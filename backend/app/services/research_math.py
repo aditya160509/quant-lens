@@ -1,0 +1,366 @@
+"""
+Research Math Service
+Mathematical functions for research computations.
+"""
+
+import pandas as pd
+import numpy as np
+from typing import Tuple, Literal, Callable, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Small epsilon to avoid division by zero
+EPSILON = 1e-8
+
+
+def returns_from_close(
+    close: pd.Series,
+    returns_type: Literal["log", "simple"] = "log"
+) -> pd.Series:
+    """
+    Compute returns from close prices.
+    
+    Args:
+        close: Series of close prices
+        returns_type: "log" for ln(p_t/p_{t-1}), "simple" for (p_t - p_{t-1})/p_{t-1}
+        
+    Returns:
+        Series of returns (first value will be NaN)
+    """
+    if close.empty:
+        return pd.Series(dtype=float)
+    
+    if returns_type == "log":
+        # Log returns: ln(p_t / p_{t-1})
+        returns = np.log(close / close.shift(1))
+    else:
+        # Simple returns: (p_t - p_{t-1}) / p_{t-1}
+        returns = close.pct_change()
+    
+    return returns
+
+
+def winsorize(series: pd.Series, p: float = 0.01) -> pd.Series:
+    """
+    Winsorize a series to reduce outlier impact.
+    
+    Args:
+        series: Input series
+        p: Percentile to clip at (e.g., 0.01 clips at 1st and 99th percentiles)
+        
+    Returns:
+        Winsorized series
+    """
+    if series.empty:
+        return series
+    
+    lower = series.quantile(p)
+    upper = series.quantile(1 - p)
+    
+    return series.clip(lower=lower, upper=upper)
+
+
+def standardize(series: pd.Series) -> pd.Series:
+    """
+    Standardize a series to z-scores.
+    
+    Args:
+        series: Input series
+        
+    Returns:
+        Standardized series: z = (x - mean) / std
+    """
+    if series.empty:
+        return series
+    
+    mean = series.mean()
+    std = series.std()
+    
+    # Use epsilon floor to avoid division by zero
+    std = max(std, EPSILON)
+    
+    return (series - mean) / std
+
+
+def standardize_cross_sectional(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Standardize each column cross-sectionally (across rows at each point).
+    
+    Args:
+        df: DataFrame with multiple columns
+        
+    Returns:
+        DataFrame with each column standardized
+    """
+    result = pd.DataFrame(index=df.index)
+    
+    for col in df.columns:
+        result[col] = standardize(df[col])
+    
+    return result
+
+
+def ols_single_factor(
+    y: np.ndarray,
+    x: np.ndarray
+) -> Tuple[float, float, float]:
+    """
+    Fast single-factor OLS regression.
+    
+    beta = cov(x, y) / var(x)
+    alpha = mean(y) - beta * mean(x)
+    r2 = 1 - SSE/SST
+    
+    Args:
+        y: Dependent variable (returns)
+        x: Independent variable (factor)
+        
+    Returns:
+        Tuple of (beta, alpha, r2)
+    """
+    # Remove NaN values
+    mask = ~(np.isnan(y) | np.isnan(x))
+    y_clean = y[mask]
+    x_clean = x[mask]
+    
+    if len(y_clean) < 2:
+        return np.nan, np.nan, np.nan
+    
+    # Compute statistics
+    mean_y = np.mean(y_clean)
+    mean_x = np.mean(x_clean)
+    
+    # Covariance and variance
+    cov_xy = np.mean((x_clean - mean_x) * (y_clean - mean_y))
+    var_x = np.var(x_clean, ddof=0)
+    
+    if var_x < EPSILON:
+        return np.nan, np.nan, np.nan
+    
+    # Beta and alpha
+    beta = cov_xy / var_x
+    alpha = mean_y - beta * mean_x
+    
+    # R-squared
+    y_pred = alpha + beta * x_clean
+    ss_res = np.sum((y_clean - y_pred) ** 2)
+    ss_tot = np.sum((y_clean - mean_y) ** 2)
+    
+    if ss_tot < EPSILON:
+        r2 = 0.0
+    else:
+        r2 = 1.0 - (ss_res / ss_tot)
+        r2 = max(0.0, min(1.0, r2))  # Clamp to [0, 1]
+    
+    return float(beta), float(alpha), float(r2)
+
+
+def ols_multi_factor(
+    y: np.ndarray,
+    X: np.ndarray,
+    ridge: float = 1e-6,
+    add_intercept: bool = True
+) -> Tuple[np.ndarray, float, float]:
+    """
+    Multi-factor OLS regression with ridge regularization.
+    
+    beta = (X'X + lambda*I)^{-1} X'y
+    
+    Args:
+        y: Dependent variable (T,)
+        X: Independent variables (T, K)
+        ridge: Ridge regularization parameter (default 1e-6)
+        add_intercept: Whether to add intercept column
+        
+    Returns:
+        Tuple of (betas, residual_std, r2)
+        - betas: array of coefficients (K+1 if intercept, else K)
+        - residual_std: standard deviation of residuals
+        - r2: R-squared
+    """
+    # Remove NaN rows
+    mask = ~np.isnan(y)
+    for k in range(X.shape[1]):
+        mask = mask & ~np.isnan(X[:, k])
+    
+    y_clean = y[mask]
+    X_clean = X[mask]
+    
+    if len(y_clean) < X.shape[1] + 2:
+        n_cols = X.shape[1] + (1 if add_intercept else 0)
+        return np.full(n_cols, np.nan), np.nan, np.nan
+    
+    # Add intercept column
+    if add_intercept:
+        intercept = np.ones((X_clean.shape[0], 1))
+        X_clean = np.hstack([intercept, X_clean])
+    
+    # Ridge regression
+    XtX = X_clean.T @ X_clean
+    XtX += ridge * np.eye(XtX.shape[0])
+    Xty = X_clean.T @ y_clean
+    
+    try:
+        betas = np.linalg.solve(XtX, Xty)
+    except np.linalg.LinAlgError:
+        n_cols = X.shape[1] + (1 if add_intercept else 0)
+        return np.full(n_cols, np.nan), np.nan, np.nan
+    
+    # Residuals
+    y_pred = X_clean @ betas
+    residuals = y_clean - y_pred
+    residual_std = np.std(residuals, ddof=len(betas))
+    
+    # R-squared
+    ss_res = np.sum(residuals ** 2)
+    ss_tot = np.sum((y_clean - np.mean(y_clean)) ** 2)
+    
+    if ss_tot < EPSILON:
+        r2 = 0.0
+    else:
+        r2 = 1.0 - (ss_res / ss_tot)
+        r2 = max(0.0, min(1.0, r2))
+    
+    return betas, float(residual_std), float(r2)
+
+
+def rolling_apply(
+    df: pd.DataFrame,
+    window: int,
+    func: Callable,
+    min_obs_ratio: float = 0.8,
+    **kwargs
+) -> pd.DataFrame:
+    """
+    Apply a function over rolling windows.
+    
+    Args:
+        df: Input DataFrame
+        window: Rolling window size
+        func: Function to apply (receives DataFrame slice, returns dict)
+        min_obs_ratio: Minimum ratio of observations required
+        **kwargs: Additional arguments passed to func
+        
+    Returns:
+        DataFrame with results from each window
+    """
+    min_obs = max(15, int(window * min_obs_ratio))
+    results = []
+    
+    for i in range(window - 1, len(df)):
+        window_data = df.iloc[i - window + 1:i + 1]
+        
+        # Check if enough observations
+        valid_rows = window_data.dropna(how='any')
+        
+        if len(valid_rows) >= min_obs:
+            try:
+                result = func(window_data, **kwargs)
+                result['date'] = df.index[i]
+                results.append(result)
+            except Exception as e:
+                logger.debug(f"Rolling apply error at index {i}: {e}")
+        else:
+            results.append({'date': df.index[i]})
+    
+    if not results:
+        return pd.DataFrame()
+    
+    result_df = pd.DataFrame(results)
+    result_df = result_df.set_index('date')
+    
+    return result_df
+
+
+def correlation_matrix(
+    returns_df: pd.DataFrame,
+    method: Literal["pearson", "spearman"] = "pearson"
+) -> pd.DataFrame:
+    """
+    Compute correlation matrix for a returns DataFrame.
+    
+    Args:
+        returns_df: DataFrame with ticker columns and date index
+        method: Correlation method
+        
+    Returns:
+        Correlation matrix DataFrame
+    """
+    return returns_df.corr(method=method)
+
+
+def hierarchical_order(corr_matrix: pd.DataFrame) -> list:
+    """
+    Compute optimal ordering for correlation matrix using hierarchical clustering.
+    
+    Args:
+        corr_matrix: Correlation matrix
+        
+    Returns:
+        List of column names in optimal order
+    """
+    from scipy.cluster import hierarchy
+    from scipy.spatial.distance import squareform
+    
+    try:
+        # Convert correlation to distance
+        dist_matrix = 1 - corr_matrix.abs()
+        
+        # Ensure symmetric and positive
+        dist_matrix = (dist_matrix + dist_matrix.T) / 2
+        np.fill_diagonal(dist_matrix.values, 0)
+        
+        # Condensed distance matrix
+        condensed = squareform(dist_matrix.values)
+        
+        # Hierarchical clustering
+        linkage = hierarchy.linkage(condensed, method='average')
+        
+        # Get optimal ordering
+        dendro = hierarchy.dendrogram(linkage, no_plot=True)
+        order_indices = dendro['leaves']
+        
+        return [corr_matrix.columns[i] for i in order_indices]
+        
+    except Exception as e:
+        logger.warning(f"Hierarchical ordering failed: {e}, using original order")
+        return list(corr_matrix.columns)
+
+
+def compute_rolling_correlation(
+    series_a: pd.Series,
+    series_b: pd.Series,
+    window: int
+) -> pd.Series:
+    """
+    Compute rolling correlation between two series.
+    
+    Args:
+        series_a: First series
+        series_b: Second series
+        window: Rolling window size
+        
+    Returns:
+        Series of rolling correlations
+    """
+    return series_a.rolling(window=window).corr(series_b)
+
+
+def downsample_series(series: pd.Series, max_points: int = 300) -> pd.Series:
+    """
+    Downsample a series to at most max_points using uniform sampling.
+    
+    Args:
+        series: Input series
+        max_points: Maximum number of points to keep
+        
+    Returns:
+        Downsampled series
+    """
+    if len(series) <= max_points:
+        return series
+    
+    # Uniform sampling
+    indices = np.linspace(0, len(series) - 1, max_points, dtype=int)
+    return series.iloc[indices]

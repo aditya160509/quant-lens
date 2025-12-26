@@ -1,0 +1,23 @@
+{
+    "recommendations": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "dsznajder.es7-react-js-snippets",
+        "eamodio.gitlens",
+        "usernamehw.errorlens",
+        "rangav.vscode-thunder-client",
+        "ms-toolsai.jupyter",
+        "mechatroner.rainbow-csv",
+        "gruntfuggly.todo-tree",
+        "streetsidesoftware.code-spell-checker",
+        "njpwerner.autodocstring",
+        "christian-kohler.path-intellisense",
+        "formulahendry.auto-rename-tag",
+        "pkief.material-icon-theme",
+        "hediet.vscode-drawio",
+        "ms-azuretools.vscode-docker",
+        "humao.rest-client"
+    ]
+}

@@ -1,0 +1,53 @@
+# Docker Compose for Quant Platform
+# Includes: Backend, Frontend, and NSE India API
+
+version: '3.8'
+
+services:
+  # NSE India API Server
+  nse-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nse-api
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Python Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - NSE_API_BASE=http://nse-api:3001
+      - USE_DIRECT_NSE=false  # Set to true if you want to bypass nse-api container
+    depends_on:
+      nse-api:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  default:
+    name: quant-network

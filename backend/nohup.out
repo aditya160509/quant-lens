@@ -1,0 +1,629 @@
+INFO:     Will watch for changes in these directories: ['/Users/adityabalaji/quant /backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [48624] using StatReload
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [48665]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+2025-12-26 11:57:54,516 - app.services.market_state - INFO - Building MarketState for INDIA with 44 tickers
+2025-12-26 11:57:54,517 - app.services.yf_wrapper - INFO - [YF] Downloading bulk data for 44 tickers
+2025-12-26 11:57:56,412 - yfinance - ERROR - HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: LARSEN.NS"}}}
+2025-12-26 11:57:57,864 - yfinance - ERROR - 
+3 Failed downloads:
+2025-12-26 11:57:57,864 - yfinance - ERROR - ['TATAMOTORS.NS', 'LTI.NS', 'LARSEN.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=282d) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 11:57:57,910 - app.services.yf_wrapper - INFO - [YF] Downloaded 292 rows for 44 tickers
+INFO:     127.0.0.1:55522 - "GET /api/market-labs/engine/2?universe=INDIA&window=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55574 - "GET /api/market-labs/engine/5?universe=INDIA&window=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55576 - "GET /api/market-labs/engine/7?universe=INDIA&window=20 HTTP/1.1" 200 OK
+2025-12-26 11:57:58,072 - app.services.screener_quant360 - ERROR - Error processing ADANIGREEN.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,073 - app.services.screener_quant360 - ERROR - Error processing ADANIPORTS.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,076 - app.services.screener_quant360 - ERROR - Error processing APOLLOHOSP.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,077 - app.services.screener_quant360 - ERROR - Error processing AXISBANK.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,079 - app.services.screener_quant360 - ERROR - Error processing BAJAJ-AUTO.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,080 - app.services.screener_quant360 - ERROR - Error processing BRITANNIA.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,081 - app.services.screener_quant360 - ERROR - Error processing CIPLA.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,083 - app.services.screener_quant360 - ERROR - Error processing COALINDIA.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,084 - app.services.screener_quant360 - ERROR - Error processing DABUR.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,085 - app.services.screener_quant360 - ERROR - Error processing DIVISLAB.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,087 - app.services.screener_quant360 - ERROR - Error processing DRREDDY.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,088 - app.services.screener_quant360 - ERROR - Error processing GRASIM.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,089 - app.services.screener_quant360 - ERROR - Error processing HCLTECH.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,091 - app.services.screener_quant360 - ERROR - Error processing HDFCBANK.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,092 - app.services.screener_quant360 - ERROR - Error processing HEROMOTOCO.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,094 - app.services.screener_quant360 - ERROR - Error processing HINDALCO.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,095 - app.services.screener_quant360 - ERROR - Error processing HINDUNILVR.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,096 - app.services.screener_quant360 - ERROR - Error processing ICICIBANK.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,097 - app.services.screener_quant360 - ERROR - Error processing INDUSINDBK.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,099 - app.services.screener_quant360 - ERROR - Error processing INFY.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,100 - app.services.screener_quant360 - ERROR - Error processing ITC.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,101 - app.services.screener_quant360 - ERROR - Error processing JSWSTEEL.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,103 - app.services.screener_quant360 - ERROR - Error processing KOTAKBANK.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,104 - app.services.screener_quant360 - ERROR - Error processing M&M.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,105 - app.services.screener_quant360 - ERROR - Error processing MARUTI.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,107 - app.services.screener_quant360 - ERROR - Error processing NESTLEIND.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,108 - app.services.screener_quant360 - ERROR - Error processing NTPC.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,110 - app.services.screener_quant360 - ERROR - Error processing ONGC.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,111 - app.services.screener_quant360 - ERROR - Error processing POWERGRID.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,112 - app.services.screener_quant360 - ERROR - Error processing RELIANCE.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,114 - app.services.screener_quant360 - ERROR - Error processing SBIN.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,115 - app.services.screener_quant360 - ERROR - Error processing SHREECEM.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,116 - app.services.screener_quant360 - ERROR - Error processing SUNPHARMA.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,118 - app.services.screener_quant360 - ERROR - Error processing TATASTEEL.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,119 - app.services.screener_quant360 - ERROR - Error processing TCS.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,120 - app.services.screener_quant360 - ERROR - Error processing TECHM.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,122 - app.services.screener_quant360 - ERROR - Error processing ULTRACEMCO.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/numpy/lib/_function_base_impl.py:2922: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[:, None]
+2025-12-26 11:57:58,127 - app.services.screener_quant360 - ERROR - Error processing USDINR=X: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,128 - app.services.screener_quant360 - ERROR - Error processing VEDL.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,130 - app.services.screener_quant360 - ERROR - Error processing WIPRO.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,131 - app.services.screener_quant360 - ERROR - Error processing ^NSEI: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 11:57:58,131 - app.services.screener_quant360 - WARNING - No data computed for INDIA, using sample data
+INFO:     127.0.0.1:55578 - "GET /api/screener/tradeable-universe?universe_key=INDIA&window=60 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55599 - "GET /api/markets/intraday?ticker=AAPL&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55596 - "GET /api/security/detail?symbol=AAPL&period=1y&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55599 - "GET /api/markets/intraday?ticker=AAPL&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55596 - "GET /api/security/AAPL/indicators?period=1y&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55596 - "GET /api/liquidity/AAPL HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55596 - "GET /api/fundamentals/AAPL?compact=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55596 - "GET /api/markets/intraday?ticker=AAPL&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55596 - "GET /api/monitor/news?region=US&k=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55729 - "GET /api/options/AAPL/vol_surface?min_maturity_days=7&max_maturity_days=365 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55732 - "GET /api/security/AAPL/drawdown_anatomy?lookback_years=5&min_drawdown=0.1&max_events=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55733 - "GET /api/etf/AAPL/lookthrough?top_n=10&include_factors=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55727 - "GET /api/security/detail?symbol=AAPL&period=1y&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55729 - "GET /api/options/AAPL/vol_surface?min_maturity_days=7&max_maturity_days=365 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55733 - "GET /api/etf/AAPL/lookthrough?top_n=10&include_factors=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55737 - "GET /api/security/AAPL/drawdown_anatomy?lookback_years=5&min_drawdown=0.1&max_events=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55749 - "GET /api/security/detail?symbol=AAPL&period=1y&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55749 - "GET /api/options/AAPL HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55754 - "GET /api/security/detail?symbol=AAPL&period=1y&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55754 - "GET /api/macro/impact?ticker=AAPL HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55754 - "GET /api/security/detail?symbol=AAPL&period=1y&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55754 - "GET /api/options/AAPL HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55754 - "GET /api/markets/intraday?ticker=AAPL&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55760 - "GET /api/markets/intraday?ticker=AAPL&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55757 - "GET /api/security/detail?symbol=AAPL&period=1y&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55757 - "GET /api/security/AAPL/indicators?period=1y&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55757 - "GET /api/liquidity/AAPL HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55757 - "GET /api/fundamentals/AAPL?compact=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55757 - "GET /api/markets/intraday?ticker=AAPL&interval=5m HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55757 - "GET /api/monitor/news?region=US&k=20 HTTP/1.1" 200 OK
+2025-12-26 12:06:42,019 - app.services.screener_quant360 - INFO - Using cached MarketState for INDIA_252
+2025-12-26 12:06:42,024 - app.services.screener_quant360 - ERROR - Error processing ADANIGREEN.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,026 - app.services.screener_quant360 - ERROR - Error processing ADANIPORTS.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,027 - app.services.screener_quant360 - ERROR - Error processing APOLLOHOSP.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,029 - app.services.screener_quant360 - ERROR - Error processing AXISBANK.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,030 - app.services.screener_quant360 - ERROR - Error processing BAJAJ-AUTO.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,032 - app.services.screener_quant360 - ERROR - Error processing BRITANNIA.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,034 - app.services.screener_quant360 - ERROR - Error processing CIPLA.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,035 - app.services.screener_quant360 - ERROR - Error processing COALINDIA.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,036 - app.services.screener_quant360 - ERROR - Error processing DABUR.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,037 - app.services.screener_quant360 - ERROR - Error processing DIVISLAB.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,039 - app.services.screener_quant360 - ERROR - Error processing DRREDDY.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,040 - app.services.screener_quant360 - ERROR - Error processing GRASIM.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,041 - app.services.screener_quant360 - ERROR - Error processing HCLTECH.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,043 - app.services.screener_quant360 - ERROR - Error processing HDFCBANK.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,044 - app.services.screener_quant360 - ERROR - Error processing HEROMOTOCO.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,045 - app.services.screener_quant360 - ERROR - Error processing HINDALCO.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,047 - app.services.screener_quant360 - ERROR - Error processing HINDUNILVR.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,048 - app.services.screener_quant360 - ERROR - Error processing ICICIBANK.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,050 - app.services.screener_quant360 - ERROR - Error processing INDUSINDBK.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,051 - app.services.screener_quant360 - ERROR - Error processing INFY.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,052 - app.services.screener_quant360 - ERROR - Error processing ITC.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,054 - app.services.screener_quant360 - ERROR - Error processing JSWSTEEL.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,055 - app.services.screener_quant360 - ERROR - Error processing KOTAKBANK.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,056 - app.services.screener_quant360 - ERROR - Error processing M&M.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,057 - app.services.screener_quant360 - ERROR - Error processing MARUTI.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,059 - app.services.screener_quant360 - ERROR - Error processing NESTLEIND.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,060 - app.services.screener_quant360 - ERROR - Error processing NTPC.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,061 - app.services.screener_quant360 - ERROR - Error processing ONGC.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,063 - app.services.screener_quant360 - ERROR - Error processing POWERGRID.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,064 - app.services.screener_quant360 - ERROR - Error processing RELIANCE.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,065 - app.services.screener_quant360 - ERROR - Error processing SBIN.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,067 - app.services.screener_quant360 - ERROR - Error processing SHREECEM.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,068 - app.services.screener_quant360 - ERROR - Error processing SUNPHARMA.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,069 - app.services.screener_quant360 - ERROR - Error processing TATASTEEL.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,070 - app.services.screener_quant360 - ERROR - Error processing TCS.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,072 - app.services.screener_quant360 - ERROR - Error processing TECHM.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,073 - app.services.screener_quant360 - ERROR - Error processing ULTRACEMCO.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/numpy/lib/_function_base_impl.py:2922: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[:, None]
+2025-12-26 12:06:42,074 - app.services.screener_quant360 - ERROR - Error processing USDINR=X: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,075 - app.services.screener_quant360 - ERROR - Error processing VEDL.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,077 - app.services.screener_quant360 - ERROR - Error processing WIPRO.NS: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,078 - app.services.screener_quant360 - ERROR - Error processing ^NSEI: Unalignable boolean Series provided as indexer (index of the boolean Series and of the indexed object do not match).
+2025-12-26 12:06:42,078 - app.services.screener_quant360 - WARNING - No data computed for INDIA, using sample data
+INFO:     127.0.0.1:55772 - "GET /api/screener/tradeable-universe?universe_key=INDIA&window=60 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55793 - "OPTIONS /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "OPTIONS /api/market-labs/build-state HTTP/1.1" 200 OK
+2025-12-26 12:07:21,550 - app.services.market_state - INFO - Building MarketState for US with 117 tickers
+2025-12-26 12:07:21,551 - app.services.yf_wrapper - INFO - [YF] Downloading bulk data for 117 tickers
+2025-12-26 12:07:21,552 - app.services.market_state - INFO - Building MarketState for US with 117 tickers
+2025-12-26 12:07:21,552 - app.services.yf_wrapper - INFO - [YF] Downloading bulk data for 117 tickers
+2025-12-26 12:07:25,515 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:07:25,515 - yfinance - ERROR - ['VIX']: YFPricesMissingError('possibly delisted; no price data found  (period=282d)')
+2025-12-26 12:07:25,533 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:07:25,535 - yfinance - ERROR - ['VIX']: YFPricesMissingError('possibly delisted; no price data found  (period=282d)')
+2025-12-26 12:07:25,625 - app.services.yf_wrapper - INFO - [YF] Downloaded 282 rows for 117 tickers
+INFO:     127.0.0.1:55793 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+2025-12-26 12:07:25,642 - app.services.yf_wrapper - INFO - [YF] Downloaded 282 rows for 117 tickers
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55796 - "OPTIONS /api/labs/factors/projection HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55798 - "POST /api/labs/factors/projection HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56054 - "OPTIONS /api/labs/volatility/forecast HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/services/volatility_intelligence.py:35: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  df = yf.download(ticker, period=period, progress=False)
+INFO:     127.0.0.1:56054 - "POST /api/labs/volatility/forecast HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/services/volatility_intelligence.py:35: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  df = yf.download(ticker, period=period, progress=False)
+INFO:     127.0.0.1:56056 - "POST /api/labs/volatility/forecast HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'app/services/screener_quant360.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [48665]
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [50684]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+/Users/adityabalaji/quant /backend/app/services/volatility_intelligence.py:35: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  df = yf.download(ticker, period=period, progress=False)
+INFO:     127.0.0.1:56066 - "POST /api/labs/volatility/forecast HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/services/volatility_intelligence.py:35: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  df = yf.download(ticker, period=period, progress=False)
+INFO:     127.0.0.1:56066 - "POST /api/labs/volatility/forecast HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56079 - "OPTIONS /api/labs/volatility/fracture HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/services/volatility_intelligence.py:35: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  df = yf.download(ticker, period=period, progress=False)
+INFO:     127.0.0.1:56079 - "POST /api/labs/volatility/fracture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56081 - "OPTIONS /api/labs/volatility/reservoir HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56081 - "POST /api/labs/volatility/reservoir HTTP/1.1" 200 OK
+2025-12-26 12:08:40,532 - app.services.market_state - INFO - Building MarketState for US with 117 tickers
+2025-12-26 12:08:40,532 - app.services.yf_wrapper - INFO - [YF] Downloading bulk data for 117 tickers
+2025-12-26 12:08:42,869 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:08:42,869 - yfinance - ERROR - ['VIX']: YFPricesMissingError('possibly delisted; no price data found  (period=282d)')
+2025-12-26 12:08:42,897 - app.services.yf_wrapper - INFO - [YF] Downloaded 282 rows for 117 tickers
+INFO:     127.0.0.1:56105 - "GET /api/screener/tradeable-universe?universe_key=US&window=60 HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/services/volatility_intelligence.py:35: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  df = yf.download(ticker, period=period, progress=False)
+INFO:     127.0.0.1:56094 - "POST /api/labs/volatility/reservoir HTTP/1.1" 200 OK
+2025-12-26 12:08:52,841 - app.services.market_state - INFO - Building MarketState for INDIA with 44 tickers
+2025-12-26 12:08:52,842 - app.services.yf_wrapper - INFO - [YF] Downloading bulk data for 44 tickers
+2025-12-26 12:08:55,531 - yfinance - ERROR - HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: LARSEN.NS"}}}
+2025-12-26 12:08:56,129 - yfinance - ERROR - 
+3 Failed downloads:
+2025-12-26 12:08:56,129 - yfinance - ERROR - ['TATAMOTORS.NS', 'LTI.NS', 'LARSEN.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=282d) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 12:08:56,175 - app.services.yf_wrapper - INFO - [YF] Downloaded 292 rows for 44 tickers
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/numpy/lib/_function_base_impl.py:2922: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[:, None]
+INFO:     127.0.0.1:56229 - "GET /api/screener/tradeable-universe?universe_key=INDIA&window=60 HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/uvicorn/protocols/http/h11_impl.py", line 403, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/fastapi/applications.py", line 1134, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/fastapi/routing.py", line 125, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/fastapi/routing.py", line 111, in app
+    response = await f(request)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/fastapi/routing.py", line 424, in app
+    response = actual_response_class(content, **response_args)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/responses.py", line 189, in __init__
+    super().__init__(content, status_code, headers, media_type, background)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/responses.py", line 46, in __init__
+    self.body = self.render(content)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/responses.py", line 192, in render
+    return json.dumps(
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/__init__.py", line 234, in dumps
+    return cls(
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/encoder.py", line 199, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/encoder.py", line 257, in iterencode
+    return _iterencode(o, 0)
+ValueError: Out of range float values are not JSON compliant
+INFO:     127.0.0.1:56282 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56296 - "OPTIONS /api/labs/volatility/macro HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/services/volatility_intelligence.py:720: FutureWarning: The default fill_method='pad' in DataFrame.pct_change is deprecated and will be removed in a future version. Either fill in any non-leading NA values prior to calling pct_change or specify 'fill_method=None' to not fill NA values.
+  macro_changes = macro_df.pct_change().fillna(0)
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: divide by zero encountered in matmul
+  return X @ coef_ + self.intercept_
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: overflow encountered in matmul
+  return X @ coef_ + self.intercept_
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: invalid value encountered in matmul
+  return X @ coef_ + self.intercept_
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: divide by zero encountered in matmul
+  return X @ coef_ + self.intercept_
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: overflow encountered in matmul
+  return X @ coef_ + self.intercept_
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: invalid value encountered in matmul
+  return X @ coef_ + self.intercept_
+INFO:     127.0.0.1:56296 - "POST /api/labs/volatility/macro HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/services/volatility_intelligence.py:720: FutureWarning: The default fill_method='pad' in DataFrame.pct_change is deprecated and will be removed in a future version. Either fill in any non-leading NA values prior to calling pct_change or specify 'fill_method=None' to not fill NA values.
+  macro_changes = macro_df.pct_change().fillna(0)
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: divide by zero encountered in matmul
+  return X @ coef_ + self.intercept_
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: overflow encountered in matmul
+  return X @ coef_ + self.intercept_
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: invalid value encountered in matmul
+  return X @ coef_ + self.intercept_
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: divide by zero encountered in matmul
+  return X @ coef_ + self.intercept_
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: overflow encountered in matmul
+  return X @ coef_ + self.intercept_
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/linear_model/_base.py:279: RuntimeWarning: invalid value encountered in matmul
+  return X @ coef_ + self.intercept_
+INFO:     127.0.0.1:56296 - "POST /api/labs/volatility/macro HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'app/services/screener_quant360.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [50684]
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [52222]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:56318 - "OPTIONS /api/pca/eigenphysics/run HTTP/1.1" 200 OK
+2025-12-26 12:09:44,592 - app.services.market_state_v2 - INFO - [MarketStateV2] Building new state for INDIA_252
+2025-12-26 12:09:44,592 - app.services.market_state_v2 - INFO - [MarketStateV2] Building INDIA with 78 tickers, 252 days
+2025-12-26 12:09:44,593 - app.services.market_state_v2 - INFO - [MarketStateV2] Fetching 78 India tickers via yfinance
+2025-12-26 12:09:44,593 - app.services.yf_wrapper - INFO - [YF] Downloading bulk data for 78 tickers
+2025-12-26 12:09:47,198 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:09:47,198 - yfinance - ERROR - ['TATAMOTORS.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=282d) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 12:09:47,223 - app.services.yf_wrapper - INFO - [YF] Downloaded 292 rows for 78 tickers
+2025-12-26 12:09:47,234 - app.services.market_state_v2 - INFO - [MarketStateV2] Build complete: 77 tickers, 251 days, quality=96.03%
+2025-12-26 12:09:47,234 - app.services.pca_state_engine - ERROR - PCA build failed for window 60: Insufficient valid data for PCA: 1 tickers
+INFO:     127.0.0.1:56318 - "POST /api/pca/eigenphysics/run HTTP/1.1" 200 OK
+2025-12-26 12:09:52,851 - app.services.market_state - INFO - Building MarketState for INDIA with 44 tickers
+2025-12-26 12:09:52,851 - app.services.yf_wrapper - INFO - [YF] Downloading bulk data for 44 tickers
+2025-12-26 12:09:54,317 - yfinance - ERROR - HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: LARSEN.NS"}}}
+2025-12-26 12:10:03,290 - yfinance - ERROR - 
+4 Failed downloads:
+2025-12-26 12:10:03,291 - yfinance - ERROR - ['TATAMOTORS.NS', 'LTI.NS', 'LARSEN.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=282d) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 12:10:03,291 - yfinance - ERROR - ['ONGC.NS']: Timeout('Failed to perform, curl: (28) Operation timed out after 10000 milliseconds with 7518 bytes received. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+2025-12-26 12:10:03,313 - app.services.yf_wrapper - INFO - [YF] Downloaded 292 rows for 44 tickers
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/numpy/lib/_function_base_impl.py:2922: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[:, None]
+INFO:     127.0.0.1:56321 - "GET /api/screener/tradeable-universe?universe_key=INDIA&window=60 HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/uvicorn/protocols/http/h11_impl.py", line 403, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/fastapi/applications.py", line 1134, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/middleware/cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/middleware/cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/fastapi/routing.py", line 125, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/fastapi/routing.py", line 111, in app
+    response = await f(request)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/fastapi/routing.py", line 424, in app
+    response = actual_response_class(content, **response_args)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/responses.py", line 189, in __init__
+    super().__init__(content, status_code, headers, media_type, background)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/responses.py", line 46, in __init__
+    self.body = self.render(content)
+  File "/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/starlette/responses.py", line 192, in render
+    return json.dumps(
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/__init__.py", line 234, in dumps
+    return cls(
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/encoder.py", line 199, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/encoder.py", line 257, in iterencode
+    return _iterencode(o, 0)
+ValueError: Out of range float values are not JSON compliant
+WARNING:  StatReload detected changes in 'app/services/screener_quant360.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [52222]
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [52236]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+2025-12-26 12:10:08,252 - app.services.market_state - INFO - Building MarketState for US with 117 tickers
+2025-12-26 12:10:08,252 - app.services.yf_wrapper - INFO - [YF] Downloading bulk data for 117 tickers
+2025-12-26 12:10:11,193 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:10:11,193 - yfinance - ERROR - ['VIX']: YFPricesMissingError('possibly delisted; no price data found  (period=282d)')
+2025-12-26 12:10:11,216 - app.services.yf_wrapper - INFO - [YF] Downloaded 282 rows for 117 tickers
+INFO:     127.0.0.1:56459 - "GET /api/screener/trend-quality?universe_key=US&window=60 HTTP/1.1" 200 OK
+2025-12-26 12:10:18,162 - app.services.market_state - INFO - Building MarketState for INDIA with 44 tickers
+2025-12-26 12:10:18,162 - app.services.yf_wrapper - INFO - [YF] Downloading bulk data for 44 tickers
+2025-12-26 12:10:20,026 - yfinance - ERROR - HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: LARSEN.NS"}}}
+2025-12-26 12:10:20,839 - yfinance - ERROR - 
+3 Failed downloads:
+2025-12-26 12:10:20,839 - yfinance - ERROR - ['TATAMOTORS.NS', 'LARSEN.NS', 'LTI.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=282d) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 12:10:20,887 - app.services.yf_wrapper - INFO - [YF] Downloaded 292 rows for 44 tickers
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/numpy/lib/_function_base_impl.py:2922: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[:, None]
+INFO:     127.0.0.1:56581 - "GET /api/screener/tradeable-universe?universe_key=INDIA&window=60 HTTP/1.1" 200 OK
+2025-12-26 12:10:29,323 - app.services.screener_quant360 - INFO - Using cached MarketState for US_252
+INFO:     127.0.0.1:56630 - "GET /api/screener/liquidity?universe_key=US&window=60 HTTP/1.1" 200 OK
+2025-12-26 12:10:35,644 - app.services.screener_quant360 - INFO - Using cached MarketState for US_252
+INFO:     127.0.0.1:56633 - "GET /api/screener/rotation?universe_key=US&window=60 HTTP/1.1" 200 OK
+2025-12-26 12:10:50,474 - app.services.screener_quant360 - INFO - Using cached MarketState for US_252
+INFO:     127.0.0.1:56635 - "GET /api/screener/stress?universe_key=US&window=60 HTTP/1.1" 200 OK
+2025-12-26 12:10:56,256 - app.services.screener_quant360 - INFO - Using cached MarketState for US_252
+INFO:     127.0.0.1:56641 - "GET /api/screener/events?universe_key=US&window=60 HTTP/1.1" 200 OK
+2025-12-26 12:11:07,394 - app.services.screener_quant360 - INFO - Using cached MarketState for US_252
+INFO:     127.0.0.1:56647 - "GET /api/screener/tradeable-universe?universe_key=US&window=60 HTTP/1.1" 200 OK
+2025-12-26 12:11:41,358 - app.services.screener_quant360 - INFO - Using cached MarketState for INDIA_252
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/numpy/lib/_function_base_impl.py:2922: RuntimeWarning: invalid value encountered in divide
+  c /= stddev[:, None]
+INFO:     127.0.0.1:56658 - "GET /api/screener/tradeable-universe?universe_key=INDIA&window=60 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56671 - "OPTIONS /api/labs/regimes/mass_flow HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/utils/extmath.py:203: RuntimeWarning: divide by zero encountered in matmul
+  ret = a @ b
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/utils/extmath.py:203: RuntimeWarning: overflow encountered in matmul
+  ret = a @ b
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/utils/extmath.py:203: RuntimeWarning: invalid value encountered in matmul
+  ret = a @ b
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:153: RuntimeWarning: divide by zero encountered in matmul
+  stats['obs'] += posteriors.T @ X
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:153: RuntimeWarning: overflow encountered in matmul
+  stats['obs'] += posteriors.T @ X
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:153: RuntimeWarning: invalid value encountered in matmul
+  stats['obs'] += posteriors.T @ X
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:157: RuntimeWarning: divide by zero encountered in matmul
+  stats['obs**2'] += posteriors.T @ X**2
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:157: RuntimeWarning: overflow encountered in matmul
+  stats['obs**2'] += posteriors.T @ X**2
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:157: RuntimeWarning: invalid value encountered in matmul
+  stats['obs**2'] += posteriors.T @ X**2
+/Users/adityabalaji/quant /backend/app/services/regimes_intelligence.py:681: UserWarning: HMM fitting failed: 'diag' covars must have shape (n_components, n_dim)
+  warnings.warn(f"HMM fitting failed: {e}")
+INFO:     127.0.0.1:56671 - "POST /api/labs/regimes/mass_flow HTTP/1.1" 200 OK
+2025-12-26 12:15:45,318 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:15:45,320 - yfinance - ERROR - ['^CNXSC']: YFPricesMissingError('possibly delisted; no price data found  (1d 2025-09-27 -> 2025-12-26)')
+2025-12-26 12:15:45,750 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:15:45,750 - yfinance - ERROR - ['^CNXSC']: YFPricesMissingError('possibly delisted; no price data found  (1d 2025-09-27 -> 2025-12-26)')
+/Users/adityabalaji/quant /backend/main.py:187: FutureWarning: The default fill_method='pad' in DataFrame.pct_change is deprecated and will be removed in a future version. Either fill in any non-leading NA values prior to calling pct_change or specify 'fill_method=None' to not fill NA values.
+  rets = closes.pct_change().fillna(0)
+2025-12-26 12:15:46,426 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:15:46,426 - yfinance - ERROR - ['^CNXSC']: YFPricesMissingError('possibly delisted; no price data found  (1d 2025-09-27 -> 2025-12-26)')
+2025-12-26 12:15:48,371 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:15:48,371 - yfinance - ERROR - ['^CNXSC']: YFPricesMissingError('possibly delisted; no price data found  (1d 2025-09-27 -> 2025-12-26)')
+INFO:     127.0.0.1:56744 - "GET /api/monitor?horizon=3mo HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/main.py:187: FutureWarning: The default fill_method='pad' in DataFrame.pct_change is deprecated and will be removed in a future version. Either fill in any non-leading NA values prior to calling pct_change or specify 'fill_method=None' to not fill NA values.
+  rets = closes.pct_change().fillna(0)
+/Users/adityabalaji/quant /backend/app/api/monitor.py:319: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  data = yf.download(tickers_str, period="2d", progress=False, threads=True)
+INFO:     127.0.0.1:56751 - "GET /api/monitor?horizon=3mo HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/api/monitor.py:435: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  data = yf.download(tickers_str, period="2d", progress=False, threads=True)
+INFO:     127.0.0.1:56759 - "GET /api/monitor/regime?market=IN&index=%5ENSEI&window=2y HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/api/monitor.py:1399: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  data = yf.download(" ".join(symbols[:30]), period="2d", progress=False, threads=True)
+INFO:     127.0.0.1:56758 - "GET /api/monitor/fxcrypto HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/api/monitor.py:1482: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  data = yf.download(" ".join(symbols[:50]), period=period, progress=False, threads=True)
+INFO:     127.0.0.1:56756 - "GET /api/monitor/macro_tickers HTTP/1.1" 200 OK
+2025-12-26 12:15:50,497 - yfinance - ERROR - $NIFTYFIN.NS: possibly delisted; no price data found  (period=2d) (Yahoo error = "No data found, symbol may be delisted")
+INFO:     127.0.0.1:56756 - "GET /api/monitor/volatility_regime?days=90 HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/api/monitor.py:1621: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  data = yf.download(" ".join(symbols[:50]), period=period, progress=False, threads=True)
+INFO:     127.0.0.1:56759 - "GET /api/monitor/nifty50_heatmap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56759 - "GET /api/monitor/regime?market=IN&index=%5ENSEI&window=2y HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56744 - "GET /api/monitor/equity_tickers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56744 - "GET /api/monitor/macro_tickers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56744 - "GET /api/monitor/volatility_regime?days=90 HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/api/monitor.py:1399: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  data = yf.download(" ".join(symbols[:30]), period="2d", progress=False, threads=True)
+INFO:     127.0.0.1:56759 - "GET /api/monitor/fxcrypto HTTP/1.1" 200 OK
+2025-12-26 12:15:52,896 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:15:52,898 - yfinance - ERROR - ['TATAMOTORS.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=3mo) (Yahoo error = "No data found, symbol may be delisted")')
+INFO:     127.0.0.1:56744 - "GET /api/monitor/nifty50_heatmap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56744 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56744 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+2025-12-26 12:15:53,423 - yfinance - ERROR - $NIFTYFIN.NS: possibly delisted; no price data found  (period=2d) (Yahoo error = "No data found, symbol may be delisted")
+2025-12-26 12:15:53,503 - yfinance - ERROR - 
+2 Failed downloads:
+2025-12-26 12:15:53,503 - yfinance - ERROR - ['TATAMOTORS.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=3mo) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 12:15:53,503 - yfinance - ERROR - ['NIFTYFIN.NS']: possibly delisted; no price data found  (period=2d) (Yahoo error = "No data found, symbol may be delisted")
+2025-12-26 12:15:53,511 - yfinance - ERROR - 
+2 Failed downloads:
+2025-12-26 12:15:53,511 - yfinance - ERROR - 
+2 Failed downloads:
+2025-12-26 12:15:53,511 - yfinance - ERROR - ['TATAMOTORS.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=3mo) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 12:15:53,512 - yfinance - ERROR - 
+2 Failed downloads:
+2025-12-26 12:15:53,512 - yfinance - ERROR - ['TATAMOTORS.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=3mo) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 12:15:53,512 - yfinance - ERROR - ['NIFTYFIN.NS']: possibly delisted; no price data found  (period=2d) (Yahoo error = "No data found, symbol may be delisted")
+2025-12-26 12:15:53,513 - yfinance - ERROR - ['TATAMOTORS.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=3mo) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 12:15:53,513 - yfinance - ERROR - ['NIFTYFIN.NS']: possibly delisted; no price data found  (period=2d) (Yahoo error = "No data found, symbol may be delisted")
+2025-12-26 12:15:53,520 - yfinance - ERROR - ['NIFTYFIN.NS']: possibly delisted; no price data found  (period=2d) (Yahoo error = "No data found, symbol may be delisted")
+INFO:     127.0.0.1:56754 - "GET /api/monitor/breadth?market=IN HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/api/monitor.py:1638: FutureWarning: The default fill_method='pad' in DataFrame.pct_change is deprecated and will be removed in a future version. Either fill in any non-leading NA values prior to calling pct_change or specify 'fill_method=None' to not fill NA values.
+  returns = closes.pct_change()
+/Users/adityabalaji/quant /backend/app/api/monitor.py:1499: FutureWarning: The default fill_method='pad' in DataFrame.pct_change is deprecated and will be removed in a future version. Either fill in any non-leading NA values prior to calling pct_change or specify 'fill_method=None' to not fill NA values.
+  returns = closes.pct_change()
+/Users/adityabalaji/quant /backend/app/api/monitor.py:319: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  data = yf.download(tickers_str, period="2d", progress=False, threads=True)
+INFO:     127.0.0.1:56751 - "GET /api/monitor/leaders?market=IN&k=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56756 - "GET /api/monitor/ad_thrust?days=90 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56758 - "GET /api/monitor/adl?days=90 HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/api/monitor.py:1621: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  data = yf.download(" ".join(symbols[:50]), period=period, progress=False, threads=True)
+/Users/adityabalaji/quant /backend/app/api/monitor.py:435: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  data = yf.download(tickers_str, period="2d", progress=False, threads=True)
+/Users/adityabalaji/quant /backend/app/api/monitor.py:1482: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  data = yf.download(" ".join(symbols[:50]), period=period, progress=False, threads=True)
+INFO:     127.0.0.1:56756 - "GET /api/market-labs/engine/1?universe=US&window=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56759 - "GET /api/monitor/equity_tickers HTTP/1.1" 200 OK
+2025-12-26 12:15:54,669 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:15:54,669 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:15:54,669 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:15:54,669 - yfinance - ERROR - 
+1 Failed download:
+2025-12-26 12:15:54,669 - yfinance - ERROR - ['TATAMOTORS.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=3mo) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 12:15:54,669 - yfinance - ERROR - ['TATAMOTORS.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=3mo) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 12:15:54,669 - yfinance - ERROR - ['TATAMOTORS.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=3mo) (Yahoo error = "No data found, symbol may be delisted")')
+2025-12-26 12:15:54,669 - yfinance - ERROR - ['TATAMOTORS.NS']: YFPricesMissingError('possibly delisted; no price data found  (period=3mo) (Yahoo error = "No data found, symbol may be delisted")')
+INFO:     127.0.0.1:56751 - "GET /api/monitor/leaders?market=IN&k=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56744 - "GET /api/monitor/breadth?market=IN HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/api/monitor.py:1638: FutureWarning: The default fill_method='pad' in DataFrame.pct_change is deprecated and will be removed in a future version. Either fill in any non-leading NA values prior to calling pct_change or specify 'fill_method=None' to not fill NA values.
+  returns = closes.pct_change()
+INFO:     127.0.0.1:56754 - "GET /api/monitor/ad_thrust?days=90 HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/api/monitor.py:1499: FutureWarning: The default fill_method='pad' in DataFrame.pct_change is deprecated and will be removed in a future version. Either fill in any non-leading NA values prior to calling pct_change or specify 'fill_method=None' to not fill NA values.
+  returns = closes.pct_change()
+INFO:     127.0.0.1:56758 - "GET /api/monitor/adl?days=90 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57247 - "GET /api/market-labs/engine/2?universe=US&window=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /api/market-labs/engine/3?universe=US&window=20 HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/utils/extmath.py:203: RuntimeWarning: divide by zero encountered in matmul
+  ret = a @ b
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/utils/extmath.py:203: RuntimeWarning: overflow encountered in matmul
+  ret = a @ b
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/sklearn/utils/extmath.py:203: RuntimeWarning: invalid value encountered in matmul
+  ret = a @ b
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:153: RuntimeWarning: divide by zero encountered in matmul
+  stats['obs'] += posteriors.T @ X
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:153: RuntimeWarning: overflow encountered in matmul
+  stats['obs'] += posteriors.T @ X
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:153: RuntimeWarning: invalid value encountered in matmul
+  stats['obs'] += posteriors.T @ X
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:157: RuntimeWarning: divide by zero encountered in matmul
+  stats['obs**2'] += posteriors.T @ X**2
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:157: RuntimeWarning: overflow encountered in matmul
+  stats['obs**2'] += posteriors.T @ X**2
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/hmmlearn/_emissions.py:157: RuntimeWarning: invalid value encountered in matmul
+  stats['obs**2'] += posteriors.T @ X**2
+/Users/adityabalaji/quant /backend/app/services/regimes_intelligence.py:681: UserWarning: HMM fitting failed: 'diag' covars must have shape (n_components, n_dim)
+  warnings.warn(f"HMM fitting failed: {e}")
+INFO:     127.0.0.1:57261 - "POST /api/labs/regimes/mass_flow HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57266 - "OPTIONS /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57267 - "OPTIONS /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57266 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57269 - "POST /api/market-labs/build-state HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57272 - "OPTIONS /api/labs/volatility/fracture HTTP/1.1" 200 OK
+/Users/adityabalaji/quant /backend/app/services/volatility_intelligence.py:35: FutureWarning: YF.download() has changed argument auto_adjust default to True
+  df = yf.download(ticker, period=period, progress=False)
+INFO:     127.0.0.1:57272 - "POST /api/labs/volatility/fracture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "OPTIONS /api/labs/volatility/forecast HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57332 - "POST /api/labs/volatility/forecast HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'app/services/regimes_intelligence.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [52236]
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [53375]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app/services/volatility_intelligence.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [53375]
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [53404]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app/api/market_labs.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [53404]
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [53414]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app/api/market_labs.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [53414]
+/Users/adityabalaji/quant /backend/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [53461]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

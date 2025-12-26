@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+yfinance
+fredapi
+pandas
+numpy
+scipy
+statsmodels
+arch
+hmmlearn
+scikit-learn
+python-multipart
+requests
+python-dotenv
+ratelimit

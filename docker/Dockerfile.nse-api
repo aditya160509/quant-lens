@@ -1,0 +1,19 @@
+# NSE India API Docker Configuration
+# This dockerfile runs the stock-nse-india server as a standalone container
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install stock-nse-india globally
+RUN npm install -g stock-nse-india
+
+# Expose the API port
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3001/ || exit 1
+
+# Start the server
+CMD ["npx", "stock-nse-india", "serve", "--port", "3001"]
