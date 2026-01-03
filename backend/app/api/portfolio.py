@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import uuid
 import json
+import math
 
 from app.services import portfolio
 from app.services.portfolio_contracts import (
@@ -24,8 +25,35 @@ from app.services.portfolio_contracts import (
     HealthMeterResponse
 )
 from app.services.portfolio_cache import get_cache, compute_quality
+from app.services import portfolio_optimize, portfolio_performance, portfolio_simulation, portfolio_analysis
+from app.services import strategy_research
+from app.services import document_summarizer, sentiment_analyzer
+from app.services import strategy_engine
 
 router = APIRouter()
+
+
+# Helper function to clean NaN/Inf values for JSON serialization
+def clean_for_json(obj):
+    """Recursively clean data to be JSON serializable (handle NaN, Inf)."""
+    if isinstance(obj, dict):
+        return {k: clean_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_for_json(v) for v in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    elif hasattr(obj, 'item'):  # numpy types
+        try:
+            val = obj.item()
+            if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+                return None
+            return val
+        except:
+            return None
+    return obj
+
 
 # =============================================================================
 # IN-MEMORY STATE STORAGE
@@ -1212,3 +1240,1101 @@ def suggestions():
 def get_state():
     """Legacy state endpoint."""
     return portfolio.get_portfolio_state()
+
+
+# =============================================================================
+# NEW FEATURE ENDPOINTS (Features 26-29, 32-34, 37, 41-45)
+# =============================================================================
+
+# Request Models for New Features
+class MarkowitzRequest(BaseModel):
+    tickers: List[str]
+    mode: str = "max_sharpe"  # max_sharpe, min_volatility, target_return, target_volatility
+    target_return: Optional[float] = None
+    target_volatility: Optional[float] = None
+    min_weight: float = 0.0
+    max_weight: float = 1.0
+    long_only: bool = True
+    covariance_method: str = "sample"
+    risk_free_rate: float = 0.05
+
+class RiskParityRequest(BaseModel):
+    tickers: List[str]
+    target_volatility: float = 0.12
+    min_weight: float = 0.02
+    crisis_mode: bool = False
+    stress_factor: float = 1.0
+
+class BlackLittermanRequest(BaseModel):
+    tickers: List[str]
+    views: List[Dict[str, Any]]  # [{type, asset, return, confidence}]
+    market_weights: Optional[Dict[str, float]] = None
+    risk_aversion: float = 2.5
+    tau: float = 0.05
+
+class FactorTiltRequest(BaseModel):
+    tickers: List[str]
+    target_factors: Dict[str, float]  # {momentum, value, quality, size, low_vol}
+    factor_strength: float = 50.0
+    neutralize_factors: Optional[List[str]] = None
+
+class PositionInput(BaseModel):
+    ticker: str
+    weight: float = 0.0
+    shares: Optional[float] = None
+    cost_basis: Optional[float] = None
+    sector: Optional[str] = None
+
+class RatiosRequest(BaseModel):
+    positions: List[PositionInput]
+    window: str = "1y"
+    benchmark: str = "SPY"
+
+class DrawdownsRequest(BaseModel):
+    positions: List[PositionInput]
+    period: str = "3y"
+    threshold: float = 0.05
+    benchmark: str = "SPY"
+
+class MonteCarloRequest(BaseModel):
+    positions: List[PositionInput]
+    n_simulations: int = 10000
+    horizon_years: float = 5
+    initial_capital: float = 100000
+    contributions: float = 0
+    withdrawals: float = 0
+    target_wealth: Optional[float] = None
+
+class VaRRequest(BaseModel):
+    positions: List[PositionInput]
+    confidence_level: float = 0.95
+    horizon_days: int = 1
+    method: str = "historical"
+    portfolio_value: float = 100000
+
+class OverlapRequest(BaseModel):
+    portfolios: List[Dict[str, Any]]
+
+class DividendsRequest(BaseModel):
+    positions: List[PositionInput]
+    reinvest: bool = False
+    growth_rate: float = 0.03
+    horizon_years: int = 5
+
+class TaxLotInput(BaseModel):
+    purchase_date: str
+    quantity: float
+    cost_basis: float
+
+class TaxLotsRequest(BaseModel):
+    tax_lots: List[TaxLotInput]
+    sell_quantity: float
+    current_price: float
+    short_term_rate: float = 0.35
+    long_term_rate: float = 0.15
+    preference: str = "minimize_tax"
+
+
+# --- FEATURE 26: Markowitz Portfolio Optimizer ---
+@router.post("/optimize/markowitz")
+def optimize_markowitz(req: MarkowitzRequest):
+    """POST /api/portfolio/optimize/markowitz - Markowitz Mean-Variance Optimization"""
+    result = portfolio_optimize.compute_markowitz(
+        tickers=req.tickers,
+        mode=req.mode,
+        target_return=req.target_return,
+        target_volatility=req.target_volatility,
+        constraints={
+            "min_weight": req.min_weight,
+            "max_weight": req.max_weight,
+            "long_only": req.long_only
+        },
+        covariance_method=req.covariance_method,
+        risk_free_rate=req.risk_free_rate
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 27: Risk Parity Allocator ---
+@router.post("/optimize/risk-parity")
+def optimize_risk_parity(req: RiskParityRequest):
+    """POST /api/portfolio/optimize/risk-parity - Risk Parity Allocation"""
+    result = portfolio_optimize.compute_risk_parity(
+        tickers=req.tickers,
+        target_volatility=req.target_volatility,
+        min_weight=req.min_weight,
+        crisis_mode=req.crisis_mode,
+        stress_factor=req.stress_factor
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 28: Black-Litterman Model ---
+@router.post("/optimize/black-litterman")
+def optimize_black_litterman(req: BlackLittermanRequest):
+    """POST /api/portfolio/optimize/black-litterman - Black-Litterman Model"""
+    result = portfolio_optimize.compute_black_litterman(
+        tickers=req.tickers,
+        views=req.views,
+        market_weights=req.market_weights,
+        risk_aversion=req.risk_aversion,
+        tau=req.tau
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 29: Factor Tilt Optimizer ---
+@router.post("/optimize/factor-tilt")
+def optimize_factor_tilt(req: FactorTiltRequest):
+    """POST /api/portfolio/optimize/factor-tilt - Factor Tilt Optimization"""
+    result = portfolio_optimize.compute_factor_tilt(
+        tickers=req.tickers,
+        target_factors=req.target_factors,
+        factor_strength=req.factor_strength,
+        neutralize_factors=req.neutralize_factors
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 32: Sharpe/Sortino/Calmar Ratios ---
+@router.post("/ratios")
+def compute_ratios(req: RatiosRequest):
+    """POST /api/portfolio/ratios - Risk-Adjusted Return Ratios"""
+    positions = [{"ticker": p.ticker, "weight": p.weight} for p in req.positions]
+    result = portfolio_performance.compute_ratios(
+        positions=positions,
+        window=req.window,
+        benchmark=req.benchmark
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 33: Max Drawdown Analysis ---
+@router.post("/drawdowns")
+def compute_drawdowns(req: DrawdownsRequest):
+    """POST /api/portfolio/drawdowns - Drawdown Analysis"""
+    positions = [{"ticker": p.ticker, "weight": p.weight} for p in req.positions]
+    result = portfolio_performance.compute_drawdowns(
+        positions=positions,
+        period=req.period,
+        threshold=req.threshold,
+        benchmark=req.benchmark
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 34: Monte Carlo Simulation ---
+@router.post("/monte-carlo")
+def run_monte_carlo(req: MonteCarloRequest):
+    """POST /api/portfolio/monte-carlo - Monte Carlo Simulation"""
+    positions = [{"ticker": p.ticker, "weight": p.weight} for p in req.positions]
+    result = portfolio_simulation.run_monte_carlo(
+        positions=positions,
+        n_simulations=req.n_simulations,
+        horizon_years=req.horizon_years,
+        initial_capital=req.initial_capital,
+        contributions=req.contributions,
+        withdrawals=req.withdrawals,
+        target_wealth=req.target_wealth
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 37: VaR & CVaR Calculator ---
+@router.post("/var")
+def compute_var(req: VaRRequest):
+    """POST /api/portfolio/var - Value at Risk & Conditional VaR"""
+    positions = [{"ticker": p.ticker, "weight": p.weight} for p in req.positions]
+    result = portfolio_simulation.compute_var(
+        positions=positions,
+        confidence_level=req.confidence_level,
+        horizon_days=req.horizon_days,
+        method=req.method,
+        portfolio_value=req.portfolio_value
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 41: Holdings Overlap ---
+@router.post("/overlap")
+def compute_overlap(req: OverlapRequest):
+    """POST /api/portfolio/overlap - Holdings Overlap Analysis"""
+    result = portfolio_analysis.compute_holdings_overlap(portfolios=req.portfolios)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 42: Dividend Tracker ---
+@router.post("/dividends")
+def compute_dividends(req: DividendsRequest):
+    """POST /api/portfolio/dividends - Dividend Income Tracking"""
+    positions = [
+        {"ticker": p.ticker, "shares": p.shares or 0, "cost_basis": p.cost_basis or 0}
+        for p in req.positions
+    ]
+    result = portfolio_analysis.compute_dividends(
+        positions=positions,
+        reinvest=req.reinvest,
+        growth_rate=req.growth_rate,
+        horizon_years=req.horizon_years
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 43: Tax Lot Optimizer ---
+@router.post("/tax-lots")
+def optimize_tax_lots(req: TaxLotsRequest):
+    """POST /api/portfolio/tax-lots - Tax Lot Optimization"""
+    tax_lots = [
+        {"purchase_date": lot.purchase_date, "quantity": lot.quantity, "cost_basis": lot.cost_basis}
+        for lot in req.tax_lots
+    ]
+    result = portfolio_analysis.optimize_tax_lots(
+        tax_lots=tax_lots,
+        sell_quantity=req.sell_quantity,
+        current_price=req.current_price,
+        short_term_rate=req.short_term_rate,
+        long_term_rate=req.long_term_rate,
+        preference=req.preference
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 44: Benchmark Comparison ---
+@router.post("/benchmark")
+def compare_benchmark(req: RatiosRequest):
+    """POST /api/portfolio/benchmark - Benchmark Comparison"""
+    positions = [{"ticker": p.ticker, "weight": p.weight} for p in req.positions]
+    result = portfolio_performance.compute_benchmark_comparison(
+        positions=positions,
+        benchmark=req.benchmark,
+        period=req.window
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 45: Performance Attribution ---
+@router.post("/attribution")
+def compute_attribution(req: RatiosRequest):
+    """POST /api/portfolio/attribution - Brinson Attribution"""
+    positions = [
+        {"ticker": p.ticker, "weight": p.weight, "sector": p.sector or "Other"}
+        for p in req.positions
+    ]
+    result = portfolio_performance.compute_attribution(
+        positions=positions,
+        benchmark=req.benchmark,
+        period=req.window
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# =============================================================================
+# STRATEGY RESEARCH LAB (Features 61-64)
+# =============================================================================
+
+# --- Request Models for Strategy Research ---
+class StrategyBuildRequest(BaseModel):
+    name: str
+    universe: List[str]
+    indicators: List[Dict[str, Any]]
+    entry_rules: Dict[str, str]
+    exit_rules: Dict[str, str]
+    position_sizing: Optional[Dict[str, Any]] = None
+    risk_management: Optional[Dict[str, Any]] = None
+    description: Optional[str] = ""
+
+class BacktestRequest(BaseModel):
+    strategy: Dict[str, Any]
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    initial_capital: float = 100000
+    commission: float = 0.001
+    slippage: float = 0.0005
+
+class OptimizeRequest(BaseModel):
+    strategy: Dict[str, Any]
+    param_space: Dict[str, Dict[str, Any]]
+    method: str = "grid"
+    objective: str = "sharpe"
+    n_iterations: int = 100
+    constraints: Optional[Dict[str, float]] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+class WalkForwardRequest(BaseModel):
+    strategy: Dict[str, Any]
+    param_space: Optional[Dict[str, Dict[str, Any]]] = None
+    train_period_days: int = 252
+    test_period_days: int = 63
+    step_days: int = 63
+    method: str = "rolling"
+    optimize_each_window: bool = True
+    n_opt_iterations: int = 50
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+
+# --- FEATURE 62: Strategy Builder Endpoints ---
+@router.get("/strategy/indicators")
+def get_indicators():
+    """GET /api/portfolio/strategy/indicators - List available indicators"""
+    return strategy_research.get_indicators()
+
+
+@router.get("/strategy/templates")
+def get_templates():
+    """GET /api/portfolio/strategy/templates - Get pre-built strategy templates"""
+    return strategy_research.get_strategy_templates()
+
+
+@router.post("/strategy/build")
+def build_strategy(req: StrategyBuildRequest):
+    """POST /api/portfolio/strategy/build - Build and validate a strategy"""
+    strategy_config = {
+        "name": req.name,
+        "description": req.description,
+        "universe": req.universe,
+        "indicators": req.indicators,
+        "entry_rules": req.entry_rules,
+        "exit_rules": req.exit_rules,
+        "position_sizing": req.position_sizing,
+        "risk_management": req.risk_management
+    }
+    result = strategy_research.build_strategy(strategy_config)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 61: Backtesting Engine Endpoint ---
+@router.post("/strategy/backtest")
+def run_backtest(req: BacktestRequest):
+    """POST /api/portfolio/strategy/backtest - Run backtest simulation"""
+    result = strategy_research.run_backtest(
+        strategy=req.strategy,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        initial_capital=req.initial_capital,
+        commission=req.commission,
+        slippage=req.slippage
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 64: Parameter Optimization Endpoint ---
+@router.post("/strategy/optimize")
+def optimize_parameters(req: OptimizeRequest):
+    """POST /api/portfolio/strategy/optimize - Optimize strategy parameters"""
+    result = strategy_research.optimize_parameters(
+        strategy=req.strategy,
+        param_space=req.param_space,
+        method=req.method,
+        objective=req.objective,
+        n_iterations=req.n_iterations,
+        constraints=req.constraints,
+        start_date=req.start_date,
+        end_date=req.end_date
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 63: Walk Forward Analysis Endpoint ---
+@router.post("/strategy/walk-forward")
+def walk_forward_analysis(req: WalkForwardRequest):
+    """POST /api/portfolio/strategy/walk-forward - Run walk-forward analysis"""
+    result = strategy_research.walk_forward_analysis(
+        strategy=req.strategy,
+        param_space=req.param_space,
+        train_period_days=req.train_period_days,
+        test_period_days=req.test_period_days,
+        step_days=req.step_days,
+        method=req.method,
+        optimize_each_window=req.optimize_each_window,
+        n_opt_iterations=req.n_opt_iterations,
+        start_date=req.start_date,
+        end_date=req.end_date
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- INSTITUTIONAL-GRADE BACKTESTING ENDPOINT ---
+class InstitutionalBacktestRequest(BaseModel):
+    strategy: Dict[str, Any]
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    initial_capital: float = 100000
+    # Execution configuration
+    commission_model: str = "fixed"  # fixed, percent, tiered
+    commission_value: float = 1.0
+    slippage_model: str = "fixed"  # fixed, volatility, impact
+    slippage_bps: float = 5.0
+    # Risk configuration
+    stop_type: str = "percent"  # percent, atr, trailing
+    stop_value: float = 0.02
+    atr_multiple: float = 2.5
+    take_profit: float = 0.06
+    daily_loss_limit: float = 0.05
+    max_positions: int = 10
+    benchmark: Optional[str] = None
+
+
+@router.post("/strategy/backtest/pro")
+def run_institutional_backtest(req: InstitutionalBacktestRequest):
+    """POST /api/portfolio/strategy/backtest/pro - Institutional-grade backtest with full execution modeling"""
+    result = strategy_engine.run_institutional_backtest(
+        strategy=req.strategy,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        initial_capital=req.initial_capital,
+        commission_model=req.commission_model,
+        commission_value=req.commission_value,
+        slippage_model=req.slippage_model,
+        slippage_bps=req.slippage_bps,
+        stop_type=req.stop_type,
+        stop_value=req.stop_value,
+        atr_multiple=req.atr_multiple,
+        take_profit=req.take_profit,
+        daily_loss_limit=req.daily_loss_limit,
+        max_positions=req.max_positions,
+        benchmark=req.benchmark
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 12: Monte Carlo Simulation Endpoint ---
+class MonteCarloStrategyRequest(BaseModel):
+    strategy: Dict[str, Any]
+    n_simulations: int = 1000
+    horizon_days: int = 252
+    initial_capital: float = 100000
+    target_wealth: Optional[float] = None
+    ruin_threshold: float = 0.5
+    use_fat_tails: bool = True
+    vol_clustering: bool = True
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+
+@router.post("/strategy/monte-carlo")
+def run_strategy_monte_carlo(req: MonteCarloStrategyRequest):
+    """POST /api/portfolio/strategy/monte-carlo - Run Monte Carlo simulation on strategy"""
+    result = strategy_research.run_monte_carlo(
+        strategy=req.strategy,
+        n_simulations=req.n_simulations,
+        horizon_days=req.horizon_days,
+        initial_capital=req.initial_capital,
+        target_wealth=req.target_wealth,
+        ruin_threshold=req.ruin_threshold,
+        use_fat_tails=req.use_fat_tails,
+        vol_clustering=req.vol_clustering,
+        start_date=req.start_date,
+        end_date=req.end_date
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 9: Strategy Comparison Endpoint ---
+class StrategyCompareRequest(BaseModel):
+    strategies: List[Dict[str, Any]]
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    initial_capital: float = 100000
+    benchmark: str = "SPY"
+
+
+@router.post("/strategy/compare")
+def compare_strategies(req: StrategyCompareRequest):
+    """POST /api/portfolio/strategy/compare - Compare multiple strategies"""
+    result = strategy_research.compare_strategies(
+        strategies=req.strategies,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        initial_capital=req.initial_capital,
+        benchmark=req.benchmark
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 13: Capacity Analysis Endpoint ---
+class CapacityAnalysisRequest(BaseModel):
+    strategy: Dict[str, Any]
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    test_capitals: Optional[List[float]] = None
+
+
+@router.post("/strategy/capacity")
+def analyze_strategy_capacity(req: CapacityAnalysisRequest):
+    """POST /api/portfolio/strategy/capacity - Analyze strategy capacity constraints"""
+    result = strategy_research.analyze_capacity(
+        strategy=req.strategy,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        test_capitals=req.test_capitals
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 4: Performance Tearsheet Endpoint ---
+class TearsheetRequest(BaseModel):
+    strategy: Dict[str, Any]
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    initial_capital: float = 100000
+    benchmark: str = "SPY"
+
+
+@router.post("/strategy/tearsheet")
+def generate_tearsheet(req: TearsheetRequest):
+    """POST /api/portfolio/strategy/tearsheet - Generate performance tearsheet"""
+    result = strategy_research.generate_performance_tearsheet(
+        strategy=req.strategy,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        initial_capital=req.initial_capital,
+        benchmark=req.benchmark
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 5: Drawdown Analysis Endpoint ---
+class DrawdownAnalysisRequest(BaseModel):
+    strategy: Dict[str, Any]
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    initial_capital: float = 100000
+    top_n: int = 10
+
+
+@router.post("/strategy/drawdowns")
+def analyze_strategy_drawdowns(req: DrawdownAnalysisRequest):
+    """POST /api/portfolio/strategy/drawdowns - Analyze drawdowns"""
+    result = strategy_research.analyze_drawdowns(
+        strategy=req.strategy,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        initial_capital=req.initial_capital,
+        top_n=req.top_n
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 8: Regime Conditional Backtest Endpoint ---
+class RegimeBacktestRequest(BaseModel):
+    strategy: Dict[str, Any]
+    regimes: Optional[Dict[str, Any]] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    initial_capital: float = 100000
+
+
+@router.post("/strategy/regime-backtest")
+def run_regime_conditional_backtest(req: RegimeBacktestRequest):
+    """POST /api/portfolio/strategy/regime-backtest - Run regime-conditional backtest"""
+    result = strategy_research.run_regime_backtest(
+        strategy=req.strategy,
+        regimes=req.regimes,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        initial_capital=req.initial_capital
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# --- FEATURE 6: Transaction Cost Analysis Endpoint ---
+class CostAnalysisRequest(BaseModel):
+    strategy: Dict[str, Any]
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    slippage_scenarios: Optional[List[float]] = None
+
+
+@router.post("/strategy/cost-analysis")
+def analyze_transaction_costs(req: CostAnalysisRequest):
+    """POST /api/portfolio/strategy/cost-analysis - Analyze transaction costs"""
+    result = strategy_research.analyze_transaction_costs(
+        strategy=req.strategy,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        slippage_scenarios=req.slippage_scenarios
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+# =============================================================================
+# RESEARCH INTELLIGENCE (Features 70-71)
+# =============================================================================
+
+# --- Request Models for Research ---
+class DocumentProcessRequest(BaseModel):
+    text: str
+    doc_type: str = "10-K"
+    ticker: str = ""
+    filing_date: str = ""
+    previous_text: str = ""
+
+class DocumentCompareRequest(BaseModel):
+    text1: str
+    text2: str
+    ticker: str = ""
+    doc_type: str = "10-K"
+
+class SentimentAnalyzeRequest(BaseModel):
+    text: str
+
+class CompanySentimentRequest(BaseModel):
+    ticker: str
+    days: int = 30
+    include_price: bool = True
+
+class SentimentCompareRequest(BaseModel):
+    tickers: List[str]
+    days: int = 30
+
+
+# --- FEATURE 70: Document Summarizer Endpoints ---
+@router.get("/research/filing-types")
+def get_filing_types():
+    """GET /api/portfolio/research/filing-types - Available SEC filing types"""
+    return document_summarizer.get_filing_types()
+
+
+@router.get("/research/filings/{ticker}")
+def get_company_filings(ticker: str, filing_type: str = "10-K", count: int = 5):
+    """GET /api/portfolio/research/filings/{ticker} - Get SEC filings for a company"""
+    filings = document_summarizer.fetch_company_filings(ticker, filing_type, count)
+    return {"ticker": ticker, "filing_type": filing_type, "filings": filings}
+
+
+@router.get("/research/fetch-filing/{ticker}")
+def fetch_and_process(ticker: str, filing_type: str = "10-K"):
+    """GET /api/portfolio/research/fetch-filing/{ticker} - Fetch and process latest filing"""
+    result = document_summarizer.fetch_and_process_filing(ticker, filing_type)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+@router.post("/research/documents/process")
+def process_document(req: DocumentProcessRequest):
+    """POST /api/portfolio/research/documents/process - Process document text"""
+    result = document_summarizer.process_document(
+        text=req.text,
+        doc_type=req.doc_type,
+        ticker=req.ticker,
+        filing_date=req.filing_date,
+        previous_text=req.previous_text
+    )
+    return clean_for_json(result)
+
+
+@router.post("/research/documents/compare")
+def compare_documents(req: DocumentCompareRequest):
+    """POST /api/portfolio/research/documents/compare - Compare two documents"""
+    result = document_summarizer.compare_documents(
+        text1=req.text1,
+        text2=req.text2,
+        ticker=req.ticker,
+        doc_type=req.doc_type
+    )
+    return clean_for_json(result)
+
+
+# --- FEATURE 71: Sentiment Analyzer Endpoints ---
+@router.post("/research/sentiment/analyze")
+def analyze_sentiment(req: SentimentAnalyzeRequest):
+    """POST /api/portfolio/research/sentiment/analyze - Analyze text sentiment"""
+    result = sentiment_analyzer.analyze_text_sentiment(req.text)
+    return clean_for_json(result)
+
+
+@router.post("/research/sentiment/company")
+def analyze_company_sentiment(req: CompanySentimentRequest):
+    """POST /api/portfolio/research/sentiment/company - Full sentiment analysis for a company"""
+    result = sentiment_analyzer.analyze_company_sentiment(
+        ticker=req.ticker,
+        days=req.days,
+        include_price=req.include_price
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return clean_for_json(result)
+
+
+@router.post("/research/sentiment/compare")
+def compare_sentiment(req: SentimentCompareRequest):
+    """POST /api/portfolio/research/sentiment/compare - Compare sentiment across tickers"""
+    result = sentiment_analyzer.compare_sentiment(
+        tickers=req.tickers,
+        days=req.days
+    )
+    return clean_for_json(result)
+
+
+@router.get("/research/sentiment/topics")
+def get_sentiment_topics():
+    """GET /api/portfolio/research/sentiment/topics - Get available sentiment topics"""
+    return {
+        "topics": list(sentiment_analyzer.TOPIC_KEYWORDS.keys()),
+        "keywords": sentiment_analyzer.TOPIC_KEYWORDS
+    }
+
+
+# --- PHASE 14 ENHANCED ENDPOINTS ---
+
+class EnhancedDocumentRequest(BaseModel):
+    text: str
+    doc_type: str = "10-K"
+    ticker: str = ""
+    filing_date: str = ""
+
+
+@router.post("/research/documents/enhanced")
+def analyze_document_enhanced(req: EnhancedDocumentRequest):
+    """POST /api/portfolio/research/documents/enhanced - Enhanced document analysis with disclosure intensity"""
+    result = document_summarizer.analyze_document_enhanced(
+        text=req.text,
+        doc_type=req.doc_type,
+        ticker=req.ticker,
+        filing_date=req.filing_date
+    )
+    return clean_for_json(result)
+
+
+@router.post("/research/documents/disclosure-intensity")
+def get_disclosure_intensity(req: EnhancedDocumentRequest):
+    """POST /api/portfolio/research/documents/disclosure-intensity - Calculate disclosure intensity only"""
+    result = document_summarizer.calculate_disclosure_intensity(req.text)
+    return clean_for_json(result)
+
+
+@router.post("/research/documents/red-flags")
+def detect_red_flags(req: EnhancedDocumentRequest):
+    """POST /api/portfolio/research/documents/red-flags - Detect document red flags"""
+    result = document_summarizer.detect_red_flags(req.text)
+    return clean_for_json(result)
+
+
+# --- PHASE 15 SENTIMENT MODEL INFO ---
+
+@router.get("/research/sentiment/model-info")
+def get_sentiment_model_info():
+    """GET /api/portfolio/research/sentiment/model-info - Get active sentiment model info"""
+    return sentiment_analyzer.get_sentiment_model_info()
+
+
+@router.post("/research/sentiment/enhanced")
+def analyze_sentiment_enhanced(req: SentimentAnalyzeRequest):
+    """POST /api/portfolio/research/sentiment/enhanced - Enhanced sentiment using FinBERT when available"""
+    result = sentiment_analyzer.analyze_sentiment_enhanced(req.text, return_details=True)
+    return clean_for_json(result)
+
+
+# =============================================================================
+# PORTFOLIO VAR SYSTEM - RISK CONTROL ENDPOINTS
+# =============================================================================
+
+from app.services import portfolio_var
+
+class IncrementalVarRequest(BaseModel):
+    ticker: str
+    trade_value: float
+    side: str = "buy"
+    confidence: float = 0.99
+
+
+@router.post("/risk-control/clear-cache")
+def clear_risk_control_cache():
+    """
+    POST /api/portfolio/risk-control/clear-cache
+    Clear price data cache to force fresh data fetch.
+    """
+    try:
+        portfolio_var.clear_price_cache()
+        return {"status": "success", "message": "Cache cleared successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-control/dashboard")
+def get_risk_control_dashboard():
+    """
+    GET /api/portfolio/risk-control/dashboard
+    Master risk dashboard aggregating all 9 VaR features.
+    """
+    try:
+        result = portfolio_var.compute_risk_dashboard()
+        return clean_for_json(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-control/parametric-var")
+def get_parametric_var(
+    confidence: float = Query(0.99, description="Confidence level: 0.90, 0.95, 0.99"),
+    lookback: int = Query(250, description="Lookback window: 120, 250, 500"),
+    holding_period: int = Query(1, description="Holding period: 1, 5, 10 days")
+):
+    """
+    GET /api/portfolio/risk-control/parametric-var
+    Feature 1: Parametric VaR with return distribution analysis.
+    """
+    # Validate inputs
+    if confidence not in [0.90, 0.95, 0.99]:
+        confidence = 0.99
+    if lookback not in [120, 250, 500]:
+        lookback = 250
+    if holding_period not in [1, 5, 10]:
+        holding_period = 1
+    
+    try:
+        result = portfolio_var.compute_parametric_var(
+            confidence=confidence,
+            lookback=lookback,
+            holding_period=holding_period
+        )
+        return clean_for_json(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-control/cf-var")
+def get_cornish_fisher_var(
+    confidence: float = Query(0.99, description="Confidence level"),
+    lookback: int = Query(250, description="Lookback window")
+):
+    """
+    GET /api/portfolio/risk-control/cf-var
+    Feature 2: Cornish-Fisher VaR with fat tail detection.
+    """
+    if confidence not in [0.90, 0.95, 0.99]:
+        confidence = 0.99
+    if lookback not in [120, 250, 500]:
+        lookback = 250
+    
+    try:
+        result = portfolio_var.compute_cornish_fisher_var(
+            confidence=confidence,
+            lookback=lookback
+        )
+        return clean_for_json(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-control/etl")
+def get_expected_tail_loss(
+    confidence: float = Query(0.99, description="Confidence level"),
+    lookback: int = Query(250, description="Lookback window")
+):
+    """
+    GET /api/portfolio/risk-control/etl
+    Feature 3: Expected Tail Loss (CVaR) with worst-case analysis.
+    """
+    if confidence not in [0.90, 0.95, 0.99]:
+        confidence = 0.99
+    if lookback not in [120, 250, 500]:
+        lookback = 250
+    
+    try:
+        result = portfolio_var.compute_expected_tail_loss(
+            confidence=confidence,
+            lookback=lookback
+        )
+        return clean_for_json(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-control/component-var")
+def get_component_var(
+    confidence: float = Query(0.99, description="Confidence level"),
+    lookback: int = Query(250, description="Lookback window")
+):
+    """
+    GET /api/portfolio/risk-control/component-var
+    Feature 4: Component VaR for risk attribution.
+    """
+    if confidence not in [0.90, 0.95, 0.99]:
+        confidence = 0.99
+    if lookback not in [120, 250, 500]:
+        lookback = 250
+    
+    try:
+        result = portfolio_var.compute_component_var(
+            confidence=confidence,
+            lookback=lookback
+        )
+        return clean_for_json(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/risk-control/incremental-var")
+def compute_incremental_var(req: IncrementalVarRequest):
+    """
+    POST /api/portfolio/risk-control/incremental-var
+    Feature 5: Incremental VaR trade gatekeeper.
+    """
+    # Validate inputs
+    if not req.ticker or len(req.ticker) > 10:
+        raise HTTPException(status_code=400, detail="Invalid ticker")
+    if req.trade_value <= 0 or req.trade_value > 10000000:
+        raise HTTPException(status_code=400, detail="Invalid trade value")
+    if req.side not in ["buy", "sell"]:
+        req.side = "buy"
+    if req.confidence not in [0.90, 0.95, 0.99]:
+        req.confidence = 0.99
+    
+    try:
+        result = portfolio_var.compute_incremental_var(
+            ticker=req.ticker.upper(),
+            trade_value=req.trade_value,
+            side=req.side,
+            confidence=req.confidence
+        )
+        return clean_for_json(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-control/stressed-var")
+def get_stressed_var(
+    crisis_scenario: str = Query("2020_covid", description="Crisis: 2008_gfc, 2020_covid, 2022_inflation"),
+    confidence: float = Query(0.99, description="Confidence level")
+):
+    """
+    GET /api/portfolio/risk-control/stressed-var
+    Feature 6: Stressed VaR using historical crisis scenarios.
+    """
+    valid_scenarios = ["2008_gfc", "2020_covid", "2022_inflation"]
+    if crisis_scenario not in valid_scenarios:
+        crisis_scenario = "2020_covid"
+    if confidence not in [0.90, 0.95, 0.99]:
+        confidence = 0.99
+    
+    try:
+        result = portfolio_var.compute_stressed_var(
+            crisis_scenario=crisis_scenario,
+            confidence=confidence
+        )
+        return clean_for_json(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-control/correlation-stress")
+def get_correlation_stress(
+    target_correlation: float = Query(0.9, description="Target correlation for stress test")
+):
+    """
+    GET /api/portfolio/risk-control/correlation-stress
+    Feature 7: Correlation stress test with diversification analysis.
+    """
+    if not 0.5 <= target_correlation <= 1.0:
+        target_correlation = 0.9
+    
+    try:
+        result = portfolio_var.compute_correlation_stress(
+            target_correlation=target_correlation
+        )
+        return clean_for_json(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-control/backtest")
+def get_var_backtest(
+    confidence: float = Query(0.99, description="Confidence level"),
+    test_period: int = Query(250, description="Test period in days")
+):
+    """
+    GET /api/portfolio/risk-control/backtest
+    Feature 8: VaR backtesting with PnL overlay.
+    """
+    if confidence not in [0.90, 0.95, 0.99]:
+        confidence = 0.99
+    if not 60 <= test_period <= 500:
+        test_period = 250
+    
+    try:
+        result = portfolio_var.compute_backtest(
+            confidence=confidence,
+            test_period=test_period
+        )
+        return clean_for_json(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/risk-control/kupiec")
+def get_kupiec_test(
+    confidence: float = Query(0.99, description="Confidence level"),
+    test_period: int = Query(250, description="Test period in days")
+):
+    """
+    GET /api/portfolio/risk-control/kupiec
+    Feature 9: Kupiec POF test for VaR model validation.
+    """
+    if confidence not in [0.90, 0.95, 0.99]:
+        confidence = 0.99
+    if not 60 <= test_period <= 500:
+        test_period = 250
+    
+    try:
+        result = portfolio_var.compute_kupiec_test(
+            confidence=confidence,
+            test_period=test_period
+        )
+        return clean_for_json(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

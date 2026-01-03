@@ -19,8 +19,67 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any
 from app import data_loader
+import yfinance as yf
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
+
+# Company info cache with TTL
+_company_cache: Dict[str, Dict[str, Any]] = {}
+_company_cache_time: Dict[str, datetime] = {}
+COMPANY_CACHE_TTL = 3600  # 1 hour
+
+def get_company_info(ticker: str) -> Dict[str, Any]:
+    """Get company info with caching using yfinance."""
+    global _company_cache, _company_cache_time
+    
+    now = datetime.now()
+    if ticker in _company_cache:
+        if (now - _company_cache_time.get(ticker, now)).total_seconds() < COMPANY_CACHE_TTL:
+            return _company_cache[ticker]
+    
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        company_data = {
+            'name': info.get('shortName') or info.get('longName') or ticker,
+            'market_cap': info.get('marketCap'),
+            'pe_ratio': info.get('trailingPE'),
+            'forward_pe': info.get('forwardPE'),
+            'pb_ratio': info.get('priceToBook'),
+            'dividend_yield': info.get('dividendYield'),
+            'beta': info.get('beta'),
+            '52w_high': info.get('fiftyTwoWeekHigh'),
+            '52w_low': info.get('fiftyTwoWeekLow'),
+            'avg_volume': info.get('averageVolume'),
+            'shares_outstanding': info.get('sharesOutstanding'),
+            'float_shares': info.get('floatShares'),
+            'earnings_date': str(info.get('earningsDate')) if info.get('earningsDate') else None,
+            'exchange': info.get('exchange'),
+            'currency': info.get('currency', 'USD'),
+        }
+        _company_cache[ticker] = company_data
+        _company_cache_time[ticker] = now
+        return company_data
+    except Exception as e:
+        logger.debug(f"Could not fetch company info for {ticker}: {e}")
+        return {
+            'name': ticker,
+            'market_cap': None,
+            'pe_ratio': None,
+            'forward_pe': None,
+            'pb_ratio': None,
+            'dividend_yield': None,
+            'beta': None,
+            '52w_high': None,
+            '52w_low': None,
+            'avg_volume': None,
+            'shares_outstanding': None,
+            'float_shares': None,
+            'earnings_date': None,
+            'exchange': None,
+            'currency': 'USD',
+        }
 
 # Default universe of tickers
 DEFAULT_UNIVERSE = [

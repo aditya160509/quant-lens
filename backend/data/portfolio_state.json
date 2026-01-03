@@ -1,5 +1,5 @@
 {
-  "cash": 78668.03915350343,
+  "cash": 53379.80076727296,
   "holdings": {
     "AAPL": {
       "quantity": 40,
@@ -12,6 +12,10 @@
     "HDFCBANK.NS": {
       "quantity": 9,
       "avg_cost": 1001.6005255737305
+    },
+    "BHARTIARTL.NS": {
+      "quantity": 12,
+      "avg_cost": 2107.353198852539
     }
   },
   "history": [
@@ -54,6 +58,14 @@
       "quantity": 9,
       "price": 1001.0999755859375,
       "fees": 4.504949890136719
+    },
+    {
+      "timestamp": "2026-01-03T17:54:20.576841",
+      "side": "BUY",
+      "ticker": "BHARTIARTL.NS",
+      "quantity": 12,
+      "price": 2106.300048828125,
+      "fees": 12.63780029296875
     }
   ],
   "base_currency": "USD",

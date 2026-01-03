@@ -4,11 +4,64 @@ import numpy as np
 import logging
 import pytz
 from datetime import datetime, time, timedelta
+import threading
 
 logger = logging.getLogger(__name__)
 
-# In-memory cache: {(tuple(symbols), start, end, interval): DataFrame}
-_price_cache = {}
+# API Usage Tracker
+try:
+    from app.services.api_tracker import track_api_call, track_yf_ticker
+    API_TRACKER = True
+except ImportError:
+    API_TRACKER = False
+    def track_api_call(*args, **kwargs): pass
+    def track_yf_ticker(*args, **kwargs): pass
+
+# Cache with TTL - Thread-safe
+class TTLCache:
+    """Thread-safe cache with TTL support."""
+    def __init__(self, default_ttl: int = 300):
+        self.cache = {}
+        self.lock = threading.Lock()
+        self.default_ttl = default_ttl
+        self.hits = 0
+        self.misses = 0
+    
+    def get(self, key):
+        with self.lock:
+            if key in self.cache:
+                entry = self.cache[key]
+                if datetime.now() < entry['expires']:
+                    self.hits += 1
+                    return entry['data']
+                else:
+                    del self.cache[key]
+            self.misses += 1
+            return None
+    
+    def set(self, key, data, ttl: int = None):
+        with self.lock:
+            self.cache[key] = {
+                'data': data,
+                'expires': datetime.now() + timedelta(seconds=ttl or self.default_ttl)
+            }
+    
+    def clear(self):
+        with self.lock:
+            self.cache.clear()
+            
+    def stats(self):
+        return {
+            'size': len(self.cache),
+            'hits': self.hits,
+            'misses': self.misses,
+            'hit_rate': self.hits / (self.hits + self.misses) if (self.hits + self.misses) > 0 else 0
+        }
+
+# Initialize caches with appropriate TTLs
+_price_cache = TTLCache(default_ttl=600)  # 10 minutes for daily data
+_intraday_cache = TTLCache(default_ttl=120)  # 2 minutes for intraday
+_ticker_info_cache = TTLCache(default_ttl=3600)  # 1 hour for ticker info
 
 def get_session_info():
     """
@@ -65,10 +118,14 @@ def get_price_history(symbols, start, end, interval="1d"):
     
     # Check cache
     cache_key = (tuple(sorted(symbols)), start, end, interval)
-    if cache_key in _price_cache:
-        return _price_cache[cache_key]
+    cached = _price_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     try:
+        # Track this API call
+        track_api_call("data_loader", "get_price_history", len(symbols), "yfinance")
+        
         # yfinance download
         df = yf.download(
             symbols, 
@@ -96,7 +153,7 @@ def get_price_history(symbols, start, end, interval="1d"):
             df = df.dropna(how='all')
             df = df.ffill()
 
-        _price_cache[cache_key] = df
+        _price_cache.set(cache_key, df)
         return df
 
     except Exception as e:
@@ -139,27 +196,25 @@ def fetch_ticker_data(ticker, period="1y", interval="1d"):
         logger.error(f"Error fetching ticker {ticker}: {e}")
         return pd.DataFrame()
 
-# Intraday Cache: {ticker: {'timestamp': datetime, 'data': [{'t':..., 'o':...}]}}
-_intraday_cache = {}
-
-def get_intraday_bars(ticker, interval="5m", max_age_seconds=60):
+def get_intraday_bars(ticker, interval="5m", max_age_seconds=120):
     """
     Fetch intraday bars for a single ticker with caching.
     Returns a list of dictionaries associated with the current or last session.
     """
-    now = datetime.now()
-    
-    # Check cache
-    if ticker in _intraday_cache:
-        entry = _intraday_cache[ticker]
-        age = (now - entry['timestamp']).total_seconds()
-        if age < max_age_seconds and entry['interval'] == interval:
-            return entry['data']
+    # Check cache using TTLCache
+    cache_key = (ticker, interval)
+    cached = _intraday_cache.get(cache_key)
+    if cached is not None:
+        return cached
             
     try:
         # Check session to decide period
         session = get_session_info()
         period = "1d" if session['market_open'] else "5d" # Fetch 5d if closed to ensure we get ANY recent session
+        
+        # Track this API call
+        track_api_call("data_loader", "get_intraday_bars", 1, "yfinance")
+        track_yf_ticker(ticker, "intraday")
         
         df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=False)
         
@@ -197,12 +252,8 @@ def get_intraday_bars(ticker, interval="5m", max_age_seconds=60):
             }
             bars.append(bar)
             
-        # Update cache
-        _intraday_cache[ticker] = {
-            'timestamp': now,
-            'interval': interval,
-            'data': bars
-        }
+        # Update cache using TTLCache
+        _intraday_cache.set(cache_key, bars, max_age_seconds)
         
         return bars
         

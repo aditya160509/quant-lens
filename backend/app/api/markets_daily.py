@@ -1,6 +1,7 @@
 """
 Markets Daily API Router - Post-Close Cognition Screen
 Rebuilt per Master Spec with 7 endpoints, cache layer, and full audit trails.
+Now uses robust_data_fetcher for multi-source data with caching.
 """
 from fastapi import APIRouter, Query, HTTPException
 from typing import List, Dict, Any, Optional
@@ -14,7 +15,16 @@ import hashlib
 import json
 from functools import lru_cache
 
+# Use robust data fetcher - handles NSE, Yahoo Direct, and yfinance with caching
+from app.services.robust_data_fetcher import (
+    get_price_data as rdf_get_price,
+    get_batch_data as rdf_get_batch,
+    get_ticker_info as rdf_get_info
+)
+
+# Keep yfinance as fallback for specific functionality
 import yfinance as yf
+
 from app.services import universe
 
 router = APIRouter()
@@ -118,16 +128,34 @@ def get_quality_label(missing_pct: float) -> str:
     return "low"
 
 def fetch_ohlcv(symbols: List[str], period: str = "3mo") -> pd.DataFrame:
-    """Fetch OHLCV data for symbols with caching."""
+    """Fetch OHLCV data for symbols using robust_data_fetcher with caching."""
     cache_key = get_cache_key("ohlcv", {"symbols": sorted(symbols)[:10], "period": period})
-    cached = get_from_cache(cache_key, ttl_sec=300)
+    cached = get_from_cache(cache_key, ttl_sec=600)  # 10 min cache
     if cached:
         return cached["payload"]
     
     try:
-        data = yf.download(" ".join(symbols), period=period, progress=False, threads=True)
-        set_cache(cache_key, data, "yfinance")
-        return data
+        # Use robust data fetcher for batch with rate limiting
+        batch_data = rdf_get_batch(symbols[:50], period=period, batch_size=10)
+        
+        if not batch_data:
+            return pd.DataFrame()
+        
+        # Combine into multi-index DataFrame like yf.download returns
+        all_data = {}
+        for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+            for symbol, df in batch_data.items():
+                if df is not None and not df.empty and col in df.columns:
+                    all_data[(col, symbol)] = df[col]
+        
+        if not all_data:
+            return pd.DataFrame()
+        
+        result = pd.DataFrame(all_data)
+        result.columns = pd.MultiIndex.from_tuples(result.columns)
+        
+        set_cache(cache_key, result, "robust_data_fetcher")
+        return result
     except Exception as e:
         logger.error(f"OHLCV fetch error: {e}")
         return pd.DataFrame()

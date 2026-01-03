@@ -40,6 +40,47 @@ MARKET_GROUPS = {"indices", "etfs"}
 MARKET_OPTIONAL_GROUPS = {"fx", "crypto"}
 ALL_GROUPS = set(UNIVERSE.keys())
 
+# ===== Asset Type Classification =====
+# Maps groups to asset types for screener feature gating
+ASSET_TYPE_MAP = {
+    "india_nse": "EQUITY",
+    "india_bse": "EQUITY",
+    "us_equities": "EQUITY",
+    "etfs": "ETF",
+    "indices": "INDEX",
+    "crypto": "CRYPTO",
+    "fx": "FX",
+}
+
+def get_asset_type(symbol: str) -> str:
+    """Get asset type for a symbol (EQUITY, CRYPTO, FX, INDEX, ETF)."""
+    group = GROUP_MAP.get(symbol)
+    if group:
+        return ASSET_TYPE_MAP.get(group, "EQUITY")
+    # Fallback detection by pattern
+    if symbol.startswith("^"):
+        return "INDEX"
+    if symbol.endswith("-USD"):
+        return "CRYPTO"
+    if symbol.endswith("=X"):
+        return "FX"
+    if symbol.endswith(".NS") or symbol.endswith(".BO"):
+        return "EQUITY"
+    return "EQUITY"
+
+def get_available_asset_types() -> List[str]:
+    """Get list of available asset types in the universe."""
+    return list(set(ASSET_TYPE_MAP.values()))
+
+def get_symbols_by_asset_type(asset_type: str) -> List[str]:
+    """Get all symbols matching an asset type (EQUITY, CRYPTO, FX, INDEX, ETF)."""
+    asset_type = asset_type.upper()
+    result = []
+    for group, atype in ASSET_TYPE_MAP.items():
+        if atype == asset_type:
+            result.extend(UNIVERSE.get(group, []))
+    return result
+
 SECURITY_SET: Set[str] = set()
 MARKET_SET: Set[str] = set()
 MARKET_OPTIONAL_SET: Set[str] = set()

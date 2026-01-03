@@ -1,7 +1,7 @@
 """
 Monitor API Router - Bloomberg-style Command Center Endpoints
 Provides real-time market monitoring data with audit trails and quality scores.
-Now with aggressive caching to prevent 429 (Too Many Requests) errors.
+Now uses robust_data_fetcher with multi-source fallback and disk caching.
 """
 from fastapi import APIRouter, Query, HTTPException
 from typing import List, Dict, Any, Optional
@@ -15,11 +15,18 @@ import hashlib
 import concurrent.futures
 import time as time_module
 
-import yfinance as yf
+# Use robust data fetcher instead of yfinance directly
+from app.services.robust_data_fetcher import (
+    get_price_data as rdf_get_price,
+    get_intraday_data as rdf_get_intraday,
+    get_batch_data as rdf_get_batch,
+    get_ticker_info as rdf_get_info
+)
+
 from app import data_loader
 from app.services import universe
 
-# Import rate limiting and caching
+# Import rate limiting and caching (for legacy compatibility)
 try:
     from app.services.rate_limiter import global_cache, yfinance_limiter, backoff_handler
     CACHE_AVAILABLE = True
@@ -31,95 +38,52 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # ============================================================================
-# Caching Helper
+# Caching Helper - Now uses robust_data_fetcher
 # ============================================================================
 
 def get_cached_yf_data(symbols: List[str], period: str = "2d") -> pd.DataFrame:
     """
-    Get yfinance data with caching and rate limiting.
-    Returns cached data if rate limited or on error.
+    Get data for multiple symbols using robust_data_fetcher.
+    Returns combined DataFrame with multi-index columns (column_name, symbol).
     """
-    cache_key = f"yf_download:{','.join(sorted(symbols[:10]))}:{period}"
-    
-    # Check cache first (5 minute TTL)
-    if CACHE_AVAILABLE and global_cache:
-        cached, is_fresh = global_cache.get(cache_key)
-        if is_fresh and cached is not None:
-            logger.debug(f"[Cache] Hit for {len(symbols)} symbols")
-            return cached
-        
-        # Check backoff
-        if backoff_handler.should_skip("yfinance"):
-            if cached is not None:
-                logger.info("[Cache] Returning stale data due to backoff")
-                return cached
-            logger.warning("[Backoff] Skipping yfinance request")
-            return pd.DataFrame()
-        
-        # Rate limit
-        if not yfinance_limiter.try_acquire():
-            if cached is not None:
-                logger.info("[RateLimit] Returning stale data")
-                return cached
-            return pd.DataFrame()
-    
     try:
-        tickers_str = " ".join(symbols[:50])  # Limit batch
-        data = yf.download(tickers_str, period=period, progress=False, threads=True)
+        batch_data = rdf_get_batch(symbols[:50], period=period, batch_size=10, delay_between_batches=0.5)
         
-        # Cache successful result
-        if CACHE_AVAILABLE and global_cache and not data.empty:
-            global_cache.set(cache_key, data, ttl=300)  # 5 min cache
-            backoff_handler.record_success("yfinance")
+        if not batch_data:
+            return pd.DataFrame()
         
-        return data
+        # Filter out empty DataFrames
+        valid_data = {sym: df for sym, df in batch_data.items() if df is not None and not df.empty}
+        
+        if not valid_data:
+            return pd.DataFrame()
+        
+        # Build multi-index DataFrame matching yfinance format
+        # yfinance format: columns are ('Close', 'SPY'), ('Close', 'QQQ'), etc.
+        all_data = {}
+        for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+            for symbol, df in valid_data.items():
+                if col in df.columns:
+                    all_data[(col, symbol)] = df[col]
+        
+        if not all_data:
+            return pd.DataFrame()
+        
+        result = pd.DataFrame(all_data)
+        result.columns = pd.MultiIndex.from_tuples(result.columns)
+        return result
+        
     except Exception as e:
-        logger.error(f"[YF] Download error: {e}")
-        if CACHE_AVAILABLE:
-            backoff_handler.record_error("yfinance")
-        
-        # Return stale cache if available
-        if CACHE_AVAILABLE and global_cache:
-            cached, _ = global_cache.get(cache_key)
-            if cached is not None:
-                return cached
-        
+        logger.error(f"[RDF] Batch data error: {e}")
+        import traceback
+        traceback.print_exc()
         return pd.DataFrame()
 
 
 def get_cached_ticker(symbol: str, period: str = "2d") -> Optional[pd.DataFrame]:
-    """Get single ticker data with caching."""
-    cache_key = f"yf_ticker:{symbol}:{period}"
-    
-    if CACHE_AVAILABLE and global_cache:
-        cached, is_fresh = global_cache.get(cache_key)
-        if is_fresh and cached is not None:
-            return cached
-        
-        if backoff_handler.should_skip("yfinance"):
-            return cached if cached is not None else None
-        
-        if not yfinance_limiter.try_acquire():
-            return cached if cached is not None else None
-    
-    try:
-        ticker = yf.Ticker(symbol)
-        hist = ticker.history(period=period)
-        
-        if CACHE_AVAILABLE and global_cache and not hist.empty:
-            global_cache.set(cache_key, hist, ttl=300)
-            backoff_handler.record_success("yfinance")
-        
-        return hist
-    except Exception as e:
-        logger.error(f"[YF] Ticker error {symbol}: {e}")
-        if CACHE_AVAILABLE:
-            backoff_handler.record_error("yfinance")
-        
-        if CACHE_AVAILABLE and global_cache:
-            cached, _ = global_cache.get(cache_key)
-            return cached
-        return None
+    """Get single ticker data using robust_data_fetcher."""
+    return rdf_get_price(symbol, period=period)
+
 
 # ============================================================================
 # Response Models
@@ -1669,3 +1633,118 @@ def get_ad_ratio_thrust(days: int = Query(90, description="Number of days")):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ============================================================================
+# AGGREGATED SNAPSHOT ENDPOINT - Reduces 11 calls to 1
+# ============================================================================
+
+# Cache for the aggregated snapshot
+_SNAPSHOT_CACHE = {}
+_SNAPSHOT_TTL = 300  # 5 minute cache for aggregated data
+
+@router.get("/snapshot")
+def get_monitor_snapshot(market: str = Query("IN", description="Market: IN or US")):
+    """
+    GET /api/monitor/snapshot
+    
+    AGGREGATED ENDPOINT: Returns all monitor data in ONE call instead of 11 separate calls.
+    This dramatically reduces API load and improves frontend performance.
+    
+    Data included:
+    - tickers: Equity ticker strip (SPY, QQQ, NIFTY, etc.)
+    - macroTickers: Macro pressure data (VIX, DXY, Gold, etc.)
+    - breadth: Advance/decline data
+    - fxcrypto: FX pairs and crypto
+    - regime: Volatility/trend regime tags
+    - clock: Market session status
+    
+    Cache: 5 minutes to prevent excessive yfinance calls
+    """
+    import time
+    start_time = time.time()
+    
+    cache_key = f"snapshot_{market}"
+    now = datetime.now(pytz.UTC)
+    
+    # Check cache
+    if cache_key in _SNAPSHOT_CACHE:
+        cached = _SNAPSHOT_CACHE[cache_key]
+        age = (now - cached["timestamp"]).total_seconds()
+        if age < _SNAPSHOT_TTL:
+            logger.info(f"[Snapshot] Cache hit, age={age:.1f}s")
+            return {
+                **cached["data"],
+                "_meta": {
+                    "cacheHit": True,
+                    "cacheAge": round(age, 1),
+                    "fetchTime": 0
+                }
+            }
+    
+    logger.info(f"[Snapshot] Cache miss for {market}, fetching fresh data")
+    
+    # Build aggregated response by calling individual endpoints
+    # This is more maintainable than duplicating all the logic
+    snapshot_data = {
+        "asOf": now.isoformat(),
+        "market": market,
+        "sections": {}
+    }
+    
+    errors = []
+    
+    # 1. Tickers (batched download)
+    try:
+        snapshot_data["sections"]["tickers"] = get_monitor_tickers()
+    except Exception as e:
+        errors.append(f"tickers: {str(e)[:50]}")
+        snapshot_data["sections"]["tickers"] = {"items": [], "error": str(e)}
+    
+    # 2. Macro Tickers
+    try:
+        snapshot_data["sections"]["macroTickers"] = get_macro_tickers()
+    except Exception as e:
+        errors.append(f"macroTickers: {str(e)[:50]}")
+        snapshot_data["sections"]["macroTickers"] = {"items": [], "error": str(e)}
+    
+    # 3. Breadth
+    try:
+        snapshot_data["sections"]["breadth"] = get_monitor_breadth(market=market)
+    except Exception as e:
+        errors.append(f"breadth: {str(e)[:50]}")
+        snapshot_data["sections"]["breadth"] = {"advances": 0, "declines": 0, "error": str(e)}
+    
+    # 4. FX/Crypto
+    try:
+        snapshot_data["sections"]["fxcrypto"] = get_monitor_fxcrypto()
+    except Exception as e:
+        errors.append(f"fxcrypto: {str(e)[:50]}")
+        snapshot_data["sections"]["fxcrypto"] = {"items": [], "error": str(e)}
+    
+    # 5. Clock (no yfinance calls)
+    try:
+        snapshot_data["sections"]["clock"] = get_monitor_clock()
+    except Exception as e:
+        errors.append(f"clock: {str(e)[:50]}")
+        snapshot_data["sections"]["clock"] = {"error": str(e)}
+    
+    # Calculate fetch time
+    fetch_time = time.time() - start_time
+    
+    snapshot_data["_meta"] = {
+        "cacheHit": False,
+        "cacheAge": 0,
+        "fetchTime": round(fetch_time, 2),
+        "errors": errors if errors else None,
+        "optimization": "aggregated_endpoint"
+    }
+    
+    # Cache the result
+    _SNAPSHOT_CACHE[cache_key] = {
+        "data": snapshot_data,
+        "timestamp": now
+    }
+    
+    logger.info(f"[Snapshot] Fresh fetch completed in {fetch_time:.2f}s with {len(errors)} errors")
+    
+    return snapshot_data

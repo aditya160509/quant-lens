@@ -11,6 +11,7 @@ Regimes Crown Engine - Market Structural Stability Analysis
 7. Collapse State Governor
 
 All computations from unified state vector. No synthetic data ever.
+Uses robust_data_fetcher for centralized, rate-limited data access.
 """
 
 import numpy as np
@@ -23,6 +24,9 @@ import warnings
 import hashlib
 import json
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # HMM for regime detection
 try:
@@ -32,8 +36,11 @@ except ImportError:
     HMM_AVAILABLE = False
     warnings.warn("hmmlearn not available - regime detection will use fallback")
 
-# Data fetching
-import yfinance as yf
+# Use robust data fetcher instead of yfinance directly
+from app.services.robust_data_fetcher import (
+    get_price_data as rdf_get_price,
+    Ticker as RDFTicker
+)
 
 # -----------------------------------------------------------------------------
 # CONFIGURATION
@@ -105,7 +112,7 @@ def sanitize_dict(d, default=0.0):
         return d
 
 # -----------------------------------------------------------------------------
-# DATA LAYER - Fetching, Caching, Alignment
+# DATA LAYER - Fetching, Caching, Alignment (using robust_data_fetcher)
 # -----------------------------------------------------------------------------
 
 def _get_cache_key(symbol: str, start: str, end: str, vendor: str = 'yahoo') -> str:
@@ -138,21 +145,27 @@ def _is_cache_valid(cache_path: str) -> bool:
 
 
 def _fetch_yahoo(symbol: str, start: str, end: str) -> pd.DataFrame:
-    """Fetch OHLCV data from Yahoo Finance."""
+    """Fetch OHLCV data using robust_data_fetcher."""
     try:
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(start=start, end=end, auto_adjust=True)
-        if df.empty:
+        # Use robust_data_fetcher instead of yfinance directly
+        df = rdf_get_price(symbol, period="5y")
+        if df is None or df.empty:
             return pd.DataFrame()
+        
+        # Filter by date range
+        start_dt = pd.to_datetime(start)
+        end_dt = pd.to_datetime(end)
+        df = df[(df.index >= start_dt) & (df.index <= end_dt)]
         
         df = df.rename(columns={
             'Open': 'open', 'High': 'high', 'Low': 'low',
             'Close': 'close', 'Volume': 'volume'
         })
-        df.index = pd.to_datetime(df.index).tz_localize(None)
-        return df[['open', 'high', 'low', 'close', 'volume']]
+        if hasattr(df.index, 'tz_localize'):
+            df.index = pd.to_datetime(df.index).tz_localize(None)
+        return df[['open', 'high', 'low', 'close', 'volume']] if all(c in df.columns for c in ['open', 'high', 'low', 'close', 'volume']) else df
     except Exception as e:
-        warnings.warn(f"Yahoo fetch failed for {symbol}: {e}")
+        warnings.warn(f"Fetch failed for {symbol}: {e}")
         return pd.DataFrame()
 
 

@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Dict, Any
-import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime, time, timedelta
@@ -8,6 +7,9 @@ import pytz
 from app import data_loader, metrics
 import logging
 from pydantic import BaseModel
+
+# Use robust data fetcher instead of yfinance directly
+from app.services.robust_data_fetcher import get_price_data as rdf_get_price, get_intraday_data as rdf_get_intraday
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -165,10 +167,9 @@ def get_markets_intraday(
         session_status = "closed"
     
     try:
-        # Fetch intraday data (5d period gives more data for after-hours viewing)
+        # Fetch intraday data using robust fetcher (handles rate limiting)
         # This ensures we have data even when market is closed
-        stock = yf.Ticker(ticker)
-        df = stock.history(period="5d", interval=interval, auto_adjust=False)
+        df = rdf_get_intraday(ticker, interval=interval, period="5d")
         
         if df.empty:
             return {

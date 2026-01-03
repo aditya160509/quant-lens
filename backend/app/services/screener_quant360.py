@@ -642,7 +642,27 @@ class Quant360ScreenerService:
             sectors = ["Energy", "IT", "Financials", "IT", "Financials", "Consumer", 
                       "Financials", "Telecom", "Consumer", "Financials", "Industrials", "Financials",
                       "Consumer", "Auto", "Consumer", "Financials", "IT", "Pharma"]
-        else:
+        elif universe_key == "CRYPTO":
+            tickers = ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD", "ADA-USD",
+                      "AVAX-USD", "DOGE-USD", "DOT-USD", "LINK-USD", "MATIC-USD", "ATOM-USD"]
+            sectors = ["Crypto", "Crypto", "Crypto", "Crypto", "Crypto", "Crypto",
+                      "Crypto", "Memecoin", "Crypto", "Oracle", "L2", "Cosmos"]
+        elif universe_key == "FX":
+            tickers = ["EURUSD=X", "USDJPY=X", "GBPUSD=X", "AUDUSD=X", "USDCHF=X", "USDCAD=X",
+                      "NZDUSD=X", "EURJPY=X", "EURGBP=X", "GBPJPY=X", "AUDJPY=X", "USDINR=X"]
+            sectors = ["Major", "Major", "Major", "Major", "Major", "Major",
+                      "Minor", "Cross", "Cross", "Cross", "Cross", "EM"]
+        elif universe_key == "INDEX":
+            tickers = ["^GSPC", "^DJI", "^IXIC", "^RUT", "^VIX", "^FTSE",
+                      "^N225", "^GDAXI", "^HSI", "^NSEI", "^BSESN", "^STOXX50E"]
+            sectors = ["US", "US", "US", "US", "Volatility", "UK",
+                      "Japan", "Germany", "HongKong", "India", "India", "Europe"]
+        elif universe_key == "ETF":
+            tickers = ["SPY", "QQQ", "IWM", "DIA", "VTI", "VOO",
+                      "GLD", "TLT", "XLF", "XLK", "XLE", "VNQ"]
+            sectors = ["SP500", "Nasdaq", "Russell", "Dow", "Total", "SP500",
+                      "Gold", "Bonds", "Financials", "Tech", "Energy", "RealEstate"]
+        else:  # US
             tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK.B",
                       "JPM", "V", "UNH", "HD", "PG", "MA", "DIS", "PYPL", "NFLX", "ADBE"]
             sectors = ["Tech", "Tech", "Tech", "Consumer", "Tech", "Tech", "Auto", "Financials",

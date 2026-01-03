@@ -584,14 +584,13 @@ async def add_holding(ticker: str, shares: float, cost_basis: float = 0):
     """
     try:
         from app.services.portfolio_brain import update_portfolio_holdings, create_snapshot
-        import yfinance as yf
+        from app.services.robust_data_fetcher import get_price_data as rdf_get_price
         
         # Get current price if cost_basis not provided
         if cost_basis == 0:
-            tk = yf.Ticker(ticker.upper())
-            hist = tk.history(period="5d")
-            if len(hist) > 0:
-                cost_basis = float(hist['Close'].iloc[-1]) * shares
+            df = rdf_get_price(ticker.upper(), period="5d")
+            if df is not None and not df.empty and 'Close' in df.columns:
+                cost_basis = float(df['Close'].iloc[-1]) * shares
         
         update_portfolio_holdings(ticker.upper(), shares, cost_basis)
         snapshot = create_snapshot(trigger="add_holding")

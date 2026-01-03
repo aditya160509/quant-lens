@@ -2824,3 +2824,138 @@ async def run_correlations(region: str, window: str, regime_mode: str, inputs: d
         ]
     )
 
+
+# =============================================================================
+# MASTER CONTROL PANEL - AGGREGATES ALL 7 MACRO FEATURES
+# =============================================================================
+
+try:
+    from app.services.macro_control_system import (
+        compute_master_posture,
+        compute_regime_engine,
+        compute_stress_detector,
+        compute_volatility_regime,
+        compute_cta_trend,
+        compute_mean_reversion,
+        compute_market_breadth,
+        compute_rate_cycle
+    )
+    CONTROL_SYSTEM_AVAILABLE = True
+except ImportError:
+    CONTROL_SYSTEM_AVAILABLE = False
+
+
+@router.get("/control-panel")
+async def get_control_panel(market: str = Query("US", description="Market: US or INDIA")):
+    """
+    Master Control Panel: Aggregates all 7 macro features.
+    
+    Returns:
+    - Overall risk score (0-100)
+    - Trading posture (RISK-ON, CAUTION, RISK-OFF)
+    - Trading clearances (max exposure, leverage, new positions)
+    - All 7 feature breakdowns
+    - Active warnings
+    """
+    if not CONTROL_SYSTEM_AVAILABLE:
+        return {"status": "error", "message": "Macro control system not available"}
+    
+    try:
+        result = compute_master_posture(market)
+        return {
+            "status": "success",
+            "market": market,
+            "control_panel": result,
+            "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "market": market,
+            "control_panel": None
+        }
+
+
+@router.get("/control-panel/regime")
+async def get_regime_feature(market: str = Query("US")):
+    """Feature 1: Market Regime Engine (HMM-based 4-state)"""
+    if not CONTROL_SYSTEM_AVAILABLE:
+        return {"status": "error", "message": "Not available"}
+    try:
+        result = compute_regime_engine(market)
+        return {"status": "success", "feature": "regime", "data": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/control-panel/stress")
+async def get_stress_feature(market: str = Query("US")):
+    """Feature 2: Stress Detector (Mahalanobis Turbulence)"""
+    if not CONTROL_SYSTEM_AVAILABLE:
+        return {"status": "error", "message": "Not available"}
+    try:
+        result = compute_stress_detector(market)
+        return {"status": "success", "feature": "stress", "data": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/control-panel/volatility")
+async def get_volatility_feature(market: str = Query("US")):
+    """Feature 3: Volatility Regime"""
+    if not CONTROL_SYSTEM_AVAILABLE:
+        return {"status": "error", "message": "Not available"}
+    try:
+        result = compute_volatility_regime(market)
+        return {"status": "success", "feature": "volatility", "data": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/control-panel/trend")
+async def get_trend_feature(market: str = Query("US")):
+    """Feature 4: CTA Trend Signal"""
+    if not CONTROL_SYSTEM_AVAILABLE:
+        return {"status": "error", "message": "Not available"}
+    try:
+        result = compute_cta_trend(market)
+        return {"status": "success", "feature": "trend", "data": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/control-panel/reversion")
+async def get_reversion_feature(market: str = Query("US")):
+    """Feature 5: Mean Reversion Timer"""
+    if not CONTROL_SYSTEM_AVAILABLE:
+        return {"status": "error", "message": "Not available"}
+    try:
+        result = compute_mean_reversion(market)
+        return {"status": "success", "feature": "reversion", "data": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/control-panel/breadth")
+async def get_breadth_feature(market: str = Query("US")):
+    """Feature 6: Market Breadth (McClellan)"""
+    if not CONTROL_SYSTEM_AVAILABLE:
+        return {"status": "error", "message": "Not available"}
+    try:
+        result = compute_market_breadth(market)
+        return {"status": "success", "feature": "breadth", "data": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/control-panel/rates")
+async def get_rates_feature(market: str = Query("US")):
+    """Feature 7: Rate Cycle Position"""
+    if not CONTROL_SYSTEM_AVAILABLE:
+        return {"status": "error", "message": "Not available"}
+    try:
+        result = compute_rate_cycle(market)
+        return {"status": "success", "feature": "rates", "data": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

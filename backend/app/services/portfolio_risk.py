@@ -1,14 +1,21 @@
 """
 Portfolio Risk Service - Features 5-10
 Category 2: Risk Wiring & Structural Safety
+
+Now uses robust_data_fetcher for multi-source data with caching and rate limiting.
 """
 import numpy as np
 import pandas as pd
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
-import yfinance as yf
 import logging
 import networkx as nx
+
+# Use robust data fetcher - handles rate limiting, caching, multi-source fallback
+from app.services.robust_data_fetcher import (
+    get_price_data as rdf_get_price,
+    get_batch_data as rdf_get_batch
+)
 
 from app.models.portfolio_models import (
     Position, PortfolioSnapshot, Quality, Provenance,
@@ -55,35 +62,51 @@ _active_alerts: List[Alert] = []
 
 
 # =============================================================================
-# HELPER FUNCTIONS
+# HELPER FUNCTIONS - Using robust_data_fetcher
 # =============================================================================
 
 def _get_returns_matrix(tickers: List[str], period: str = "1y") -> pd.DataFrame:
-    """Get aligned returns matrix for multiple tickers."""
+    """Get aligned returns matrix for multiple tickers using robust_data_fetcher."""
     all_returns = {}
-    for ticker in tickers:
-        try:
-            tk = yf.Ticker(ticker)
-            hist = tk.history(period=period)
-            if len(hist) > 20:
-                all_returns[ticker] = log_returns(hist['Close'])
-        except Exception as e:
-            logger.warning(f"Failed to get returns for {ticker}: {e}")
+    
+    try:
+        # Use batch fetcher with rate limiting
+        batch_data = rdf_get_batch(tickers, period=period, batch_size=5, delay_between_batches=0.5)
+        
+        for ticker, df in batch_data.items():
+            if df is not None and not df.empty and 'Close' in df.columns:
+                close = df['Close']
+                if isinstance(close, pd.DataFrame):
+                    close = close.squeeze()
+                if len(close) > 20:
+                    all_returns[ticker] = log_returns(close)
+    except Exception as e:
+        logger.warning(f"Batch returns fetch failed: {e}")
+        # Fallback to individual fetches
+        for ticker in tickers:
+            try:
+                df = rdf_get_price(ticker, period=period)
+                if df is not None and not df.empty and 'Close' in df.columns:
+                    close = df['Close']
+                    if isinstance(close, pd.DataFrame):
+                        close = close.squeeze()
+                    if len(close) > 20:
+                        all_returns[ticker] = log_returns(close)
+            except Exception as e:
+                logger.warning(f"Failed to get returns for {ticker}: {e}")
     
     if not all_returns:
         return pd.DataFrame()
     
-    df = pd.DataFrame(all_returns).dropna()
-    return df
+    return pd.DataFrame(all_returns).dropna()
 
 
 def _get_adv(ticker: str) -> float:
     """Get average daily volume in shares."""
     try:
-        tk = yf.Ticker(ticker)
-        hist = tk.history(period="3mo")
-        if len(hist) > 0:
-            return float(hist['Volume'].mean())
+        df = rdf_get_price(ticker, period="3mo")
+        if df is not None and not df.empty and 'Volume' in df.columns:
+            return float(df['Volume'].mean())
     except:
         pass
     return 1e6
@@ -92,11 +115,10 @@ def _get_adv(ticker: str) -> float:
 def _get_adv_dollar(ticker: str) -> float:
     """Get average daily dollar volume."""
     try:
-        tk = yf.Ticker(ticker)
-        hist = tk.history(period="3mo")
-        if len(hist) > 0:
-            avg_vol = float(hist['Volume'].mean())
-            avg_price = float(hist['Close'].mean())
+        df = rdf_get_price(ticker, period="3mo")
+        if df is not None and not df.empty and 'Volume' in df.columns and 'Close' in df.columns:
+            avg_vol = float(df['Volume'].mean())
+            avg_price = float(df['Close'].mean())
             return avg_vol * avg_price
     except:
         pass

@@ -1,8 +1,36 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# =============================================================================
+# Quant360 Elite - Production .gitignore
+# =============================================================================
 
-# dependencies
-/node_modules
-/.pnp
+# =============================================================================
+# ENVIRONMENT & SECRETS (CRITICAL - NEVER COMMIT!)
+# =============================================================================
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+*.env
+.env.*
+!.env.example
+
+# API Keys and secrets
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+credentials/
+
+# =============================================================================
+# DEPENDENCIES
+# =============================================================================
+# Node.js
+node_modules/
+.pnp/
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -10,29 +38,186 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
+# Python
+venv/
+.venv/
+venv_fresh/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
 
-# next.js
-/.next/
-/out/
+# =============================================================================
+# BUILD OUTPUTS
+# =============================================================================
+# Next.js
+.next/
+out/
+build/
+.turbo/
 
-# production
-/build
+# Python
+*.pyc
+*.pyo
+*.pyd
 
-# misc
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# =============================================================================
+# IDE & EDITOR
+# =============================================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*~
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# =============================================================================
+# OS FILES
+# =============================================================================
 .DS_Store
-*.pem
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
 
-# debug
+# =============================================================================
+# LOGS & DEBUG
+# =============================================================================
+*.log
+logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+backend.log
+frontend.log
+nohup.out
 
-# vercel
+# =============================================================================
+# TESTING & COVERAGE
+# =============================================================================
+coverage/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+.hypothesis/
+*.cover
+*.py,cover
+.cache
+nosetests.xml
+coverage.xml
+*.coveragerc
+
+# =============================================================================
+# CACHE & TEMP FILES
+# =============================================================================
+.cache/
+data_cache/
+*.cache
+tmp/
+temp/
+.temp/
+*.tmp
+
+# =============================================================================
+# DEPLOYMENT & HOSTING
+# =============================================================================
 .vercel
+.netlify
+.serverless/
+.amplify/
+.firebase/
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# =============================================================================
+# DOCKER
+# =============================================================================
+# Don't ignore docker-compose.yml as it's needed for deployment
+# But ignore volumes and runtime data
+docker/data/
+docker/volumes/
+
+# =============================================================================
+# DATABASE
+# =============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.sql.gz
+*.sql.zip
+
+# =============================================================================
+# MISC
+# =============================================================================
+# Package manager locks (keep package-lock.json for reproducible builds)
+# bun.lock  # Uncomment if not using Bun
+
+# Playwright
+.playwright-mcp/
+
+# AI/ML artifacts
+*.h5
+*.pkl
+*.model
+*.onnx
+models/
+
+# Large data files
+*.csv
+*.parquet
+*.feather
+!data/sample*.csv
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# =============================================================================
+# PROJECT-SPECIFIC
+# =============================================================================
+# Backend data cache
+backend/data_cache/
+backend/venv/
+backend/venv_fresh/
+backend/__pycache__/
+backend/*.log
+backend/nohup.out
+
+# Frontend build
+frontend/.next/
+frontend/node_modules/
+frontend/out/
+
+# Orchids (if not needed)
+.orchids/

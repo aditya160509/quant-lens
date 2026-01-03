@@ -71,11 +71,9 @@ def _format_candles(df) -> List[Dict[str, Any]]:
     return candles
 
 
-def _get_cache_key(symbol: str, interval: str, lookback_days: int) -> tuple:
-    """Generate cache key components."""
-    end = datetime.now().strftime("%Y-%m-%d")
-    start = (datetime.now() - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
-    return symbol, interval, start, end
+def _get_cache_key(symbol: str, interval: str, period: str) -> tuple:
+    """Generate cache key components including period."""
+    return symbol, interval, period, datetime.now().strftime("%Y-%m-%d")
 
 
 def _get_ttl_seconds(interval: str) -> int:
@@ -90,12 +88,17 @@ def _get_ttl_seconds(interval: str) -> int:
 @router.get("/{symbol}", response_model=SinglePriceResponse)
 async def get_prices(
     symbol: str,
-    interval: str = Query(default="1d", regex="^(1d|1m|5m|15m|1h)$"),
+    interval: str = Query(default="1d", pattern="^(1d|1m|2m|5m|15m|30m|60m|1h)$"),
     lookback_days: int = Query(default=365, ge=1, le=3650),
+    period: str = Query(default=None, description="Optional: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y"),
 ):
     """
     Get price candles for a single symbol.
+    Supports all intervals: 1m, 2m, 5m, 15m, 30m, 60m/1h, 1d
+    Supports Indian stocks (.NS, .BO) via robust_data_fetcher.
     """
+    from ..services.robust_data_fetcher import get_price_data, get_intraday_data
+    
     # Normalize and validate
     symbol = normalize_symbol(symbol)
     
@@ -109,8 +112,35 @@ async def get_prices(
             }
         )
     
-    # Check cache
-    cache_key = _get_cache_key(symbol, interval, lookback_days)
+    # Determine period based on interval and lookback
+    if period:
+        data_period = period
+    else:
+        # Map interval to appropriate period (Yahoo API limits)
+        # 1m: max 7 days, 2m-60m: max 60 days, 1h: max 730 days
+        if interval == "1m":
+            data_period = "7d"  # Yahoo limits 1m to 7 days
+        elif interval in ["2m", "5m"]:
+            data_period = "60d"  # Last 60 days for 2m/5m
+        elif interval in ["15m", "30m", "60m", "1h"]:
+            data_period = "60d"  # Last 60 days for intraday hourly
+        else:
+            # Daily - use lookback_days
+            if lookback_days <= 30:
+                data_period = "1mo"
+            elif lookback_days <= 90:
+                data_period = "3mo"
+            elif lookback_days <= 180:
+                data_period = "6mo"
+            elif lookback_days <= 365:
+                data_period = "1y"
+            elif lookback_days <= 730:
+                data_period = "2y"
+            else:
+                data_period = "5y"
+    
+    # Check cache - use period in key
+    cache_key = _get_cache_key(symbol, interval, data_period)
     cached_data, cache_hit = research_cache.get_prices(*cache_key)
     
     if cache_hit and cached_data is not None:
@@ -121,22 +151,14 @@ async def get_prices(
                 "computed_at": datetime.now().isoformat() + "Z",
                 "symbol": symbol,
                 "interval": interval,
-                "lookback_days": lookback_days,
-                "provider": "yfinance"
+                "period": data_period,
+                "provider": "robust_data_fetcher"
             }
         )
     
-    # Fetch data
+    # Fetch data using robust_data_fetcher (supports Indian stocks)
     try:
-        # Note: get_prices_daily currently only supports daily
-        # For intraday, would need to extend fetch logic
-        if interval != "1d":
-            # For now, fall back to daily with a note
-            df = get_prices_daily(symbol, lookback_days)
-            interval_note = "intraday_unsupported_using_daily"
-        else:
-            df = get_prices_daily(symbol, lookback_days)
-            interval_note = None
+        df = get_price_data(symbol, period=data_period, interval=interval)
         
         if df is None or df.empty:
             raise HTTPException(
@@ -153,19 +175,18 @@ async def get_prices(
         # Cache result
         research_cache.set_prices(*cache_key, candles)
         
-        meta = {
-            "cache_hit": False,
-            "computed_at": datetime.now().isoformat() + "Z",
-            "symbol": symbol,
-            "interval": interval,
-            "lookback_days": lookback_days,
-            "data_points": len(candles),
-            "provider": "yfinance"
-        }
-        if interval_note:
-            meta["note"] = interval_note
-        
-        return SinglePriceResponse(candles=candles, meta=meta)
+        return SinglePriceResponse(
+            candles=candles,
+            meta={
+                "cache_hit": False,
+                "computed_at": datetime.now().isoformat() + "Z",
+                "symbol": symbol,
+                "interval": interval,
+                "period": data_period,
+                "data_points": len(candles),
+                "provider": "robust_data_fetcher"
+            }
+        )
         
     except HTTPException:
         raise

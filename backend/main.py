@@ -9,12 +9,18 @@ import numpy as np
 from typing import List, Dict, Optional
 from pydantic import BaseModel
 import concurrent.futures
+from pathlib import Path
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from project root .env
+env_path = Path(__file__).parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    load_dotenv()  # Fallback to default search
 
 from app import data_loader, metrics, factors
 from app.api import labs, portfolio, cluster_b, options, markets, security, orderbook, earnings, registry, macro
+from app.api import portfolio_risk_api  # Portfolio Risk VaR System
 from app.api import liquidity_api  # Liquidity Intelligence Engine
 from app.api import screener_api  # QUANT360 Screener
 from app.api import research_beta, research_macro_shock, research_style_map, research_regimes, research_correlation
@@ -36,25 +42,44 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Quant360 API", description="Backend for Quant360 Terminal")
+app = FastAPI(
+    title="Quant360 API",
+    description="Backend for Quant360 Terminal",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json"
+)
 
-# Configure CORS - Allow all origins to prevent CORS errors on error responses
-origins = [
+# Configure CORS - Use specific origins in production
+ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
-    "*",  # Allow all for development
 ]
+
+# In production, set CORS_ALLOW_ALL=false
+import os
+if os.environ.get("CORS_ALLOW_ALL", "true").lower() == "true":
+    ALLOWED_ORIGINS = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
-    allow_credentials=False,  # Must be False when using "*"
-    allow_methods=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False if "*" in ALLOWED_ORIGINS else True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["*"],
+    expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "Retry-After"],
 )
+
+# Security Middleware (OWASP Top 10 Compliant)
+# Rate limiting, input validation, security headers, audit logging
+try:
+    from app.middleware.security import SecurityMiddleware
+    app.add_middleware(SecurityMiddleware)
+    logger.info("Security middleware enabled: Rate limiting, security headers, audit logging")
+except ImportError as e:
+    logger.warning(f"Security middleware not loaded: {e}")
 
 # Include Routers
 # Include Routers
@@ -69,6 +94,7 @@ app.include_router(orderbook.router, prefix="/api/orderbook", tags=["orderbook"]
 app.include_router(earnings.router, prefix="/api/earnings", tags=["earnings"])
 app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
 app.include_router(macro.router, prefix="/api/macro", tags=["macro"])
+app.include_router(portfolio_risk_api.router, prefix="/api/portfolio-risk", tags=["portfolio-risk"])
 
 # Price/Quote Routers
 app.include_router(prices.router, tags=["prices"])
@@ -116,9 +142,25 @@ app.include_router(trades_api.router, prefix="/api", tags=["trades"])
 from app.api import websocket_api
 app.include_router(websocket_api.router, tags=["websocket"])
 
+# ML God Stack - 11 Module ML Intelligence System (Labs → ML + Portfolio)
+from app.api import ml_api
+app.include_router(ml_api.router, prefix="/api", tags=["ml-god-stack"])
+
 # Portfolio v2 - 29-Feature Institutional Portfolio System
 from app.api import portfolio_v2
 app.include_router(portfolio_v2.router, prefix="/api", tags=["portfolio-v2"])
+
+# Payments API - Razorpay (INR) + Stripe (USD)
+from app.api import payments_api
+app.include_router(payments_api.router, prefix="/api", tags=["payments"])
+
+# Accuracy Status API - Check enhancement status
+from app.api import accuracy_status
+app.include_router(accuracy_status.router, tags=["accuracy"])
+
+# Alpha Models API - Momentum and Mean Reversion Intelligence
+from app.api import alpha
+app.include_router(alpha.router, prefix="/api/alpha", tags=["alpha-models"])
 
 
 
@@ -128,6 +170,15 @@ try:
     RATE_LIMITER_AVAILABLE = True
 except ImportError:
     RATE_LIMITER_AVAILABLE = False
+
+# Import API tracker for monitoring yfinance usage
+try:
+    from app.services.api_tracker import get_tracker_stats, reset_tracker, track_api_call
+    API_TRACKER_AVAILABLE = True
+    logger.info("API tracker enabled: Monitoring yfinance and external API usage")
+except ImportError as e:
+    API_TRACKER_AVAILABLE = False
+    logger.warning(f"API tracker not loaded: {e}")
 
 @app.get("/")
 def read_root():
@@ -155,6 +206,38 @@ def clear_cache():
         clear_all_caches()
         return {"status": "ok", "message": "All caches cleared"}
     return {"status": "disabled", "message": "Rate limiter not available"}
+
+# =============================================================================
+# API USAGE TRACKER - Monitor yfinance and external API calls per module
+# =============================================================================
+
+@app.get("/api/tracker/stats")
+def api_tracker_stats():
+    """
+    Get API usage statistics to identify which modules are making heavy yfinance calls.
+    
+    Returns:
+        - modules_ranked: List of modules sorted by call count
+        - top_tickers: Most frequently fetched tickers
+        - total_calls: Total API calls in tracking window
+        - total_yf_calls: Total yfinance calls
+    """
+    if API_TRACKER_AVAILABLE:
+        stats = get_tracker_stats()
+        return {
+            "status": "ok",
+            **stats,
+            "message": "API usage tracker active - monitor yfinance load here"
+        }
+    return {"status": "disabled", "message": "API tracker not available"}
+
+@app.post("/api/tracker/reset")
+def api_tracker_reset():
+    """Reset API usage tracking data."""
+    if API_TRACKER_AVAILABLE:
+        reset_tracker()
+        return {"status": "ok", "message": "API tracker reset - all stats cleared"}
+    return {"status": "disabled", "message": "API tracker not available"}
 
 @app.get("/api/universe")
 def get_universe_endpoint():

@@ -1,6 +1,8 @@
 """
 Portfolio Brain Service - Features 1-4
 Category 1: Executive Control & Intelligence
+
+Now uses robust_data_fetcher for multi-source data with caching and rate limiting.
 """
 import hashlib
 import json
@@ -8,9 +10,15 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple, Any
-import yfinance as yf
 import logging
 import uuid
+
+# Use robust data fetcher instead of yfinance directly
+from app.services.robust_data_fetcher import (
+    get_price_data as rdf_get_price,
+    get_current_price as rdf_current_price,
+    Ticker as RDFTicker
+)
 
 from app.models.portfolio_models import (
     Position, PortfolioSnapshot, RiskMetrics, Quality, Provenance,
@@ -81,40 +89,41 @@ _factor_baseline = {
 
 
 # =============================================================================
-# HELPER FUNCTIONS
+# HELPER FUNCTIONS - Using robust_data_fetcher
 # =============================================================================
 
 def _get_price(ticker: str) -> Optional[float]:
-    """Get current price for ticker."""
+    """Get current price for ticker using robust data fetcher."""
     try:
-        tk = yf.Ticker(ticker)
-        hist = tk.history(period="5d")
-        if len(hist) > 0:
-            return float(hist['Close'].iloc[-1])
+        price = rdf_current_price(ticker)
+        if price is not None:
+            return float(price)
+        # Fallback to getting last close
+        df = rdf_get_price(ticker, period="5d")
+        if df is not None and not df.empty and 'Close' in df.columns:
+            return float(df['Close'].iloc[-1])
     except Exception as e:
         logger.warning(f"Failed to get price for {ticker}: {e}")
     return None
 
 
 def _get_returns(ticker: str, period: str = "1y") -> pd.Series:
-    """Get return series for ticker."""
+    """Get return series for ticker using robust data fetcher."""
     try:
-        tk = yf.Ticker(ticker)
-        hist = tk.history(period=period)
-        if len(hist) > 10:
-            return log_returns(hist['Close'])
+        df = rdf_get_price(ticker, period=period)
+        if df is not None and not df.empty and 'Close' in df.columns and len(df) > 10:
+            return log_returns(df['Close'])
     except Exception as e:
         logger.warning(f"Failed to get returns for {ticker}: {e}")
     return pd.Series([])
 
 
 def _get_volume(ticker: str) -> float:
-    """Get average daily volume."""
+    """Get average daily volume using robust data fetcher."""
     try:
-        tk = yf.Ticker(ticker)
-        hist = tk.history(period="3mo")
-        if len(hist) > 0:
-            return float(hist['Volume'].mean())
+        df = rdf_get_price(ticker, period="3mo")
+        if df is not None and not df.empty and 'Volume' in df.columns:
+            return float(df['Volume'].mean())
     except Exception:
         pass
     return 1e6  # Default fallback

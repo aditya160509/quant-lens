@@ -256,3 +256,256 @@ def get_earnings_history(symbol: str, quarters: int = Query(8, ge=1, le=20)):
 def get_earnings_calendar():
     """Legacy endpoint - redirects to /upcoming"""
     return get_upcoming_earnings(days_ahead=30)
+
+
+# =============================================================================
+# EARNINGS LAB ENDPOINTS (14 PRODUCTION-SAFE MODULES)
+# =============================================================================
+
+from app.services.earnings_lab import (
+    EarningsSnapshot,
+    ExpectationTracker,
+    RepricingAnalyzer,
+    ForwardExpectationReset,  # renamed from GuidanceEngine
+    QualityEngine,
+    ToneAnalyzer,
+    RevisionTracker,
+    ReactionAnalyzer,
+    TargetDistribution,
+    InstitutionalTracker,
+    OwnershipAlerts,  # renamed from ActivistMonitor
+    BuybackTracker,
+    DividendMonitor,
+    PeerComparator,
+    earnings_lab_service,
+)
+
+
+# Module 1: Earnings Snapshot ✅
+@router.get("/lab/snapshot/{symbol}")
+def get_earnings_snapshot(symbol: str, quarters: int = Query(12, ge=1, le=20)):
+    """Get complete earnings snapshot with beat/miss analysis."""
+    try:
+        return EarningsSnapshot.get_snapshot(symbol, quarters)
+    except Exception as e:
+        logger.error(f"Snapshot error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Module 2: Expectation Path Tracker ⚠️ (some historical gaps)
+@router.get("/lab/expectations/{symbol}")
+def get_expectations(symbol: str):
+    """Track estimate drift and classify low/high bar."""
+    try:
+        return ExpectationTracker.get_expectations(symbol)
+    except Exception as e:
+        logger.error(f"Expectations error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Module 3: Post-Earnings Repricing ✅
+@router.get("/lab/repricing/{symbol}")
+def get_repricing(symbol: str):
+    """Analyze post-earnings price action and market acceptance."""
+    try:
+        return RepricingAnalyzer.get_repricing(symbol)
+    except Exception as e:
+        logger.error(f"Repricing error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Module 4: Forward Expectation Reset (renamed from Guidance Delta)
+@router.get("/lab/forward-reset/{symbol}")
+def get_forward_reset(symbol: str):
+    """Measure how expectations changed after earnings."""
+    try:
+        return ForwardExpectationReset.get_reset(symbol)
+    except Exception as e:
+        logger.error(f"Forward reset error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Legacy endpoint for backwards compatibility
+@router.get("/lab/guidance/{symbol}")
+def get_guidance_legacy(symbol: str):
+    """Legacy endpoint - redirects to forward-reset."""
+    return get_forward_reset(symbol)
+
+
+# Module 5: Earnings Quality ✅
+@router.get("/lab/quality/{symbol}")
+def get_quality(symbol: str):
+    """Assess earnings quality - cash vs accruals."""
+    try:
+        return QualityEngine.get_quality(symbol)
+    except Exception as e:
+        logger.error(f"Quality error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Module 6: Tone Delta ⚠️ (limited without transcripts)
+@router.get("/lab/tone/{symbol}")
+def get_tone(symbol: str):
+    """Basic tone analysis from company description."""
+    try:
+        return ToneAnalyzer.get_tone(symbol)
+    except Exception as e:
+        logger.error(f"Tone error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Module 7: Analyst Revision Velocity ✅
+@router.get("/lab/revisions/{symbol}")
+def get_revisions(symbol: str):
+    """Track analyst revision velocity."""
+    try:
+        return RevisionTracker.get_revisions(symbol)
+    except Exception as e:
+        logger.error(f"Revisions error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Module 8: Post-Earnings Analyst Reaction ✅
+@router.get("/lab/reactions/{symbol}")
+def get_reactions(symbol: str):
+    """Analyze post-earnings analyst reactions."""
+    try:
+        return ReactionAnalyzer.get_reactions(symbol)
+    except Exception as e:
+        logger.error(f"Reactions error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Module 9: Target Price Distribution ✅
+@router.get("/lab/targets/{symbol}")
+def get_targets(symbol: str):
+    """Analyze analyst target price distribution."""
+    try:
+        return TargetDistribution.get_targets(symbol)
+    except Exception as e:
+        logger.error(f"Targets error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Module 10: Institutional Holdings ⚠️ (45-day lag)
+@router.get("/lab/institutional/{symbol}")
+def get_institutional(symbol: str):
+    """Track institutional holdings trends."""
+    try:
+        return InstitutionalTracker.get_institutional(symbol)
+    except Exception as e:
+        logger.error(f"Institutional error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Module 11: Ownership Threshold Alerts (renamed from Activist Alerts)
+@router.get("/lab/ownership-alerts/{symbol}")
+def get_ownership_alerts(symbol: str):
+    """Monitor ownership crossing meaningful levels via SEC EDGAR."""
+    try:
+        return OwnershipAlerts.get_alerts(symbol)
+    except Exception as e:
+        logger.error(f"Ownership alerts error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Legacy endpoint for backwards compatibility
+@router.get("/lab/activist/{symbol}")
+def get_activist_legacy(symbol: str):
+    """Legacy endpoint - redirects to ownership-alerts."""
+    return get_ownership_alerts(symbol)
+
+
+# Module 12: Buyback Tracker ✅
+@router.get("/lab/buyback/{symbol}")
+def get_buyback(symbol: str):
+    """Track buyback effectiveness."""
+    try:
+        return BuybackTracker.get_buyback(symbol)
+    except Exception as e:
+        logger.error(f"Buyback error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Module 13: Dividend Monitor ✅
+@router.get("/lab/dividend/{symbol}")
+def get_dividend(symbol: str):
+    """Monitor dividend stability and cut risk."""
+    try:
+        return DividendMonitor.get_dividend(symbol)
+    except Exception as e:
+        logger.error(f"Dividend error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Module 14: Peer Comparison ✅
+@router.get("/lab/peers/{symbol}")
+def get_peers(symbol: str, peers: Optional[str] = Query(None, description="Comma-separated peer symbols")):
+    """Compare earnings vs peers."""
+    try:
+        peer_list = peers.split(",") if peers else None
+        return PeerComparator.get_peer_comparison(symbol, peer_list)
+    except Exception as e:
+        logger.error(f"Peers error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Full Analysis Endpoint
+@router.get("/lab/full/{symbol}")
+def get_full_analysis(symbol: str):
+    """
+    Get complete earnings lab analysis - 14 production-safe modules.
+    
+    Removed modules (no reliable free data):
+    - Topic Emphasis
+    - Revenue Concentration
+    - Geographic Exposure
+    - Debt Maturity
+    """
+    try:
+        return earnings_lab_service.get_full_analysis(symbol)
+    except Exception as e:
+        logger.error(f"Full analysis error for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# REMOVED ENDPOINTS (return deprecation notice)
+@router.get("/lab/topics/{symbol}")
+def get_topics_removed(symbol: str):
+    """REMOVED - No reliable free data source."""
+    return {
+        "status": "removed",
+        "reason": "Topic analysis requires paid transcript feeds (Seeking Alpha)",
+        "alternative": "Use /lab/tone for basic language analysis"
+    }
+
+
+@router.get("/lab/concentration/{symbol}")
+def get_concentration_removed(symbol: str):
+    """REMOVED - No reliable free data source."""
+    return {
+        "status": "removed", 
+        "reason": "Customer concentration only exists in 10-K filings",
+        "alternative": "Manual 10-K review required"
+    }
+
+
+@router.get("/lab/geographic/{symbol}")
+def get_geographic_removed(symbol: str):
+    """REMOVED - No reliable free data source."""
+    return {
+        "status": "removed",
+        "reason": "Geographic segment data only exists in annual reports",
+        "alternative": "Manual annual report review required"
+    }
+
+
+@router.get("/lab/debt/{symbol}")
+def get_debt_removed(symbol: str):
+    """REMOVED - No reliable free data source."""
+    return {
+        "status": "removed",
+        "reason": "Debt maturity schedules only exist in 10-K footnotes",
+        "alternative": "Manual 10-K review required"
+    }
+
