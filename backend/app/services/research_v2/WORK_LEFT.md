@@ -79,6 +79,37 @@ Open each link, screenshot the part named in the "Capture" column, and share it.
 | Reports | Quarto dashboards gallery | https://quarto.org/docs/dashboards/ | Value boxes + sidebar + tabset layout |
 | Reports | Hex data stories | https://hex.tech/templates/exploratory-analysis/interactive-data-stories/ | Long-form narrative report with inline charts |
 
+### Quant and trading platforms (open them and use them)
+
+| Site | URL | What to screenshot |
+|---|---|---|
+| QuantConnect | https://www.quantconnect.com/ | Backtest result page (equity, drawdown, exposure, capacity, stats strip, orders table); research notebook; project terminal |
+| QuantConnect backtest PDF report | https://www.quantconnect.com/pricing | "Backtest PDF Report": sample report layout, for our run report |
+| TradingView Supercharts | https://www.tradingview.com/chart/ | Multi-pane layout, crosshair, object tree, strategy tester panel (performance summary + list of trades) |
+| Koyfin | https://www.koyfin.com/ | Dashboards, graphing, theme switcher, drag-from-sidebar |
+| Composer | https://www.composer.trade/ | Visual strategy editor ("symphony" tree), backtest vs benchmark compare |
+| StockCharts ACP | https://stockcharts.com/acp | Full-screen chart, multi-chart layouts, templates |
+| TrendSpider | https://trendspider.com/home | Strategy tester results, point-and-click strategy builder |
+| Portfolio Visualizer | https://www.portfoliovisualizer.com/ | Backtest, Monte Carlo and factor-regression result pages (closest to our research outputs) |
+| Finviz | https://finviz.com/map.ashx | Market heatmap density |
+| Portfolio123 | https://www.portfolio123.com/ | Factor ranking and screen backtest pages |
+
+### WebGL / GPU rendering
+
+Our research outputs are small (hundreds to a few thousand points), so SVG is not a speed problem. GPU helps in three places: (1) 3D parameter or regime surfaces, (2) dense spaghetti plots (5,000-spec curves, 1,000 placebo paths), (3) a premium animated hero on the home page. Options:
+
+| Library | URL | Licence | Use it for |
+|---|---|---|---|
+| react-three-fiber + drei (already installed) | https://r3f.docs.pmnd.rs/ | MIT | 3D surfaces (robustness over two dimensions, threshold × regime), home-page hero |
+| deck.gl | https://deck.gl/ | MIT | GPU scatter/line layers for 100k-point placebo clouds |
+| uPlot | https://github.com/leeoniya/uPlot | MIT | Very fast canvas time series (rolling IC, long history) |
+| ChartGPU | in the ABT benchmark below | open source | WebGPU lines/candles; watch, not yet mature |
+| SciChart.js | https://www.scichart.com/javascript-chart-features/ | Commercial (free community edition is non-commercial only) | Fastest in benchmarks; only if we go commercial |
+| LightningChart JS | https://lightningchart.com/js-charts/ | Commercial | Same as above |
+| Chart benchmark suite | https://github.com/abtsoftware/javascript-chart-performance-test-suite | Open | FPS comparison across all of the above (vendor-run, so read critically) |
+
+Decision to confirm with you: visx/SVG for the statistical charts (crisp, printable, exportable), r3f for 3D surfaces and the hero, deck.gl only if a view exceeds ~20k marks. No commercial chart licence.
+
 ### Components and libraries to evaluate
 
 | Need | Source | URL | Note |
