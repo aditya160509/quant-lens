@@ -7,6 +7,12 @@ Smoke check: `python3.11 backend/app/services/research_v2/smoke_test.py` runs al
 
 ---
 
+## Status (2026-09-29): items 1-8 done in commit fd8bb373
+
+Every blocker and feature finding below was fixed; see `backend/app/services/research_v2/DONE.md` for what exists now and its known limitations. Item 9 (shared loaders and workbench across V2 modules) is deliberately not started.
+
+---
+
 ## 1. Verdict
 
 | Area | State | One line |
