@@ -17,6 +17,10 @@ import math
 # =============================================================================
 
 SEC_EDGAR_BASE = "https://www.sec.gov"
+import logging
+
+logger = logging.getLogger(__name__)
+
 SEC_DATA_BASE = "https://data.sec.gov"
 SEC_FULL_TEXT = "https://www.sec.gov/cgi-bin/browse-edgar"
 
@@ -182,19 +186,39 @@ def fetch_filing_text(filing_url: str) -> str:
     """Fetch the text content of a SEC filing."""
     try:
         headers = {"User-Agent": "QuantResearch research@example.com"}
-        resp = requests.get(filing_url, headers=headers, timeout=30)
+        # Use stream=True to handle large files and check size
+        resp = requests.get(filing_url, headers=headers, timeout=20, stream=True)
         if resp.status_code == 200:
-            # Clean HTML and extract text
-            text = resp.text
-            # Remove HTML tags
-            text = re.sub(r'<[^>]+>', ' ', text)
+            # Limit to 5MB for analysis to prevent timeouts/memory issues
+            content = b""
+            max_size = 5 * 1024 * 1024
+            for chunk in resp.iter_content(chunk_size=8192):
+                content += chunk
+                if len(content) > max_size:
+                    logger.warning(f"Filing at {filing_url} truncated at 5MB")
+                    break
+            
+            text_content = content.decode('utf-8', errors='ignore')
+            
+            # Use BeautifulSoup for much better HTML stripping
+            try:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(text_content, 'html.parser')
+                # Remove script and style elements
+                for script in soup(["script", "style"]):
+                    script.extract()
+                text = soup.get_text(separator=' ')
+            except ImportError:
+                # Fallback to regex if bs4/lxml not available
+                text = re.sub(r'<[^>]+>', ' ', text_content)
+                
             # Remove extra whitespace
             text = re.sub(r'\s+', ' ', text)
             # Remove special characters but keep punctuation
             text = re.sub(r'[^\w\s\.\,\;\:\-\$\%\(\)]', ' ', text)
             return text.strip()
     except Exception as e:
-        print(f"Error fetching filing text: {e}")
+        logger.error(f"Error fetching filing text from {filing_url}: {e}")
     return ""
 
 
@@ -408,25 +432,39 @@ def extract_metrics(text: str) -> Dict[str, Dict[str, Any]]:
     metrics = {}
     
     for metric_name, pattern in METRIC_PATTERNS.items():
-        matches = re.findall(pattern, text, re.IGNORECASE)
-        if matches:
-            # Take the first match
-            match = matches[0]
-            value = float(match[0].replace(",", "")) if match[0] else 0
-            unit = match[1] if len(match) > 1 and match[1] else ""
-            
-            # Convert to absolute value
-            if unit.lower() in ["billion", "b"]:
-                value *= 1e9
-            elif unit.lower() in ["million", "m"]:
-                value *= 1e6
-            
-            metrics[metric_name] = {
-                "value": value,
-                "raw": match[0],
-                "unit": "USD",
-                "context": ""
-            }
+        try:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                # Take the first match
+                match = matches[0]
+                
+                # Handle group extraction (some patterns have more groups)
+                raw_val = match[0] if isinstance(match, (tuple, list)) else match
+                raw_unit = match[1] if isinstance(match, (tuple, list)) and len(match) > 1 else ""
+                
+                # Sanitize value string
+                sanitized_val = re.sub(r'[^\d.]', '', raw_val.replace(",", ""))
+                if not sanitized_val or sanitized_val == ".":
+                    continue
+                    
+                value = float(sanitized_val)
+                unit = raw_unit if raw_unit else ""
+                
+                # Convert to absolute value
+                if unit.lower() in ["billion", "b"]:
+                    value *= 1e9
+                elif unit.lower() in ["million", "m"]:
+                    value *= 1e6
+                
+                metrics[metric_name] = {
+                    "value": value,
+                    "raw": raw_val,
+                    "unit": "USD",
+                    "context": ""
+                }
+        except Exception as e:
+            logger.warning(f"Failed to extract metric {metric_name}: {e}")
+            continue
     
     return metrics
 
@@ -633,43 +671,57 @@ def get_filing_types() -> List[Dict[str, str]]:
 
 def fetch_and_process_filing(ticker: str, filing_type: str = "10-K") -> Dict[str, Any]:
     """Fetch and process the most recent filing for a company."""
-    filings = fetch_company_filings(ticker, filing_type, count=2)
-    
-    if not filings:
-        return {"error": f"No {filing_type} filings found for {ticker}"}
-    
-    # Fetch current filing
-    current_filing = filings[0]
-    current_text = fetch_filing_text(current_filing["url"])
-    
-    if not current_text:
-        return {"error": "Failed to fetch filing content"}
-    
-    # Fetch previous filing for comparison if available
-    previous_text = ""
-    if len(filings) > 1:
-        previous_text = fetch_filing_text(filings[1]["url"])
-    
-    # Process document
-    result = process_document(
-        text=current_text,
-        doc_type=filing_type,
-        ticker=ticker,
-        filing_date=current_filing["date"],
-        previous_text=previous_text
-    )
-    
-    result["company"]["name"] = current_filing.get("company", ticker)
-    result["filing"]["url"] = current_filing["url"]
-    
-    # Add previous filing info if available
-    if len(filings) > 1:
-        result["filing"]["compared_to"] = {
-            "date": filings[1]["date"],
-            "url": filings[1]["url"]
-        }
-    
-    return result
+    try:
+        filings = fetch_company_filings(ticker, filing_type, count=2)
+        
+        if not filings:
+            return {"error": f"No {filing_type} filings found for {ticker}"}
+        
+        # Fetch current filing
+        current_filing = filings[0]
+        current_text = fetch_filing_text(current_filing["url"])
+        
+        if not current_text:
+            return {"error": "Failed to fetch filing content"}
+        
+        # Fetch previous filing for comparison if available
+        previous_text = ""
+        if len(filings) > 1:
+            try:
+                previous_text = fetch_filing_text(filings[1]["url"])
+            except Exception as e:
+                logger.warning(f"Failed to fetch previous filing for {ticker}: {e}")
+        
+        # Process document
+        result = process_document(
+            text=current_text,
+            doc_type=filing_type,
+            ticker=ticker,
+            filing_date=current_filing["date"],
+            previous_text=previous_text
+        )
+        
+        # Add company and filing info
+        if "company" not in result:
+            result["company"] = {}
+        result["company"]["name"] = current_filing.get("company", ticker)
+        
+        if "filing" not in result:
+            result["filing"] = {}
+        result["filing"]["url"] = current_filing["url"]
+        result["filing"]["date"] = current_filing["date"]
+        
+        # Add previous filing info if available
+        if len(filings) > 1:
+            result["filing"]["compared_to"] = {
+                "date": filings[1]["date"],
+                "url": filings[1]["url"]
+            }
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error in fetch_and_process_filing for {ticker}: {e}", exc_info=True)
+        return {"error": f"Internal processing error: {str(e)}"}
 
 
 def compare_documents(

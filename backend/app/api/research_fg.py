@@ -188,7 +188,7 @@ async def flow_heatmap(request: FlowHeatmapRequest):
         
     except Exception as e:
         logger.error(f"Flow heatmap error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -220,7 +220,7 @@ async def liquidity_radar(request: LiquidityRadarRequest):
         
     except Exception as e:
         logger.error(f"Liquidity radar error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -282,7 +282,7 @@ async def recession_prob(request: RecessionProbRequest):
         
     except Exception as e:
         logger.error(f"Recession prob error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -336,7 +336,7 @@ async def drawdown_anatomy(
         raise
     except Exception as e:
         logger.error(f"Drawdown anatomy error for {ticker}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -364,7 +364,7 @@ async def etf_lookthrough(
         
     except Exception as e:
         logger.error(f"ETF lookthrough error for {ticker}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -481,7 +481,7 @@ async def vol_surface(
         raise
     except Exception as e:
         logger.error(f"Vol surface error for {ticker}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -505,7 +505,7 @@ async def etf_factor_dna(request: EtfFactorDnaRequest):
         
     except Exception as e:
         logger.error(f"ETF Factor DNA error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -573,7 +573,7 @@ async def hedge_sim(request: HedgeSimRequest):
         raise
     except Exception as e:
         logger.error(f"Hedge sim error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -628,4 +628,4 @@ async def hedge_ratio(request: HedgeRatioRequest):
         raise
     except Exception as e:
         logger.error(f"Hedge ratio error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

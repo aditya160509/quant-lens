@@ -260,20 +260,52 @@ def garch_variance(returns: pd.Series) -> pd.Series:
 def har_variance(returns: pd.Series) -> pd.Series:
     """
     HAR-RV model (Heterogeneous Autoregressive model of Realized Volatility).
-    Uses daily, weekly, monthly components.
+    Uses daily, weekly, monthly components with OLS-estimated weights.
     """
     # Realized variance
     rv = returns ** 2
     
-    # Components
-    rv_d = rv  # Daily
-    rv_w = rv.rolling(5).mean()  # Weekly
-    rv_m = rv.rolling(22).mean()  # Monthly
+    # Components (Lags)
+    rv_d = rv.shift(1)  # Previous day
+    rv_w = rv.rolling(5).mean().shift(1)  # Previous week
+    rv_m = rv.rolling(22).mean().shift(1)  # Previous month
     
-    # Simple HAR: weighted average (typically need to estimate weights, using empirical)
+    # Align components
+    df_har = pd.DataFrame({
+        'target': rv,
+        'daily': rv_d,
+        'weekly': rv_w,
+        'monthly': rv_m
+    }).dropna()
+    
+    if len(df_har) > 100:
+        try:
+            from sklearn.linear_model import LinearRegression
+            X = df_har[['daily', 'weekly', 'monthly']].values
+            y = df_har['target'].values
+            
+            # Use a rolling window for time-varying weights or just full sample?
+            # Full sample for global stability in this context
+            model = LinearRegression(fit_intercept=True)
+            model.fit(X, y)
+            
+            # Predict
+            har_var_values = model.predict(X)
+            har_var = pd.Series(har_var_values, index=df_har.index)
+            
+            # Reindex to match original returns (fill with last valid)
+            har_var = har_var.reindex(returns.index).fillna(method='ffill')
+            
+            # Clip negative values (theoretical impossibility)
+            har_var = har_var.clip(lower=1e-9)
+            
+            return har_var
+        except Exception as e:
+            logger.debug(f"HAR estimation failed: {e}. Falling back to empirical weights.")
+    
+    # Fallback: Empirical weights (Standard in literature: approx 0.4, 0.35, 0.25)
     har_var = 0.4 * rv_d + 0.35 * rv_w + 0.25 * rv_m
-    
-    return har_var
+    return har_var.reindex(returns.index).fillna(method='ffill')
 
 
 def ensemble_volatility_forecast(returns: pd.Series, horizon: int = 5) -> Dict[str, Any]:
@@ -484,13 +516,14 @@ def cross_validated_factor_loadings(
     X = aligned.iloc[:, 1:].values
     feature_names = factors.columns.tolist()
     
-    # Cross-validation
-    kf = KFold(n_splits=n_folds, shuffle=False)  # Time series - no shuffle
+    # Cross-validation for Time Series
+    from sklearn.model_selection import TimeSeriesSplit
+    tscv = TimeSeriesSplit(n_splits=n_folds)
     
     all_betas = []
     all_r2 = []
     
-    for train_idx, test_idx in kf.split(X):
+    for train_idx, test_idx in tscv.split(X):
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
         

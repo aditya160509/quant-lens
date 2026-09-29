@@ -38,10 +38,28 @@ from app.services.ml.strategy_overlap import StrategyOverlapDetector, analyze_st
 from app.services.ml.embedding import EmbeddingEngine, create_embedding
 from app.services.ml.regime_quality import RegimeSeparationAnalyzer, analyze_regime_separation
 from app.services.ml.summary import SummaryEngine, score_signals, compute_position_sizing
+from app.services.ml_v2.registry import ML_V2_FEATURES, run_feature as run_ml_v2_feature
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/ml/v2/features")
+async def list_ml_v2_features():
+    """List available ML V2 feature contracts."""
+    return {"features": [{"id": f.id, "title": f.title, "status": f.status} for f in ML_V2_FEATURES.values()]}
+
+
+@router.post("/ml/v2/features/{feature_id}/run")
+async def execute_ml_v2_feature(feature_id: str, payload: Dict[str, Any] = Body(default={})):
+    """Execute one ML V2 feature without blocking the event loop."""
+    try:
+        return await asyncio.to_thread(run_ml_v2_feature, feature_id, payload)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 # =============================================================================
 # THREAD-SAFE CACHE WITH TTL
@@ -145,8 +163,8 @@ class PositionSizeRequest(BaseModel):
 # =============================================================================
 
 def get_cached_prices(tickers: List[str], period: str = '1y') -> pd.DataFrame:
-    """Get prices with caching"""
-    import yfinance as yf
+    """Get prices with caching - uses centralized robust_data_fetcher"""
+    from app.services.robust_data_fetcher import get_batch_data
     
     cache_key = f"prices_{'_'.join(sorted(tickers))}_{period}"
     cached = _price_cache.get(cache_key)
@@ -154,9 +172,22 @@ def get_cached_prices(tickers: List[str], period: str = '1y') -> pd.DataFrame:
         return cached
     
     try:
-        data = yf.download(tickers, period=period, progress=False, threads=True)['Adj Close']
-        if isinstance(data, pd.Series):
-            data = data.to_frame(tickers[0])
+        # Use centralized data fetcher with rate limiting
+        data_dict = get_batch_data(tickers, period=period)
+        
+        if not data_dict:
+            return pd.DataFrame()
+        
+        # Extract close prices from each ticker's data
+        close_data = {}
+        for ticker, df in data_dict.items():
+            if df is not None and not df.empty and 'Close' in df.columns:
+                close_data[ticker] = df['Close']
+        
+        if not close_data:
+            return pd.DataFrame()
+        
+        data = pd.DataFrame(close_data)
         _price_cache.set(cache_key, data)
         return data
     except Exception as e:
@@ -180,8 +211,10 @@ async def get_demo_dataset():
     tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META']
     
     for ticker in tickers:
-        for i in range(10):
-            date = (datetime.now() - timedelta(days=30+i*3)).strftime('%Y-%m-%d')
+        # Increase to 30 signals per ticker to ensure we hit the 100 sample threshold
+        for i in range(30):
+            # Spread over 2 years to ensure sufficient history
+            date = (datetime.now() - timedelta(days=30 + i*15)).strftime('%Y-%m-%d')
             demo_signals.append({
                 'ticker': ticker,
                 'signal_date': date,
@@ -267,7 +300,7 @@ async def build_dataset(request: DatasetRequest, background_tasks: BackgroundTas
         logger.error(f"Dataset build error: {e}")
         with _training_lock:
             _training_status['building_dataset'] = False
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/ml/data/overview")
@@ -367,7 +400,7 @@ async def train_models(
             return {'status': 'success', 'training_results': results}
         except Exception as e:
             logger.error(f"Training error: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Internal server error")
     else:
         # Train in background for large datasets
         with _training_lock:
@@ -420,7 +453,7 @@ async def predict_signal(request: PredictionRequest):
         return {'status': 'success', 'prediction': result}
     except Exception as e:
         logger.error(f"Prediction error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/ml/supervised/importance")
@@ -721,7 +754,7 @@ async def cluster_assets(
         }
     except Exception as e:
         logger.error(f"Clustering error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/ml/clustering/dendrogram")
@@ -1063,4 +1096,3 @@ async def clear_ml_caches(cache_type: str = Body(default='all')):
             _price_cache.delete(key)
     
     return {'status': 'success', 'message': f'Cleared {cache_type} caches'}
-

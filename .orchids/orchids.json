@@ -1,8 +1,0 @@
-{
-  "projectId": "7602a2ab-a255-4f4e-a764-63bc6bd904d0",
-  "createdAt": 1765359784809,
-  "startupCommands": [
-    "cd \"/Users/adityabalaji/quant /backend\" && source venv/bin/activate && python main.py",
-    "cd \"/Users/adityabalaji/quant /frontend\" && npm run dev"
-  ]
-}

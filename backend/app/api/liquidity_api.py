@@ -23,6 +23,7 @@ import logging
 import pandas as pd
 import numpy as np
 from scipy import stats
+from fastapi.concurrency import run_in_threadpool
 
 from app.services.market_state_v2 import get_market_state
 from app.services.liquidity_engine import (
@@ -74,83 +75,48 @@ async def _get_engine_data(
             detail=f"Market state build failed: {market_state._build_error}"
         )
     
-    # Initialize engine
-    engine = LiquidityIntelligenceEngine(window=window)
-    
-    # Get data from market state - use REAL OHLC if available
-    prices = market_state.prices
-    volumes = market_state.volumes
-    ohlc = market_state.ohlc  # Real OHLC data
-    
-    if prices.empty or volumes.empty:
-        raise HTTPException(status_code=500, detail="No price/volume data available")
-    
-    tickers = list(prices.columns)[:50]  # Limit for performance
-    
-    # Get sector mapping from universe config
-    sector_map = {}
-    config = market_state.config
-    if config and "sector_groups" in config:
-        for sector, tickers_in_sector in config["sector_groups"].items():
-            for t in tickers_in_sector:
-                sector_map[t] = sector
-    
-    # Store amihud series for contagion
-    amihud_dict = {}
-    
-    # Process each ticker
-    for ticker in tickers:
-        try:
-            close = prices[ticker].dropna()
-            volume = volumes[ticker].dropna() if ticker in volumes.columns else pd.Series()
-            
-            if len(close) < 30 or len(volume) < 30:
-                continue
-            
-            # Use REAL OHLC data if available, otherwise create estimates
-            if ohlc is not None and ticker in ohlc.open.columns:
-                open_prices = ohlc.open[ticker].reindex(close.index).fillna(close)
-                high = ohlc.high[ticker].reindex(close.index).fillna(close)
-                low = ohlc.low[ticker].reindex(close.index).fillna(close)
-            else:
-                # Fallback to volatility-based estimates
-                returns = close.pct_change().abs()
-                daily_range = returns.rolling(20).mean().fillna(0.01)
-                open_prices = close.shift(1).fillna(close.iloc[0])
-                high = close * (1 + daily_range)
-                low = close * (1 - daily_range)
-            
-            # Get sector for this ticker
-            ticker_sector = sector_map.get(ticker, "Other")
-            
-            # Process ticker through engine (with sector info)
-            engine.process_ticker(
-                ticker=ticker,
-                close=close,
-                volume=volume,
-                open_prices=open_prices,
-                high=high,
-                low=low,
-                sector=ticker_sector,
-            )
-            
-            # Store amihud for contagion
-            returns = compute_returns(close)
-            dollar_volume = compute_dollar_volume(close, volume)
-            amihud = compute_amihud(returns, dollar_volume).replace([np.inf, -np.inf], np.nan).dropna()
-            if len(amihud) > 20:
-                amihud_dict[ticker] = amihud
+    # AUDIT FIX: Synchronous Math Deadlocking
+    # Offload the heavy loop and matrix math to a threadpool
+    def _heavy_compute(tickers, prices, volumes, ohlc, sector_map):
+        engine = LiquidityIntelligenceEngine(window=window)
+        amihud_dict = {}
+        for ticker in tickers:
+            try:
+                close = prices[ticker].dropna()
+                volume = volumes[ticker].dropna() if ticker in volumes.columns else pd.Series()
+                if len(close) < 30 or len(volume) < 30: continue
                 
-        except Exception as e:
-            logger.warning(f"Failed to process {ticker}: {e}")
-            continue
-    
-    # Compute contagion network (cross-ticker analysis)
-    if len(amihud_dict) > 5:
-        try:
-            engine.compute_contagion_network(amihud_dict)
-        except Exception as e:
-            logger.warning(f"Contagion computation failed: {e}")
+                if ohlc is not None and ticker in ohlc.open.columns:
+                    open_prices = ohlc.open[ticker].reindex(close.index).fillna(close)
+                    high = ohlc.high[ticker].reindex(close.index).fillna(close)
+                    low = ohlc.low[ticker].reindex(close.index).fillna(close)
+                else:
+                    returns = close.pct_change().abs()
+                    daily_range = returns.rolling(20).mean().fillna(0.01)
+                    open_prices = close.shift(1).fillna(close.iloc[0])
+                    high = close * (1 + daily_range)
+                    low = close * (1 - daily_range)
+                
+                ticker_sector = sector_map.get(ticker, "Other")
+                engine.process_ticker(ticker, close, volume, open_prices, high, low, ticker_sector)
+                
+                returns = compute_returns(close)
+                dollar_volume = compute_dollar_volume(close, volume)
+                amihud = compute_amihud(returns, dollar_volume).replace([np.inf, -np.inf], np.nan).dropna()
+                if len(amihud) > 20: amihud_dict[ticker] = amihud
+            except Exception as e:
+                logger.warning(f"Failed to process {ticker}: {e}")
+                continue
+        
+        if len(amihud_dict) > 5:
+            try:
+                engine.compute_contagion_network(amihud_dict)
+            except Exception as e:
+                logger.warning(f"Contagion computation failed: {e}")
+        return engine
+
+    # Run heavy compute in a separate thread to avoid blocking the event loop
+    engine = await run_in_threadpool(_heavy_compute, tickers, prices, volumes, ohlc, sector_map)
     
     return {
         "engine": engine,
@@ -204,7 +170,7 @@ async def get_state_manifold(
         raise
     except Exception as e:
         logger.error(f"State manifold failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/cliff-vacuum")
@@ -251,7 +217,7 @@ async def get_cliff_vacuum(
         raise
     except Exception as e:
         logger.error(f"Cliff-vacuum failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/contagion")
@@ -324,7 +290,7 @@ async def get_contagion(
         raise
     except Exception as e:
         logger.error(f"Contagion failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/capacity")
@@ -378,7 +344,7 @@ async def get_capacity(
         raise
     except Exception as e:
         logger.error(f"Capacity failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/regimes")
@@ -425,7 +391,7 @@ async def get_regimes(
         raise
     except Exception as e:
         logger.error(f"Regimes failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/feedback")
@@ -472,7 +438,7 @@ async def get_feedback(
         raise
     except Exception as e:
         logger.error(f"Feedback failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/fingerprint")
@@ -510,7 +476,7 @@ async def get_fingerprint(
         raise
     except Exception as e:
         logger.error(f"Fingerprint failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/diagnostics")
@@ -535,7 +501,7 @@ async def get_diagnostics(
         
     except Exception as e:
         logger.error(f"Diagnostics failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/summary")
@@ -573,7 +539,7 @@ async def get_summary(
         raise
     except Exception as e:
         logger.error(f"Summary failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/health")

@@ -42,7 +42,7 @@ def load_factors(model: str = "ff3") -> pd.DataFrame:
         
         # Read first few lines to check
         with open(file_path, 'r') as f:
-            lines = [next(f) for _ in range(10)]
+            lines = [next(f) for _ in range(50)]
             
         skip_rows = 0
         for i, line in enumerate(lines):

@@ -163,16 +163,36 @@ def get_prices_multi(tickers: List[str], lookback_days: int) -> Dict[str, pd.Dat
     return result
 
 
+from app.services.parquet_cache import pq_cache
+
+def get_research_series(symbol: str, lookback_days: int) -> pd.DataFrame:
+    """
+    Unified series fetcher for Research Engine.
+    Detects symbol type and routes to appropriate source.
+    """
+    upper_sym = symbol.upper()
+    
+    # 1. Check if it's a known Factor
+    if upper_sym in FACTOR_MAP:
+        df = get_factor_returns([upper_sym], lookback_days)
+        if not df.empty:
+            # Stats functions usually expect 'close' column
+            df = df.rename(columns={upper_sym: 'close'})
+            return df
+            
+    # 2. Check if it's a known Macro indicator
+    if upper_sym in MACRO_MAP:
+        df = get_macro_series([upper_sym], lookback_days)
+        if not df.empty:
+            df = df.rename(columns={upper_sym: 'close'})
+            return df
+
+    # 3. Default to Price Data (Equity/Index)
+    return get_prices_daily(symbol, lookback_days)
+
 def get_factor_returns(factors: List[str], lookback_days: int) -> pd.DataFrame:
     """
-    Get factor return series for requested factors.
-    
-    Args:
-        factors: List of factor names (MKT, SMB, HML, MOMENTUM, etc.)
-        lookback_days: Number of days to fetch
-        
-    Returns:
-        DataFrame with date index and factor columns
+    Get factor return series with Parquet caching.
     """
     end_date = datetime.now()
     start_date = end_date - timedelta(days=lookback_days + 30)
@@ -182,107 +202,87 @@ def get_factor_returns(factors: List[str], lookback_days: int) -> pd.DataFrame:
     for factor in factors:
         factor_upper = factor.upper()
         
+        # Try Parquet Cache First
+        cache_key = f"factor_{factor_upper}"
+        cached = pq_cache.get(cache_key, max_age_hours=24)
+        if cached is not None:
+            mask = cached.index >= start_date
+            result[factor_upper] = cached.loc[mask].iloc[:, 0]
+            continue
+            
         if factor_upper not in FACTOR_MAP:
-            logger.warning(f"Unknown factor: {factor}")
             continue
         
         mapping = FACTOR_MAP[factor_upper]
-        
-        if mapping is None:
-            # Computed factor - skip for now
-            logger.info(f"Factor {factor} requires computation, skipping in factor_returns")
-            continue
+        if mapping is None: continue
         
         source, column = mapping
         
         try:
             df = factor_data.load_factors(source)
+            if df.empty: continue
             
-            if df.empty:
-                logger.warning(f"No data for factor source: {source}")
-                continue
+            col_match = next((c for c in df.columns if c.strip().replace(" ", "") == column.replace(" ", "")), None)
+            if col_match is None: continue
             
-            # Find the column (handle whitespace)
-            col_match = None
-            for c in df.columns:
-                if c.strip().replace(" ", "") == column.replace(" ", ""):
-                    col_match = c
-                    break
+            # Save to Parquet for next time
+            pq_cache.set(cache_key, df[[col_match]])
             
-            if col_match is None:
-                logger.warning(f"Column {column} not found in {source}")
-                continue
-            
-            # Filter by date range
             mask = df.index >= start_date
-            series = df.loc[mask, col_match]
-            
-            # Use user-facing name as column
-            result[factor_upper] = series
+            result[factor_upper] = df.loc[mask, col_match]
             
         except Exception as e:
             logger.error(f"Error loading factor {factor}: {e}")
     
     if not result.empty:
         result = result.dropna(how='all')
-        # Normalize index to date only (strip time component for alignment)
         result.index = pd.to_datetime(result.index.date)
     
     return result
 
-
 def get_macro_series(series_names: List[str], lookback_days: int) -> pd.DataFrame:
     """
-    Get macro indicator series.
-    
-    Args:
-        series_names: List of macro names (RATES, USD, VIX, etc.)
-        lookback_days: Number of days to fetch
-        
-    Returns:
-        DataFrame with date index and macro columns (resampled to daily)
+    Get macro indicator series with Parquet caching.
     """
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=lookback_days + 60)  # Extra buffer for monthly data
+    start_date = end_date - timedelta(days=lookback_days + 60)
     
     result = pd.DataFrame()
     
     for name in series_names:
         name_upper = name.upper()
         
-        if name_upper not in MACRO_MAP:
-            logger.warning(f"Unknown macro series: {name}")
+        # Try Parquet Cache First
+        cache_key = f"macro_{name_upper}"
+        cached = pq_cache.get(cache_key, max_age_hours=12)
+        if cached is not None:
+            mask = cached.index >= start_date
+            result[name_upper] = cached.loc[mask].iloc[:, 0]
             continue
-        
+            
+        if name_upper not in MACRO_MAP: continue
         fred_id = MACRO_MAP[name_upper]
-        
-        if fred_id is None:
-            # Computed series
-            logger.info(f"Macro series {name} requires computation")
-            continue
+        if fred_id is None: continue
         
         try:
-            series = macro_data.fetch_series(
-                fred_id,
-                observation_start=start_date.strftime("%Y-%m-%d")
-            )
+            series = macro_data.fetch_series(fred_id, observation_start=start_date.strftime("%Y-%m-%d"))
+            if series.empty: continue
             
-            if series.empty:
-                logger.warning(f"No data for macro series: {fred_id}")
-                continue
+            df = pd.DataFrame({name_upper: pd.to_numeric(series, errors='coerce')})
+            # Save to Parquet
+            pq_cache.set(cache_key, df)
             
-            result[name_upper] = series
+            result[name_upper] = df[name_upper]
             
         except Exception as e:
             logger.error(f"Error loading macro series {name}: {e}")
     
     if not result.empty:
-        # Resample to daily with forward fill (for weekly/monthly data)
+        # Resample to daily with forward fill
         result = result.resample('D').ffill()
         result = result.dropna(how='all')
     
     return result
-
 
 def align_frames(
     frames: List[pd.DataFrame],

@@ -104,9 +104,11 @@ def get_intraday(ticker: str, interval: str = "5m"):
     except Exception as e:
         return {"error": str(e)}
 
-# --- Macro Impact ---
-from app import macro
-
+# --- Macro Impact (module retired) ---
 @router.get("/macro/impact")
 def get_macro_impact(ticker: str):
-    return macro.get_macro_impact(ticker)
+    return {
+        "ticker": ticker,
+        "status": "unavailable",
+        "message": "Macro impact module was removed from this build."
+    }

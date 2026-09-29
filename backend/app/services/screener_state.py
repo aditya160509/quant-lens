@@ -317,7 +317,7 @@ def parse_time_window(window: str) -> int:
     """Convert time window string to days."""
     mappings = {
         "20D": 20, "60D": 60, "120D": 120, "252D": 252,
-        "1M": 20, "3M": 60, "6M": 126, "1Y": 252, "2Y": 504, "5Y": 1260
+        "1M": 20, "3M": 60, "6M": 126, "1Y": 252, "2Y": 504, "3Y": 756, "5Y": 1260
     }
     return mappings.get(window.upper(), 60)
 

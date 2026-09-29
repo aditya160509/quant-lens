@@ -145,25 +145,41 @@ def _is_cache_valid(cache_path: str) -> bool:
 
 
 def _fetch_yahoo(symbol: str, start: str, end: str) -> pd.DataFrame:
-    """Fetch OHLCV data using robust_data_fetcher."""
+    """Fetch OHLCV data using DataEngine (Parquet) with RDF fallback."""
+    from app.services.data_engine import engine
     try:
-        # Use robust_data_fetcher instead of yfinance directly
-        df = rdf_get_price(symbol, period="5y")
+        # 1. Try Parquet-Native Engine FIRST
+        # Calculate lookback from start/end
+        start_dt = pd.to_datetime(start)
+        end_dt = pd.to_datetime(end)
+        days = (datetime.now() - start_dt).days + 30
+        
+        df = engine.get_full_ohlcv(symbol, lookback_days=days)
+        
+        # 2. Fallback to RobustDataFetcher
+        if df.empty:
+            logger.info(f"[Regime] Parquet miss for {symbol}, falling back to RDF")
+            df = rdf_get_price(symbol, period="5y")
+            
         if df is None or df.empty:
             return pd.DataFrame()
         
         # Filter by date range
-        start_dt = pd.to_datetime(start)
-        end_dt = pd.to_datetime(end)
+        df.index = pd.to_datetime(df.index)
+        if hasattr(df.index, 'tz_localize'):
+            df.index = df.index.tz_localize(None)
+            
         df = df[(df.index >= start_dt) & (df.index <= end_dt)]
         
+        # Mapping for Regime compatibility
         df = df.rename(columns={
             'Open': 'open', 'High': 'high', 'Low': 'low',
             'Close': 'close', 'Volume': 'volume'
         })
-        if hasattr(df.index, 'tz_localize'):
-            df.index = pd.to_datetime(df.index).tz_localize(None)
-        return df[['open', 'high', 'low', 'close', 'volume']] if all(c in df.columns for c in ['open', 'high', 'low', 'close', 'volume']) else df
+        
+        cols = ['open', 'high', 'low', 'close', 'volume']
+        available = [c for c in cols if c in df.columns]
+        return df[available]
     except Exception as e:
         warnings.warn(f"Fetch failed for {symbol}: {e}")
         return pd.DataFrame()
@@ -391,22 +407,39 @@ def compute_robust_zscore(series: pd.Series, window: int = CALIBRATION_DAYS, min
 
 def calibrate_weights(features: pd.DataFrame, target: pd.Series, default_weights: Dict[str, float]) -> Dict[str, float]:
     """
-    Compute dynamic weights for features based on their correlation with a target signal
-    (usually drawdown or volatility).
+    Compute dynamic weights for features using Entropy-Weighted Correlation (EWC).
+    Prioritizes features that have high correlation with the target AND provide
+    distinct structural information (avoiding redundant signals).
     """
     try:
-        corrs = {}
-        for col in features.columns:
-            # Correlation with target
-            c = features[col].corr(target)
-            corrs[col] = abs(c) if not np.isnan(c) else 0.0
+        # Ensure alignment
+        common_idx = features.index.intersection(target.index)
+        f = features.loc[common_idx]
+        t = target.loc[common_idx]
+        
+        if len(common_idx) < 30:
+            return default_weights
             
-        total = sum(corrs.values())
+        # Core correlations
+        corrs = {col: abs(f[col].corr(t)) for col in f.columns}
+        
+        # Calculate Information Gain (approx using signal variance and entropy)
+        from scipy.stats import entropy
+        info_weights = {}
+        for col in f.columns:
+            # Use absolute values and bin into histograms to estimate entropy
+            bins = np.histogram(f[col].fillna(0).values, bins=10)[0]
+            inf_gain = entropy(bins + 1e-10)
+            info_weights[col] = inf_gain * corrs[col]
+            
+        total = sum(info_weights.values())
         if total < 1e-6:
             return default_weights
             
         # Normalize to sum to 1
-        return {k: v / total for k, v in corrs.items()}
+        dynamic_weights = {k: v / total for k, v in info_weights.items()}
+        return dynamic_weights
+        
     except Exception as e:
         logger.warning(f"Weight calibration failed: {e}")
         return default_weights
@@ -665,12 +698,13 @@ def compute_mass_flow(
         return _compute_mass_flow_fallback(state, features)
     
     try:
-        # Fit HMM
+        # Fit HMM with 'full' covariance to capture complex inter-feature relationships
         model = GaussianHMM(
             n_components=n_states,
-            covariance_type='diag',
+            covariance_type='full',
             n_iter=100,
-            random_state=42
+            random_state=42,
+            tol=1e-3
         )
         model.fit(X[-min(train_days, len(X)):])
         

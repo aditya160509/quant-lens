@@ -1,54 +1,51 @@
 """
 Portfolio Performance Service - Features 32-33, 44-45
 Sharpe/Sortino/Calmar, Drawdowns, Benchmark Comparison, Attribution
+
+Now uses robust_data_fetcher for centralized rate-limited data access.
 """
 import numpy as np
 import pandas as pd
 from typing import List, Dict, Optional, Any
-import yfinance as yf
 import logging
 from datetime import datetime, timedelta
+import yfinance as yf
+
+from app.services.robust_data_fetcher import get_price_data, get_batch_data
 
 logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# HELPER FUNCTIONS
+# HELPER FUNCTIONS - Using robust_data_fetcher
 # =============================================================================
 
 def _get_portfolio_returns(positions: List[Dict], period: str = "1y") -> pd.Series:
-    """Compute weighted portfolio returns."""
+    """Compute weighted portfolio returns using robust_data_fetcher."""
     tickers = [p.get("ticker") for p in positions]
     weights = {p.get("ticker"): p.get("weight", 0) for p in positions}
     
     try:
-        data = yf.download(tickers, period=period, progress=False, auto_adjust=True)
+        # Use centralized batch fetcher with rate limiting
+        data_dict = get_batch_data(tickers, period=period)
         
-        if data.empty:
+        if not data_dict:
             return pd.Series()
         
-        # Get Close prices - handle MultiIndex
-        if 'Close' in data.columns:
-            close_data = data['Close']
-        elif isinstance(data.columns, pd.MultiIndex):
-            if 'Close' in data.columns.get_level_values(0):
-                close_data = data['Close']
-            else:
-                close_data = data.iloc[:, :len(tickers)]
-        else:
-            close_data = data
+        # Extract close prices
+        close_data = {}
+        for ticker, df in data_dict.items():
+            if df is not None and not df.empty and 'Close' in df.columns:
+                close_data[ticker] = df['Close']
         
-        if isinstance(close_data, pd.Series):
-            close_data = close_data.to_frame(tickers[0])
+        if not close_data:
+            return pd.Series()
         
-        returns = close_data.pct_change().dropna()
-        
-        # Ensure column names match tickers
-        if isinstance(returns.columns, pd.MultiIndex):
-            returns.columns = returns.columns.get_level_values(-1)
+        prices = pd.DataFrame(close_data)
+        returns = prices.pct_change().dropna()
         
         # Weighted returns
-        port_returns = pd.Series(0, index=returns.index)
+        port_returns = pd.Series(0.0, index=returns.index)
         for ticker in tickers:
             if ticker in returns.columns:
                 port_returns += returns[ticker] * weights.get(ticker, 0)
@@ -60,26 +57,17 @@ def _get_portfolio_returns(positions: List[Dict], period: str = "1y") -> pd.Seri
 
 
 def _get_benchmark_returns(symbol: str = "SPY", period: str = "1y") -> pd.Series:
-    """Fetch benchmark returns."""
+    """Fetch benchmark returns using robust_data_fetcher."""
     try:
-        data = yf.download(symbol, period=period, progress=False, auto_adjust=True)
-        if data.empty:
+        df = get_price_data(symbol, period=period)
+        
+        if df is None or df.empty:
             return pd.Series(dtype=float)
         
-        # Handle MultiIndex columns from yfinance
-        if isinstance(data.columns, pd.MultiIndex):
-            # For single symbol, get the Close column and squeeze to Series
-            if 'Close' in data.columns.get_level_values(0):
-                close_data = data['Close']
-                # If still DataFrame (MultiIndex), squeeze or take first column
-                if isinstance(close_data, pd.DataFrame):
-                    close_data = close_data.iloc[:, 0]
-            else:
-                close_data = data.iloc[:, 0]
-        elif 'Close' in data.columns:
-            close_data = data['Close']
+        if 'Close' in df.columns:
+            close_data = df['Close']
         else:
-            close_data = data.iloc[:, 0] if isinstance(data, pd.DataFrame) else data
+            close_data = df.iloc[:, 0] if isinstance(df, pd.DataFrame) else df
         
         # Ensure it's a Series
         if isinstance(close_data, pd.DataFrame):
@@ -145,7 +133,13 @@ def compute_ratios(
         rolling_max = cumulative.cummax()
         drawdowns = (cumulative - rolling_max) / rolling_max
         max_drawdown = float(abs(drawdowns.min()))
-        annual_return = float(port_returns.mean()) * ann_factor
+        
+        # Use CAGR for Calmar - more accurate for long horizons
+        days = (port_returns.index[-1] - port_returns.index[0]).days
+        years = max(days / 365.25, 0.1)
+        total_return = cumulative.iloc[-1] - 1
+        annual_return = (1 + total_return) ** (1 / years) - 1
+        
         calmar = annual_return / max_drawdown if max_drawdown > 0 else 0.0
         
         # === Rolling Ratios (90-day window) ===
@@ -477,13 +471,20 @@ def compute_benchmark_comparison(
             rolling_alpha.append(float(alpha))
             rolling_dates.append(str(port_returns.index[i].date()) if hasattr(port_returns.index[i], 'date') else str(port_returns.index[i]))
         
-        # Beta calculation
+        # Jensen's Alpha calculation: α = Rp - [Rf + β(Rm - Rf)]
         if len(port_returns) > 1:
             covariance = float(port_returns.cov(bench_returns))
             bench_variance = float(bench_returns.var())
             beta = float(covariance / bench_variance) if bench_variance > 0 else 1.0
+            
+            # Annualize for Alpha
+            rf_annual = 0.04 # Assume 4% risk-free rate if not provided
+            port_annual = float(port_returns.mean() * 252)
+            bench_annual = float(bench_returns.mean() * 252)
+            alpha = port_annual - (rf_annual + beta * (bench_annual - rf_annual))
         else:
             beta = 1.0
+            alpha = 0.0
         
         # Cumulative chart data
         cumulative_chart = [
@@ -515,7 +516,8 @@ def compute_benchmark_comparison(
             "risk_metrics": {
                 "tracking_error": tracking_error,
                 "information_ratio": info_ratio,
-                "beta": beta
+                "beta": beta,
+                "jensens_alpha": float(alpha)
             },
             "capture_ratios": {
                 "upside": upside_capture,
@@ -566,28 +568,20 @@ def compute_attribution(
         weights = {p.get("ticker"): p.get("weight", 0) for p in positions}
         sectors = {p.get("ticker"): p.get("sector", "Other") for p in positions}
         
-        # Fetch returns
+        # Fetch returns using robust_data_fetcher
         all_tickers = tickers + [benchmark]
-        data = yf.download(all_tickers, period=period, progress=False, auto_adjust=True)
+        data_dict = get_batch_data(all_tickers, period=period)
         
-        if data.empty:
+        if not data_dict:
             return {"error": "Failed to fetch price data"}
         
-        # Get Close prices - handle MultiIndex
-        if 'Close' in data.columns:
-            close_data = data['Close']
-        elif isinstance(data.columns, pd.MultiIndex):
-            if 'Close' in data.columns.get_level_values(0):
-                close_data = data['Close']
-            else:
-                close_data = data.iloc[:, :len(all_tickers)]
-        else:
-            close_data = data
+        # Build returns matrix
+        returns_dict = {}
+        for ticker, df in data_dict.items():
+            if df is not None and not df.empty and 'Close' in df.columns:
+                returns_dict[ticker] = df['Close'].pct_change()
         
-        if isinstance(close_data, pd.Series):
-            close_data = close_data.to_frame()
-        
-        returns = close_data.pct_change().dropna()
+        returns = pd.DataFrame(returns_dict).dropna()
         
         # Ensure column names match tickers
         if isinstance(returns.columns, pd.MultiIndex):

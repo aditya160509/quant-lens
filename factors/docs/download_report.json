@@ -1,0 +1,118 @@
+{
+  "fama_french": [
+    {
+      "name": "F-F_Research_Data_Factors_daily_CSV.zip",
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_Factors_daily_CSV.zip",
+      "ok": true,
+      "status": 200,
+      "bytes": 177286,
+      "extracted": [
+        "F-F_Research_Data_Factors_daily.csv"
+      ]
+    },
+    {
+      "name": "F-F_Research_Data_5_Factors_2x3_daily_CSV.zip",
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_5_Factors_2x3_daily_CSV.zip",
+      "ok": true,
+      "status": 200,
+      "bytes": 149059,
+      "extracted": [
+        "F-F_Research_Data_5_Factors_2x3_daily.csv"
+      ]
+    },
+    {
+      "name": "F-F_Momentum_Factor_daily_CSV.zip",
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Momentum_Factor_daily_CSV.zip",
+      "ok": true,
+      "status": 200,
+      "bytes": 84724,
+      "extracted": [
+        "F-F_Momentum_Factor_daily.csv"
+      ]
+    },
+    {
+      "name": "F-F_ST_Reversal_Factor_daily_CSV.zip",
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_ST_Reversal_Factor_daily_CSV.zip",
+      "ok": true,
+      "status": 200,
+      "bytes": 85542,
+      "extracted": [
+        "F-F_ST_Reversal_Factor_daily.csv"
+      ]
+    },
+    {
+      "name": "F-F_LT_Reversal_Factor_daily_CSV.zip",
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_LT_Reversal_Factor_daily_CSV.zip",
+      "ok": true,
+      "status": 200,
+      "bytes": 79964,
+      "extracted": [
+        "F-F_LT_Reversal_Factor_Daily.csv"
+      ]
+    },
+    {
+      "name": "48_Industry_Portfolios_daily_CSV.zip",
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/48_Industry_Portfolios_daily_CSV.zip",
+      "ok": true,
+      "status": 200,
+      "bytes": 4077172,
+      "extracted": [
+        "48_Industry_Portfolios_Daily.csv"
+      ]
+    },
+    {
+      "name": "F-F_Research_Data_Factors_CSV.zip",
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_Factors_CSV.zip",
+      "ok": true,
+      "status": 200,
+      "bytes": 13012,
+      "extracted": [
+        "F-F_Research_Data_Factors.csv"
+      ]
+    },
+    {
+      "name": "F-F_Research_Data_5_Factors_2x3_CSV.zip",
+      "url": "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_5_Factors_2x3_CSV.zip",
+      "ok": true,
+      "status": 200,
+      "bytes": 11844,
+      "extracted": [
+        "F-F_Research_Data_5_Factors_2x3.csv"
+      ]
+    }
+  ],
+  "aqr": [
+    {
+      "name": "aqr_data_library_global_style_premia.xlsx",
+      "url": "https://www.aqr.com/Insights/Datasets/Style-Premia-Data-Library",
+      "ok": true,
+      "status": 200,
+      "bytes": 47008,
+      "final_file": "aqr_data_library_global_style_premia.xlsx"
+    },
+    {
+      "name": "aqr_betting_against_beta.xlsx",
+      "url": "https://www.aqr.com/Insights/Datasets/Betting-Against-Beta-Original-Paper-Data",
+      "ok": true,
+      "status": 200,
+      "bytes": 63930,
+      "final_file": "aqr_betting_against_beta.xlsx"
+    },
+    {
+      "name": "aqr_quality_minus_junk.xlsx",
+      "url": "https://www.aqr.com/Insights/Datasets/Quality-Minus-Junk-Factors-Monthly",
+      "ok": true,
+      "status": 200,
+      "bytes": 66235,
+      "final_file": "aqr_quality_minus_junk.xlsx"
+    },
+    {
+      "name": "aqr_devil_in_hml_details.xlsx",
+      "url": "https://www.aqr.com/Insights/Datasets/The-Devil-in-HMLs-Details-Factors-Daily",
+      "ok": true,
+      "status": 200,
+      "bytes": 63581,
+      "final_file": "aqr_devil_in_hml_details.xlsx"
+    }
+  ]
+}

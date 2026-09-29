@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def get_option_chain(ticker):
+def get_option_chain(ticker, r=None):
     try:
         tk = yf.Ticker(ticker)
         
@@ -17,13 +17,24 @@ def get_option_chain(ticker):
             return {"error": "No data for ticker"}
         spot = hist["Close"].iloc[-1]
         
+        # Get risk-free rate if not provided
+        if r is None:
+            try:
+                # Try to get 10Y Treasury rate as proxy
+                tnx = yf.Ticker("^TNX").history(period="1d")
+                if not tnx.empty:
+                    r = tnx["Close"].iloc[-1] / 100.0 # Convert from e.g. 4.2 to 0.042
+                else:
+                    r = 0.04 # Fallback
+            except:
+                r = 0.04
+        
         # Get expirations
         exps = tk.options
         if not exps:
-            return {"underlying": ticker, "spot": spot, "options": []}
+            return {"underlying": ticker, "spot": spot, "options": [], "risk_free_rate": r}
             
-        # Fetch first expiration for demo speed, or maybe first 2
-        # For a real terminal we might want more, but yfinance is slow
+        # Fetch first expiration
         target_exp = exps[0]
         
         chain = tk.option_chain(target_exp)
@@ -31,10 +42,11 @@ def get_option_chain(ticker):
         puts = chain.puts
         
         options = []
+        t = (datetime.strptime(target_exp, "%Y-%m-%d") - datetime.now()).days / 365.0
         
         # Process Calls
         for _, row in calls.iterrows():
-            greeks = calculate_greeks("call", spot, row["strike"], 0.05, (datetime.strptime(target_exp, "%Y-%m-%d") - datetime.now()).days / 365.0, row["impliedVolatility"])
+            greeks = calculate_greeks("call", spot, row["strike"], r, t, row["impliedVolatility"])
             options.append({
                 "type": "call",
                 "strike": row["strike"],
@@ -46,7 +58,7 @@ def get_option_chain(ticker):
             
         # Process Puts
         for _, row in puts.iterrows():
-            greeks = calculate_greeks("put", spot, row["strike"], 0.05, (datetime.strptime(target_exp, "%Y-%m-%d") - datetime.now()).days / 365.0, row["impliedVolatility"])
+            greeks = calculate_greeks("put", spot, row["strike"], r, t, row["impliedVolatility"])
             options.append({
                 "type": "put",
                 "strike": row["strike"],
@@ -59,6 +71,7 @@ def get_option_chain(ticker):
         return {
             "underlying": ticker,
             "spot": spot,
+            "risk_free_rate": r,
             "options": options
         }
         

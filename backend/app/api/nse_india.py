@@ -161,6 +161,10 @@ class NSEClient:
         elif "/api/indices" in endpoint:
             return await nse_direct.get_indices()
         
+        elif "/api/stocks" in endpoint:
+            # Return NIFTY_50_STOCKS as fallback
+            return NIFTY_50_STOCKS
+            
         raise HTTPException(status_code=404, detail=f"No direct API mapping for {endpoint}")
     
     async def is_healthy(self) -> bool:
@@ -423,7 +427,7 @@ async def get_earnings(symbol: str):
         }
     except Exception as e:
         logger.error(f"Error fetching earnings for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/earnings/upcoming")
@@ -490,7 +494,7 @@ async def get_earnings_history(
             'dividends': earnings['dividends']
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ===================== INDEX ENDPOINTS =====================

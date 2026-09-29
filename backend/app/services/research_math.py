@@ -5,7 +5,7 @@ Mathematical functions for research computations.
 
 import pandas as pd
 import numpy as np
-from typing import Tuple, Literal, Callable, Optional
+from typing import Tuple, Literal, Callable, Optional, Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,10 @@ def ols_single_factor(
     Returns:
         Tuple of (beta, alpha, r2)
     """
-    # Remove NaN values
+    # Remove NaN values and cast to float to avoid ufunc 'isnan' error on object arrays
+    y = np.asanyarray(y).astype(float)
+    x = np.asanyarray(x).astype(float)
+    
     mask = ~(np.isnan(y) | np.isnan(x))
     y_clean = y[mask]
     x_clean = x[mask]
@@ -160,26 +163,29 @@ def ols_multi_factor(
     y: np.ndarray,
     X: np.ndarray,
     ridge: float = 1e-6,
-    add_intercept: bool = True
-) -> Tuple[np.ndarray, float, float]:
+    add_intercept: bool = True,
+    robust: bool = False
+) -> Tuple[np.ndarray, Any, float]:
     """
-    Multi-factor OLS regression with ridge regularization.
-    
-    beta = (X'X + lambda*I)^{-1} X'y
+    Multi-factor OLS regression with ridge regularization and optional HAC (Newey-West) errors.
     
     Args:
         y: Dependent variable (T,)
         X: Independent variables (T, K)
-        ridge: Ridge regularization parameter (default 1e-6)
+        ridge: Ridge regularization parameter
         add_intercept: Whether to add intercept column
+        robust: Whether to use Newey-West robust standard errors
         
     Returns:
-        Tuple of (betas, residual_std, r2)
-        - betas: array of coefficients (K+1 if intercept, else K)
-        - residual_std: standard deviation of residuals
+        Tuple of (betas, stats_dict, r2)
+        - betas: array of coefficients
+        - stats_dict: dictionary containing se, tstats, pvalues
         - r2: R-squared
     """
-    # Remove NaN rows
+    # Remove NaN rows and cast to float to avoid ufunc 'isnan' error on object arrays
+    y = np.asanyarray(y).astype(float)
+    X = np.asanyarray(X).astype(float)
+    
     mask = ~np.isnan(y)
     for k in range(X.shape[1]):
         mask = mask & ~np.isnan(X[:, k])
@@ -187,42 +193,80 @@ def ols_multi_factor(
     y_clean = y[mask]
     X_clean = X[mask]
     
-    if len(y_clean) < X.shape[1] + 2:
+    if len(y_clean) < X.shape[1] + (3 if robust else 2):
         n_cols = X.shape[1] + (1 if add_intercept else 0)
-        return np.full(n_cols, np.nan), np.nan, np.nan
+        return np.full(n_cols, np.nan), {}, np.nan
     
     # Add intercept column
     if add_intercept:
         intercept = np.ones((X_clean.shape[0], 1))
         X_clean = np.hstack([intercept, X_clean])
     
-    # Ridge regression
+    # CASE 1: Robust / Statistics focused (uses statsmodels)
+    if robust:
+        try:
+            import statsmodels.api as sm
+            model = sm.OLS(y_clean, X_clean)
+            # Newey-West with automatic lag selection
+            results = model.fit(cov_type='HAC', cov_kwds={'maxlags': int(4 * (len(y_clean)/100)**(2/9))})
+            
+            stats_dict = {
+                "se": results.bse,
+                "t_stats": results.tvalues,
+                "p_values": results.pvalues,
+                "residual_std": np.std(results.resid, ddof=len(results.params))
+            }
+            return results.params, stats_dict, float(results.rsquared)
+        except Exception as e:
+            logger.debug(f"Robust OLS failed, falling back to standard: {e}")
+            # fall through to normal OLS
+            
+    # CASE 2: High-performance / Ridge focused (uses numpy)
+    # AUDIT FIX: Use lstsq instead of solve for numerical stability
+    # lstsq handles singular/near-singular matrices gracefully (common during regime shifts)
     XtX = X_clean.T @ X_clean
     XtX += ridge * np.eye(XtX.shape[0])
     Xty = X_clean.T @ y_clean
     
     try:
-        betas = np.linalg.solve(XtX, Xty)
-    except np.linalg.LinAlgError:
+        # Use lstsq instead of solve for better numerical stability
+        # lstsq finds minimum norm solution even for rank-deficient matrices
+        betas, residuals, rank, singular_values = np.linalg.lstsq(XtX, Xty, rcond=None)
+        
+        # Check for rank deficiency and log warning
+        if rank < XtX.shape[0]:
+            logger.warning(f"Rank deficient matrix detected (rank={rank}/{XtX.shape[0]}). Results may be unstable.")
+        
+        y_pred = X_clean @ betas
+        residuals = y_clean - y_pred
+        ss_res = np.sum(residuals ** 2)
+        ss_tot = np.sum((y_clean - np.mean(y_clean)) ** 2)
+        r2 = 1.0 - (ss_res / (ss_tot + EPSILON))
+        
+        # Simple standard errors (non-robust)
+        n, k = X_clean.shape
+        sigma_sq = ss_res / max(1, n - k)  # Prevent division by zero
+        try:
+            # Use pinv (pseudo-inverse) for stability instead of inv
+            var_beta = sigma_sq * np.linalg.pinv(XtX)
+            se = np.sqrt(np.maximum(np.diag(var_beta), 0))  # Ensure non-negative
+            t_stats = betas / (se + EPSILON)
+        except:
+            se = np.zeros(k)
+            t_stats = np.zeros(k)
+            
+        stats_dict = {
+            "se": se,
+            "t_stats": t_stats,
+            "residual_std": np.sqrt(max(0, sigma_sq)),
+            "matrix_rank": int(rank) if rank else k
+        }
+        
+        return betas, stats_dict, float(max(0, min(1, r2)))
+    except Exception as e:
+        logger.warning(f"OLS computation failed: {e}")
         n_cols = X.shape[1] + (1 if add_intercept else 0)
-        return np.full(n_cols, np.nan), np.nan, np.nan
-    
-    # Residuals
-    y_pred = X_clean @ betas
-    residuals = y_clean - y_pred
-    residual_std = np.std(residuals, ddof=len(betas))
-    
-    # R-squared
-    ss_res = np.sum(residuals ** 2)
-    ss_tot = np.sum((y_clean - np.mean(y_clean)) ** 2)
-    
-    if ss_tot < EPSILON:
-        r2 = 0.0
-    else:
-        r2 = 1.0 - (ss_res / ss_tot)
-        r2 = max(0.0, min(1.0, r2))
-    
-    return betas, float(residual_std), float(r2)
+        return np.full(n_cols, np.nan), {}, np.nan
 
 
 def rolling_apply(

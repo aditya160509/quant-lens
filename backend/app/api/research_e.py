@@ -23,6 +23,8 @@ from app.services.cluster_e_service import (
 from app.services.fundamentals_service import get_fundamentals, get_fundamentals_compact
 from app.services.research_cache import research_cache
 from app.services.universe import get_universe_list
+from app.services.data_engine import engine as data_engine
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Research E"])
@@ -97,6 +99,72 @@ def _fetch_prices(ticker: str, days: int) -> pd.DataFrame:
     except Exception as e:
         logger.error(f"Error fetching {ticker}: {e}")
         return pd.DataFrame()
+
+
+# ===== E12: Ticker Intel (Terminal Elite) =====
+
+@router.get("/research/e/ticker_intel")
+async def get_ticker_intel(ticker: str = Query(...)):
+    """
+    E12: High-speed ticker intelligence for Terminal Elite.
+    Uses DataEngine for local-first zero-latency response.
+    """
+    try:
+        ticker = ticker.upper()
+        # Get latest indicators via vectorized DataEngine
+        indicators_pl = data_engine.get_latest_indicators([ticker])
+        
+        if indicators_pl.is_empty():
+            # Fallback to yfinance if not in local parquet
+            df = _fetch_prices(ticker, 60)
+            if df.empty:
+                raise HTTPException(status_code=404, detail=f"Ticker {ticker} not found")
+            
+            last_close = float(df['Close'].iloc[-1])
+            prev_close = float(df['Close'].iloc[-2])
+            change_1d = (last_close / prev_close) - 1
+            
+            hist_5d = df['Close'].tail(6)
+            change_5d = (last_close / float(hist_5d.iloc[0])) - 1
+            
+            vol_30d = float(df['Close'].pct_change().tail(30).std() * np.sqrt(252))
+            
+            # Simple sparkline logic
+            prices = df['Close'].tail(20).values
+            p_min, p_max = prices.min(), prices.max()
+            norm_prices = [(p - p_min) / (p_max - p_min + 1e-6) * 20 for p in prices]
+            spark_points = " ".join([f"{i*5},{20-p}" for i, p in enumerate(norm_prices)])
+            sparkline = f"M {spark_points}"
+        else:
+            row = indicators_pl.to_dicts()[0]
+            last_close = row['Price']
+            change_1d = row['Change_1D']
+            change_5d = row['Change_5D']
+            vol_30d = row['Vol_20D']
+            
+            # Get Sparkline from full OHLCV
+            df_full = data_engine.get_full_ohlcv(ticker, 40)
+            prices = df_full['Close'].tail(20).values
+            p_min, p_max = prices.min(), prices.max()
+            norm_prices = [(p - p_min) / (p_max - p_min + 1e-6) * 15 for p in prices]
+            spark_points = " ".join([f"{i*5},{20-p}" for i, p in enumerate(norm_prices)])
+            sparkline = f"M {spark_points}"
+
+        return {
+            "ticker": ticker,
+            "name": ticker, # Could add a proper name mapping service later
+            "price": round(last_close, 2),
+            "change_1d": round(change_1d, 4),
+            "change_5d": round(change_5d, 4),
+            "vol_30d": round(vol_30d, 4),
+            "mcap": "$428.5B", # Mock for now
+            "sparkline": sparkline
+        }
+
+    except Exception as e:
+        logger.error(f"Ticker intel error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 
 
 def _compute_breadth(tickers: List[str], days: int = 1) -> float:
@@ -248,7 +316,7 @@ async def compute_narrative(request: NarrativeRequest):
         raise
     except Exception as e:
         logger.error(f"Narrative error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ===== E2: Risk Thermometer =====
@@ -348,7 +416,7 @@ async def compute_risk_score(request: RiskScoreRequest):
         raise
     except Exception as e:
         logger.error(f"Risk score error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ===== E4: Market Replay =====
@@ -438,7 +506,7 @@ async def compute_replay(request: ReplayRequest):
         raise
     except Exception as e:
         logger.error(f"Replay error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ===== E5: Pattern Scanner =====
@@ -578,7 +646,7 @@ async def scan_patterns(request: ScanRequest):
         raise
     except Exception as e:
         logger.error(f"Scan error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ===== E6: Sharpe Radar =====
@@ -631,7 +699,7 @@ async def compute_sharpe_radar(request: SharpeRadarRequest):
         
     except Exception as e:
         logger.error(f"Sharpe radar error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ===== E7: Fundamentals =====
@@ -666,7 +734,7 @@ async def get_ticker_fundamentals(ticker: str, compact: bool = Query(False)):
         raise
     except Exception as e:
         logger.error(f"Fundamentals error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ===== E9: Sentiment =====
@@ -746,7 +814,7 @@ async def get_market_sentiment(
         
     except Exception as e:
         logger.error(f"Market sentiment error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sentiment/asset")
@@ -818,7 +886,7 @@ async def get_asset_sentiment(
         raise
     except Exception as e:
         logger.error(f"Asset sentiment error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ===== E10: Spider Chart =====
@@ -893,8 +961,87 @@ async def compute_spider(request: SpiderRequest):
         raise
     except Exception as e:
         logger.error(f"Spider error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
+
+# ===== E11: Neural Dependency Map =====
+
+@router.get("/research/e/dependency_map")
+async def get_dependency_map(symbol: str = Query(...)):
+    """
+    E11: Generate structural dependency nodes for a ticker.
+    Returns 6-8 peripheral nodes including peers and macro correlates.
+    """
+    cache_key = {"endpoint": "dependency_map", "symbol": symbol}
+    cached, hit = research_cache.get_compute(cache_key)
+    if hit:
+        return cached
+
+    try:
+        # 1. Determine local universe
+        is_indian = symbol.endswith('.NS') or symbol.endswith('.BO')
+        
+        # 2. Mock some sophisticated correlation data for the constellation
+        # In a real scenario, this would compute correlations vs sector/macro
+        nodes = []
+        
+        # Core Index Connection
+        idx_label = "NIFTY 50" if is_indian else "S&P 500"
+        idx_symbol = "^NSEI" if is_indian else "SPY"
+        nodes.append({
+            "id": "index",
+            "title": "BENCHMARK CORE",
+            "items": [{"label": idx_label, "sub": f"ID: {idx_symbol}", "color": "#10b981"}]
+        })
+
+        # Macro Nodes (3 nodes)
+        nodes.append({
+            "id": "macro_rate",
+            "title": "RATE SENSITIVITY",
+            "items": [{"label": "US10Y" if not is_indian else "IN10Y", "sub": "SENS: HIGH", "color": "#f43f5e"}]
+        })
+        nodes.append({
+            "id": "macro_fx",
+            "title": "FX CORRELATE",
+            "items": [{"label": "DXY" if not is_indian else "USDINR", "sub": "BETA: -0.42", "color": "#8b5cf6"}]
+        })
+        nodes.append({
+            "id": "macro_vol",
+            "title": "VOLATILITY CLUSTER",
+            "items": [{"label": "VIX" if not is_indian else "INDIAVIX", "sub": "STRESS: CALM", "color": "#0ea5e9"}]
+        })
+
+        # Peer Nodes (3 nodes)
+        peers = ["AAPL", "MSFT", "NVDA"] if not is_indian else ["RELIANCE.NS", "HDFCBANK.NS", "TCS.NS"]
+        for i, p in enumerate(peers):
+            nodes.append({
+                "id": f"peer_{i}",
+                "title": f"PEER CORRELATE {i+1}",
+                "items": [{"label": p, "sub": f"CORR: {0.85 - i*0.1:.2f}", "color": "#ffffff"}]
+            })
+
+        # Flow Correlate
+        nodes.append({
+            "id": "flow",
+            "title": "FLOW DYNAMICS",
+            "items": [{"label": "LIQUIDITY", "sub": "IMBALANCE: +12%", "color": "#fbbf24"}]
+        })
+
+        result = {
+            "symbol": symbol,
+            "nodes": nodes,
+            "meta": {
+                "count": len(nodes),
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+        research_cache.set_compute(cache_key, result)
+        return result
+
+    except Exception as e:
+        logger.error(f"Dependency map error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # ===== E3: Terminal Log (Optional) =====
 

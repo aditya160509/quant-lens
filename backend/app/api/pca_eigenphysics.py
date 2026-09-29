@@ -352,7 +352,7 @@ async def run_pca_eigenphysics(req: PCARunRequest):
         raise
     except Exception as e:
         logger.error(f"PCA Eigenphysics run failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/state")
@@ -383,7 +383,7 @@ async def get_pca_state(
         raise
     except Exception as e:
         logger.error(f"Get PCA state failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/feature/{feature_name}")
@@ -424,7 +424,7 @@ async def get_pca_feature(
         raise
     except Exception as e:
         logger.error(f"Get feature {feature_name} failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/shock")
@@ -456,7 +456,7 @@ async def simulate_shock(req: ShockRequest):
         raise
     except Exception as e:
         logger.error(f"Shock simulation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/cache-status")

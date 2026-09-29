@@ -79,9 +79,11 @@ def compute_macro_shocks(
         y = combined['y'].values
         X = combined[drivers].values
         
-        betas, resid_std, r2 = research_math.ols_multi_factor(
+        betas, stats, r2 = research_math.ols_multi_factor(
             y, X, ridge=ridge, add_intercept=True
         )
+        
+        resid_std = stats.get("residual_std")
         
         if np.any(np.isnan(betas)):
             impacts[ticker] = {

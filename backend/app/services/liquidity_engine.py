@@ -27,6 +27,8 @@ from scipy.sparse import csr_matrix
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
+from app.services.robust_data_fetcher import get_batch_data, get_price_data
+
 logger = logging.getLogger(__name__)
 
 
@@ -468,10 +470,12 @@ def compute_liquidity_metrics(
     dv_std = float(dollar_volume.std())
     dv_trend = float((dollar_volume.iloc[-5:].mean() / dollar_volume.iloc[:5].mean() - 1)) if len(dollar_volume) >= 10 else 0.0
     
-    # Gap analysis
-    gaps = detect_gaps(open_prices.tail(window), close.tail(window))
-    gap_frequency = len(gaps) / window * 252  # Annualized
+    # Gap analysis - refined with recovery
+    gap_stats = compute_gap_recovery(open_prices, close, high, low)
+    gap_frequency = gap_stats["gap_count"] / window * 252 # Annualized
     gap_mean_size = float(gaps["gap_size_pct"].abs().mean()) if len(gaps) > 0 else 0.0
+    gap_recovery = gap_stats["avg_recovery_time"]
+    gap_failed = gap_stats["failed_recovery_rate"]
     
     # Asymmetry
     up_days = returns[returns > 0]
@@ -521,8 +525,8 @@ def compute_liquidity_metrics(
         dollar_volume_trend=dv_trend,
         gap_frequency=gap_frequency,
         gap_mean_size=gap_mean_size,
-        gap_recovery_time=5.0,  # Simplified
-        gap_failed_recovery_rate=0.1,
+        gap_recovery_time=gap_recovery,
+        gap_failed_recovery_rate=gap_failed,
         up_day_illiquidity=up_illiq,
         down_day_illiquidity=down_illiq,
         asymmetry_ratio=asymmetry,
@@ -790,14 +794,16 @@ def compute_capacity_metrics(
     except Exception:
         impact_slope = 1.0
     
-    # Capacity thresholds (simplified)
-    # Safe size: where expected impact < 10bps
-    safe_size = adv * 0.1  # 10% of ADV as safe
-    stress_size = adv * 0.25  # 25% of ADV
-    break_size = adv * 0.5  # 50% of ADV
+    # Convexity: measures how much impact accelerates relative to linear
+    # Estimated by comparing the power law fit vs linear fit
+    from scipy.optimize import curve_fit
+    def power_law(x, k, g): return k * (x**g)
     
-    # Elasticity: how liquidity responds to volume
-    elasticity = -impact_slope  # Negative slope = good elasticity
+    try:
+        popt, _ = curve_fit(power_law, dv, np.abs(r), p0=[1e-8, 0.5])
+        convexity = float(popt[1]) # Gamma exponent is a scale for convexity
+    except Exception:
+        convexity = 0.5
     
     return CapacityMetrics(
         ticker=ticker,
@@ -806,7 +812,7 @@ def compute_capacity_metrics(
         stress_size_dollars=stress_size,
         break_size_dollars=break_size,
         impact_slope=impact_slope,
-        convexity=0.0,  # Simplified
+        convexity=convexity,
         elasticity=elasticity,
         capacity_percentile=50.0,  # Will be computed in aggregation
     )

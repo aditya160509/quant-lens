@@ -3,6 +3,27 @@
 # =============================================================================
 
 # =============================================================================
+# MARKDOWN DOCS (exclude all .md EXCEPT README.md)
+# =============================================================================
+*.md
+
+# =============================================================================
+# LARGE MEDIA FILES
+# =============================================================================
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.mp3
+*.wav
+
+# =============================================================================
+# AGENT/AI WORKSPACE FILES
+# =============================================================================
+.agent/
+.gemini/
+
+# =============================================================================
 # ENVIRONMENT & SECRETS (CRITICAL - NEVER COMMIT!)
 # =============================================================================
 .env
@@ -24,6 +45,11 @@
 *.p12
 secrets/
 credentials/
+config.local.*
+secrets.*
+credentials.*
+*key*
+*secret*
 
 # =============================================================================
 # DEPENDENCIES
@@ -41,6 +67,7 @@ node_modules/
 # Python
 venv/
 .venv/
+env/
 venv_fresh/
 __pycache__/
 *.py[cod]
@@ -211,6 +238,45 @@ backend/data_cache/
 backend/venv/
 backend/venv_fresh/
 backend/__pycache__/
+
+# =============================================================================
+# GITHUB PUBLISH CLEANUP
+# =============================================================================
+# Local process/runtime state
+.backend.pid
+.frontend.pid
+.run/
+*.pid
+
+# Generated app/runtime folders
+frontend/node_modules/
+frontend/.next/
+backend/venv/
+backend/.venv/
+
+# Generated caches and analysis outputs
+backend/app/services/.regime_cache/
+.orchids/
+
+# Data should stay local unless intentionally moved to a small sample fixture
+backend/data/
+data/
+factors/data/
+research_exports/
+converted_pdf_text/
+
+# Local research/reference blobs
+*.pdf
+*.zip
+*.xlsx
+*.xls
+*.html
+
+# Keep examples, docs, and code explicitly when needed
+!README.md
+!AGENTS.md
+!docs/**/*.md
+!backend/app/data/**/*.json
 backend/*.log
 backend/nohup.out
 
@@ -218,6 +284,26 @@ backend/nohup.out
 frontend/.next/
 frontend/node_modules/
 frontend/out/
+frontend/.env.local
+frontend/build_log.txt
+frontend/tsconfig.tsbuildinfo
 
 # Orchids (if not needed)
 .orchids/
+
+# Regime cache (backend)
+backend/app/services/.regime_cache/
+.regime_cache/
+
+# Third-party projects
+Space-Portolio-main/
+
+# Demo/test JSON signals
+backend/app/api/demo_signals.json
+
+# Lock files (keep package-lock.json, exclude bun.lock if not using bun)
+bun.lock
+frontend/bun.lock
+
+# Expansion lists
+expansion_lists.json

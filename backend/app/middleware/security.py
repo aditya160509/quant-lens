@@ -317,12 +317,12 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             response.headers["Retry-After"] = str(rate_info.get("retry_after", 60))
             return response
         
-        # 2. Process request
         try:
             response = await call_next(request)
         except Exception as e:
-            # Log error without sensitive details
-            logger.error(f"Request error: {request.url.path} - {type(e).__name__}")
+            import traceback
+            # Log error with traceback for debugging
+            logger.error(f"Request error: {request.url.path} - {str(e)}\n{traceback.format_exc()}")
             response = JSONResponse(
                 status_code=500,
                 content={"error": "Internal Server Error"}

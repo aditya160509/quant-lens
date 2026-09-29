@@ -35,15 +35,51 @@ def load_factors():
         ff3_path = os.path.join(FACTOR_DIR, "ff3_daily.csv")
         mom_path = os.path.join(FACTOR_DIR, "momentum_daily.csv")
         
-        ff3 = pd.read_csv(ff3_path, index_col=0, parse_dates=True)
-        mom = pd.read_csv(mom_path, index_col=0, parse_dates=True)
+        # AUDIT FIX: Ken French files have 5-6 lines of metadata at the top
+        # We need to find the actual header row
+        def read_ff_csv(filepath):
+            with open(filepath, 'r') as f:
+                lines = f.readlines()
+            
+            # Find header row (contains comma-separated factor names)
+            header_row = 0
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if ',' in stripped and ('Mkt-RF' in stripped or 'Mom' in stripped or stripped.startswith(',')):
+                    header_row = i
+                    break
+            
+            df = pd.read_csv(filepath, skiprows=header_row)
+            df.columns = [c.strip() for c in df.columns]
+            
+            # Handle date column
+            first_col = df.columns[0]
+            if first_col == '' or 'unnamed' in first_col.lower():
+                df = df.rename(columns={first_col: 'Date'})
+            if df.columns[0] != 'Date':
+                df = df.rename(columns={df.columns[0]: 'Date'})
+            
+            # Parse dates (handle YYYYMMDD format)
+            date_sample = str(df['Date'].iloc[0])
+            if len(date_sample) == 8 and date_sample.isdigit():
+                df['Date'] = pd.to_datetime(df['Date'].astype(str), format='%Y%m%d', errors='coerce')
+            else:
+                df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+            
+            df = df.dropna(subset=['Date'])
+            df = df.set_index('Date')
+            
+            # AUDIT FIX: Unconditionally divide by 100 (FF data is in percentage format)
+            for col in df.columns:
+                df[col] = df[col] / 100.0
+            
+            return df
+        
+        ff3 = read_ff_csv(ff3_path)
+        mom = read_ff_csv(mom_path)
         
         # Join and clean
         factors = ff3.join(mom, how='inner').dropna()
-        
-        # Rename columns if needed to match standard names
-        # Assuming FF3 has Mkt-RF, SMB, HML, RF
-        # Assuming Mom has Mom
         
         # Normalize names
         factors.columns = [c.strip() for c in factors.columns]
@@ -51,6 +87,8 @@ def load_factors():
         return factors
     except Exception as e:
         logger.error(f"Error loading factors: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return pd.DataFrame()
 
 # --- 1A Factors Lab ---

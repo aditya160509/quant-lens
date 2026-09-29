@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Any, Optional
+from fastapi.concurrency import run_in_threadpool
 import logging
 
 from app.models.research_schemas import (
@@ -281,6 +282,21 @@ def compute_hmm_regimes(
     }
 
 
+@router.get("/regimes")
+async def get_regimes_summary():
+    """
+    Convenience GET endpoint for Terminal quick-access.
+    Returns recent regime analysis using default z-score model.
+    """
+    from app.models.research_schemas import RegimesRequest
+    # Default inputs for global regime
+    default_request = RegimesRequest(
+        inputs=["VIX", "SPY", "DXY", "US10Y"],
+        lookback=252
+    )
+    return await regimes(default_request)
+
+
 @router.post("/regimes")
 async def regimes(request: RegimesRequest):
     """
@@ -343,9 +359,11 @@ async def regimes(request: RegimesRequest):
                 }
             )
         elif model_type == RegimeModelType.KMEANS:
-            results = compute_kmeans_regimes(inputs_df, request.model.n_clusters)
+            # AUDIT: Offload clustering to threadpool
+            results = await run_in_threadpool(compute_kmeans_regimes, inputs_df, request.model.n_clusters)
         elif model_type == RegimeModelType.HMM:
-            results = compute_hmm_regimes(inputs_df, request.model.n_states)
+            # AUDIT: Offload HMM to threadpool
+            results = await run_in_threadpool(compute_hmm_regimes, inputs_df, request.model.n_states)
         else:
             # Rule-based fallback to zscore
             weights = request.model.weights or {col: 1.0 for col in inputs_df.columns}

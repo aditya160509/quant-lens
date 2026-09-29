@@ -64,4 +64,4 @@ def get_orderbook(ticker: str, depth: int = 10):
 
     except Exception as e:
         print(f"Error generating orderbook for {ticker}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

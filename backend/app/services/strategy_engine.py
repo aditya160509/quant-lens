@@ -513,8 +513,62 @@ class BacktestEngine:
         return self._generate_results(start_date, end_date, benchmark)
     
     def _fetch_data(self, symbols: List[str], start: str, end: str) -> pd.DataFrame:
-        """Fetch OHLCV data"""
+        """Fetch OHLCV data using high-speed Parquet engine with fallback."""
         try:
+            from app.services.robust_data_fetcher import get_batch_data
+            
+            # Calculate approximate period for RDF
+            if isinstance(start, str):
+                start_dt = datetime.strptime(start, "%Y-%m-%d")
+            else:
+                start_dt = start
+                
+            days = (datetime.now() - start_dt).days + 60 # Extra buffer
+            if days <= 30: period = "1mo"
+            elif days <= 90: period = "3mo"
+            elif days <= 185: period = "6mo"
+            elif days <= 370: period = "1y"
+            elif days <= 740: period = "2y"
+            else: period = "5y"
+            
+            logger.info(f"[StrategyEngine] Fetching {len(symbols)} symbols for {period}")
+            
+            # Use RDF (which now uses Parquet + CSV first)
+            batch = get_batch_data(symbols, period=period)
+            
+            if batch:
+                all_dfs = []
+                for sym, df in batch.items():
+                    if df is not None and not df.empty:
+                        # Clean labels to match YF structure expected by engine
+                        # RDF usually returns Open, High, Low, Close, Volume
+                        # Ensure we filter to the exact start/end range
+                        # Handle timezone alignment for filtering
+                        df_idx = df.index
+                        target_start = pd.to_datetime(start)
+                        target_end = pd.to_datetime(end)
+                        
+                        if df_idx.tz is not None:
+                            if target_start.tz is None: target_start = target_start.tz_localize('UTC')
+                            if target_end.tz is None: target_end = target_end.tz_localize('UTC')
+                        
+                        mask = (df_idx >= target_start) & (df_idx <= target_end)
+                        df_filtered = df.loc[mask].copy()
+                        
+                        if not df_filtered.empty:
+                            # Convert to MultiIndex columns: (Attribute, Symbol)
+                            df_filtered.columns = pd.MultiIndex.from_product([df_filtered.columns, [sym]])
+                            all_dfs.append(df_filtered)
+                
+                if all_dfs:
+                    combined = pd.concat(all_dfs, axis=1)
+                    # Handle possible duplicates on index
+                    combined = combined[~combined.index.duplicated(keep='first')]
+                    logger.info(f"[StrategyEngine] Parquet/RDF success: {len(combined)} bars")
+                    return combined
+
+            # Strategy Engine fallback (legacy)
+            logger.warning(f"[StrategyEngine] RDF failed, falling back to direct yfinance for {symbols}")
             data = yf.download(
                 symbols if len(symbols) > 1 else symbols[0],
                 start=start, end=end,
@@ -526,7 +580,7 @@ class BacktestEngine:
                 data.columns = pd.MultiIndex.from_product([data.columns, symbols])
             return data
         except Exception as e:
-            logger.error(f"Data fetch error: {e}")
+            logger.error(f"Strategy data fetch error: {e}")
             return pd.DataFrame()
     
     def _compute_indicators(self, symbol: str, configs: List[Dict]) -> Dict[str, pd.Series]:

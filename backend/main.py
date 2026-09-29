@@ -19,7 +19,7 @@ else:
     load_dotenv()  # Fallback to default search
 
 from app import data_loader, metrics, factors
-from app.api import labs, portfolio, cluster_b, options, markets, security, orderbook, earnings, registry, macro
+from app.api import labs, portfolio, cluster_b, options, markets, security, orderbook, registry, macro
 from app.api import portfolio_risk_api  # Portfolio Risk VaR System
 from app.api import liquidity_api  # Liquidity Intelligence Engine
 from app.api import screener_api  # QUANT360 Screener
@@ -27,9 +27,12 @@ from app.api import research_beta, research_macro_shock, research_style_map, res
 from app.api import prices, quotes
 from app.api import research_e  # Cluster E
 from app.api import research_fg  # Cluster F+G
-from app.api import monitor  # Monitor Command Center
 from app.api import markets_daily  # Markets Daily Cognition Terminal
 from app.api import nse_india  # NSE India Stock Market API (FREE)
+from app.api import research_stats  # Institutional Statistical Lab
+from app.api import research_quantitative  # Quantitative Math Lab
+from app.api import factors_v2  # Factors V2 - 14-feature institutional factor intelligence
+from app.api import screener_v2
 
 # Configure logging
 logging.basicConfig(
@@ -69,7 +72,12 @@ app.add_middleware(
     allow_credentials=False if "*" in ALLOWED_ORIGINS else True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "Retry-After"],
+    expose_headers=[
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining",
+        "Retry-After",
+        "X-Request-ID",
+    ],
 )
 
 # Security Middleware (OWASP Top 10 Compliant)
@@ -81,6 +89,10 @@ try:
 except ImportError as e:
     logger.warning(f"Security middleware not loaded: {e}")
 
+# Aggregate Studio V2 request telemetry without retaining payloads or secrets.
+from app.studio_v2.shared.observability import StudioObservabilityMiddleware
+app.add_middleware(StudioObservabilityMiddleware)
+
 # Include Routers
 # Include Routers
 app.include_router(labs.router, prefix="/api/labs", tags=["labs"])
@@ -91,7 +103,8 @@ app.include_router(markets.router, prefix="/api/markets", tags=["markets"])
 app.include_router(security.router, prefix="/api/security", tags=["security"])
 app.include_router(liquidity_api.router, prefix="/api", tags=["liquidity-intelligence"])
 app.include_router(orderbook.router, prefix="/api/orderbook", tags=["orderbook"])
-app.include_router(earnings.router, prefix="/api/earnings", tags=["earnings"])
+
+
 app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
 app.include_router(macro.router, prefix="/api/macro", tags=["macro"])
 app.include_router(portfolio_risk_api.router, prefix="/api/portfolio-risk", tags=["portfolio-risk"])
@@ -106,6 +119,14 @@ app.include_router(research_macro_shock.router, prefix="/api/research", tags=["r
 app.include_router(research_style_map.router, prefix="/api/research", tags=["research"])
 app.include_router(research_regimes.router, prefix="/api/research", tags=["research"])
 app.include_router(research_correlation.router, prefix="/api/research", tags=["research"])
+app.include_router(research_stats.router, prefix="/api", tags=["research-stats"])
+
+# Quantitative Math Lab - SDE, Kalman, Cointegration, Spectral
+app.include_router(research_quantitative.router, prefix="/api", tags=["quantitative-lab"])
+
+# Factors V2 - Institutional Factor Intelligence
+# Mounted under /api/labs/factors/v2 so legacy /api/labs/factors remains untouched.
+app.include_router(factors_v2.router, prefix="/api", tags=["factors-v2"])
 
 # Research Router (Cluster E)
 app.include_router(research_e.router, tags=["research-e"])
@@ -113,8 +134,6 @@ app.include_router(research_e.router, tags=["research-e"])
 # Research Router (Cluster F+G)
 app.include_router(research_fg.router, prefix="/api", tags=["research-fg"])
 
-# Monitor Command Center Router
-app.include_router(monitor.router, prefix="/api/monitor", tags=["monitor"])
 
 # Markets Daily Cognition Terminal Router
 app.include_router(markets_daily.router, prefix="/api/markets_daily", tags=["markets_daily"])
@@ -128,11 +147,20 @@ app.include_router(market_labs.router, prefix="/api/market-labs", tags=["market-
 
 # QUANT360 Screener - 8-Tab Market Intelligence
 app.include_router(screener_api.router, prefix="/api", tags=["quant360-screener"])
+app.include_router(screener_v2.router, prefix="/api", tags=["screener-v2"])
 
 
 # PCA Eigenphysics - Advanced PCA Analysis Terminal
 from app.api import pca_eigenphysics
 app.include_router(pca_eigenphysics.router, prefix="/api", tags=["pca-eigenphysics"])
+
+# PCA God Mode Omega - Institutional-Grade PCA System  
+from app.api import pca_god_mode_api
+app.include_router(pca_god_mode_api.router, tags=["pca-god-mode"])
+
+# PCA V2 quantitative feature suite
+from app.api import pca_v2
+app.include_router(pca_v2.router, prefix="/api", tags=["pca-v2"])
 
 # Trade Execution API - CATEGORY G, I, J
 from app.api import trades_api
@@ -146,9 +174,14 @@ app.include_router(websocket_api.router, tags=["websocket"])
 from app.api import ml_api
 app.include_router(ml_api.router, prefix="/api", tags=["ml-god-stack"])
 
-# Portfolio v2 - 29-Feature Institutional Portfolio System
+# Volatility V2 quantitative engines
+from app.api import volatility_v2
+app.include_router(volatility_v2.router, prefix="/api")
+
+# Portfolio V2 institutional portfolio engines
 from app.api import portfolio_v2
-app.include_router(portfolio_v2.router, prefix="/api", tags=["portfolio-v2"])
+app.include_router(portfolio_v2.router, prefix="/api")
+
 
 # Payments API - Razorpay (INR) + Stripe (USD)
 from app.api import payments_api
@@ -161,6 +194,39 @@ app.include_router(accuracy_status.router, tags=["accuracy"])
 # Alpha Models API - Momentum and Mean Reversion Intelligence
 from app.api import alpha
 app.include_router(alpha.router, prefix="/api/alpha", tags=["alpha-models"])
+
+# Historical Prices API - CSV-First Data Management
+from app.api import historical_prices_api
+app.include_router(historical_prices_api.router, tags=["historical-prices"])
+
+# Strategy Institutional - God-Mode Architecture
+from app.api import strategy_institutional
+app.include_router(strategy_institutional.router, prefix="/api/strategy-institutional", tags=["strategy-institutional"])
+
+# CLI Kernel Router
+from app.api import cli as cli_api
+app.include_router(cli_api.router, prefix="/api", tags=["cli"])
+
+# Sovereign Algo Studio - Institutional Model Engineering
+from app.routers import studio as studio_router
+app.include_router(studio_router.router, prefix="/api", tags=["sovereign-algo-studio"])
+
+# Studio V2 is retired. Only the data-studio and health endpoints stay mounted
+# because the canonical Studio data inspector (useDataStudio) still calls them.
+from fastapi import APIRouter
+from app.studio_v2.router import router as studio_v2_router
+studio_v2_retained = APIRouter()
+studio_v2_retained.routes.extend(
+    route for route in studio_v2_router.routes
+    if route.path.startswith(("/api/v2/data-studio/", "/api/v2/health/"))
+)
+app.include_router(studio_v2_retained)
+
+# Sovereign Workspace - Command-and-Control Hub (Parquet-First)
+from app.api import sovereign
+app.include_router(sovereign.router, prefix="/api/sovereign", tags=["sovereign-workspace"])
+
+# ML v2 - Extended Intelligence System# Removed redundant v2 router as it's merged into labs.py
 
 
 
@@ -249,162 +315,6 @@ def get_universe_endpoint():
     all_tickers.sort()
     return all_tickers
 
-# --- MONITOR Page ---
-
-@app.get("/api/monitor")
-def get_monitor_data(horizon: str = "3mo"):
-    """
-    Data for the Monitor page.
-    Returns real quantitative data for indices, sectors, breadth, and drawdowns.
-    """
-    try:
-        import datetime
-        end_date = datetime.datetime.now()
-        days_map = {"3mo": 90, "1y": 365}
-        
-        # Helper functions for parallel execution
-        def fetch_global():
-            indices = ["DIA", "IWM", "QQQ", "SPY", "^CNXSC", "^GDAXI", "^KS11", "^NSEI"]
-            start_date = end_date - datetime.timedelta(days=days_map.get(horizon, 90))
-            df_global = data_loader.get_price_history(indices, start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
-            
-            series_data = {}
-            if not df_global.empty:
-                if isinstance(df_global.columns, pd.MultiIndex):
-                    closes = df_global.xs('Close', axis=1, level=0)
-                else:
-                    closes = df_global
-                
-                rets = closes.pct_change().fillna(0)
-                cum_rets = (1 + rets).cumprod() * 100
-                
-                for col in cum_rets.columns:
-                    series_data[col] = {
-                        "dates": cum_rets.index.strftime('%Y-%m-%d').tolist(),
-                        "close": cum_rets[col].replace([np.inf, -np.inf], np.nan).fillna(0).tolist()
-                    }
-            return series_data
-
-        def fetch_sectors():
-            sectors = ["XLK", "XLF", "XLV", "XLE", "XLY", "XLP", "XLI", "XLB", "XLU", "XLRE"]
-            sector_start = end_date - datetime.timedelta(days=90)
-            df_sectors = data_loader.get_price_history(sectors, start=sector_start.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
-            
-            sectors_data = {}
-            if not df_sectors.empty:
-                if isinstance(df_sectors.columns, pd.MultiIndex):
-                    closes = df_sectors.xs('Close', axis=1, level=0)
-                else:
-                    closes = df_sectors
-                    
-                for col in closes.columns:
-                    series = closes[col].dropna()
-                    if len(series) > 0:
-                        sectors_data[col] = {
-                            "dates": series.index.strftime('%Y-%m-%d').tolist(),
-                            "close": series.replace([np.inf, -np.inf], np.nan).fillna(0).tolist()
-                        }
-            return sectors_data
-
-        def fetch_breadth():
-            breadth_data = {"dates": [], "breadth_percent": [], "vix_scaled": []}
-            try:
-                # Breadth: % of US Universe > SMA 200
-                us_universe = data_loader.get_universe("us")[:20] # Limit to top 20 for speed
-                # Need 200 days prior to start to calc SMA200 properly, so fetch ~1 year + 90 days
-                breadth_start = end_date - datetime.timedelta(days=365) 
-                df_univ = data_loader.get_price_history(us_universe, start=breadth_start.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
-                df_vix = data_loader.get_price_history(["^VIX"], start=breadth_start.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
-                
-                if not df_univ.empty and not df_vix.empty:
-                    if isinstance(df_univ.columns, pd.MultiIndex):
-                        univ_closes = df_univ.xs('Close', axis=1, level=0)
-                    else:
-                        univ_closes = df_univ
-                    
-                    # Calculate SMA 200
-                    sma200 = univ_closes.rolling(window=200).mean()
-                    
-                    # Determine % above SMA200
-                    above_sma = (univ_closes > sma200).sum(axis=1)
-                    total_valid = sma200.notna().sum(axis=1)
-                    breadth_pct = (above_sma / total_valid.replace(0, np.nan)).fillna(0) * 100
-                    
-                    # VIX
-                    if isinstance(df_vix.columns, pd.MultiIndex):
-                        vix_close = df_vix.xs('Close', axis=1, level=0)["^VIX"]
-                    else:
-                        vix_close = df_vix["^VIX"] if "^VIX" in df_vix.columns else df_vix.iloc[:, 0]
-                    
-                    # Align dates (last 90 days or horizon)
-                    display_start = end_date - datetime.timedelta(days=days_map.get(horizon, 90))
-                    common = breadth_pct.index.intersection(vix_close.index)
-                    common = common[common >= display_start]
-                    
-                    breadth_pct = breadth_pct.loc[common]
-                    vix_close = vix_close.loc[common]
-                    
-                    breadth_data = {
-                        "dates": common.strftime('%Y-%m-%d').tolist(),
-                        "breadth_percent": breadth_pct.replace([np.inf, -np.inf], np.nan).fillna(0).tolist(),
-                        "vix_scaled": vix_close.replace([np.inf, -np.inf], np.nan).fillna(0).tolist()
-                    }
-            except Exception as e:
-                logger.error(f"Error in breadth calc: {e}")
-            return breadth_data
-
-        def fetch_drawdowns():
-            drawdowns_data = {}
-            dd_indices = ["QQQ", "SPY", "^NSEI"]
-            dd_start = end_date - datetime.timedelta(days=365*2)
-            df_dd = data_loader.get_price_history(dd_indices, start=dd_start.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
-            
-            if not df_dd.empty:
-                if isinstance(df_dd.columns, pd.MultiIndex):
-                    closes = df_dd.xs('Close', axis=1, level=0)
-                else:
-                    closes = df_dd
-                    
-                for col in closes.columns:
-                    dd = metrics.max_drawdown(closes[col])
-                    drawdowns_data[col] = {
-                        "dates": dd.index.strftime('%Y-%m-%d').tolist(),
-                        "drawdown": dd.replace([np.inf, -np.inf], np.nan).fillna(0).tolist()
-                    }
-            return drawdowns_data
-
-        # Execute in parallel
-        executor = concurrent.futures.ThreadPoolExecutor()
-        try:
-            f_global = executor.submit(fetch_global)
-            f_sectors = executor.submit(fetch_sectors)
-            f_breadth = executor.submit(fetch_breadth)
-            f_drawdowns = executor.submit(fetch_drawdowns)
-            
-            # Helper to get result with timeout
-            def get_result_safe(f, name, timeout=10):
-                try:
-                    return f.result(timeout=timeout)
-                except concurrent.futures.TimeoutError:
-                    logger.warning(f"Timeout fetching {name}")
-                    return {} if name != "breadth" else {"dates": [], "breadth_percent": [], "vix_scaled": []}
-                except Exception as e:
-                    logger.error(f"Error fetching {name}: {e}")
-                    return {} if name != "breadth" else {"dates": [], "breadth_percent": [], "vix_scaled": []}
-
-            return {
-                "indices": ["DIA", "IWM", "QQQ", "SPY", "^CNXSC", "^GDAXI", "^KS11", "^NSEI"],
-                "series": get_result_safe(f_global, "global", 10),
-                "sectors": get_result_safe(f_sectors, "sectors", 10),
-                "breadth": get_result_safe(f_breadth, "breadth", 15), # Give breadth a bit more time
-                "drawdowns": get_result_safe(f_drawdowns, "drawdowns", 10)
-            }
-        finally:
-            executor.shutdown(wait=False)
-
-    except Exception as e:
-        logger.error(f"Critical error in monitor endpoint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 # =============================================================================
 # SIMPLE LIQUIDITY ENDPOINT - For Security Page

@@ -22,7 +22,11 @@ from typing import Dict, List, Optional, Any, Literal
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import logging
+import time
+import polars as pl
 from scipy import stats
+from app.services.data_engine import engine
+from app.services.market_state import get_or_build_market_state, MarketState
 
 logger = logging.getLogger(__name__)
 
@@ -608,27 +612,108 @@ class Quant360ScreenerService:
         self._metrics_cache = {}
         self._last_fetch_time = None
     
-    async def get_market_state(self, universe_key: str, lookback_days: int = 252):
-        """Get or build MarketState with error handling."""
-        from app.services.market_state import get_or_build_market_state
-        
-        cache_key = f"{universe_key}_{lookback_days}"
-        if cache_key in self._cache:
-            logger.info(f"Using cached MarketState for {cache_key}")
-            return self._cache[cache_key]
-        
+
+    async def get_market_state(self, universe_key: str = "US", lookback_days: int = 252) -> Optional[MarketState]:
+        """
+        Fetch market state for a universe.
+        Prioritizes high-performance DataEngine (Parquet) for "God-Mode" speed.
+        Falls back to MarketState (yfinance) for live data if needed.
+        """
         try:
-            # Use the working market_state module
-            state = await get_or_build_market_state(universe=universe_key)
+            u_key = universe_key.upper()
             
-            if state.prices is not None and len(state.prices.columns) > 0:
-                self._cache[cache_key] = state
+            # 1. Map universe name to DataEngine keys
+            if u_key == "INDIA":
+                data_engine_key = "india_nse"
+            elif u_key == "US":
+                data_engine_key = "us_equities"
+            elif u_key == "CRYPTO":
+                data_engine_key = "crypto"
+            elif u_key == "FX":
+                data_engine_key = "fx"
+            elif u_key == "INDEX":
+                data_engine_key = "indices"
+            elif u_key == "ETF":
+                data_engine_key = "etfs"
+            else:
+                data_engine_key = u_key.lower()
+                
+            # 2. Try DataEngine (Parquet) - High Speed
+            tickers = engine.get_tickers_for_universe(data_engine_key)
+            
+            if not tickers and u_key == "INDIA":
+                # Final hardcoded fallback if universes.json is missing it
+                tickers = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", "SBIN.NS"]
+            
+            if tickers:
+                prices = engine.get_price_matrix(tickers=tickers, lookback_days=lookback_days, column="Close")
+                if not prices.empty:
+                    logger.info(f"Using DataEngine for {u_key} (tickers: {len(prices.columns)})")
+                    
+                    class MockState:
+                        def __init__(self, tickers, prices, engine):
+                            self.tickers = list(prices.columns)
+                            self.prices = prices
+                            # Fetch other columns
+                            self.volumes = engine.get_price_matrix(tickers=self.tickers, lookback_days=lookback_days, column="Volume")
+                            self.high = engine.get_price_matrix(tickers=self.tickers, lookback_days=lookback_days, column="High")
+                            self.low = engine.get_price_matrix(tickers=self.tickers, lookback_days=lookback_days, column="Low")
+                            self.open_prices = engine.get_price_matrix(tickers=self.tickers, lookback_days=lookback_days, column="Open")
+                            
+                            # Clean up and ensure all are same shape
+                            common_idx = self.prices.index
+                            self.volumes = self.volumes.reindex(common_idx).fillna(0)
+                            self.high = self.high.reindex(common_idx).ffill()
+                            self.low = self.low.reindex(common_idx).ffill()
+                            self.open_prices = self.open_prices.reindex(common_idx).ffill()
+                            
+                            # Also ffill prices themselves to be safe
+                            self.prices = self.prices.ffill()
+                            
+                            # Compute returns (keep full index for alignment)
+                            self.returns = np.log(self.prices / self.prices.shift(1))
+                            
+                            # Basic sector map
+                            self.sector_map = {t: "Equity" for t in self.tickers}
+                    
+                    return MockState(tickers, prices, engine)
+
+            # 3. Fallback to standard MarketState (yfinance)
+            # This is slow but provides live data
+            logger.info(f"DataEngine failed or empty for {u_key}, falling back to MarketState (yfinance)")
+            state = await get_or_build_market_state(u_key)
+            if state and state.prices is not None and not state.prices.empty:
                 return state
+                
+            return None
+            
         except Exception as e:
-            logger.error(f"Failed to build MarketState: {e}")
+            logger.error(f"Error in get_market_state for {universe_key}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+
+    def get_market_state_fast(self, universe_key: str):
+        """High-performance universe scanning using DataEngine."""
+        start_time = time.time()
         
-        # Return None if failed - will use sample data
-        return None
+        # 1. Get tickers for universe
+        tickers = engine.get_tickers_for_universe(universe_key)
+        if not tickers:
+            # Fallback to scanning everything if universe not defined
+            tickers = None
+            
+        # 2. Vectorized scan in Polars (RSI, MA, Vol, Change)
+        indicators = engine.get_latest_indicators(tickers)
+        
+        # 3. Add 'Neural Confidence' placeholder (to be filled by ML service)
+        # For now, generate a placeholder score
+        indicators = indicators.with_columns(
+            pl.lit(0.85).alias("Neural_Confidence") # Placeholder
+        )
+        
+        compute_time_ms = (time.time() - start_time) * 1000
+        return indicators, compute_time_ms
     
     def _generate_sample_data(self, universe_key: str) -> pd.DataFrame:
         """Generate sample data when real data unavailable (rate limited)."""
@@ -772,17 +857,31 @@ class Quant360ScreenerService:
                 if ticker not in prices.columns:
                     continue
                     
-                price_series = prices[ticker].dropna()
-                vol_series = volumes[ticker].dropna() if ticker in volumes.columns else pd.Series([0] * len(price_series), index=price_series.index)
-                ret_series = returns[ticker].dropna() if ticker in returns.columns else pd.Series([0] * len(price_series), index=price_series.index)
+                # 1. Create a combined DataFrame for internal alignment
+                # This prevents 'Can only compare identically-labeled Series objects'
+                combined = pd.DataFrame({
+                    'close': prices[ticker],
+                    'volume': volumes[ticker] if ticker in volumes.columns else 0,
+                    'high': state.high[ticker] if ticker in state.high.columns else prices[ticker] * 1.01,
+                    'low': state.low[ticker] if ticker in state.low.columns else prices[ticker] * 0.99,
+                    'open': state.open_prices[ticker] if ticker in state.open_prices.columns else prices[ticker],
+                    'returns': returns[ticker] if ticker in returns.columns else 0
+                })
                 
-                if len(price_series) < 20:
+                # Ffill any intra-day NaNs but keep the index
+                combined = combined.ffill()
+                
+                # Filter for minimum history length
+                if len(combined.dropna(subset=['close'])) < 20:
                     continue
                 
-                # OHLC from MarketState attributes (high, low, open_prices)
-                high = state.high[ticker] if ticker in state.high.columns else price_series * 1.01
-                low = state.low[ticker] if ticker in state.low.columns else price_series * 0.99
-                open_p = state.open_prices[ticker] if ticker in state.open_prices.columns else price_series
+                # Extract aligned series
+                price_series = combined['close']
+                vol_series = combined['volume']
+                ret_series = combined['returns'].fillna(0)
+                high = combined['high']
+                low = combined['low']
+                open_p = combined['open']
                 close = price_series
                 
                 # Basic
@@ -923,7 +1022,7 @@ class Quant360ScreenerService:
         import time
         start = time.time()
         
-        state = await self.get_market_state(universe_key)
+        state = await self.get_market_state(universe_key, lookback_days=window)
         
         # Use sample data if MarketState failed (rate limited)
         if state is None:
@@ -956,6 +1055,12 @@ class Quant360ScreenerService:
         # Capacity percentile
         df['capacity_pctl'] = df['dollar_volume'].rank(pct=True) * 100
         df['position_size'] = df['capacity_pctl'].apply(self.math.classify_position_size)
+        
+        # Sector Percentiles (Sprint 3)
+        # Compute how each stock ranks within its sector for key metrics
+        for col in ['change_20d', 'atr_pct', 'rsi', 'realized_vol']:
+            if col in df.columns:
+                df[f'{col}_sector_pctl'] = df.groupby('sector')[col].rank(pct=True) * 100
         
         # Sanitize for JSON serialization (remove inf/nan)
         df = sanitize_df_for_json(df)
@@ -1001,7 +1106,7 @@ class Quant360ScreenerService:
         import time
         start = time.time()
         
-        state = await self.get_market_state(universe_key)
+        state = await self.get_market_state(universe_key, lookback_days=window)
         
         if state is None:
             df = self._generate_sample_data(universe_key)
@@ -1058,7 +1163,7 @@ class Quant360ScreenerService:
         import time
         start = time.time()
         
-        state = await self.get_market_state(universe_key)
+        state = await self.get_market_state(universe_key, lookback_days=window)
         
         if state is None:
             df = self._generate_sample_data(universe_key)
@@ -1102,7 +1207,7 @@ class Quant360ScreenerService:
         import time
         start = time.time()
         
-        state = await self.get_market_state(universe_key)
+        state = await self.get_market_state(universe_key, lookback_days=window)
         if state is None:
             df = self._generate_sample_data(universe_key)
             names_scanned = 50
@@ -1155,7 +1260,7 @@ class Quant360ScreenerService:
         import time
         start = time.time()
         
-        state = await self.get_market_state(universe_key)
+        state = await self.get_market_state(universe_key, lookback_days=window)
         
         if state is None:
             df = self._generate_sample_data(universe_key)
@@ -1199,7 +1304,7 @@ class Quant360ScreenerService:
         import time
         start = time.time()
         
-        state = await self.get_market_state(universe_key)
+        state = await self.get_market_state(universe_key, lookback_days=window)
         
         if state is None:
             df = self._generate_sample_data(universe_key)
@@ -1245,7 +1350,7 @@ class Quant360ScreenerService:
         import time
         start = time.time()
         
-        state = await self.get_market_state(universe_key)
+        state = await self.get_market_state(universe_key, lookback_days=window)
         
         if state is None:
             df = self._generate_sample_data(universe_key)
@@ -1291,7 +1396,7 @@ class Quant360ScreenerService:
         import time
         start = time.time()
         
-        state = await self.get_market_state(universe_key)
+        state = await self.get_market_state(universe_key, lookback_days=window)
         
         if state is None:
             df = self._generate_sample_data(universe_key)

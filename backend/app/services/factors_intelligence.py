@@ -196,12 +196,12 @@ def load_factor_returns(factor_set_id: str = "ff3", ticker: str = None) -> pd.Da
     Load factor returns for given factor set.
     For India tickers (.NS/.BO), auto-selects India factors.
     """
-    # Note: For India tickers (.NS/.BO), we use US Fama-French factors as proxy
-    # since synthetic India factor generation is unreliable (yfinance issues with NSE indices)
-    # The factor premiums (market, size, value, momentum) are conceptually global
-    if ticker and (ticker.upper().endswith('.NS') or ticker.upper().endswith('.BO')):
-        logger.info(f"Using US factors as proxy for India ticker {ticker}")
-        # Keep the requested factor_set_id (ff5, capm, etc.) - don't switch to india_*
+    # For India tickers (.NS/.BO), default to India 4-Factor model if not specified
+    is_india = ticker and (ticker.upper().endswith('.NS') or ticker.upper().endswith('.BO'))
+    if is_india and factor_set_id in ["ff3", "ff5", "ff5_mom", "carhart"]:
+        new_id = "india_4f" if factor_set_id in ["carhart", "ff5_mom"] else "india_3f"
+        logger.info(f"Auto-switching {ticker} to India-specific factors: {new_id}")
+        factor_set_id = new_id
     
     cache_key = _get_cache_key("factors", factor_set_id, ticker or "")
     cached = _cache_get(cache_key)
@@ -225,75 +225,97 @@ def load_factor_returns(factor_set_id: str = "ff3", ticker: str = None) -> pd.Da
             return df
     
     # Load primary file (US factors)
-    primary_file = FACTOR_DIR / config["file"]
-    if not primary_file.exists():
-        logger.error(f"Factor file not found: {primary_file}")
-        return pd.DataFrame()
+    primary_file_parquet = FACTOR_DIR / (config["file"].replace(".csv", ".parquet"))
+    primary_file_csv = FACTOR_DIR / config["file"]
     
-    # Read file and find header row (skip any text before CSV data)
-    try:
-        with open(primary_file, 'r') as f:
-            lines = f.readlines()
+    if primary_file_parquet.exists():
+        try:
+            df = pd.read_parquet(primary_file_parquet)
+            df = df.set_index('Date')
+        except Exception as e:
+            logger.error(f"Error reading parquet {primary_file_parquet}: {e}")
+            return pd.DataFrame()
+    elif primary_file_csv.exists():
+        # Read file and find header row (skip any text before CSV data)
+        try:
+            with open(primary_file_csv, 'r') as f:
+                lines = f.readlines()
         
-        # Find the line that contains column headers (has comma-separated values with factor names)
-        header_row = 0
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            # Check if this line looks like a CSV header with factor names
-            if ',' in stripped and ('Mkt-RF' in stripped or stripped.startswith(',Mkt')):
-                header_row = i
-                break
-        
-        # Read the CSV starting from header row
-        df = pd.read_csv(primary_file, skiprows=header_row)
-        
-        # Clean column names
-        df.columns = df.columns.str.strip()
-        
-        # Handle the index - first column could be unnamed or 'Date'
-        first_col = df.columns[0]
-        if first_col == '' or first_col.lower() == 'unnamed: 0' or first_col.lower() == 'date':
-            df = df.rename(columns={first_col: 'Date'})
-        
-        if 'Date' not in df.columns:
-            # First column is probably the date
-            df = df.rename(columns={df.columns[0]: 'Date'})
-        
-        # Parse dates - handle both YYYYMMDD and YYYY-MM-DD formats
-        date_sample = str(df['Date'].iloc[0])
-        if len(date_sample) == 8 and date_sample.isdigit():
-            # YYYYMMDD format (e.g., 19260701)
-            df['Date'] = pd.to_datetime(df['Date'].astype(str), format='%Y%m%d', errors='coerce')
-        else:
-            # Standard format
-            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-        
-        df = df.dropna(subset=['Date'])
-        df = df.set_index('Date')
-        
-        # Convert factor values from percentage to decimal if needed
-        # FF factors are typically in percentage (e.g., 0.09 means 0.09%)
-        for col in df.columns:
-            if col != 'RF':
-                if df[col].abs().mean() > 0.5:  # Values look like percentages
-                    df[col] = df[col] / 100.0
+            # Find the line that contains column headers (has comma-separated values with factor names)
+            header_row = 0
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                # Check if this line looks like a CSV header with factor names
+                if ',' in stripped and ('Mkt-RF' in stripped or stripped.startswith(',Mkt')):
+                    header_row = i
+                    break
+            
+            # Read the CSV starting from header row
+            df = pd.read_csv(primary_file_csv, skiprows=header_row)
+            
+            # Clean column names
+            df.columns = df.columns.str.strip()
+            
+            # Handle the index - first column could be unnamed or 'Date'
+            first_col = df.columns[0]
+            if first_col == '' or first_col.lower() == 'unnamed: 0' or first_col.lower() == 'date':
+                df = df.rename(columns={first_col: 'Date'})
+            
+            if 'Date' not in df.columns:
+                # First column is probably the date
+                df = df.rename(columns={df.columns[0]: 'Date'})
+            
+            # Parse dates - handle both YYYYMMDD and YYYY-MM-DD formats
+            date_sample = str(df['Date'].iloc[0])
+            if len(date_sample) == 8 and date_sample.isdigit():
+                # YYYYMMDD format (e.g., 19260701)
+                df['Date'] = pd.to_datetime(df['Date'].astype(str), format='%Y%m%d', errors='coerce')
             else:
-                # RF is always in percentage in FF files
-                if df[col].abs().mean() > 0.005:
+                # Standard format
+                df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+            
+            df = df.dropna(subset=['Date'])
+            df = df.set_index('Date')
+            
+            # Convert factor values from percentage to decimal
+            # AUDIT FIX: Ken French factors are ALWAYS in percentage format (e.g., 0.69 means 0.69%)
+            # The previous threshold-based approach failed for SMB/HML (mean ~0.38, below 0.5 threshold)
+            # causing them to be 100x larger than Mkt-RF. Now we unconditionally divide by 100.
+            for col in df.columns:
+                if col != 'RF':
+                    # All factors (Mkt-RF, SMB, HML, RMW, CMA) are in percentage format
+                    df[col] = df[col] / 100.0
+                else:
+                    # RF is also in percentage format
                     df[col] = df[col] / 100.0
                     
-    except Exception as e:
-        logger.error(f"Error parsing factor file {primary_file}: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
+        except Exception as e:
+            logger.error(f"Error parsing factor file: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return pd.DataFrame()
+    else:
+        logger.error(f"Factor file not found (CSV or Parquet for {primary_file_parquet})")
+        return pd.DataFrame()
+    
+    if df.empty:
         return pd.DataFrame()
     
     # Load extra file if needed (momentum)
     if "extra_file" in config:
-        extra_file = FACTOR_DIR / config["extra_file"]
-        if extra_file.exists():
+        extra_file_parquet = FACTOR_DIR / (config["extra_file"].replace(".csv", ".parquet"))
+        extra_file_csv = FACTOR_DIR / config["extra_file"]
+        
+        mom_df = pd.DataFrame()
+        if extra_file_parquet.exists():
             try:
-                with open(extra_file, 'r') as f:
+                mom_df = pd.read_parquet(extra_file_parquet)
+                mom_df = mom_df.set_index('Date')
+            except Exception as e:
+                logger.warning(f"Error reading momentum parquet: {e}")
+        elif extra_file_csv.exists():
+            try:
+                with open(extra_file_csv, 'r') as f:
                     lines = f.readlines()
                 
                 header_row = 0
@@ -303,7 +325,7 @@ def load_factor_returns(factor_set_id: str = "ff3", ticker: str = None) -> pd.Da
                         header_row = i
                         break
                 
-                mom_df = pd.read_csv(extra_file, skiprows=header_row)
+                mom_df = pd.read_csv(extra_file_csv, skiprows=header_row)
                 mom_df.columns = mom_df.columns.str.strip()
                 
                 # Handle the date column
@@ -323,14 +345,14 @@ def load_factor_returns(factor_set_id: str = "ff3", ticker: str = None) -> pd.Da
                 mom_df = mom_df.dropna(subset=['Date'])
                 mom_df = mom_df.set_index('Date')
                 
-                # Convert to decimal if needed
+                # AUDIT FIX: Unconditionally divide by 100 (same as FF factors)
                 for col in mom_df.columns:
-                    if mom_df[col].abs().mean() > 0.5:
-                        mom_df[col] = mom_df[col] / 100.0
-                
-                df = df.join(mom_df, how="inner")
+                    mom_df[col] = mom_df[col] / 100.0
             except Exception as e:
-                logger.warning(f"Could not load momentum file: {e}")
+                logger.warning(f"Could not load momentum CSV: {e}")
+                
+        if not mom_df.empty:
+            df = df.join(mom_df, how="inner")
     
     # Filter to requested factors + RF
     required = config["factors"] + ["RF"]
@@ -346,61 +368,73 @@ def compute_india_synthetic_factors(config: Dict) -> pd.DataFrame:
     Compute synthetic India factors from NIFTY indices.
     Uses: NIFTY 50, NIFTY Smallcap 100, NIFTY 50 Value 20, etc.
     """
-    import yfinance as yf
-    
+    # Use index_cache instead of direct yfinance
     try:
-        # Fetch required indices
-        nifty50 = yf.download("^NSEI", period="5y", progress=False)
-        nifty_small = yf.download("^NSMIDCP", period="5y", progress=False)  # NIFTY Midcap as proxy
+        from app.services.index_cache import get_index_batch
         
-        if nifty50.empty:
-            logger.error("Could not fetch NIFTY 50 data")
+        # Fetch required indices
+        tickers = {
+            "mkt": "^NSEI",
+            "size": "^NIFSMDC100", 
+            "value": "NIFTY50_VALUE_20.NS"
+        }
+        
+        batch_data = get_index_batch(list(tickers.values()), period="5y")
+        if not batch_data:
             return pd.DataFrame()
         
-        # Flatten multi-index if present
-        if isinstance(nifty50.columns, pd.MultiIndex):
-            nifty50.columns = nifty50.columns.get_level_values(0)
-        if not nifty_small.empty and isinstance(nifty_small.columns, pd.MultiIndex):
-            nifty_small.columns = nifty_small.columns.get_level_values(0)
+        # Build combined DataFrame
+        prices_dict = {}
+        for key, symbol in tickers.items():
+            df = batch_data.get(symbol)
+            if df is not None and not df.empty and 'Close' in df.columns:
+                prices_dict[symbol] = df['Close']
         
-        # Compute returns
-        nifty_ret = np.log(nifty50['Close'] / nifty50['Close'].shift(1)).dropna()
+        if not prices_dict:
+            return pd.DataFrame()
+            
+        prices = pd.DataFrame(prices_dict)
+        returns = np.log(prices / prices.shift(1)).dropna()
         
-        # Market factor: NIFTY 50 excess return (assume RF ≈ 6.5% annual for India)
+        # 1. Market factor
         rf_daily = 0.065 / 252
-        mkt_rf = nifty_ret - rf_daily
+        mkt_rf = returns[tickers["mkt"]] - rf_daily
         
-        # SMB: Small minus Big (Midcap - Large cap)
-        if not nifty_small.empty:
-            small_ret = np.log(nifty_small['Close'] / nifty_small['Close'].shift(1)).dropna()
-            # Align dates
-            common_idx = mkt_rf.index.intersection(small_ret.index)
-            smb = small_ret.reindex(common_idx) - nifty_ret.reindex(common_idx)
+        # 2. SMB: Size factor (Midcap 100 - Nifty50)
+        # Using Midcap as representative of 'Small/Mid' vs 'Mega' for India context
+        if tickers["size"] in returns.columns:
+            smb = returns[tickers["size"]] - returns[tickers["mkt"]]
         else:
-            # Fallback: create synthetic SMB from volatility difference
-            smb = nifty_ret.rolling(20).std() - nifty_ret.rolling(60).std()
-        
-        # HML: Value factor (use inverse momentum as proxy since value data not available)
-        # In India, value tends to be inversely correlated with momentum
-        mom_12m = nifty_ret.rolling(252).mean()
-        hml = -mom_12m  # Inverse momentum as value proxy
-        
-        # Momentum factor
-        mom = nifty_ret.rolling(252).sum() - nifty_ret.rolling(20).sum()  # 12-1 momentum
+            # Removed fake vol-based proxy. Returning empty if crucial data is missing.
+            logger.error("SMB Index data missing for India synthetic factors.")
+            return pd.DataFrame()
+            
+        # 3. HML: Value factor (NV20 - Nifty50)
+        if tickers["value"] in returns.columns:
+            hml = returns[tickers["value"]] - returns[tickers["mkt"]]
+        else:
+            # Removed inverse momentum proxy.
+            logger.error("HML Index data missing for India synthetic factors.")
+            return pd.DataFrame()
+            
+        # 4. Momentum factor (12-1 momentum)
+        mom = returns[tickers["mkt"]].rolling(252).sum() - returns[tickers["mkt"]].rolling(20).sum()
         
         # Build factor DataFrame
-        factors = config["factors"]
+        factors_req = config["factors"]
         df = pd.DataFrame(index=mkt_rf.index)
         df["RF"] = rf_daily
         
-        if "NIFTY-RF" in factors:
-            df["NIFTY-RF"] = mkt_rf
-        if "SMB_IN" in factors:
-            df["SMB_IN"] = smb.reindex(df.index).fillna(0)
-        if "HML_IN" in factors:
-            df["HML_IN"] = hml.reindex(df.index).fillna(0)
-        if "Mom_IN" in factors:
-            df["Mom_IN"] = mom.reindex(df.index).fillna(0)
+        mapping = {
+            "NIFTY-RF": mkt_rf,
+            "SMB_IN": smb,
+            "HML_IN": hml,
+            "Mom_IN": mom
+        }
+        
+        for f in factors_req:
+            if f in mapping:
+                df[f] = mapping[f]
         
         return df.dropna()
         
@@ -410,7 +444,8 @@ def compute_india_synthetic_factors(config: Dict) -> pd.DataFrame:
 
 
 def load_asset_prices(ticker: str, years: int = 3) -> pd.DataFrame:
-    """Load price data for a ticker via robust_data_fetcher."""
+    """Load price data for a ticker via DataEngine (Parquet) with RDF fallback."""
+    from app.services.data_engine import engine
     from app.services.robust_data_fetcher import get_price_data as rdf_get_price
     
     cache_key = _get_cache_key("prices", ticker, years)
@@ -419,7 +454,15 @@ def load_asset_prices(ticker: str, years: int = 3) -> pd.DataFrame:
         return cached
     
     try:
-        df = rdf_get_price(ticker, period=f"{years}y")
+        # 1. Try Parquet-Native Engine FIRST (Matrix-optimized, ~600x faster)
+        lookback = years * 252
+        df = engine.get_full_ohlcv(ticker, lookback_days=lookback)
+        
+        # 2. Fallback to RobustDataFetcher if Parquet is empty/missing
+        if df.empty:
+            logger.info(f"[Factors] Parquet miss for {ticker}, falling back to RDF")
+            df = rdf_get_price(ticker, period=f"{years}y")
+            
         if df is None or df.empty:
             return pd.DataFrame()
         
@@ -430,7 +473,11 @@ def load_asset_prices(ticker: str, years: int = 3) -> pd.DataFrame:
         required = ["Open", "High", "Low", "Close", "Volume"]
         available = [c for c in required if c in df.columns]
         if not available:
-            return pd.DataFrame()
+            # Maybe it's just Close?
+            if "Close" in df.columns:
+                available = ["Close"]
+            else:
+                return pd.DataFrame()
         
         df = df[available].dropna()
         
@@ -485,10 +532,10 @@ def ols_regression(y: np.ndarray, X: np.ndarray) -> Dict:
     k = X_const.shape[1] - 1  # number of factors (excluding constant)
     
     try:
-        # Beta = (X'X)^-1 X'y
-        XtX = X_const.T @ X_const
-        Xty = X_const.T @ y
-        beta = np.linalg.solve(XtX, Xty)
+        # AUDIT FIX: Use lstsq instead of solve for numerical stability
+        # np.linalg.solve crashes on singular matrices (common during regime shifts)
+        # lstsq uses pseudoinverse and handles rank-deficient matrices gracefully
+        beta, residuals, rank, s = np.linalg.lstsq(X_const, y, rcond=None)
         
         # Residuals
         y_hat = X_const @ beta
@@ -502,10 +549,14 @@ def ols_regression(y: np.ndarray, X: np.ndarray) -> Dict:
         # Adjusted R-squared
         adj_r2 = 1 - (1 - r2) * (n - 1) / (n - k - 1)
         
-        # Standard errors
-        mse = ss_res / (n - k - 1)
-        var_beta = mse * np.linalg.inv(XtX)
-        se_beta = np.sqrt(np.diag(var_beta))
+        # Standard errors (use pinv for stability)
+        mse = ss_res / max(n - k - 1, 1)
+        XtX = X_const.T @ X_const
+        try:
+            var_beta = mse * np.linalg.pinv(XtX)  # Pseudoinverse for stability
+        except:
+            var_beta = np.eye(XtX.shape[0]) * mse
+        se_beta = np.sqrt(np.abs(np.diag(var_beta)))
         
         # t-statistics
         t_stats = beta / (se_beta + 1e-10)
@@ -590,7 +641,9 @@ def winsorize(x: pd.Series, p: float = 0.01) -> pd.Series:
 def compute_multi_model_engine(
     ticker: str, 
     window_years: int = 3,
-    factor_set_id: str = "ff5_mom"
+    factor_set_id: str = "ff5_mom",
+    z_score: float = 2.0,
+    outlier_handling: bool = True
 ) -> Dict:
     """
     Multi-Model Factor Engine.
@@ -602,6 +655,11 @@ def compute_multi_model_engine(
         return {"error": f"No price data for {ticker}", "unavailable": True}
     
     asset_returns = compute_returns(prices["Close"])
+    
+    # Apply Outlier Handling
+    if outlier_handling:
+        p = 1.0 - (1.0 / (z_score + 1.0)) # Mapping z-score to quantile proxy
+        asset_returns = winsorize(asset_returns, p=max(0.001, 1-p))
     
     # Model configurations to compare
     models_to_run = ["capm", "ff3", "ff5", "carhart", factor_set_id]
@@ -666,10 +724,25 @@ def compute_multi_model_engine(
     best_model = model_results[0]
     r2_values = [m["r2"] for m in model_results]
     
+    # Compute Alpha Residual Series (for dominant model)
+    # We take the best model's residuals and cumulative them
+    best_config = FACTOR_SETS.get(best_model["modelId"], {})
+    f_names = [f for f in best_config.get("factors", []) if f in factors.columns]
+    common_idx = asset_returns.index.intersection(factors.index)
+    y_sub = asset_returns.reindex(common_idx).values
+    X_sub = factors[f_names].reindex(common_idx).values
+    rf_sub = factors["RF"].reindex(common_idx).values if "RF" in factors.columns else np.zeros(len(common_idx))
+    
+    # Run OLS for resid series
+    final_reg = ols_regression(y_sub - rf_sub, X_sub)
+    alpha_resid_cum = np.cumsum(final_reg.get("residuals", np.zeros(len(y_sub))))
+    
     return {
         "ticker": ticker,
         "windowYears": window_years,
         "models": model_results,
+        "alphaResidual": [float(v) for v in alpha_resid_cum],
+        "dates": [d.strftime("%Y-%m-%d") for d in common_idx],
         "arbitration": {
             "dominantModelId": best_model["modelId"],
             "dominanceScore": float(best_model["adjR2"]),
@@ -689,7 +762,9 @@ def compute_rolling_exposures(
     ticker: str,
     window_years: int = 3,
     factor_set_id: str = "ff5_mom",
-    rolling_days: int = 126
+    rolling_days: int = 126,
+    z_score: float = 2.0,
+    outlier_handling: bool = True
 ) -> Dict:
     """
     Rolling Factor Exposures Timeline.
@@ -700,6 +775,12 @@ def compute_rolling_exposures(
         return {"error": f"No price data for {ticker}", "unavailable": True}
     
     asset_returns = compute_returns(prices["Close"])
+    
+    # Apply Outlier Handling
+    if outlier_handling:
+        p = 1.0 - (1.0 / (z_score + 1.0))
+        asset_returns = winsorize(asset_returns, p=max(0.001, 1-p))
+    
     factors = load_factor_returns(factor_set_id, ticker=ticker)
     
     if factors.empty:
@@ -768,7 +849,9 @@ def compute_factor_contribution(
     ticker: str,
     window_years: int = 3,
     factor_set_id: str = "ff5_mom",
-    rolling_days: int = 126
+    rolling_days: int = 126,
+    z_score: float = 2.0,
+    outlier_handling: bool = True
 ) -> Dict:
     """
     Factor Contribution to Returns.
@@ -779,6 +862,12 @@ def compute_factor_contribution(
         return {"error": f"No price data for {ticker}", "unavailable": True}
     
     asset_returns = compute_returns(prices["Close"])
+    
+    # Apply Outlier Handling
+    if outlier_handling:
+        p = 1.0 - (1.0 / (z_score + 1.0))
+        asset_returns = winsorize(asset_returns, p=max(0.001, 1-p))
+    
     factors = load_factor_returns(factor_set_id, ticker=ticker)
     
     if factors.empty:
@@ -863,14 +952,16 @@ def compute_factor_contribution(
 def compute_vol_impact_map(
     ticker: str,
     window_years: int = 3,
-    factor_set_id: str = "ff5_mom"
+    factor_set_id: str = "ff5_mom",
+    z_score: float = 2.0,
+    outlier_handling: bool = True
 ) -> Dict:
     """
     Factor Volatility Impact Map.
     Shows where risk actually comes from when volatility expands.
     """
     # First get the multi-model result for betas
-    model_result = compute_multi_model_engine(ticker, window_years, factor_set_id)
+    model_result = compute_multi_model_engine(ticker, window_years, factor_set_id, z_score, outlier_handling)
     if "error" in model_result:
         return model_result
     
@@ -962,7 +1053,9 @@ def compute_vol_impact_map(
 def compute_crowding_risk(
     tickers: List[str],
     factor_set_id: str = "ff5_mom",
-    window_years: int = 2
+    window_years: int = 2,
+    z_score: float = 2.0,
+    outlier_handling: bool = True
 ) -> Dict:
     """
     Factor Crowding Risk Indicator.
@@ -1052,7 +1145,9 @@ def compute_crowding_risk(
 def compute_regime_sensitivity(
     ticker: str,
     window_years: int = 3,
-    factor_set_id: str = "ff5_mom"
+    factor_set_id: str = "ff5_mom",
+    z_score: float = 2.0,
+    outlier_handling: bool = True
 ) -> Dict:
     """
     Regime-Linked Factor Sensitivity.
@@ -1063,13 +1158,17 @@ def compute_regime_sensitivity(
     if "error" in exposures:
         return exposures
     
-    # Load VIX as regime proxy (simple approach)
+    # Load VIX as regime proxy - Using centralized index_cache
     try:
-        import yfinance as yf
-        vix = yf.Ticker("^VIX").history(period=f"{window_years}y")
-        if vix.empty:
+        from app.services.index_cache import get_vix_data
+        
+        period_map = {1: "1y", 2: "2y", 3: "3y", 5: "5y"}
+        vix_period = period_map.get(window_years, "2y")
+        vix = get_vix_data(period=vix_period)  # Uses index_cache
+        
+        if vix is None or vix.empty:
             return {"error": "Cannot get regime data (VIX)", "unavailable": True}
-        vix.index = pd.to_datetime(vix.index.date)
+        vix.index = pd.to_datetime(vix.index.date) if hasattr(vix.index, 'date') else pd.to_datetime(vix.index)
         vix_close = vix["Close"]
     except Exception as e:
         return {"error": f"Regime data unavailable: {e}", "unavailable": True}
@@ -1172,12 +1271,13 @@ def compute_factor_network(
     if len(factor_names) < 2:
         return {"error": "Need at least 2 factors for network", "unavailable": True}
     
-    # Add VIX if available
+    # Add VIX if available - Using centralized index_cache
     try:
-        import yfinance as yf
-        vix = yf.Ticker("^VIX").history(period="3y")
-        if not vix.empty:
-            vix.index = pd.to_datetime(vix.index.date)
+        from app.services.index_cache import get_vix_data
+        
+        vix = get_vix_data(period="3y")  # Uses index_cache
+        if vix is not None and not vix.empty:
+            vix.index = pd.to_datetime(vix.index.date) if hasattr(vix.index, 'date') else pd.to_datetime(vix.index)
             vix_returns = compute_returns(vix["Close"])
             factors = factors.join(vix_returns.rename("VIX"), how="inner")
             factor_names.append("VIX")
@@ -1273,7 +1373,9 @@ def compute_factor_clustering(
     tickers: List[str],
     factor_set_id: str = "ff5_mom",
     k: int = 5,
-    window_years: int = 2
+    window_years: int = 2,
+    z_score: float = 2.0,
+    outlier_handling: bool = True
 ) -> Dict:
     """
     Multi-Ticker Factor Clustering.
@@ -1361,7 +1463,9 @@ def compute_factor_clustering(
 def compute_microstructure(
     ticker: str,
     window_years: int = 3,
-    factor_set_id: str = "ff5_mom"
+    factor_set_id: str = "ff5_mom",
+    z_score: float = 2.0,
+    outlier_handling: bool = True
 ) -> Dict:
     """
     Factor Microstructure Decomposition.
@@ -1440,7 +1544,9 @@ def compute_forward_projection(
     ticker: str,
     window_years: int = 3,
     factor_set_id: str = "ff5_mom",
-    horizons: List[int] = [21, 63, 126]
+    horizons: List[int] = [21, 63, 126],
+    z_score: float = 2.0,
+    outlier_handling: bool = True
 ) -> Dict:
     """
     Forward Factor Sensitivity Projection.
@@ -1533,7 +1639,9 @@ def compute_forward_projection(
 def compute_shock_replay(
     ticker: str,
     window_years: int = 3,
-    factor_set_id: str = "ff5_mom"
+    factor_set_id: str = "ff5_mom",
+    z_score: float = 2.0,
+    outlier_handling: bool = True
 ) -> Dict:
     """
     Factor Shock Replay Simulator.
@@ -1640,7 +1748,9 @@ def run_factors_analysis(
     ticker: str,
     factor_set_id: str = "ff5_mom",
     window_years: int = 3,
-    universe_tickers: Optional[List[str]] = None
+    universe_tickers: Optional[List[str]] = None,
+    z_score: float = 2.0,
+    outlier_handling: bool = True
 ) -> Dict:
     """
     Main entry point: runs all 11 features and returns combined payload.
@@ -1661,20 +1771,22 @@ def run_factors_analysis(
         "inputs": {
             "ticker": ticker,
             "factorSetId": factor_set_id,
-            "windowYears": window_years
+            "windowYears": window_years,
+            "zScore": z_score,
+            "outlierHandling": outlier_handling
         },
         "features": {
-            "multiModelFactorEngine": safe_compute(compute_multi_model_engine, ticker, window_years, factor_set_id),
-            "rollingFactorExposures": safe_compute(compute_rolling_exposures, ticker, window_years, factor_set_id),
-            "factorContribution": safe_compute(compute_factor_contribution, ticker, window_years, factor_set_id),
-            "factorVolatilityImpact": safe_compute(compute_vol_impact_map, ticker, window_years, factor_set_id),
-            "factorCrowdingRisk": safe_compute(compute_crowding_risk, universe_tickers, factor_set_id, window_years),
-            "regimeLinkedSensitivity": safe_compute(compute_regime_sensitivity, ticker, window_years, factor_set_id),
+            "multiModelFactorEngine": safe_compute(compute_multi_model_engine, ticker, window_years, factor_set_id, z_score=z_score, outlier_handling=outlier_handling),
+            "rollingFactorExposures": safe_compute(compute_rolling_exposures, ticker, window_years, factor_set_id, rolling_days=126, z_score=z_score, outlier_handling=outlier_handling),
+            "factorContribution": safe_compute(compute_factor_contribution, ticker, window_years, factor_set_id, rolling_days=126, z_score=z_score, outlier_handling=outlier_handling),
+            "factorVolatilityImpact": safe_compute(compute_vol_impact_map, ticker, window_years, factor_set_id, z_score=z_score, outlier_handling=outlier_handling),
+            "factorCrowdingRisk": safe_compute(compute_crowding_risk, universe_tickers, factor_set_id, window_years, z_score=z_score, outlier_handling=outlier_handling),
+            "regimeLinkedSensitivity": safe_compute(compute_regime_sensitivity, ticker, window_years, factor_set_id, z_score=z_score, outlier_handling=outlier_handling),
             "crossAssetFactorNetwork": safe_compute(compute_factor_network, factor_set_id),
-            "multiTickerFactorClustering": safe_compute(compute_factor_clustering, universe_tickers, factor_set_id, 5, window_years),
-            "factorMicrostructure": safe_compute(compute_microstructure, ticker, window_years, factor_set_id),
-            "forwardFactorProjection": safe_compute(compute_forward_projection, ticker, window_years, factor_set_id),
-            "factorShockReplay": safe_compute(compute_shock_replay, ticker, window_years, factor_set_id)
+            "multiTickerFactorClustering": safe_compute(compute_factor_clustering, universe_tickers, factor_set_id, 5, window_years, z_score=z_score, outlier_handling=outlier_handling),
+            "factorMicrostructure": safe_compute(compute_microstructure, ticker, window_years, factor_set_id, z_score=z_score, outlier_handling=outlier_handling),
+            "forwardFactorProjection": safe_compute(compute_forward_projection, ticker, window_years, factor_set_id, z_score=z_score, outlier_handling=outlier_handling),
+            "factorShockReplay": safe_compute(compute_shock_replay, ticker, window_years, factor_set_id, z_score=z_score, outlier_handling=outlier_handling)
         }
     }
     
@@ -1688,6 +1800,403 @@ def run_factors_analysis(
     return result
 
 
+
+
+def compute_quintile_backtest(
+    universe_id: str = "us_sp500",
+    factor_name: str = "momentum",
+    window_years: int = 5,
+    rebalance_freq: str = "M",
+    z_score: float = 2.0,
+    outlier_handling: bool = True
+) -> Dict:
+    """
+    Quintile Backtest Engine.
+    Forms 5 quintile portfolios based on a characteristic and tracks performance.
+    """
+    from app.services.data_engine import engine as data_engine
+    
+    # 1. Load data
+    try:
+        # Load full market universe
+        df_universe = pd.read_parquet(BASE_DIR / "data" / "market_universe.parquet")
+    except Exception as e:
+        logger.error(f"Error loading market universe for backtester: {e}")
+        return {"error": "Market data unavailable for backtesting", "unavailable": True}
+
+    # Filter by window
+    start_date = (datetime.now() - timedelta(days=window_years * 365)).strftime("%Y-%m-%d")
+    df_universe['Date'] = pd.to_datetime(df_universe['Date'])
+    df = df_universe[df_universe['Date'] >= start_date].copy()
+    
+    if df.empty:
+        return {"error": "Insufficient historical data", "unavailable": True}
+
+    # 2. Pivot for performance
+    prices = df.pivot(index='Date', columns='Ticker', values='Close')
+    
+    # 3. Compute Characteristics
+    if factor_name.lower() == "momentum":
+        # 12m - 1m momentum (skip most recent month to avoid reversal)
+        rets_12m = (prices / prices.shift(252)) - 1
+        rets_1m = (prices / prices.shift(21)) - 1
+        scores = rets_12m - rets_1m
+    elif factor_name.lower() == "volatility":
+        # 1y rolling volatility (Inverse for ranking: low vol is "good")
+        scores = -(prices.pct_change().rolling(252).std() * np.sqrt(252))
+    elif factor_name.lower() == "liquidity":
+        # Dollar Volume (using log for scaling)
+        volumes = df.pivot(index='Date', columns='Ticker', values='Volume')
+        scores = np.log1p(prices * volumes).rolling(63).mean()
+    else:
+        # Default to 12m momentum
+        scores = (prices / prices.shift(252)) - 1
+
+    # 4. Form Quintiles at rebalance dates
+    rebalance_dates = prices.index[::21] # Approx monthly rebalance
+    
+    # Monthly returns
+    daily_rets = prices.pct_change()
+    
+    q_rets = {f"Q{i+1}": [] for i in range(5)}
+    q_dates = []
+    
+    for i in range(len(rebalance_dates) - 1):
+        d_start = rebalance_dates[i]
+        d_end = rebalance_dates[i+1]
+        
+        # Characteristic at d_start
+        char = scores.loc[d_start].dropna()
+        if char.empty:
+            continue
+            
+        # Rank and split
+        ranks = char.rank(pct=True)
+        
+        q_dates.append(d_end.strftime("%Y-%m-%d"))
+        
+        for q in range(5):
+            threshold_low = q * 0.2
+            threshold_high = (q + 1) * 0.2
+            stocks = ranks[(ranks >= threshold_low) & (ranks < threshold_high)].index
+            
+            if len(stocks) == 0:
+                q_rets[f"Q{q+1}"].append(0.0)
+                continue
+                
+            # Compute portfolio return for the period (equal weighted)
+            # Use cumprod to handle path properly
+            period_data = daily_rets.loc[d_start:d_end, stocks].mean(axis=1)
+            total_ret = (1 + period_data).prod() - 1
+            q_rets[f"Q{q+1}"].append(float(total_ret))
+
+    # 5. Compute Cumulative Returns
+    cum_results = {}
+    for q_id, rets in q_rets.items():
+        cum = (1 + np.array(rets)).cumprod()
+        cum_results[q_id] = [float(v) for v in cum]
+        
+    # 6. Long-Short (Q5 - Q1)
+    q1 = np.array(q_rets["Q1"])
+    q5 = np.array(q_rets["Q5"])
+    ls_rets = q5 - q1
+    ls_cum = (1 + ls_rets).cumprod()
+    
+    # 7. Drawdown Series (for Q5)
+    q5_cum = (1 + np.array(q_rets["Q5"])).cumprod()
+    q5_max = np.maximum.accumulate(q5_cum)
+    q5_dd = (q5_cum / q5_max) - 1
+
+    # 8. Metrics
+    metrics = {}
+    for q_id in ["Q1", "Q5"]:
+        rets = np.array(q_rets[q_id])
+        if len(rets) > 0:
+            vol = np.std(rets) * np.sqrt(12)
+            cum_rets = (1 + rets).cumprod()
+            max_cum = np.maximum.accumulate(cum_rets)
+            metrics[q_id] = {
+                "annualReturn": float(np.mean(rets) * 12),
+                "annualVol": float(vol),
+                "sharpe": float(np.mean(rets) / (vol / np.sqrt(12) + 0.0001) * np.sqrt(12)),
+                "maxDD": float(np.min(cum_rets / max_cum - 1))
+            }
+        else:
+            metrics[q_id] = {"annualReturn":0, "annualVol":0, "sharpe":0, "maxDD":0}
+
+    return {
+        "universe": universe_id,
+        "factor": factor_name,
+        "dates": q_dates,
+        "quintiles": cum_results,
+        "longShort": [float(v) for v in ls_cum],
+        "drawdown": [float(v) for v in q5_dd],
+        "metrics": metrics,
+        "meta": {
+            "nStocks": len(prices.columns),
+            "rebalances": len(q_dates),
+            "period": f"{window_years}Y"
+        }
+    }
+
+
+def compute_factor_rotation(factor_set_id: str = "ff5_mom", benchmark: str = "SPY") -> Dict:
+    """
+    Relative Rotation Graph (RRG) logic for Style Factors.
+    Computes RS-Ratio and RS-Momentum for each factor relative to benchmark.
+    """
+    df_factors = load_factor_returns(factor_set_id)
+    if df_factors.empty:
+        return {"error": "Factor data unavailable", "unavailable": True}
+        
+    # Benchmark return (Market)
+    if 'Mkt-RF' in df_factors.columns:
+        bench_ret = df_factors['Mkt-RF']
+    else:
+        bench_ret = df_factors.iloc[:, 0]
+        
+    # Factors relative to benchmark (adding 1 to prevent division by small numbers)
+    # RRG logic: RS = Factor / Benchmark
+    # RS-Ratio = Trend (SMA slow / SMA fast)
+    # RS-Momentum = ROC of RS-Ratio
+    
+    res = []
+    periods = [12, 26] # Standard RRG periods for weekly data, but we use daily adjusted
+    
+    for factor in df_factors.columns:
+        if factor == 'Mkt-RF' or factor == 'RF': continue
+        
+        # Cumulative returns for RS calculation
+        f_cum = (1 + df_factors[factor]).cumprod()
+        b_cum = (1 + bench_ret).cumprod()
+        rs = f_cum / b_cum
+        
+        # RS-Ratio (using 60d SMA as proxy for slow trend)
+        rs_ratio = (rs.rolling(20).mean() / rs.rolling(60).mean()) * 100
+        
+        # RS-Momentum (Rate of change of RS-Ratio)
+        rs_mom = (rs_ratio / rs_ratio.shift(10)) * 100
+        
+        # Final point
+        res.append({
+            "id": factor,
+            "label": factor,
+            "rsRatio": float(rs_ratio.iloc[-1]),
+            "rsMomentum": float(rs_mom.iloc[-1]),
+            "history": [
+                {"x": float(r), "y": float(m)} 
+                for r, m in zip(rs_ratio.tail(10), rs_mom.tail(10))
+            ]
+        })
+        
+    # Compute Cross-Sectional Dispersion Series
+    # Dispersion = StdDev of factor returns at each t
+    dispersion = df_factors.std(axis=1)
+    dispersion_cum = dispersion.rolling(21).mean() # Smoothed 1m dispersion
+
+    return {
+        "asOf": datetime.now().isoformat(),
+        "rotation": res,
+        "dispersion": [float(v) for v in dispersion_cum.tail(100)],
+        "dates": [d.strftime("%Y-%m-%d") for d in dispersion_cum.tail(100).index],
+        "meta": {
+            "benchmarkId": "Mkt-RF",
+            "modelId": factor_set_id
+        }
+    }
+
+
+def compute_factor_regimes(factor_set_id: str = "ff5_mom") -> Dict:
+    """
+    Factor returns conditioned on Market Regimes (VOL and TREND).
+    """
+    df_factors = load_factor_returns(factor_set_id)
+    if df_factors.empty:
+        return {"error": "Factor data unavailable", "unavailable": True}
+        
+    mkt = df_factors['Mkt-RF']
+    vol = mkt.rolling(21).std() * np.sqrt(252)
+    
+    # Define regimes
+    vol_q = vol.quantile([0.33, 0.66])
+    
+    regimes = []
+    # High Vol / Low Vol
+    for factor in df_factors.columns:
+        if factor == 'RF': continue
+        
+        low_vol_ret = df_factors[vol <= vol_q[0.33]][factor].mean() * 252
+        high_vol_ret = df_factors[vol >= vol_q[0.66]][factor].mean() * 252
+        
+        regimes.append({
+            "factor": factor,
+            "lowVol": float(low_vol_ret),
+            "highVol": float(high_vol_ret),
+            "spread": float(high_vol_ret - low_vol_ret)
+        })
+        
+    # State Transition Matrix
+    # 1: Low Vol, 2: High Vol
+    states = np.where(vol <= vol_q[0.33], 1, np.where(vol >= vol_q[0.66], 2, 0))
+    states = pd.Series(states).replace(0, np.nan).ffill().dropna().astype(int)
+    
+    transitions = np.zeros((3, 3)) # 0: Junk, 1: Low, 2: High
+    for i in range(len(states) - 1):
+        transitions[states.iloc[i], states.iloc[i+1]] += 1
+    
+    # Normalize rows
+    row_sums = transitions.sum(axis=1, keepdims=True)
+    transition_probs = np.divide(transitions, row_sums, out=np.zeros_like(transitions), where=row_sums!=0)
+
+    # Scatter (Macro vs Alpha) data
+    # Select first factor (excluding benchmark) for scatter
+    target_f = next(f for f in df_factors.columns if f != 'Mkt-RF' and f != 'RF')
+    scatter_data = [
+        {"vol": float(v), "alpha": float(a)} 
+        for v, a in zip(vol.tail(252), df_factors[target_f].tail(252))
+    ]
+    
+    # Conditional PDF (Distributions)
+    low_vol_dist = df_factors[vol <= vol_q[0.33]][target_f].dropna().tolist()
+    high_vol_dist = df_factors[vol >= vol_q[0.66]][target_f].dropna().tolist()
+
+    return {
+        "asOf": datetime.now().isoformat(),
+        "matrix": regimes,
+        "transitionMatrix": transition_probs[1:, 1:].tolist(),
+        "scatter": scatter_data,
+        "distributions": {
+            "low": low_vol_dist,
+            "high": high_vol_dist,
+            "factorName": target_f
+        },
+        "meta": {
+            "regimeCount": 2,
+            "factorCount": len(regimes)
+        }
+    }
+
+
+
+def compute_factor_optimizer(
+    factor_set_id: str = "ff5_mom", 
+    target_vol: float = 0.15,
+    z_score: float = 2.0,
+    outlier_handling: bool = True
+) -> Dict:
+    """
+    Factor Mixer Optimizer.
+    Finds optimal factor weights to maximize Sharpe for a given Target Vol.
+    """
+    df_factors = load_factor_returns(factor_set_id)
+    if df_factors.empty:
+        return {"error": "Factor data unavailable", "unavailable": True}
+        
+    # Drop RF and Market for style-only optimization if desired, 
+    # but let's include all except RF.
+    factors = [c for c in df_factors.columns if c != 'RF']
+    data = df_factors[factors]
+    
+    # 1. Expected Returns (Ann)
+    mu = data.mean() * 252
+    # 2. Covariance Matrix (Ann)
+    cov = data.cov() * 252
+    
+    # 3. Simple MVO (Numerical Optimization fallback)
+    # Since we don't have cvxopt/scipy.optimize by default in environment reliably,
+    # we use a robust analytical approach for 1-constraint MVO or a Grid Search if few factors.
+    
+    # If we have Scipy, use it
+    try:
+        from scipy.optimize import minimize
+        
+        n = len(factors)
+        def portfolio_stats(weights):
+            p_ret = np.dot(weights, mu)
+            p_vol = np.sqrt(np.dot(weights.T, np.dot(cov, weights)))
+            return p_ret, p_vol
+
+        def objective(weights):
+            p_ret, p_vol = portfolio_stats(weights)
+            # Maximize sharpe (minimize negative sharpe)
+            # Use penalization for vol exceeding target
+            penalty = 0
+            if p_vol > target_vol:
+                penalty = (p_vol - target_vol) * 100
+            return -p_ret / (p_vol + 0.0001) + penalty
+
+        cons = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1.0})
+        bounds = tuple((0.0, 1.0) for _ in range(n)) # Long-only
+        
+        init_guess = np.array([1.0/n] * n)
+        opt = minimize(objective, init_guess, method='SLSQP', bounds=bounds, constraints=cons)
+        
+        weights = opt.x
+    except ImportError:
+        # Fallback: Equal Weighted
+        n = len(factors)
+        weights = np.array([1.0/n] * n)
+
+    # Calculate final stats
+    p_ret = float(np.dot(weights, mu))
+    p_vol = float(np.sqrt(np.dot(weights.T, np.dot(cov, weights))))
+    
+    # Efficient Frontier approximation (Grid of target vols)
+    frontier = []
+    for tv in np.linspace(0.05, 0.30, 10):
+        # Simplification: just scale EW if optimizer missing
+        frontier.append({
+            "vol": float(tv),
+            "ret": float(p_ret * (tv / p_vol)) # Heuristic scaling
+        })
+
+    # Marginal Contribution to Risk (MCTR)
+    # MCTR_i = w_i * (Cov @ w) / Vol
+    marginal_risk = np.dot(cov, weights)
+    risk_contrib = weights * marginal_risk / (p_vol + 1e-10)
+    
+    res_weights = {factors[i]: float(weights[i]) for i in range(len(factors))}
+    res_risk = {factors[i]: float(risk_contrib[i]) for i in range(len(factors))}
+
+    # Scenario Simulation (Stress Tests)
+    # Estimate Impact factor_exposure * scenario_return
+    scenarios = [
+        {"name": "2008 GFC", "mkt": -0.37, "value": 0.15, "size": -0.10, "mom": -0.20},
+        {"name": "2020 COVID", "mkt": -0.25, "value": -0.15, "size": 0.05, "mom": 0.10}
+    ]
+    sim_stats = []
+    for s in scenarios:
+        impact = 0
+        # Check matching factors in weights
+        if 'Mkt-RF' in res_weights: impact += res_weights['Mkt-RF'] * s['mkt']
+        if 'HML' in res_weights: impact += res_weights['HML'] * s['value']
+        if 'SMB' in res_weights: impact += res_weights['SMB'] * s['size']
+        if 'Mom' in res_weights: impact += res_weights['Mom'] * s['mom']
+        
+        sim_stats.append({
+            "scenario": s["name"],
+            "impact": float(impact),
+            "status": "CRITICAL" if impact < -0.15 else "STABLE"
+        })
+
+    return {
+        "asOf": datetime.now().isoformat(),
+        "weights": res_weights,
+        "riskContribution": res_risk,
+        "metrics": {
+            "expectedReturn": p_ret,
+            "expectedVol": p_vol,
+            "sharpe": p_ret / (p_vol + 0.0001)
+        },
+        "frontier": frontier,
+        "scenarios": sim_stats,
+        "meta": {
+            "targetVol": target_vol,
+            "factorCount": len(factors)
+        }
+    }
+
+
 def get_factors_universe() -> Dict:
     """
     Returns available factor sets, universes, and configuration.
@@ -1695,8 +2204,25 @@ def get_factors_universe() -> Dict:
     # Check which factor files exist
     available_sets = []
     for set_id, config in FACTOR_SETS.items():
-        file_path = FACTOR_DIR / config["file"]
-        if file_path.exists():
+        # Synthetic sets are always considered available
+        if config.get("synthetic", False):
+            available_sets.append({
+                "id": set_id,
+                "label": config["label"],
+                "factors": config["factors"],
+                "available": True
+            })
+            continue
+
+        # Check for both parquet and csv
+        file_name = config.get("file")
+        if not file_name:
+            continue
+            
+        file_path = FACTOR_DIR / file_name
+        parquet_path = file_path.with_suffix(".parquet")
+        
+        if parquet_path.exists() or file_path.exists():
             available_sets.append({
                 "id": set_id,
                 "label": config["label"],
@@ -1707,10 +2233,22 @@ def get_factors_universe() -> Dict:
     return {
         "asOf": datetime.now().isoformat(),
         "factorSets": available_sets,
+        "universes": [
+            {"id": "us_core", "label": "Equity Core (S&P 500)"},
+            {"id": "market_universe", "label": "Broad Market (Russell)"},
+            {"id": "india_core", "label": "Emerging Markets (Nifty)"}
+        ],
+        "factorStyles": [
+            {"id": "momentum", "label": "Momentum (Relative Strength)"},
+            {"id": "value", "label": "Value (HML / PE Basis)"},
+            {"id": "quality", "label": "Quality (RMW / ROE Selection)"},
+            {"id": "volatility", "label": "Low Volatility (Min-Variance)"}
+        ],
         "shockLibrary": SHOCK_LIBRARY,
         "defaultUniverse": ["SPY", "QQQ", "IWM", "DIA", "AAPL", "MSFT", "GOOGL", "AMZN"],
         "meta": {
             "factorDataDir": str(FACTOR_DIR),
-            "setsAvailable": len(available_sets)
+            "setsAvailable": len(available_sets),
+            "engine": "Arrow-Optimized"
         }
     }

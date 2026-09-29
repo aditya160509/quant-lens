@@ -109,9 +109,7 @@ def get_session_info():
 
 def get_price_history(symbols, start, end, interval="1d"):
     """
-    Fetch price history for one or more symbols from yfinance.
-    Returns a DataFrame with MultiIndex columns if multiple symbols,
-    or flattened columns if single symbol.
+    Fetch price history for one or more symbols using high-speed Parquet engine with fallback.
     """
     if isinstance(symbols, str):
         symbols = [symbols]
@@ -123,10 +121,47 @@ def get_price_history(symbols, start, end, interval="1d"):
         return cached
 
     try:
-        # Track this API call
-        track_api_call("data_loader", "get_price_history", len(symbols), "yfinance")
+        from app.services.robust_data_fetcher import get_batch_data, get_price_data
         
-        # yfinance download
+        # Calculate period for RDF
+        start_dt = pd.to_datetime(start)
+        days = (datetime.now() - start_dt).days + 30
+        if days <= 30: period = "1mo"
+        elif days <= 90: period = "3mo"
+        elif days <= 365: period = "1y"
+        elif days <= 730: period = "2y"
+        else: period = "5y"
+
+        # Use efficient batch fetcher for multiple symbols, single fetcher for one
+        if len(symbols) > 1:
+            batch = get_batch_data(symbols, period=period, interval=interval)
+            if batch:
+                all_dfs = []
+                for sym, df in batch.items():
+                    if df is not None and not df.empty:
+                        # Filter to range
+                        mask = (df.index >= pd.to_datetime(start)) & (df.index <= pd.to_datetime(end))
+                        df_f = df.loc[mask].copy()
+                        if not df_f.empty:
+                            df_f.columns = pd.MultiIndex.from_product([df_f.columns, [sym]])
+                            all_dfs.append(df_f)
+                
+                if all_dfs:
+                    res = pd.concat(all_dfs, axis=1)
+                    _price_cache.set(cache_key, res)
+                    return res
+        else:
+            df = get_price_data(symbols[0], period=period, interval=interval)
+            if df is not None and not df.empty:
+                mask = (df.index >= pd.to_datetime(start)) & (df.index <= pd.to_datetime(end))
+                res = df.loc[mask].copy()
+                _price_cache.set(cache_key, res)
+                return res
+
+        # Fallback to direct yfinance if RDF failed
+        logger.warning(f"[DataLoader] High-speed fetch failed, falling back to direct yfinance for {symbols}")
+        track_api_call("data_loader", "get_price_history", len(symbols), "yfinance_fallback")
+        
         df = yf.download(
             symbols, 
             start=start, 

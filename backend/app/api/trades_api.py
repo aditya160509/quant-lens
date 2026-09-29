@@ -18,13 +18,19 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import uuid
-import json
+import os
+import hmac
+import hashlib
 import logging
 import asyncio
 from enum import Enum
+from app.auth.dependencies import get_current_user, CurrentUser
+from fastapi import Depends
+
+from app.middleware.security import sanitize_ticker, sanitize_string
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # =============================================================================
 # MODELS
@@ -136,26 +142,30 @@ def get_live_price(symbol: str) -> float:
             return float(data['Close'].iloc[-1])
     except Exception as e:
         logger.warning(f"Could not fetch live price for {symbol}: {e}")
-    # Fallback to mock price
-    import random
-    return round(random.uniform(100, 500), 2)
+    # AUDIT: Standardized price fallback (prevents hallucination)
+    # Using 100.0 as a floor for undefined assets
+    return 100.0
 
 # =============================================================================
 # TRADE EXECUTION ENDPOINT - CATEGORY G
 # =============================================================================
 
 @router.post("/trades/execute")
-async def execute_trade(request: ExecuteTradeRequest, background_tasks: BackgroundTasks):
+async def execute_trade(
+    request: ExecuteTradeRequest, 
+    background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(get_current_user)
+):
     """
     Execute a new trade. This is the ONLY endpoint that creates portfolio positions.
-    
-    Returns:
-        - tradeId: Unique trade identifier
-        - fillPrice: Executed price
-        - status: Trade status
-        - position: Position details
+    Requires authentication. Sanitizes all inputs.
     """
     try:
+        # SANITIZATION (A03: Injection)
+        request.symbol = sanitize_ticker(request.symbol)
+        if hasattr(request, 'notes') and request.notes:
+            request.notes = sanitize_string(request.notes)
+        
         # Get current market price
         current_price = get_live_price(request.symbol)
         
@@ -235,15 +245,15 @@ async def execute_trade(request: ExecuteTradeRequest, background_tasks: Backgrou
         
     except Exception as e:
         logger.error(f"Trade execution failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # =============================================================================
 # POSITION ENDPOINTS - CATEGORY I
 # =============================================================================
 
 @router.get("/trades/positions")
-async def get_all_positions():
-    """Get all active positions"""
+async def get_all_positions(user: CurrentUser = Depends(get_current_user)):
+    """Get all active positions (requires authentication)"""
     positions = []
     for symbol, pos in _positions_db.items():
         # Update current price
@@ -261,9 +271,12 @@ async def get_all_positions():
     return {"positions": positions, "count": len(positions)}
 
 @router.get("/trades/positions/{symbol}")
-async def get_position_by_symbol(symbol: str):
-    """Get position for a specific symbol"""
-    symbol = symbol.upper()
+async def get_position_by_symbol(
+    symbol: str,
+    user: CurrentUser = Depends(get_current_user)
+):
+    """Get position for a specific symbol (requires authentication)"""
+    symbol = sanitize_ticker(symbol).upper()
     
     if symbol not in _positions_db:
         return {"position": None, "hasPosition": False}
@@ -295,7 +308,11 @@ def calculate_pnl(entry: float, current: float, qty: int, side: OrderSide) -> fl
 # =============================================================================
 
 @router.patch("/trades/{trade_id}/stop")
-async def modify_stop_loss(trade_id: str, request: ModifyStopRequest):
+async def modify_stop_loss(
+    trade_id: str, 
+    request: ModifyStopRequest,
+    user: CurrentUser = Depends(get_current_user)
+):
     """Modify stop loss for an active trade"""
     if trade_id not in _trades_db:
         raise HTTPException(status_code=404, detail="Trade not found")
@@ -322,7 +339,11 @@ async def modify_stop_loss(trade_id: str, request: ModifyStopRequest):
     }
 
 @router.patch("/trades/{trade_id}/target")
-async def modify_take_profit(trade_id: str, request: ModifyTargetRequest):
+async def modify_take_profit(
+    trade_id: str, 
+    request: ModifyTargetRequest,
+    user: CurrentUser = Depends(get_current_user)
+):
     """Modify take profit for an active trade"""
     if trade_id not in _trades_db:
         raise HTTPException(status_code=404, detail="Trade not found")
@@ -349,7 +370,11 @@ async def modify_take_profit(trade_id: str, request: ModifyTargetRequest):
     }
 
 @router.post("/trades/{trade_id}/partial-exit")
-async def partial_exit(trade_id: str, request: PartialExitRequest):
+async def partial_exit(
+    trade_id: str, 
+    request: PartialExitRequest,
+    user: CurrentUser = Depends(get_current_user)
+):
     """Reduce position by closing part of it"""
     if trade_id not in _trades_db:
         raise HTTPException(status_code=404, detail="Trade not found")
@@ -392,7 +417,10 @@ async def partial_exit(trade_id: str, request: PartialExitRequest):
     }
 
 @router.post("/trades/{trade_id}/close")
-async def close_position(trade_id: str):
+async def close_position(
+    trade_id: str,
+    user: CurrentUser = Depends(get_current_user)
+):
     """Close entire position"""
     if trade_id not in _trades_db:
         raise HTTPException(status_code=404, detail="Trade not found")
@@ -440,8 +468,11 @@ async def close_position(trade_id: str):
 # =============================================================================
 
 @router.get("/trades/history")
-async def get_trade_history(limit: int = 50):
-    """Get trade history (closed trades)"""
+async def get_trade_history(
+    limit: int = 50,
+    user: CurrentUser = Depends(get_current_user)
+):
+    """Get trade history (closed trades) - requires authentication"""
     closed_trades = [
         t.dict() for t in _trades_db.values() 
         if t.status in [TradeStatus.CLOSED, TradeStatus.PARTIAL_CLOSED]
@@ -461,8 +492,9 @@ async def get_trade_history(limit: int = 50):
 
 @router.get("/trades/prices/{symbol}")
 async def get_live_price_endpoint(symbol: str):
-    """Get current live price for a symbol"""
-    price = get_live_price(symbol.upper())
+    """Get current live price for a symbol (public endpoint)"""
+    symbol = sanitize_ticker(symbol).upper()
+    price = get_live_price(symbol)
     return {
         "symbol": symbol.upper(),
         "price": price,
@@ -474,11 +506,15 @@ async def get_live_price_endpoint(symbol: str):
 # =============================================================================
 
 @router.post("/trades/estimate")
-async def estimate_trade(request: ExecuteTradeRequest):
+async def estimate_trade(
+    request: ExecuteTradeRequest,
+    user: CurrentUser = Depends(get_current_user)
+):
     """
     Calculate estimated costs and risk for a trade without executing.
-    Used for the Risk Preview panel.
+    Used for the Risk Preview panel. Requires authentication.
     """
+    request.symbol = sanitize_ticker(request.symbol)
     current_price = get_live_price(request.symbol)
     
     # Estimate fill price

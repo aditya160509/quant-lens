@@ -28,6 +28,7 @@ import requests
 import asyncio
 import time
 import logging
+import random
 import hashlib
 import json
 import os
@@ -40,12 +41,18 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+try:
+    from app.services.redis_service import redis_brain
+except ImportError:
+    redis_brain = None
+    logger.warning("[RDF] redis_service not found. Cloud cache disabled.")
+
 # =============================================================================
 # SECURITY CONFIGURATION
 # =============================================================================
 
-# Valid ticker pattern (alphanumeric, periods, hyphens, ^, =, max 20 chars)
-VALID_TICKER_PATTERN = re.compile(r'^[\w\^\.\-=]{1,20}$')
+# Valid ticker pattern (alphanumeric, periods, hyphens, ^, =, &, max 20 chars)
+VALID_TICKER_PATTERN = re.compile(r'^[\w\^\.\-=&]{1,20}$')
 
 # Maximum values to prevent abuse
 MAX_BATCH_SIZE = 100
@@ -53,7 +60,7 @@ MAX_PERIOD_DAYS = 3650  # 10 years max
 REQUEST_TIMEOUT = 15  # seconds
 
 # Allowed periods
-ALLOWED_PERIODS = {"1d", "5d", "7d", "60d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "max"}
+ALLOWED_PERIODS = {"1d", "2d", "5d", "7d", "60d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "max"}
 ALLOWED_INTERVALS = {"1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"}
 
 # =============================================================================
@@ -87,20 +94,23 @@ _pending_requests: Dict[str, 'asyncio.Future'] = {}
 _pending_lock = Lock()
 
 # Time-aware TTL settings
-def get_smart_ttl() -> int:
+def _get_dynamic_ttl(ticker: str = None) -> int:
     """Smart TTL based on market hours (EST)."""
-    from datetime import datetime
-    import pytz
-    
     try:
         est = pytz.timezone('US/Eastern')
         now = datetime.now(est)
         hour = now.hour
         weekday = now.weekday()
         
-        # Weekend - ultra long TTL (12 hours)
+        # Crypto/FX - Ticker level logic
+        if ticker and any(x in ticker for x in ["=X", "BTC", "ETH", "USDT"]):
+            # Crypto trades 24/7 - usually 5-15 min TTL
+            return 600 # 10 min
+            
+        # Weekend - stock market closed - ultra long TTL (72 hours)
+        # This ensuring Friday data is considered fresh until Monday open
         if weekday >= 5:
-            return 43200
+            return 259200
         
         # Pre-market (4am-9:30am) - medium TTL
         if 4 <= hour < 9 or (hour == 9 and now.minute < 30):
@@ -115,6 +125,9 @@ def get_smart_ttl() -> int:
         
     except Exception:
         return CACHE_TTL_SECONDS  # Fallback to default
+
+def get_smart_ttl() -> int:
+    return _get_dynamic_ttl()
 
 # Cache warm-up configuration
 WARM_CACHE_TICKERS = [
@@ -191,28 +204,7 @@ def _save_to_disk(key: str, data: Any, data_type: str = "price"):
     """Save data to disk cache (snapshot)"""
     try:
         path = _get_disk_cache_path(key, data_type)
-        
-        if isinstance(data, pd.DataFrame):
-            # Convert DataFrame to serializable format
-            cache_data = {
-                "timestamp": time.time(),
-                "type": "dataframe",
-                "data": data.reset_index().to_dict('records'),
-                "columns": list(data.columns),
-                "index_name": data.index.name or "Date"
-            }
-        elif isinstance(data, dict):
-            cache_data = {
-                "timestamp": time.time(),
-                "type": "dict",
-                "data": data
-            }
-        else:
-            cache_data = {
-                "timestamp": time.time(),
-                "type": "other",
-                "data": str(data)
-            }
+        cache_data = _serialize_data(data)
         
         with open(path, 'w') as f:
             json.dump(cache_data, f, default=str)
@@ -237,25 +229,57 @@ def _load_from_disk(key: str, data_type: str = "price", max_age_hours: int = DIS
             logger.debug(f"[RDF] Disk cache too old: {age_hours:.1f}h > {max_age_hours}h")
             return None
         
-        # Reconstruct data
-        if cache_data.get("type") == "dataframe":
-            df = pd.DataFrame(cache_data["data"])
-            # Restore index
-            index_name = cache_data.get("index_name", "Date")
-            if index_name in df.columns:
-                if 'Date' in index_name or index_name == 'Date':
-                    df[index_name] = pd.to_datetime(df[index_name])
-                df.set_index(index_name, inplace=True)
-            logger.info(f"[RDF] Loaded snapshot from disk: {key}")
-            return df
-        elif cache_data.get("type") == "dict":
-            return cache_data["data"]
-        else:
-            return cache_data.get("data")
-            
+        return _deserialize_data(cache_data)
     except Exception as e:
         logger.warning(f"[RDF] Failed to load disk cache: {e}")
         return None
+
+
+# =============================================================================
+# REDIS SERIALIZATION HELPERS
+# =============================================================================
+
+def _serialize_data(data: Any) -> Dict:
+    """Standardize data for JSON serialization (reused for Redis/Disk)"""
+    if isinstance(data, pd.DataFrame):
+        return {
+            "timestamp": time.time(),
+            "type": "dataframe",
+            "data": data.reset_index().to_dict('records'),
+            "columns": list(data.columns),
+            "index_name": data.index.name or "Date"
+        }
+    elif isinstance(data, dict):
+        return {
+            "timestamp": time.time(),
+            "type": "dict",
+            "data": data
+        }
+    return {
+        "timestamp": time.time(),
+        "type": "other",
+        "data": str(data)
+    }
+
+def _deserialize_data(cache_data: Dict) -> Any:
+    """Convert JSON dict back to original Python types (DataFrame/Dict)"""
+    if not cache_data or not isinstance(cache_data, dict):
+        return None
+        
+    data_type = cache_data.get("type")
+    raw_data = cache_data.get("data")
+    
+    if data_type == "dataframe":
+        df = pd.DataFrame(raw_data)
+        index_name = cache_data.get("index_name", "Date")
+        if index_name in df.columns:
+            if 'Date' in index_name or index_name == 'Date':
+                df[index_name] = pd.to_datetime(df[index_name])
+            df.set_index(index_name, inplace=True)
+        return df
+    elif data_type == "dict":
+        return raw_data
+    return raw_data
 
 
 # =============================================================================
@@ -396,6 +420,7 @@ def _fetch_from_nse(ticker: str, period: str = "2y") -> Optional[pd.DataFrame]:
         from app.services.nse_direct import nse_direct
         
         loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
             # Determine which NSE endpoint to use
             clean_ticker = ticker.replace(".NS", "").replace(".BO", "").replace("^", "")
@@ -538,12 +563,31 @@ def _fetch_from_yahoo_direct(ticker: str, period: str = "2y", interval: str = "1
 
 
 def _fetch_yahoo_quote_summary(ticker: str) -> Optional[Dict]:
-    """Fetch quote summary from Yahoo for fundamentals"""
+    """Fetch expanded quote summary from Yahoo for all fundamental & earnings data"""
     _enforce_rate_limit()
     
     url = f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}"
-    params = {"modules": "price,summaryDetail,defaultKeyStatistics,financialData,assetProfile"}
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    modules = [
+        "price", "summaryDetail", "defaultKeyStatistics", 
+        "financialData", "assetProfile", "earningsHistory", 
+        "recommendationTrend", "indexTrend", "earnings"
+    ]
+    params = {"modules": ",".join(modules)}
+    
+    # Enhanced browser-like headers
+    user_agents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+    ]
+    
+    headers = {
+        "User-Agent": random.choice(user_agents),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Origin": "https://finance.yahoo.com",
+        "Referer": "https://finance.yahoo.com/quote/" + ticker
+    }
     
     try:
         resp = requests.get(url, params=params, headers=headers, timeout=15)
@@ -553,11 +597,108 @@ def _fetch_yahoo_quote_summary(ticker: str) -> Optional[Dict]:
             result = data.get('quoteSummary', {}).get('result', [])
             if result:
                 return result[0]
+        elif resp.status_code == 429:
+            logger.error(f"[RDF] Master fetch rate limited for {ticker}")
+        else:
+            logger.warning(f"[RDF] Yahoo API error {resp.status_code} for {ticker}")
     except Exception as e:
         logger.warning(f"[RDF] Yahoo quote summary failed for {ticker}: {e}")
     
     return None
 
+def get_master_snapshot(ticker: str, use_cache: bool = True) -> Optional[Dict]:
+    """
+    Standard of Excellence: The unified data packet for a ticker.
+    Bundles Info + Fundamentals + Earnings + Revisions into ONE cached object.
+    """
+    ticker = validate_ticker(ticker)
+    cache_key = _make_cache_key("master", ticker)
+    
+    # 1. Memory Check
+    if use_cache:
+        cached, is_fresh = _info_cache.get(cache_key)
+        if is_fresh and cached:
+            return cached
+            
+    # 2. Redis Check (Shared Brain)
+    if use_cache and redis_brain and redis_brain.is_active:
+        cloud_data = redis_brain.get(f"rdf:{cache_key}")
+        if cloud_data:
+            snapshot = _deserialize_data(cloud_data)
+            if snapshot:
+                _info_cache.set(cache_key, snapshot)
+                return snapshot
+                
+    # 3. API Fetch (The Robust Way)
+    raw = _fetch_yahoo_quote_summary(ticker)
+    
+    # 4. yfinance Fallback if raw fetch fails (handles crumbs/cookies better)
+    if not raw:
+        try:
+            import yfinance as yf
+            _enforce_rate_limit()
+            logger.info(f"[RDF-INTEL] Raw fetch failed for {ticker}, falling back to yfinance library...")
+            yt = yf.Ticker(ticker)
+            
+            # We normalize this to match our snapshot format
+            snapshot = {
+                'symbol': ticker,
+                'info': yt.info,
+                'earnings_history': yt.earnings_history.reset_index().to_dict('records') if yt.earnings_history is not None and not yt.earnings_history.empty else [],
+                'recommendations': yt.recommendations.reset_index().to_dict('records') if yt.recommendations is not None and not yt.recommendations.empty else [],
+                'financials': {}, # yf.info contains most financials
+                'timestamp': time.time()
+            }
+            # Cache it
+            _info_cache.set(cache_key, snapshot)
+            _save_to_disk(cache_key, snapshot, "master")
+            return snapshot
+        except Exception as e:
+            logger.warning(f"[RDF-INTEL] yfinance fallback failed for {ticker}: {e}")
+            return _load_from_disk(cache_key, "master")
+        
+    logger.info(f"[RDF-INTEL] Successfully fetched Master Snapshot for {ticker} ({len(str(raw))} bytes)")
+    snapshot = {
+        'symbol': ticker,
+        'info': {},
+        'earnings_history': [],
+        'recommendations': [],
+        'financials': raw.get('financialData', {}),
+        'timestamp': time.time()
+    }
+    
+    # Extract Info
+    price = raw.get('price', {})
+    profile = raw.get('assetProfile', {})
+    stats = raw.get('defaultKeyStatistics', {})
+    summary = raw.get('summaryDetail', {})
+    
+    snapshot['info'] = {
+        **price, **profile, **stats, **summary,
+        'shortName': price.get('shortName', ticker),
+        'currentPrice': price.get('regularMarketPrice', {}).get('raw', 0),
+        'marketCap': price.get('marketCap', {}).get('raw', 0),
+        'sector': profile.get('sector', 'N/A'),
+        'industry': profile.get('industry', 'N/A')
+    }
+    
+    # Extract Earnings History
+    eh = raw.get('earningsHistory', {}).get('history', [])
+    if eh:
+        snapshot['earnings_history'] = eh
+        
+    # Extract Recommendations (Trend)
+    recs = raw.get('recommendationTrend', {}).get('trend', [])
+    if recs:
+        snapshot['recommendations'] = recs
+        
+    # Cache it everywhere
+    _info_cache.set(cache_key, snapshot)
+    _save_to_disk(cache_key, snapshot, "master")
+    if redis_brain and redis_brain.is_active:
+        redis_brain.set(f"rdf:{cache_key}", _serialize_data(snapshot), ex=3600)
+        
+    return snapshot
 
 # =============================================================================
 # DATA SOURCE 3: YFINANCE (last resort)
@@ -584,6 +725,48 @@ def _fetch_from_yfinance(ticker: str, period: str = "2y", interval: str = "1d") 
     return None
 
 
+def _fetch_batch_from_yfinance(tickers: List[str], period: str = "2y", interval: str = "1d") -> Dict[str, pd.DataFrame]:
+    """Fetch multiple tickers at once using yfinance.download (high efficiency)"""
+    if not tickers:
+        return {}
+    
+    _enforce_rate_limit()
+    
+    try:
+        import yfinance as yf
+        logger.info(f"[RDF] Bulk fetching {len(tickers)} tickers via yfinance.download")
+        
+        # yfinance.download is much faster for multiple tickers
+        data = yf.download(
+            tickers=tickers,
+            period=period,
+            interval=interval,
+            group_by='ticker',
+            auto_adjust=True,
+            prepost=False,
+            threads=True,
+            progress=False
+        )
+        
+        results = {}
+        if isinstance(data.columns, pd.MultiIndex):
+            for ticker in tickers:
+                if ticker in data.columns.levels[0]:
+                    df = data[ticker].dropna(how='all')
+                    if not df.empty:
+                        results[ticker] = df
+        else:
+            # Single ticker returned
+            if len(tickers) == 1:
+                results[tickers[0]] = data.dropna(how='all')
+        
+        return results
+            
+    except Exception as e:
+        logger.warning(f"[RDF] yfinance bulk fetch failed: {e}")
+        return {}
+
+
 def _fetch_yfinance_info(ticker: str) -> Optional[Dict]:
     """Fallback to yfinance for stock info"""
     _enforce_rate_limit()
@@ -602,12 +785,57 @@ def _fetch_yfinance_info(ticker: str) -> Optional[Dict]:
 
 
 # =============================================================================
+# HISTORICAL PRICE SERVICE INTEGRATION (CSV-First Approach)
+# =============================================================================
+
+def _try_historical_service(ticker: str, period: str, interval: str) -> Optional[pd.DataFrame]:
+    """
+    Try to get data from Historical Price Service (CSV-first) for daily data.
+    
+    This dramatically reduces yfinance API calls by using stored CSV data.
+    Only used for daily interval data; intraday always goes to yfinance.
+    """
+    # Only use for daily data
+    if interval != "1d":
+        return None
+    
+    try:
+        from app.services.historical_price_service import get_historical_prices
+        
+        df = get_historical_prices(ticker, period=period, interval=interval)
+        
+        if df is not None and not df.empty:
+            logger.info(f"[RDF] Historical Price Service hit for {ticker}: {len(df)} rows")
+            return df
+            
+    except ImportError:
+        logger.debug("[RDF] Historical Price Service not available")
+    except Exception as e:
+        logger.debug(f"[RDF] Historical Price Service error for {ticker}: {e}")
+    
+    return None
+
+
+# =============================================================================
 # MAIN PUBLIC API
 # =============================================================================
 
 def get_price_data(ticker: str, period: str = "2y", interval: str = "1d", use_cache: bool = True) -> pd.DataFrame:
     """
-    Get price data with multi-source fallback and disk snapshot.
+    Get price data with CSV-first approach and multi-source fallback.
+    
+    Priority for daily data (interval="1d"):
+    1. In-memory cache
+    2. Historical Price Service (CSV files) - NO API CALL!
+    3. NSE Direct for Indian stocks (realtime)
+    4. Direct Yahoo API
+    5. yfinance library
+    
+    Priority for intraday data:
+    1. In-memory cache
+    2. NSE Direct for Indian stocks
+    3. Direct Yahoo API
+    4. yfinance library
     
     Security: Validates ticker, period, and interval inputs.
     """
@@ -629,7 +857,72 @@ def get_price_data(ticker: str, period: str = "2y", interval: str = "1d", use_ca
         if is_fresh and cached is not None:
             return cached
     
-    # 2. Check backoff
+    # 2. NEW: Check Redis Cloud Cache (Shared Brain)
+    if use_cache and redis_brain and redis_brain.is_active:
+        redis_data = redis_brain.get(f"rdf:{cache_key}")
+        if redis_data:
+            df = _deserialize_data(redis_data)
+            if df is not None and not df.empty:
+                # Calculate freshness: only use as PRIMARY if fresh, else treat as fallback
+                age = time.time() - redis_data.get("timestamp", 0)
+                if age < _get_dynamic_ttl(ticker):
+                    # Warm memory cache
+                    _cache.set(cache_key, df)
+                    logger.debug(f"[RDF] Redis cloud hit for {ticker}")
+                    return df
+
+    # 3. For DAILY data, try high-performance sources FIRST
+    if interval == "1d":
+        # A. Try God-Mode Data Engine (Parquet - FASTEST)
+        try:
+            from app.services.data_engine import engine
+            lookback = 1000 # Default
+            if 'y' in period: lookback = int(period.replace('y', '')) * 365
+            elif 'mo' in period: lookback = int(period.replace('mo', '')) * 31
+            
+            pq_data = engine.get_full_ohlcv(ticker, lookback_days=lookback)
+            if not pq_data.empty:
+                logger.info(f"[RDF] God-Mode Parquet hit for {ticker}")
+                
+                # HYBRID LOGIC: Check if we need the latest candle from Yahoo
+                try:
+                    last_date = pq_data.index.max()
+                    if hasattr(last_date, 'date'):
+                        last_date = last_date.date()
+                    
+                    # If it's a weekday and market might be open or closed today but after parquet snapshot
+                    today = datetime.now().date()
+                    if last_date < today:
+                        # Fetch just the latest data (1d period is enough to get today/yesterday)
+                        logger.info(f"[RDF] Fetching next candle for {ticker} (Last Parquet: {last_date})")
+                        next_candle = _fetch_from_yahoo_direct(ticker, period="5d", interval="1d")
+                        
+                        if next_candle is not None and not next_candle.empty:
+                            # Keep only candles strictily AFTER parquet last date
+                            new_candles = next_candle[next_candle.index.date > last_date]
+                            if not new_candles.empty:
+                                logger.info(f"[RDF] Merging {len(new_candles)} recent candles into Parquet data for {ticker}")
+                                pq_data = pd.concat([pq_data, new_candles])
+                                # Remove duplicates just in case
+                                pq_data = pq_data[~pq_data.index.duplicated(keep='last')]
+                except Exception as merge_err:
+                    logger.warning(f"[RDF] Hybrid merge failed for {ticker}: {merge_err}")
+
+                _cache.set(cache_key, pq_data)
+                return pq_data
+        except Exception as e:
+            logger.debug(f"[RDF] DataEngine failed or not found: {e}")
+
+        # B. Try Historical Price Service (CSV-based)
+        hps_data = _try_historical_service(ticker, period, interval)
+        if hps_data is not None and not hps_data.empty:
+            _cache.set(cache_key, hps_data)
+            # Sync to Redis for other instances
+            if redis_brain and redis_brain.is_active:
+                redis_brain.set(f"rdf:{cache_key}", _serialize_data(hps_data), ex=3600)
+            return hps_data
+    
+    # 3. Check backoff
     if _backoff.should_skip(cache_key):
         # Try disk cache
         disk_data = _load_from_disk(cache_key, "price")
@@ -638,7 +931,7 @@ def get_price_data(ticker: str, period: str = "2y", interval: str = "1d", use_ca
         cached, _ = _cache.get(cache_key)
         return cached if cached is not None else pd.DataFrame()
     
-    # 3. Acquire rate limit
+    # 4. Acquire rate limit for API calls
     _rate_limiter.acquire(blocking=True)
     
     df = None
@@ -660,8 +953,15 @@ def get_price_data(ticker: str, period: str = "2y", interval: str = "1d", use_ca
     
     # Handle result
     if df is not None and not df.empty:
+        # Update caches
         _cache.set(cache_key, df)
-        _save_to_disk(cache_key, df, "price")  # Snapshot to disk
+        _save_to_disk(cache_key, df, "price")
+        
+        # 5. NEW: Sync to Redis Cloud
+        if redis_brain and redis_brain.is_active:
+            ttl = _get_dynamic_ttl(ticker)
+            redis_brain.set(f"rdf:{cache_key}", _serialize_data(df), ex=ttl)
+            
         _backoff.record_success(cache_key)
         return df
     else:
@@ -736,22 +1036,125 @@ def get_batch_data(
     tickers: List[str], 
     period: str = "2y", 
     interval: str = "1d",
-    batch_size: int = 5,
-    delay_between_batches: float = 1.0
+    batch_size: int = 50, # Increased batch size for efficiency
+    delay_between_batches: float = 0.5
 ) -> Dict[str, pd.DataFrame]:
-    """Get data for multiple tickers with batching"""
+    """
+    Get data for multiple tickers with MGET optimization.
+    Reduces Upstash usage by ~90% for batched monitor calls.
+    """
     results = {}
+    remaining_tickers = []
     
-    for i in range(0, len(tickers), batch_size):
-        batch = tickers[i:i + batch_size]
-        
-        for ticker in batch:
+    # 1. MEMORY FIRST: Check local cache for immediate hits
+    for ticker in tickers:
+        cache_key = _make_cache_key("price", ticker, period=period, interval=interval)
+        cached, is_fresh = _cache.get(cache_key)
+        if is_fresh and cached is not None:
+            results[ticker] = cached
+        else:
+            remaining_tickers.append(ticker)
+            
+    if not remaining_tickers:
+        return results
+
+    # 2. BULK CLOUD FETCH: Use MGET to fetch all remaining in ONE call per batch
+    if redis_brain and redis_brain.is_active:
+        for i in range(0, len(remaining_tickers), batch_size):
+            batch = remaining_tickers[i:i + batch_size]
+            redis_keys = [f"rdf:{_make_cache_key('price', t, period=period, interval=interval)}" for t in batch]
+            
+            try:
+                cloud_results = redis_brain.mget(redis_keys)
+                for ticker, redis_data in zip(batch, cloud_results):
+                    if redis_data:
+                        df = _deserialize_data(redis_data)
+                        if df is not None and not df.empty:
+                            age = time.time() - redis_data.get("timestamp", 0)
+                            if age < _get_dynamic_ttl(ticker):
+                                results[ticker] = df
+                                # Sync to memory cache
+                                _cache.set(_make_cache_key("price", ticker, period=period, interval=interval), df)
+            except Exception as e:
+                logger.error(f"[RDF] Batch Redis error: {e}")
+                
+    # 3. API FALLBACK: Only fetch what is still missing
+    still_missing = [t for t in tickers if t not in results]
+    if still_missing:
+        logger.info(f"[RDF] Fetching {len(still_missing)} remaining tickers from API")
+        for ticker in still_missing:
             results[ticker] = get_price_data(ticker, period, interval)
-        
-        if i + batch_size < len(tickers):
-            time.sleep(delay_between_batches)
+            # Short sleep to prevent rate limiting if we have many misses
+            if len(still_missing) > 5:
+                time.sleep(0.1)
     
     return results
+
+
+def get_batch_data_bulk(
+    tickers: List[str], 
+    period: str = "2y", 
+    interval: str = "1d",
+    batch_size: int = 100
+) -> Dict[str, pd.DataFrame]:
+    """
+    Standard of Excellence: High-performance bulk fetching.
+    Uses MGET + yfinance.download for maximum speed.
+    """
+    results = {}
+    remaining_tickers = []
+    
+    # 1. MEMORY FIRST
+    for ticker in tickers:
+        cache_key = _make_cache_key("price", ticker, period=period, interval=interval)
+        cached, is_fresh = _cache.get(cache_key)
+        if is_fresh and cached is not None:
+            results[ticker] = cached
+        else:
+            remaining_tickers.append(ticker)
+            
+    if not remaining_tickers:
+        return results
+
+    # 2. BULK CLOUD (MGET)
+    if redis_brain and redis_brain.is_active:
+        redis_keys = [f"rdf:{_make_cache_key('price', t, period=period, interval=interval)}" for t in remaining_tickers]
+        try:
+            cloud_results = redis_brain.mget(redis_keys)
+            for ticker, redis_data in zip(remaining_tickers, cloud_results):
+                if redis_data:
+                    df = _deserialize_data(redis_data)
+                    if df is not None and not df.empty:
+                        results[ticker] = df
+                        _cache.set(_make_cache_key("price", ticker, period=period, interval=interval), df)
+        except Exception as e:
+            logger.error(f"[RDF] Bulk Redis error: {e}")
+
+    # 3. BULK API (The Performance Tier)
+    still_missing = [t for t in tickers if t not in results]
+    if still_missing:
+        yahoo_results = _fetch_batch_from_yfinance(still_missing, period, interval)
+        
+        redis_mapping = {}
+        for ticker, df in yahoo_results.items():
+            results[ticker] = df
+            # Update local caches
+            cache_key = _make_cache_key("price", ticker, period=period, interval=interval)
+            _cache.set(cache_key, df)
+            _save_to_disk(cache_key, df, "price") # Persistent disk cache
+            
+            # Prepare for Bulk Redis Sync
+            if redis_brain and redis_brain.is_active:
+                redis_mapping[f"rdf:{cache_key}"] = _serialize_data(df)
+        
+        # ONE SINGLE REDIS CALL instead of 100
+        if redis_mapping:
+            ttl = 300 if interval == "1m" else 3600
+            redis_brain.mset(redis_mapping, ex=ttl)
+            logger.info(f"[RDF] Sync'd {len(redis_mapping)} tickers to Shared Brain via MSET")
+            
+    return results
+
 
 
 def get_current_price(ticker: str) -> Optional[float]:

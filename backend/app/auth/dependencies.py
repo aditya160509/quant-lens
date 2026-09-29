@@ -5,7 +5,7 @@ FastAPI Dependencies for Authentication
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .jwt import decode_token, verify_token
 
@@ -16,12 +16,12 @@ security = HTTPBearer(auto_error=False)
 
 class CurrentUser(BaseModel):
     """Current authenticated user model."""
+
+    model_config = ConfigDict(extra="allow")
+
     id: str
     email: Optional[str] = None
     role: str = "authenticated"
-    
-    class Config:
-        extra = "allow"  # Allow additional fields from token
 
 
 async def get_current_user(

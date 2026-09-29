@@ -55,6 +55,47 @@ INDIA_UNIVERSE = {
     "benchmark": "^NSEI"
 }
 
+CRYPTO_UNIVERSE = {
+    "anchors": ["BTC-USD", "ETH-USD"],
+    "sector_groups": {
+        "Majors": ["BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD"],
+        "L1/L2": ["ADA-USD", "AVAX-USD", "DOT-USD", "MATIC-USD", "NEAR-USD", "OP-USD", "ARB11841-USD"],
+        "DeFi": ["UNI7083-USD", "AAVE-USD", "MKR-USD", "LINK-USD", "GRT-USD"],
+        "Meme": ["DOGE-USD", "SHIB-USD", "PEPE-USD", "BONK-USD"],
+    },
+    "benchmark": "BTC-USD"
+}
+
+FX_UNIVERSE = {
+    "anchors": ["EURUSD=X", "USDJPY=X", "GBPUSD=X"],
+    "sector_groups": {
+        "Majors": ["EURUSD=X", "USDJPY=X", "GBPUSD=X", "AUDUSD=X", "USDCAD=X", "USDCHF=X", "NZDUSD=X"],
+        "Crosses": ["EURJPY=X", "GBPJPY=X", "EURGBP=X", "EURCHF=X", "AUDJPY=X"],
+        "EM": ["USDINR=X", "USDCNY=X", "USDMXN=X", "USDBRL=X", "USDZAR=X"],
+    },
+    "benchmark": "EURUSD=X"
+}
+
+INDEX_UNIVERSE = {
+    "anchors": ["^GSPC", "^IXIC", "^NSEI"],
+    "sector_groups": {
+        "US": ["^GSPC", "^DJI", "^IXIC", "^RUT", "^VIX"],
+        "Europe": ["^FTSE", "^GDAXI", "^FCHI", "^STOXX50E"],
+        "Asia": ["^N225", "^HSI", "^STI", "^NSEI", "^BSESN"],
+    },
+    "benchmark": "^GSPC"
+}
+
+ETF_UNIVERSE = {
+    "anchors": ["SPY", "QQQ", "GLD"],
+    "sector_groups": {
+        "Broad": ["SPY", "IVV", "VOO", "VTI", "QQQ", "DIA", "IWM"],
+        "Sectors": ["XLF", "XLK", "XLV", "XLE", "XLY", "XLP", "XLI", "XLC", "XLB", "XLRE"],
+        "Alternatives": ["GLD", "SLV", "TLT", "IEF", "SHY", "BITO"],
+    },
+    "benchmark": "SPY"
+}
+
 
 # ============================================================================
 # MARKET STATE CLASS
@@ -71,7 +112,19 @@ class MarketState:
     def __init__(self, universe: str = "US", lookback_days: int = 252):
         self.universe = universe.upper()
         self.lookback_days = lookback_days
-        self.config = US_UNIVERSE if universe == "US" else INDIA_UNIVERSE
+        
+        if self.universe == "INDIA":
+            self.config = INDIA_UNIVERSE
+        elif self.universe == "CRYPTO":
+            self.config = CRYPTO_UNIVERSE
+        elif self.universe == "FX":
+            self.config = FX_UNIVERSE
+        elif self.universe == "INDEX":
+            self.config = INDEX_UNIVERSE
+        elif self.universe == "ETF":
+            self.config = ETF_UNIVERSE
+        else:
+            self.config = US_UNIVERSE
         
         # Data matrices (populated on build)
         self.prices: Optional[pd.DataFrame] = None  # Close prices
@@ -92,14 +145,14 @@ class MarketState:
         
     def get_all_tickers(self) -> List[str]:
         """Get all tickers for the universe."""
-        tickers = set(self.config["anchors"])
+        tickers = set(self.config.get("anchors", []))
         
-        if self.universe == "US":
+        if "sector_etfs" in self.config:
             for sector, names in self.config["sector_etfs"].items():
                 tickers.update(names)
                 for name in names:
                     self.sector_map[name] = sector
-        else:
+        elif "sector_groups" in self.config:
             for sector, names in self.config["sector_groups"].items():
                 tickers.update(names)
                 for name in names:

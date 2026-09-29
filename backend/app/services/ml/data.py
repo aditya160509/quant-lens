@@ -483,8 +483,12 @@ class DatasetBuilder:
             # Return over lag period
             features[f'return_{lag}d'] = (close.iloc[-1] - close.iloc[-lag]) / close.iloc[-lag]
             
-            # Volatility over lag period
-            features[f'volatility_{lag}d'] = returns.tail(lag).std() * np.sqrt(252)
+            # Volatility over lag period (at least 2 points needed)
+            if lag > 1:
+                features[f'volatility_{lag}d'] = returns.tail(lag).std() * np.sqrt(252)
+            else:
+                # Use absolute return as 1d volatility proxy
+                features[f'volatility_{lag}d'] = abs(returns.iloc[-1]) * np.sqrt(252) if not pd.isna(returns.iloc[-1]) else 0
             
             # RSI approximation
             gains = returns.tail(lag).clip(lower=0).mean()

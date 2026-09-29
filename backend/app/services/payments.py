@@ -23,12 +23,12 @@ PRICING = {
         "yearly": {"usd": 0, "inr": 0}
     },
     "pro": {
-        "monthly": {"usd": 2900, "inr": 249900},  # $29, ₹2499
-        "yearly": {"usd": 29000, "inr": 2499900}   # $290/year, ₹24999/year
+        "monthly": {"usd": 500, "inr": 45900},  # $5, ₹459
+        "yearly": {"usd": 5000, "inr": 459000}   # $50/year, ₹4590/year
     },
     "enterprise": {
-        "monthly": {"usd": 9900, "inr": 849900},  # $99, ₹8499
-        "yearly": {"usd": 99000, "inr": 8499900}   # $990/year, ₹84999/year
+        "monthly": {"usd": 1500, "inr": 149900},  # $15, ₹1499
+        "yearly": {"usd": 15000, "inr": 1499900}   # $150/year, ₹14999/year
     }
 }
 
@@ -279,8 +279,8 @@ def get_pricing_config() -> Dict[str, Any]:
             "pro": {
                 "name": "Pro",
                 "price": {
-                    "monthly": {"usd": 29, "inr": 2499},
-                    "yearly": {"usd": 290, "inr": 24999}
+                    "monthly": {"usd": 5, "inr": 459},
+                    "yearly": {"usd": 50, "inr": 4590}
                 },
                 "features": [
                     "Everything in Basic",
@@ -294,8 +294,8 @@ def get_pricing_config() -> Dict[str, Any]:
             "enterprise": {
                 "name": "Enterprise",
                 "price": {
-                    "monthly": {"usd": 99, "inr": 8499},
-                    "yearly": {"usd": 990, "inr": 84999}
+                    "monthly": {"usd": 15, "inr": 1499},
+                    "yearly": {"usd": 150, "inr": 14999}
                 },
                 "features": [
                     "Everything in Pro",

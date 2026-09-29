@@ -143,7 +143,7 @@ def get_security_detail(symbol: str, period: str = "1y", interval: str = "1d"):
         }
     except Exception as e:
         logger.error(f"Error in security detail: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/{ticker}/indicators")
 def get_security_indicators(ticker: str, period: str = "1y", interval: str = "1d"):
@@ -238,4 +238,4 @@ def get_security_indicators(ticker: str, period: str = "1y", interval: str = "1d
         }
     except Exception as e:
         logger.error(f"Error in security indicators: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

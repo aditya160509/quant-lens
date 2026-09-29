@@ -1,0 +1,20 @@
+project:
+  name: quant_factors
+  timezone: UTC
+
+data:
+  universe_parquet: backend/data/market_universe.parquet
+  fundamentals_parquet: backend/data/fundamentals/master_fundamentals.parquet
+  prices_dir: backend/data/prices
+
+category7:
+  source: FRED
+  series:
+    VIXCLS: vix_close
+    DGS2: ust_2y
+    DGS10: ust_10y
+    FEDFUNDS: fed_funds
+    CPIAUCSL: cpi
+  start_date: "2000-01-01"
+  out_file: factors/data/processed/category7_macro_regime.parquet
+  out_csv: factors/data/processed/category7_macro_regime.csv

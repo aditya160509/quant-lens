@@ -1,14 +1,17 @@
 """
 Portfolio Optimization Service - Features 26-29
 Markowitz, Risk Parity, Black-Litterman, Factor Tilt
+
+Now uses robust_data_fetcher for centralized rate-limited data access.
 """
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 from typing import List, Dict, Optional, Tuple, Any
-import yfinance as yf
 import logging
 from datetime import datetime, timedelta
+
+from app.services.robust_data_fetcher import get_batch_data
 
 logger = logging.getLogger(__name__)
 
@@ -18,32 +21,27 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 def _get_returns_data(tickers: List[str], period: str = "1y") -> pd.DataFrame:
-    """Fetch historical returns for tickers."""
+    """Fetch historical returns for tickers using robust_data_fetcher."""
     try:
-        data = yf.download(tickers, period=period, progress=False, auto_adjust=True)
+        # Use centralized data fetcher with rate limiting
+        data_dict = get_batch_data(tickers, period=period)
         
-        if data.empty:
-            logger.error("Empty data from yfinance")
+        if not data_dict:
+            logger.error("Empty data from robust_data_fetcher")
             return pd.DataFrame()
         
-        # Get Close prices - handle both MultiIndex and single column
-        if 'Close' in data.columns:
-            close_data = data['Close']
-        elif isinstance(data.columns, pd.MultiIndex):
-            if 'Close' in data.columns.get_level_values(0):
-                close_data = data['Close']
-            else:
-                close_data = data.iloc[:, :len(tickers)]
-        else:
-            close_data = data
+        # Extract close prices from each ticker's data
+        close_data = {}
+        for ticker, df in data_dict.items():
+            if df is not None and not df.empty and 'Close' in df.columns:
+                close_data[ticker] = df['Close']
         
-        if isinstance(close_data, pd.Series):
-            close_data = close_data.to_frame(tickers[0])
+        if not close_data:
+            logger.error("No valid close data found")
+            return pd.DataFrame()
         
-        returns = close_data.pct_change().dropna()
-        
-        if isinstance(returns.columns, pd.MultiIndex):
-            returns.columns = returns.columns.get_level_values(-1)
+        prices = pd.DataFrame(close_data)
+        returns = prices.pct_change().dropna()
         
         return returns
     except Exception as e:
@@ -54,24 +52,37 @@ def _get_returns_data(tickers: List[str], period: str = "1y") -> pd.DataFrame:
 def _compute_covariance_matrix(returns: pd.DataFrame, method: str = "sample") -> np.ndarray:
     """Compute covariance matrix with optional shrinkage."""
     if method == "shrinkage":
-        # Ledoit-Wolf shrinkage
-        sample_cov = returns.cov().values
-        n = len(returns)
-        p = returns.shape[1]
+        # Ledoit-Wolf shrinkage to constant correlation target
+        X = returns.values
+        n, p = X.shape
+        if n < 2: return returns.cov().values
         
-        # Shrinkage target: diagonal matrix
-        mu = np.trace(sample_cov) / p
-        delta = np.eye(p) * mu
+        X_centered = X - X.mean(axis=0)
+        sample_cov = (X_centered.T @ X_centered) / (n - 1)
         
-        # Shrinkage intensity (simplified)
-        shrinkage = min(1.0, max(0.0, (1.0 / n)))
+        # Target: constant correlation
+        var = np.diag(sample_cov)
+        std = np.sqrt(np.maximum(var, 1e-10))
+        corr = sample_cov / np.outer(std, std)
+        np.fill_diagonal(corr, 1.0)
+        avg_corr = (np.sum(corr) - p) / (p * (p - 1)) if p > 1 else 0
+        target = avg_corr * np.outer(std, std)
+        np.fill_diagonal(target, var)
         
-        return shrinkage * delta + (1 - shrinkage) * sample_cov
+        # Heuristic optimal shrinkage intensity
+        shrinkage = min(1.0, max(0.0, 1.0 / n)) 
+        return shrinkage * target + (1 - shrinkage) * sample_cov
+        
     elif method == "ewma":
-        # Exponentially weighted
-        span = min(60, len(returns) // 2)
-        ewma_returns = returns.ewm(span=span).mean()
-        return ewma_returns.cov().values
+        # Exponentially weighted covariance (RiskMetrics approach)
+        lambda_ = 0.94
+        n = len(returns)
+        weights = np.array([(1 - lambda_) * (lambda_ ** i) for i in range(n)])[::-1]
+        weights = weights / weights.sum()
+        
+        centered = returns - returns.mean()
+        weighted_returns = centered.values * np.sqrt(weights[:, np.newaxis])
+        return weighted_returns.T @ weighted_returns
     else:
         return returns.cov().values
 
@@ -148,8 +159,13 @@ def compute_markowitz(
         # Constraint: weights sum to 1
         eq_constraint = {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}
         
-        # Initial guess: equal weights
-        init_weights = np.array([1.0 / n_assets] * n_assets)
+        # Initial guess: inverse volatility or equal weights
+        vols = np.sqrt(np.diag(cov_matrix))
+        if mode == "min_volatility" and np.all(vols > 0):
+            inv_vols = 1.0 / vols
+            init_weights = inv_vols / np.sum(inv_vols)
+        else:
+            init_weights = np.array([1.0 / n_assets] * n_assets)
         
         # Optimization based on mode
         if mode == "max_sharpe":
@@ -503,32 +519,58 @@ def compute_factor_tilt(
         factor_loadings = np.zeros((n_assets, 5))
         factor_names = ["momentum", "value", "quality", "size", "low_vol"]
         
+        # Get price data from already-fetched returns for factor computation
+        # Use get_batch_data for any additional info needed
+        prices_data = get_batch_data(tickers, period="1y")
+        
         for i, ticker in enumerate(tickers):
             try:
-                stock = yf.Ticker(ticker)
-                info = stock.info
-                hist = stock.history(period="1y")
+                # Get price history from batch data
+                hist = prices_data.get(ticker, pd.DataFrame())
                 
-                # Momentum: 12-month return
-                if len(hist) > 0:
-                    momentum = (hist['Close'].iloc[-1] / hist['Close'].iloc[0] - 1) if len(hist) > 200 else 0
+                # Momentum: 12-month return (from price data)
+                if hist is not None and not hist.empty and 'Close' in hist.columns:
+                    close_prices = hist['Close'].dropna()
+                    if len(close_prices) > 0:
+                        momentum = (close_prices.iloc[-1] / close_prices.iloc[0] - 1) if len(close_prices) > 200 else 0
+                    else:
+                        momentum = 0
                 else:
                     momentum = 0
                 
-                # Value: inverse of P/E (higher = more value)
-                pe = info.get('trailingPE', 20)
-                value = 1 / pe if pe and pe > 0 else 0.05
+                # Value Proxy: Higher past return over long periods often correlates with 'Growth'
+                # While not perfect, it's better than nothing without fundamental data.
+                # We also look at low volatility as a defensive/value component.
+                if ticker in returns.columns:
+                    ret_series = returns[ticker]
+                    ann_ret = ret_series.mean() * 252
+                    ann_vol = ret_series.std() * np.sqrt(252)
+                    
+                    # Growth stocks often have high returns and moderate-to-high vol
+                    # Value stocks often have lower returns and different vol profiles
+                    # This is a VERY crude proxy:
+                    value = 0.5 * (0.15 - ann_ret) + 0.5 * (0.20 - ann_vol)
+                else:
+                    value = 0
                 
-                # Quality: ROE
-                roe = info.get('returnOnEquity', 0.1) or 0.1
-                quality = roe
+                # Quality: Use returns stability as proxy (institutional approach)
+                # Stable positive returns = higher quality
+                if ticker in returns.columns:
+                    ret = returns[ticker]
+                    sharpe_proxy = ret.mean() / (ret.std() + 0.001) * np.sqrt(252)
+                    quality = max(-1, min(1, sharpe_proxy / 3))  # Normalized
+                else:
+                    quality = 0.1
                 
-                # Size: log market cap (inverted - small cap is positive)
-                market_cap = info.get('marketCap', 1e10)
-                size = -np.log10(max(market_cap, 1e6))  # Smaller = higher score
+                # Size: Use average dollar volume as proxy (larger = lower score)
+                if hist is not None and not hist.empty and 'Volume' in hist.columns and 'Close' in hist.columns:
+                    avg_dollar_vol = (hist['Volume'] * hist['Close']).mean()
+                    size = -np.log10(max(avg_dollar_vol, 1e6)) / 10  # Smaller = higher score
+                else:
+                    size = 0
                 
                 # Low Vol: inverse of volatility
-                if len(returns) > 0 and ticker in returns.columns:
+                if ticker in returns.columns:
                     vol = returns[ticker].std() * np.sqrt(252)
                     low_vol = 1 / (vol + 0.01)
                 else:

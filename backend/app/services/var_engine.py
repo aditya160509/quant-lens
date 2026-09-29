@@ -45,6 +45,7 @@ def calculate_covariance_matrix(returns: pd.DataFrame, method: str = "exponentia
     Methods:
     - 'simple': Simple rolling covariance
     - 'exponential': EWMA covariance (RiskMetrics style)
+    - 'shrinkage': Ledoit-Wolf Shrinkage (optimal for N > T or high noise)
     """
     if method == "exponential":
         # Exponential weighted covariance
@@ -55,6 +56,17 @@ def calculate_covariance_matrix(returns: pd.DataFrame, method: str = "exponentia
         # Reshape to square matrix
         n_assets = len(returns.columns)
         cov_matrix = cov_matrix.reshape(n_assets, n_assets)
+        
+    elif method == "shrinkage":
+        # Ledoit-Wolf optimal shrinkage
+        try:
+            from sklearn.covariance import ledoit_wolf
+            # ledoit_wolf expects (n_samples, n_features)
+            shrunk_cov, _ = ledoit_wolf(returns.dropna().values)
+            cov_matrix = shrunk_cov
+        except Exception as e:
+            logger.debug(f"Shrinkage failed: {e}. Falling back to simple.")
+            cov_matrix = returns.cov().values
     else:
         cov_matrix = returns.cov().values
     

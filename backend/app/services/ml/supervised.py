@@ -162,8 +162,8 @@ class SignalPredictor:
         X_clean = X.replace([np.inf, -np.inf], np.nan).dropna()
         y_clean = y.loc[X_clean.index]
         
-        if len(X_clean) < 100:
-            raise ValueError(f"Insufficient data: {len(X_clean)} samples (need at least 100)")
+        if len(X_clean) < 40:
+            raise ValueError(f"Insufficient data: {len(X_clean)} samples (need at least 40)")
         
         self.feature_names = list(X_clean.columns)
         

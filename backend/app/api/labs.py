@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from app.services import labs
 from app.services.regimes_intelligence import sanitize_dict
+from datetime import datetime
 
 router = APIRouter()
 
@@ -43,64 +44,12 @@ def get_volatility(req: VolatilityRequest):
 @router.post("/volatility/intelligence")
 def get_volatility_intelligence(req: VolatilityRequest):
     """
-    Aggregate endpoint: Returns all 13 volatility features in one response.
-    Used by VolatilityLabPro frontend component.
+    Main Volatility Command Center Controller.
+    Returns all 13 institutional volatility features.
     """
-    from app.services.volatility_intelligence import (
-        compute_rv_suite,
-        compute_vol_heatmap,
-        compute_iv_rv_spread,
-        compute_cluster_detector,
-        compute_zscore,
-        compute_regime_classifier,
-        compute_macro_model,
-        compute_forecast_cone,
-        compute_gravity_well,
-        compute_fracture_map,
-        compute_energy_reservoir,
-        compute_symmetry_break,
-        compute_transmission_engine,
-        get_cached_prices
-    )
-    
-    ticker = req.ticker
-    window_years = req.window_years
-    
-    # Get price data for date range info
-    df = get_cached_prices(ticker, f'{window_years}y')
-    data_range = None
-    if not df.empty:
-        data_range = {
-            'start': df.index[0].strftime('%Y-%m-%d'),
-            'end': df.index[-1].strftime('%Y-%m-%d'),
-            'trading_days': len(df)
-        }
-    
-    # Compute all features (with error handling for each)
-    def safe_compute(func, *args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            return {'error': str(e)}
-    
-    return {
-        'ticker': ticker,
-        'window_years': window_years,
-        'data_range': data_range,
-        'rv_suite': safe_compute(compute_rv_suite, ticker, window_years),
-        'heatmap': safe_compute(compute_vol_heatmap, ticker, window_years),
-        'iv_rv_spread': safe_compute(compute_iv_rv_spread, ticker, window_years),
-        'cluster_detector': safe_compute(compute_cluster_detector, ticker, window_years),
-        'zscore': safe_compute(compute_zscore, ticker, window_years),
-        'regime': safe_compute(compute_regime_classifier, ticker, window_years),
-        'macro_model': safe_compute(compute_macro_model, ticker, window_years),
-        'forecast_cone': safe_compute(compute_forecast_cone, ticker),
-        'gravity_well': safe_compute(compute_gravity_well, ticker, window_years),
-        'fracture_map': safe_compute(compute_fracture_map, ticker, window_years),
-        'energy_reservoir': safe_compute(compute_energy_reservoir, ticker, window_years),
-        'symmetry_break': safe_compute(compute_symmetry_break, ticker, window_years),
-        'transmission': safe_compute(compute_transmission_engine),
-    }
+    from app.services.volatility_intelligence import run_volatility_intelligence
+    result = run_volatility_intelligence(req.ticker, req.window_years)
+    return sanitize_dict(result)
 
 
 # =============================================================================
@@ -111,143 +60,40 @@ class VolFeatureRequest(BaseModel):
     ticker: str
     window_years: int = 2
 
-@router.post("/volatility/rv_suite")
-def get_vol_rv_suite(req: VolFeatureRequest):
-    """Feature 1: Realized Volatility Suite"""
-    from app.services.volatility_intelligence import compute_rv_suite
-    res = compute_rv_suite(req.ticker, req.window_years)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
+@router.post("/volatility/dna")
+def get_vol_dna(req: VolFeatureRequest):
+    from app.services.volatility_intelligence import compute_vol_dna
+    return compute_vol_dna(req.ticker, req.window_years)
 
+@router.post("/volatility/surface")
+def get_vol_surface(req: VolFeatureRequest):
+    from app.services.volatility_intelligence import compute_vol_surface
+    return compute_vol_surface(req.ticker, req.window_years)
 
-@router.post("/volatility/heatmap")
-def get_vol_heatmap(req: VolFeatureRequest):
-    """Feature 2: Volatility Heatmap"""
-    from app.services.volatility_intelligence import compute_vol_heatmap
-    res = compute_vol_heatmap(req.ticker, req.window_years)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
+@router.post("/volatility/edge")
+def get_vol_edge(req: VolFeatureRequest):
+    from app.services.volatility_intelligence import compute_vol_edge
+    return compute_vol_edge(req.ticker, req.window_years)
 
+@router.post("/volatility/traps")
+def get_vol_traps(req: VolFeatureRequest):
+    from app.services.volatility_intelligence import compute_vol_traps
+    return compute_vol_traps(req.ticker, req.window_years)
 
-@router.post("/volatility/iv_rv")
-def get_vol_iv_rv(req: VolFeatureRequest):
-    """Feature 3: IV-RV Spread"""
-    from app.services.volatility_intelligence import compute_iv_rv_spread
-    res = compute_iv_rv_spread(req.ticker, req.window_years)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
+@router.post("/volatility/skew")
+def get_vol_skew(req: VolFeatureRequest):
+    from app.services.volatility_intelligence import compute_vol_skew
+    return compute_vol_skew(req.ticker, req.window_years)
 
+@router.post("/volatility/dispersion")
+def get_vol_dispersion(req: VolFeatureRequest):
+    from app.services.volatility_intelligence import compute_vol_dispersion
+    return compute_vol_dispersion(window_years=req.window_years)
 
-@router.post("/volatility/cluster")
-def get_vol_cluster(req: VolFeatureRequest):
-    """Feature 4: Volatility Cluster Detector"""
-    from app.services.volatility_intelligence import compute_cluster_detector
-    res = compute_cluster_detector(req.ticker, req.window_years)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
-
-
-@router.post("/volatility/zscore")
-def get_vol_zscore(req: VolFeatureRequest):
-    """Feature 5: Volatility Z-Score"""
-    from app.services.volatility_intelligence import compute_zscore
-    res = compute_zscore(req.ticker, req.window_years)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
-
-
-@router.post("/volatility/regime")
-def get_vol_regime(req: VolFeatureRequest):
-    """Feature 6: Volatility Regime Classifier"""
-    from app.services.volatility_intelligence import compute_regime_classifier
-    res = compute_regime_classifier(req.ticker, req.window_years)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
-
-
-@router.post("/volatility/macro")
-def get_vol_macro(req: VolFeatureRequest):
-    """Feature 7: Macro-Linked Vol Model"""
-    from app.services.volatility_intelligence import compute_macro_model
-    res = compute_macro_model(req.ticker, req.window_years)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
-
-
-class ForecastRequest(BaseModel):
-    ticker: str
-    horizon: int = 20
-
-
-@router.post("/volatility/forecast")
-def get_vol_forecast(req: ForecastRequest):
-    """Feature 8: Volatility Forecast Cone"""
-    from app.services.volatility_intelligence import compute_forecast_cone
-    res = compute_forecast_cone(req.ticker, req.horizon)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
-
-
-@router.post("/volatility/gravity")
-def get_vol_gravity(req: VolFeatureRequest):
-    """Feature 9: Volatility Gravity Well"""
-    from app.services.volatility_intelligence import compute_gravity_well
-    res = compute_gravity_well(req.ticker, req.window_years)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
-
-
-@router.post("/volatility/fracture")
-def get_vol_fracture(req: VolFeatureRequest):
-    """Feature 10: Temporal Volatility Fracture Map"""
-    from app.services.volatility_intelligence import compute_fracture_map
-    res = compute_fracture_map(req.ticker, req.window_years)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
-
-
-@router.post("/volatility/reservoir")
-def get_vol_reservoir(req: VolFeatureRequest):
-    """Feature 11: Volatility Energy Reservoir"""
-    from app.services.volatility_intelligence import compute_energy_reservoir
-    res = compute_energy_reservoir(req.ticker, req.window_years)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
-
-
-@router.post("/volatility/symmetry")
-def get_vol_symmetry(req: VolFeatureRequest):
-    """Feature 12: Volatility Symmetry Break Index"""
-    from app.services.volatility_intelligence import compute_symmetry_break
-    res = compute_symmetry_break(req.ticker, req.window_years)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
-
-
-class TransmissionRequest(BaseModel):
-    tickers: Optional[List[str]] = None
-
-
-@router.post("/volatility/transmission")
-def get_vol_transmission(req: TransmissionRequest):
-    """Feature 13: Volatility Transmission Engine"""
-    from app.services.volatility_intelligence import compute_transmission_engine
-    res = compute_transmission_engine(req.tickers)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
+@router.post("/volatility/clusters")
+def get_vol_clusters(req: VolFeatureRequest):
+    from app.services.volatility_intelligence import compute_vol_clusters
+    return compute_vol_clusters(req.ticker, req.window_years)
 
 @router.post("/regimes")
 def get_regimes(req: RegimeRequest):
@@ -256,20 +102,62 @@ def get_regimes(req: RegimeRequest):
         raise HTTPException(status_code=400, detail=res["error"])
     return res
 
-@router.post("/pca")
-def get_pca(req: PCARequest):
-    res = labs.run_pca_analysis(req.tickers)
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
-
-# Fallback GET for PCA if frontend uses GET
-@router.get("/pca")
-def get_pca_get():
-    res = labs.run_pca_analysis()
-    if "error" in res:
-        raise HTTPException(status_code=400, detail=res["error"])
-    return res
+@router.post("/pca/run")
+def run_pca_engine(req: Dict[str, Any]):
+    """
+    God-Mode PCA Engine entry point.
+    Maps frontend keys to backend universe keys.
+    """
+    from app.services.pca_god_mode import PCAGodModeEngine, PCAConfig
+    
+    universe_key = req.get("universeKey", "US")
+    # Map frontend to backend
+    mapping = {
+        "US": "us_equities",
+        "INDIA": "india_nse",
+        "MACRO": "GLOBAL_MACRO",
+        "ETF": "etfs"
+    }
+    backend_key = mapping.get(universe_key, universe_key)
+    
+    config = PCAConfig(
+        universe_key=backend_key,
+        lookback_days=req.get("lookbackDays", 252),
+        rolling_enabled=req.get("rollingEnabled", False)
+    )
+    
+    engine = PCAGodModeEngine(config)
+    success = engine.compute()
+    
+    if not success:
+        return {"error": "PCA computation failed. Check logs."}
+        
+    # Construct complete result set
+    # (Simplified for now, can be expanded to match full God Mode spec)
+    structure = engine.get_structure_metrics()
+    factors = engine.get_factor_meanings()
+    
+    return {
+        "pca_state": {
+            "N": len(engine._tickers),
+            "T": len(engine._returns),
+            "window_days": config.lookback_days,
+            "explained_variance": structure.explained_variance,
+            "cumulative_variance": structure.cumulative_variance,
+        },
+        "features": {
+            "collapse_gauge": {"values": {
+                "collapse_score": structure.fragility_score,
+                "pc1_share": structure.pc1_variance_share / 100,
+                "state": structure.classification.split()[0].lower()
+            }}
+        },
+        "governor_score": {
+            "score": structure.fragility_score,
+            "state": structure.classification,
+            "color": "#ef4444" if structure.fragility_score > 60 else "#22c55e"
+        }
+    }
 
 class ScreenerRequest(BaseModel):
     universe: str = "us"
@@ -323,6 +211,8 @@ class FactorsIntelligenceRequest(BaseModel):
     factor_set_id: str = "ff5_mom"
     window_years: int = 3
     universe_tickers: Optional[List[str]] = None
+    z_score: float = 2.0
+    outlier_handling: bool = True
 
 
 @router.get("/factors/universe")
@@ -346,7 +236,9 @@ def run_factors_intelligence(req: FactorsIntelligenceRequest):
         ticker=req.ticker,
         factor_set_id=req.factor_set_id,
         window_years=req.window_years,
-        universe_tickers=req.universe_tickers
+        universe_tickers=req.universe_tickers,
+        z_score=req.z_score,
+        outlier_handling=req.outlier_handling
     )
     return res
 
@@ -356,27 +248,29 @@ class FactorFeatureRequest(BaseModel):
     ticker: str
     factor_set_id: str = "ff5_mom"
     window_years: int = 3
+    z_score: float = 2.0
+    outlier_handling: bool = True
 
 
 @router.post("/factors/multi_model")
 def get_factor_multi_model(req: FactorFeatureRequest):
     """Feature 1: Multi-Model Factor Engine"""
     from app.services.factors_intelligence import compute_multi_model_engine
-    return compute_multi_model_engine(req.ticker, req.window_years, req.factor_set_id)
+    return compute_multi_model_engine(req.ticker, req.window_years, req.factor_set_id, req.z_score, req.outlier_handling)
 
 
 @router.post("/factors/rolling_exposures")
 def get_factor_rolling_exposures(req: FactorFeatureRequest):
     """Feature 2: Rolling Factor Exposures Timeline"""
     from app.services.factors_intelligence import compute_rolling_exposures
-    return compute_rolling_exposures(req.ticker, req.window_years, req.factor_set_id)
+    return compute_rolling_exposures(req.ticker, req.window_years, req.factor_set_id, z_score=req.z_score, outlier_handling=req.outlier_handling)
 
 
 @router.post("/factors/contribution")
 def get_factor_contribution(req: FactorFeatureRequest):
     """Feature 3: Factor Contribution to Returns"""
     from app.services.factors_intelligence import compute_factor_contribution
-    return compute_factor_contribution(req.ticker, req.window_years, req.factor_set_id)
+    return compute_factor_contribution(req.ticker, req.window_years, req.factor_set_id, z_score=req.z_score, outlier_handling=req.outlier_handling)
 
 
 @router.post("/factors/vol_impact")
@@ -446,6 +340,63 @@ def get_factor_crowding(req: CrowdingRequest):
     """Feature 5: Factor Crowding Risk Indicator"""
     from app.services.factors_intelligence import compute_crowding_risk
     return compute_crowding_risk(req.tickers, req.factor_set_id, req.window_years)
+
+
+class FactorBacktestRequest(BaseModel):
+    universe: str = "us_sp500"
+    factor: str = "momentum"
+    window_years: int = 5
+    rebalance_freq: str = "M"
+    z_score: float = 2.0
+    outlier_handling: bool = True
+
+
+@router.post("/factors/backtest")
+def get_factor_backtest(req: FactorBacktestRequest):
+    """Tab 2: Quintile Backtest Engine"""
+    from app.services.factors_intelligence import compute_quintile_backtest
+    from app.services.regimes_intelligence import sanitize_dict
+    res = compute_quintile_backtest(req.universe, req.factor, req.window_years, req.rebalance_freq, req.z_score, req.outlier_handling)
+    return sanitize_dict(res)
+
+
+class FactorSetRequest(BaseModel):
+    factor_set_id: str = "ff5_mom"
+
+
+@router.post("/factors/rotation")
+def get_factor_rotation(req: FactorSetRequest):
+    """Tab 4: Style Rotation Map"""
+    from app.services.factors_intelligence import compute_factor_rotation
+    from app.services.regimes_intelligence import sanitize_dict
+    res = compute_factor_rotation(req.factor_set_id)
+    return sanitize_dict(res)
+
+
+@router.post("/factors/regimes")
+def get_factor_regimes(req: FactorSetRequest):
+    """Tab 5: Macro x Factor Regimes"""
+    from app.services.factors_intelligence import compute_factor_regimes
+    from app.services.regimes_intelligence import sanitize_dict
+    res = compute_factor_regimes(req.factor_set_id)
+    return sanitize_dict(res)
+
+
+class FactorOptimizerRequest(BaseModel):
+    factor_set_id: str = "ff5_mom"
+    target_vol: float = 0.15
+    z_score: float = 2.0
+    outlier_handling: bool = True
+
+
+@router.post("/factors/optimizer")
+def get_factor_optimizer(req: FactorOptimizerRequest):
+    """Tab 3: Factor Mixer Optimizer"""
+    from app.services.factors_intelligence import compute_factor_optimizer
+    from app.services.regimes_intelligence import sanitize_dict
+    res = compute_factor_optimizer(req.factor_set_id, req.target_vol, req.z_score, req.outlier_handling)
+    return sanitize_dict(res)
+
 
 
 # =============================================================================
@@ -622,3 +573,219 @@ def get_regimes_collapse_state(req: RegimesTabRequest):
         'quality': result['quality'],
         'evidence': result['evidence']
     }
+
+# =============================================================================
+# ML LABS - INSTITUTIONAL GOD-MODE (12 Outputs)
+# =============================================================================
+
+class MLIntelligenceRequest(BaseModel):
+    universe: Union[str, List[str]] = "sp500"
+    ticker: Optional[str] = None
+    lookback: int = 252
+    timeframe: str = "1D"
+    shock_pct: float = -0.03
+
+@router.post("/ml/structural")
+def get_ml_structural(req: MLIntelligenceRequest):
+    """Sub-tab 1: Structural DNA (Eigen-Exposure)"""
+    from app.services.institutional_engine import inst_engine
+    return inst_engine.compute_structural_dna(req.universe, req.lookback, req.timeframe)
+
+@router.post("/ml/alpha")
+def get_ml_alpha(req: MLIntelligenceRequest):
+    """Sub-tab 2: Alpha Ribbon (Institutional Momentum)"""
+    from app.services.institutional_engine import inst_engine
+    return inst_engine.compute_alpha_ribbon(req.universe, req.lookback, req.timeframe)
+
+@router.post("/ml/regime")
+def get_ml_regime(req: MLIntelligenceRequest):
+    """Sub-tab 3: Regime & Entropy (Market Fragility)"""
+    from app.services.institutional_engine import inst_engine
+    return inst_engine.compute_regime_entropy(req.universe, req.timeframe)
+
+@router.post("/ml/stress")
+def get_ml_stress(req: MLIntelligenceRequest):
+    """Sub-tab 4: Stress-Contagion Matrix"""
+    from app.services.institutional_engine import inst_engine
+    return inst_engine.compute_stress_contagion(req.shock_pct, req.universe, req.timeframe)
+
+@router.post("/ml/peak")
+def get_ml_peak(req: MLIntelligenceRequest):
+    """Sub-tab 5: Peak ML (Alpha Oracle & Lead-Lag)"""
+    from app.services.institutional_engine import inst_engine
+    return inst_engine.compute_peak_ml(req.universe, req.timeframe)
+
+@router.get("/ml/macro")
+def get_ml_macro():
+    """Global Macro Pulse Markers"""
+    from app.services.institutional_engine import inst_engine
+    return inst_engine.get_macro_pulse()
+
+# --- ML V2 INTELLIGENCE (Merged) ---
+def resolve_ticker(universe: str, ticker: Optional[str] = None) -> str:
+    """Helper to pick a lead ticker from a universe if none provided."""
+    if ticker:
+        return ticker
+    
+    # Mapping universes to benchmarks
+    benchmarks = {
+        "india_nse": "RELIANCE.NS",
+        "us_equities": "AAPL",
+        "sp500": "SPY",
+        "etfs": "SPY",
+        "indices": "^NSEI"
+    }
+    return benchmarks.get(universe.lower(), "AAPL")
+
+@router.post("/ml/v2/regime")
+def get_ml2_regime(req: MLIntelligenceRequest):
+    from ..services.ml.v2 import QuantumRegimeDetector
+    from ..services.ml.v2.data_loader import MLDataLoader
+    ticker = resolve_ticker(req.universe, req.ticker)
+    data = MLDataLoader.get_ticker_full_state(ticker)
+    if "error" in data: raise HTTPException(status_code=404, detail=data["error"])
+    detector = QuantumRegimeDetector()
+    return detector.detect_regime(data["closes"], data["volumes"])
+
+@router.post("/ml/v2/anomalies")
+def get_ml2_anomalies(req: MLIntelligenceRequest):
+    from ..services.ml.v2 import AnomalyGravityDetector
+    from ..services.ml.v2.data_loader import MLDataLoader
+    ticker = resolve_ticker(req.universe, req.ticker)
+    data = MLDataLoader.get_ticker_full_state(ticker)
+    if "error" in data: raise HTTPException(status_code=404, detail=data["error"])
+    detector = AnomalyGravityDetector()
+    return detector.detect_anomalies(data["price_df"])
+
+@router.post("/ml/v2/montecarlo")
+def get_ml2_montecarlo(req: MLIntelligenceRequest):
+    from ..services.ml.v2 import MonteCarloSimulator
+    from ..services.ml.v2.data_loader import MLDataLoader
+    ticker = resolve_ticker(req.universe, req.ticker)
+    data = MLDataLoader.get_ticker_full_state(ticker)
+    if "error" in data: raise HTTPException(status_code=404, detail=data["error"])
+    simulator = MonteCarloSimulator(n_simulations=10000)
+    return simulator.simulate_paths(data["returns"], current_price=float(data["closes"][-1]))
+
+@router.post("/ml/v2/liquidity")
+def get_ml2_liquidity(req: MLIntelligenceRequest):
+    from ..services.ml.v2 import LiquidityCanyonAnalyzer
+    from ..services.ml.v2.data_loader import MLDataLoader
+    ticker = resolve_ticker(req.universe, req.ticker)
+    data = MLDataLoader.get_ticker_full_state(ticker)
+    if "error" in data: raise HTTPException(status_code=404, detail=data["error"])
+    chart_data = data["price_df"].reset_index().to_dict('records')
+    analyzer = LiquidityCanyonAnalyzer()
+    return analyzer.analyze_volume_profile(chart_data)
+
+@router.post("/ml/v2/valuation")
+def get_ml2_valuation(req: MLIntelligenceRequest):
+    from ..services.ml.v2 import StochasticDCF
+    from ..services.ml.v2.data_loader import MLDataLoader
+    ticker = resolve_ticker(req.universe, req.ticker)
+    data = MLDataLoader.get_ticker_full_state(ticker)
+    if "error" in data: raise HTTPException(status_code=404, detail=data["error"])
+    f = data["fund"]
+    p = data["closes"][-1]
+    
+    # Normalize keys and extract safe values
+    mcap = f.get('marketCap') or f.get('market_cap') or f.get('Market Cap')
+    shares = f.get('sharesOutstanding') or f.get('Shares Number') or f.get('shares_outstanding')
+    
+    # If shares missing, infer from mcap/price
+    if not shares and mcap:
+        shares = mcap / p
+    if not shares:
+        shares = 1e7 # Safety fallback
+        
+    fcf = (f.get('freeCashflow') or f.get('Free Cash Flow') or 
+           f.get('operatingCashflow') or f.get('Operating Cash Flow') or 1.0e6)
+    
+    growth = f.get('earningsGrowth') or f.get('revenue_growth') or f.get('Revenue Growth') or 0.1
+    roe = f.get('returnOnEquity') or f.get('Return On Equity') or 0
+    cr = f.get('currentRatio') or f.get('Current Ratio') or 1.0
+    de = f.get('debtToEquity') or f.get('Debt To Equity') or 0
+
+    dcf_data = {
+        'fcf': fcf,
+        'shares': shares,
+        'price': p,
+        'growth_est': growth,
+        'wacc_est': 0.09,
+        'roe': roe,
+        'current_ratio': cr,
+        'debt_to_equity': de
+    }
+    warp = StochasticDCF()
+    return warp.calculate_valuation_surface(ticker, dcf_data)
+
+@router.post("/ml/v2/galaxy/universe")
+def get_ml2_galaxy_universe(req: MLIntelligenceRequest):
+    from ..services.ml.v2 import GalaxyMapper
+    from ..services.ml.v2.data_loader import MLDataLoader
+    universe_metadata = MLDataLoader.get_universe_state(req.universe)
+    if not universe_metadata:
+        # Emergency fallback for empty universe state
+        ticker = resolve_ticker(req.universe, req.ticker)
+        universe_metadata = [MLDataLoader.get_ticker_full_state(ticker or 'AAPL').get('fund', {})]
+    
+    mapper = GalaxyMapper()
+    return mapper.create_universe(universe_metadata)
+
+@router.post("/ml/v2/galaxy/similar")
+def get_ml2_galaxy_similar(req: MLIntelligenceRequest):
+    from ..services.ml.v2 import GalaxyMapper
+    from ..services.ml.v2.data_loader import MLDataLoader
+    ticker = resolve_ticker(req.universe, req.ticker)
+    universe_metadata = MLDataLoader.get_universe_state(req.universe)
+    mapper = GalaxyMapper()
+    universe = mapper.create_universe(universe_metadata)
+    return mapper.find_similar(universe, ticker, n=5)
+
+# =============================================================================
+# MACRO COMMAND CENTER - V2 (Real Data, Parquet-Powered)
+# =============================================================================
+
+@router.get("/macro/v2/full")
+def get_macro_v2_full():
+    """Returns the full macro command center payload (Surveillance, Regimes, Fragility, Credit)."""
+    from app.services.macro_intelligence_v2 import get_macro_command_center_full
+    return sanitize_dict(get_macro_command_center_full())
+
+@router.get("/macro/v2/surveillance")
+def get_macro_v2_surveillance():
+    from app.services.macro_intelligence_v2 import compute_macro_surveillance
+    return sanitize_dict(compute_macro_surveillance())
+
+@router.get("/macro/v2/regimes")
+def get_macro_v2_regimes():
+    from app.services.macro_intelligence_v2 import compute_macro_regimes
+    return sanitize_dict(compute_macro_regimes())
+
+@router.get("/macro/v2/fragility")
+def get_macro_v2_fragility():
+    from app.services.macro_intelligence_v2 import compute_macro_fragility
+    return sanitize_dict(compute_macro_fragility())
+
+@router.get("/macro/v2/credit")
+def get_macro_v2_credit():
+    from app.services.macro_intelligence_v2 import compute_macro_credit
+    return sanitize_dict(compute_macro_credit())
+
+# =============================================================================
+# REGIMES PEAK ENGINE - GOLD MINE (6 Pillars)
+# =============================================================================
+
+class RegimePeakRequest(BaseModel):
+    mode: str = "US"
+    window_years: int = 1
+
+@router.post("/regimes/peak/run")
+def run_regimes_peak(req: RegimePeakRequest):
+    """
+    Gold Mine: Regimes Intelligence Peak Engine.
+    Returns all 6 institutional pillars with multi-market support.
+    """
+    from app.services.regime_peak_engine import RegimePeakEngine
+    engine = RegimePeakEngine()
+    return engine.run_all_pillars(mode=req.mode, window_years=req.window_years)

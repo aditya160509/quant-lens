@@ -27,382 +27,27 @@ import logging
 import threading
 import json
 import os
-
-import yfinance as yf
-
-logger = logging.getLogger(__name__)
-
-# =============================================================================
-# CONSTANTS
-# =============================================================================
-
-ANNUAL_FACTOR = 252
-EWMA_LAMBDA = 0.94
-CACHE_TTL_SECONDS = 300
-MAX_CACHE_SIZE = 500  # Increased for 10k users
-MAX_CONCURRENT_REQUESTS = 50  # Connection pool limit
-
-# Crisis periods for stressed VaR
-CRISIS_PERIODS = {
-    "2008_gfc": {"start": "2008-09-01", "end": "2008-11-30", "name": "2008 GFC"},
-    "2020_covid": {"start": "2020-02-15", "end": "2020-03-31", "name": "2020 COVID"},
-    "2022_inflation": {"start": "2022-01-01", "end": "2022-06-30", "name": "2022 Inflation"}
-}
-
-# Risk score weights
-RISK_WEIGHTS = {
-    "var_health": 0.30,
-    "tail_risk": 0.25,
-    "stress_prep": 0.20,
-    "correlation": 0.15,
-    "validation": 0.10
-}
-
-# Input validation patterns
 import re
-import time
-import requests
-import os
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
-TICKER_PATTERN = re.compile(r'^[A-Z0-9.\-]{1,20}$')
-
-# Rate limiting prevention
-_last_request_time = 0
-REQUEST_DELAY = 0.3  # 300ms between requests
+# Use centralized robust data fetcher
+from app.services.robust_data_fetcher import (
+    get_price_data as rdf_get_price,
+    get_batch_data as rdf_get_batch,
+    get_current_price as rdf_current_price
+)
 
 # =============================================================================
-# FREE API KEYS - Get yours at:
-# Twelve Data: https://twelvedata.com/ (800 calls/day free)
+# CORE DATA HELPERS - Centralized
 # =============================================================================
-TWELVE_DATA_KEY = os.environ.get('TWELVE_DATA_KEY', '')
-
-# =============================================================================
-# HTTP SESSION WITH RETRY LOGIC
-# =============================================================================
-
-def create_robust_session() -> requests.Session:
-    """Create session with retry logic for reliability."""
-    session = requests.Session()
-    retry = Retry(
-        total=3,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504]
-    )
-    adapter = HTTPAdapter(max_retries=retry, pool_connections=10, pool_maxsize=20)
-    session.mount('http://', adapter)
-    session.mount('https://', adapter)
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-    })
-    return session
-
-_http_session = create_robust_session()
-
-# =============================================================================
-# THREAD-SAFE CACHING
-# =============================================================================
-
-_cache_lock = threading.Lock()
-_price_cache: Dict[str, Dict] = {}
-
-
-def get_cache_key(ticker: str, period: str) -> str:
-    return f"{ticker}_{period}"
-
-
-def is_indian_stock(ticker: str) -> bool:
-    """Check if ticker is an Indian stock (NSE/BSE)."""
-    return ticker.upper().endswith(('.NS', '.BO', '.NSE', '.BSE'))
-
-
-# Circuit breaker for yfinance
-_yf_failure_count = 0
-_yf_circuit_open = False
-_yf_circuit_reset_time = 0
-YF_FAILURE_THRESHOLD = 2  # Open circuit after 2 failures
-YF_CIRCUIT_TIMEOUT = 300  # Try again after 5 minutes
-
-
-def check_yf_circuit() -> bool:
-    """Check if yfinance circuit breaker is open (should skip yfinance)."""
-    global _yf_circuit_open, _yf_circuit_reset_time
-    
-    if not _yf_circuit_open:
-        return False
-    
-    # Check if we should try again
-    if time.time() > _yf_circuit_reset_time:
-        logger.info("yfinance circuit breaker: attempting reset")
-        return False
-    
-    return True
-
-
-def record_yf_failure():
-    """Record a yfinance failure for circuit breaker."""
-    global _yf_failure_count, _yf_circuit_open, _yf_circuit_reset_time
-    
-    _yf_failure_count += 1
-    if _yf_failure_count >= YF_FAILURE_THRESHOLD:
-        _yf_circuit_open = True
-        _yf_circuit_reset_time = time.time() + YF_CIRCUIT_TIMEOUT
-        logger.warning(f"yfinance circuit breaker OPEN - using synthetic data for {YF_CIRCUIT_TIMEOUT}s")
-
-
-def record_yf_success():
-    """Record a yfinance success - reset circuit breaker."""
-    global _yf_failure_count, _yf_circuit_open
-    _yf_failure_count = 0
-    _yf_circuit_open = False
-
-
-def fetch_nse_data(symbol: str, period: str = "2y") -> pd.DataFrame:
-    """Fetch data from NSE India API for Indian stocks."""
-    global _last_request_time
-    
-    # Clean symbol (remove .NS, .BO suffix)
-    clean_symbol = symbol.upper().replace('.NS', '').replace('.BO', '').replace('.NSE', '').replace('.BSE', '')
-    
-    # Rate limiting
-    elapsed = time.time() - _last_request_time
-    if elapsed < REQUEST_DELAY:
-        time.sleep(REQUEST_DELAY - elapsed)
-    
-    try:
-        # NSE India historical data endpoint
-        days_map = {"5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825}
-        days = days_map.get(period, 365)
-        
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
-        
-        # Use NSE India API
-        url = f"https://www.nseindia.com/api/historical/cm/equity?symbol={clean_symbol}&series=[%22EQ%22]&from={start_date.strftime('%d-%m-%Y')}&to={end_date.strftime('%d-%m-%Y')}"
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/json',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Referer': 'https://www.nseindia.com'
-        }
-        
-        # First get cookies from main page
-        session = requests.Session()
-        session.get("https://www.nseindia.com", headers=headers, timeout=10)
-        
-        response = session.get(url, headers=headers, timeout=15)
-        _last_request_time = time.time()
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'data' in data and len(data['data']) > 0:
-                df = pd.DataFrame(data['data'])
-                df['CH_TIMESTAMP'] = pd.to_datetime(df['CH_TIMESTAMP'])
-                df = df.set_index('CH_TIMESTAMP')
-                df = df.rename(columns={
-                    'CH_OPENING_PRICE': 'Open',
-                    'CH_TRADE_HIGH_PRICE': 'High',
-                    'CH_TRADE_LOW_PRICE': 'Low',
-                    'CH_CLOSING_PRICE': 'Close',
-                    'CH_TOT_TRADED_QTY': 'Volume'
-                })
-                df = df[['Open', 'High', 'Low', 'Close', 'Volume']].sort_index()
-                return df
-    except Exception as e:
-        logger.debug(f"NSE API failed for {symbol}: {e}")
-    
-    return pd.DataFrame()
-
-
-def fetch_yahoo_direct(ticker: str, period: str = "2y") -> pd.DataFrame:
-    """Fetch data DIRECTLY from Yahoo API (bypasses broken yfinance library)."""
-    global _last_request_time
-    
-    # Rate limiting
-    elapsed = time.time() - _last_request_time
-    if elapsed < REQUEST_DELAY:
-        time.sleep(REQUEST_DELAY - elapsed)
-    
-    # Map period to Yahoo API format
-    period_map = {
-        "5d": "5d", "1mo": "1mo", "3mo": "3mo", "6mo": "6mo",
-        "1y": "1y", "2y": "2y", "5y": "5y", "10y": "10y", "max": "max"
-    }
-    yahoo_range = period_map.get(period, "1y")
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-    }
-    
-    url = f'https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range={yahoo_range}'
-    
-    try:
-        response = requests.get(url, headers=headers, timeout=15)
-        _last_request_time = time.time()
-        
-        if response.status_code != 200:
-            logger.debug(f"Yahoo API returned {response.status_code} for {ticker}")
-            return pd.DataFrame()
-        
-        data = response.json()
-        
-        if 'chart' not in data or 'result' not in data['chart'] or not data['chart']['result']:
-            logger.debug(f"Invalid Yahoo response for {ticker}")
-            return pd.DataFrame()
-        
-        result = data['chart']['result'][0]
-        
-        if 'timestamp' not in result or not result['timestamp']:
-            return pd.DataFrame()
-        
-        timestamps = result['timestamp']
-        quotes = result['indicators']['quote'][0]
-        
-        # Build DataFrame
-        df = pd.DataFrame({
-            'Open': quotes.get('open', []),
-            'High': quotes.get('high', []),
-            'Low': quotes.get('low', []),
-            'Close': quotes.get('close', []),
-            'Volume': quotes.get('volume', [])
-        })
-        
-        # Set datetime index
-        df.index = pd.to_datetime(timestamps, unit='s')
-        df.index.name = 'Date'
-        
-        # Remove rows with NaN close prices
-        df = df.dropna(subset=['Close'])
-        
-        if not df.empty:
-            logger.info(f"✅ Fetched {len(df)} rows for {ticker} from Yahoo Direct API")
-        
-        return df
-        
-    except Exception as e:
-        logger.debug(f"Yahoo Direct API failed for {ticker}: {e}")
-        return pd.DataFrame()
-
-
-def fetch_yfinance_data(ticker: str, period: str = "2y") -> pd.DataFrame:
-    """Fetch data - tries direct Yahoo API first, then yfinance as backup."""
-    # Try direct Yahoo API first (more reliable)
-    df = fetch_yahoo_direct(ticker, period)
-    if not df.empty:
-        return df
-    
-    # Fallback to yfinance library
-    global _last_request_time
-    
-    elapsed = time.time() - _last_request_time
-    if elapsed < REQUEST_DELAY:
-        time.sleep(REQUEST_DELAY - elapsed)
-    
-    try:
-        df = yf.download(ticker, period=period, progress=False, timeout=10, auto_adjust=True)
-        _last_request_time = time.time()
-        if not df.empty:
-            return df
-    except Exception as e:
-        logger.debug(f"yfinance failed for {ticker}: {e}")
-    
-    return pd.DataFrame()
-
-
-def generate_synthetic_data(ticker: str, period: str = "2y") -> pd.DataFrame:
-    """Generate synthetic historical data when APIs fail (for testing/demo)."""
-    days_map = {"5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 252, "2y": 504, "5y": 1260}
-    num_days = days_map.get(period, 252)
-    
-    # Generate realistic price data with random walk
-    np.random.seed(hash(ticker) % 2**32)  # Consistent per ticker
-    
-    end_date = datetime.now()
-    dates = pd.date_range(end=end_date, periods=num_days, freq='B')  # Business days
-    
-    # Start price based on ticker hash
-    start_price = 100 + (hash(ticker) % 400)
-    
-    # Generate returns with realistic volatility
-    daily_vol = 0.015 + (hash(ticker) % 100) / 5000  # 1.5% to 3.5% daily vol
-    drift = 0.0002  # Small positive drift
-    returns = np.random.normal(drift, daily_vol, num_days)
-    
-    # Cumulative returns to prices
-    prices = start_price * np.exp(np.cumsum(returns))
-    
-    # Generate OHLCV
-    df = pd.DataFrame({
-        'Open': prices * (1 + np.random.uniform(-0.01, 0.01, num_days)),
-        'High': prices * (1 + np.random.uniform(0, 0.02, num_days)),
-        'Low': prices * (1 - np.random.uniform(0, 0.02, num_days)),
-        'Close': prices,
-        'Volume': np.random.randint(100000, 10000000, num_days)
-    }, index=dates)
-    
-    logger.info(f"Generated synthetic data for {ticker} ({num_days} days)")
-    return df
-
 
 def get_price_data(ticker: str, period: str = "2y") -> pd.DataFrame:
-    """Fetch price data with multi-source fallback and caching."""
-    cache_key = get_cache_key(ticker, period)
-    now = datetime.now()
-    
-    # Check cache first
-    with _cache_lock:
-        if cache_key in _price_cache:
-            cached = _price_cache[cache_key]
-            if (now - cached["timestamp"]).total_seconds() < CACHE_TTL_SECONDS:
-                return cached["data"]
-    
-    df = pd.DataFrame()
-    
-    # Strategy 1: Use NSE API for Indian stocks
-    if is_indian_stock(ticker):
-        df = fetch_nse_data(ticker, period)
-        if not df.empty:
-            logger.info(f"Fetched {ticker} from NSE API")
-    
-    # Strategy 2: Use yfinance with retry logic
-    if df.empty:
-        df = fetch_yfinance_data(ticker, period)
-        if not df.empty:
-            logger.info(f"Fetched {ticker} from yfinance")
-    
-    # Strategy 3: Generate synthetic data as last resort (for demo/testing)
-    if df.empty:
-        df = generate_synthetic_data(ticker, period)
-    
-    # Cache the result
-    if not df.empty:
-        with _cache_lock:
-            if len(_price_cache) >= MAX_CACHE_SIZE:
-                # LRU eviction - remove oldest 25%
-                sorted_keys = sorted(_price_cache.keys(), key=lambda k: _price_cache[k]["timestamp"])
-                for k in sorted_keys[:len(sorted_keys)//4]:
-                    del _price_cache[k]
-            _price_cache[cache_key] = {"data": df, "timestamp": now}
-    
-    return df
-
-
-def clear_price_cache():
-    """Clear the price cache."""
-    global _price_cache
-    with _cache_lock:
-        _price_cache.clear()
-    logger.info("Price cache cleared")
-
+    """Wrapper for centralized robust data fetcher."""
+    return rdf_get_price(ticker, period=period)
 
 def validate_ticker(ticker: str) -> bool:
     """Validate ticker symbol for security."""
-    if not ticker or len(ticker) > 20:
-        return False
-    return bool(TICKER_PATTERN.match(ticker.upper()))
+    if not ticker or len(ticker) > 20: return False
+    return bool(re.match(r'^[A-Z0-9.\-]{1,20}$', ticker.upper()))
 
 
 def safe_float(val, default=0.0) -> float:
@@ -438,22 +83,18 @@ def load_portfolio_positions() -> List[Dict]:
                     qty = holding.get("quantity", holding.get("qty", 0))
                     avg_cost = holding.get("avg_cost", holding.get("price", 0))
                     
-                    # Get current price (uses synthetic fallback if API fails)
-                    df = get_price_data(ticker, "5d")
-                    if not df.empty:
-                        try:
-                            close_col = df["Close"]
-                            if isinstance(close_col, pd.DataFrame):
-                                close_col = close_col.squeeze()
-                            current_price = float(close_col.iloc[-1])
-                        except Exception:
-                            current_price = avg_cost  # Fallback to avg cost
-                    else:
-                        current_price = avg_cost
-                    
-                    # Ensure we have a valid price
-                    if current_price <= 0:
-                        current_price = avg_cost if avg_cost > 0 else 100.0
+                    # Get current price
+                    current_price = rdf_current_price(ticker)
+                    # AUDIT FIX: Don't silently use $100 anchor - flag synthetic data
+                    is_synthetic_price = False
+                    if current_price is None or current_price <= 0:
+                        if avg_cost > 0:
+                            current_price = avg_cost
+                            is_synthetic_price = True
+                        else:
+                            # Skip positions with no price data rather than hallucinate
+                            logger.warning(f"Skipping {ticker}: No valid price available (avg_cost={avg_cost})")
+                            continue
                     
                     market_value = qty * current_price
                     if market_value > 0:
@@ -463,7 +104,8 @@ def load_portfolio_positions() -> List[Dict]:
                             "avg_cost": avg_cost,
                             "price": current_price,
                             "market_value": market_value,
-                            "value": market_value
+                            "value": market_value,
+                            "_synthetic_price": is_synthetic_price  # Flag for audit
                         })
                 
                 return positions
@@ -514,21 +156,28 @@ def get_portfolio_weights(positions: List[Dict]) -> Tuple[List[str], np.ndarray,
 
 
 def get_returns_matrix(tickers: List[str], period: str = "2y") -> pd.DataFrame:
-    """Get aligned returns matrix for multiple tickers."""
-    returns_dict = {}
-    
-    for ticker in tickers:
-        df = get_price_data(ticker, period)
-        if not df.empty:
-            close = df["Close"].squeeze() if isinstance(df["Close"], pd.DataFrame) else df["Close"]
-            returns_dict[ticker] = np.log(close / close.shift(1))
-    
-    if not returns_dict:
+    """Get aligned returns matrix for multiple tickers using robust batch fetcher."""
+    try:
+        batch_data = rdf_get_batch(tickers, period=period)
+        if not batch_data:
+            return pd.DataFrame()
+            
+        returns_dict = {}
+        for ticker, df in batch_data.items():
+            if df is not None and not df.empty and 'Close' in df.columns:
+                close = df['Close'].squeeze() if isinstance(df['Close'], pd.DataFrame) else df['Close']
+                if len(close) > 10:
+                    returns_dict[ticker] = np.log(close / close.shift(1))
+                    
+        return pd.DataFrame(returns_dict).dropna()
+    except Exception as e:
+        logger.error(f"Returns matrix fetch failed: {e}")
         return pd.DataFrame()
-    
-    combined = pd.DataFrame(returns_dict).dropna()
-    return combined
 
+
+# Portfolio Risk Constants (Fallback if config.py missing)
+ANNUAL_FACTOR = 252
+EWMA_LAMBDA = 0.94
 
 # =============================================================================
 # COVARIANCE ESTIMATION

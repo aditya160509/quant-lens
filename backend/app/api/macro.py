@@ -7,9 +7,23 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import numpy as np
-from app import macro
+import pandas as pd
 import datetime
 import asyncio
+
+try:
+    from app import macro  # legacy module (may be absent in trimmed builds)
+except Exception:
+    class _MacroFallback:
+        @staticmethod
+        def get_macro_summary():
+            return {}
+
+        @staticmethod
+        def get_series(_series_id: str):
+            return pd.Series(dtype=float)
+
+    macro = _MacroFallback()
 
 # Import our new services
 from app.services.macro.series_catalog import SERIES_CATALOG, get_series_config, get_series_by_region
@@ -199,7 +213,7 @@ async def run_model(request: ModelRunRequest):
         return response
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def run_module(module_id: str, region: str, window: str, regime_mode: str, inputs: dict) -> MacroModelResponse:

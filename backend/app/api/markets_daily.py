@@ -307,7 +307,7 @@ def get_market_matrix():
             "quality": {"missingPct": round(missing_pct, 1), "confidenceLabel": get_quality_label(missing_pct)}
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -409,7 +409,7 @@ def get_sector_dispersion():
             "quality": {"missingPct": round(missing_pct, 1), "confidenceLabel": get_quality_label(missing_pct)}
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -487,7 +487,7 @@ def get_graph_index_structure():
                 "quality": {"missingPct": 100, "confidenceLabel": "low"}
             }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -599,7 +599,7 @@ def get_graph_move_intensity():
                 "quality": {"missingPct": 100, "confidenceLabel": "low"}
             }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -722,7 +722,7 @@ def get_graph_gap_followthrough():
                 "quality": {"missingPct": 100, "confidenceLabel": "low"}
             }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -832,7 +832,7 @@ def get_stock_move_map(k: int = Query(30, description="Top K stocks")):
                 "quality": {"missingPct": 100, "confidenceLabel": "low"}
             }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -905,7 +905,7 @@ def get_sector_relative_strength():
             "quality": {"missingPct": 0 if items else 100, "confidenceLabel": "high" if len(items) >= 5 else "medium"}
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -1010,4 +1010,4 @@ def get_news(category: str = Query("Market", description="Market, Stocks, IPO, G
             "quality": {"missingPct": 100, "confidenceLabel": "low"}
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

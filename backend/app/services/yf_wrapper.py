@@ -138,6 +138,87 @@ class YFinanceWrapper:
             logger.error(f"[YF] Error getting history for {symbol}: {e}")
             backoff_handler.record_error(cache_key)
             return cached
+
+    @classmethod
+    def get_earnings_history(cls, symbol: str) -> Optional[pd.DataFrame]:
+        """Get earnings history with caching."""
+        cache_key = cls._make_cache_key('earnings_history', symbol)
+        
+        if backoff_handler.should_skip(cache_key):
+            cached, _ = global_cache.get(cache_key)
+            return cached
+            
+        cached, is_fresh = global_cache.get(cache_key)
+        if is_fresh: return cached
+        
+        if not cls._check_rate_limit():
+            return cached
+            
+        try:
+            ticker = yf.Ticker(symbol)
+            eh = ticker.earnings_history
+            if eh is not None and not eh.empty:
+                global_cache.set(cache_key, eh, cls.TTL_FINANCIALS)
+                backoff_handler.record_success(cache_key)
+            return eh
+        except Exception as e:
+            logger.error(f"[YF] Error getting earnings history for {symbol}: {e}")
+            backoff_handler.record_error(cache_key)
+            return cached
+
+    @classmethod
+    def get_recommendations(cls, symbol: str) -> Optional[pd.DataFrame]:
+        """Get analyst recommendations with caching."""
+        cache_key = cls._make_cache_key('recommendations', symbol)
+        
+        if backoff_handler.should_skip(cache_key):
+            cached, _ = global_cache.get(cache_key)
+            return cached
+            
+        cached, is_fresh = global_cache.get(cache_key)
+        if is_fresh: return cached
+        
+        if not cls._check_rate_limit():
+            return cached
+            
+        try:
+            ticker = yf.Ticker(symbol)
+            recs = ticker.recommendations
+            if recs is not None and not recs.empty:
+                global_cache.set(cache_key, recs, cls.TTL_INFO)
+                backoff_handler.record_success(cache_key)
+            return recs
+        except Exception as e:
+            logger.error(f"[YF] Error getting recommendations for {symbol}: {e}")
+            backoff_handler.record_error(cache_key)
+            return cached
+
+    @classmethod
+    def get_institutional_holders(cls, symbol: str) -> Optional[pd.DataFrame]:
+        """Get institutional holders with caching."""
+        cache_key = cls._make_cache_key('institutional', symbol)
+        
+        if backoff_handler.should_skip(cache_key):
+            cached, _ = global_cache.get(cache_key)
+            return cached
+            
+        cached, is_fresh = global_cache.get(cache_key)
+        if is_fresh: return cached
+        
+        if not cls._check_rate_limit():
+            return cached
+            
+        try:
+            ticker = yf.Ticker(symbol)
+            inst = ticker.institutional_holders
+            if inst is not None and not inst.empty:
+                global_cache.set(cache_key, inst, cls.TTL_FINANCIALS)
+                backoff_handler.record_success(cache_key)
+            return inst
+        except Exception as e:
+            logger.error(f"[YF] Error getting institutional holders for {symbol}: {e}")
+            backoff_handler.record_error(cache_key)
+            return cached
     
     @classmethod
     def get_current_price(cls, symbol: str) -> Optional[float]:

@@ -198,13 +198,84 @@ class ScreenerEvaluator:
         
         service = get_screener_service()
         
-        # Get sample data based on universe
+        # Determine universe key from asset type or use default
+        u_key = state.universe
+        
+        # Try to get market state which has richer data than sample generator
+        market_state = await service.get_market_state(u_key)
+        
+        if market_state:
+            # Construct rich row data for each ticker
+            symbols_data = []
+            for ticker in market_state.tickers:
+                try:
+                    # Get basic info
+                    current_price = market_state.prices[ticker].iloc[-1] if ticker in market_state.prices else 0
+                    current_vol = market_state.volumes[ticker].iloc[-1] if ticker in market_state.volumes else 0
+                    
+                    symbol_data = {
+                        "ticker": ticker,
+                        "universe": u_key,
+                        "asset_type": get_universe_asset_type(u_key),
+                        "price": current_price,
+                        "close": current_price,
+                        "CLOSE": current_price,
+                        "volume": current_vol,
+                        "VOLUME": current_vol,
+                        "change_1d": ((market_state.prices[ticker].iloc[-1] / market_state.prices[ticker].iloc[-2]) - 1) * 100 if ticker in market_state.prices and len(market_state.prices) > 1 else 0,
+                        "dollar_volume": (current_price * current_vol),
+                        "sector": "Equity" if u_key in ["INDIA", "US"] else u_key.title()
+                    }
+                    
+                    # Real calculations using ScreenerMathEngine
+                    from app.services.screener_quant360 import ScreenerMathEngine as math
+                    
+                    # Extract series and align
+                    prices = market_state.prices[ticker].dropna()
+                    if len(prices) < 20: continue
+                    
+                    common_idx = prices.index
+                    volumes = market_state.volumes[ticker].reindex(common_idx).fillna(0)
+                    highs = market_state.high[ticker].reindex(common_idx).fillna(method='ffill')
+                    lows = market_state.low[ticker].reindex(common_idx).fillna(method='ffill')
+                    opens = market_state.open_prices[ticker].reindex(common_idx).fillna(method='ffill')
+                    
+                    # Compute indicators using requested window
+                    w = state.lookback_days
+                    rets = math.compute_returns(prices)
+                    dollar_vol = math.compute_dollar_volume(prices, volumes)
+                    atr = math.compute_atr(highs, lows, prices, window=min(w, 14))
+                    atr_pct_series = math.compute_atr_percent(atr, prices)
+                    
+                    realized_vol = math.compute_realized_vol(rets, window=min(w, 20))
+                    
+                    symbol_data.update({
+                        "rsi": math.compute_rsi(prices, min(w, 14)),
+                        "RSI_14": math.compute_rsi(prices, 14),
+                        "realized_vol": realized_vol,
+                        "volatility": realized_vol,
+                        "VOLATILITY": realized_vol,
+                        "atr_pct": float(atr_pct_series.iloc[-1]) if not atr_pct_series.empty else 0,
+                        "ma20_dist": math.compute_ma_distance(prices, 20),
+                        "ma50_dist": math.compute_ma_distance(prices, 50),
+                        "momentum_current": math.compute_momentum(prices, w) * 100,
+                        "momentum_20d": math.compute_momentum(prices, 20) * 100,
+                        "trend_persistence": math.compute_trend_persistence(rets, "up", w),
+                        "liq_persistence": math.compute_liquidity_persistence(dollar_vol, 1),
+                        "gap_freq": math.compute_gap_frequency(math.compute_gap_percent(math.compute_gaps(opens, prices), prices), 2.0, w),
+                        "illiq_accel": math.compute_illiq_acceleration(math.compute_amihud_illiquidity(rets, dollar_vol, min(w, 20)), min(w, 20)),
+                        "sparkline": prices.tail(20).tolist()
+                    })
+                    
+                    symbols_data.append(symbol_data)
+                except Exception as e:
+                    logger.warning(f"Error hydrating {ticker}: {e}")
+                    continue
+            return symbols_data
+        
+        # Fallback to sample generator if MarketState fails
         df = service._generate_sample_data(state.universe)
-        
-        # Convert to list of dicts
-        symbols_data = df.to_dict('records')
-        
-        return symbols_data
+        return df.to_dict('records')
     
     def _evaluate_symbol(self, symbol_data: Dict, state: ScreenerState) -> bool:
         """Evaluate all conditions against a single symbol."""
@@ -283,6 +354,21 @@ class FormulaParser:
         '<': 'lt', '<=': 'lte', '>': 'gt', '>=': 'gte',
         '=': 'eq', '==': 'eq', '!=': 'neq', '<>': 'neq'
     }
+
+    # Keyword aliases to internal field names
+    METRIC_ALIASES = {
+        "RSI": "RSI_14",
+        "PRICE": "price",
+        "CLOSE": "price",
+        "VOL": "dollar_volume",
+        "VOLUME": "dollar_volume",
+        "CHANGE": "change_1d",
+        "MOMENTUM": "momentum_20d",
+        "VOLATILITY": "realized_vol",
+        "RV": "realized_vol",
+        "ATR": "atr_pct",
+        "LIQUIDITY": "liq_persistence"
+    }
     
     def parse(self, formula: str) -> List[Condition]:
         """
@@ -317,7 +403,9 @@ class FormulaParser:
             if op_str in expr:
                 parts = expr.split(op_str)
                 if len(parts) == 2:
-                    field = parts[0].strip()
+                    field = parts[0].strip().upper()
+                    # Resolve aliases
+                    internal_field = self.METRIC_ALIASES.get(field, field.lower())
                     value_str = parts[1].strip()
                     
                     # Parse value
@@ -332,7 +420,7 @@ class FormulaParser:
                         value = value_str
                     
                     return Condition(
-                        field=field,
+                        field=internal_field,
                         operator=op_code,
                         value=value,
                         condition_type="indicator",

@@ -1,0 +1,671 @@
+"""Shared PCA V2 analytics.
+
+The implementation is designed for real local parquet data and deterministic
+JSON output. It avoids placeholders: where the repo lacks true external asset
+classes, outputs are marked as proxy/data-constrained in metadata.
+"""
+
+from __future__ import annotations
+
+import math
+from functools import lru_cache
+from typing import Any, Iterable
+
+import numpy as np
+import pandas as pd
+from scipy import stats
+from scipy.linalg import subspace_angles
+from scipy.optimize import minimize
+from sklearn.covariance import LedoitWolf, MinCovDet, OAS
+
+try:
+    import cvxpy as cp
+except Exception:  # pragma: no cover
+    cp = None
+
+from .data_loader import (
+    dollar_volume_matrix,
+    latest_market_caps,
+    load_category7_macro,
+    ohlcv_for_symbols,
+    parse_symbols,
+    returns_matrix,
+    sector_map,
+)
+
+
+DEFAULT_SYMBOLS = ["SPY", "QQQ", "IWM", "EFA", "EEM", "TLT", "GLD", "USO", "AAPL", "MSFT", "NVDA", "AMZN"]
+
+
+def clean_json(value: Any) -> Any:
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        v = float(value)
+        return v if math.isfinite(v) else None
+    if isinstance(value, pd.Timestamp):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, np.ndarray):
+        return clean_json(value.tolist())
+    if isinstance(value, pd.Series):
+        return clean_json(value.tolist())
+    if isinstance(value, pd.DataFrame):
+        return clean_json(value.to_dict("records"))
+    if isinstance(value, dict):
+        return {str(k): clean_json(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [clean_json(v) for v in value]
+    return value
+
+
+def number_like(value: Any, default: float | None = None) -> float | None:
+    try:
+        out = float(value)
+    except Exception:
+        return default
+    return out if math.isfinite(out) else default
+
+
+def response(
+    feature_id: str,
+    summary_cards: list[dict[str, Any]],
+    charts: dict[str, Any],
+    tables: dict[str, Any],
+    alerts: list[dict[str, Any]] | None = None,
+    meta: dict[str, Any] | None = None,
+    status: str = "ok",
+) -> dict[str, Any]:
+    return clean_json(
+        {
+            "feature_id": f"feature_{str(feature_id).zfill(2)}",
+            "status": status,
+            "summary_cards": summary_cards,
+            "charts": charts,
+            "tables": tables,
+            "alerts": alerts or [],
+            "meta": meta or {},
+        }
+    )
+
+
+def compact_records(df: pd.DataFrame, limit: int = 500) -> list[dict[str, Any]]:
+    if df is None or df.empty:
+        return []
+    out = df.copy()
+    if len(out) > limit:
+        idx = np.unique(np.round(np.linspace(0, len(out) - 1, limit)).astype(int))
+        out = out.iloc[idx]
+    for col in out.columns:
+        if np.issubdtype(out[col].dtype, np.datetime64):
+            out[col] = out[col].dt.strftime("%Y-%m-%d")
+    return clean_json(out.to_dict("records"))
+
+
+def matrix_records(matrix: pd.DataFrame | np.ndarray, labels: Iterable[str] | None = None, limit: int = 120) -> list[dict[str, Any]]:
+    if isinstance(matrix, pd.DataFrame):
+        row_labels = [str(x) for x in matrix.index]
+        col_labels = [str(x) for x in matrix.columns]
+        arr = matrix.to_numpy(dtype=float)
+    else:
+        arr = np.asarray(matrix, dtype=float)
+        base = list(labels or [f"A{i+1}" for i in range(arr.shape[0])])
+        row_labels = base[: arr.shape[0]]
+        col_labels = base[: arr.shape[1]]
+    n = min(arr.shape[0], limit)
+    m = min(arr.shape[1], limit)
+    rows = []
+    for i in range(n):
+        for j in range(m):
+            rows.append({"row": row_labels[i], "col": col_labels[j], "value": float(arr[i, j])})
+    return clean_json(rows)
+
+
+def parse_compute_mode(payload: dict[str, Any] | None) -> str:
+    payload = payload or {}
+    raw = str(payload.get("compute_mode") or payload.get("mode") or "realtime").lower()
+    if raw == "research" or payload.get("research_mode") is True:
+        return "research"
+    return "realtime"
+
+
+def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> dict[str, Any]:
+    payload = payload or {}
+    lookback = int(number_like(payload.get("window_length") or payload.get("window_days") or payload.get("lookback_days"), 504) or 504)
+    max_symbols = int(number_like(payload.get("max_symbols") or payload.get("max_tickers"), 120) or 120)
+    symbols = parse_symbols(payload, default_limit=max(min_symbols, min(max_symbols, 120)), max_symbols=max_symbols)
+    frequency = str(payload.get("sampling_frequency") or payload.get("frequency") or "daily").lower()
+    rets = returns_matrix(symbols, lookback_days=max(lookback, 80), frequency=frequency)
+    if rets.shape[1] < min_symbols:
+        symbols = parse_symbols({}, default_limit=max(min_symbols, 80), max_symbols=max_symbols)
+        rets = returns_matrix(symbols, lookback_days=max(lookback, 80), frequency=frequency)
+    rets = rets.dropna(axis=1, how="all").fillna(0.0)
+    symbols = [str(c) for c in rets.columns]
+    return {
+        "payload": payload,
+        "symbols": symbols,
+        "returns": rets,
+        "lookback_days": lookback,
+        "frequency": frequency,
+        "sectors": sector_map(symbols),
+        "market_caps": latest_market_caps(symbols),
+        "compute_mode": parse_compute_mode(payload),
+    }
+
+
+def covariance_estimator(returns: pd.DataFrame, method: str = "ledoit_wolf", ewma_lambda: float = 0.94) -> tuple[np.ndarray, dict[str, Any]]:
+    x = returns.fillna(0.0).to_numpy(dtype=float)
+    method = str(method or "ledoit_wolf").lower().replace("-", "_")
+    meta: dict[str, Any] = {"estimator": method}
+    if method in {"ledoit_wolf", "lw"}:
+        est = LedoitWolf().fit(x)
+        meta["shrinkage"] = float(est.shrinkage_)
+        return est.covariance_, meta
+    if method == "oas":
+        est = OAS().fit(x)
+        meta["shrinkage"] = float(est.shrinkage_)
+        return est.covariance_, meta
+    if method in {"mcd", "mincovdet", "minimum_covariance_determinant"} and len(x) > x.shape[1] + 5:
+        est = MinCovDet(random_state=7, support_fraction=0.75).fit(x)
+        meta["support_fraction"] = float(np.mean(est.support_))
+        return est.covariance_, meta
+    if method == "ewma":
+        lam = min(0.995, max(0.50, float(ewma_lambda)))
+        w = np.array([(1 - lam) * lam ** i for i in range(len(x) - 1, -1, -1)], dtype=float)
+        w = w / max(w.sum(), 1e-12)
+        xc = x - np.average(x, axis=0, weights=w)
+        cov = (xc * w[:, None]).T @ xc
+        meta["ewma_lambda"] = lam
+        meta["half_life"] = float(np.log(0.5) / np.log(lam))
+        return cov, meta
+    return np.cov(x, rowvar=False), meta
+
+
+def eig_sorted(cov: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    vals, vecs = np.linalg.eigh((cov + cov.T) / 2)
+    idx = np.argsort(vals)[::-1]
+    return np.maximum(vals[idx], 0.0), vecs[:, idx]
+
+
+def mp_threshold(eigenvalues: np.ndarray, n_assets: int, n_obs: int, sigma2: float | None = None) -> dict[str, float]:
+    q = max(float(n_assets) / max(float(n_obs), 1.0), 1e-9)
+    vals = np.asarray(eigenvalues, dtype=float)
+    sigma = float(sigma2) if sigma2 is not None else float(np.nanmedian(vals) if len(vals) else 1.0)
+    sigma = max(sigma, 1e-12)
+    root = math.sqrt(q)
+    return {
+        "q_ratio": q,
+        "sigma2": sigma,
+        "lambda_min": sigma * (1 - root) ** 2,
+        "lambda_max": sigma * (1 + root) ** 2,
+    }
+
+
+def scree_elbow(eigenvalues: np.ndarray) -> int:
+    vals = np.asarray(eigenvalues, dtype=float)
+    if len(vals) < 3:
+        return max(1, len(vals))
+    second = vals[:-2] - 2 * vals[1:-1] + vals[2:]
+    return int(np.argmax(second) + 1)
+
+
+def choose_k(eigenvalues: np.ndarray, mp: dict[str, float], payload: dict[str, Any] | None = None) -> dict[str, int]:
+    payload = payload or {}
+    vals = np.asarray(eigenvalues, dtype=float)
+    total = max(float(vals.sum()), 1e-12)
+    variance_threshold = float(number_like(payload.get("variance_threshold"), 0.95) or 0.95)
+    k_rmt = int(max(1, np.sum(vals > mp["lambda_max"])))
+    k_var = int(np.searchsorted(np.cumsum(vals) / total, variance_threshold) + 1)
+    k_kaiser = int(max(1, np.sum(vals > 1.0)))
+    k_elbow = scree_elbow(vals)
+    manual = payload.get("component_count") or payload.get("k") or payload.get("K")
+    k_manual = int(number_like(manual, k_rmt) or k_rmt)
+    k = int(max(1, min(len(vals), k_manual if manual is not None else k_rmt)))
+    return {"selected": k, "rmt": k_rmt, "variance_threshold": k_var, "kaiser": k_kaiser, "scree_elbow": k_elbow}
+
+
+def rmt_model(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    ctx = load_context(payload)
+    payload = ctx["payload"]
+    returns = ctx["returns"]
+    method = payload.get("covariance_estimator") or payload.get("estimator") or "ledoit_wolf"
+    cov, cov_meta = covariance_estimator(returns, method, ewma_lambda=float(number_like(payload.get("ewma_lambda"), 0.94) or 0.94))
+    evals, evecs = eig_sorted(cov)
+    mp = mp_threshold(evals, returns.shape[1], returns.shape[0], sigma2=payload.get("sigma2_noise"))
+    k_info = choose_k(evals, mp, payload)
+    k = k_info["selected"]
+    signal = (evecs[:, :k] * evals[:k]) @ evecs[:, :k].T
+    idio = np.maximum(np.diag(cov - signal), 1e-10)
+    cleaned = signal + np.diag(idio)
+    raw_evals, _ = eig_sorted(np.cov(returns.to_numpy(dtype=float), rowvar=False))
+    clean_evals, _ = eig_sorted(cleaned)
+    return {
+        **ctx,
+        "cov": cov,
+        "cleaned_cov": cleaned,
+        "eigenvalues": evals,
+        "eigenvectors": evecs,
+        "raw_eigenvalues": raw_evals,
+        "cleaned_eigenvalues": clean_evals,
+        "mp": mp,
+        "k_info": k_info,
+        "k": k,
+        "idio_var": idio,
+        "cov_meta": cov_meta,
+    }
+
+
+@lru_cache(maxsize=32)
+def _cached_rmt_key(symbols_key: tuple[str, ...], lookback: int, estimator: str, k: int | None) -> dict[str, Any]:
+    payload = {"symbols": list(symbols_key), "lookback_days": lookback, "covariance_estimator": estimator}
+    if k:
+        payload["k"] = k
+    return rmt_model(payload)
+
+
+def factor_returns(model: dict[str, Any], k: int | None = None) -> pd.DataFrame:
+    k = int(k or model["k"])
+    data = model["returns"].to_numpy(dtype=float)
+    loadings = model["eigenvectors"][:, :k]
+    factors = data @ loadings
+    return pd.DataFrame(factors, index=model["returns"].index, columns=[f"PC{i+1}" for i in range(k)])
+
+
+def loading_records(model: dict[str, Any], k: int | None = None) -> list[dict[str, Any]]:
+    k = int(k or model["k"])
+    sectors = model["sectors"]
+    records = []
+    for i, ticker in enumerate(model["symbols"]):
+        row = {"ticker": ticker, "sector": sectors.get(ticker, "Unknown")}
+        for pc in range(k):
+            row[f"PC{pc+1}"] = float(model["eigenvectors"][i, pc])
+        records.append(row)
+    return records
+
+
+def explained_variance_records(model: dict[str, Any], limit: int | None = None) -> list[dict[str, Any]]:
+    vals = model["eigenvalues"]
+    total = max(float(vals.sum()), 1e-12)
+    cum = np.cumsum(vals) / total
+    n = limit or min(len(vals), 50)
+    return [
+        {"component": f"PC{i+1}", "rank": i + 1, "eigenvalue": float(vals[i]), "explained_variance": float(vals[i] / total), "cumulative_variance": float(cum[i])}
+        for i in range(min(n, len(vals)))
+    ]
+
+
+def varimax(loadings: np.ndarray, gamma: float = 1.0, q: int = 80, tol: float = 1e-6) -> np.ndarray:
+    p, k = loadings.shape
+    r = np.eye(k)
+    d = 0.0
+    for _ in range(q):
+        old = d
+        lam = loadings @ r
+        u, s, vh = np.linalg.svd(loadings.T @ (lam ** 3 - (gamma / p) * lam @ np.diag(np.diag(lam.T @ lam))))
+        r = u @ vh
+        d = float(np.sum(s))
+        if old and d / old < 1 + tol:
+            break
+    return loadings @ r
+
+
+def portfolio_weights(symbols: list[str], payload: dict[str, Any] | None = None) -> pd.Series:
+    payload = payload or {}
+    raw = payload.get("weights") or payload.get("portfolio") or payload.get("holdings")
+    weights: dict[str, float] = {}
+    if isinstance(raw, dict):
+        weights = {str(k).upper().replace(".", "_").replace("-", "_"): float(v) for k, v in raw.items()}
+    elif isinstance(raw, list):
+        for row in raw:
+            if isinstance(row, dict):
+                t = str(row.get("ticker") or row.get("symbol") or row.get("asset") or "").upper().replace(".", "_").replace("-", "_")
+                v = number_like(row.get("weight") or row.get("target_weight") or row.get("value"), None)
+                if t and v is not None:
+                    weights[t] = float(v)
+    if not weights:
+        caps = latest_market_caps(symbols)
+        vals = np.array([caps.get(s, np.nan) for s in symbols], dtype=float)
+        if not np.isfinite(vals).any() or np.nansum(vals) <= 0:
+            vals = np.ones(len(symbols), dtype=float)
+        vals = np.nan_to_num(vals, nan=np.nanmedian(vals[np.isfinite(vals)]) if np.isfinite(vals).any() else 1.0)
+        vals = vals / vals.sum()
+        return pd.Series(vals, index=symbols)
+    s = pd.Series({sym: weights.get(sym, 0.0) for sym in symbols}, dtype=float)
+    total = float(s.abs().sum())
+    return s / total if total else pd.Series(np.ones(len(symbols)) / len(symbols), index=symbols)
+
+
+def risk_decomposition(model: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    symbols = model["symbols"]
+    w = portfolio_weights(symbols, payload).reindex(symbols).fillna(0.0).to_numpy(dtype=float)
+    cov = model["cleaned_cov"]
+    vals = model["eigenvalues"]
+    vecs = model["eigenvectors"]
+    k = model["k"]
+    port_var = float(w @ cov @ w)
+    port_vol = math.sqrt(max(port_var, 1e-16))
+    factor_exposures = vecs[:, :k].T @ w
+    factor_vars = vals[:k] * factor_exposures ** 2
+    idio_var = float(np.sum(model["idio_var"] * w ** 2))
+    total = max(float(factor_vars.sum() + idio_var), 1e-16)
+    factor_rows = [
+        {"component": f"PC{i+1}", "variance_contribution": float(factor_vars[i]), "pct_total_variance": float(factor_vars[i] / total * 100), "annualized_vol_contribution": float(math.sqrt(max(factor_vars[i], 0)) * math.sqrt(252))}
+        for i in range(k)
+    ]
+    factor_rows.append({"component": "Idiosyncratic", "variance_contribution": idio_var, "pct_total_variance": float(idio_var / total * 100), "annualized_vol_contribution": float(math.sqrt(max(idio_var, 0)) * math.sqrt(252))})
+    sigma_w = cov @ w
+    mrc = w * sigma_w / max(port_vol, 1e-12)
+    pos_rows = []
+    sectors = model["sectors"]
+    for i, ticker in enumerate(symbols):
+        pc_drive = int(np.argmax(np.abs(vecs[i, :k] * factor_exposures))) + 1 if k else 1
+        pos_rows.append({"ticker": ticker, "sector": sectors.get(ticker, "Unknown"), "weight": float(w[i]), "marginal_risk_contribution": float(mrc[i]), "pct_total_risk": float(mrc[i] / max(port_vol, 1e-12) * 100), "dominant_pc": f"PC{pc_drive}"})
+    rets = model["returns"].reindex(columns=symbols).fillna(0.0).to_numpy(dtype=float)
+    p_returns = rets @ w
+    alpha = float(number_like((payload or {}).get("var_confidence"), 0.95) or 0.95)
+    z = stats.norm.ppf(alpha)
+    var_gauss = port_vol * z
+    cvar_gauss = port_vol * stats.norm.pdf(z) / max(1 - alpha, 1e-6)
+    hist_var = -float(np.nanquantile(p_returns, 1 - alpha)) if len(p_returns) else None
+    hist_cvar = -float(np.nanmean(p_returns[p_returns <= np.nanquantile(p_returns, 1 - alpha)])) if len(p_returns) else None
+    skew = float(stats.skew(p_returns, nan_policy="omit")) if len(p_returns) > 5 else 0.0
+    kurt = float(stats.kurtosis(p_returns, fisher=True, nan_policy="omit")) if len(p_returns) > 5 else 0.0
+    z_cf = z + (z * z - 1) * skew / 6 + (z ** 3 - 3 * z) * kurt / 24 - (2 * z ** 3 - 5 * z) * skew * skew / 36
+    return {
+        "portfolio_vol_daily": port_vol,
+        "portfolio_vol_annualized": port_vol * math.sqrt(252),
+        "factor_rows": factor_rows,
+        "position_rows": sorted(pos_rows, key=lambda r: abs(r["pct_total_risk"]), reverse=True),
+        "var": {"confidence": alpha, "gaussian_var": var_gauss, "cornish_fisher_var": port_vol * z_cf, "gaussian_cvar": cvar_gauss, "historical_var": hist_var, "historical_cvar": hist_cvar},
+        "portfolio_returns": pd.Series(p_returns, index=model["returns"].index),
+        "factor_exposures": factor_exposures,
+    }
+
+
+def residual_matrix(model: dict[str, Any], k: int | None = None) -> pd.DataFrame:
+    k = int(k or model["k"])
+    rets = model["returns"].fillna(0.0)
+    f = factor_returns(model, k)
+    x = np.column_stack([np.ones(len(f)), f.to_numpy(dtype=float)])
+    y = rets.to_numpy(dtype=float)
+    beta = np.linalg.pinv(x.T @ x) @ x.T @ y
+    resid = y - x @ beta
+    return pd.DataFrame(resid, index=rets.index, columns=rets.columns)
+
+
+def ou_signal_table(model: dict[str, Any], payload: dict[str, Any] | None = None) -> pd.DataFrame:
+    payload = payload or {}
+    resid = residual_matrix(model)
+    window = int(number_like(payload.get("ou_window"), 126) or 126)
+    entry = float(number_like(payload.get("entry_z"), 2.0) or 2.0)
+    max_half_life = float(number_like(payload.get("max_half_life"), 60.0) or 60.0)
+    sectors = model["sectors"]
+    rows = []
+    for ticker in resid.columns:
+        x = resid[ticker].tail(window).cumsum().dropna().to_numpy(dtype=float)
+        if len(x) < 25 or np.nanstd(x) <= 0:
+            continue
+        y = x[1:]
+        lag = x[:-1]
+        design = np.column_stack([np.ones(len(lag)), lag])
+        a, b = np.linalg.lstsq(design, y, rcond=None)[0]
+        b = float(np.clip(b, 1e-6, 0.999999))
+        kappa = -math.log(b)
+        mu = float(a / (1 - b)) if abs(1 - b) > 1e-8 else float(np.mean(x))
+        err = y - (a + b * lag)
+        zeta = float(np.std(err, ddof=1))
+        sigma = zeta * math.sqrt(max(2 * kappa / max(1 - math.exp(-2 * kappa), 1e-9), 1e-9))
+        sigma_eq = sigma / math.sqrt(max(2 * kappa, 1e-9))
+        zscore = float((x[-1] - mu) / max(sigma_eq, 1e-9))
+        half_life = float(math.log(2) / max(kappa, 1e-9))
+        direction = "Long" if zscore < -entry else "Short" if zscore > entry else "No Signal"
+        viable = direction != "No Signal" and half_life <= max_half_life
+        rows.append({"ticker": ticker, "sector": sectors.get(ticker, "Unknown"), "residual_z": zscore, "ou_half_life_days": half_life, "kappa": kappa, "mu": mu, "sigma_eq": sigma_eq, "direction": direction, "economically_viable": bool(viable), "estimated_days_to_half_reversion": half_life})
+    return pd.DataFrame(rows).sort_values("residual_z", key=lambda s: s.abs(), ascending=False)
+
+
+def rolling_pca_metrics(payload: dict[str, Any] | None = None, windows: tuple[int, ...] = (21, 63, 126, 252)) -> pd.DataFrame:
+    ctx = load_context(payload)
+    rets = ctx["returns"]
+    rows = []
+    for w in windows:
+        if len(rets) < w + 5:
+            continue
+        step = max(1, int(w // 8))
+        prior_vec = None
+        series = []
+        for end in range(w, len(rets) + 1, step):
+            sample = rets.iloc[end - w : end]
+            cov, _ = covariance_estimator(sample, (payload or {}).get("covariance_estimator", "ledoit_wolf"))
+            vals, vecs = eig_sorted(cov)
+            pc1 = float(vals[0] / max(vals.sum(), 1e-12))
+            cos = abs(float(vecs[:, 0] @ prior_vec)) if prior_vec is not None else 1.0
+            series.append(pc1)
+            rows.append({"date": sample.index[-1], "window": w, "pc1_share": pc1, "pc1_cosine_stability": cos, "effective_dimensions": float((vals.sum() ** 2) / max(np.sum(vals ** 2), 1e-12)), "eigen_ratio_k": int(np.argmax(vals[:-1] / np.maximum(vals[1:], 1e-12)) + 1) if len(vals) > 2 else 1})
+            prior_vec = vecs[:, 0]
+        if series:
+            arr = np.asarray(series)
+            mean = float(arr.mean())
+            std = float(arr.std(ddof=1) or 1.0)
+            for r in rows:
+                if r["window"] == w:
+                    r["pc1_zscore"] = float((r["pc1_share"] - mean) / std)
+    return pd.DataFrame(rows)
+
+
+def cusum_table(series: pd.Series) -> list[dict[str, Any]]:
+    x = pd.to_numeric(series, errors="coerce").dropna().to_numpy(dtype=float)
+    if len(x) < 5:
+        return []
+    centered = x - x.mean()
+    s = x.std(ddof=1) or 1.0
+    vals = np.abs(np.cumsum(centered)) / (s * math.sqrt(len(x)))
+    return [{"index": i, "cusum": float(v), "critical_90": 1.224, "critical_95": 1.358, "critical_99": 1.628, "break": bool(v > 1.358)} for i, v in enumerate(vals)]
+
+
+def optimize_portfolio(model: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    symbols = model["symbols"]
+    cov = model["cleaned_cov"]
+    mu = model["returns"].mean().reindex(symbols).fillna(0.0).to_numpy(dtype=float) * 252
+    n = len(symbols)
+    if cp is None:
+        inv = np.linalg.pinv(cov)
+        w = inv @ np.ones(n)
+        w = np.maximum(w, 0)
+        w = w / max(w.sum(), 1e-12)
+        status = "cvxpy_unavailable_closed_form_gmvp"
+    else:
+        w_var = cp.Variable(n)
+        risk_aversion = float(number_like(payload.get("risk_aversion"), 5.0) or 5.0)
+        objective = cp.Minimize(cp.quad_form(w_var, cov) - (1.0 / max(risk_aversion, 1e-6)) * mu @ w_var)
+        constraints = [cp.sum(w_var) == 1]
+        if bool(payload.get("long_short", False)):
+            constraints.append(cp.norm1(w_var) <= float(number_like(payload.get("gross_limit"), 2.0) or 2.0))
+        else:
+            constraints += [w_var >= 0, w_var <= float(number_like(payload.get("max_weight"), 0.12) or 0.12)]
+        problem = cp.Problem(objective, constraints)
+        try:
+            problem.solve(solver=cp.OSQP, warm_start=True, verbose=False)
+            w = np.asarray(w_var.value, dtype=float)
+            status = str(problem.status)
+        except Exception:
+            inv = np.linalg.pinv(cov)
+            w = inv @ np.ones(n)
+            w = np.maximum(w, 0)
+            w = w / max(w.sum(), 1e-12)
+            status = "fallback_gmvp"
+    w = np.nan_to_num(w, nan=0.0)
+    if abs(w.sum()) > 1e-12:
+        w = w / w.sum()
+    frontier = []
+    for t in np.linspace(0, 1, 35):
+        blend = (1 - t) * np.ones(n) / n + t * w
+        ret = float(blend @ mu)
+        vol = float(math.sqrt(max(blend @ cov @ blend, 0)) * math.sqrt(252))
+        frontier.append({"risk": vol, "return": ret, "lambda": float(t)})
+    weights = [{"ticker": symbols[i], "weight": float(w[i]), "sector": model["sectors"].get(symbols[i], "Unknown")} for i in np.argsort(np.abs(w))[::-1]]
+    return {"status": status, "weights": weights, "frontier": frontier, "expected_return": float(w @ mu), "annualized_vol": float(math.sqrt(max(w @ cov @ w, 0)) * math.sqrt(252))}
+
+
+def bootstrap_validation(model: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    mode = parse_compute_mode(payload)
+    b = int(number_like(payload.get("bootstrap_runs"), 80 if mode == "research" else 30) or 30)
+    b = min(b, 250 if mode == "research" else 60)
+    rng = np.random.default_rng(7)
+    rets = model["returns"]
+    x = rets.to_numpy(dtype=float)
+    k = model["k"]
+    evals = []
+    cosines = [[] for _ in range(k)]
+    for _ in range(b):
+        idx = rng.integers(0, len(x), len(x))
+        sample = pd.DataFrame(x[idx], columns=rets.columns)
+        cov, _ = covariance_estimator(sample, model["cov_meta"].get("estimator", "ledoit_wolf"))
+        vals, vecs = eig_sorted(cov)
+        evals.append(vals[: min(25, len(vals))])
+        for j in range(k):
+            cosines[j].append(abs(float(model["eigenvectors"][:, j] @ vecs[:, j])))
+    e = np.asarray(evals)
+    bands = []
+    for j in range(e.shape[1]):
+        bands.append({"component": f"PC{j+1}", "eigenvalue": float(model["eigenvalues"][j]), "ci_low": float(np.percentile(e[:, j], 5)), "ci_high": float(np.percentile(e[:, j], 95)), "mp_lambda_max": float(model["mp"]["lambda_max"]), "verdict": "robust" if np.percentile(e[:, j], 5) > model["mp"]["lambda_max"] else "marginal" if np.percentile(e[:, j], 95) > model["mp"]["lambda_max"] else "noise"})
+    scorecard = []
+    for j in range(k):
+        vals = np.asarray(cosines[j])
+        scorecard.append({"component": f"PC{j+1}", "cosine_mean": float(vals.mean()), "cosine_p05": float(np.percentile(vals, 5)), "verdict": "Statistically Robust" if vals.mean() > 0.9 and np.percentile(vals, 5) > 0.8 else "Marginal" if vals.mean() > 0.7 else "Potentially Spurious"})
+    return {"bootstrap_bands": bands, "genuineness_scorecard": scorecard, "bootstrap_runs": b}
+
+
+def residual_contagion(model: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    resid = residual_matrix(model)
+    window = int(number_like(payload.get("residual_window"), 63) or 63)
+    r = resid.tail(window)
+    corr = r.corr().fillna(0.0)
+    vals, _ = eig_sorted(corr.to_numpy(dtype=float))
+    sectors = model["sectors"]
+    group_rows = []
+    for sector in sorted(set(sectors.values())):
+        cols = [s for s in corr.columns if sectors.get(s) == sector]
+        if len(cols) < 2:
+            continue
+        c = corr.loc[cols, cols].to_numpy(dtype=float)
+        group_rows.append({"group": sector, "avg_pairwise_residual_corr": float(c[np.triu_indices_from(c, 1)].mean()), "asset_count": len(cols)})
+    pairs = []
+    arr = corr.to_numpy(dtype=float)
+    cols = list(corr.columns)
+    for i in range(len(cols)):
+        for j in range(i + 1, len(cols)):
+            pairs.append({"pair": f"{cols[i]} / {cols[j]}", "ticker_a": cols[i], "ticker_b": cols[j], "sector_a": sectors.get(cols[i], "Unknown"), "sector_b": sectors.get(cols[j], "Unknown"), "residual_corr": float(arr[i, j]), "same_sector": sectors.get(cols[i]) == sectors.get(cols[j])})
+    pairs = sorted(pairs, key=lambda x: abs(x["residual_corr"]), reverse=True)[:80]
+    under = []
+    for kk in range(1, min(12, model["returns"].shape[1] - 1, len(model["eigenvalues"])) + 1):
+        rr = residual_matrix(model, kk).tail(window).corr().fillna(0.0).to_numpy(dtype=float)
+        upper = rr[np.triu_indices_from(rr, 1)]
+        ev, _ = eig_sorted(rr)
+        under.append({"k": kk, "avg_abs_residual_corr": float(np.mean(np.abs(upper))), "lambda1_residual": float(ev[0])})
+    return {"residual_corr": corr, "lambda1_residual": float(vals[0]), "group_rows": group_rows, "pairs": pairs, "under_specification": under}
+
+
+def stress_scenarios(model: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    w = portfolio_weights(model["symbols"], payload).reindex(model["symbols"]).fillna(0.0).to_numpy(dtype=float)
+    f = factor_returns(model)
+    stds = f.std().replace(0, np.nan).fillna(1e-6).to_numpy(dtype=float)
+    magnitude = float(number_like(payload.get("shock_sigma"), 2.0) or 2.0)
+    exposures = model["eigenvectors"][:, : model["k"]].T @ w
+    rows = []
+    waterfall = {}
+    for j in range(model["k"]):
+        for sign in (1, -1):
+            shock = np.zeros(model["k"])
+            shock[j] = sign * magnitude * stds[j]
+            asset_impacts = model["eigenvectors"][:, : model["k"]] @ shock
+            pnl = float(w @ asset_impacts)
+            label = f"PC{j+1} {'+' if sign > 0 else '-'}{magnitude:g}sigma"
+            rows.append({"scenario": label, "component": f"PC{j+1}", "direction": "positive" if sign > 0 else "negative", "portfolio_pnl_pct": pnl, "shock_sigma": sign * magnitude, "factor_exposure": float(exposures[j])})
+            waterfall[label] = sorted([{"ticker": model["symbols"][i], "pnl_contribution": float(w[i] * asset_impacts[i])} for i in range(len(w))], key=lambda r: r["pnl_contribution"])[:80]
+    scen = pd.DataFrame(rows).sort_values("portfolio_pnl_pct")
+    worst = scen.iloc[0].to_dict() if not scen.empty else {}
+    q_hist = f / f.std().replace(0, np.nan)
+    analogs = []
+    if not scen.empty:
+        target = np.zeros(model["k"])
+        pc_idx = int(str(worst.get("component", "PC1")).replace("PC", "")) - 1
+        target[pc_idx] = float(worst.get("shock_sigma", -magnitude))
+        dist = ((q_hist.fillna(0.0).to_numpy(dtype=float) - target) ** 2).sum(axis=1)
+        for idx in np.argsort(dist)[:5]:
+            analogs.append({"date": str(pd.Timestamp(q_hist.index[idx]).date()), "distance": float(math.sqrt(dist[idx])), "realized_portfolio_return": float(model["returns"].iloc[idx].to_numpy(dtype=float) @ w)})
+    losses = -scen["portfolio_pnl_pct"].to_numpy(dtype=float) if not scen.empty else np.array([])
+    stress_var = float(np.percentile(losses, 95)) if len(losses) else None
+    stress_cvar = float(losses[losses >= stress_var].mean()) if stress_var is not None and np.any(losses >= stress_var) else stress_var
+    return {"scenario_rows": rows, "worst_scenario": worst, "waterfall": waterfall, "analogs": analogs, "stress_var": stress_var, "stress_cvar": stress_cvar}
+
+
+def liquidity_outputs(model: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    symbols = model["symbols"]
+    dv = dollar_volume_matrix(symbols, lookback_days=model["lookback_days"]).reindex(model["returns"].index).ffill()
+    rets = model["returns"].reindex(columns=symbols).fillna(0.0)
+    amihud = (rets.abs() / dv.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan)
+    amihud = np.log1p(amihud * 1e9).rolling(int(number_like(payload.get("illiquidity_window"), 21) or 21), min_periods=5).mean()
+    z = amihud.sub(amihud.mean(axis=1), axis=0).div(amihud.std(axis=1).replace(0, np.nan), axis=0).fillna(0.0)
+    cov = np.cov(z.to_numpy(dtype=float), rowvar=False)
+    vals, vecs = eig_sorted(cov)
+    liq_factor = pd.Series(z.to_numpy(dtype=float) @ vecs[:, 0], index=z.index, name="latent_liquidity")
+    dliq = liq_factor.diff().fillna(0.0).to_numpy(dtype=float)
+    betas = []
+    f1 = factor_returns(model, 1).iloc[:, 0].reindex(rets.index).fillna(0.0).to_numpy(dtype=float)
+    x = np.column_stack([np.ones(len(dliq)), dliq, f1])
+    xtx_inv = np.linalg.pinv(x.T @ x)
+    for ticker in symbols:
+        y = rets[ticker].to_numpy(dtype=float)
+        beta = xtx_inv @ x.T @ y
+        resid = y - x @ beta
+        se = math.sqrt(max(np.var(resid), 1e-12) * xtx_inv[1, 1])
+        current_illiq = float(amihud[ticker].dropna().iloc[-1]) if not amihud[ticker].dropna().empty else None
+        pct = float((amihud[ticker].dropna() <= current_illiq).mean() * 100) if current_illiq is not None else None
+        betas.append({"ticker": ticker, "sector": model["sectors"].get(ticker, "Unknown"), "current_amihud": current_illiq, "amihud_percentile": pct, "liquidity_beta": float(beta[1]), "beta_se": float(se), "t_stat": float(beta[1] / max(se, 1e-12))})
+    betas = sorted(betas, key=lambda r: r["liquidity_beta"])
+    w = portfolio_weights(symbols, payload).reindex(symbols).fillna(0.0)
+    beta_map = pd.Series({r["ticker"]: r["liquidity_beta"] for r in betas})
+    port_beta = float((w * beta_map.reindex(symbols).fillna(0.0)).sum())
+    liq_var = float(np.var(dliq))
+    standard = risk_decomposition(model, payload)
+    port_value = float(number_like(payload.get("portfolio_value"), 1_000_000.0) or 1_000_000.0)
+    adv = dv.tail(21).median().reindex(symbols).fillna(dv.median().median())
+    vols = rets.tail(63).std().reindex(symbols).fillna(rets.std().median())
+    liquidation = []
+    for ticker in symbols:
+        pos = abs(float(w.get(ticker, 0.0))) * port_value
+        adv_i = max(float(adv.get(ticker, 1.0)), 1.0)
+        vol_i = max(float(vols.get(ticker, 0.01)), 1e-6)
+        days = max(1.0, pos / max(0.15 * adv_i, 1.0))
+        cost_bps = vol_i * math.sqrt(max(pos / max(days * adv_i, 1.0), 0.0)) * 10000
+        liquidation.append({"ticker": ticker, "position_value": pos, "adv": adv_i, "position_pct_adv": pos / adv_i, "days_to_liquidate_15pct_adv": days, "estimated_cost_bps": cost_bps, "rating": "Red" if days > 5 or cost_bps > 20 else "Amber" if days > 1 or cost_bps > 5 else "Green"})
+    lavar = (standard["var"]["gaussian_var"] or 0.0) + sum(abs(float(w.get(r["ticker"], 0))) * r["estimated_cost_bps"] / 10000 for r in liquidation)
+    return {"amihud_panel": z, "latent_liquidity": liq_factor, "liquidity_betas": betas, "portfolio_liquidity_beta": port_beta, "liquidity_variance_contribution": port_beta * port_beta * liq_var, "liquidation": sorted(liquidation, key=lambda r: r["estimated_cost_bps"], reverse=True), "lavar": lavar, "quant_unwind_score": (port_beta * port_beta * liq_var) / max(standard["portfolio_vol_daily"] ** 2, 1e-12)}
+
+
+def metadata(model: dict[str, Any], extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    out = {
+        "symbols": model["symbols"],
+        "n_assets": len(model["symbols"]),
+        "n_observations": int(model["returns"].shape[0]),
+        "date_start": str(pd.Timestamp(model["returns"].index.min()).date()) if len(model["returns"]) else None,
+        "date_end": str(pd.Timestamp(model["returns"].index.max()).date()) if len(model["returns"]) else None,
+        "k_selected": int(model["k"]),
+        "k_criteria": model["k_info"],
+        "mp": model["mp"],
+        "covariance": model["cov_meta"],
+        "data_sources": ["backend/data/market_universe.parquet", "backend/data/fundamentals/master_fundamentals.parquet", "factors/data/processed/category7_macro_regime.parquet"],
+    }
+    if extra:
+        out.update(extra)
+    return out
+
