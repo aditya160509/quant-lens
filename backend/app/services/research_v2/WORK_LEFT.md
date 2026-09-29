@@ -10,6 +10,36 @@ Status 2026-09-29: backend is complete (see `DONE.md`). The frontend works end t
 4. **Everything exportable.** LaTeX, CSV, PNG/SVG per chart, a full PDF report, and a shareable run link.
 5. **Fast and honest states.** Skeletons that match the final layout, live job progress with the step name, errors that say how to fix the input, and caveats pinned to the outputs they affect.
 
+## 0.5 Quality bar: high-end, not "okay"
+
+The target is a research tool that feels like a flagship product, not a dashboard template. Use every high-end tool where it adds meaning, and never as decoration that hides the numbers.
+
+**WebGL and GPU, used where they earn it**
+- [ ] **3D robustness landscape (r3f + drei):** the coefficient surface over two specification dimensions, orbit and zoom, with significance painted as a shader colour ramp and a zero-plane you can scrub.
+- [ ] **Regime × threshold surface:** the Chow F over the conditioning variable and time, lit mesh, with the chosen threshold as a glowing contour.
+- [ ] **Placebo universe (deck.gl or instanced r3f):** 1,000+ permutation and placebo paths drawn on the GPU, the real result a bright line cutting through the cloud, animated as the permutations stream in.
+- [ ] **Specification curve at 5,000 specs:** GPU instanced points with smooth hover, brush and linked decision panel at 60 fps.
+- [ ] **Home hero:** a live shader scene built from real data (e.g. the factor-zoo correlation network as a force graph in 3D, or the IC decay surface), not a stock animation.
+- [ ] **Graceful fallback:** detect WebGL/WebGPU and low-power mode; fall back to the SVG version with the same data; respect `prefers-reduced-motion`.
+
+**Motion and interaction**
+- [ ] Results assemble in sequence as a job finishes (verdict → headline number → evidence), with spring physics from framer-motion and number count-ups.
+- [ ] Linked brushing everywhere: hover a month in one chart and it highlights in every chart on the page.
+- [ ] Smooth morphs when switching estimator or variant (TWFE → Callaway-Sant'Anna → Sun-Abraham line morphs, not a redraw).
+- [ ] Scroll-driven "explain this test" narratives for each hero chart (Distill-style).
+- [ ] Command palette, keyboard shortcuts for every action, instant search.
+
+**Visual craft**
+- [ ] Type system: a serif display face for headlines and verdicts, a grotesk for UI, a mono with tabular numerals for data.
+- [ ] Colour: an OKLCH token scale with a perceptually uniform diverging palette for effects (negative ↔ zero ↔ positive), colour-blind safe, verified in light and dark.
+- [ ] Surfaces: layered depth with hairlines and subtle noise and grain, glass only for overlays; no generic gradient cards.
+- [ ] Every chart annotated like an FT graphic: direct labels instead of legends, callouts on the key point, a source and method line.
+- [ ] Export quality: SVG/PDF charts that drop straight into a paper at journal width.
+
+**Performance budget (high-end also means fast)**
+- [ ] First result paint < 100 ms after the job completes; 60 fps interactions; heavy WebGL views lazy-loaded per tab.
+- [ ] Lighthouse performance ≥ 90 on the feature pages despite the 3D.
+
 ## 1. Stack decision (pick once, use everywhere)
 
 | Need | Choice | Why | Already installed? |
