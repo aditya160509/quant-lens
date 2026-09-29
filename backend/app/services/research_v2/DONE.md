@@ -3,6 +3,72 @@
 Spec: `docs/research features.md` (Features 1-9 and 11; the spec defines no Feature 10).
 Review that drove this rebuild: `docs/reviews/RESEARCH_V2_REVIEW.md`.
 
+## Architecture changes (rebuild of 2026-09-29, commit fd8bb373)
+
+### Before
+
+- One 2,272-line `core/analytics.py` held every feature. Many estimators were stand-ins named after real ones (`_iv_proxy`, `_rdd_proxy`, `_goodman_bacon_proxy`, `_callaway_santanna_proxy`, a "bootstrap" that was `|t| > 2.1`).
+- Fundamental signals, controls and value weights used the latest report for every past month (look-ahead).
+- `parse_symbols` replaced unknown tickers with the default universe without saying so.
+- The numba Fama-MacBeth kernel was compiled with `fastmath=True`, which breaks `np.isfinite`, so NaN rows were treated as data.
+- There was no API route. The frontend pages had no data flow, and `registry.js` hand-copied the input contract.
+- There were no tests (the `tests/` folder was empty), only `smoke_test.py`.
+
+### After
+
+1. **Data layer** (`core/data_loader.py`, kept and extended)
+   - Strict tickers (`UnknownSymbolsError`) and a US-equity default universe.
+   - `point_in_time_fundamental` and `annual_growth` with a 90-day lag and a 550-day expiry.
+   - `ohlcv_matrices` and `static_sectors`.
+   - Monthly factor returns are now compounded instead of summed.
+   - Uploads are sandboxed to `backend/data/research_v2/uploads/`.
+2. **Panel** (`core/panel.py`, new)
+   - A `Panel` dataclass that every feature shares: signal, dependent variable, controls, weights and market cap at formation dates.
+   - Holds the full-history context used to recompute signals.
+   - Supports rebalancing, holding period, universe filters and signal transforms.
+3. **Inference** (`core/stats.py`, new): the statistical primitives, with Andrews p-values simulated from the limiting distribution.
+4. **Estimators** (`core/estimators.py`, new): cross-sectional tools shared across features, built on linearmodels.
+5. **One module per feature** (new): `canonical`, `robustness`, `placebo`, `regime`, `diagnostics`, `specification`, `causal`, `decay`, `synthetic`, `zoo`. Feature 7 uses pyfixest, differences, rdrobust, rddensity and linearmodels. Feature 9 uses pysyncon.
+6. **State** (`core/holdout.py`, new)
+   - Protected out-of-sample windows, which `build_panel` excludes.
+   - Locked specifications, which make a Feature 6 column confirmatory.
+7. **Contract** (`features/inputs.py` + `feature_XX.py`, rewritten)
+   - Each feature declares `INPUTS` (label, type, group, options, help) and `OUTPUTS` (source, render hint, primary).
+   - `registry.py` is now lazy and serves this manifest.
+8. **Response envelope** (`core/common.py`, new): JSON-safe `records`, `response`, LaTeX helpers.
+9. **API** (`backend/app/api/research_v2.py`, new, mounted in `main.py`)
+   - Endpoints: manifest, symbol search, validated uploads, background jobs, holdouts, locks.
+   - Jobs reuse the Studio `JobStore` with their own file; results go to per-job files.
+10. **Frontend** (`frontend/src/components/research-v2/`, rewritten)
+    - `api.js` holds the React Query hooks.
+    - `StudyForm.jsx` renders the form from the manifest.
+    - `renderers.jsx` has one component per render hint, built on recharts.
+    - `Workbench.jsx` is the page; `research-v2.css` and `format.js` hold styles and formatting.
+    - The layout nav is built from the manifest.
+11. **Tests** (new)
+    - `backend/tests/test_research_v2_math.py`: golden numbers and look-ahead guards.
+    - `test_research_v2_data_and_api.py`: point-in-time data, sandbox, Bacon = TWFE, API, and a render-hint contract checked against `renderers.jsx`.
+    - `test_research_v2_features.py`: every feature returns every declared output.
+    - `src/components/research-v2/__tests__/researchV2.test.tsx`: frontend.
+12. **Data refresh** (`fetchers/fetch_missing_data.py`, kept): FRED fetch now starts in 1990 and adds `BAA10Y`.
+
+### Old files
+
+| File | Fate |
+|---|---|
+| `core/analytics.py` | Deleted; replaced by the modules above |
+| `core/performance.py` | Kept, trimmed to the numba FM kernel (fastmath removed), portfolio bucketing, ACF and the inventory cache; 8 unused helpers deleted |
+| `core/data_loader.py` | Kept and extended (above); `latest_fundamentals` removed |
+| `features/feature_01..11.py` | Rewritten |
+| `registry.py`, `__init__.py` | Rewritten (lazy; package no longer imports features on import) |
+| `fetchers/fetch_missing_data.py` | Kept, extended |
+| `docs/research features.md` | Kept (the spec) |
+| `DONE.md` | Rewritten (this file) |
+| `schemas/requests.py`, `smoke_test.py` | Deleted; superseded by the API models and pytest suite |
+| `review.md`, `speed_optimizations.md` | Deleted; they described the old implementation (still in git history) |
+| empty `tests/`, `utils/` folders | Removed |
+| `frontend/.../customPagePrimitives.jsx`, `registry.js` | Deleted; replaced by the new components |
+
 ## Layout
 
 | Path | Role |
