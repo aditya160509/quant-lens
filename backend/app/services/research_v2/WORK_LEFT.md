@@ -29,17 +29,68 @@ Status 2026-09-29: backend is complete (see `DONE.md`). The frontend works end t
 
 Do **not** add ECharts or Plotly to Research V2. One family (visx + recharts) keeps the bundle and the look consistent.
 
-## 2. Inspiration to study (open source and public)
+## 2. Screenshot checklist (research 2026-09-29)
 
-- **Tables and regression output:** R `fixest::etable` / `modelsummary`, Stata `esttab`, and the booktabs look. Our HTML journal table should match these.
-- **Specification curves:** Simonsohn, Simmons & Nelson's `specr` R package (curve plus decision dashboard, the canonical design).
-- **Event study / DiD plots:** `did` (Callaway-Sant'Anna) and `fixest::iplot` plots; the Goodman-Bacon `bacondecomp` scatter.
-- **RD plots:** `rdrobust::rdplot` (binned scatter plus polynomial fit, the standard look).
-- **Synthetic control:** the `augsynth` and `Synth` package plots (treated vs synthetic, gap, placebo spaghetti).
-- **Interactive stats explainers:** Distill.pub, Seeing Theory (Brown), R Psychologist (Kristoffer Magnusson): how to show null distributions and power.
-- **Data-journalism polish:** NYT Upshot, FT Visual Vocabulary, Our World in Data (chart annotation, notes and sources).
-- **Product feel:** Linear, Vercel dashboard, Observable notebooks, Hex, Bloomberg Terminal density.
-- **Component galleries:** shadcn/ui blocks, Tremor (dashboard patterns), Aceternity/Magic UI (use sparingly for the home page only).
+Open each link, screenshot the part named in the "Capture" column, and share it. Each row names the feature it informs. Links were found by web search on 2026-09-29.
+
+### Statistical output (the canonical look researchers trust)
+
+| Feature | Source | URL | Capture |
+|---|---|---|---|
+| F02 | specr: custom plots vignette | https://masurp.github.io/specr/articles/custom-plot.html | Curve + choice panel + sample-size strip stacked; boxplot-by-choice; variance decomposition bar |
+| F02 | specr intro | https://masurp.github.io/specr/articles/specr.html | Default `plot(results)`; circular "garden of forking paths" setup plot |
+| F02 | specr repo | https://github.com/masurp/specr | README figure |
+| F02 | Hall et al. 2022, survey of multiverse visualisations | https://onlinelibrary.wiley.com/doi/abs/10.1111/cgf.14443 | Figure grid of multiverse vis types |
+| F01, F06 | modelsummary | https://modelsummary.com/ | Side-by-side regression table; `modelplot` dot-whisker |
+| F06 | modelsummary: themes and styles | https://modelsummary.com/vignettes/appearance.html | gt-styled table with spanners, footnotes and highlighted rows; density sparklines inside a table |
+| F06 | modelsummary: model summaries | https://modelsummary.com/vignettes/modelsummary.html | Stars, SE in parentheses, GOF block, stacked panels (`shape="rbind"`) |
+| F06 | modelplot | https://modelsummary.com/man/modelplot.html | Multi-model coefficient plot with shaded background band |
+| F07 DiD | DiD / event-study workshop (hesscl) | https://hesscl.com/data-viz-workshop/case-b-event-study.html | Treated vs control trends; `ggdid` group-time and dynamic plots |
+| F07 DiD | `fixes` R package README | https://cran.r-project.org/web/packages/fixes/readme/README.html | Event study with simultaneous vs pointwise bands; ATT(g,t) heatmap; honest-DiD sensitivity plot |
+| F07 RD | rdrobust `rdplot` docs | https://search.r-project.org/CRAN/refmans/rdrobust/html/rdplot.html | Binned-means RD plot with fits each side |
+| F07 RD | rdpackages repo | https://github.com/rdpackages/rdrobust | rdplot illustration (senate data) |
+| F09 | synthdid plot reference | https://synth-inference.github.io/synthdid/reference/synthdid_plot.html | Treated vs synthetic with the 2×2 "parallelogram" diagram and the effect arrow; lambda weights strip below |
+| F09 | synthdid vignette | https://github.com/synth-inference/synthdid/blob/master/vignettes/synthdid.Rmd | Unit-contribution dot plot (dot size = weight); DiD vs SC vs SDID side by side |
+| F09 | synthdid "more plotting" | https://rdrr.io/github/synth-inference/synthdid/f/vignettes/more-plotting.Rmd | Spaghetti of top-weight donors; zoomed inset around treatment onset |
+
+### Explaining inference visually (null distributions, CIs, power)
+
+| Feature | Source | URL | Capture |
+|---|---|---|---|
+| F03, F02 | R Psychologist: p-values | https://rpsychologist.com/pvalue/ | Simulated null with observed marker and shaded tail |
+| F03 | R Psychologist: power and significance | https://rpsychologist.com/d3/nhst/ | Two overlapping distributions with α/β regions (for the power card) |
+| F01, F04 | R Psychologist: confidence intervals | https://rpsychologist.com/d3/ci/ | "Dance of CIs" stack |
+| F01 | Observable: interactive t-test | https://observablehq.com/@bluprince13/an-interactive-explanation-of-the-t-test-to-compare-means | Layout of explanation text next to the live chart |
+
+### Product feel and dashboards
+
+| Area | Source | URL | Capture |
+|---|---|---|---|
+| App shell | Koyfin | https://www.koyfin.com/ | Dashboard density, sidebar drag-out, theme switcher |
+| Tokens | Bloomberg design tokens (shadcn.io) | https://www.shadcn.io/design/bloomberg | Colour tokens and the market up/down semantics |
+| Tokens | Perpetua style guide ("Bloomberg meets Linear") | https://github.com/tomiiide/perpetua/blob/main/design/STYLE_GUIDE.md | Surface steps, hairlines, serif display with mono data, density tokens |
+| Tokens | Trading terminal design system | https://vontigo.ai/docs/systems/trading-terminal | Panel rules, no-shadow elevation |
+| Shell | Fortress dashboard (shadcn + Tailwind 4) | https://fortress-shadcn.dashboardpack.com/ | Dense institutional layout on our exact stack |
+| Shell | v0 Bloomberg-like terminal | https://v0.app/templates/bloomberg-like-terminal-Ywgao7dGBbN | Terminal panes |
+| Principles | "Designing data-dense dashboards" | https://pixel-show.com/blog/designing-data-dense-dashboards | Dark surface ladder, sparkline vs full chart |
+| Styles | financial-ui-suite (14 finance aesthetics) | https://github.com/rgourley/financial-ui-suite | `research-terminal` (AlphaSense/FactSet) and `editorial-financial` (FT) examples |
+| Reports | Observable Framework showcase dashboards | https://old.observablehq.com/blog/takeaways-from-building-showcase-dashboards | Big-number boxes with tick charts; custom legends; brush-zoom |
+| Reports | Evidence example apps | http://evidence.dev/examples | Component gallery; tables with sparklines |
+| Reports | Quarto dashboards gallery | https://quarto.org/docs/dashboards/ | Value boxes + sidebar + tabset layout |
+| Reports | Hex data stories | https://hex.tech/templates/exploratory-analysis/interactive-data-stories/ | Long-form narrative report with inline charts |
+
+### Components and libraries to evaluate
+
+| Need | Source | URL | Note |
+|---|---|---|---|
+| Charts on our stack | shadcn/ui Chart (Recharts v3) | https://ui.shadcn.com/docs/components/radix/chart | Tooltip, legend and theming pattern to adopt for simple charts |
+| Chart gallery | shadcn.io charts (53) | https://www.shadcn.io/charts | Interactive area/bar with range brush |
+| Linked chart + table | linked-chart | https://awesome-shadcn-ui.com/linked-chart | Click the chart, filter the table: use for the F02 matrix |
+| Dashboard kit | Tremor | https://github.com/tremorlabs/tremor-npm | KPI card + chart patterns |
+| Chart grammar | TanStack Charts | https://github.com/TanStack/charts | Library comparison table (bundle size, SVG/Canvas); candidate if visx gets heavy |
+| Comparison | TanStack Charts vs others | https://github.com/TanStack/charts/blob/main/docs/comparison.md | Size and feature matrix used for the stack decision |
+
+Already decided from this research: keep recharts through **shadcn Chart** for simple charts (the same library, better tooltips and theming) and **visx** for the statistical hero plots. Adopt the specr, rdplot and synthdid visual grammars exactly, because readers already know how to read them.
 
 ## 3. App-level work
 
