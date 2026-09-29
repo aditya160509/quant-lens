@@ -88,27 +88,49 @@ def available_symbols() -> tuple[str, ...]:
     return tuple(str(x) for x in counts.index)
 
 
+class UnknownSymbolsError(ValueError):
+    """Raised when a researcher names tickers that are not in the local data."""
+
+    def __init__(self, missing: list[str]):
+        self.missing = missing
+        super().__init__(f"Unknown tickers (not in local market data): {', '.join(missing[:25])}")
+
+
+# Named cross-sectional universes. Cross-sectional tests must not mix markets
+# and currencies, so every named universe resolves to US common equities.
+US_UNIVERSE_LABELS = {"", "default", "broad", "broad_market", "master", "master_universe", "us", "us_equities"}
+GLOBAL_UNIVERSE_LABELS = {"all", "full", "whole", "global"}
+
+
+@lru_cache(maxsize=1)
+def us_equity_symbols() -> tuple[str, ...]:
+    """US common equities: in the market file, no exchange suffix, with a sector."""
+
+    sectors = static_sectors()
+    return tuple(s for s in available_symbols() if "_" not in s and not s.startswith("^") and s in sectors.index)
+
+
 def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: int = 5000) -> list[str]:
     payload = payload or {}
     raw = payload.get("tickers") or payload.get("symbols") or payload.get("universe") or payload.get("asset_universe")
-    universe = list(available_symbols())
-    existing = set(universe)
-    label = str(raw or "").strip().lower()
-    if raw is None or label in {"", "default", "broad", "broad_market"}:
-        requested = universe[:default_limit]
-    elif label in {"all", "full", "master", "master_universe", "whole"}:
-        requested = universe
-    elif isinstance(raw, str):
+    cap = int(payload.get("max_symbols") or payload.get("max_tickers") or default_limit or max_symbols)
+    cap = max(1, min(cap, max_symbols))
+    label = str(raw or "").strip().lower() if not isinstance(raw, (list, tuple)) else "__list__"
+    if raw is None or label in US_UNIVERSE_LABELS:
+        return list(us_equity_symbols()[:cap])
+    if label in GLOBAL_UNIVERSE_LABELS:
+        return list(available_symbols()[:cap])
+    if isinstance(raw, str):
         requested = [normalize_symbol(x) for x in re.split(r"[,;\s]+", raw) if x.strip()]
     elif isinstance(raw, Iterable):
         requested = [normalize_symbol(x) for x in raw if str(x).strip()]
     else:
         requested = [normalize_symbol(raw)]
-    out = [s for s in requested if s in existing]
-    if not out:
-        out = universe[:default_limit]
-    cap = int(payload.get("max_symbols") or payload.get("max_tickers") or max_symbols)
-    return out[: max(1, min(cap, max_symbols))]
+    existing = set(available_symbols())
+    missing = [s for s in dict.fromkeys(requested) if s not in existing]
+    if missing:
+        raise UnknownSymbolsError(missing)
+    return list(dict.fromkeys(requested))[:cap]
 
 
 def ohlcv_for_symbols(symbols: Iterable[str], lookback_days: int | None = None) -> pd.DataFrame:
@@ -152,23 +174,23 @@ def returns_matrix(symbols: Iterable[str], lookback_days: int = 2520, frequency:
     return np.log(prices).diff().replace([np.inf, -np.inf], np.nan).dropna(how="all")
 
 
+UPLOAD_DIR = BACKEND_DATA / "research_v2" / "uploads"
+
+
 def _safe_user_path(path_value: Any) -> Path | None:
+    """Resolve an upload id (as returned by the upload endpoint) to a file in UPLOAD_DIR.
+
+    Only files inside UPLOAD_DIR are readable; anything else is rejected so a
+    payload cannot point the service at arbitrary files on the server.
+    """
+
     if not path_value:
         return None
-    path = Path(str(path_value)).expanduser()
-    if not path.is_absolute():
-        path = ROOT / path
-    try:
-        resolved = path.resolve()
-    except Exception:
-        return None
-    upload_roots = [BACKEND_DATA / "uploads", BACKEND_DATA / "research_uploads"]
-    for root in upload_roots:
-        root.mkdir(parents=True, exist_ok=True)
-    allowed_roots = [ROOT.resolve(), *[p.resolve() for p in upload_roots], Path("/tmp").resolve()]
-    if not any(str(resolved).startswith(str(root)) for root in allowed_roots):
-        return None
-    return resolved if resolved.exists() else None
+    name = Path(str(path_value)).name
+    resolved = (UPLOAD_DIR / name).resolve()
+    if resolved.parent != UPLOAD_DIR.resolve() or not resolved.exists():
+        raise ValueError(f"Upload '{name}' was not found. Upload the file again.")
+    return resolved
 
 
 def load_signal_upload(path_value: Any) -> pd.DataFrame:
@@ -253,13 +275,88 @@ def load_fundamentals() -> pd.DataFrame:
 
 
 @lru_cache(maxsize=1)
-def latest_fundamentals() -> pd.DataFrame:
+def static_sectors() -> pd.Series:
+    """Sector per ticker. Sector membership is treated as time-invariant."""
+
     df = load_fundamentals()
+    if df.empty or "sector" not in df.columns:
+        return pd.Series(dtype=object)
+    out = df.dropna(subset=["sector"]).sort_values("reportDate").groupby("ticker")["sector"].last()
+    return out[out.astype(str).str.len() > 0]
+
+
+# Balance-sheet items are stocks (any report type is valid at its date);
+# income-statement items are flows and are only comparable across annual reports.
+STOCK_FIELDS = {"Total Assets", "Stockholders Equity", "Common Stock Equity", "Total Debt", "Ordinary Shares Number", "Share Issued"}
+FLOW_FIELDS = {"Net Income", "Net Income Common Stockholders", "Gross Profit", "Operating Income", "Total Revenue"}
+
+
+def point_in_time_fundamental(field: str, dates: pd.DatetimeIndex, symbols: Iterable[str], lag_days: int = 90, max_age_days: int = 550) -> pd.DataFrame:
+    """Fundamental ``field`` as it was knowable at each date.
+
+    A report dated ``reportDate`` becomes usable ``lag_days`` later (filing lag).
+    Values older than ``max_age_days`` are treated as missing rather than carried
+    forward indefinitely. Dates before the first report are NaN: no backfill.
+    """
+
+    symbols = [normalize_symbol(s) for s in symbols]
+    df = load_fundamentals()
+    if df.empty or field not in df.columns or "reportDate" not in df.columns:
+        return pd.DataFrame(np.nan, index=dates, columns=symbols)
+    sub = df[df["ticker"].isin(symbols)][["ticker", "reportDate", "periodType", field]].dropna(subset=["reportDate", field])
+    if field in FLOW_FIELDS and "periodType" in sub.columns:
+        sub = sub[sub["periodType"] == "annual"]
+    if sub.empty:
+        return pd.DataFrame(np.nan, index=dates, columns=symbols)
+    sub = sub.assign(available=sub["reportDate"] + pd.Timedelta(days=int(lag_days)), value=pd.to_numeric(sub[field], errors="coerce"))
+    sub = sub.sort_values(["ticker", "reportDate"]).drop_duplicates(["ticker", "available"], keep="last")
+    wide = sub.pivot_table(index="available", columns="ticker", values="value", aggfunc="last").sort_index()
+    grid = wide.index.union(dates)
+    values = wide.reindex(grid).ffill(limit=None)
+    # Age of the carried value: days since the last row where the ticker had a report.
+    stamp = pd.DataFrame(np.where(wide.notna(), wide.index.values[:, None], np.datetime64("NaT")), index=wide.index, columns=wide.columns)
+    stamp = stamp.reindex(grid).ffill()
+    age = (grid.values[:, None] - stamp.to_numpy(dtype="datetime64[ns]")) / np.timedelta64(1, "D")
+    values = values.where(age <= max_age_days).reindex(dates)
+    return values.reindex(columns=symbols)
+
+
+def annual_growth(field: str, dates: pd.DatetimeIndex, symbols: Iterable[str], lag_days: int = 90) -> pd.DataFrame:
+    """Year-over-year growth of an annual-report field, point in time."""
+
+    symbols = [normalize_symbol(s) for s in symbols]
+    df = load_fundamentals()
+    if df.empty or field not in df.columns:
+        return pd.DataFrame(np.nan, index=dates, columns=symbols)
+    sub = df[(df["ticker"].isin(symbols)) & (df.get("periodType") == "annual")][["ticker", "reportDate", field]].dropna()
+    if sub.empty:
+        return pd.DataFrame(np.nan, index=dates, columns=symbols)
+    sub = sub.sort_values(["ticker", "reportDate"]).drop_duplicates(["ticker", "reportDate"], keep="last")
+    sub["value"] = pd.to_numeric(sub[field], errors="coerce")
+    prev = sub.groupby("ticker")["value"].shift(1)
+    sub["growth"] = sub["value"] / prev.where(prev > 0) - 1
+    sub["available"] = sub["reportDate"] + pd.Timedelta(days=int(lag_days))
+    wide = sub.dropna(subset=["growth"]).pivot_table(index="available", columns="ticker", values="growth", aggfunc="last")
+    if wide.empty:
+        return pd.DataFrame(np.nan, index=dates, columns=symbols)
+    grid = wide.index.union(dates)
+    return wide.reindex(grid).ffill(limit=None).reindex(dates).reindex(columns=symbols)
+
+
+def fundamentals_coverage_start() -> pd.Timestamp | None:
+    df = load_fundamentals()
+    if df.empty or "reportDate" not in df.columns:
+        return None
+    return pd.Timestamp(df["reportDate"].min()) + pd.Timedelta(days=90)
+
+
+def ohlcv_matrices(symbols: Iterable[str], lookback_days: int = 2520) -> dict[str, pd.DataFrame]:
+    """Daily Open/High/Low/Close/Volume matrices (dates x tickers)."""
+
+    df = ohlcv_for_symbols(symbols, lookback_days)
     if df.empty:
-        return pd.DataFrame(columns=["ticker"]).set_index("ticker")
-    if "reportDate" in df.columns:
-        df = df.sort_values(["ticker", "reportDate"])
-    return df.groupby("ticker", as_index=False).tail(1).set_index("ticker", drop=False)
+        return {}
+    return {col: df.pivot_table(index="Date", columns="Ticker", values=col, aggfunc="last", observed=True).sort_index() for col in ["Open", "High", "Low", "Close", "Volume"]}
 
 
 def _parse_ken_french_csv(path: Path) -> pd.DataFrame:
@@ -309,7 +406,7 @@ def monthly_factor_returns() -> pd.DataFrame:
     df = load_factor_returns()
     if df.empty:
         return df
-    out = df.set_index("date").resample("ME").sum(min_count=1).reset_index()
+    out = df.set_index("date").resample("ME").apply(lambda x: (1 + x).prod() - 1 if x.notna().any() else np.nan).reset_index()
     return out.rename(columns={"date": "Date"})
 
 
@@ -362,6 +459,7 @@ def data_inventory() -> dict[str, Any]:
             "DGS10": "dgs10" in macro_cols or "ust_10y" in macro_cols,
             "USREC": bool(any(token in c for c in macro_cols for token in ("usrec", "recession", "nber"))),
             "BAMLC0A0CM": "bamlc0a0cm" in macro_cols or bool(any(token in c for c in macro_cols for token in ("ig_credit", "credit_spread"))),
+            "BAA10Y": "baa10y" in macro_cols,
             "BAMLH0A0HYM2": "bamlh0a0hym2" in macro_cols or bool(any("hy" in c and "spread" in c for c in macro_cols)),
         },
     }

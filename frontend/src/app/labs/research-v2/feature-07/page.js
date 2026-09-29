@@ -1,3 +1,7 @@
 "use client";
-import { ResearchV2Workbench } from "@/components/research-v2/customPagePrimitives";
-export default function CausalIdentificationPage() { return <ResearchV2Workbench featureId="07" />; }
+
+import { ResearchV2Workbench } from "@/components/research-v2/Workbench";
+
+export default function ResearchV2Feature07Page() {
+  return <ResearchV2Workbench featureId="07" />;
+}

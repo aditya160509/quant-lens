@@ -1,3 +1,7 @@
 "use client";
-import { ResearchV2Workbench } from "@/components/research-v2/customPagePrimitives";
-export default function CanonicalTestPage() { return <ResearchV2Workbench featureId="01" />; }
+
+import { ResearchV2Workbench } from "@/components/research-v2/Workbench";
+
+export default function ResearchV2Feature01Page() {
+  return <ResearchV2Workbench featureId="01" />;
+}

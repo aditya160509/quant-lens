@@ -1,54 +1,54 @@
-"""R01 Canonical Test Engine."""
+"""F01 Canonical Test Engine: Fama-MacBeth, panel OLS, sorts, GRS, MR test, spanning, two-pass risk premia."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from ..core.analytics import canonical_outputs, response
+from ..core.canonical import run_canonical
+from ..core.common import response
+from .inputs import BASE, field, output
 
 FEATURE_ID = "01"
 FEATURE_NAME = "Canonical Test Engine"
+DESCRIPTION = "Fama-MacBeth with validity checks, panel OLS with fixed effects, single and double sorts, GRS, the Patton-Timmermann monotonicity test, factor spanning, calendar-time portfolios and a Shanken vs GMM two-pass test."
 
-INPUTS = [
-    {"key": "universe", "type": "ticker_list", "default": "master"},
-    {"key": "max_symbols", "type": "number", "default": 500},
-    {"key": "lookback_days", "type": "number", "default": 2520},
-    {"key": "signal", "type": "select", "default": "momentum", "options": ["momentum", "value", "quality", "low_vol", "reversal", "size"]},
-    {"key": "signal_csv_path", "type": "file_path", "default": ""},
-    {"key": "controls", "type": "select", "default": "none", "options": ["none", "size", "value", "momentum", "reversal", "beta", "ivol", "asset_growth", "profitability", "leverage", "full"]},
-    {"key": "fixed_effects", "type": "select", "default": "none", "options": ["none", "time", "asset", "two_way"]},
-    {"key": "weighting", "type": "select", "default": "equal", "options": ["equal", "value", "rank"]},
-    {"key": "rebalancing_frequency", "type": "select", "default": "monthly", "options": ["daily", "weekly", "monthly", "quarterly"]},
-    {"key": "second_signal", "type": "select", "default": "low_vol", "options": ["low_vol", "momentum", "value", "quality", "reversal", "size"]},
-    {"key": "benchmark_tickers", "type": "ticker_list", "default": "ff5_mom"},
-    {"key": "se_type", "type": "select", "default": "newey_west", "options": ["newey_west", "driscoll_kraay", "double_cluster", "time_cluster", "asset_cluster"]},
-    {"key": "nw_lag", "type": "number", "default": 4},
-    {"key": "forward_months", "type": "select", "default": 1, "options": [1, 3, 6, 12]},
-    {"key": "sort_portfolios", "type": "select", "default": 5, "options": [3, 5, 10]},
-    {"key": "rolling_window", "type": "number", "default": 36},
-    {"key": "bootstrap_replications", "type": "number", "default": 500},
+INPUTS = BASE + [
+    field("fixed_effects", "Panel fixed effects", "select", "none", "Inference", ["none", "time", "asset", "two_way"]),
+    field("se_type", "Panel standard errors", "select", "clustered_both", "Inference", ["unadjusted", "robust", "clustered_time", "clustered_asset", "clustered_both", "driscoll_kraay"]),
+    field("nw_lag", "Newey-West lag (FM)", "text", "auto", "Inference", help_="'auto' uses max(Newey-West plug-in, holding period)."),
+    field("bootstrap_replications", "Bootstrap replications", "select", 1000, "Inference", [500, 1000, 2000]),
+    field("sort_portfolios", "Sort portfolios", "select", 5, "Sorts", [3, 5, 10]),
+    field("second_signal", "Double-sort second signal", "select", "low_vol", "Sorts", ["low_vol", "momentum", "reversal", "size", "value", "beta", "ivol"]),
+    field("double_sort_type", "Double-sort type", "select", "independent", "Sorts", ["independent", "sequential"]),
+    field("factor_benchmark", "Factor benchmark", "select", "ff5_mom", "Sorts", ["capm", "ff3", "ff5", "ff5_mom"]),
+    field("rolling_window", "Rolling window (months)", "select", 36, "Sorts", [12, 24, 36, 60]),
+    field("event_window_months", "Calendar-time holding (months)", "select", 6, "Sorts", [3, 6, 12, 24]),
+    field("event_quantile", "Calendar-time event threshold", "number", 0.8, "Sorts", min=0.5, max=0.95, help_="Event = signal rank crosses above this percentile."),
 ]
 
 OUTPUTS = [
-    "fama_macbeth_regression",
-    "panel_ols",
-    "portfolio_sort",
-    "double_sort_matrix",
-    "grs_test",
-    "monotonicity_test",
-    "rolling_coefficient",
-    "calendar_time_portfolio",
-    "portfolio_return_series",
-    "factor_spanning",
-    "fm_validity_flag",
-    "weak_identification_card",
-    "gmm_vs_shanken_comparison",
-    "bootstrap_vs_ttest_disagreement",
-    "latex_export",
-    "csv_export",
+    output("fama_macbeth_regression", "Fama-MacBeth regression", "tables", "regressionTable", "Time-series means of monthly cross-sectional slopes with Newey-West SEs.", primary=True),
+    output("fm_validity_flag", "FM validity", "tables", "testCard"),
+    output("rolling_coefficient", "Rolling Fama-MacBeth slope", "charts", "coefficientPath"),
+    output("portfolio_sort", "Single portfolio sort", "tables", "portfolioLadder"),
+    output("cumulative_long_short", "Long-short growth of $1", "charts", "lineChart"),
+    output("double_sort_matrix", "Double-sort mean returns", "tables", "heatmap"),
+    output("grs_test", "GRS test", "tables", "testCard"),
+    output("monotonicity_test", "Monotonic relation test", "tables", "testCard"),
+    output("factor_spanning", "Factor spanning", "tables", "keyValue"),
+    output("gmm_vs_shanken_comparison", "Shanken vs GMM risk premia", "tables", "dataTable"),
+    output("weak_identification_card", "Weak identification", "tables", "testCard"),
+    output("two_pass_model_fit", "Two-pass model fit", "tables", "keyValue"),
+    output("panel_ols", "Panel OLS", "tables", "regressionTable"),
+    output("hausman_test", "Hausman test", "tables", "testCard"),
+    output("calendar_time_portfolio", "Calendar-time portfolio", "tables", "keyValue"),
+    output("bootstrap_vs_ttest_disagreement", "Bootstrap vs t-test", "tables", "dataTable"),
+    output("portfolio_return_series", "Portfolio returns", "charts", "lineChart"),
+    output("latex_export", "LaTeX", "tables", "latex"),
+    output("csv_export", "CSV", "tables", "csv"),
 ]
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    out = canonical_outputs(payload or {})
-    return response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out.get("meta"))
+    out = run_canonical(payload or {})
+    return response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])

@@ -1,5 +1,1 @@
-"""Research V2 service package."""
-
-from .registry import FEATURES, feature_manifest, get_feature, run_feature
-
-__all__ = ["FEATURES", "feature_manifest", "get_feature", "run_feature"]
+"""Research V2 service package. Import ``registry`` for the feature entry points."""

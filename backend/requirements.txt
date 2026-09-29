@@ -25,6 +25,12 @@ pyarrow>=14.0.0
 # QUANTITATIVE LIBRARIES
 # =============================================================================
 arch>=6.0.0
+linearmodels>=6.0,<8       # panel OLS, IV, two-pass asset pricing (Research V2)
+pyfixest>=0.60,<1          # TWFE, Sun-Abraham, did2s (Research V2)
+differences>=0.3,<1        # Callaway-Sant'Anna ATT(g,t) (Research V2)
+rdrobust>=2.1,<3           # regression discontinuity (Research V2)
+rddensity>=3.0,<4          # RD manipulation test (Research V2)
+pysyncon>=1.7,<2           # synthetic control (Research V2)
 hmmlearn>=0.3.0
 lightgbm>=4.0.0
 xgboost>=2.0.0

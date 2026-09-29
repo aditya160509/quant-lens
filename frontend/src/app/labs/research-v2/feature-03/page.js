@@ -1,3 +1,7 @@
 "use client";
-import { ResearchV2Workbench } from "@/components/research-v2/customPagePrimitives";
-export default function PlaceboSuitePage() { return <ResearchV2Workbench featureId="03" />; }
+
+import { ResearchV2Workbench } from "@/components/research-v2/Workbench";
+
+export default function ResearchV2Feature03Page() {
+  return <ResearchV2Workbench featureId="03" />;
+}

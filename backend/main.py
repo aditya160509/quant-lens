@@ -32,6 +32,7 @@ from app.api import nse_india  # NSE India Stock Market API (FREE)
 from app.api import research_stats  # Institutional Statistical Lab
 from app.api import research_quantitative  # Quantitative Math Lab
 from app.api import factors_v2  # Factors V2 - 14-feature institutional factor intelligence
+from app.api import research_v2  # Research V2 - empirical finance test battery
 from app.api import screener_v2
 
 # Configure logging
@@ -127,6 +128,7 @@ app.include_router(research_quantitative.router, prefix="/api", tags=["quantitat
 # Factors V2 - Institutional Factor Intelligence
 # Mounted under /api/labs/factors/v2 so legacy /api/labs/factors remains untouched.
 app.include_router(factors_v2.router, prefix="/api", tags=["factors-v2"])
+app.include_router(research_v2.router, prefix="/api", tags=["research-v2"])
 
 # Research Router (Cluster E)
 app.include_router(research_e.router, tags=["research-e"])

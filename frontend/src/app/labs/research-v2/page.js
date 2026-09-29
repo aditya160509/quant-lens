@@ -1,5 +1,7 @@
 "use client";
 
-import { ResearchV2Home } from "@/components/research-v2/customPagePrimitives";
+import { ResearchV2Home } from "@/components/research-v2/Workbench";
 
-export default function ResearchV2Page() { return <ResearchV2Home />; }
+export default function ResearchV2Page() {
+  return <ResearchV2Home />;
+}

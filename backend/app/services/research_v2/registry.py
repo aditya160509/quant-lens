@@ -1,62 +1,53 @@
-"""Feature registry for Research V2."""
+"""Feature registry for Research V2. Features load on first use."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from importlib import import_module
-from typing import Any, Callable
+from typing import Any
+
+FEATURE_MODULES = [*(f"feature_{i:02d}" for i in range(1, 10)), "feature_11"]  # the spec defines no Feature 10
 
 
 @dataclass(frozen=True)
 class ResearchFeature:
     id: str
     name: str
+    description: str
     module: str
     inputs: list[dict[str, Any]]
-    outputs: list[str]
+    outputs: list[dict[str, Any]]
 
 
 def _load(module: str):
-    try:
-        return import_module(f"app.services.research_v2.features.{module}")
-    except ModuleNotFoundError:
-        return import_module(f"backend.app.services.research_v2.features.{module}")
+    return import_module(f"{__package__}.features.{module}")
 
 
-_MODULES = [*(f"feature_{i:02d}" for i in range(1, 10)), "feature_11"]
+@lru_cache(maxsize=1)
+def features() -> dict[str, ResearchFeature]:
+    out: dict[str, ResearchFeature] = {}
+    for name in FEATURE_MODULES:
+        m = _load(name)
+        out[str(m.FEATURE_ID).zfill(2)] = ResearchFeature(str(m.FEATURE_ID).zfill(2), m.FEATURE_NAME, m.DESCRIPTION, name, m.INPUTS, m.OUTPUTS)
+    return out
 
 
-def _build_registry() -> dict[str, ResearchFeature]:
-    registry: dict[str, ResearchFeature] = {}
-    for module_name in _MODULES:
-        module = _load(module_name)
-        feature = ResearchFeature(
-            id=str(module.FEATURE_ID).zfill(2),
-            name=module.FEATURE_NAME,
-            module=module_name,
-            inputs=getattr(module, "INPUTS", []),
-            outputs=getattr(module, "OUTPUTS", []),
-        )
-        registry[feature.id] = feature
-    return registry
-
-
-FEATURES = _build_registry()
+def normalize_id(feature_id: int | str) -> str:
+    return str(feature_id).replace("feature-", "").replace("feature_", "").zfill(2)
 
 
 def get_feature(feature_id: int | str) -> ResearchFeature:
-    key = str(feature_id).replace("feature-", "").replace("feature_", "").zfill(2)
-    if key not in FEATURES:
+    key = normalize_id(feature_id)
+    if key not in features():
         raise KeyError(f"Unknown Research V2 feature {feature_id}")
-    return FEATURES[key]
+    return features()[key]
 
 
 def feature_manifest() -> list[dict[str, Any]]:
-    return [{"id": f.id, "name": f.name, "inputs": f.inputs, "outputs": f.outputs} for f in FEATURES.values()]
+    return [{"id": f.id, "name": f.name, "description": f.description, "inputs": f.inputs, "outputs": f.outputs} for f in features().values()]
 
 
 def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     feature = get_feature(feature_id)
-    module = _load(feature.module)
-    runner: Callable[[dict[str, Any] | None], dict[str, Any]] = getattr(module, "run")
-    return runner(payload or {})
+    return _load(feature.module).run(payload or {})

@@ -31,6 +31,7 @@ FRED_SERIES = {
     "DGS10": "dgs10",
     "BAMLC0A0CM": "bamlc0a0cm",
     "BAMLH0A0HYM2": "bamlh0a0hym2",
+    "BAA10Y": "baa10y",
     "FEDFUNDS": "fed_funds",
     "CPIAUCSL": "cpi",
     "USREC": "usrec",
@@ -110,7 +111,7 @@ def _standardize_yahoo_ohlcv(hist: pd.DataFrame, ticker: str) -> pd.DataFrame:
     return out.dropna(subset=["Date", "Close"])[["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]]
 
 
-def fetch_fred_series(api_key: str | None = None, series: Iterable[str] | None = None) -> dict[str, int]:
+def fetch_fred_series(api_key: str | None = None, series: Iterable[str] | None = None, start: str = "1990-01-01") -> dict[str, int]:
     """Fetch FRED series and append them into category7 macro/regime parquet."""
 
     try:
@@ -122,7 +123,7 @@ def fetch_fred_series(api_key: str | None = None, series: Iterable[str] | None =
     wide = pd.DataFrame()
     for code in selected:
         col = FRED_SERIES.get(code, code.lower())
-        df = pdr.DataReader(code, "fred").reset_index().rename(columns={"DATE": "date", code: col})
+        df = pdr.DataReader(code, "fred", start=start).reset_index().rename(columns={"DATE": "date", code: col})
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
         results[code] = int(df[col].notna().sum())
         wide = df if wide.empty else wide.merge(df, on="date", how="outer")
