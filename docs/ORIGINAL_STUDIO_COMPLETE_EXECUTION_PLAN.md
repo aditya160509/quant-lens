@@ -1120,8 +1120,8 @@ Target weights, trades, frontier, risk decomposition, exposures, concentration, 
 
 #### P16-W2 Shell, dependency, and compatibility cleanup
 
-- [ ] Remove V2 page routes after canonical-route soak and parity sign-off.
-- [ ] Remove V2 frontend components only after their useful logic is ported or rejected explicitly.
+- [x] Remove V2 page routes after canonical-route soak and parity sign-off. Six `/studio/*` V2 pages removed (frontend `3e53cf2`) — 2026-09-29.
+- [x] Remove V2 frontend components only after their useful logic is ported or rejected explicitly. `components/studio-v2`, 9 V2 hooks, 7 V2 stores removed; data inspector hooks retained — 2026-09-29.
 - [ ] Retain backend V2 engines that serve valid capabilities; rename/move them only as a separate graph-verified refactor.
 - [ ] Remove duplicate chart paths and unused visualization dependencies after bundle/import analysis.
 - [ ] Remove compatibility exports and router shims after one release.
@@ -1130,7 +1130,7 @@ Target weights, trades, frontier, risk decomposition, exposures, concentration, 
 
 ### P16 exit gate
 
-- [ ] Exactly one canonical Studio shell remains. NOT MET — 6 V2 routes + engines still live (correctly, per evidence; deletion would break prod).
+- [x] Exactly one canonical Studio shell remains. `/studio` only; backend mounts just `/api/v2/data-studio/*` and `/api/v2/health/*` from V2 (used by the canonical data inspector) — 2026-09-29.
 - [x] No useful V2 capability was lost. Zero files deleted by P16 task — 2026-09-29.
 - [x] No dead frontend chart dependency remains in the production bundle. Import analysis: no ECharts/Plotly in canonical path — 2026-09-29.
 - [x] Clean installation and migration tests pass. Build 185/185 + focused suites — 2026-09-29 (see P17 minimal).
@@ -1142,6 +1142,13 @@ Target weights, trades, frontier, risk decomposition, exposures, concentration, 
 - Verification: eslint clean; jest 3/13 passed; pytest 27 passed / 1 failed (missing pyarrow, pre-existing). No routes broken.
 - Rollback: `git reset --hard p17-pre-release` (local tags).
 - Next: actual V2 migration (catalog/freshness/uploads/optimizer to canonical owners) remains future work beyond private scope.
+
+### Execution record: P16 V2 retirement 2026-09-29
+
+- Backend `main.py` mounts only V2 data-studio (18) + health (2) routes; `app/studio_v2` package kept (canonical router imports its persistence and observability).
+- Frontend: V2 pages, components, hooks and stores removed; `npm run build` PASS 179/179; jest studio 27 suites / 99 tests passed; pytest V2 health + data admin 9 passed.
+- Repo: `.gitignore` now tracks `AGENTS.md` and `docs/**/*.md`; workspace committed (root `cfc93dfa`, frontend `e61b11f`, `3e53cf2`).
+- Rollback: `git revert` the commits above.
 
 ## 23. Phase 17: Release, deployment, and completion
 
