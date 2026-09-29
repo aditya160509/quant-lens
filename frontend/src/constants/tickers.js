@@ -1,0 +1,22 @@
+export const TICKERS = [
+    { symbol: "AAPL", name: "Apple Inc." },
+    { symbol: "MSFT", name: "Microsoft Corp." },
+    { symbol: "GOOGL", name: "Alphabet Inc." },
+    { symbol: "AMZN", name: "Amazon.com Inc." },
+    { symbol: "NVDA", name: "NVIDIA Corp." },
+    { symbol: "TSLA", name: "Tesla Inc." },
+    { symbol: "META", name: "Meta Platforms" },
+    { symbol: "SPY", name: "SPDR S&P 500 ETF" },
+    { symbol: "QQQ", name: "Invesco QQQ Trust" },
+    { symbol: "IWM", name: "iShares Russell 2000" },
+    { symbol: "GLD", name: "SPDR Gold Shares" },
+    { symbol: "USO", name: "United States Oil Fund" },
+    { symbol: "TLT", name: "iShares 20+ Year Treasury" },
+    { symbol: "RELIANCE.NS", name: "Reliance Industries" },
+    { symbol: "TCS.NS", name: "Tata Consultancy Services" },
+    { symbol: "HDFCBANK.NS", name: "HDFC Bank" },
+    { symbol: "INFY.NS", name: "Infosys Ltd." },
+    { symbol: "ICICIBANK.NS", name: "ICICI Bank" },
+    { symbol: "SBIN.NS", name: "State Bank of India" },
+    { symbol: "ITC.NS", name: "ITC Ltd." }
+];

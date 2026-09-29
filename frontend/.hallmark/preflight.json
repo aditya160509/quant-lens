@@ -1,0 +1,21 @@
+{
+  "date": "2026-07-26",
+  "framework": "Next.js 16.0.5 App Router",
+  "font_stack": "Geist and JetBrains Mono through existing CSS variables",
+  "palette": "Existing dark research palette, normalized into OKLCH semantic tokens",
+  "motion": "Framer Motion installed; state transitions retained with reduced-motion coverage",
+  "spacing": "Four-point semantic scale",
+  "preserved": [
+    "existing application chrome",
+    "dark institutional direction",
+    "amber research accent",
+    "Studio API and Zustand state contracts"
+  ],
+  "introduced": [
+    "Workbench macrostructure",
+    "N8 command navigation",
+    "Ft4 telemetry colophon",
+    "honest preflight output contracts",
+    "full responsive and interaction-state audit"
+  ]
+}

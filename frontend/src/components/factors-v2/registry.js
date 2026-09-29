@@ -1,0 +1,470 @@
+export const FACTORS_V2_FEATURES = [
+  {
+    id: "01",
+    slug: "feature-01",
+    title: "Factor Valuation Spread Monitor",
+    shortTitle: "Valuation Spread",
+    description: "Measure whether factor characteristics are historically stretched or compressed.",
+    defaults: { factor: "value_pb", factors: ["value_pb"], lookback_days: 2520, max_tickers: 160, alert_percentile: 70, factor_model: "ff5_mom" },
+    fields: [
+      { key: "factor", label: "Primary Factor", type: "select", options: ["value_pb", "momentum_12_1", "quality_roe", "low_vol", "size", "investment", "profitability"] },
+      { key: "lookback_days", label: "Percentile Lookback", type: "number" },
+      { key: "max_tickers", label: "Universe Size", type: "number" },
+      { key: "alert_percentile", label: "Alert Percentile", type: "number" },
+      { key: "factor_model", label: "Factor Model", type: "select", options: ["ff3", "ff5", "ff5_mom", "carhart"] },
+    ],
+  },
+  {
+    id: "02",
+    slug: "feature-02",
+    title: "Factor Exposure Decomposition",
+    shortTitle: "Portfolio X-Ray",
+    description: "Compare characteristic and return-based portfolio factor exposures.",
+    defaults: { factors: ["value_pb", "momentum_12_1", "quality_roe", "low_vol", "size"], benchmark: "SPY", estimation_days: 252, max_tickers: 120, factor_model: "ff5_mom" },
+    fields: [
+      { key: "benchmark", label: "Benchmark", type: "text" },
+      { key: "estimation_days", label: "Regression Window", type: "number" },
+      { key: "max_tickers", label: "Universe Size", type: "number" },
+      { key: "factor_model", label: "Factor Model", type: "select", options: ["ff3", "ff5", "ff5_mom", "carhart"] },
+      { key: "holdings", label: "Holdings JSON", type: "textarea", placeholder: '[{"ticker":"SPY","weight":0.5},{"ticker":"QQQ","weight":0.5}]' },
+    ],
+  },
+  {
+    id: "03",
+    slug: "feature-03",
+    title: "Factor Return Attribution",
+    shortTitle: "Attribution",
+    description: "Decompose active return into factor, selection, interaction, and carryover components.",
+    defaults: { window_days: 252, factor_model: "ff5_mom", frequency: "daily", benchmark: "SPY" },
+    fields: [
+      { key: "window_days", label: "Attribution Window", type: "number" },
+      { key: "frequency", label: "Frequency", type: "select", options: ["daily", "weekly", "monthly", "quarterly"] },
+      { key: "benchmark", label: "Benchmark", type: "text" },
+      { key: "factor_model", label: "Factor Model", type: "select", options: ["ff3", "ff5", "ff5_mom", "carhart"] },
+    ],
+  },
+  {
+    id: "04",
+    slug: "feature-04",
+    title: "Probabilistic Regime Analysis",
+    shortTitle: "Regimes",
+    description: "Blend macro rules, HMM, and GMM covariance clustering into regime probabilities.",
+    defaults: { states: 3, vix_threshold: 25, window_days: 1260, factor_model: "ff5_mom", include_aqr: true },
+    fields: [
+      { key: "states", label: "Regime States", type: "select", options: [2, 3, 4] },
+      { key: "vix_threshold", label: "Stress VIX Threshold", type: "number" },
+      { key: "window_days", label: "History Window", type: "number" },
+      { key: "factor_model", label: "Factor Model", type: "select", options: ["ff3", "ff5", "ff5_mom", "carhart"] },
+      { key: "include_aqr", label: "Use AQR Factors", type: "select", options: [true, false] },
+    ],
+  },
+  {
+    id: "05",
+    slug: "feature-05",
+    title: "Alpha Decay and Half-Life",
+    shortTitle: "Alpha Decay",
+    description: "Estimate IC decay, ICIR, fitted half-life, and rebalancing signal persistence.",
+    defaults: { factor: "momentum_12_1", horizons: [1, 5, 10, 21, 42, 63, 126, 252], window_days: 2520, bootstrap_samples: 400, factor_model: "ff5_mom" },
+    fields: [
+      { key: "factor", label: "Factor", type: "select", options: ["value_pb", "momentum_12_1", "quality_roe", "low_vol", "size"] },
+      { key: "window_days", label: "History Window", type: "number" },
+      { key: "horizons", label: "Decay Horizons", type: "text", placeholder: "1,5,10,21,42,63,126,252" },
+      { key: "bootstrap_samples", label: "Bootstrap Samples", type: "number" },
+      { key: "factor_model", label: "Factor Model", type: "select", options: ["ff3", "ff5", "ff5_mom", "carhart"] },
+    ],
+  },
+  {
+    id: "06",
+    slug: "feature-06",
+    title: "Factor Crowding Monitor",
+    shortTitle: "Crowding",
+    description: "Combine valuation stretch, autocorrelation, concentration, and liquidity into crowding risk.",
+    defaults: { factor: "momentum_12_1", lookback_days: 2520, alert_threshold: 70, max_tickers: 160, factor_model: "ff5_mom", include_aqr: true },
+    fields: [
+      { key: "factor", label: "Factor", type: "select", options: ["value_pb", "momentum_12_1", "quality_roe", "low_vol", "size"] },
+      { key: "lookback_days", label: "Lookback Window", type: "number" },
+      { key: "alert_threshold", label: "Alert Threshold", type: "number" },
+      { key: "max_tickers", label: "Universe Size", type: "number" },
+      { key: "include_aqr", label: "Use AQR Factors", type: "select", options: [true, false] },
+    ],
+  },
+  {
+    id: "07",
+    slug: "feature-07",
+    title: "Backtesting with Implementation Shortfall",
+    shortTitle: "Backtest",
+    description: "Run gross/net factor backtests with turnover and transaction cost drag.",
+    defaults: { factor: "value_pb", window_days: 2520, turnover: 0.35, cost_bps: 8, aum: 100000000, participation_cap: 0.15, factor_model: "ff5_mom" },
+    fields: [
+      { key: "factor", label: "Strategy Factor", type: "select", options: ["value_pb", "momentum_12_1", "quality_roe", "investment", "size"] },
+      { key: "window_days", label: "Backtest Window", type: "number" },
+      { key: "turnover", label: "Monthly Turnover", type: "number" },
+      { key: "cost_bps", label: "Cost Per Trade (bps)", type: "number" },
+      { key: "aum", label: "AUM", type: "number" },
+      { key: "participation_cap", label: "ADV Participation Cap", type: "number" },
+    ],
+  },
+  {
+    id: "08",
+    slug: "feature-08",
+    title: "Factor Covariance Matrix",
+    shortTitle: "Covariance",
+    description: "Estimate factor covariance, correlations, crisis amplification, eigenvalues, and condition risk.",
+    defaults: { method: "ledoit_wolf", half_life: 63, window_days: 1260, stress_vix: 30, factor_model: "ff5_mom" },
+    fields: [
+      { key: "method", label: "Estimator", type: "select", options: ["sample", "ewma", "ledoit_wolf"] },
+      { key: "half_life", label: "EWMA Half-Life", type: "number" },
+      { key: "window_days", label: "Estimation Window", type: "number" },
+      { key: "stress_vix", label: "Stress VIX Level", type: "number" },
+    ],
+  },
+  {
+    id: "09",
+    slug: "feature-09",
+    title: "Strategy Capacity Analyzer",
+    shortTitle: "Capacity",
+    description: "Map net alpha and slippage across AUM levels to estimate capacity ceiling.",
+    defaults: { factor: "value_pb", turnover: 0.35, explicit_bps: 8, kyle_lambda: 0.1, max_tickers: 160 },
+    fields: [
+      { key: "factor", label: "Strategy Factor", type: "select", options: ["value_pb", "momentum_12_1", "quality_roe", "size"] },
+      { key: "turnover", label: "One-Way Turnover", type: "number" },
+      { key: "explicit_bps", label: "Explicit Cost (bps)", type: "number" },
+      { key: "kyle_lambda", label: "Kyle Lambda", type: "number" },
+      { key: "max_tickers", label: "Universe Size", type: "number" },
+    ],
+  },
+  {
+    id: "10",
+    slug: "feature-10",
+    title: "Factor-Based Portfolio Optimizer",
+    shortTitle: "Optimizer",
+    description: "Solve robust factor allocation and detect Factor Alignment Problem risk.",
+    defaults: { window_days: 756, risk_aversion: 5, robust: true, robust_penalty: 0.25, long_short: true, covariance_method: "ledoit_wolf" },
+    fields: [
+      { key: "window_days", label: "Optimization Window", type: "number" },
+      { key: "risk_aversion", label: "Risk Aversion", type: "number" },
+      { key: "robust", label: "Robust Optimization", type: "select", options: [true, false] },
+      { key: "robust_penalty", label: "Robust Penalty", type: "number" },
+      { key: "long_short", label: "Long/Short Allowed", type: "select", options: [true, false] },
+    ],
+  },
+  {
+    id: "11",
+    slug: "feature-11",
+    title: "Stress Testing and Reverse Stress Testing",
+    shortTitle: "Stress Test",
+    description: "Run parametric factor shocks, reverse stress, and VAR contagion analysis.",
+    defaults: { window_days: 1260, loss_threshold: 0.15, factor_model: "ff5_mom", include_aqr: true },
+    fields: [
+      { key: "window_days", label: "History Window", type: "number" },
+      { key: "loss_threshold", label: "Reverse Stress Loss", type: "number" },
+      { key: "factor_model", label: "Factor Model", type: "select", options: ["ff3", "ff5", "ff5_mom", "carhart"] },
+      { key: "include_aqr", label: "Use AQR Factors", type: "select", options: [true, false] },
+      { key: "shocks", label: "Shock JSON", type: "textarea", placeholder: '{"Mkt-RF":-0.05,"HML":-0.03}' },
+    ],
+  },
+  {
+    id: "12",
+    slug: "feature-12",
+    title: "Factor DNA Attribution",
+    shortTitle: "Factor DNA",
+    description: "Synthesize decay, crowding, covariance, purity, and taxonomy into a DNA card.",
+    defaults: { factor: "value_pb", analysis_depth: "full", window_days: 1260, max_tickers: 120, factor_model: "ff5_mom" },
+    fields: [
+      { key: "factor", label: "Primary Factor", type: "select", options: ["value_pb", "momentum_12_1", "quality_roe", "low_vol", "size"] },
+      { key: "analysis_depth", label: "Analysis Depth", type: "select", options: ["quick", "full"] },
+      { key: "window_days", label: "History Window", type: "number" },
+      { key: "max_tickers", label: "Universe Size", type: "number" },
+    ],
+  },
+  {
+    id: "13",
+    slug: "feature-13",
+    title: "Live Signal Monitoring Dashboard",
+    shortTitle: "Signal Monitor",
+    description: "Track IC drift, structural break proxy, crowding velocity, and signal health.",
+    defaults: { factor: "momentum_12_1", window_days: 504, ic_drift_threshold: -1.0, crowding_velocity_threshold: 15, alert_cooldown_hours: 24, factor_model: "ff5_mom" },
+    fields: [
+      { key: "factor", label: "Signal Factor", type: "select", options: ["value_pb", "momentum_12_1", "quality_roe", "size"] },
+      { key: "window_days", label: "Monitoring Window", type: "number" },
+      { key: "ic_drift_threshold", label: "IC Drift Threshold", type: "number" },
+      { key: "crowding_velocity_threshold", label: "Crowding Velocity Threshold", type: "number" },
+      { key: "alert_cooldown_hours", label: "Alert Cooldown Hours", type: "number" },
+      { key: "factor_model", label: "Factor Model", type: "select", options: ["ff3", "ff5", "ff5_mom", "carhart"] },
+    ],
+  },
+  {
+    id: "14",
+    slug: "feature-14",
+    title: "Allocator Transparency Report Generator",
+    shortTitle: "Allocator Report",
+    description: "Assemble factor exposure, attribution, crowding, capacity, stress, and health into a report.",
+    defaults: { report_type: "full_lp_ddq_supplement", fund_name: "Quant360 Strategy", report_version: "v1.0", history_years: 5, window_days: 504, max_tickers: 80, factor_model: "ff5_mom" },
+    fields: [
+      { key: "report_type", label: "Report Type", type: "select", options: ["full_lp_ddq_supplement", "quarterly_factor_attribution", "monthly_risk_report"] },
+      { key: "fund_name", label: "Fund Name", type: "text" },
+      { key: "report_version", label: "Report Version", type: "text" },
+      { key: "history_years", label: "Available History Years", type: "number" },
+      { key: "window_days", label: "Report Window", type: "number" },
+      { key: "max_tickers", label: "Universe Size", type: "number" },
+      { key: "fund_disclosures", label: "Fund Disclosures", type: "textarea", placeholder: "Optional LP/DDQ disclosure language" },
+      { key: "custom_narrative", label: "Manager Commentary", type: "textarea", placeholder: "Optional commentary inserted into the report" },
+    ],
+  },
+];
+
+const FACTOR_OPTIONS = ["value_pb", "momentum_12_1", "quality_roe", "low_vol", "size", "growth", "investment", "profitability"];
+const FACTOR_MODEL_OPTIONS = ["ff3", "ff5", "carhart", "ff5_mom", "extended", "custom"];
+const BOOL_OPTIONS = [false, true];
+
+export const FEATURE_INPUT_SPEC_DEFAULTS = {
+  "01": { universe_filter: "full", characteristic_metric: "book_to_price", historical_anchors: "gfc,covid,liberation_day", display_mode: "percentile" },
+  "02": { portfolio_input_method: "manual", exposure_methodology: "both", exposure_type: "active_zscore", estimation_months: 12, neutralization: "sector", comparison_mode: false },
+  "03": { attribution_model: "brinson_fachler_factor", period_frequency: "daily", transaction_cost_model: "implementation_shortfall", carryover_effect: true },
+  "04": { regime_model: "composite", yield_curve_metric: "10y_2y", timing_signals: "factor_momentum,macro_rules", hypothesis_tests: "value_in_recovery,momentum_in_stress" },
+  "05": { ic_method: "spearman_rank", decay_model: "compare_all", rolling_window_days: 252, universe_filter: "full", transaction_cost_bps: 8, include_icir: true },
+  "06": { metrics_to_include: "valuation_stretch,autocorrelation,hhi,liquidity", composite_method: "weighted_zscore", lookback_years: 10, crash_conditioning: "bayesian" },
+  "07": { composite_method: "single_factor", construction: "long_short_quintile", weighting: "equal_weight", rebalance_frequency: "monthly", transaction_cost_model: "three_component", benchmark: "SPY", neutralization: "sector_beta", short_selling: true },
+  "08": { factors: ["Mkt-RF", "SMB", "HML", "RMW", "CMA", "MOM"], display_mode: "correlation", stress_period: "covid_crash" },
+  "09": { strategy_reference: "current_factor_strategy", aum_min: 10000000, aum_max: 10000000000, sweep_points: 20, cost_components: "explicit,market_impact,timing", display_mode: "net_alpha" },
+  "10": { alpha_source: "historical_factor_premia", frontier_points: 50, optimization_horizon: "annual", constraints_json: '{"max_weight":0.35,"gross_exposure":1.5}' },
+  "11": { scenario_type: "preset", scenario_preset: "liberation_day_2025", var_lag: 5 },
+  "12": { comparison_factors: "momentum_12_1", period_focus: "full_history", classifier_training_set: "institutional_archetypes" },
+  "13": { factor_scope: "all_library", selected_factors: "value_pb,momentum_12_1,quality_roe,low_vol,size", recent_ic_window: 21, baseline_window: 252, alert_preferences: "in_app" },
+  "14": { portfolio_reference: "current_workspace", include_sections: "exposures,attribution,crowding,capacity,stress,health", chart_theme: "dark", chart_palette: "institutional" },
+};
+
+export const FEATURE_INPUT_SPEC_UPGRADES = {
+  "01": [
+    { key: "factor", label: "Factor Selector", type: "select", options: FACTOR_OPTIONS, group: "Signal" },
+    { key: "lookback_days", label: "Percentile Lookback", type: "number", presets: [756, 1260, 2520], min: 126, step: 21, group: "Window" },
+    { key: "universe_filter", label: "Universe Filter", type: "select", options: ["full", "gics_sector", "custom_universe"], group: "Universe" },
+    { key: "sector_filter", label: "GICS Sector", type: "select", options: ["All", "Technology", "Financials", "Health Care", "Consumer Discretionary", "Industrials", "Energy", "Communication Services"], group: "Universe" },
+    { key: "custom_universe_tickers", label: "Custom Universe Tickers", type: "text", inputType: "multiTicker", group: "Universe", helper: "Bloomberg-style multi-symbol entry; used when Universe Filter is custom." },
+    { key: "characteristic_metric", label: "Characteristic Metric", type: "select", options: ["book_to_price", "earnings_yield", "sales_to_price", "cashflow_yield", "ev_ebitda"], group: "Signal" },
+    { key: "historical_anchors", label: "Historical Anchors", type: "tokens", options: ["gfc", "covid", "liberation_day", "quant_unwind", "rate_shock_2022"], group: "Window" },
+    { key: "display_mode", label: "Display Mode", type: "select", options: ["percentile", "zscore", "raw_spread"], group: "View" },
+  ],
+  "02": [
+    { key: "portfolio_input_method", label: "Portfolio Input", type: "select", options: ["manual", "csv_upload", "json_upload", "equal_weight_universe"], group: "Portfolio" },
+    { key: "holdings", label: "Portfolio Holdings", type: "textarea", inputType: "holdings", group: "Portfolio", helper: "Ticker + weight editor backed by local master universe search." },
+    { key: "benchmark", label: "Benchmark", type: "text", inputType: "ticker", group: "Portfolio" },
+    { key: "long_short", label: "Book Type", type: "select", options: ["long_only", "long_short"], group: "Portfolio" },
+    { key: "factor_model", label: "Factor Model", type: "select", options: FACTOR_MODEL_OPTIONS, group: "Model" },
+    { key: "exposure_methodology", label: "Methodology", type: "select", options: ["characteristic", "return_based", "both"], group: "Model" },
+    { key: "exposure_type", label: "Exposure Type", type: "select", options: ["raw", "active", "zscore", "active_zscore"], group: "Model" },
+    { key: "estimation_months", label: "Estimation Window", type: "select", options: [6, 12, 24, 36, 60], group: "Window" },
+    { key: "rebalancing_date", label: "Rebalance Date", type: "text", placeholder: "2026-03-31", group: "Window" },
+    { key: "neutralization", label: "Neutralization", type: "select", options: ["none", "sector", "beta", "sector_beta", "industry"], group: "Model" },
+    { key: "comparison_mode", label: "Comparison Mode", type: "select", options: BOOL_OPTIONS, group: "View" },
+    { key: "comparison_portfolios", label: "Comparison Symbols", type: "text", inputType: "multiTicker", group: "View" },
+  ],
+  "03": [
+    { key: "holdings", label: "Portfolio + Rebalance History", type: "textarea", inputType: "holdings", group: "Portfolio" },
+    { key: "benchmark", label: "Benchmark", type: "text", inputType: "ticker", group: "Portfolio" },
+    { key: "period_start", label: "Period Start", type: "text", placeholder: "2021-01-01", group: "Window" },
+    { key: "period_end", label: "Period End", type: "text", placeholder: "2026-03-31", group: "Window" },
+    { key: "attribution_model", label: "Attribution Model", type: "select", options: ["brinson_fachler", "factor_based", "brinson_fachler_factor"], group: "Model" },
+    { key: "frequency", label: "Attribution Frequency", type: "select", options: ["daily", "weekly", "monthly", "quarterly"], group: "Window" },
+    { key: "transaction_cost_model", label: "Transaction Cost", type: "select", options: ["none", "explicit_bps", "implementation_shortfall"], group: "Costs" },
+    { key: "carryover_effect", label: "Carryover Effect", type: "select", options: BOOL_OPTIONS, group: "Model" },
+  ],
+  "04": [
+    { key: "regime_model", label: "Regime Model", type: "select", options: ["rules_macro", "hmm", "gmm_covariance", "composite"], group: "Model" },
+    { key: "states", label: "HMM States", type: "select", options: [2, 3, 4], group: "Model" },
+    { key: "vix_threshold", label: "VIX Threshold", type: "number", presets: [20, 25, 30, 35], group: "Rules" },
+    { key: "yield_curve_metric", label: "Yield Curve", type: "select", options: ["10y_2y", "10y_3m", "real_rate", "credit_spread"], group: "Rules" },
+    { key: "factors", label: "Factor Set", type: "tokens", options: ["Mkt-RF", "SMB", "HML", "RMW", "CMA", "MOM", "QMJ", "BAB"], group: "Signal" },
+    { key: "timing_signals", label: "Timing Signals", type: "tokens", options: ["factor_momentum", "macro_rules", "valuation_spread", "volatility"], group: "Signal" },
+    { key: "factor_momentum_rank_months", label: "Momentum Rank Months", type: "number", presets: [3, 6, 12], group: "Signal" },
+    { key: "factor_momentum_hold_months", label: "Momentum Hold Months", type: "number", presets: [1, 3, 6], group: "Signal" },
+  ],
+  "05": [
+    { key: "factor", label: "Primary Factor", type: "select", options: FACTOR_OPTIONS, group: "Signal" },
+    { key: "horizons", label: "Forward Horizons", type: "tokens", options: [1, 5, 10, 21, 42, 63, 126, 252], group: "Horizon" },
+    { key: "ic_method", label: "IC Method", type: "select", options: ["spearman_rank", "pearson", "kendall"], group: "Model" },
+    { key: "decay_model", label: "Decay Model", type: "select", options: ["linear", "exponential", "hyperbolic", "compare_all"], group: "Model" },
+    { key: "rolling_window_days", label: "Rolling Window", type: "number", presets: [126, 252, 504], group: "Window" },
+    { key: "transaction_cost_bps", label: "Cost Assumption bps", type: "number", presets: [0, 5, 8, 12, 25], group: "Costs" },
+    { key: "include_icir", label: "Include ICIR", type: "select", options: BOOL_OPTIONS, group: "View" },
+  ],
+  "06": [
+    { key: "factor", label: "Factor", type: "select", options: FACTOR_OPTIONS, group: "Signal" },
+    { key: "metrics_to_include", label: "Crowding Signals", type: "tokens", options: ["valuation_stretch", "autocorrelation", "hhi", "liquidity", "short_interest"], group: "Model" },
+    { key: "metric_weights", label: "Metric Weights JSON", type: "textarea", placeholder: '{"valuation_stretch":0.25,"autocorrelation":0.25,"hhi":0.25,"liquidity":0.25}', group: "Model" },
+    { key: "composite_method", label: "Composite Method", type: "select", options: ["weighted_zscore", "percentile_average", "bayesian"], group: "Model" },
+    { key: "lookback_years", label: "Percentile Lookback Years", type: "number", presets: [3, 5, 10], group: "Window" },
+    { key: "alert_threshold", label: "Alert Threshold", type: "number", presets: [60, 70, 80, 90], group: "Risk" },
+    { key: "crash_conditioning", label: "Crash Conditioning", type: "select", options: ["bayesian", "empirical", "none"], group: "Risk" },
+  ],
+  "07": [
+    { key: "factor", label: "Strategy Factor", type: "select", options: FACTOR_OPTIONS, group: "Strategy" },
+    { key: "composite_method", label: "Composite Method", type: "select", options: ["single_factor", "equal_weight_multi", "custom_weights"], group: "Strategy" },
+    { key: "universe_filter", label: "Universe", type: "select", options: ["sp500", "russell_1000", "top_adv", "custom"], group: "Universe" },
+    { key: "construction", label: "Construction", type: "select", options: ["long_short_quintile", "long_only_top_decile", "market_neutral"], group: "Portfolio" },
+    { key: "weighting", label: "Weighting", type: "select", options: ["equal_weight", "cap_weight", "vol_targeted", "risk_parity"], group: "Portfolio" },
+    { key: "rebalance_frequency", label: "Rebalance Frequency", type: "select", options: ["daily", "weekly", "monthly", "quarterly"], group: "Window" },
+    { key: "transaction_cost_model", label: "Cost Model", type: "select", options: ["explicit", "kyle_lambda", "three_component"], group: "Costs" },
+    { key: "participation_cap", label: "ADV Cap", type: "number", presets: [0.05, 0.1, 0.15, 0.25], group: "Costs" },
+    { key: "short_selling", label: "Short Selling", type: "select", options: BOOL_OPTIONS, group: "Portfolio" },
+    { key: "benchmark", label: "Benchmark", type: "text", inputType: "ticker", group: "Portfolio" },
+    { key: "neutralization", label: "Neutralization", type: "select", options: ["none", "sector", "beta", "sector_beta"], group: "Portfolio" },
+    { key: "train_window_days", label: "Walk-Forward Train", type: "number", presets: [252, 504, 756], group: "Walk-forward" },
+    { key: "hold_window_days", label: "Walk-Forward Hold", type: "number", presets: [21, 63, 126], group: "Walk-forward" },
+  ],
+  "08": [
+    { key: "factors", label: "Factor Set", type: "tokens", options: ["Mkt-RF", "SMB", "HML", "RMW", "CMA", "MOM", "BAB", "QMJ"], group: "Factor Set" },
+    { key: "method", label: "Estimator", type: "select", options: ["sample", "ewma", "ledoit_wolf", "dcc_garch"], group: "Model" },
+    { key: "window_days", label: "Window", type: "number", presets: [252, 756, 1260, 2520], group: "Window" },
+    { key: "display_mode", label: "Matrix Type", type: "select", options: ["correlation", "covariance"], group: "View" },
+    { key: "stress_period", label: "Stress Period", type: "select", options: ["gfc", "covid_crash", "rate_shock_2022", "liberation_day_2025", "custom"], group: "Stress" },
+    { key: "portfolio_holdings", label: "Portfolio", type: "textarea", inputType: "holdings", group: "Portfolio" },
+  ],
+  "09": [
+    { key: "strategy_reference", label: "Strategy Reference", type: "text", group: "Strategy" },
+    { key: "factor", label: "Strategy Factor", type: "select", options: FACTOR_OPTIONS, group: "Strategy" },
+    { key: "aum_min", label: "AUM Min", type: "number", presets: [1000000, 10000000, 100000000], group: "AUM Sweep" },
+    { key: "aum_max", label: "AUM Max", type: "number", presets: [1000000000, 2500000000, 10000000000], group: "AUM Sweep" },
+    { key: "sweep_points", label: "Sweep Points", type: "number", presets: [10, 20, 50], group: "AUM Sweep" },
+    { key: "participation_cap", label: "ADV Cap", type: "number", presets: [0.1, 0.15, 0.25], group: "Costs" },
+    { key: "kyle_lambda", label: "Kyle Lambda", type: "number", presets: [0.05, 0.1, 0.2], group: "Costs" },
+    { key: "cost_components", label: "Cost Components", type: "tokens", options: ["explicit", "market_impact", "timing", "borrow"], group: "Costs" },
+    { key: "rebalance_frequency", label: "Rebalance", type: "select", options: ["weekly", "monthly", "quarterly"], group: "Strategy" },
+    { key: "display_mode", label: "Display", type: "select", options: ["net_alpha", "slippage", "capacity_ceiling"], group: "View" },
+  ],
+  "10": [
+    { key: "alpha_source", label: "Alpha Source", type: "select", options: ["historical_factor_premia", "user_views", "black_litterman", "uploaded"], group: "Inputs" },
+    { key: "risk_aversion", label: "Risk Aversion", type: "number", presets: [1, 3, 5, 8, 12], group: "Objective" },
+    { key: "robust", label: "Robust Optimization", type: "select", options: BOOL_OPTIONS, group: "Objective" },
+    { key: "constraints_json", label: "Constraints JSON", type: "textarea", group: "Constraints" },
+    { key: "frontier_points", label: "Frontier Points", type: "number", presets: [25, 50, 100], group: "View" },
+    { key: "optimization_horizon", label: "Horizon", type: "select", options: ["monthly", "quarterly", "annual"], group: "Objective" },
+  ],
+  "11": [
+    { key: "scenario_type", label: "Scenario Type", type: "select", options: ["preset", "custom_shock", "reverse_stress"], group: "Scenario" },
+    { key: "scenario_preset", label: "Preset", type: "select", options: ["gfc", "covid_crash", "covid_recovery", "taper_tantrum", "rate_shock_2022", "liberation_day_2025", "quant_unwind_2025"], group: "Scenario" },
+    { key: "shocks", label: "Factor Shocks", type: "textarea", placeholder: '{"Mkt-RF":-0.05,"HML":-0.03}', group: "Scenario" },
+    { key: "loss_threshold", label: "Reverse Stress Loss", type: "number", presets: [0.05, 0.1, 0.15, 0.25], group: "Reverse Stress" },
+    { key: "var_lag", label: "VAR Lag", type: "number", presets: [1, 5, 10, 21], group: "Contagion" },
+    { key: "portfolio_holdings", label: "Portfolio", type: "textarea", inputType: "holdings", group: "Portfolio" },
+  ],
+  "12": [
+    { key: "factor", label: "Primary Factor", type: "select", options: FACTOR_OPTIONS, group: "Signal" },
+    { key: "comparison_factors", label: "Comparison Factors", type: "tokens", options: FACTOR_OPTIONS, group: "Signal" },
+    { key: "analysis_depth", label: "Analysis Depth", type: "select", options: ["quick", "full", "allocator"], group: "Mode" },
+    { key: "period_focus", label: "Period Focus", type: "select", options: ["full_history", "post_2015", "current_regime", "custom"], group: "Window" },
+    { key: "classifier_training_set", label: "Classifier Set", type: "select", options: ["institutional_archetypes", "aqr_library", "custom"], group: "Classifier" },
+  ],
+  "13": [
+    { key: "factor_scope", label: "Factor Library Scope", type: "select", options: ["all_library", "portfolio_weighted", "selected"], group: "Scope" },
+    { key: "selected_factors", label: "Selected Factors", type: "tokens", options: FACTOR_OPTIONS, group: "Scope" },
+    { key: "recent_ic_window", label: "Recent IC Window", type: "number", presets: [10, 21, 42, 63], group: "Health Rules" },
+    { key: "baseline_window", label: "Baseline Window", type: "number", presets: [126, 252, 504], group: "Health Rules" },
+    { key: "ic_drift_threshold", label: "IC Drift Threshold", type: "number", presets: [-2, -1, -0.5], group: "Alerts" },
+    { key: "crowding_velocity_threshold", label: "Crowding Velocity", type: "number", presets: [10, 15, 20, 30], group: "Alerts" },
+    { key: "alert_preferences", label: "Alerts", type: "tokens", options: ["in_app", "email", "slack", "audit_log"], group: "Alerts" },
+    { key: "portfolio_linkage", label: "Portfolio Linkage", type: "select", options: ["none", "current_workspace", "uploaded_holdings"], group: "Scope" },
+  ],
+  "14": [
+    { key: "report_type", label: "Report Type", type: "select", options: ["full_lp_ddq_supplement", "quarterly_factor_attribution", "monthly_risk_report", "aima_ddq_cross_reference"], group: "Report" },
+    { key: "portfolio_reference", label: "Portfolio Reference", type: "text", group: "Report" },
+    { key: "attribution_start", label: "Date Range Start", type: "text", placeholder: "2025-01-01", group: "Window" },
+    { key: "attribution_end", label: "Date Range End", type: "text", placeholder: "2026-03-31", group: "Window" },
+    { key: "include_sections", label: "Sections", type: "tokens", options: ["exposures", "attribution", "crowding", "capacity", "stress", "health", "audit"], group: "Report" },
+    { key: "fund_name", label: "Fund Name", type: "text", group: "White Label" },
+    { key: "logo_url", label: "Logo URL", type: "text", group: "White Label" },
+    { key: "contact_info", label: "Contact Info", type: "textarea", group: "White Label" },
+    { key: "fund_disclosures", label: "Disclaimer Text", type: "textarea", group: "Narrative" },
+    { key: "custom_narrative", label: "Manager Commentary", type: "textarea", group: "Narrative" },
+    { key: "chart_theme", label: "Chart Theme", type: "select", options: ["dark", "print_light"], group: "Style" },
+    { key: "chart_palette", label: "Chart Palette", type: "select", options: ["institutional", "colorblind", "print"], group: "Style" },
+  ],
+};
+
+export function getFactorsV2Feature(idOrSlug) {
+  const feature = FACTORS_V2_FEATURES.find((item) => item.id === idOrSlug || item.slug === idOrSlug || `feature-${item.id}` === idOrSlug);
+  if (!feature) return feature;
+  return {
+    ...feature,
+    defaults: { compute_mode: "realtime", ...(FEATURE_INPUT_SPEC_DEFAULTS[feature.id] || {}), ...feature.defaults },
+    fields: dedupeFields([
+      { key: "compute_mode", label: "Compute Mode", type: "select", options: ["realtime", "research"], helper: "Realtime enforces cache and speed caps. Research unlocks expensive diagnostics." },
+      ...feature.fields,
+      ...(FEATURE_INPUT_SPEC_UPGRADES[feature.id] || []),
+      ...(FEATURE_RESEARCH_TOGGLES[feature.id] || []),
+    ]),
+    outputLayout: FACTORS_V2_OUTPUT_LAYOUT[feature.id] || DEFAULT_OUTPUT_LAYOUT,
+    constraints: FEATURE_REALTIME_CONSTRAINTS[feature.id] || [],
+  };
+}
+
+function dedupeFields(fields) {
+  const seen = new Set();
+  const out = [];
+  for (const rawField of fields) {
+    const field = rawField.key === "max_tickers"
+      ? { ...rawField, label: "Universe Cap", group: rawField.group || "Compute", helper: rawField.helper || "Compute cap only. Use Custom Universe Tickers for Bloomberg-style universe entry." }
+      : rawField;
+    if (seen.has(field.key)) {
+      const index = out.findIndex((item) => item.key === field.key);
+      out[index] = { ...out[index], ...field };
+      continue;
+    }
+    seen.add(field.key);
+    out.push(field);
+  }
+  return out;
+}
+
+export const DEFAULT_OUTPUT_LAYOUT = ["summary", "charts", "tables", "alerts", "audit"];
+
+export const FACTORS_V2_OUTPUT_LAYOUT = {
+  "01": ["summary", "valuation_gauges", "spread_history", "sector_tables", "alerts", "audit"],
+  "02": ["summary", "exposure_snapshot", "static_heatmap", "tables", "alerts", "audit"],
+  "03": ["summary", "waterfall", "cumulative", "brinson", "tables", "alerts", "audit"],
+  "04": ["summary", "regime_probabilities", "transition_matrix", "conditional_returns", "alerts", "audit"],
+  "05": ["summary", "decay_curve", "half_life", "rebalancing", "tables", "alerts", "audit"],
+  "06": ["summary", "crowding_gauge", "metric_breakdown", "crash_probability", "crowding_league", "tables", "alerts", "audit"],
+  "07": ["summary", "equity_curve", "drawdown", "costs", "statistics", "alerts", "audit"],
+  "08": ["summary", "correlation_heatmap", "covariance", "eigenvalues", "validation", "alerts", "audit"],
+  "09": ["summary", "capacity_curve", "slippage", "memo", "tables", "alerts", "audit"],
+  "10": ["summary", "efficient_frontier", "weights", "constraints", "fap", "alerts", "audit"],
+  "11": ["summary", "scenario_waterfall", "reverse_stress", "var_irf", "tables", "alerts", "audit"],
+  "12": ["summary", "dna_radar", "classifier", "anatomy", "purity", "alerts", "audit"],
+  "13": ["summary", "health", "cusum", "alerts_log", "policy", "audit"],
+  "14": ["summary", "report_preview", "sections", "pdf", "audit"],
+};
+
+export const FEATURE_REALTIME_CONSTRAINTS = {
+  "02": ["Realtime characteristic z-scores run only for holdings/top sample; full universe is nightly cached.", "Animated rolling heatmap is Research export only."],
+  "03": ["Full-history attribution defaults monthly.", "Daily attribution above 5 years is Research Mode only."],
+  "04": ["HMM is primary; rules are secondary.", "GMM rolling covariance is toggle/cached, not realtime default."],
+  "05": ["Full-universe decay is default.", "Sector decay is selected-sector drill-down only."],
+  "06": ["Composite uses valuation, autocorrelation, HHI, and local Roll/Amihud spread proxy.", "Short-interest and institutional ownership feeds are not claimed without local data."],
+  "07": ["Weekly refit is realtime default.", "Monte Carlo cap is 250 realtime, 500 Research.", "Timing cost is optional."],
+  "08": ["DCC realtime only for <=15 factors.", "Ledoit-Wolf default above 15 factors."],
+  "09": ["20 AUM sweep points realtime.", "50 points in Research Mode."],
+  "10": ["No live integer programming.", "Cardinality uses continuous relaxation plus greedy post-processing."],
+  "11": ["VAR cap is 5 lags and 200 bootstrap reps realtime.", "21 lags and 500 reps require Research Mode."],
+  "12": ["CART classifier uses deterministic 100+ archetype training samples."],
+  "13": ["Realtime structural break uses rolling CUSUM.", "Chow is weekly cached diagnostic."],
+  "14": ["PDF render cap is 20 pages realtime.", "Long reports require Research Mode/async."],
+};
+
+export const FEATURE_RESEARCH_TOGGLES = {
+  "04": [{ key: "include_gmm", label: "Include GMM Toggle", type: "select", options: [false, true], helper: "Computes weekly/cached covariance-cluster regime diagnostics." }],
+  "05": [{ key: "selected_sector", label: "Sector Drill-Down", type: "text", placeholder: "Technology", helper: "Optional single-sector decay drill-down." }],
+  "07": [
+    { key: "refit_frequency", label: "Walk-Forward Refit", type: "select", options: ["weekly", "monthly", "daily"], helper: "Daily is Research Mode only." },
+    { key: "mc_simulations", label: "Monte Carlo Sims", type: "number", helper: "Realtime cap 250; Research cap 500." },
+    { key: "include_timing_cost", label: "Timing Cost", type: "select", options: [false, true], helper: "Adds overnight gap timing component." },
+  ],
+  "08": [{ key: "method", label: "Estimator", type: "select", options: ["sample", "ewma", "ledoit_wolf", "dcc_garch"], helper: "DCC is gated by factor count and compute mode." }],
+  "09": [{ key: "aum_points", label: "AUM Sweep Points", type: "number", helper: "Realtime cap 20; Research cap 50." }],
+  "10": [{ key: "cardinality", label: "Cardinality Target", type: "number", helper: "Continuous relaxation plus greedy post-processing; no integer programming." }],
+  "11": [
+    { key: "var_lags", label: "VAR Max Lags", type: "number", helper: "Realtime cap 5; Research cap 21." },
+    { key: "var_bootstrap_samples", label: "VAR Bootstrap Reps", type: "number", helper: "Realtime cap 200; Research cap 500." },
+  ],
+  "14": [{ key: "max_pdf_pages", label: "PDF Page Cap", type: "number", helper: "Default realtime cap is 20 pages." }],
+};
