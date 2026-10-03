@@ -1,9 +1,30 @@
+import dynamic from "next/dynamic";
 import type { ComponentType } from "react";
-import * as P from "./plots";
 import "./views.css";
-import { AttributionBars, ByChoice, DivergingView, RobustnessMatrix, withSwitch, SpecificationCurveView, StabilityView } from "./robustness";
-import * as T from "./tables";
 import type { ViewProps } from "./types";
+
+type Mod = Record<string, unknown>;
+type Views = Record<string, ComponentType<ViewProps>>;
+
+const skeleton = () => <div aria-busy="true" style={{ minHeight: 160 }} />;
+
+/** Load one named view on first use; the heavy modules stay out of the first page bundle. */
+function lazy(load: () => Promise<Mod>, name: string): ComponentType<ViewProps> {
+  return dynamic(async () => (await load())[name] as ComponentType<ViewProps>, { ssr: false, loading: skeleton });
+}
+function group(load: () => Promise<Mod>): Views {
+  return new Proxy({} as Views, { get: (c, k: string) => (c[k] ??= lazy(load, k)) });
+}
+const P = group(() => import("./plots") as Promise<Mod>);
+const T = group(() => import("./tables") as Promise<Mod>);
+const R = group(() => import("./robustness") as Promise<Mod>);
+const BarListSwitch = dynamic(
+  async () => {
+    const m = (await import("./robustness")) as unknown as Mod;
+    return (m.withSwitch as (...a: unknown[]) => ComponentType<ViewProps>)(m.DivergingView, "Diverging", "Bars", m.AttributionBars);
+  },
+  { ssr: false, loading: skeleton },
+);
 
 /**
  * Every view by name. Layout items pick a view explicitly; otherwise the backend render hint
@@ -15,7 +36,7 @@ export const VIEWS: Record<string, ComponentType<ViewProps>> = {
   tstats: T.TStatTable, reportCard: T.ReportCard, scorecard: T.Scorecard, publicationTable: T.PublicationTable, latex: T.Latex, csv: T.CsvExport,
   pdf: T.PdfExport, summaryLine: T.Prose, verdict: T.Prose, explanation: T.Prose, prose: T.Prose,
   // robustness
-  specificationCurve: SpecificationCurveView, decisionLedger: T.DataTable, barList: withSwitch(DivergingView, "Diverging", "Bars", AttributionBars), diverging: DivergingView, byChoice: ByChoice, robustnessMatrix: RobustnessMatrix, boxSummary: StabilityView, stability: StabilityView,
+  specificationCurve: R.SpecificationCurveView, decisionLedger: T.DataTable, barList: BarListSwitch, diverging: R.DivergingView, byChoice: R.ByChoice, robustnessMatrix: R.RobustnessMatrix, boxSummary: R.StabilityView, stability: R.StabilityView,
   // time series
   lineChart: P.LineView, coefficientPath: P.CoefficientPath, growth: P.GrowthView, cumulative: P.CumulativeView, regimeRibbon: P.RegimeTimeline,
   breakScan: P.BreakScan, decayCurve: P.DecayCurve, sharpeDecay: P.SharpeDecay, syntheticPath: P.SyntheticPath, gapPlot: P.GapWithPlacebos,

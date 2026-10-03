@@ -1,7 +1,7 @@
 "use client";
 
 import { createElement, useState, useRef, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, BookOpen, Check, ChevronDown, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, Pin, Check, ChevronDown, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
 import { downloadCsv, downloadPng, downloadSvg } from "@/charts/export";
 import { useLayout } from "@/workspace/layout";
 import { MenuItem, PopMenu, Tooltip, type MenuAt } from "@/workspace/ui";
@@ -10,6 +10,7 @@ import type { Item } from "./layouts";
 import { CHART_VIEWS, viewFor } from "./outputs/registry";
 import { Explore, ExploreControls, VIEW_LABEL, defaults, overlay, useExplore, viewsFor, type ViewKind } from "./outputs/explore";
 import { useJob, useRuns } from "./api";
+import { cardId, usePins } from "./cardPrefs";
 import type { FeatureResult, FeatureSpec } from "./types";
 
 export function OutputCard({ item, feature, result, maximized, onToggleMax, onHide, onMove, onSpan, scope }: {
@@ -44,6 +45,8 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const otherRows = other.data?.result ? out(other.data.result, key) : [];
   const merged = overlayId && otherRows.length ? overlay(rows, otherRows) : null;
   const canOverlay = kinds.some((k) => k === "line");
+  const pinned = usePins((st) => st.pins.some((p) => p.featureId === feature.id && p.card === cardId(item)));
+  const togglePin = usePins((st) => st.toggle);
   const [menu, setMenu] = useState<MenuAt | null>(null);
   const [about, setAbout] = useState(false);
   const title = item.title ?? spec?.title ?? label(key);
@@ -128,6 +131,7 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
       </PopMenu>
       <PopMenu at={menu} onClose={() => setMenu(null)}>
         {rows.length ? <MenuItem icon={<Copy size={13} />} onClick={copy}>Copy data</MenuItem> : null}
+        {currentJob && currentJob !== "draft" ? <MenuItem icon={<Pin size={13} />} onClick={() => togglePin({ featureId: feature.id, card: cardId(item), jobId: currentJob })}>{pinned ? "Unpin from board" : "Pin to board"}</MenuItem> : null}
         {onHide ? <MenuItem icon={<EyeOff size={13} />} onClick={onHide}>Hide</MenuItem> : null}
         <MenuItem icon={maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />} onClick={onToggleMax} hint={maximized ? "Esc" : undefined}>{maximized ? "Restore" : "Expand"}</MenuItem>
         {canTable ? <MenuItem icon={asTable ? <BarChart3 size={13} /> : <Table2 size={13} />} onClick={() => setAsTable((v) => !v)}>{asTable ? "Show chart" : "Show table"}</MenuItem> : null}

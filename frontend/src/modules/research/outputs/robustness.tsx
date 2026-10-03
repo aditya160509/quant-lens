@@ -191,7 +191,7 @@ export function withSwitch(Chart: ComponentType<ViewProps>, a = "Chart", b = "Ta
     const [v, setV] = useState<"a" | "b">("a");
     return (
       <div>
-        <div className="vw-head"><span /><Segmented label="View" value={v} onChange={setV} options={[{ value: "a", label: a }, { value: "b", label: b }]} /></div>
+        <div className="vw-head"><span /><Segmented<"a" | "b"> label="View" value={v} onChange={setV} options={[{ value: "a", label: a }, { value: "b", label: b }]} /></div>
         {v === "a" ? <Chart {...p} /> : <Alt {...p} />}
       </div>
     );
@@ -243,7 +243,7 @@ export function ByChoice({ rows }: ViewProps) {
   return (
     <div>
       <div className="vw-head">
-        <Segmented label="Choice" value={active} onChange={setDim} options={dims.map((d) => ({ value: d, label: label(d) }))} />
+        <Segmented<string> label="Choice" value={active} onChange={setDim} options={dims.map((d) => ({ value: d, label: label(d) }))} />
       </div>
       {groups.map((g) => (
         <div key={g.k} className="dv-row" style={{ height: 30 }}>

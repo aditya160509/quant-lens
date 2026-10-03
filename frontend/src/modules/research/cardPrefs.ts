@@ -35,3 +35,14 @@ export function arrange(items: Item[], prefs: Record<string, CardPref>, keepHidd
     .sort((a, b) => (a.p.order ?? a.i) - (b.p.order ?? b.i))
     .map(({ it, p }) => (p.span ? { ...it, span: p.span } : it));
 }
+
+/** Outputs pinned to the Overview board, each tied to the run it came from. */
+export type Pin = { featureId: string; card: string; jobId: string; at: number };
+type PinStore = { pins: Pin[]; toggle: (p: Omit<Pin, "at">) => void; remove: (card: string, featureId: string) => void };
+export const usePins = create<PinStore>()(persist((set) => ({
+  pins: [],
+  toggle: (p) => set((s) => (s.pins.some((x) => x.featureId === p.featureId && x.card === p.card)
+    ? { pins: s.pins.filter((x) => !(x.featureId === p.featureId && x.card === p.card)) }
+    : { pins: [{ ...p, at: Date.now() }, ...s.pins].slice(0, 24) })),
+  remove: (card, featureId) => set((s) => ({ pins: s.pins.filter((x) => !(x.featureId === featureId && x.card === card)) })),
+}), { name: "research-pins", storage: createJSONStorage(() => localStorage) }));

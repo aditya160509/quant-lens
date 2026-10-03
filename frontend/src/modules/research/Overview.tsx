@@ -5,7 +5,10 @@ import { motion } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
 import { DUR } from "@/workspace/prefs";
 import { Chip, Dot } from "@/workspace/ui";
-import { latestRun } from "./api";
+import { latestRun, useJob } from "./api";
+import { cardId, usePins, type Pin } from "./cardPrefs";
+import { layoutFor } from "./layouts";
+import { OutputCard } from "./OutputCard";
 import { featureHref, metaFor } from "./catalog";
 import type { FeatureSpec, RunRecord } from "./types";
 
@@ -55,6 +58,8 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
             <div key={l}><div className="l">{l}</div><div className="v" style={{ color: c && v ? c : undefined }}>{v}</div></div>
           ))}
         </div>
+
+        <Board features={features} />
 
         {stages.map((stage, si) => (
           <section key={stage.id} style={{ marginTop: 26 }}>
@@ -106,6 +111,47 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
           </section>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Pinned outputs from any feature, side by side, each drawn from the run it was pinned from. */
+function Board({ features }: { features: FeatureSpec[] }) {
+  const pins = usePins((s) => s.pins);
+  if (!pins.length || !features.length) return null;
+  return (
+    <section style={{ marginTop: 26 }}>
+      <div className="ov-stage"><span className="n">★</span><h2>Board</h2><p>Outputs you pinned. Right-click any output and choose Pin to board.</p></div>
+      <div className="out-grid">
+        {pins.map((p) => <PinnedCard key={`${p.featureId}:${p.card}`} pin={p} features={features} />)}
+      </div>
+    </section>
+  );
+}
+
+function PinnedCard({ pin, features }: { pin: Pin; features: FeatureSpec[] }) {
+  const feature = features.find((f) => f.id === pin.featureId);
+  const job = useJob(pin.jobId);
+  const remove = usePins((s) => s.remove);
+  const item = feature ? layoutFor(feature).sections.flatMap((s) => s.items).find((i) => cardId(i) === pin.card) : undefined;
+  const result = job.data?.status === "completed" ? job.data.result : null;
+  if (!feature || !item) return null;
+  const span = Math.max(6, item.span);
+  if (!result) {
+    return (
+      <div className="card" style={{ gridColumn: `span ${span}`, height: 160 }}>
+        <div className="card-b" style={{ color: "var(--text-3)", fontSize: 12.5, display: "grid", gap: 8 }}>
+          <b style={{ color: "var(--text)" }}>{metaFor(feature.id, feature.name).name}</b>
+          {job.isLoading ? "Loading…" : "This run is no longer on the server. Re-run the feature and pin it again."}
+          <button className="btn sm ghost" style={{ justifySelf: "start" }} onClick={() => remove(pin.card, pin.featureId)}>Remove</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ gridColumn: `span ${span}`, minWidth: 0 }}>
+      <OutputCard item={{ ...item, title: `${metaFor(feature.id, feature.name).name} · ${item.title ?? feature.outputs.find((o) => o.key === item.keys[0])?.title ?? item.keys[0]}` }}
+        feature={feature} result={result} maximized={false} onToggleMax={() => undefined} onHide={() => remove(pin.card, pin.featureId)} scope={`${feature.id}:${pin.jobId}`} />
     </div>
   );
 }
