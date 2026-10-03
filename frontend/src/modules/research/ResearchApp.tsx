@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useMemo, useState, useSyncExternalStore } from "react";
 import { Bookmark, History, LayoutGrid, Trash2 } from "lucide-react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import { create } from "zustand";
@@ -50,6 +50,7 @@ function ResearchPanels() {
   const animate = useLayout((s) => s.animate);
   const shownJob = useSearchParams()?.get("run") ?? (featureId ? runs.find((r) => r.featureId === featureId)?.jobId ?? null : null);
   useBackgroundRuns(manifest.data, shownJob, verdictFor);
+  useDoneInTitle(runs);
 
   useEffect(() => setCrumb(feature ? metaFor(feature.id, feature.name).name : "Overview"), [feature, setCrumb]);
 
@@ -283,4 +284,21 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
       <button className="btn" onClick={onRetry}>Retry</button>
     </div>
   );
+}
+
+/** When a run finishes while the tab is hidden, say so in the tab title until the reader comes back. */
+function useDoneInTitle(runs: RunRecord[]) {
+  const done = runs.filter((r) => r.status === "completed" || r.status === "failed").map((r) => r.jobId).join(",");
+  const seen = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = seen.current;
+    seen.current = done;
+    if (prev === null || !document.hidden) return;
+    const fresh = runs.find((r) => (r.status === "completed" || r.status === "failed") && !prev.split(",").includes(r.jobId));
+    if (!fresh) return;
+    const base = document.title.replace(/^[✓✕] .*? · /, "");
+    document.title = `${fresh.status === "failed" ? "✕" : "✓"} ${metaFor(fresh.featureId, fresh.featureName).name} finished · ${base}`;
+    const back = () => { if (!document.hidden) { document.title = base; document.removeEventListener("visibilitychange", back); } };
+    document.addEventListener("visibilitychange", back);
+  }, [done, runs]);
 }
