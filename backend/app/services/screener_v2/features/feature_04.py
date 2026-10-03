@@ -3,42 +3,36 @@
 from __future__ import annotations
 
 from typing import Any
+from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
-from ..core.analytics import academic_strategy_scores, access_meta, altman_history, full_strategy_performance_metadata, full_strategy_performance_table, matrix_records, metric_panel, records, response, score_backtest, strategy_leaderboard
+from ..core.academic import academic_strategy_scores, altman_history, full_strategy_performance_metadata, full_strategy_performance_table, strategy_leaderboard
+from ..core.common import access_meta, matrix_records, records, response
+from ..core.panel import metric_panel
+from ..core.screener import apply_filters
+from ..core.validation import point_in_time_scorer, score_backtest
 from ..core.data_loader import parse_symbols
 
 
 FEATURE_ID = "04"
 FEATURE_NAME = "Academic Strategy Screener Library"
 
-INPUTS = [
-    {"key": "universe", "type": "ticker_list", "default": "master"},
-    {"key": "strategy", "type": "select", "default": "magic_formula"},
-    {"key": "lookback_days", "type": "number", "default": 756},
-    {"key": "top_n", "type": "number", "default": 50},
-]
+INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master'}, {'key': 'lookback_days', 'type': 'number', 'default': 756}, {'key': 'top_n', 'type': 'number', 'default': 50}, {'key': 'strategy', 'type': 'select', 'default': 'magic_formula', 'options': ['magic_formula', 'acquirers_multiple', 'value_composite', 'novy_marx_gpa', 'momentum_jt', 'low_vol', 'sloan_accruals', 'graham_net_net', 'high_dividend_low_payout', 'interest_coverage_distress', 'piotroski_f_score', 'altman_z_score', 'altman_z_double_prime']}, {'key': 'strategy_perf_limit', 'type': 'number', 'default': 24, 'min': 1, 'max': 24}, {'key': 'long_short', 'type': 'boolean', 'default': False}]))
 
-OUTPUTS = [
-    "strategy_leaderboard",
-    "per_strategy_stock_list",
-    "piotroski_breakdown",
-    "altman_z_score_status",
-    "strategy_correlation_matrix",
-    "historical_strategy_performance",
-    "historical_strategy_performance_all",
-]
+OUTPUTS = [{'key': 'strategy_correlation_matrix', 'source': 'charts', 'render': 'heatmap', 'primary': True, 'label': 'Strategy Correlation Matrix'}, {'key': 'historical_strategy_performance', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Historical Strategy Performance'}, {'key': 'strategy_leaderboard', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Strategy Leaderboard'}, {'key': 'per_strategy_stock_list', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Per Strategy Stock List'}, {'key': 'piotroski_breakdown', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Piotroski Breakdown'}, {'key': 'altman_z_score_status', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Altman Z Score Status'}, {'key': 'altman_z_score_8q_trend', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Altman Z Score 8Q Trend'}, {'key': 'historical_strategy_statistics', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Historical Strategy Statistics'}, {'key': 'historical_strategy_performance_all', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Historical Strategy Performance All'}, {'key': 'historical_strategy_performance_metadata', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Historical Strategy Performance Metadata'}]
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=5000)
     panel = metric_panel(payload, symbols=symbols)
+    panel, _ = apply_filters(panel, payload)
     strategies = academic_strategy_scores(panel)
     strategy = payload.get("strategy") or "magic_formula"
     if strategy not in strategies.columns:
-        strategy = "best_strategy_score"
+        raise ValueError(f"Unknown or unsupported academic strategy: {strategy}")
     ranked = strategies.sort_values(strategy, ascending=False)
-    backtest = score_backtest(list(ranked["ticker"]), ranked.set_index("ticker")[strategy], int(payload.get("lookback_days") or 756), int(payload.get("top_n") or 50), long_short=bool(payload.get("long_short")))
+    shared_cache = {}
+    backtest = score_backtest(list(ranked["ticker"]), ranked.set_index("ticker")[strategy], int(payload.get("lookback_days") or 756), int(payload.get("top_n") or 50), long_short=bool(payload.get("long_short")), score_at=point_in_time_scorer(symbols, payload, "academic", strategy, shared_cache))
     numeric = strategies.select_dtypes("number").drop(columns=["altman_z_score"], errors="ignore")
     focus = str(payload.get("focus_ticker") or ranked.iloc[0]["ticker"]) if not ranked.empty else ""
     return response(
@@ -64,8 +58,10 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
                 int(payload.get("lookback_days") or 756),
                 int(payload.get("top_n") or 50),
                 int(payload.get("strategy_perf_limit") or 24),
+                payload=payload,
+                shared_cache=shared_cache,
             ),
             "historical_strategy_performance_metadata": [full_strategy_performance_metadata(strategies, int(payload.get("strategy_perf_limit") or 24))],
         },
-        meta=access_meta(payload, ["Academic screens use the latest local fundamentals snapshot; true PIT strategy library requires appended PIT fundamentals. Full strategy performance uses deterministic local price-history backtests for available numeric strategy scores."]),
+        meta=access_meta(payload, ["Every strategy is rebuilt on its formation date. Conservative 90-day statement availability does not reconstruct filing vintages or revisions. Unsupported named approximations were removed; missing criteria remain unknown."]),
     )

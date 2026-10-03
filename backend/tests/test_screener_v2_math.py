@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.services.screener_v2.core import analytics
+from app.services.screener_v2.core import estimators, formula, stats, screener, validation
 from app.services.screener_v2.features.feature_05 import _holding_period_stats
 
 
@@ -17,19 +17,19 @@ def test_gap_uses_open_against_prior_close(monkeypatch: pytest.MonkeyPatch) -> N
         for date in dates:
             rows.append({"Ticker": ticker, "Date": date, "Open": 100.0, "High": 101.0, "Low": 99.0, "Close": 100.0, "Volume": 1_000.0})
     rows[299]["Open"] = 110.0
-    monkeypatch.setattr(analytics, "ohlcv_for_symbols", lambda *_args, **_kwargs: pd.DataFrame(rows))
-    monkeypatch.setattr(analytics, "close_matrix", lambda *_args, **_kwargs: close)
-    monkeypatch.setattr(analytics, "volume_matrix", lambda *_args, **_kwargs: volume)
-    result = analytics.latest_technical_features(["AAA"], 300).set_index("ticker")
+    monkeypatch.setattr(estimators, "ohlcv_for_symbols", lambda *_args, **_kwargs: pd.DataFrame(rows))
+    monkeypatch.setattr(estimators, "close_matrix", lambda *_args, **_kwargs: close)
+    monkeypatch.setattr(estimators, "volume_matrix", lambda *_args, **_kwargs: volume)
+    result = estimators.latest_technical_features(["AAA"], 300).set_index("ticker")
     assert result.loc["AAA", "gap_1d"] == pytest.approx(0.10)
 
 
 def test_formula_if_alias_and_division_guard() -> None:
     panel = pd.DataFrame({"ticker": ["A", "B"], "roa": [0.1, -0.1], "sector": ["X", "X"]})
-    result = analytics.evaluate_formula(panel, "if(roa > 0, 1, 0)")
+    result = formula.evaluate_formula(panel, "if(roa > 0, 1, 0)")
     assert result.values.tolist() == [1.0, 0.0]
-    with pytest.raises(analytics.FormulaError, match="Division by zero"):
-        analytics.evaluate_formula(panel, "1/0")
+    with pytest.raises(formula.FormulaError, match="Division by zero"):
+        formula.evaluate_formula(panel, "1/0")
 
 
 def test_holding_period_stats_uses_forward_horizon() -> None:
@@ -40,21 +40,115 @@ def test_holding_period_stats_uses_forward_horizon() -> None:
     assert result["mean_forward_return"] == pytest.approx(21.0)
 
 
-def test_rebalance_cost_is_charged_only_on_rebalance_dates(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_turnover_cost_and_walk_forward_reselection():
+    from app.services.screener_v2.core.backtest import simulate
     dates = pd.date_range("2025-01-01", periods=10, freq="B")
-    prices = pd.DataFrame({"A": np.full(10, 100.0)}, index=dates)
-    monkeypatch.setattr(analytics, "close_matrix", lambda *_args, **_kwargs: prices)
-    monkeypatch.setattr(analytics, "eligible_at_date", lambda *_args, **_kwargs: ["A"])
-    monkeypatch.setattr(analytics, "risk_free_annual", lambda: 0.0)
-    result = analytics.score_backtest(["A"], pd.Series({"A": 1.0}), lookback_days=10, top_n=1, cost_bps=100, rebalance_days=5)
-    curve = result["equity_curve"]
-    equity = pd.Series([row["strategy"] for row in curve])
-    daily = equity.pct_change()
-    daily.iloc[0] = equity.iloc[0] - 1.0
-    assert (daily < 0).sum() == 2
+    prices = pd.DataFrame({"A": np.full(10, 100.), "B": np.full(10, 100.)}, index=dates)
+    calls = []
+    def scores(date):
+        calls.append(date)
+        return pd.Series({"A": 2 if date < dates[5] else 0, "B": 1})
+    result = simulate(prices, scores, top_n=1, min_history=2, rebalance_days=4, cost_bps=100)
+    curve = result['curve']
+    assert calls == [dates[1], dates[5]]
+    assert result['trades'].execution_date.tolist() == [dates[2], dates[6], dates[6]]
+    assert curve.turnover.iloc[0] == pytest.approx(1 / 1.01)
+    assert curve.cost_fraction.iloc[0] == pytest.approx(.01 / 1.01)
+    assert curve.turnover.iloc[4] == pytest.approx(2 / 1.01)
+    assert curve.loc[~curve.rebalance, 'cost_fraction'].eq(0).all()
+
+
+def test_static_score_backfill_is_rejected():
+    with pytest.raises(ValueError, match='point-in-time score provider'):
+        validation.score_backtest(['A'], pd.Series({'A': 1.}))
+
+
+def test_cscv_partitions_and_rank():
+    from app.services.screener_v2.core.backtest import cscv_pbo
+    returns = pd.DataFrame({'good': np.tile([.01, .02, .03, .04], 4), 'bad': np.tile([-.04, -.03, -.02, -.01], 4)})
+    result = cscv_pbo(returns, 4)
+    assert result['split_count'] == 6
+    assert result['pbo'] == 0
+    assert all(row['winner'] == 'good' for row in result['splits'])
 
 
 def test_roic_formula() -> None:
     ebit, tax, equity, debt, cash = 100.0, 0.25, 500.0, 200.0, 50.0
     expected = ebit * (1 - tax) / (equity + debt - cash)
     assert expected == pytest.approx(75.0 / 650.0)
+
+
+def test_execution_price_gaps_are_rejected():
+    from app.services.screener_v2.core.backtest import simulate
+    dates = pd.date_range('2025-01-01', periods=6, freq='B')
+    prices = pd.DataFrame({'A': [100., 100., np.nan, 100., 100., 100.]}, index=dates)
+    with pytest.raises(ValueError, match='Missing execution price'):
+        simulate(prices, lambda date: pd.Series({'A': 1.}), min_history=2, top_n=1)
+
+
+def test_missing_values_do_not_receive_normalized_scores():
+    values = pd.Series([1., 2., np.nan])
+    assert pd.isna(stats.rank_pct(values).iloc[2])
+    assert pd.isna(stats.zscore(values).iloc[2])
+
+
+def test_requested_unavailable_filter_is_rejected():
+    panel = pd.DataFrame({'ticker': ['A'], 'price': [100.], 'forward_pe': [np.nan]})
+    with pytest.raises(ValueError, match='unavailable'):
+        screener.apply_filters(panel, {'forward_pe_max': 10})
+
+
+def test_wilder_seed_includes_all_first_valid_observations():
+    values = pd.Series([np.nan, 1., 2., 3., 4.])
+    result = stats._wilder_smooth(values, 3)
+    assert result.iloc[:3].isna().all()
+    assert result.iloc[3] == pytest.approx(2.)
+    assert result.iloc[4] == pytest.approx(8 / 3)
+
+
+def test_piotroski_original_criteria_and_missing_inputs(monkeypatch):
+    from app.services.screener_v2.core import academic
+    history = pd.DataFrame({
+        'reportDate': pd.to_datetime(['2021-12-31', '2022-12-31', '2023-12-31']),
+        'periodType': ['annual'] * 3, 'Total Assets': [80., 100., 110.],
+        'Net Income': [5., 10., 20.], 'Operating Cash Flow': [6., 15., 25.],
+        'Long Term Debt': [30., 20., 10.], 'Current Portion Of Long Term Debt': [1., 1., 1.],
+        'Current Assets': [20., 30., 40.], 'Current Liabilities': [10., 10., 10.],
+        'Gross Profit': [20., 40., 70.], 'Total Revenue': [100., 120., 180.],
+        'Issuance Of Capital Stock': [0., 0., 0.],
+    })
+    monkeypatch.setattr(academic, 'fundamental_history', lambda ticker: history)
+    result = academic.piotroski_criteria_spec(pd.DataFrame({'ticker': ['A']}), ['A']).iloc[0]
+    assert result.piotroski_f_score_spec == 9
+    history.drop(columns='Current Portion Of Long Term Debt', inplace=True)
+    missing = academic.piotroski_criteria_spec(pd.DataFrame({'ticker': ['A']}), ['A']).iloc[0]
+    assert pd.isna(missing.piotroski_f_score_spec)
+    assert 'f5_leverage_declining' in missing.piotroski_missing_criteria
+
+
+def test_altman_golden_numbers_use_distinct_equity_measures():
+    from app.services.screener_v2.core.academic import altman_z_score, altman_z_double_prime
+    panel = pd.DataFrame({'working_capital_assets': [.2], 'retained_earnings_assets': [.3], 'ebit_assets': [.1], 'market_value_liabilities': [2.], 'book_value_liabilities': [.5], 'sales_assets': [1.5]})
+    assert altman_z_score(panel).iloc[0] == pytest.approx(3.69)
+    assert altman_z_double_prime(panel).iloc[0] == pytest.approx(3.487)
+
+
+def test_attribution_reconciles_to_total_net_return_without_daily_stock_rows():
+    from app.services.screener_v2.core.backtest import simulate
+    dates = pd.date_range('2025-01-01', periods=10, freq='B')
+    prices = pd.DataFrame({'A': np.arange(100., 110.), 'B': np.arange(100., 90., -1)}, index=dates)
+    def scores(date):
+        return pd.Series({'A': 2 if date < dates[5] else 0, 'B': 1})
+    result = simulate(prices, scores, top_n=1, min_history=2, rebalance_days=4, cost_bps=10)
+    assert len(result['attribution']) == 2
+    assert result['attribution'].net_pnl_contribution.sum() == pytest.approx(result['curve'].strategy.iloc[-1] - 1)
+    assert result['positions'].iloc[0].entry_date == dates[2]
+    assert result['positions'].iloc[0].exit_date == dates[6]
+
+
+def test_formula_unknown_input_is_not_zero_and_rank_is_unit_scaled():
+    panel = pd.DataFrame({'ticker': ['A', 'B', 'C'], 'roa': [1., 2., np.nan], 'sector': ['X'] * 3})
+    result = formula.evaluate_formula(panel, 'rank(roa)')
+    assert result.values.iloc[:2].tolist() == [0., 1.]
+    assert pd.isna(result.values.iloc[2])
+    assert pd.isna(formula.evaluate_formula(panel, 'if(roa > 0, 1, 0)').values.iloc[2])

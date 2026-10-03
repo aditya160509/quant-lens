@@ -47,17 +47,24 @@ def get_feature(feature_id: int | str) -> ScreenerFeature:
     return registry[key]
 
 
+
 def feature_manifest() -> list[dict[str, Any]]:
-    return [
-        {"id": f.id, "name": f.name, "inputs": f.inputs, "outputs": f.outputs}
-        for f in _build_registry().values()
-    ]
+    return [{"id": feature.id, "name": feature.name, "inputs": feature.inputs, "outputs": feature.outputs}
+            for feature in _build_registry().values()]
 
 
 def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     feature = get_feature(feature_id)
     module = _load(feature.module)
     runner: Callable[[dict[str, Any] | None], dict[str, Any]] = getattr(module, "run")
-    from .core.data_loader import as_of_context
-    with as_of_context((payload or {}).get("as_of_date")):
-        return runner(payload or {})
+    from .core.data_loader import as_of_context, load_market_ohlcv
+    from .features.inputs import normalize_payload
+    payload = normalize_payload(feature.inputs, payload or {})
+    cutoff = payload.get("as_of_date") or str(load_market_ohlcv().Date.max().date())
+    payload = {**payload, "as_of_date": cutoff}
+    with as_of_context(cutoff):
+        result = runner(payload or {})
+        if (payload or {}).get("screen_id"):
+            from .core.state import save_run
+            save_run(str(payload["screen_id"]), str(result.get("meta", {}).get("as_of_date") or payload.get("as_of_date") or "latest"), result)
+        return result

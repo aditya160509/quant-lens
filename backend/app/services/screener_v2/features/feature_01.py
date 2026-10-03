@@ -3,35 +3,22 @@
 from __future__ import annotations
 
 from typing import Any
+from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
 import pandas as pd
 
-from ..core.analytics import access_meta, apply_filters, heatmap_view, metric_panel, quick_look, records, response, top_table
+from ..core.common import access_meta, records, response
+from ..core.screener import apply_filters, heatmap_view, quick_look, top_table
+from ..core.panel import metric_panel
 from ..core.data_loader import parse_symbols
 
 
 FEATURE_ID = "01"
 FEATURE_NAME = "Core Multi-Factor Screener Engine"
 
-INPUTS = [
-    {"key": "universe", "type": "ticker_list", "default": "master", "description": "Universe symbols or master universe alias."},
-    {"key": "max_symbols", "type": "number", "default": 500, "description": "Maximum symbols loaded from the master universe."},
-    {"key": "lookback_days", "type": "number", "default": 756},
-    {"key": "sector", "type": "text", "default": "all"},
-    {"key": "industry_group", "type": "text", "default": "all"},
-    {"key": "market_cap_min", "type": "number", "default": None},
-    {"key": "dollar_volume_min", "type": "number", "default": None},
-    {"key": "score_min", "type": "number", "default": None},
-]
+INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master', 'description': 'Universe symbols or master universe alias.'}, {'key': 'max_symbols', 'type': 'number', 'default': 500, 'description': 'Maximum symbols loaded from the master universe.'}, {'key': 'lookback_days', 'type': 'number', 'default': 756}, {'key': 'sector', 'type': 'text', 'default': 'all'}, {'key': 'industry_group', 'type': 'text', 'default': 'all'}, {'key': 'market_cap_min', 'type': 'number', 'default': None}, {'key': 'dollar_volume_min', 'type': 'number', 'default': None}, {'key': 'score_min', 'type': 'number', 'default': None}, {'key': 'heatmap_metric', 'type': 'text', 'default': 'core_quant_score'}, {'key': 'include_market_cap_buckets', 'type': 'boolean', 'default': True}]))
 
-OUTPUTS = [
-    "ranked_screener_table",
-    "filter_funnel_waterfall",
-    "cross_sectional_percentile_context",
-    "heatmap_view",
-    "quick_look_card",
-    "saved_screens",
-]
+OUTPUTS = [{'key': 'filter_funnel_waterfall', 'source': 'charts', 'render': 'table', 'primary': True, 'label': 'Filter Funnel Waterfall'}, {'key': 'cross_sectional_percentile_context', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Cross Sectional Percentile Context'}, {'key': 'heatmap_view', 'source': 'charts', 'render': 'heatmap', 'primary': False, 'label': 'Heatmap View'}, {'key': 'quick_look_card', 'source': 'charts', 'render': 'metrics', 'primary': False, 'label': 'Quick Look Card'}, {'key': 'market_cap_bucket_distribution', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Market Cap Bucket Distribution'}, {'key': 'ranked_screener_table', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Ranked Screener Table'}, {'key': 'saved_screens', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Saved Screens'}]
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -75,6 +62,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
             "amihud_percentile",
         ] if c in filtered.columns
     ]].head(250)
+    from ..core.state import list_screens
     ql = quick_look(filtered, payload.get("focus_ticker"))
     return response(
         FEATURE_ID,
@@ -93,12 +81,12 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         },
         tables={
             "ranked_screener_table": records(ranked),
-            "saved_screens": [],
+            "saved_screens": list_screens(),
         },
         meta=access_meta(
             payload,
             [
-                "Saved screen persistence is not wired to a server database yet; runtime emits the current result only.",
+
                 *(
                     [f"{len(dropped)} requested ticker(s) had insufficient local price history and were excluded: {', '.join(dropped[:20])}{'...' if len(dropped) > 20 else ''}"]
                     if dropped

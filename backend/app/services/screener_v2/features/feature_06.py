@@ -3,21 +3,20 @@
 from __future__ import annotations
 
 from typing import Any
+from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
-from ..core.analytics import access_meta, alert_precision_backtest, fundamental_change_rows, metric_panel, records, response
+from ..core.common import access_meta, records, response
+from ..core.alerts import alert_precision_backtest, current_alerts, realized_alert_precision
+from ..core.panel import metric_panel
 from ..core.data_loader import parse_symbols
 
 
 FEATURE_ID = "06"
 FEATURE_NAME = "Alert Engine and Watchlist Monitor"
 
-INPUTS = [
-    {"key": "watchlist", "type": "ticker_list", "default": "AAPL MSFT NVDA AMZN META GOOGL"},
-    {"key": "alert_score_min", "type": "number", "default": 80},
-    {"key": "alert_return_1d_abs", "type": "number", "default": 0.05},
-]
+INPUTS = merge_inputs(shared_inputs(), enrich([{'key': 'watchlist', 'type': 'ticker_list', 'default': 'AAPL MSFT NVDA AMZN META GOOGL'}, {'key': 'alert_score_min', 'type': 'number', 'default': 80}, {'key': 'alert_return_1d_abs', 'type': 'number', 'default': 0.05}, {'key': 'volume_spike_multiple', 'type': 'number', 'default': 2}, {'key': 'metric_threshold', 'type': 'number', 'default': None}, {'key': 'formula_threshold', 'type': 'number', 'default': None}, {'key': 'fundamental_change_threshold', 'type': 'number', 'default': 0.2}, {'key': 'metric', 'type': 'text', 'default': 'core_quant_score'}, {'key': 'formula', 'type': 'text', 'default': None}]))
 
-OUTPUTS = ["alert_feed", "alert_performance_tracker", "alert_performance_tracker_historical", "screen_entry_exit_log"]
+OUTPUTS = [{'key': 'alert_feed', 'source': 'charts', 'render': 'table', 'primary': True, 'label': 'Alert Feed'}, {'key': 'watchlist_live_monitoring_dashboard', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Watchlist Live Monitoring Dashboard'}, {'key': 'alert_performance_tracker', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Alert Performance Tracker'}, {'key': 'alert_performance_tracker_historical', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Alert Performance Tracker Historical'}, {'key': 'screen_entry_exit_log', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Screen Entry Exit Log'}]
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -25,44 +24,17 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = {**payload, "universe": payload.get("watchlist") or payload.get("universe") or "AAPL MSFT NVDA AMZN META GOOGL"}
     symbols = parse_symbols(payload, default_limit=25, max_symbols=250)
     panel = metric_panel(payload, symbols=symbols)
-    score_min = float(payload.get("alert_score_min") or 80)
-    move_abs = float(payload.get("alert_return_1d_abs") or 0.05)
-    spike_threshold = float(payload.get("volume_spike_multiple") or 2.0)
-    metric = payload.get("metric") or "core_quant_score"
-    metric_threshold = payload.get("metric_threshold")
-    formula_threshold = payload.get("formula_threshold")
-    alerts = []
-    fundamental_alerts = fundamental_change_rows(panel, float(payload.get("fundamental_change_threshold") or 0.20))
-    for _, row in panel.iterrows():
-        if row.get("core_quant_score", 0) >= score_min:
-            alerts.append({"ticker": row["ticker"], "type": "SCREEN_ENTRY", "severity": "high", "value": row.get("core_quant_score"), "message": "Quant score crossed alert threshold."})
-        if abs(row.get("return_1d", 0) or 0) >= move_abs:
-            alerts.append({"ticker": row["ticker"], "type": "PRICE_MOVE", "severity": "medium", "value": row.get("return_1d"), "message": "One-day move exceeded configured absolute threshold."})
-        if row.get("rsi_14", 50) >= 75 or row.get("rsi_14", 50) <= 25:
-            alerts.append({"ticker": row["ticker"], "type": "RSI_EXTREME", "severity": "low", "value": row.get("rsi_14"), "message": "RSI moved to an extreme band."})
-        if metric in row and metric_threshold is not None and (row.get(metric) or 0) >= float(metric_threshold):
-            alerts.append({"ticker": row["ticker"], "type": "METRIC_THRESHOLD", "severity": "medium", "metric": metric, "value": row.get(metric), "message": f"{metric} crossed configured threshold."})
-        if formula_threshold is not None and row.get("core_quant_score", 0) >= float(formula_threshold):
-            alerts.append({"ticker": row["ticker"], "type": "FORMULA_THRESHOLD", "severity": "medium", "value": row.get("core_quant_score"), "message": "Formula/core score threshold triggered."})
-        try:
-            spike_ratio = float(row.get("vratio", row.get("volume_spike_ratio")))
-        except (TypeError, ValueError):
-            spike_ratio = None
-        if spike_ratio is not None and spike_ratio >= spike_threshold:
-            alerts.append({"ticker": row["ticker"], "type": "VOLUME_SPIKE", "severity": "high" if spike_ratio >= spike_threshold * 1.5 else "medium", "value": spike_ratio, "message": f"Volume {spike_ratio:.2f}x the 20-day average."})
-        for window in [20, 50, 100, 200]:
-            if row.get(f"crossed_above_sma_{window}_today"):
-                alerts.append({"ticker": row["ticker"], "type": "PRICE_CROSS_SMA_UP", "severity": "low", "value": window, "message": f"Price crossed above SMA-{window} today."})
-            if row.get(f"crossed_below_sma_{window}_today"):
-                alerts.append({"ticker": row["ticker"], "type": "PRICE_CROSS_SMA_DOWN", "severity": "low", "value": window, "message": f"Price crossed below SMA-{window} today."})
-        if row.get("macd_bullish") == 1 or row.get("sma50_above_sma200") == 1 or row.get("bollinger_pct_b", 0.5) >= 0.95:
-            alerts.append({"ticker": row["ticker"], "type": "TECHNICAL_TRIGGER", "severity": "low", "value": row.get("macd_histogram"), "message": "Price/SMA/MACD/Bollinger condition triggered."})
-        if row.get("consecutive_up_days", 0) >= 5 or row.get("consecutive_down_days", 0) >= 5:
-            alerts.append({"ticker": row["ticker"], "type": "CONSECUTIVE_DAYS", "severity": "low", "value": max(row.get("consecutive_up_days", 0), row.get("consecutive_down_days", 0)), "message": "Consecutive day trigger fired."})
-    alerts.extend(fundamental_alerts)
+    score_min = float(payload.get("alert_score_min", 80))
+    alerts = current_alerts(panel, payload)
     entries = panel[panel["core_quant_score"] >= score_min][["ticker", "core_quant_score", "sector"]].copy() if not panel.empty else panel
-    entries["event"] = "entered" if not entries.empty else []
-    performance = [{"alert_type": t, "count": sum(1 for a in alerts if a["type"] == t), "precision_proxy": None, "forward_window": "requires persistent alert history"} for t in sorted({a["type"] for a in alerts})]
+    from ..core.state import compare_and_store
+    from ..core.data_loader import ohlcv_for_symbols
+    entries = records(entries)
+    changes = compare_and_store(str(payload["screen_id"]), entries, str(ohlcv_for_symbols(symbols).Date.max().date())) if payload.get("screen_id") else []
+    from ..core.state import store_alerts
+    if payload.get("screen_id"):
+        store_alerts(str(payload["screen_id"]), str(ohlcv_for_symbols(symbols).Date.max().date()), alerts)
+    performance = realized_alert_precision(str(payload["screen_id"])) if payload.get("screen_id") else []
     historical_precision = alert_precision_backtest(panel, {"GOLDEN_CROSS": "golden_cross", "RSI_EXTREME": "rsi_extreme"})
     dashboard_cols = ["ticker", "sector", "core_quant_score", "return_1d", "rsi_14", "macd_histogram", "bollinger_pct_b", "volume_spike_ratio", "consecutive_up_days", "consecutive_down_days"]
     dashboard = records(panel[[c for c in dashboard_cols if c in panel.columns]].head(250)) if not panel.empty else []
@@ -76,7 +48,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         tables={
             "alert_performance_tracker": performance,
             "alert_performance_tracker_historical": historical_precision,
-            "screen_entry_exit_log": records(entries),
+            "screen_entry_exit_log": changes,
         },
-        meta=access_meta(payload, ["Persistent alert scheduling, delivery, and realized alert precision require server state and a job runner."]),
+        meta=access_meta(payload, ["Realized precision requires screen_id and stored, fully matured directional alerts. Email delivery is unavailable without a configured provider. Condition replay statistics are separate from persisted alert precision."]),
     )

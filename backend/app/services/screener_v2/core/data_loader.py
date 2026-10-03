@@ -19,7 +19,7 @@ from io import BytesIO
 import numpy as np
 import pandas as pd
 
-from .performance import cached_close_matrix, cached_fundamental_history, cached_returns_matrix, cached_volume_matrix, symbol_key
+from .performance import cached_close_matrix, cached_fundamental_history, cached_returns_matrix, cached_volume_matrix, symbol_key, _path_version
 
 try:
     import polars as pl
@@ -100,12 +100,18 @@ def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
 
 
 @lru_cache(maxsize=1)
-def load_market_ohlcv() -> pd.DataFrame:
+def _load_market_ohlcv_versioned(version: float) -> pd.DataFrame:
     if not MARKET_UNIVERSE.exists():
         raise FileNotFoundError(f"Required market dataset is missing: {MARKET_UNIVERSE}")
     source = MARKET_UNIVERSE
     cols = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
     return _standardize_ohlcv(_read_parquet(source, cols))
+
+
+def load_market_ohlcv() -> pd.DataFrame:
+    if not MARKET_UNIVERSE.exists():
+        raise FileNotFoundError(f"Required market dataset is missing: {MARKET_UNIVERSE}")
+    return _load_market_ohlcv_versioned(_path_version(MARKET_UNIVERSE))
 
 
 @lru_cache(maxsize=1)
@@ -114,12 +120,16 @@ def load_hourly_ohlcv() -> pd.DataFrame:
 
 
 @lru_cache(maxsize=1)
-def available_symbols() -> tuple[str, ...]:
+def _available_symbols_versioned(version: float) -> tuple[str, ...]:
     df = load_market_ohlcv()
     if df.empty:
         return ()
     counts = df.groupby("Ticker")["Close"].count().sort_values(ascending=False)
     return tuple(str(x) for x in counts.index)
+
+
+def available_symbols() -> tuple[str, ...]:
+    return _available_symbols_versioned(_path_version(MARKET_UNIVERSE))
 
 
 class UnknownSymbolsError(ValueError):
@@ -133,6 +143,11 @@ class UnknownSymbolsError(ValueError):
 def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: int = 5000) -> list[str]:
     payload = payload or {}
     raw = payload.get("tickers") or payload.get("symbols") or payload.get("universe")
+    if payload.get("universe_id"):
+        if raw:
+            raise ValueError("Use either universe_id or explicit universe/tickers")
+        from .state import get_universe
+        raw = get_universe(str(payload["universe_id"]))
     universe = list(available_symbols())
     label = str(raw or "").strip().lower()
     if label in {"sp500", "s&p 500"}:
@@ -195,7 +210,7 @@ def returns_matrix(symbols: Iterable[str], lookback_days: int = 756, min_coverag
 
 
 @lru_cache(maxsize=1)
-def load_fundamentals() -> pd.DataFrame:
+def _load_fundamentals_versioned(version: float) -> pd.DataFrame:
     if not MASTER_FUNDAMENTALS.exists():
         return pd.DataFrame(columns=["ticker"])
     df = pd.read_parquet(MASTER_FUNDAMENTALS, engine="pyarrow")
@@ -206,6 +221,10 @@ def load_fundamentals() -> pd.DataFrame:
     if "reportDate" in out.columns:
         out["reportDate"] = pd.to_datetime(out["reportDate"], errors="coerce")
     return out.dropna(subset=["ticker"])
+
+
+def load_fundamentals() -> pd.DataFrame:
+    return _load_fundamentals_versioned(_path_version(MASTER_FUNDAMENTALS))
 
 
 @lru_cache(maxsize=1)
@@ -293,3 +312,34 @@ def data_inventory() -> dict[str, Any]:
         "ff5_daily": {"exists": FF5_DAILY.exists(), "rows": int(len(load_factor_returns()))},
         "momentum_daily": {"exists": MOM_DAILY.exists()},
     }
+
+
+UPLOADS_DIR = BACKEND_DATA / 'screener_v2' / 'uploads'
+
+
+def store_universe_upload(raw: bytes, filename: str | None = None) -> dict:
+    """Validate before writing, using a generated id rather than client paths."""
+    import csv
+    import json
+    from io import StringIO
+    from uuid import uuid4
+    from .state import save_universe
+    if len(raw) > 2_000_000:
+        raise ValueError('Universe CSV exceeds 2 MB')
+    try:
+        reader = csv.reader(StringIO(raw.decode('utf-8-sig')), strict=True)
+        symbols = [row[0].strip() for row in reader if row and row[0].strip() and row[0].strip().lower() not in {'ticker', 'tickers', 'symbol', 'symbols'}]
+    except (UnicodeDecodeError, csv.Error) as exc:
+        raise ValueError('Invalid UTF-8 universe CSV') from exc
+    if not symbols or len(symbols) > 5000:
+        raise ValueError('Universe CSV must contain 1-5000 ticker rows')
+    symbols = parse_symbols({'tickers': symbols, 'max_symbols': 5000})
+    upload_id = uuid4().hex
+    name = Path(filename or 'Uploaded universe').name[:200] or 'Uploaded universe'
+    # Only a generated UUID can determine a write path.
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    path = UPLOADS_DIR / f'{upload_id}.json'
+    with path.open('x') as handle:
+        json.dump({'symbols': symbols, 'name': name}, handle, allow_nan=False)
+    universe = save_universe(upload_id, name, symbols)
+    return {'upload_id': upload_id, **universe}

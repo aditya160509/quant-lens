@@ -1,0 +1,209 @@
+"""Screener V2 fundamentals computations."""
+from __future__ import annotations
+from typing import Any
+import numpy as np
+import pandas as pd
+from .data_loader import AS_OF, eligible_reports, close_matrix, fundamental_history, load_fundamentals, ohlcv_for_symbols
+from .stats import _pick, _safe_div, rank_pct
+
+
+def statement_snapshots(symbols):
+    """One stock/flow-consistent row per report date; four complete quarters for flows."""
+    source = load_fundamentals()
+    frame = source[source.ticker.isin(symbols)].copy()
+    if frame.empty or "periodType" not in frame:
+        return frame
+    flow_fields = ["Total Revenue", "Gross Profit", "EBIT", "Operating Income", "EBITDA", "Net Income", "Operating Cash Flow", "Free Cash Flow", "Interest Expense", "Interest Expense Non Operating", "Cash Dividends Paid", "Common Stock Dividend Paid", "Repurchase Of Capital Stock", "Issuance Of Capital Stock", "Tax Provision", "Pretax Income"]
+    annual = frame[frame.periodType.eq("annual")].sort_values(["ticker", "reportDate"]).drop_duplicates(["ticker", "reportDate"], keep="last").set_index(["ticker", "reportDate"])
+    quarters = frame[frame.periodType.eq("quarterly")].sort_values(["ticker", "reportDate"]).drop_duplicates(["ticker", "reportDate"], keep="last")
+    base = frame.sort_values(["ticker", "reportDate", "periodType"]).drop_duplicates(["ticker", "reportDate"], keep="last").set_index(["ticker", "reportDate"])
+    fields = [field for field in flow_fields if field in quarters]
+    if not quarters.empty:
+        rolling = quarters.groupby("ticker")[fields].rolling(4, min_periods=4).sum().reset_index(level=0, drop=True).reindex(quarters.index)
+        gaps = quarters.groupby("ticker").reportDate.diff().dt.days
+        contiguous = gaps.between(70, 110).groupby(quarters.ticker).rolling(3, min_periods=3).sum().reset_index(level=0, drop=True).reindex(quarters.index).eq(3)
+        rolling = rolling.where(contiguous, axis=0)
+        rolling.index = pd.MultiIndex.from_frame(quarters[["ticker", "reportDate"]])
+    else:
+        rolling = pd.DataFrame(index=base.index, columns=fields, dtype=float)
+    for field in fields:
+        base[field] = rolling[field].reindex(base.index).fillna(annual[field].reindex(base.index))
+    return base.reset_index()
+
+
+def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = None) -> pd.DataFrame:
+    cutoff = pd.Timestamp(as_of_date) if as_of_date else AS_OF.get()
+    if cutoff is None:
+        market = ohlcv_for_symbols(symbols)
+        cutoff = market.Date.max() if not market.empty else pd.Timestamp.today().normalize()
+    eligible = eligible_reports(statement_snapshots(symbols), cutoff)
+    base = eligible.sort_values(["ticker", "reportDate"]).groupby("ticker").tail(1).set_index("ticker", drop=False) if not eligible.empty else eligible
+    # Vendor .info ratios are current snapshots repeated across historical rows.
+    # Only statement-derived fields can be used as point-in-time measurements.
+    snapshot_fields = ["marketCap", "trailingPE", "forwardPE", "priceToBook", "dividendYield", "debtToEquity", "returnOnEquity", "grossMargins", "currentRatio"]
+    for field in snapshot_fields:
+        if field in base:
+            base[field] = np.nan
+    if base.empty:
+        base = pd.DataFrame(index=pd.Index([], name="ticker"))
+    df = base.reindex(symbols).copy()
+    df["ticker"] = df.index
+    out = pd.DataFrame(index=df.index)
+    out["ticker"] = df["ticker"]
+    out["company_name"] = _pick(df, ["shortName", "longName", "companyName"], "").fillna("").astype(str)
+    out["exchange"] = _pick(df, ["exchange", "fullExchangeName"], "").fillna("").astype(str)
+    out["sector"] = _pick(df, ["sector"], "Unknown").fillna("Unknown").astype(str)
+    out["industry"] = _pick(df, ["industry"], "Unknown").fillna("Unknown").astype(str)
+    out["market_cap"] = pd.to_numeric(_pick(df, ["marketCap", "market_cap", "Market Cap"]), errors="coerce")
+    out["enterprise_value"] = pd.to_numeric(_pick(df, ["enterpriseValue", "enterprise_value"]), errors="coerce")
+    out["trailing_pe"] = pd.to_numeric(_pick(df, ["trailingPE", "pe_ratio"]), errors="coerce")
+    out["forward_pe"] = pd.to_numeric(_pick(df, ["forwardPE"]), errors="coerce")
+    out["pb_ratio"] = pd.to_numeric(_pick(df, ["priceToBook", "price_to_book"]), errors="coerce")
+    out["ps_ratio"] = pd.to_numeric(_pick(df, ["priceToSalesTrailing12Months", "price_to_sales"]), errors="coerce")
+    out["ev_ebitda"] = pd.to_numeric(_pick(df, ["enterpriseToEbitda", "ev_ebitda"]), errors="coerce")
+    out["ev_revenue"] = pd.to_numeric(_pick(df, ["enterpriseToRevenue", "ev_revenue"]), errors="coerce")
+    out["dividend_yield"] = pd.to_numeric(_pick(df, ["dividendYield"]), errors="coerce")
+    out["gross_margin"] = pd.to_numeric(_pick(df, ["grossMargins", "Gross Profit Margin"]), errors="coerce")
+    out["operating_margin"] = pd.to_numeric(_pick(df, ["operatingMargins"]), errors="coerce")
+    out["net_margin"] = pd.to_numeric(_pick(df, ["profitMargins"]), errors="coerce")
+    out["roe"] = pd.to_numeric(_pick(df, ["returnOnEquity"]), errors="coerce")
+    out["roa"] = pd.to_numeric(_pick(df, ["returnOnAssets"]), errors="coerce")
+    out["debt_equity"] = pd.to_numeric(_pick(df, ["debtToEquity"]), errors="coerce")
+    out["current_ratio"] = pd.to_numeric(_pick(df, ["currentRatio"]), errors="coerce")
+    out["quick_ratio"] = pd.to_numeric(_pick(df, ["quickRatio"]), errors="coerce")
+    out["shares_outstanding"] = pd.to_numeric(_pick(df, ["sharesOutstanding"]), errors="coerce")
+    out["float_percent"] = np.nan  # No point-in-time float dataset.
+    revenue = pd.to_numeric(_pick(df, ["Total Revenue", "totalRevenue", "revenue"]), errors="coerce")
+    gross_profit = pd.to_numeric(_pick(df, ["Gross Profit", "grossProfit"]), errors="coerce")
+    ebit = pd.to_numeric(_pick(df, ["EBIT", "Operating Income", "operatingIncome"]), errors="coerce")
+    ebitda = pd.to_numeric(_pick(df, ["EBITDA"]), errors="coerce")
+    net_income = pd.to_numeric(_pick(df, ["Net Income", "netIncomeToCommon"]), errors="coerce")
+    assets = pd.to_numeric(_pick(df, ["Total Assets", "totalAssets"]), errors="coerce")
+    liabilities = pd.to_numeric(_pick(df, ["Total Liabilities Net Minority Interest", "totalLiabilitiesNetMinorityInterest"]), errors="coerce")
+    current_assets = pd.to_numeric(_pick(df, ["Current Assets", "totalCurrentAssets"]), errors="coerce")
+    current_liabilities = pd.to_numeric(_pick(df, ["Current Liabilities", "totalCurrentLiabilities"]), errors="coerce")
+    cash = pd.to_numeric(_pick(df, ["Cash And Cash Equivalents", "totalCash"]), errors="coerce")
+    total_debt = pd.to_numeric(_pick(df, ["Total Debt", "totalDebt"]), errors="coerce")
+    retained_earnings = pd.to_numeric(_pick(df, ["Retained Earnings"]), errors="coerce")
+    operating_cf = pd.to_numeric(_pick(df, ["Operating Cash Flow", "operatingCashflow"]), errors="coerce")
+    free_cf = pd.to_numeric(_pick(df, ["Free Cash Flow", "freeCashflow"]), errors="coerce")
+    interest_expense = pd.to_numeric(_pick(df, ["Interest Expense", "Interest Expense Non Operating"]), errors="coerce").abs()
+    inventory = pd.to_numeric(_pick(df, ["Inventory"]), errors="coerce")
+    dividends_paid = pd.to_numeric(_pick(df, ["Cash Dividends Paid", "Common Stock Dividend Paid", "Dividend Paid Cfo"]), errors="coerce").abs()
+    repurchase = pd.to_numeric(_pick(df, ["Repurchase Of Capital Stock"]), errors="coerce").abs()
+    avg_shares = pd.to_numeric(_pick(df, ["Diluted Average Shares", "Basic Average Shares", "Ordinary Shares Number"]), errors="coerce")
+    equity_book = pd.to_numeric(_pick(df, ["Stockholders Equity", "Common Stock Equity"]), errors="coerce")
+    shares = pd.to_numeric(_pick(df, ["Ordinary Shares Number", "Share Issued"]), errors="coerce")
+    prices_at_date = close_matrix(symbols, 1)
+    last_prices = prices_at_date.iloc[-1].reindex(out.index) if not prices_at_date.empty else pd.Series(np.nan, index=out.index)
+    out["shares_outstanding"] = shares
+    out["market_cap"] = last_prices * shares
+    out["enterprise_value"] = out["market_cap"] + total_debt - cash
+    out["trailing_pe"] = _safe_div(out["market_cap"], net_income.where(net_income > 0))
+    out["pb_ratio"] = _safe_div(out["market_cap"], equity_book.where(equity_book > 0))
+    out["ps_ratio"] = _safe_div(out["market_cap"], revenue.where(revenue > 0))
+    out["ev_ebitda"] = _safe_div(out["enterprise_value"], ebitda.where(ebitda > 0))
+    out["ev_revenue"] = _safe_div(out["enterprise_value"], revenue.where(revenue > 0))
+    out["roe"] = _safe_div(net_income, equity_book)
+    out["roa"] = _safe_div(net_income, assets)
+    out["current_ratio"] = _safe_div(current_assets, current_liabilities)
+    out["debt_equity"] = _safe_div(total_debt, equity_book)
+    out["dividend_yield"] = _safe_div(dividends_paid, out["market_cap"])
+    out["gross_margin"] = _safe_div(gross_profit, revenue)
+    out["operating_margin"] = _safe_div(ebit, revenue)
+    out["net_margin"] = _safe_div(net_income, revenue)
+    out["total_equity"] = equity_book
+    out["gross_margin_calc"] = _safe_div(gross_profit, revenue)
+    out["current_assets"] = current_assets
+    out["current_liabilities"] = current_liabilities
+    out["cash"] = cash
+    out["ebit"] = ebit
+    out["net_ppe"] = pd.to_numeric(_pick(df, ["Net PPE"]), errors="coerce")
+    out["total_liabilities"] = liabilities
+    out["ebitda_margin"] = _safe_div(ebitda, revenue)
+    out["operating_margin_calc"] = _safe_div(ebit, revenue)
+    out["net_margin_calc"] = _safe_div(net_income, revenue)
+    out["roa_calc"] = _safe_div(net_income, assets)
+    tax_rate = _safe_div(_pick(df, ["Tax Provision"]), _pick(df, ["Pretax Income"])).clip(lower=0, upper=0.5)
+    invested_capital = out.get("total_equity", pd.Series(np.nan, index=out.index))
+    if invested_capital.isna().all():
+        invested_capital = assets - liabilities
+    invested_capital = invested_capital + total_debt - cash
+    out["roic"] = _safe_div(ebit * (1.0 - tax_rate), invested_capital)
+    out["asset_turnover"] = _safe_div(revenue, assets)
+    out["gpa"] = _safe_div(gross_profit, assets)
+    out["debt_assets"] = _safe_div(total_debt, assets)
+    out["working_capital_assets"] = _safe_div(current_assets - current_liabilities, assets)
+    out["retained_earnings_assets"] = _safe_div(retained_earnings, assets)
+    out["ebit_assets"] = _safe_div(ebit, assets)
+    out["sales_assets"] = _safe_div(revenue, assets)
+    out["book_value_liabilities"] = _safe_div(equity_book, liabilities)
+    out["market_value_liabilities"] = _safe_div(out["market_cap"], liabilities)
+    out["ocf_net_income"] = _safe_div(operating_cf, net_income)
+    out["fcf_yield"] = _safe_div(free_cf, out["market_cap"])
+    out["p_cf"] = _safe_div(out["market_cap"], operating_cf.where(operating_cf > 0))
+    out["cash_debt"] = _safe_div(cash, total_debt)
+    out["ev_ebit"] = _safe_div(out["enterprise_value"], ebit)
+    out["interest_coverage"] = _safe_div(ebit, interest_expense)
+    out["debt_ebitda"] = _safe_div(total_debt, ebitda)
+    out["payout_ratio"] = _safe_div(dividends_paid, net_income.where(net_income > 0))
+    issuance = pd.to_numeric(_pick(df, ["Issuance Of Capital Stock"]), errors="coerce")
+    out["net_payout_yield"] = _safe_div(dividends_paid + repurchase - issuance, out["market_cap"])
+    out["accruals_assets"] = _safe_div(net_income - operating_cf, assets)
+    out["inventory_assets"] = _safe_div(inventory, assets)
+    out["shares_from_statements"] = avg_shares
+    out["earnings_yield"] = _safe_div(ebit, out["enterprise_value"].where(out["enterprise_value"] > 0))
+    out["net_income_yield"] = _safe_div(net_income, out["market_cap"])
+    out["quick_ratio"] = _safe_div(current_assets - inventory, current_liabilities)
+    out["fundamental_basis"] = "four complete consecutive quarters or matching fiscal annual report; 90-day availability lag"
+    growth = _fundamental_growth_metrics(symbols, as_of_date)
+    if not growth.empty:
+        out = out.join(growth.reindex(out.index), how="left")
+    out["valuation_percentile"] = (
+        rank_pct(out["earnings_yield"]) * 0.35
+        + rank_pct(out["fcf_yield"]) * 0.25
+        + rank_pct(out["pb_ratio"], higher_better=False) * 0.2
+        + rank_pct(out["ev_ebitda"], higher_better=False) * 0.2
+    )
+    out["quality_percentile"] = (
+        rank_pct(out["roe"].fillna(out["roa_calc"])) * 0.3
+        + rank_pct(out["gpa"]) * 0.25
+        + rank_pct(out["debt_assets"], higher_better=False) * 0.2
+        + rank_pct(out["ocf_net_income"]) * 0.15
+        + rank_pct(out["gross_margin"].fillna(out["gross_margin_calc"])) * 0.1
+    )
+    return out.reset_index(drop=True).replace([np.inf, -np.inf], np.nan)
+
+
+def _fundamental_growth_metrics(symbols: list[str], as_of_date: Any | None = None) -> pd.DataFrame:
+    rows = []
+    for symbol in symbols:
+        hist = fundamental_history(symbol)
+        if "periodType" in hist:
+            hist = hist[hist.periodType == "annual"]
+        if as_of_date and not hist.empty and "reportDate" in hist:
+            cutoff = pd.to_datetime(as_of_date, errors="coerce")
+            if pd.notna(cutoff):
+                hist = hist[pd.to_datetime(hist.reportDate) + pd.Timedelta(days=90) <= cutoff]
+        if hist.empty:
+            rows.append({"ticker": symbol})
+            continue
+        revenue = pd.to_numeric(_pick(hist, ["Total Revenue", "totalRevenue", "revenue"]), errors="coerce")
+        eps = pd.to_numeric(_pick(hist, ["Diluted EPS", "Basic EPS"]), errors="coerce")
+        ebit = pd.to_numeric(_pick(hist, ["EBIT", "Operating Income", "operatingIncome"]), errors="coerce")
+        assets = pd.to_numeric(_pick(hist, ["Total Assets", "totalAssets"]), errors="coerce")
+        row = {"ticker": symbol}
+        if revenue.dropna().shape[0] >= 2:
+            row["revenue_growth_yoy"] = revenue.dropna().iloc[-1] / revenue.dropna().iloc[-2] - 1
+        if eps.dropna().shape[0] >= 2:
+            row["eps_growth_yoy"] = (eps.dropna().iloc[-1] - eps.dropna().iloc[-2]) / abs(eps.dropna().iloc[-2] or np.nan)
+        if revenue.dropna().shape[0] >= 4:
+            start, end = revenue.dropna().iloc[-4], revenue.dropna().iloc[-1]
+            row["revenue_growth_3y_cagr"] = (end / start) ** (1 / 3) - 1 if start and start > 0 and end > 0 else np.nan
+        rows.append(row)
+    if not rows:
+        return pd.DataFrame()
+    out = pd.DataFrame(rows).set_index("ticker")
+    out.index = out.index.map(str)
+    return out
+

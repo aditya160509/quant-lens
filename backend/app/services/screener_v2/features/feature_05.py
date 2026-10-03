@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from typing import Any
+from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
 import pandas as pd
 
-from ..core.analytics import access_meta, compute_turnover_series, metric_panel, monte_carlo_pbo, records, regime_performance_from_returns, response, score_backtest, score_backtest_by_weekday
+from ..core.common import access_meta, records, response
+from ..core.panel import metric_panel
+from ..core.validation import point_in_time_scorer, score_backtest, score_backtest_by_weekday
 from ..core.data_loader import close_matrix, parse_symbols
 
 
@@ -34,27 +37,9 @@ def _holding_period_stats(prices: pd.DataFrame, holding_days: int) -> dict[str, 
         "hit_rate": float((forward > 0).mean()) if len(forward) else None,
     }
 
-INPUTS = [
-    {"key": "universe", "type": "ticker_list", "default": "master"},
-    {"key": "score_field", "type": "select", "default": "core_quant_score"},
-    {"key": "lookback_days", "type": "number", "default": 756},
-    {"key": "top_n", "type": "number", "default": 50},
-    {"key": "transaction_cost_bps", "type": "number", "default": 10},
-]
+INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master'}, {'key': 'score_field', 'type': 'select', 'default': 'core_quant_score'}, {'key': 'lookback_days', 'type': 'number', 'default': 756}, {'key': 'top_n', 'type': 'number', 'default': 50}, {'key': 'transaction_cost_bps', 'type': 'number', 'default': 10}, {'key': 'long_short', 'type': 'boolean', 'default': False}, {'key': 'score_weighted', 'type': 'boolean', 'default': False}, {'key': 'run_full_pbo', 'type': 'boolean', 'default': False}, {'key': 'rebalance_frequency', 'type': 'select', 'default': 'monthly', 'options': ['weekly', 'monthly', 'quarterly']}, {'key': 'rebalance_days', 'type': 'number', 'default': 21, 'min': 1}, {'key': 'pbo_partitions', 'type': 'select', 'default': 8, 'options': [4, 6, 8, 10, 12]}, {'key': 'run_holding_sensitivity', 'type': 'boolean', 'default': True}]))
 
-OUTPUTS = [
-    "equity_curve",
-    "full_performance_statistics",
-    "rolling_performance",
-    "holding_period_sensitivity",
-    "rebalancing_date_sensitivity",
-    "rebalancing_date_sensitivity_by_weekday",
-    "turnover_report",
-    "sector_attribution",
-    "regime_conditional_performance",
-    "monte_carlo_sharpe_distribution",
-    "stock_level_attribution",
-]
+OUTPUTS = [{'key': 'equity_curve', 'source': 'charts', 'render': 'lineChart', 'primary': True, 'label': 'Equity Curve'}, {'key': 'rolling_performance', 'source': 'charts', 'render': 'lineChart', 'primary': False, 'label': 'Rolling Performance'}, {'key': 'full_performance_statistics', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Full Performance Statistics'}, {'key': 'rebalancing_date_sensitivity', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Rebalancing Date Sensitivity'}, {'key': 'rebalancing_date_sensitivity_by_weekday', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Rebalancing Date Sensitivity By Weekday'}, {'key': 'turnover_report', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Turnover Report'}, {'key': 'stock_level_attribution', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Stock Level Attribution'}, {'key': 'position_trade_log', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Position Trade Log'}, {'key': 'position_entry_exit_log', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Position Entry Exit Log'}, {'key': 'cscv_pbo', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Cscv Pbo'}]
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -62,61 +47,29 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=5000)
     panel = metric_panel(payload, symbols=symbols)
     score_field = payload.get("score_field") or "core_quant_score"
-    if score_field not in panel.columns:
-        score_field = "core_quant_score"
+    if score_field not in panel:
+        raise ValueError(f"Unknown score field: {score_field}")
     score = panel.set_index("ticker")[score_field]
-    backtest = score_backtest(
-        symbols,
-        score,
-        int(payload.get("lookback_days") or 756),
-        int(payload.get("top_n") or 50),
-        float(payload.get("transaction_cost_bps") or 10),
-        long_short=bool(payload.get("long_short")),
-        score_weighted=bool(payload.get("score_weighted")),
-        rebalance_days=_rebalance_days(payload),
-        sector_neutral=bool(payload.get("sector_neutral")),
-        sector_map=panel.set_index("ticker")["sector"].to_dict() if "sector" in panel else None,
-    )
+    provider = point_in_time_scorer(symbols, payload, field=score_field)
+    kwargs = dict(lookback_days=int(payload.get("lookback_days", 756)), top_n=int(payload.get("top_n", 50)),
+                  cost_bps=float(payload.get("transaction_cost_bps", 10)),
+                  long_short=bool(payload.get("long_short")), score_weighted=bool(payload.get("score_weighted")),
+                  rebalance_days=_rebalance_days(payload), sector_neutral=bool(payload.get("sector_neutral")),
+                  score_at=provider)
+    backtest = score_backtest(symbols, score, **kwargs)
     selected = backtest.get("selected", [])
-    prices = close_matrix(selected, int(payload.get("lookback_days") or 756))
-    returns = prices.pct_change(fill_method=None).dropna(how="all") if not prices.empty else pd.DataFrame()
-    sector_map = panel.set_index("ticker")["sector"].to_dict() if "sector" in panel else {}
+    sensitivity = []
+    candidates = {}
+    for offset in [0, 5, 10, 15, 20]:
+        result = backtest if offset == 0 else score_backtest(symbols, score, **kwargs, rebalance_offset_days=offset)
+        sensitivity.append({"rebalance_offset_days": offset, **result["stats"]})
+        candidates[f"offset_{offset}"] = result["daily_returns"]
+    pbo = None
+    if payload.get("run_full_pbo"):
+        from ..core.backtest import cscv_pbo
+        pbo = cscv_pbo(pd.DataFrame(candidates).dropna(), int(payload.get("pbo_partitions", 8)))
     sector_attr = []
-    if not returns.empty:
-        for sector, tickers in pd.Series(selected).groupby([sector_map.get(t, "Unknown") for t in selected]):
-            cols = [t for t in tickers.tolist() if t in returns.columns]
-            if cols:
-                sector_attr.append({"sector": sector, "avg_return": float((1 + returns[cols].mean(axis=1)).prod() - 1), "count": len(cols)})
-    holding_sensitivity = [_holding_period_stats(prices, hold) for hold in [21, 63, 126, 252]]
-    mc = []
-    if not returns.empty:
-        series = returns.mean(axis=1).dropna()
-        rng = pd.Series(range(250))
-        for i in rng:
-            sample = series.sample(n=len(series), replace=True, random_state=int(i))
-            sharpe = sample.mean() / (sample.std() or 1) * (252 ** 0.5)
-            mc.append({"simulation": int(i), "sharpe": float(sharpe)})
-    pbo_proxy = sum(1 for row in mc if row["sharpe"] < backtest.get("stats", {}).get("sharpe", 0)) / len(mc) if mc else None
-    stock_attr = []
-    if not returns.empty:
-        total = (1 + returns).prod() - 1
-        entry = str(returns.index.min().date()) if len(returns.index) else None
-        exit_date = str(returns.index.max().date()) if len(returns.index) else None
-        stock_attr = [{"ticker": k, "total_return": float(v), "sector": sector_map.get(k, "Unknown"), "entry_date": entry, "exit_date": exit_date} for k, v in total.sort_values(ascending=False).items()]
-    turnover_series = compute_turnover_series(
-        symbols,
-        score,
-        int(payload.get("lookback_days") or 756),
-        int(payload.get("top_n") or 50),
-        _rebalance_days(payload),
-    )
-    pbo_rebalance = monte_carlo_pbo(
-        symbols,
-        score,
-        int(payload.get("lookback_days") or 756),
-        int(payload.get("top_n") or 50),
-        int(payload.get("pbo_trials") or 60),
-    ) if payload.get("run_full_pbo") else None
+    stock_attr = backtest.get("attribution", [])
     return response(
         FEATURE_ID,
         summary_cards=[
@@ -127,30 +80,17 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         charts={
             "equity_curve": backtest.get("equity_curve", []),
             "rolling_performance": backtest.get("rolling", []),
-            "monte_carlo_sharpe_distribution": mc,
+
         },
         tables={
             "full_performance_statistics": [backtest.get("stats", {})],
-            "holding_period_sensitivity": holding_sensitivity,
-            "rebalancing_date_sensitivity_by_weekday": score_backtest_by_weekday(
-                symbols,
-                score,
-                int(payload.get("lookback_days") or 756),
-                int(payload.get("top_n") or 50),
-                float(payload.get("transaction_cost_bps") or 10),
-            ),
-            "rebalancing_date_sensitivity": [
-                {"rebalance_offset_days": x, **score_backtest(symbols, score, int(payload.get("lookback_days") or 756), int(payload.get("top_n") or 50), float(payload.get("transaction_cost_bps") or 10), long_short=bool(payload.get("long_short")), score_weighted=bool(payload.get("score_weighted")), rebalance_days=_rebalance_days(payload), rebalance_offset_days=x, sector_neutral=bool(payload.get("sector_neutral")), sector_map=panel.set_index("ticker")["sector"].to_dict() if "sector" in panel else None).get("stats", {})}
-                for x in [0, 5, 10, 15, 20]
-            ],
-            "turnover_report": turnover_series
-            or [{"period": "insufficient_history", "turnover": None, "selected_count": len(selected), "rebalance_days": _rebalance_days(payload)}],
-            "sector_attribution": sector_attr,
-            "regime_conditional_performance": regime_performance_from_returns(returns.mean(axis=1)) if not returns.empty else [],
-            "pbo_proxy": [{"probability_of_backtest_overfit_proxy": pbo_proxy}],
-            "rebalancing_date_pbo": [pbo_rebalance] if pbo_rebalance else [],
-            "rebalancing_date_pbo_trials": pbo_rebalance.get("trials", []) if pbo_rebalance else [],
-            "stock_level_attribution": stock_attr[:250],
+            "rebalancing_date_sensitivity": sensitivity,
+            "rebalancing_date_sensitivity_by_weekday": score_backtest_by_weekday(symbols, score, **kwargs),
+            "turnover_report": backtest["turnover"],
+            "stock_level_attribution": stock_attr,
+            "position_trade_log": backtest["trades"],
+            "position_entry_exit_log": backtest["positions"],
+            "cscv_pbo": [pbo] if pbo else [],
         },
-        meta=access_meta(payload, ["True point-in-time fundamentals and delisting bias correction require the append-only PIT/delist fetcher datasets before production use. Turnover uses deterministic rank drift from local price history and current scores. Full rebalancing-date PBO is gated behind run_full_pbo because it re-runs the backtest across offsets."]),
+        meta=access_meta(payload, ["Current local universe has survivorship bias; no delisted-security return data exists. Historical sector-neutral execution is unavailable. Holding-period sensitivity and regime attribution were removed until supported by a valid historical implementation."]),
     )

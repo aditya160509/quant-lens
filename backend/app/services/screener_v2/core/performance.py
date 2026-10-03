@@ -29,7 +29,7 @@ def symbol_key(symbols: Iterable[str]) -> tuple[str, ...]:
 def _lookback_key(lookback_days: int | None, floor: int = 1) -> int:
     try:
         value = int(lookback_days or floor)
-    except Exception:
+    except (TypeError, ValueError):
         value = floor
     return max(floor, value)
 
@@ -66,8 +66,6 @@ def _market_ohlcv_by_ticker(version: float) -> dict[str, pd.DataFrame]:
     """Pre-index the current market parquet by ticker for fast subset assembly."""
     from . import data_loader
 
-    if hasattr(data_loader.load_market_ohlcv, "cache_clear"):
-        data_loader.load_market_ohlcv.cache_clear()
     df = data_loader.load_market_ohlcv()
     if df.empty or "Ticker" not in df.columns:
         return {}
@@ -81,7 +79,7 @@ def _ohlcv_subset(symbols: tuple[str, ...], lookback_days: int | None = None, ve
     frames = [grouped[symbol] for symbol in symbols if symbol in grouped]
     if not frames:
         return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
-    out = pd.concat(frames, ignore_index=True, copy=False)
+    out = pd.concat(frames, ignore_index=True)
     if lookback_days and not out.empty:
         cutoff = out["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)
         out = out[out["Date"] >= cutoff]
@@ -135,8 +133,6 @@ def cached_returns_matrix(symbols: tuple[str, ...], lookback_days: int = 756, mi
 def _fundamentals_frame(version: float) -> pd.DataFrame:
     from . import data_loader
 
-    if hasattr(data_loader.load_fundamentals, "cache_clear"):
-        data_loader.load_fundamentals.cache_clear()
     return data_loader.load_fundamentals()
 
 

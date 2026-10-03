@@ -3,33 +3,33 @@
 from __future__ import annotations
 
 from typing import Any
+from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
-from ..core.analytics import access_meta, build_export_payload, metric_panel, records, response, top_table
+from ..core.common import access_meta, records, response
+from ..core.exports import build_export_payload
+from ..core.panel import metric_panel
+from ..core.screener import apply_filters, top_table
 from ..core.data_loader import parse_symbols
 
 
 FEATURE_ID = "08"
 FEATURE_NAME = "Screener Result Export and Integration Layer"
 
-INPUTS = [
-    {"key": "universe", "type": "ticker_list", "default": "master"},
-    {"key": "export_format", "type": "select", "default": "csv"},
-    {"key": "top_n", "type": "number", "default": 100},
-]
+INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master'}, {'key': 'top_n', 'type': 'number', 'default': 100}, {'key': 'export_format', 'type': 'select', 'default': 'csv', 'options': ['csv', 'tsv', 'json', 'tickers']}, {'key': 'columns', 'type': 'json', 'default': None}, {'key': 'rank_shift', 'type': 'number', 'default': 10, 'min': 1}]))
 
-OUTPUTS = ["instant_download", "screen_result_api_endpoint", "change_report"]
+OUTPUTS = [{'key': 'change_report', 'source': 'charts', 'render': 'table', 'primary': True, 'label': 'Change Report'}, {'key': 'instant_download', 'source': 'tables', 'render': 'download', 'primary': False, 'label': 'Instant Download'}, {'key': 'screen_result_api_endpoint', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Screen Result Api Endpoint'}]
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=5000)
     panel = metric_panel(payload, symbols=symbols)
+    panel, _ = apply_filters(panel, payload)
     rows = records(top_table(panel, int(payload.get("top_n") or 100)))
     export_payload = build_export_payload(FEATURE_ID, payload, rows)
-    change_report = [
-        {"field": "row_count", "value": len(rows), "status": "current_run"},
-        {"field": "columns", "value": len(export_payload["columns"]), "status": "current_run"},
-    ]
+    from ..core.state import compare_and_store
+    from ..core.data_loader import ohlcv_for_symbols
+    change_report = compare_and_store(str(payload["screen_id"]), rows, str(ohlcv_for_symbols(symbols).Date.max().date()), int(payload.get("rank_shift", 10))) if payload.get("screen_id") else []
     return response(
         FEATURE_ID,
         summary_cards=[
