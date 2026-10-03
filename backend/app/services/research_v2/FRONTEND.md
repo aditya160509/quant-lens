@@ -100,3 +100,26 @@ What to adopt, by source:
 | Perpetua | Density as a setting (compact 24px rows vs comfortable 32px); flash a cell for about 600 ms when a value changes; up/down colour inversion for markets that use red for up; ▲ ▼ glyph deltas | Workspace settings; KPI and table cells |
 | synthdid | Effect arrow and parallelogram diagram on the treated vs synthetic chart; time-weight strip under the path; labelled spaghetti for top donors; an overlay slider that shifts the control onto the treated path to judge parallel trends; highlight one estimate while dimming others | F09 effect chart; F07 DiD compare |
 | R Psychologist | Interactive "simulate the null" explainer: draw samples, watch the statistic's distribution build up, see where the observed value lands | Method drawer for permutation and placebo cards |
+
+## 11. Built after the reference pass (2026-10-03)
+
+Sources: the TradingView, Koyfin, Portfolio Visualizer, TradeStation and QuantConnect screenshots, plus section 10.
+
+| Feature | Reference | Where |
+|---|---|---|
+| Unboxed key stats, toned by sign; pill section tabs | TradingView strategy tester | `FeatureView`, `workspace.css` |
+| Run-context bar (period, universe, costs) with stale marker | TradingView tester toolbar | `FeatureView` |
+| View as: any output redrawn as line/area/step/columns/diverging/scatter/histogram/heatmap/table, with column, transform (cumulative, rebase 100, z-score, rank), sort and limit pickers | Koyfin graphing, user request | `outputs/explore.tsx`, `OutputCard` |
+| Overlay the same output from another run (B dashed) | QuantConnect backtest compare | `OutputCard`, `explore.overlay` |
+| Chart selector with checkboxes, card width and order, reset layout | QuantConnect "Select chart" | `cardPrefs.ts`, `Inspector`, `OutputCard` |
+| Board of pinned outputs across features | Koyfin dashboards | `Overview` |
+| Parameter sweeps with background polling and a Sweep plot | QuantConnect optimizer | `ResearchApp`, `Dock` |
+| Compare two runs (figures, change, differing settings) | TradingView benchmarking | `Dock` |
+| Report: every section on one printable page | QuantConnect report | `FeatureView`, print CSS |
+| Chart style: palette (default, colour-safe, vivid, mono), gridlines, line weight | TradingView chart settings | `prefs.ts`, `WorkspaceShell` |
+| Level drawing tool and date notes | TradingView drawing tools | `charts/TimeSeries` |
+| Legend toggles, end-of-line value tags, zero fill | Koyfin, TradingView | `charts/TimeSeries` |
+| Grouped/collapsible table rows, heat tint, column picker, row drawer, regression settings | Koyfin, RadarScreen, modelsummary | `outputs/tables.tsx` |
+| Overview by research stage with stats strip and latest figures | QuantConnect project terminal | `Overview` |
+| Design-aware causal settings; skipped-step notice; required fields | TradingView settings dialog | `StudyForm`, `FeatureView` |
+| Tab-title notice when a run finishes in the background; `[` `]` section keys | | `ResearchApp`, `FeatureView` |
