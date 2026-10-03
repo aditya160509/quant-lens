@@ -29,7 +29,7 @@ What stops it being worth paying for today:
 2. **No point-in-time or survivorship guarantees are shown to the user.** Researchers distrust any result that doesn't show them.
 3. **No single verdict across all 10 tests.** Each feature reports separately, and the user has to stitch them together.
 4. **Results disappear when the server restarts,** because jobs live in memory. Nobody pays for work that vanishes.
-5. **Only about 10 years of US data,** so many anomalies can't be tested properly. The tests become weak because there are too few observations.
+5. **The research module uses only a slice of the data.** The parquet already holds 4,300+ tickers across many universes (US, international, indices, ETFs), but Research V2 defaults to 400 US names over about 10 years. Production data will be much larger. Build for that now (see A2.10 and section E).
 
 Fix those five and this is a product.
 
@@ -64,7 +64,10 @@ Fix those five and this is a product.
    - outlier counts and corporate-action adjustments
    - the exact universe size each month
    - one click downloads the panel used
-10. **[B] Longer history and more markets:** 30+ years of US data, plus at least developed international markets. Small-sample tests are the single biggest credibility hit right now.
+10. **[B] Use every universe already in the parquet:**
+    - All 4,300+ tickers and every market and asset class in the file, with a universe picker by region, exchange and asset type.
+    - Country-neutral and region-level tests, so the same signal is tested in the US, Europe and Asia at once. Out-of-market replication is the strongest evidence a referee accepts.
+    - Design every query to scale to the much larger production data: lazy scans, partitioning by market and year, and cached per-universe panels (WORK_LEFT memory section).
 11. **[B] Look-ahead guard:** automatically detect signals that correlate with future returns impossibly well, or that use same-day closes, and flag them before showing results.
 
 ### A3. Overfitting control (r/algotrading's top pain)
@@ -109,6 +112,14 @@ Fix those five and this is a product.
 27. **[B+F] Idea → formula:** describe a signal in English and get the formula with an explanation, which the user edits. Alpha-GPT (arXiv 2308.00016) shows the pattern.
 28. **[B+F] Plain-language explainer on every result:** "Your t of 1.14 is below the factor-zoo hurdle of 3.39 because…", grounded only in the run's numbers.
 29. **[B] Literature lookup:** "Has this been published?" matches the formula against the Chen–Zimmermann catalog and SSRN titles.
+
+### A7b. Found in the extra research pass
+30. **[B+F] "Assaying Anomalies"-standard template report.**
+    - Novy-Marx and Velikov (2023) define the academic protocol for testing a new cross-sectional predictor. Their open MATLAB toolkit produces standardized "template reports" and has been used to screen more than 30,000 signals.
+    - Matching that protocol, with a "Protocol: Novy-Marx & Velikov" badge on the report card, gives instant academic credibility.
+    - It also positions us as the no-code, web version of the tool academics already trust.
+31. **[B] Batch screening:** run the report card over hundreds of formula variants at once, as the AI-Powered Scholarship paper did. Rank them, apply the multiple-testing correction automatically, and keep the survivors. Power users will pay for this.
+32. **[B+F] Research agent (later):** QRAFTI (arXiv 2604.18500) shows agentic empirical-finance research built on this protocol. Ours: "test these 5 ideas overnight and give me the report cards", with every step logged in the ledger.
 
 ### A8. Money features: how it gets paid for
 - **Free:** 3 runs a day, US large caps, built-in signals, watermarked exports.
@@ -186,6 +197,32 @@ Result: **6 core pages** instead of 10:
 24. **[B] Lazy-load sklearn and statsmodels in the other routers** so the app idles near 150 MB instead of 485 MB.
 
 ---
+
+## E. Inputs: make them the best part of the product
+The inputs decide what users can test, so this is where we give maximum freedom without clutter.
+
+1. **[F] Three levels on every feature:**
+   - *Quick*: 3–5 inputs with referee-safe defaults.
+   - *Standard*: the current groups.
+   - *Expert*: everything, including raw JSON.
+   - One toggle in the Study panel switches level, and the setting is remembered.
+2. **[B+F] Universe builder at full scale:**
+   - pick region, country, exchange, asset type, sector, size band, liquidity floor, price floor and listing-age
+   - "exclude financials or utilities", custom lists and uploaded lists
+   - historical index membership once available
+   - a live count of names per month while editing
+   - save as a named universe, reusable across features
+3. **[F] Sample window:**
+   - a timeline brush over the data's actual coverage, with recession and crisis shading
+   - presets (pre and post publication, ex-2008, ex-COVID, last 5 or 10 years)
+   - the out-of-sample split drawn on the same timeline
+4. **[B+F] Signal input = formula editor (A1),** with field autocomplete grouped by data source and a coverage hint on each field.
+5. **[F] Every numeric input** gets a slider and a box, a unit (days, months, bps, %), a valid range from the API, a "why this default" tooltip with a citation, and a sweep toggle (already built).
+6. **[F] Linked inputs:** choosing a design or method hides irrelevant inputs (built for Causal designs; extend to all features). Inputs that conflict show an inline warning, never a backend error.
+7. **[F] Presets from the literature,** as one-click settings: "Fama-French 1993 setup", "Novy-Marx & Velikov protocol", "Jegadeesh-Titman momentum", "Hou-Xue-Zhang q-factor screens".
+8. **[F] Shareable settings:** each run's inputs encoded in the URL, and a "copy as Python SDK call" button.
+9. **[B] Validation from the API:** each input carries `required`, `min`/`max`, `depends_on` and `conflicts_with` in the feature spec, so the frontend stops hard-coding rules (StudyForm's REQUIRED and CONDITIONAL maps today).
+10. **[F] Diff before run:** "You changed 3 settings vs the last run", with the list, so every comparison is deliberate.
 
 ## D. Order to build
 
