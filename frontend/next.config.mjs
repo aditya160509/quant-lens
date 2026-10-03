@@ -60,15 +60,23 @@ const nextConfig = {
   // Experimental features for performance
   experimental: {
     // Optimize package imports
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons', 'd3', 'framer-motion'],
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons', '@radix-ui/react-dialog', '@radix-ui/react-popover', '@radix-ui/react-select', '@radix-ui/react-tabs', '@radix-ui/react-tooltip', '@radix-ui/react-label', '@radix-ui/react-slot', 'd3', 'framer-motion'],
     // Cap the dev compiler's memory; Turbopack evicts caches above this instead of growing to 4+ GB.
-    turbopackMemoryLimit: 1536 * 1024 * 1024,
+    turbopackMemoryLimit: 1024 * 1024 * 1024,
   },
 
   turbopack: {
     root: __dirname,
   },
   
+  // The old Research V2 UI was replaced by the /research workspace.
+  async redirects() {
+    return [
+      { source: '/labs/research-v2', destination: '/research', permanent: false },
+      { source: '/labs/research-v2/:path*', destination: '/research', permanent: false },
+    ];
+  },
+
   // Proxy API requests to FastAPI backend
   async rewrites() {
     return [
