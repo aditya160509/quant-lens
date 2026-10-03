@@ -48,8 +48,6 @@ def _market_source_path() -> Path | None:
 
     if data_loader.MARKET_UNIVERSE.exists():
         return data_loader.MARKET_UNIVERSE
-    if data_loader.RESEARCH_MARKET_UNIVERSE.exists():
-        return data_loader.RESEARCH_MARKET_UNIVERSE
     return None
 
 
@@ -96,7 +94,7 @@ def _cached_close_matrix_versioned(symbols: tuple[str, ...], lookback_days: int 
     raw = _ohlcv_subset(symbols, lookback_days=max(lookback + 260, lookback), version=version)
     if raw.empty:
         return pd.DataFrame()
-    return raw.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index().ffill().tail(lookback)
+    return raw.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index().tail(lookback)
 
 
 def cached_close_matrix(symbols: tuple[str, ...], lookback_days: int = 756) -> pd.DataFrame:
@@ -109,7 +107,7 @@ def _cached_volume_matrix_versioned(symbols: tuple[str, ...], lookback_days: int
     raw = _ohlcv_subset(symbols, lookback_days=max(lookback + 260, lookback), version=version)
     if raw.empty:
         return pd.DataFrame()
-    return raw.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index().ffill().tail(lookback)
+    return raw.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index().tail(lookback)
 
 
 def cached_volume_matrix(symbols: tuple[str, ...], lookback_days: int = 756) -> pd.DataFrame:
@@ -126,7 +124,7 @@ def _cached_returns_matrix_versioned(symbols: tuple[str, ...], lookback_days: in
     prices = prices.dropna(axis=1, thresh=max(20, int(len(prices) * min_coverage)))
     rets = np.log(prices / prices.shift(1)).replace([np.inf, -np.inf], np.nan)
     rets = rets.dropna(how="all")
-    return rets.dropna(axis=1, thresh=max(20, int(len(rets) * min_coverage))).fillna(0.0)
+    return rets.dropna(axis=1, thresh=max(20, int(len(rets) * min_coverage)))
 
 
 def cached_returns_matrix(symbols: tuple[str, ...], lookback_days: int = 756, min_coverage_bps: int = 5500) -> pd.DataFrame:

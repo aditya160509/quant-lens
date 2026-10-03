@@ -7,6 +7,8 @@ append-only operator helpers for datasets that are not present locally.
 from __future__ import annotations
 
 from functools import lru_cache
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Iterable
 import math
@@ -21,7 +23,7 @@ from .performance import cached_close_matrix, cached_fundamental_history, cached
 
 try:
     import polars as pl
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     pl = None
 
 
@@ -35,6 +37,32 @@ MASTER_FUNDAMENTALS = BACKEND_DATA / "fundamentals" / "master_fundamentals.parqu
 CATEGORY7_MACRO = FACTORS_DATA / "processed" / "category7_macro_regime.parquet"
 FF5_DAILY = BACKEND_DATA / "factors_us" / "ff5_daily.csv"
 MOM_DAILY = BACKEND_DATA / "factors_us" / "momentum_daily.csv"
+
+
+
+AS_OF = ContextVar("screener_as_of", default=None)
+
+
+@contextmanager
+def as_of_context(value):
+    date = pd.Timestamp(value) if value else None
+    if date is not None and pd.isna(date):
+        raise ValueError("Invalid as_of_date")
+    token = AS_OF.set(date)
+    try:
+        yield
+    finally:
+        AS_OF.reset(token)
+
+
+def eligible_reports(frame, date=None):
+    cutoff = pd.Timestamp(date) if date is not None else AS_OF.get()
+    if frame.empty or cutoff is None:
+        return frame
+    if "reportDate" not in frame:
+        raise ValueError("Fundamentals lack reportDate")
+    dates = pd.to_datetime(frame.reportDate, errors="coerce")
+    return frame[(dates + pd.Timedelta(days=90) <= cutoff) & (dates + pd.Timedelta(days=640) >= cutoff)]
 
 
 @lru_cache(maxsize=8192)
@@ -73,7 +101,9 @@ def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
 
 @lru_cache(maxsize=1)
 def load_market_ohlcv() -> pd.DataFrame:
-    source = MARKET_UNIVERSE if MARKET_UNIVERSE.exists() else RESEARCH_MARKET_UNIVERSE
+    if not MARKET_UNIVERSE.exists():
+        raise FileNotFoundError(f"Required market dataset is missing: {MARKET_UNIVERSE}")
+    source = MARKET_UNIVERSE
     cols = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
     return _standardize_ohlcv(_read_parquet(source, cols))
 
@@ -118,7 +148,8 @@ def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: i
     else:
         requested = [normalize_symbol(raw)]
     requested = list(dict.fromkeys(requested))
-    missing = [symbol for symbol in requested if symbol not in set(universe)]
+    universe_set = set(universe)
+    missing = [symbol for symbol in requested if symbol not in universe_set]
     if missing:
         raise UnknownSymbolsError(missing)
     cap = int(payload.get("max_symbols") or payload.get("max_tickers") or max_symbols)
@@ -129,8 +160,11 @@ def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: i
 
 def ohlcv_for_symbols(symbols: Iterable[str], lookback_days: int | None = None) -> pd.DataFrame:
     normalized = {normalize_symbol(s) for s in symbols if str(s).strip()}
-    df = load_market_ohlcv()
-    out = df[df["Ticker"].isin(normalized)]
+    from .performance import _ohlcv_subset
+    out = _ohlcv_subset(tuple(sorted(normalized)))
+    cutoff_date = AS_OF.get()
+    if cutoff_date is not None:
+        out = out[out["Date"] <= cutoff_date]
     if lookback_days and not out.empty:
         cutoff = out["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)
         out = out[out["Date"] >= cutoff]
@@ -138,14 +172,24 @@ def ohlcv_for_symbols(symbols: Iterable[str], lookback_days: int | None = None) 
 
 
 def close_matrix(symbols: Iterable[str], lookback_days: int = 756) -> pd.DataFrame:
+    if AS_OF.get() is not None:
+        raw = ohlcv_for_symbols(symbols)
+        return raw.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index().tail(int(lookback_days))
     return cached_close_matrix(symbol_key(symbols), int(lookback_days)).copy()
 
 
 def volume_matrix(symbols: Iterable[str], lookback_days: int = 756) -> pd.DataFrame:
+    if AS_OF.get() is not None:
+        raw = ohlcv_for_symbols(symbols)
+        return raw.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index().tail(int(lookback_days))
     return cached_volume_matrix(symbol_key(symbols), int(lookback_days)).copy()
 
 
 def returns_matrix(symbols: Iterable[str], lookback_days: int = 756, min_coverage: float = 0.55) -> pd.DataFrame:
+    if AS_OF.get() is not None:
+        prices = close_matrix(symbols, lookback_days)
+        rets = np.log(prices / prices.shift(1)).replace([np.inf, -np.inf], np.nan).dropna(how="all")
+        return rets.dropna(axis=1, thresh=max(20, int(len(rets) * min_coverage)))
     min_coverage_bps = int(max(0.0, min(1.0, float(min_coverage))) * 10000)
     return cached_returns_matrix(symbol_key(symbols), int(lookback_days), min_coverage_bps).copy()
 
@@ -175,7 +219,11 @@ def latest_fundamentals() -> pd.DataFrame:
 
 
 def fundamental_history(symbol: str) -> pd.DataFrame:
-    return cached_fundamental_history(normalize_symbol(symbol)).copy()
+    frame = cached_fundamental_history(normalize_symbol(symbol)).copy()
+    cutoff = AS_OF.get()
+    if cutoff is not None and not frame.empty:
+        frame = frame[pd.to_datetime(frame.reportDate) + pd.Timedelta(days=90) <= cutoff]
+    return frame
 
 
 @lru_cache(maxsize=1)

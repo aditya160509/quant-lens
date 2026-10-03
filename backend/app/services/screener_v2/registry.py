@@ -58,4 +58,6 @@ def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) ->
     feature = get_feature(feature_id)
     module = _load(feature.module)
     runner: Callable[[dict[str, Any] | None], dict[str, Any]] = getattr(module, "run")
-    return runner(payload or {})
+    from .core.data_loader import as_of_context
+    with as_of_context((payload or {}).get("as_of_date")):
+        return runner(payload or {})
