@@ -32,6 +32,17 @@ export function toPayload(feature: FeatureSpec, form: FormState): Record<string,
   return out;
 }
 
+/** Groups that only matter for one choice of another setting, e.g. RD settings only for the RD design. */
+const CONDITIONAL: Record<string, { field: string; groups: Record<string, string[]> }> = {
+  "07": { field: "identification_design", groups: { DiD: ["did"], "Event study": ["event_study"], "Regression discontinuity": ["rdd"], "Instrumental variables": ["iv"], Treatment: ["did", "event_study"] } },
+};
+const groupApplies = (featureId: string, group: string, form: FormState) => {
+  const c = CONDITIONAL[featureId];
+  const want = c?.groups[group];
+  const v = c ? String(form[c.field] ?? "") : "";
+  return !want || v === "all" || want.includes(v);
+};
+
 /** Inputs a study cannot run without. The API spec has no required flag yet, so they are listed here. */
 const REQUIRED: Record<string, string[]> = { "08": ["discovery_date"], "09": ["treated_unit", "treatment_date"] };
 
@@ -63,7 +74,7 @@ export function StudyForm({ feature, form, setForm, errors }: {
 }) {
   const hasUniverse = feature.inputs.some((f) => f.type === "ticker_list");
   const groups = useMemo(() => feature.inputs.filter((f) => !(hasUniverse && f.key === "max_symbols")).reduce<Record<string, InputSpec[]>>((acc, f) => ({ ...acc, [f.group]: [...(acc[f.group] ?? []), f] }), {}), [feature, hasUniverse]);
-  const names = Object.keys(groups);
+  const names = Object.keys(groups).filter((g) => groupApplies(feature.id, g, form));
   const [open, setOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(names.map((g, i) => [g, i < 2 || groups[g].some((f) => REQUIRED[feature.id]?.includes(f.key))])));
   const set = (key: string) => (value: unknown) => setForm((cur) => ({ ...cur, [key]: value }));
   const maxField = feature.inputs.find((f) => f.key === "max_symbols");
@@ -235,18 +246,18 @@ export function Control({ field: f, value, onChange }: { field: InputSpec; value
           </div>
         );
       }
-      return <input className="input num" type="number" inputMode="decimal" value={String(value ?? "")} min={f.min} max={f.max} step="any" onChange={(e) => onChange(e.target.value)} />;
+      return <input className="input num" type="number" inputMode="decimal" value={String(value ?? "")} min={f.min} max={f.max} step="any" aria-label={f.label} onChange={(e) => onChange(e.target.value)} />;
     }
     case "date":
-      return <input className="input num" type="date" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+      return <input className="input num" type="date" aria-label={f.label} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
     case "json":
-      return <textarea className="input" rows={5} spellCheck={false} value={typeof value === "string" ? value : value ? JSON.stringify(value, null, 2) : ""} onChange={(e) => onChange(e.target.value)} />;
+      return <textarea className="input" rows={5} aria-label={f.label} spellCheck={false} value={typeof value === "string" ? value : value ? JSON.stringify(value, null, 2) : ""} onChange={(e) => onChange(e.target.value)} />;
     case "file":
       return <FileField kind={UPLOAD_KIND[f.key] ?? "signal"} value={String(value ?? "")} onChange={onChange} help={f.help} />;
     case "ticker":
       return <TickerPicker value={String(value ?? "")} onChange={onChange} />;
     default:
-      return <input className="input" type="text" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+      return <input className="input" type="text" aria-label={f.label} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
   }
 }
 

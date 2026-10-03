@@ -123,6 +123,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
 
       <div style={{ padding: "6px 18px 22px" }}>
         {run.error && !running ? <RunError message={run.error} /> : null}
+        {result && !running ? <Skipped result={result} /> : null}
         {result && printing ? (
           <div className="report">
             {sections.map((sec) => (
@@ -280,6 +281,28 @@ function Placeholder({ items, running, onRun }: { items: Item[]; running: boolea
           </motion.div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Designs or tests the backend skipped, with its reason: e.g. an event study without an event file. */
+function Skipped({ result }: { result: FeatureResult }) {
+  const rows = Object.values(result.tables ?? {}).flat()
+    .filter((r): r is Record<string, unknown> => Boolean(r) && typeof r === "object" && /not run|skipped/i.test(String((r as Record<string, unknown>).status ?? "")) && Boolean((r as Record<string, unknown>).reason));
+  if (!rows.length) return null;
+  return (
+    <div className="card" style={{ height: "auto", marginBottom: 12, background: "var(--warn-soft)", boxShadow: "inset 0 0 0 1px color-mix(in oklch, var(--warn) 30%, transparent)" }}>
+      <div className="card-b" style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <AlertTriangle size={16} style={{ color: "var(--warn)", flex: "none", marginTop: 2 }} />
+        <div style={{ display: "grid", gap: 4 }}>
+          <div style={{ fontWeight: 600 }}>{rows.length === 1 ? "One part did not run" : `${rows.length} parts did not run`}</div>
+          {rows.map((r, i) => (
+            <div key={i} style={{ color: "var(--text-2)", fontSize: 12.5 }}>
+              <b style={{ fontWeight: 500, color: "var(--text)" }}>{label(String(r.design ?? r.test ?? r.name ?? "Step"))}:</b> {String(r.reason)}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

@@ -62,7 +62,7 @@ export function useBackgroundRuns(features: FeatureSpec[] | undefined, activeJob
   const pending = useRuns((s) => s.runs.filter((r) => (r.status === "queued" || r.status === "running") && r.jobId !== activeJob).map((r) => r.jobId).join(","));
   const ids = pending ? pending.split(",") : [];
   const queries = useQueries({
-    queries: ids.map((id) => ({ queryKey: ["research", "job", id], queryFn: () => request<Job>(`/jobs/${id}`), refetchInterval: 1500, retry: 1 })),
+    queries: ids.map((id) => ({ queryKey: ["research", "job", id], queryFn: () => request<Job>(`/jobs/${id}`), refetchInterval: 1500, refetchIntervalInBackground: true, retry: 1 })),
   });
   const key = queries.map((q) => q.data?.status ?? "").join(",");
   useEffect(() => {
@@ -91,6 +91,8 @@ export function useJob(jobId: string | null) {
     enabled: Boolean(jobId),
     staleTime: (q) => (TERMINAL.has(q.state.data?.status ?? "") ? Infinity : 0),
     refetchInterval: (q) => (TERMINAL.has(q.state.data?.status ?? "") ? false : 1000),
+    // Keep polling in a background tab so a long study finishes while the reader is elsewhere.
+    refetchIntervalInBackground: true,
     retry: (count, err) => !(err instanceof ApiError) && count < 2,
   });
 }

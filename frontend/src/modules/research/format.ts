@@ -3,7 +3,7 @@ import type { FeatureResult, Row } from "./types";
 export const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 const ACRONYMS: Record<string, string> = {
-  ols: "OLS", nw: "NW", fm: "FM", grs: "GRS", gmm: "GMM", gls: "GLS", iv: "IV", did: "DiD", rd: "RD", car: "CAR", att: "ATT", ls: "L/S",
+  ols: "OLS", nw: "NW", fm: "FM", grs: "GRS", gmm: "GMM", gls: "GLS", iv: "IV", did: "DiD", rd: "RD", rdd: "RD", bhar: "BHAR", liml: "LIML", "2sls": "2SLS", psr: "PSR", car: "CAR", att: "ATT", ls: "L/S",
   oos: "OOS", is: "IS", se: "SE", r2: "R²", vif: "VIF", ic: "IC", ir: "IR", hlz: "HLZ", rmspe: "RMSPE", scm: "SCM", qq: "Q-Q",
   ar: "AR", tsls: "2SLS", vix: "VIX", cs: "CS", pdf: "PDF", csv: "CSV", bm: "B/M", ivol: "IVOL", us: "US", ff5: "FF5", bhy: "BHY",
   mr: "MR", hhi: "HHI", aic: "AIC", bic: "BIC", smd: "SMD", twfe: "TWFE", fe: "FE", mkt: "Mkt", rf: "RF", smb: "SMB", hml: "HML",
