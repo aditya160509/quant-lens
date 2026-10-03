@@ -1,3 +1,5 @@
+> Historical audit, superseded by [DONE.md](DONE.md) and the central Screener V2 review. Checked boxes here are not current verification evidence. Removed strategies and estimators must not be restored from this checklist.
+
 # Screener V2 — Full Spec Compliance Audit
 
 ## Remediation checklist (2026-07-13)

@@ -1,3 +1,5 @@
+> Rebuild status (2026-10-03): IN PROGRESS. The backend has 53 passing scoped tests and previously passed eight live feature runs. Repository-wide FX/macro discovery has reopened the currency/universe and regime implementation audit. Earlier no-FX limitations and completion claims are withdrawn pending correction. Frontend rebuilding remains reserved for Claude under playbook commit `9451bc32`. See [Screener V2 DONE](../../backend/app/services/screener_v2/DONE.md) for changes, verification and outstanding work.
+
 # Screener V2 Review: Spec vs Implementation vs Frontend
 
 Date: 2026-09-29
@@ -200,3 +202,26 @@ These came from a second read of the code and were not in the first pass.
 | A10 | Performance | Row loops: `panel.iterrows()` in S6 alerts and S7 cards, plus three more in analytics. These run per request over up to 5,000 names. Vectorize. | `feature_06.py:36`, `analytics.py:873,1928,1951,2219` |
 | A11 | Docs | `review.md` and `missing.md` are fully ticked checklists that conflict with this review (for example, "deduct costs on rebalance dates" is ticked, but the weekday path still smears costs). `schemas/` and `utils/` are empty packages. | `screener_v2/` |
 | A12 | Tests | No frontend tests at all; no test would have caught B1 (path and envelope) or B4 (static portfolio). | `frontend/src/components/screener-v2/` |
+
+
+## Backend remediation disposition, 2026-10-03
+
+| Review items | Final disposition |
+| --- | --- |
+| B1, B3 | Owned job route and payload envelope wired; demo generation/failure fallback removed; two frontend API regression tests pass. |
+| B2, A1, A2 | Explicit unknown/partial universes rejected; false S&P membership removed; caps and coverage ordering disclosed. |
+| A3 | Primary market parquet required; research-export fallback removed. Missing data yields an explicit error. |
+| A4, A5, A6, A8 | Background jobs/cancel/status, strict upload/export errors, owned symbol search and lazy package registration implemented. |
+| B4, S5 | Dated reselection and next-session execution; drift-based actual turnover costs; bounded attribution/episodes; full holding/offset/weekday reruns; real CSCV, with undefined estimates disclosed. Delisting and adjustment history remain unavailable. |
+| S1 | Observed estimators/statement fundamentals, strict filters, saved definitions and local interval schedules. Classification and price-return basis are explicit. |
+| S2 | Panel-order historical proxies removed; supported time operators read real series; historical local-signal IC uses matured labels. Unsupported series/external factor-zoo claims are not invented. |
+| S3 | Historical IC-IR/Ridge training; configured decomposition/correlation and sector scores; false regime/preset names removed. Historical sector neutralization is unavailable without dated memberships. |
+| S4 | Correct NCAV and Greenblatt capital, original Piotroski unknown criteria, Altman variants and dated strategy portfolios. Approximate named strategies/templates removed or descriptively relabelled. |
+| S6, S8 | Persistent baselines, entries/exits/rank changes, stored matured alert precision and lossless exports. Email delivery remains unavailable. |
+| S7 | 252/756/2520 actual history selection, statement-derived repricing, real four-dimensional cards and truthful observed coverage. |
+| A9, A10 | Broad hidden error fallbacks and per-row DataFrame loops removed from runtime computations; shared dated panels and versioned caches used. |
+| A11 | Old module review/checklists explicitly marked historical/superseded; empty packages removed after graph/reference/import/route checks. |
+| A12 | Four backend test files plus frontend route/error tests. Golden arithmetic, future-data invariance, execution, persistence, jobs and manifests covered. |
+| A7 and frontend section | UI upload/export controls, manifest forms, renderers, layout and browser validation reserved for Claude. Backend routes and INPUTS/OUTPUTS are ready. |
+
+This is not a claim that unavailable historical vintages, delisted outcomes or full-project frontend gates are solved. See DONE.md before restoring any removed feature or interpreting historical results.

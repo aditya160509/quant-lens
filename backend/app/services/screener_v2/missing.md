@@ -1,3 +1,5 @@
+> Historical audit, superseded by [DONE.md](DONE.md) and the central Screener V2 review. Checked boxes here are not current verification evidence. Removed strategies and estimators must not be restored from this checklist.
+
 ## Attachment Upgrade Checklist — 2026-07-06
 
 Scope: applied the Screener V2 backend upgrades from `/Users/adityabalaji/.codex/attachments/cd5147f4-cb3b-484b-892a-a3bd69facdd3/pasted-text.txt`.
