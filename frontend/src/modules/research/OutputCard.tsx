@@ -1,7 +1,7 @@
 "use client";
 
 import { createElement, useState, useRef, type ReactNode } from "react";
-import { BookOpen, Check, ChevronDown, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, Check, ChevronDown, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
 import { downloadCsv, downloadPng, downloadSvg } from "@/charts/export";
 import { useLayout } from "@/workspace/layout";
 import { MenuItem, PopMenu, Tooltip, type MenuAt } from "@/workspace/ui";
@@ -11,13 +11,15 @@ import { CHART_VIEWS, viewFor } from "./outputs/registry";
 import { Explore, ExploreControls, VIEW_LABEL, defaults, useExplore, viewsFor, type ViewKind } from "./outputs/explore";
 import type { FeatureResult, FeatureSpec } from "./types";
 
-export function OutputCard({ item, feature, result, maximized, onToggleMax, onHide, scope }: {
+export function OutputCard({ item, feature, result, maximized, onToggleMax, onHide, onMove, onSpan, scope }: {
   item: Item;
   feature: FeatureSpec;
   result: FeatureResult;
   maximized: boolean;
   onToggleMax: () => void;
   onHide?: () => void;
+  onMove?: (d: -1 | 1) => void;
+  onSpan?: (span: number) => void;
   scope: string;
 }) {
   const body = useRef<HTMLDivElement>(null);
@@ -26,7 +28,7 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const viewName = item.view ?? spec?.render ?? "dataTable";
   const rows = out(result, key);
   const isChart = CHART_VIEWS.has(viewName);
-  const cfgId = `${scope}:${key}:${item.view ?? ""}`;
+  const cfgId = `${feature.id}:${key}:${item.view ?? ""}`;
   const custom = useExplore((st) => st.configs[cfgId]);
   const setCustom = useExplore((st) => st.set);
   const asTable = custom?.kind === "table";
@@ -110,6 +112,13 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
           <MenuItem icon={<Download size={13} />} onClick={() => { const sv = svg(); if (sv) downloadSvg(sv, name); }}>Export SVG</MenuItem>
           <MenuItem icon={<Download size={13} />} onClick={() => { const sv = svg(); if (sv) void downloadPng(sv, name); }}>Export PNG</MenuItem></> : null}
         {exportable ? <MenuItem icon={<Download size={13} />} onClick={() => downloadCsv(rows, name)}>Export CSV</MenuItem> : null}
+        {onSpan ? <><div className="sep" /><div className="hd">Width</div>
+          <div className="menu-seg">{[[4, "⅓"], [6, "½"], [8, "⅔"], [12, "Full"]].map(([sp, t]) => (
+            <button key={sp} type="button" aria-pressed={item.span === sp} onClick={() => { onSpan(sp as number); setMenu(null); }}>{t}</button>
+          ))}</div></> : null}
+        {onMove ? <>
+          <MenuItem icon={<ArrowUp size={13} />} onClick={() => onMove(-1)}>Move earlier</MenuItem>
+          <MenuItem icon={<ArrowDown size={13} />} onClick={() => onMove(1)}>Move later</MenuItem></> : null}
         <div className="sep" />
         <MenuItem icon={<Settings2 size={13} />} onClick={openSettings}>Settings</MenuItem>
         <MenuItem icon={<BookOpen size={13} />} onClick={() => setAbout(true)}>About this method</MenuItem>

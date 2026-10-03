@@ -8,6 +8,7 @@ import { PopMenu, Tabs, type MenuAt } from "@/workspace/ui";
 import { metaFor } from "./catalog";
 import { isNum, label, num, out } from "./format";
 import { layoutFor, verdictFor, type Item, type Section } from "./layouts";
+import { arrange, cardId, useCardPrefs, useFeaturePrefs } from "./cardPrefs";
 import { OutputCard } from "./OutputCard";
 import type { FeatureRun } from "./ResearchApp";
 import { Control } from "./StudyForm";
@@ -22,7 +23,8 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   const [tab, setTab] = useState(layout.sections[0]?.id ?? "");
   const [maxKey, setMaxKey] = useState<string | null>(null);
   const [stuck, setStuck] = useState(false);
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const prefs = useFeaturePrefs(feature.id);
+  const setPref = useCardPrefs((st) => st.set);
   const [printing, setPrinting] = useState(false);
   // Report: render every section stacked, print once painted, then restore the tabbed view.
   useEffect(() => {
@@ -37,7 +39,8 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   const running = RUNNING.has(run.status);
   const result = run.result;
   const visible = (s: Section) => (result ? s.items.filter((i) => i.keys.some((k) => out(result, k).length > 0)) : s.items);
-  const shown = (s: Section) => visible(s).filter((i) => !hidden.has(i.keys[0]));
+  const shown = (s: Section) => arrange(visible(s), prefs);
+  const hiddenIn = (s: Section) => visible(s).filter((i) => prefs[cardId(i)]?.hidden);
   const sections = result ? layout.sections.filter((s) => visible(s).length) : layout.sections;
   const active = sections.find((s) => s.id === tab) ?? sections[0];
 
@@ -143,13 +146,15 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
           ) : (
             <motion.div key={`${active.id}-${run.jobId}`} className="out-grid" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.015 } } }}>
               {active.intro ? <div className="section-h"><p>{active.intro}</p></div> : null}
-              {hidden.size && visible(active).some((i) => hidden.has(i.keys[0])) ? (
-                <div style={{ gridColumn: "1 / -1" }}><button className="btn sm ghost" onClick={() => setHidden(new Set())}>Show {visible(active).filter((i) => hidden.has(i.keys[0])).length} hidden</button></div>
+              {hiddenIn(active).length ? (
+                <div style={{ gridColumn: "1 / -1" }}><button className="btn sm ghost" onClick={() => hiddenIn(active).forEach((i) => setPref(feature.id, cardId(i), { hidden: false }))}>Show {hiddenIn(active).length} hidden</button></div>
               ) : null}
               {shown(active).map((item) => (
                 <motion.div key={item.keys.join("+") + (item.view ?? "")} style={{ gridColumn: `span ${item.span}`, minWidth: 0 }}
                   variants={{ hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0, transition: { duration: DUR.base, ease: [0.2, 0, 0, 1] } } }}>
-                  <OutputCard item={item} feature={feature} result={result} maximized={false} onToggleMax={() => setMaxKey(item.keys[0])} onHide={() => setHidden((h) => new Set(h).add(item.keys[0]))} scope={scope} />
+                  <OutputCard item={item} feature={feature} result={result} maximized={false} onToggleMax={() => setMaxKey(item.keys[0])} onHide={() => setPref(feature.id, cardId(item), { hidden: true })}
+                    onMove={(d) => { const list = shown(active); const i = list.findIndex((x) => cardId(x) === cardId(item)); const j = i + d; if (j < 0 || j >= list.length) return; list.forEach((x, k) => setPref(feature.id, cardId(x), { order: k === i ? j : k === j ? i : k })); }}
+                    onSpan={(span) => setPref(feature.id, cardId(item), { span })} scope={scope} />
                 </motion.div>
               ))}
               {result.meta.research_caveats?.length ? <Caveats items={result.meta.research_caveats} /> : null}

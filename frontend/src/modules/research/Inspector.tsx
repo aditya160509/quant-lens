@@ -7,6 +7,7 @@ import { Dot, Segmented } from "@/workspace/ui";
 import { featureHref, metaFor } from "./catalog";
 import { out } from "./format";
 import { layoutFor } from "./layouts";
+import { cardId, useCardPrefs, useFeaturePrefs } from "./cardPrefs";
 import type { FeatureRun } from "./ResearchApp";
 import { useSelection } from "./selection";
 import { StudyForm, toPayload } from "./StudyForm";
@@ -80,9 +81,14 @@ export function Inspector({ feature, run }: { feature: FeatureSpec; run: Feature
 function Outline({ feature, run }: { feature: FeatureSpec; run: FeatureRun }) {
   const layout = layoutFor(feature);
   const result = run.result;
+  const prefs = useFeaturePrefs(feature.id);
+  const setPref = useCardPrefs((st) => st.set);
+  const resetPrefs = useCardPrefs((st) => st.reset);
   return (
     <section style={{ padding: "14px 8px" }}>
-      <h4 className="insp-h" style={{ padding: "0 8px" }}>Outputs</h4>
+      <h4 className="insp-h" style={{ padding: "0 8px", display: "flex", alignItems: "center" }}>Outputs
+        {Object.keys(prefs).length ? <button className="btn sm ghost" style={{ marginLeft: "auto", height: 22 }} onClick={() => resetPrefs(feature.id)}>Reset layout</button> : null}
+      </h4>
       {layout.sections.map((s) => (
         <div key={s.id} style={{ marginBottom: 8 }}>
           <div style={{ padding: "4px 8px", fontSize: 11.5, color: "var(--text-4)", fontWeight: 500 }}>{s.label}</div>
@@ -90,11 +96,14 @@ function Outline({ feature, run }: { feature: FeatureSpec; run: FeatureRun }) {
             const spec = feature.outputs.find((o) => o.key === i.keys[0]);
             const has = result ? i.keys.some((k) => out(result, k).length > 0) : false;
             return (
-              <button key={i.keys.join("+") + (i.view ?? "")} className="outline-item" disabled={!has}
-                onClick={() => window.dispatchEvent(new CustomEvent("research:jump", { detail: i.keys[0] }))}>
-                <span style={{ width: 5, height: 5, borderRadius: 3, background: has ? "var(--accent)" : "var(--line-3)", flex: "none" }} />
-                {i.title ?? spec?.title ?? i.keys[0]}
-              </button>
+              <div key={i.keys.join("+") + (i.view ?? "")} className="outline-row">
+                <input type="checkbox" aria-label={`Show ${i.title ?? spec?.title ?? i.keys[0]}`} checked={!prefs[cardId(i)]?.hidden} disabled={!has}
+                  onChange={(e) => setPref(feature.id, cardId(i), { hidden: !e.target.checked })} />
+                <button className="outline-item" disabled={!has || prefs[cardId(i)]?.hidden}
+                  onClick={() => window.dispatchEvent(new CustomEvent("research:jump", { detail: i.keys[0] }))}>
+                  {i.title ?? spec?.title ?? i.keys[0]}
+                </button>
+              </div>
             );
           })}
         </div>
