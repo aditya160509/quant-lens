@@ -1,12 +1,11 @@
 """Screener V2 alerts computations."""
 from __future__ import annotations
-import math
 from typing import Any
 import numpy as np
 import pandas as pd
-from .data_loader import close_matrix, load_macro
+from .data_loader import close_matrix
 from .common import clean_json, number_like
-from .stats import TRADING_DAYS, _wilder_smooth
+from .stats import _wilder_smooth
 from .estimators import sma_cross_event
 
 
@@ -41,28 +40,6 @@ def alert_precision_backtest(panel: pd.DataFrame, alert_type_field_map: dict[str
     return clean_json(rows)
 
 
-def regime_performance_from_returns(strategy: pd.Series) -> list[dict[str, Any]]:
-    regimes = regime_context()
-    if strategy.empty or regimes.empty:
-        return []
-    df = pd.DataFrame({"date": strategy.index, "strategy_return": strategy.values})
-    df["date"] = pd.to_datetime(df["date"]).dt.normalize()
-    regimes = regimes.copy()
-    regimes["date"] = pd.to_datetime(regimes["date"]).dt.normalize()
-    merged = df.merge(regimes[["date", "regime"]], on="date", how="left").ffill()
-    rows = []
-    for regime, g in merged.dropna(subset=["regime"]).groupby("regime"):
-        r = g["strategy_return"]
-        rows.append(
-            {
-                "regime": regime,
-                "days": int(len(r)),
-                "annualized_return": float((1 + r).prod() ** (TRADING_DAYS / max(len(r), 1)) - 1),
-                "annualized_vol": float(r.std() * math.sqrt(TRADING_DAYS)),
-                "sharpe": float(r.mean() / (r.std() or np.nan) * math.sqrt(TRADING_DAYS)),
-            }
-        )
-    return clean_json(rows)
 
 
 def fundamental_change_rows(panel: pd.DataFrame, threshold: float = 0.20) -> list[dict[str, Any]]:
@@ -76,20 +53,6 @@ def fundamental_change_rows(panel: pd.DataFrame, threshold: float = 0.20) -> lis
     return records(rows)
 
 
-def regime_context() -> pd.DataFrame:
-    macro = load_macro()
-    if macro.empty:
-        return pd.DataFrame()
-    df = macro.copy()
-    vix_col = next((c for c in ["vix_close", "vixcls"] if c in df.columns), None)
-    slope_col = next((c for c in ["yc_slope_10y_2y", "yield_slope"] if c in df.columns), None)
-    df["vix"] = pd.to_numeric(df[vix_col], errors="coerce") if vix_col else np.nan
-    df["slope"] = pd.to_numeric(df[slope_col], errors="coerce") if slope_col else np.nan
-    vix_q = df["vix"].quantile([0.33, 0.66]).to_list() if df["vix"].notna().sum() else [15, 25]
-    df["regime"] = np.where(df["vix"] >= vix_q[1], "High Vol", np.where(df["vix"] <= vix_q[0], "Low Vol", "Normal"))
-    if slope_col:
-        df.loc[df["slope"] < 0, "regime"] = "Inverted Curve"
-    return df[["date", "regime", "vix", "slope"]].dropna(subset=["date"]).tail(1500)
 
 
 

@@ -30,6 +30,11 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
     if panel.empty:
         return panel, []
     payload = dict(payload)
+    if any(key in payload for key in ("vol_forecast_min", "vol_forecast_max")):
+        raise ValueError("HAR forecasts are unavailable; use explicitly named yang_zhang_vol_min/max estimates")
+    for key, column in [("industry_group", "industry_group"), ("industry_groups", "industry_group"), ("exchange", "exchange"), ("exchanges", "exchange")]:
+        if payload.get(key) and str(payload[key]).lower() not in {"all", "any"} and (column not in panel or panel[column].replace(["", "Unknown", "Unclassified"], np.nan).isna().all()):
+            raise ValueError(f"Requested filter {key} is unavailable in the local data")
     preset = str(payload.get("dollar_volume_preset") or "").lower()
     if preset and "dollar_volume_min" not in payload:
         preset_map = {
@@ -93,7 +98,7 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
         ("prox52", "prox52_min", "prox52_max", "PROX52"),
         ("pct_from_52w_high", "high_proximity_min", "high_proximity_max", "52W high proximity"),
         ("vratio", "vratio_min", "vratio_max", "Volume ratio"),
-        ("vol_forecast_21d", "vol_forecast_min", "vol_forecast_max", "Vol forecast"),
+        ("yang_zhang_vol_21d_estimate", "yang_zhang_vol_min", "yang_zhang_vol_max", "Yang-Zhang trailing volatility estimate"),
         ("amihud_percentile", "amihud_percentile_min", "amihud_percentile_max", "Amihud percentile"),
         ("core_quant_score", "score_min", "score_max", "Quant score"),
     ]:
@@ -143,6 +148,9 @@ def top_table(panel: pd.DataFrame, n: int = DEFAULT_TOP_N) -> pd.DataFrame:
         "exchange",
         "price",
         "market_cap",
+        "valuation_score_definition",
+        "fundamental_basis",
+        "enterprise_value_basis",
         "shares_outstanding",
         "float_percent",
         "dollar_volume_20d",

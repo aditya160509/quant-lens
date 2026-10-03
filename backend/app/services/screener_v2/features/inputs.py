@@ -13,7 +13,7 @@ def field(key, type='text', default=None, group='Specification', help='', **cons
 
 
 def shared_inputs():
-    return [field('universe', 'ticker_list', 'master', 'Universe', 'Master local universe or explicit tickers; not historical index membership.'),
+    return [field('universe', 'ticker_list', 'master', 'Universe', 'Local equities with observed prices and a fundamentals inventory entry, or explicit eligible tickers; current coverage is not historical index membership.'),
             field('max_symbols', 'number', 500, 'Universe', min=1, max=5000),
             field('lookback_days', 'number', 756, 'Window', min=1, max=10000),
             field('top_n', 'number', 50, 'Selection', min=1, max=5000),

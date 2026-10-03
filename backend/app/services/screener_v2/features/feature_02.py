@@ -18,9 +18,9 @@ from ..core.data_loader import parse_symbols
 FEATURE_ID = "02"
 FEATURE_NAME = "Formula Builder and Custom Expression Screener"
 
-INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master'}, {'key': 'formula', 'type': 'text', 'default': '0.4*rank(earnings_yield)+0.3*rank(momentum_jt)+0.3*rank(roe)'}, {'key': 'lookback_days', 'type': 'number', 'default': 756}, {'key': 'top_n', 'type': 'number', 'default': 50}, {'key': 'as_of_date', 'type': 'date', 'default': None}]))
+INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master'}, {'key': 'formula', 'type': 'text', 'default': '0.4*rank(net_income_yield)+0.3*rank(momentum_jt)+0.3*rank(roe)'}, {'key': 'lookback_days', 'type': 'number', 'default': 756}, {'key': 'top_n', 'type': 'number', 'default': 50}, {'key': 'as_of_date', 'type': 'date', 'default': None}]))
 
-OUTPUTS = [{'key': 'historical_formula_backtest', 'source': 'charts', 'render': 'lineChart', 'primary': True, 'label': 'Historical Formula Backtest'}, {'key': 'factor_zoo_comparison', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Factor Zoo Comparison'}, {'key': 'formula_result_table', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Result Table'}, {'key': 'formula_validation_panel', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Validation Panel'}, {'key': 'formula_template_library', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Template Library'}]
+OUTPUTS = [{'key': 'historical_formula_backtest', 'source': 'charts', 'render': 'lineChart', 'primary': True, 'label': 'Historical Formula Backtest'}, {'key': 'historical_local_signal_ic', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Historical Local Signal IC'}, {'key': 'formula_result_table', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Result Table'}, {'key': 'formula_validation_panel', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Validation Panel'}, {'key': 'formula_template_library', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Template Library'}]
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -28,15 +28,16 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=5000)
     panel = metric_panel(payload, symbols=symbols)
     panel, _ = apply_filters(panel, payload)
-    formula = payload.get("formula") or "core_quant_score"
-    issues: list[str] = []
+    formula = payload.get("formula") or "0.4*rank(net_income_yield)+0.3*rank(momentum_jt)+0.3*rank(roe)"
+    payload = {**payload, "formula": formula}
+    issues: list[str] = ["IC comparison covers declared local signals, not unavailable cross-module factor-zoo exports. Labels use next-session entry and mature by the run date."]
     result = evaluate_formula(panel, formula)
     panel["formula_score"] = result.values
     diagnostics = result.diagnostics
     panel["formula_rank"] = panel["formula_score"].rank(ascending=False, method="first").astype("Int64")
     ranked = panel.sort_values("formula_score", ascending=False)
     provider = point_in_time_scorer(symbols, payload, "formula")
-    backtest = score_backtest(list(ranked["ticker"]), ranked.set_index("ticker")["formula_score"], int(payload.get("lookback_days") or 756), int(payload.get("top_n") or 50), score_at=provider)
+    backtest = score_backtest(symbols, ranked.set_index("ticker")["formula_score"], int(payload.get("lookback_days") or 756), int(payload.get("top_n") or 50), score_at=provider)
     zoo = historical_ic_comparison(symbols, payload, provider)
     return response(
         FEATURE_ID,
@@ -47,7 +48,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         ],
         charts={
             "historical_formula_backtest": backtest.get("equity_curve", []),
-            "factor_zoo_comparison": zoo,
+            "historical_local_signal_ic": zoo,
         },
         tables={
             "formula_result_table": records(ranked[["formula_rank", "ticker", "sector", "formula_score", "core_quant_score", "valuation_percentile", "quality_percentile", "momentum_percentile"]].head(int(payload.get("top_n") or 50))),

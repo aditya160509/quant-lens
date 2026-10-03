@@ -11,14 +11,17 @@ from ..core.panel import metric_panel
 from ..core.screener import apply_filters
 from ..core.validation import point_in_time_scorer, score_backtest
 from ..core.data_loader import parse_symbols
+from ..core.macro import macro_regime_attribution
 
 
 FEATURE_ID = "03"
 FEATURE_NAME = "Composite Quant Score Engine"
 
-INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master'}, {'key': 'components', 'type': 'json', 'default': None}, {'key': 'lookback_days', 'type': 'number', 'default': 756}, {'key': 'top_n', 'type': 'number', 'default': 50}, {'key': 'weighting_mode', 'type': 'select', 'default': 'manual', 'options': ['manual', 'equal', 'ic_ir', 'ridge']}, {'key': 'ic_target_field', 'type': 'select', 'default': 'return_1m', 'options': ['return_1m', 'return_3m', 'return_6m']}, {'key': 'ridge_lambda', 'type': 'number', 'default': 1, 'min': 0}, {'key': 'min_training_periods', 'type': 'number', 'default': 6, 'min': 6}, {'key': 'preset', 'type': 'select', 'default': '', 'options': ['', 'aqr_quality_value', 'momentum_quality', 'low_vol_quality', 'vmq']}, {'key': 'output_scale', 'type': 'select', 'default': 'percentile', 'options': ['percentile', 'zscore', 'signed_rank']}, {'key': 'long_short', 'type': 'boolean', 'default': False}, {'key': 'score_weighted', 'type': 'boolean', 'default': False}, {'key': 'sector_neutral', 'type': 'boolean', 'default': False}, {'key': 'beta_neutral', 'type': 'boolean', 'default': False}, {'key': 'winsorize', 'type': 'boolean', 'default': False}, {'key': 'signed_rank', 'type': 'boolean', 'default': False}]))
+INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master'}, {'key': 'components', 'type': 'json', 'default': None}, {'key': 'lookback_days', 'type': 'number', 'default': 756}, {'key': 'top_n', 'type': 'number', 'default': 50}, {'key': 'weighting_mode', 'type': 'select', 'default': 'manual', 'options': ['manual', 'equal', 'ic_ir', 'ridge']}, {'key': 'ic_target_field', 'type': 'select', 'default': 'return_1m', 'options': ['return_1m', 'return_3m', 'return_6m']}, {'key': 'ridge_lambda', 'type': 'number', 'default': 1, 'min': 0}, {'key': 'min_training_periods', 'type': 'number', 'default': 6, 'min': 6}, {'key': 'preset', 'type': 'select', 'default': '', 'options': ['', 'equal_value_quality', 'momentum_quality', 'low_vol_quality', 'vmq']}, {'key': 'output_scale', 'type': 'select', 'default': 'percentile', 'options': ['percentile', 'zscore', 'signed_rank']}, {'key': 'long_short', 'type': 'boolean', 'default': False}, {'key': 'score_weighted', 'type': 'boolean', 'default': False}, {'key': 'sector_neutral', 'type': 'boolean', 'default': False}, {'key': 'beta_neutral', 'type': 'boolean', 'default': False}, {'key': 'winsorize', 'type': 'boolean', 'default': False}, {'key': 'signed_rank', 'type': 'boolean', 'default': False}]))
 
-OUTPUTS = [{'key': 'factor_correlation_heatmap', 'source': 'charts', 'render': 'heatmap', 'primary': True, 'label': 'Factor Correlation Heatmap'}, {'key': 'composite_vs_factor_backtest', 'source': 'charts', 'render': 'lineChart', 'primary': False, 'label': 'Composite Vs Factor Backtest'}, {'key': 'sector_composite_breakdown', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Sector Composite Breakdown'}, {'key': 'composite_score_universe_ranking', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Composite Score Universe Ranking'}, {'key': 'score_transparency_decomposition', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Score Transparency Decomposition'}, {'key': 'per_stock_score_decomposition', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Per Stock Score Decomposition'}, {'key': 'factor_correlation_redundancy_alerts', 'source': 'tables', 'render': 'heatmap', 'primary': False, 'label': 'Factor Correlation Redundancy Alerts'}, {'key': 'historical_weight_training', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Historical Weight Training'}, {'key': 'effective_number_of_factors', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Effective Number Of Factors'}]
+OUTPUTS = [{'key': 'factor_correlation_heatmap', 'source': 'charts', 'render': 'heatmap', 'primary': True, 'label': 'Factor Correlation Heatmap'}, {'key': 'composite_vs_spy_backtest', 'source': 'charts', 'render': 'lineChart', 'primary': False, 'label': 'Composite Vs SPY Backtest'}, {'key': 'sector_composite_breakdown', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Sector Composite Breakdown'}, {'key': 'composite_score_universe_ranking', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Composite Score Universe Ranking'}, {'key': 'score_transparency_decomposition', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Score Transparency Decomposition'}, {'key': 'per_stock_score_decomposition', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Per Stock Score Decomposition'}, {'key': 'factor_correlation_redundancy_alerts', 'source': 'tables', 'render': 'heatmap', 'primary': False, 'label': 'Factor Correlation Redundancy Alerts'}, {'key': 'historical_weight_training', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Historical Weight Training'}, {'key': 'effective_number_of_factors', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Effective Number Of Factors'}]
+
+OUTPUTS.append({'key': 'macro_regime_attribution', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Prior VIX Regime Attribution'})
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -27,10 +30,10 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     panel = metric_panel(payload, symbols=symbols)
     panel, _ = apply_filters(panel, payload)
     scored = component_scores(panel, composite_config(payload))
-    component_cols = [c for c in ["Value", "Quality", "Momentum", "Low Vol", "Liquidity", "composite_score"] if c in scored.columns]
+    component_cols = [item["component"] for item in scored.attrs.get("decomposition", []) if item["component"] in scored.columns]
     corr = scored[component_cols].corr() if component_cols else scored.select_dtypes("number").corr()
     backtest = score_backtest(
-        list(scored["ticker"]),
+        symbols,
         scored.set_index("ticker")["composite_score"],
         int(payload.get("lookback_days") or 756),
         int(payload.get("top_n") or 50),
@@ -38,7 +41,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         score_weighted=bool(payload.get("score_weighted")),
         score_at=point_in_time_scorer(symbols, payload, "composite"),
     )
-    regime_breakdown = panel.groupby("sector").agg(avg_composite=("core_quant_score", "mean"), count=("ticker", "count")).reset_index()
+    regime_breakdown = scored.merge(panel[["ticker", "sector"]], on="ticker", validate="one_to_one").groupby("sector").agg(avg_composite=("composite_score", "mean"), count=("ticker", "count")).reset_index()
     redundancy = []
     for row in matrix_records(corr):
         if row["row"] != row["col"] and abs(row["value"]) > 0.6:
@@ -46,7 +49,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     focus = payload.get("focus_ticker") or (scored.iloc[0]["ticker"] if not scored.empty else None)
     weights = {item["component"]: item["weight"] for item in scored.attrs.get("decomposition", []) if item.get("component") in corr.columns}
     n_eff = effective_num_factors(weights, corr)
-    meta_issues = ["Sector breakdown uses current industry labels, not macroeconomic regimes."]
+    meta_issues = ["Sector breakdown uses current industry labels. Macro attribution uses preceding-day observed VIX, a fixed threshold of 20, and a seven-day expiry; missing regimes are explicit."]
     if scored.attrs.get("weighting_diagnostics"):
         meta_issues.append(str(scored.attrs["weighting_diagnostics"]))
     return response(
@@ -59,7 +62,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         ],
         charts={
             "factor_correlation_heatmap": matrix_records(corr),
-            "composite_vs_factor_backtest": backtest.get("equity_curve", []),
+            "composite_vs_spy_backtest": backtest.get("equity_curve", []),
             "sector_composite_breakdown": records(regime_breakdown),
         },
         tables={
@@ -67,6 +70,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
             "score_transparency_decomposition": scored.attrs.get("decomposition", []),
             "per_stock_score_decomposition": score_decomposition_for_ticker(scored, focus),
             "factor_correlation_redundancy_alerts": redundancy,
+            "macro_regime_attribution": records(macro_regime_attribution(backtest["daily_returns"])),
             "historical_weight_training": [scored.attrs["weighting_diagnostics"]] if scored.attrs.get("weighting_diagnostics") else [],
             "effective_number_of_factors": [{"n_eff": n_eff, "component_count": len(weights)}],
         },

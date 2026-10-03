@@ -34,13 +34,13 @@ def _lookback_key(lookback_days: int | None, floor: int = 1) -> int:
     return max(floor, value)
 
 
-def _path_version(path: Path | None) -> float:
+def _path_version(path: Path | None) -> int:
     if path is None:
-        return 0.0
+        return 0
     try:
-        return float(path.stat().st_mtime)
+        return path.stat().st_mtime_ns
     except OSError:
-        return 0.0
+        return 0
 
 
 def _market_source_path() -> Path | None:
@@ -51,18 +51,18 @@ def _market_source_path() -> Path | None:
     return None
 
 
-def _market_version() -> float:
+def _market_version() -> int:
     return _path_version(_market_source_path())
 
 
-def _fundamentals_version() -> float:
+def _fundamentals_version() -> int:
     from . import data_loader
 
     return _path_version(data_loader.MASTER_FUNDAMENTALS)
 
 
 @lru_cache(maxsize=1)
-def _market_ohlcv_by_ticker(version: float) -> dict[str, pd.DataFrame]:
+def _market_ohlcv_by_ticker(version: int) -> dict[str, pd.DataFrame]:
     """Pre-index the current market parquet by ticker for fast subset assembly."""
     from . import data_loader
 
@@ -72,7 +72,7 @@ def _market_ohlcv_by_ticker(version: float) -> dict[str, pd.DataFrame]:
     return {str(ticker): group.copy() for ticker, group in df.groupby("Ticker", sort=False)}
 
 
-def _ohlcv_subset(symbols: tuple[str, ...], lookback_days: int | None = None, version: float | None = None) -> pd.DataFrame:
+def _ohlcv_subset(symbols: tuple[str, ...], lookback_days: int | None = None, version: int | None = None) -> pd.DataFrame:
     if not symbols:
         return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
     grouped = _market_ohlcv_by_ticker(version if version is not None else _market_version())
@@ -87,7 +87,7 @@ def _ohlcv_subset(symbols: tuple[str, ...], lookback_days: int | None = None, ve
 
 
 @lru_cache(maxsize=384)
-def _cached_close_matrix_versioned(symbols: tuple[str, ...], lookback_days: int = 756, version: float = 0.0) -> pd.DataFrame:
+def _cached_close_matrix_versioned(symbols: tuple[str, ...], lookback_days: int = 756, version: int = 0) -> pd.DataFrame:
     lookback = _lookback_key(lookback_days)
     raw = _ohlcv_subset(symbols, lookback_days=max(lookback + 260, lookback), version=version)
     if raw.empty:
@@ -100,7 +100,7 @@ def cached_close_matrix(symbols: tuple[str, ...], lookback_days: int = 756) -> p
 
 
 @lru_cache(maxsize=256)
-def _cached_volume_matrix_versioned(symbols: tuple[str, ...], lookback_days: int = 756, version: float = 0.0) -> pd.DataFrame:
+def _cached_volume_matrix_versioned(symbols: tuple[str, ...], lookback_days: int = 756, version: int = 0) -> pd.DataFrame:
     lookback = _lookback_key(lookback_days)
     raw = _ohlcv_subset(symbols, lookback_days=max(lookback + 260, lookback), version=version)
     if raw.empty:
@@ -113,7 +113,7 @@ def cached_volume_matrix(symbols: tuple[str, ...], lookback_days: int = 756) -> 
 
 
 @lru_cache(maxsize=256)
-def _cached_returns_matrix_versioned(symbols: tuple[str, ...], lookback_days: int = 756, min_coverage_bps: int = 5500, version: float = 0.0) -> pd.DataFrame:
+def _cached_returns_matrix_versioned(symbols: tuple[str, ...], lookback_days: int = 756, min_coverage_bps: int = 5500, version: int = 0) -> pd.DataFrame:
     lookback = _lookback_key(lookback_days)
     min_coverage = max(0.0, min(1.0, float(min_coverage_bps) / 10000.0))
     prices = _cached_close_matrix_versioned(symbols, lookback, version)
@@ -130,14 +130,14 @@ def cached_returns_matrix(symbols: tuple[str, ...], lookback_days: int = 756, mi
 
 
 @lru_cache(maxsize=1)
-def _fundamentals_frame(version: float) -> pd.DataFrame:
+def _fundamentals_frame(version: int) -> pd.DataFrame:
     from . import data_loader
 
     return data_loader.load_fundamentals()
 
 
 @lru_cache(maxsize=None)
-def _cached_fundamental_history_versioned(symbol: str, version: float = 0.0) -> pd.DataFrame:
+def _cached_fundamental_history_versioned(symbol: str, version: int = 0) -> pd.DataFrame:
     normalized = str(symbol).strip().upper().replace(".", "_").replace("-", "_")
     df = _fundamentals_frame(version)
     if df.empty:

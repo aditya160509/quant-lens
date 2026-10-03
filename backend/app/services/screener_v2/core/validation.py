@@ -4,7 +4,7 @@ import math
 from typing import Any, Callable
 import numpy as np
 import pandas as pd
-from .data_loader import as_of_context, close_matrix, load_factor_returns
+from .data_loader import as_of_context, close_matrix, load_factor_returns, ohlcv_for_symbols
 from .common import clean_json, records
 from .stats import TRADING_DAYS
 
@@ -40,7 +40,11 @@ def score_backtest(
         raise ValueError("Historical backtests require a point-in-time score provider; current scores cannot be backfilled")
     if sector_neutral:
         raise ValueError("Sector-neutral execution is unavailable without historical sector membership")
-    prices = close_matrix(symbols, lookback_days=lookback_days + 252)
+    source_prices = close_matrix(list(dict.fromkeys(symbols + ["SPY"])), lookback_days=(lookback_days + 252) * 2)
+    if "SPY" not in source_prices or source_prices["SPY"].notna().sum() < 254:
+        raise ValueError("Backtest trading calendar requires at least 254 observed SPY sessions")
+    calendar = pd.DatetimeIndex(ohlcv_for_symbols(["SPY"]).Date.drop_duplicates().sort_values().tail(lookback_days + 252))
+    prices = source_prices.reindex(index=calendar, columns=symbols)
     result = simulate(prices, score_at, top_n=top_n, rebalance_days=rebalance_days,
                       cost_bps=cost_bps, offset=rebalance_offset_days, long_short=long_short,
                       score_weighted=score_weighted, weekday=weekday)
@@ -67,6 +71,7 @@ def score_backtest(
     rf_annual = float(rf_daily.mean() * TRADING_DAYS) if rf_daily.notna().all() else np.nan
     sharpe = float(((strategy.mean() * TRADING_DAYS) - rf_annual) / (ann_vol or np.nan))
     stats = {
+        "trading_calendar": "observed SPY sessions; US-market schedule, not crypto weekends or other exchange calendars",
         "benchmark": "SPY",
         "benchmark_status": "observed" if benchmark_complete else "unavailable: missing observed SPY returns",
         "selected_count": len(selected),
@@ -86,9 +91,9 @@ def score_backtest(
         "calmar": float((annualized_return or np.nan) / abs(drawdown.min() or np.nan)) if len(equity) else None,
         "max_drawdown": float(drawdown.min()),
         "average_drawdown": float(avg_drawdown) if pd.notna(avg_drawdown) else None,
-        "hit_rate": float((position_returns > 0).mean()) if len(position_returns) else None,
-        "average_gain": float(position_returns[position_returns > 0].mean()) if len(position_returns[position_returns > 0]) else None,
-        "average_loss": float(position_returns[position_returns < 0].mean()) if len(position_returns[position_returns < 0]) else None,
+        "rebalance_period_hit_rate": float((position_returns > 0).mean()) if len(position_returns) else None,
+        "rebalance_period_average_gain": float(position_returns[position_returns > 0].mean()) if len(position_returns[position_returns > 0]) else None,
+        "rebalance_period_average_loss": float(position_returns[position_returns < 0].mean()) if len(position_returns[position_returns < 0]) else None,
         "best_calendar_year": int(years.idxmax()) if len(years) else None,
         "best_calendar_year_return": float(years.max()) if len(years) else None,
         "worst_calendar_year": int(years.idxmin()) if len(years) else None,
@@ -107,7 +112,7 @@ def score_backtest(
         rolling[f"rolling_{window}d_return"] = ((1 + strategy).rolling(window).apply(np.prod, raw=True) - 1).to_numpy()
         rolling[f"rolling_{window}d_vol"] = (strategy.rolling(window).std() * math.sqrt(TRADING_DAYS)).to_numpy()
         rolling[f"rolling_{window}d_sharpe"] = ((strategy - rf_daily).rolling(window).mean() / strategy.rolling(window).std() * math.sqrt(TRADING_DAYS)).to_numpy()
-    return {"equity_curve": records(curve), "stats": clean_json(stats), "rolling": records(rolling.tail(250)), "selected": selected, "short_selected": short_selected, "turnover": records(frame.reset_index()[["date", "turnover", "cost_fraction", "rebalance"]]), "trades": records(result["trades"]), "positions": records(result["positions"]), "attribution": records(result["attribution"]), "daily_returns": strategy}
+    return {"equity_curve": records(curve), "stats": clean_json(stats), "rolling": records(rolling), "selected": selected, "short_selected": short_selected, "turnover": records(frame.reset_index()[["date", "turnover", "cost_fraction", "rebalance"]]), "trades": records(result["trades"]), "positions": records(result["positions"]), "attribution": records(result["attribution"]), "daily_returns": strategy}
 
 
 def score_backtest_by_weekday(symbols, scores, lookback_days=756, top_n=50, cost_bps=10.0, **kwargs):
@@ -117,6 +122,11 @@ def score_backtest_by_weekday(symbols, scores, lookback_days=756, top_n=50, cost
 
 
 def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cache=None):
+    for key in ["sector", "sectors", "industry", "industries", "industry_group", "industry_groups", "exchange", "exchanges"]:
+        if payload.get(key) and str(payload[key]).lower() not in {"all", "any"}:
+            raise ValueError(f"Historical {key} filters require dated classification membership unavailable locally")
+    if payload.get("sector_neutral") or isinstance(payload.get("components"), dict) and payload["components"].get("sector_neutral"):
+        raise ValueError("Historical sector neutralization requires dated sector membership unavailable locally")
     from .panel import metric_panel
     from .screener import apply_filters
     from .formula import evaluate_formula
@@ -158,6 +168,8 @@ def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cach
                 if selected_field not in panel:
                     raise ValueError(f"Unknown score field: {selected_field}")
                 cache[key] = panel.set_index("ticker")[selected_field]
+                if kind == "academic" and field == "graham_net_net":
+                    cache[key] = cache[key].where(cache[key] > 0)
         return cache[key]
     score_at.unavailable_dates = unavailable_dates
     score_at.panel_at = panel_at

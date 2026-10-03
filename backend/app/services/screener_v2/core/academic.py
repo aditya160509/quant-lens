@@ -192,11 +192,12 @@ def full_strategy_performance_table(
     max_strategies: int = 24,
     payload: dict | None = None,
     shared_cache=None,
+    symbols=None,
 ) -> list[dict[str, Any]]:
     if strategy_df.empty or "ticker" not in strategy_df:
         return []
     numeric_cols, _eligible = _select_strategies_for_backtest(strategy_df, max_strategies)
-    symbols = list(strategy_df["ticker"].dropna().astype(str))
+    symbols = symbols if symbols is not None else list(strategy_df["ticker"].dropna().astype(str))
     strategy_by_ticker = strategy_df.set_index("ticker", drop=False)
     rows = []
     shared_cache = shared_cache if shared_cache is not None else {}

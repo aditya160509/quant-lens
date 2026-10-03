@@ -139,6 +139,10 @@ def simulate(prices: pd.DataFrame, score_at: Callable, top_n: int = 50,
             'selected': weights.index[weights > 0].tolist(), 'short_selected': weights.index[weights < 0].tolist()}
 
 
+class PBOUnavailable(ValueError):
+    """Valid experiment has insufficient variable returns to estimate PBO."""
+
+
 def cscv_pbo(returns: pd.DataFrame, partitions: int = 8) -> dict:
     """Bailey et al. CSCV, all half-partition training/test combinations.
 
@@ -155,7 +159,7 @@ def cscv_pbo(returns: pd.DataFrame, partitions: int = 8) -> dict:
     def sharpe(x):
         mean, std = x.mean(axis=0), x.std(axis=0, ddof=1)
         if (std <= 0).any():
-            raise ValueError('CSCV candidate has zero return variance in a split')
+            raise PBOUnavailable('CSCV candidate has zero return variance in a split')
         return mean / std
     for selected in combinations(range(partitions), partitions // 2):
         train = np.concatenate([blocks[j] for j in selected])

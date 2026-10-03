@@ -53,7 +53,7 @@ def local_data(tmp_path, monkeypatch):
                             'Total Assets': 1000. + growth * 100, 'Stockholders Equity': 600., 'Total Equity': 600., 'Total Revenue': 500. + growth * 100,
                             'Net Income': 50. + growth * 20, 'Gross Profit': 200. + growth * 50, 'EBIT': 100., 'EBITDA': 120., 'Operating Cash Flow': 140.,
                             'Free Cash Flow': 100., 'Cash And Cash Equivalents': 100., 'Current Assets': 400., 'Current Liabilities': 200., 'Total Debt': 200.,
-                            'Long Term Debt': 180. - growth * 10, 'Current Portion Of Long Term Debt': 20., 'Ordinary Shares Number': 10., 'Net PPE': 500.,
+                            'Preferred Stock Equity': 0., 'Minority Interest': 0., 'Long Term Debt': 180. - growth * 10, 'Current Portion Of Long Term Debt': 20., 'Ordinary Shares Number': 10., 'Net PPE': 500.,
                             'Retained Earnings': 300., 'Total Liabilities Net Minority Interest': 600., 'Tax Provision': 25., 'Pretax Income': 100.,
                             'Interest Expense': 10., 'Inventory': 50., 'Cash Dividends Paid': -20., 'Repurchase Of Capital Stock': -10., 'Issuance Of Capital Stock': 0.})
     source = {'market': pd.concat(frames, ignore_index=True), 'fund': pd.DataFrame(reports)}
@@ -99,3 +99,165 @@ def test_future_price_and_statement_changes_do_not_change_historical_screen(loca
     clear_performance_caches()
     after = run_feature('01', payload)
     assert before['tables']['ranked_screener_table'] == after['tables']['ranked_screener_table']
+
+
+def test_export_is_lossless_quoted_and_honors_columns():
+    import csv, io
+    from app.services.screener_v2.core.exports import build_export_payload
+    rows = [{'ticker': f'T{i}', 'company': 'Quoted\tcompany\nname', 'score': None} for i in range(1001)]
+    result = build_export_payload('08', {'export_format': 'json', 'columns': ['ticker', 'company', 'score']}, rows)
+    assert len(result['json_payload']['rows']) == 1001
+    assert result['json_payload']['rows'][0]['score'] is None
+    parsed = list(csv.DictReader(io.StringIO(result['tsv']), delimiter='\t'))
+    assert parsed[0]['company'] == rows[0]['company']
+    assert result['ticker_list'].splitlines()[-1] == 'T1000'
+    with pytest.raises(ValueError, match='Unknown export columns'):
+        build_export_payload('08', {'columns': ['fake']}, rows)
+
+
+def test_historical_training_labels_never_pass_the_training_date(local_data):
+    import pandas as pd
+    from app.services.screener_v2.core.composite import historical_weights
+    from app.services.screener_v2.core.panel import metric_panel
+    from app.services.screener_v2.core.data_loader import as_of_context
+    cutoff = local_data['market'].Date.max()
+    with as_of_context(cutoff):
+        current = metric_panel({'as_of_date': str(cutoff.date())}, ['AAA', 'BBB', 'CCC'])
+        rows = [{'field': 'momentum_jt'}, {'field': 'realized_vol_63d'}]
+        weights, details = historical_weights(current, rows, {'weighting_mode': 'ridge', 'ic_target_field': 'return_1m'})
+    assert pd.Timestamp(details['last_label_end']) <= cutoff
+    assert weights.abs().sum() == pytest.approx(1)
+    assert details['formation_count'] >= 6
+
+
+def test_schedules_claim_once_and_publish_dispatch_state(store):
+    from app.services.screener_v2.core.scheduler import ScreenScheduler
+    store.save_screen('daily', 'Daily', '01', {'tickers': 'A'})
+    store.set_schedule('daily', 60, now=1000)
+    calls = []
+    scheduler = ScreenScheduler(lambda feature, payload, key: calls.append((feature, payload, key)) or {'job_id': 'real-job-id'})
+    scheduler.tick(now=1060)
+    scheduler.tick(now=1060)
+    assert len(calls) == 1
+    assert store.list_schedules()[0]['last_job_id'] == 'real-job-id'
+    assert store.list_schedules()[0]['next_due'] == 1120
+
+
+def test_alert_precision_uses_persisted_matured_observations(store, monkeypatch):
+    import pandas as pd
+    from app.services.screener_v2.core import alerts
+    dates = pd.bdate_range('2025-01-01', periods=4)
+    prices = pd.DataFrame({'A': [100., 110., 121., 133.1]}, index=dates)
+    monkeypatch.setattr(alerts, 'close_matrix', lambda *_args: prices)
+    event = {'ticker': 'A', 'type': 'SCORE_THRESHOLD', 'direction': 1}
+    store.store_alerts('screen', str(dates[0].date()), [event])
+    store.store_alerts('screen', str(dates[-1].date()), [event])
+    result = alerts.realized_alert_precision('screen', (1,))[0]
+    assert result['matured_count'] == 1
+    assert result['pending_count'] == 1
+    assert result['realized_precision'] == 1.
+
+
+@pytest.mark.parametrize('feature_id', ['02', '03', '04'])
+def test_current_filters_do_not_shrink_historical_universe(local_data, monkeypatch, feature_id):
+    from importlib import import_module
+    from app.services.screener_v2.registry import run_feature
+    module = import_module(f'app.services.screener_v2.features.feature_{feature_id}')
+    original = module.score_backtest
+    universes = []
+    def observe(symbols, *args, **kwargs):
+        universes.append(symbols)
+        return original(symbols, *args, **kwargs)
+    monkeypatch.setattr(module, 'score_backtest', observe)
+    run_feature(feature_id, {'tickers': ['AAA', 'BBB', 'CCC'], 'price_min': 130, 'lookback_days': 60, 'top_n': 1, 'strategy_perf_limit': 1})
+    assert universes[0] == ['AAA', 'BBB', 'CCC']
+
+
+def test_future_as_of_dates_are_rejected(local_data):
+    from app.services.screener_v2.registry import run_feature
+    with pytest.raises(ValueError, match='latest observed'):
+        run_feature('01', {'tickers': ['AAA'], 'as_of_date': '2099-01-01'})
+
+
+def test_statement_valuation_and_roic_match_independent_numbers(local_data):
+    from app.services.screener_v2.core.data_loader import as_of_context
+    from app.services.screener_v2.core.fundamentals import latest_fundamental_features
+    cutoff = local_data['market'].Date.max()
+    price = local_data['market'].query("Ticker == 'AAA'").Close.iloc[-1]
+    with as_of_context(cutoff):
+        row = latest_fundamental_features(['AAA'], cutoff).iloc[0]
+    assert row.market_cap == pytest.approx(price * 10)
+    assert row.enterprise_value == pytest.approx(price * 10 + 200 - 100)
+    assert row.roic == pytest.approx(100 * (1 - .25) / (600 + 200 - 100))
+    assert row.trailing_pe == pytest.approx(price * 10 / 130)
+    assert row.revenue_growth_yoy == pytest.approx(900 / 800 - 1)
+
+
+def test_missing_claims_are_not_assumed_to_be_zero(local_data):
+    import pandas as pd
+    from app.services.screener_v2.core.data_loader import as_of_context
+    from app.services.screener_v2.core.fundamentals import latest_fundamental_features
+    local_data['fund']['Preferred Stock Equity'] = float('nan')
+    with as_of_context(local_data['market'].Date.max()):
+        row = latest_fundamental_features(['AAA']).iloc[0]
+    assert pd.isna(row.enterprise_value)
+    assert pd.isna(row.ev_ebitda)
+
+
+def test_owned_job_route_runs_feature_and_publishes_real_result(local_data, monkeypatch, tmp_path):
+    import time
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api import screener_v2
+    from app.services.studio.jobs import JobStore
+    monkeypatch.setattr(screener_v2, 'JOBS', JobStore(path=tmp_path / 'jobs.json'))
+    monkeypatch.setattr(screener_v2, 'RESULTS_DIR', tmp_path / 'results')
+    app = FastAPI()
+    app.include_router(screener_v2.router, prefix='/api')
+    client = TestClient(app)
+    submitted = client.post('/api/screener-v2/feature/01/jobs', json={'payload': {'tickers': ['AAA', 'BBB', 'CCC'], 'top_n': 2}})
+    assert submitted.status_code == 200
+    job_id = submitted.json()['job_id']
+    for _ in range(200):
+        status = client.get(f'/api/screener-v2/jobs/{job_id}')
+        assert status.status_code == 200
+        if status.json()['status'] in {'completed', 'failed'}:
+            break
+        time.sleep(.01)
+    assert status.json()['status'] == 'completed', status.json()
+    rows = status.json()['result']['tables']['ranked_screener_table']
+    assert len(rows) == 2
+    assert {row['ticker'] for row in rows} <= {'AAA', 'BBB', 'CCC'}
+
+
+def test_zero_variance_pbo_is_disclosed_without_fabricating_a_probability(local_data):
+    from app.services.screener_v2.registry import run_feature
+    local_data['market'][['Open', 'High', 'Low', 'Close']] = 100.
+    result = run_feature('05', {'tickers': ['AAA', 'BBB', 'CCC'], 'lookback_days': 60, 'top_n': 1, 'transaction_cost_bps': 0, 'run_full_pbo': True, 'pbo_partitions': 4, 'run_holding_sensitivity': False})
+    assert result['tables']['cscv_pbo'] == []
+    assert 'zero return variance' in result['meta']['pbo_status']
+
+
+def test_valuation_cards_contain_four_real_dimensions_and_honor_window(local_data):
+    from app.services.screener_v2.registry import run_feature
+    result = run_feature('07', {'tickers': ['AAA', 'BBB', 'CCC'], 'history_window': 252, 'card_limit': 3})
+    assert result['meta']['requested_history_sessions'] == 252
+    assert result['meta']['observed_history_rows'] <= 252
+    cards = result['charts']['universe_wide_four_dimension_cards']
+    assert len(cards) == 3
+    for card in cards:
+        assert {'absolute_valuation', 'sector_percentile', 'universe_percentile', 'own_history_percentile'} <= card.keys()
+        assert card['own_history_observations'] <= 252
+
+
+def test_nonstock_weekends_do_not_change_the_us_backtest_calendar(local_data):
+    import pandas as pd
+    from app.services.screener_v2.core.validation import score_backtest
+    from app.services.screener_v2.core.performance import clear_performance_caches
+    dates = pd.date_range(local_data['market'].Date.min(), local_data['market'].Date.max())
+    coin = pd.DataFrame({'Ticker': 'COIN_TEST', 'Date': dates, 'Open': 100., 'High': 101., 'Low': 99., 'Close': 100., 'Volume': 1000.})
+    local_data['market'] = pd.concat([local_data['market'], coin], ignore_index=True)
+    clear_performance_caches()
+    result = score_backtest(['AAA', 'COIN_TEST'], pd.Series({'AAA': 1.}), lookback_days=60, top_n=1, score_at=lambda date: pd.Series({'AAA': 1.}))
+    assert len(result['daily_returns']) == 60
+    assert all(date.weekday() < 5 for date in result['daily_returns'].index)

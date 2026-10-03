@@ -12,8 +12,8 @@ def sma_cross_event(short: pd.DataFrame, long: pd.DataFrame) -> pd.DataFrame:
     short_aligned, long_aligned = short.align(long, join="inner", axis=None)
     if short_aligned.empty or long_aligned.empty:
         return pd.DataFrame()
-    above = (short_aligned > long_aligned).astype(float)
-    return above.diff().fillna(0.0)
+    above = (short_aligned > long_aligned).astype(float).where(short_aligned.notna() & long_aligned.notna())
+    return above.diff()
 
 
 def latest_technical_features(symbols: list[str], lookback_days: int = 756, periods: dict[str, Any] | None = None) -> pd.DataFrame:
@@ -53,14 +53,13 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["high"] = highs.iloc[-1].reindex(out.index)
     out["low"] = lows.iloc[-1].reindex(out.index)
     out["close"] = latest
-    out["adj_close"] = latest
     out["price"] = latest
     out["volume_today"] = volumes.iloc[-1]
     out["volume"] = out["volume_today"]
-    out["volume_20d"] = volumes.tail(20).mean()
+    out["volume_20d"] = volumes.tail(20).mean().where(volumes.tail(20).count().eq(20))
     out["volume_spike_ratio"] = _safe_div(out["volume_today"], out["volume_20d"])
     out["vratio"] = out["volume_spike_ratio"]
-    out["dollar_volume_20d"] = (volumes * prices).tail(20).mean()
+    out["dollar_volume_20d"] = (volumes * prices).tail(20).mean().where((volumes * prices).tail(20).count().eq(20))
     for days, key in [(1, "return_1d"), (5, "return_1w"), (21, "return_1m"), (63, "return_3m"), (126, "return_6m"), (252, "return_12m")]:
         if len(prices) > days:
             out[key] = prices.iloc[-1] / prices.shift(days).iloc[-1] - 1.0
@@ -87,10 +86,11 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
         out[f"dist_ema_{window}"] = out["price"] / ema - 1.0
         above_today = prices.iloc[-1] > ma_series.iloc[-1]
         above_yesterday = prices.iloc[-2] > ma_series.iloc[-2] if len(prices) > 1 else above_today
-        out[f"crossed_above_sma_{window}_today"] = (above_today & ~above_yesterday).astype(float)
-        out[f"crossed_below_sma_{window}_today"] = (~above_today & above_yesterday).astype(float)
-    out["sma20_above_sma50"] = (out["sma_20"] > out["sma_50"]).astype(float)
-    out["sma50_above_sma200"] = (out["sma_50"] > out["sma_200"]).astype(float)
+        valid_cross = prices.iloc[-1].notna() & prices.iloc[-2].notna() & ma_series.iloc[-1].notna() & ma_series.iloc[-2].notna() if len(prices) > 1 else pd.Series(False, index=out.index)
+        out[f"crossed_above_sma_{window}_today"] = (above_today & ~above_yesterday).astype(float).where(valid_cross)
+        out[f"crossed_below_sma_{window}_today"] = (~above_today & above_yesterday).astype(float).where(valid_cross)
+    out["sma20_above_sma50"] = (out["sma_20"] > out["sma_50"]).astype(float).where(out["sma_20"].notna() & out["sma_50"].notna())
+    out["sma50_above_sma200"] = (out["sma_50"] > out["sma_200"]).astype(float).where(out["sma_50"].notna() & out["sma_200"].notna())
     short_cross = prices.rolling(20).mean() - prices.rolling(50).mean()
     long_cross = prices.rolling(50).mean() - prices.rolling(200).mean()
     out["sma20_50_cross_days"] = short_cross.tail(cross_lookback).apply(_last_sign_cross_age)
@@ -102,15 +102,15 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["death_cross_within_20d"] = (cross_50_200.tail(20) == -1).any().astype(float)
     out["golden_cross_age_days"] = cross_50_200.tail(cross_lookback).apply(lambda s: _last_event_age(s, 1.0))
     out["death_cross_age_days"] = cross_50_200.tail(cross_lookback).apply(lambda s: _last_event_age(s, -1.0))
-    ema12 = prices.ewm(span=macd_fast, adjust=False).mean()
-    ema26 = prices.ewm(span=macd_slow, adjust=False).mean()
+    ema12 = prices.ewm(span=macd_fast, adjust=False, min_periods=macd_fast).mean()
+    ema26 = prices.ewm(span=macd_slow, adjust=False, min_periods=macd_slow).mean()
     macd = ema12 - ema26
-    macd_signal = macd.ewm(span=macd_signal_period, adjust=False).mean()
+    macd_signal = macd.ewm(span=macd_signal_period, adjust=False, min_periods=macd_signal_period).mean()
     macd_hist = macd - macd_signal
     out["macd"] = macd.iloc[-1]
     out["macd_signal"] = macd_signal.iloc[-1]
     out["macd_histogram"] = macd_hist.iloc[-1]
-    out["macd_bullish"] = (out["macd"] > out["macd_signal"]).astype(float)
+    out["macd_bullish"] = (out["macd"] > out["macd_signal"]).astype(float).where(out["macd"].notna() & out["macd_signal"].notna())
     out["macd_cross_days"] = macd_hist.tail(20).apply(_last_sign_cross_age)
     bb_mid = prices.rolling(bb_period).mean()
     bb_std = prices.rolling(bb_period).std(ddof=0)
@@ -129,7 +129,9 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     down_move = -lows.diff()
     plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
     minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
-    atr_dm = atr.replace(0, np.nan)
+    plus_dm = plus_dm.where(up_move.notna() & down_move.notna())
+    minus_dm = minus_dm.where(up_move.notna() & down_move.notna())
+    atr_dm = tr.apply(lambda col: _wilder_smooth(col, adx_period)).replace(0, np.nan)
     plus_di = 100 * plus_dm.apply(lambda col: _wilder_smooth(col, adx_period)) / atr_dm
     minus_di = 100 * minus_dm.apply(lambda col: _wilder_smooth(col, adx_period)) / atr_dm
     dx = ((plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)) * 100
@@ -142,7 +144,7 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["stochastic_k"] = stoch_k.iloc[-1]
     out["stochastic_d"] = stoch_k.rolling(stochastic_d_period).mean().iloc[-1]
     out["williams_r"] = -100 * (high14.iloc[-1] - prices.iloc[-1]) / (high14.iloc[-1] - low14.iloc[-1]).replace(0, np.nan)
-    signed_volume = np.sign(prices.diff()).fillna(0) * volumes.fillna(0)
+    signed_volume = np.sign(prices.diff()) * volumes
     obv = signed_volume.cumsum()
     from scipy.stats import linregress
     out["obv_20d_slope"] = obv.tail(20).apply(lambda column: linregress(np.arange(len(column)), column).slope if column.notna().all() and len(column) == 20 else np.nan)
@@ -169,7 +171,9 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
         market = rets["SPY"].tail(252)
         var = market.var()
         out["beta_252"] = rets.tail(252).apply(lambda col: col.cov(market)).reindex(out.index) / var if var else np.nan
-        out["beta_252_unavailable_reason"] = None
+        complete_beta = rets.tail(252).notna().sum().eq(252) & market.notna().all()
+        out["beta_252"] = out["beta_252"].where(complete_beta.reindex(out.index))
+        out["beta_252_unavailable_reason"] = np.where(out["beta_252"].notna(), None, "missing returns in 252-session window")
     else:
         out["beta_252"] = np.nan
         out["beta_252_unavailable_reason"] = "insufficient_history" if not sufficient_history else "spy_series_missing"
@@ -181,7 +185,7 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["amihud_percentile"] = rank_pct(out["amihud_20d"], higher_better=False)
     ff = load_factor_returns()
     out["ivol_ff3_63d"] = _idiosyncratic_vol(rets.tail(63), ff)
-    yz_window = min(63, max(2, len(prices) - 1))
+    yz_window = 63
     log_overnight = np.log(opens / prices.shift(1)).replace([np.inf, -np.inf], np.nan)
     log_open_close = np.log(prices / opens).replace([np.inf, -np.inf], np.nan)
     rs_daily = (
@@ -194,8 +198,9 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
         + yz_k * log_open_close.tail(yz_window).var(ddof=1)
         + (1.0 - yz_k) * rs_daily.tail(yz_window).mean()
     ).clip(lower=0)
-    out["vol_forecast_21d"] = np.sqrt(yz_daily_variance * 21.0)
-    out["vol_forecast_method"] = "yang_zhang_63d_scaled_21d"
+    yz_complete = pd.concat([log_overnight.tail(63).count(), log_open_close.tail(63).count(), rs_daily.tail(63).count()], axis=1).min(axis=1).eq(63)
+    out["yang_zhang_vol_21d_estimate"] = np.sqrt(yz_daily_variance * 21.0).where(yz_complete)
+    out["vol_estimate_method"] = "yang_zhang_63d_scaled_21d"
     out["technical_percentile"] = (
         rank_pct(out["momentum_jt"]) * 0.35
         + rank_pct(out["return_6m"]) * 0.2

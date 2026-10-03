@@ -24,13 +24,10 @@ def component_scores(panel: pd.DataFrame, components: list[dict[str, Any]] | dic
         {"name": "Liquidity", "field": "liquidity_percentile", "weight": 0.10},
     ]
     presets = {
-        "aqr_quality_value": [{"name": "Value", "field": "valuation_percentile", "weight": 0.50}, {"name": "Quality", "field": "quality_percentile", "weight": 0.50}],
+        "equal_value_quality": [{"name": "Value", "field": "valuation_percentile", "weight": 0.50}, {"name": "Quality", "field": "quality_percentile", "weight": 0.50}],
         "momentum_quality": [{"name": "Momentum", "field": "momentum_percentile", "weight": 0.55}, {"name": "Quality", "field": "quality_percentile", "weight": 0.45}],
         "low_vol_quality": [{"name": "Low Vol", "field": "low_vol_percentile", "weight": 0.55}, {"name": "Quality", "field": "quality_percentile", "weight": 0.45}],
         "vmq": [{"name": "Value", "field": "valuation_percentile", "weight": 0.34}, {"name": "Momentum", "field": "momentum_percentile", "weight": 0.33}, {"name": "Quality", "field": "quality_percentile", "weight": 0.33}],
-        "ff5_screen": [{"name": "Value", "field": "valuation_percentile", "weight": 0.30}, {"name": "Profitability", "field": "quality_percentile", "weight": 0.30}, {"name": "Investment", "field": "debt_assets", "weight": -0.20}, {"name": "Size", "field": "size_percentile", "weight": -0.20}],
-        "conservative_formula": [{"name": "Low Vol", "field": "low_vol_percentile", "weight": 0.35}, {"name": "Momentum", "field": "momentum_percentile", "weight": 0.35}, {"name": "Payout", "field": "net_payout_yield", "weight": 0.30}],
-        "trending_value": [{"name": "Value", "field": "valuation_percentile", "weight": 0.50}, {"name": "Momentum", "field": "momentum_percentile", "weight": 0.50}],
     }
     if preset == "ff5_screen":
         raise ValueError("FF5 screen is unavailable: debt/assets is not the investment factor")
@@ -51,7 +48,12 @@ def component_scores(panel: pd.DataFrame, components: list[dict[str, Any]] | dic
             item["weight"] = 1.0
     out = pd.DataFrame(index=panel.index)
     out["ticker"] = panel["ticker"]
-    total_weight = sum(abs(float(r.get("weight", 0))) for r in rows) or 1.0
+    total_weight = sum(abs(float(r.get("weight", 0))) for r in rows)
+    if not np.isfinite(total_weight) or total_weight <= 0:
+        raise ValueError("Composite weights must have a positive finite absolute sum")
+    names = [str(row.get("name") or row.get("field")) for row in rows]
+    if len(set(names)) != len(names):
+        raise ValueError("Composite component names must be unique")
     out["composite_score"] = 0.0
     decomposition = []
     for item in rows:
@@ -69,6 +71,7 @@ def component_scores(panel: pd.DataFrame, components: list[dict[str, Any]] | dic
         out["composite_score"] += values * weight
         decomposition.append({"component": name, "field": field, "weight": weight, "mean_score": float(values.mean())})
     out["rank"] = out["composite_score"].rank(ascending=False, method="first").astype("Int64")
+    out["composite_raw_score"] = out["composite_score"]
     output_scale = str(config.get("output_scale") or "percentile").lower() if isinstance(config, dict) else "percentile"
     if output_scale in {"zscore", "z", "-3_3"}:
         out["composite_score"] = zscore(out["composite_score"]).clip(-3, 3)
@@ -90,7 +93,7 @@ def score_decomposition_for_ticker(scored: pd.DataFrame, ticker: str | None = No
     symbol = str(ticker or scored.iloc[0].get("ticker") or "").upper()
     row = scored[scored["ticker"].astype(str).str.upper().eq(symbol)]
     if row.empty:
-        row = scored.head(1)
+        raise ValueError(f"Focus ticker {symbol} is outside the scored universe")
     r = row.iloc[0]
     rows = []
     for item in scored.attrs.get("decomposition", []):

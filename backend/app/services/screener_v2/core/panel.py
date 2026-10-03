@@ -1,7 +1,7 @@
 """Screener V2 panel computations."""
 from __future__ import annotations
 import pandas as pd
-from .data_loader import AS_OF, load_factor_returns, parse_symbols
+from .data_loader import AS_OF, load_factor_returns, ohlcv_for_symbols, parse_symbols
 from .gics import add_industry_group
 from .stats import rank_pct
 from .estimators import latest_technical_features
@@ -31,8 +31,11 @@ def metric_panel(payload: dict | None, symbols: list[str] | None = None) -> pd.D
     ff = load_factor_returns()
     if payload.get("as_of_date") or AS_OF.get() is not None:
         ff = ff[ff.date <= pd.Timestamp(payload.get("as_of_date") or AS_OF.get())]
-    if not ff.empty:
+    observed = ohlcv_for_symbols(list(dict.fromkeys(symbols + ["SPY"])), 1)
+    latest_price_date = observed.Date.max() if not observed.empty else None
+    if not ff.empty and ff.date.iloc[-1] == latest_price_date:
         latest_factors = ff.tail(1).iloc[0].to_dict()
+        panel["factor_observation_date"] = latest_factors["date"]
         for key in ["mkt_rf", "smb", "hml", "rmw", "cma", "mom", "rf"]:
             if key in latest_factors:
                 panel[key] = latest_factors[key]

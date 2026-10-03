@@ -31,6 +31,17 @@ def statement_snapshots(symbols):
     return base.reset_index()
 
 
+def enterprise_claims(frame):
+    """Observed debt, preferred and noncontrolling claims; absent is unknown."""
+    debt = pd.to_numeric(_pick(frame, ["Total Debt"]), errors="coerce")
+    preferred = pd.to_numeric(_pick(frame, ["Preferred Stock Equity", "Preferred Stock"]), errors="coerce")
+    minority = pd.to_numeric(_pick(frame, ["Minority Interest"]), errors="coerce")
+    gross = pd.to_numeric(_pick(frame, ["Total Equity Gross Minority Interest"]), errors="coerce")
+    equity = pd.to_numeric(_pick(frame, ["Stockholders Equity"]), errors="coerce")
+    minority = minority.fillna(gross - equity)
+    return debt + preferred + minority
+
+
 def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = None) -> pd.DataFrame:
     cutoff = pd.Timestamp(as_of_date) if as_of_date else AS_OF.get()
     if cutoff is None:
@@ -98,7 +109,8 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
     last_prices = prices_at_date.iloc[-1].reindex(out.index) if not prices_at_date.empty else pd.Series(np.nan, index=out.index)
     out["shares_outstanding"] = shares
     out["market_cap"] = last_prices * shares
-    out["enterprise_value"] = out["market_cap"] + total_debt - cash
+    out["enterprise_value"] = out["market_cap"] + enterprise_claims(df) - cash
+    out["enterprise_value_basis"] = "observed market cap + debt + preferred equity + noncontrolling interests - cash; missing claims remain unknown"
     out["trailing_pe"] = _safe_div(out["market_cap"], net_income.where(net_income > 0))
     out["pb_ratio"] = _safe_div(out["market_cap"], equity_book.where(equity_book > 0))
     out["ps_ratio"] = _safe_div(out["market_cap"], revenue.where(revenue > 0))
@@ -159,14 +171,15 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
     growth = _fundamental_growth_metrics(symbols, as_of_date)
     if not growth.empty:
         out = out.join(growth.reindex(out.index), how="left")
+    out["valuation_score_definition"] = "35% net-income yield + 25% free-cash-flow yield + 20% inverse P/B + 20% inverse P/S cross-sectional percentiles; all inputs required"
     out["valuation_percentile"] = (
-        rank_pct(out["earnings_yield"]) * 0.35
+        rank_pct(out["net_income_yield"]) * 0.35
         + rank_pct(out["fcf_yield"]) * 0.25
         + rank_pct(out["pb_ratio"], higher_better=False) * 0.2
-        + rank_pct(out["ev_ebitda"], higher_better=False) * 0.2
+        + rank_pct(out["ps_ratio"], higher_better=False) * 0.2
     )
     out["quality_percentile"] = (
-        rank_pct(out["roe"].fillna(out["roa_calc"])) * 0.3
+        rank_pct(out["roe"]) * 0.3
         + rank_pct(out["gpa"]) * 0.25
         + rank_pct(out["debt_assets"], higher_better=False) * 0.2
         + rank_pct(out["ocf_net_income"]) * 0.15
@@ -190,16 +203,16 @@ def _fundamental_growth_metrics(symbols: list[str], as_of_date: Any | None = Non
             continue
         revenue = pd.to_numeric(_pick(hist, ["Total Revenue", "totalRevenue", "revenue"]), errors="coerce")
         eps = pd.to_numeric(_pick(hist, ["Diluted EPS", "Basic EPS"]), errors="coerce")
-        ebit = pd.to_numeric(_pick(hist, ["EBIT", "Operating Income", "operatingIncome"]), errors="coerce")
-        assets = pd.to_numeric(_pick(hist, ["Total Assets", "totalAssets"]), errors="coerce")
         row = {"ticker": symbol}
-        if revenue.dropna().shape[0] >= 2:
-            row["revenue_growth_yoy"] = revenue.dropna().iloc[-1] / revenue.dropna().iloc[-2] - 1
-        if eps.dropna().shape[0] >= 2:
-            row["eps_growth_yoy"] = (eps.dropna().iloc[-1] - eps.dropna().iloc[-2]) / abs(eps.dropna().iloc[-2] or np.nan)
-        if revenue.dropna().shape[0] >= 4:
-            start, end = revenue.dropna().iloc[-4], revenue.dropna().iloc[-1]
-            row["revenue_growth_3y_cagr"] = (end / start) ** (1 / 3) - 1 if start and start > 0 and end > 0 else np.nan
+        gaps = pd.to_datetime(hist.reportDate).diff().dt.days
+        if len(hist) >= 2 and 320 <= gaps.iloc[-1] <= 410:
+            if revenue.iloc[-2] > 0 and pd.notna(revenue.iloc[-1]):
+                row["revenue_growth_yoy"] = revenue.iloc[-1] / revenue.iloc[-2] - 1
+            if pd.notna(eps.iloc[-1]) and pd.notna(eps.iloc[-2]) and eps.iloc[-2] != 0:
+                row["eps_growth_yoy"] = (eps.iloc[-1] - eps.iloc[-2]) / abs(eps.iloc[-2])
+        if len(hist) >= 4 and gaps.tail(3).between(320, 410).all():
+            start, end = revenue.iloc[-4], revenue.iloc[-1]
+            row["revenue_growth_3y_cagr"] = (end / start) ** (1 / 3) - 1 if start > 0 and end > 0 else np.nan
         rows.append(row)
     if not rows:
         return pd.DataFrame()

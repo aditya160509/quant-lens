@@ -43,5 +43,5 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
             "peer_comparison_table": rel.get("peer_table", []),
             "universe_percentile_table": rel.get("universe_table", []),
         },
-        meta=access_meta(payload, []),
+        meta={**access_meta(payload, []), "requested_history_sessions": int(payload.get("history_window", payload.get("lookback_days", 756))), "observed_history_rows": len(rel.get("history", [])), "history_coverage_policy": "Only observed prices with available statement inputs; shorter coverage is returned explicitly, never padded."},
     )

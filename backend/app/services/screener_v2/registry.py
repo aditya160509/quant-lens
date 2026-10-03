@@ -14,7 +14,7 @@ class ScreenerFeature:
     name: str
     module: str
     inputs: list[dict[str, Any]]
-    outputs: list[str]
+    outputs: list[dict[str, Any]]
 
 
 def _load(module: str):
@@ -60,7 +60,16 @@ def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) ->
     from .core.data_loader import as_of_context, load_market_ohlcv
     from .features.inputs import normalize_payload
     payload = normalize_payload(feature.inputs, payload or {})
-    cutoff = payload.get("as_of_date") or str(load_market_ohlcv().Date.max().date())
+    import pandas as pd
+    latest = load_market_ohlcv().Date.max()
+    if pd.isna(latest):
+        raise ValueError("Market dataset has no observed dates")
+    cutoff = payload.get("as_of_date") or str(latest.date())
+    date = pd.Timestamp(cutoff)
+    if pd.isna(date) or date.tzinfo is not None or date != date.normalize():
+        raise ValueError("as_of_date must be an unzoned calendar date")
+    if date > latest.normalize():
+        raise ValueError("as_of_date exceeds the latest observed market date")
     payload = {**payload, "as_of_date": cutoff}
     with as_of_context(cutoff):
         result = runner(payload or {})

@@ -5,7 +5,6 @@ import pandas as pd
 import pytest
 
 from app.services.screener_v2.core import estimators, formula, stats, screener, validation
-from app.services.screener_v2.features.feature_05 import _holding_period_stats
 
 
 def test_gap_uses_open_against_prior_close(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -32,12 +31,15 @@ def test_formula_if_alias_and_division_guard() -> None:
         formula.evaluate_formula(panel, "1/0")
 
 
-def test_holding_period_stats_uses_forward_horizon() -> None:
-    prices = pd.DataFrame({"A": np.arange(1.0, 43.0)}, index=pd.date_range("2025-01-01", periods=42, freq="B"))
-    result = _holding_period_stats(prices, 21)
-    assert result["holding_days"] == 21
-    assert result["observations"] == 1
-    assert result["mean_forward_return"] == pytest.approx(21.0)
+def test_holding_frequency_changes_actual_trade_dates():
+    from app.services.screener_v2.core.backtest import simulate
+    dates = pd.bdate_range("2025-01-01", periods=12)
+    prices = pd.DataFrame({"A": np.arange(100., 112.), "B": np.arange(100., 88., -1)}, index=dates)
+    scores = lambda date: pd.Series({"A": 2 if date < dates[4] else 0, "B": 1})
+    short = simulate(prices, scores, min_history=2, top_n=1, rebalance_days=3)
+    long = simulate(prices, scores, min_history=2, top_n=1, rebalance_days=6)
+    assert short['curve'].rebalance.sum() > long['curve'].rebalance.sum()
+    assert short['trades'].execution_date.tolist() != long['trades'].execution_date.tolist()
 
 
 def test_turnover_cost_and_walk_forward_reselection():
@@ -70,12 +72,6 @@ def test_cscv_partitions_and_rank():
     assert result['split_count'] == 6
     assert result['pbo'] == 0
     assert all(row['winner'] == 'good' for row in result['splits'])
-
-
-def test_roic_formula() -> None:
-    ebit, tax, equity, debt, cash = 100.0, 0.25, 500.0, 200.0, 50.0
-    expected = ebit * (1 - tax) / (equity + debt - cash)
-    assert expected == pytest.approx(75.0 / 650.0)
 
 
 def test_execution_price_gaps_are_rejected():
@@ -152,3 +148,23 @@ def test_formula_unknown_input_is_not_zero_and_rank_is_unit_scaled():
     assert result.values.iloc[:2].tolist() == [0., 1.]
     assert pd.isna(result.values.iloc[2])
     assert pd.isna(formula.evaluate_formula(panel, 'if(roa > 0, 1, 0)').values.iloc[2])
+
+
+def test_historical_current_classification_filters_are_rejected():
+    with pytest.raises(ValueError, match='dated classification'):
+        validation.point_in_time_scorer(['AAA'], {'sector': 'Technology'})
+    with pytest.raises(ValueError, match='dated sector'):
+        validation.point_in_time_scorer(['AAA'], {'sector_neutral': True}, 'composite')
+
+
+def test_macro_attribution_uses_only_prior_observations_and_expires(monkeypatch):
+    import pandas as pd
+    from app.services.screener_v2.core import macro
+    frame = pd.DataFrame({'date': pd.to_datetime(['2025-01-01', '2025-01-02']), 'vixcls': [15., 40.]})
+    monkeypatch.setattr(macro, 'load_macro', lambda: frame)
+    returns = pd.Series([.1, -.2, .03], index=pd.to_datetime(['2025-01-02', '2025-01-03', '2025-01-20']))
+    result = macro.macro_regime_attribution(returns).set_index('regime')
+    assert result.loc['prior_VIX_below_20', 'sessions'] == 1
+    assert result.loc['prior_VIX_below_20', 'compounded_return'] == pytest.approx(.1)
+    assert result.loc['prior_VIX_at_least_20', 'compounded_return'] == pytest.approx(-.2)
+    assert result.loc['unavailable', 'sessions'] == 1

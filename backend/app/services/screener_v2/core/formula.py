@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 import numpy as np
 import pandas as pd
-from .data_loader import as_of_context, close_matrix, fundamental_history, ohlcv_for_symbols
+from .data_loader import AS_OF, as_of_context, close_matrix, fundamental_history, load_factor_returns, ohlcv_for_symbols
 from .common import number_like
 from .stats import _pick, _safe_div, rank_pct, zscore
 
@@ -195,11 +195,20 @@ class FormulaEngine:
             return None
         lookback = max(periods * 3, 60)
         key = self._sanitize(field_key)
-        if key in {"price", "close", "adj_close"}:
+        if key in {"price", "close"}:
             return close_matrix(tickers, lookback_days=lookback)
-        if key in {"open", "high", "low"}:
+        if key in {"open", "high", "low", "volume"}:
             raw = ohlcv_for_symbols(tickers)
             return raw.pivot_table(index="Date", columns="Ticker", values=key.title(), aggfunc="last").sort_index().tail(lookback)
+        if key in {"mkt_rf", "smb", "hml", "rmw", "cma", "mom", "rf"}:
+            factors = load_factor_returns()
+            if key not in factors:
+                return None
+            factors = factors.set_index("date").sort_index()
+            if AS_OF.get() is not None:
+                factors = factors.loc[factors.index <= AS_OF.get()]
+            series = factors[key].tail(lookback)
+            return pd.DataFrame({ticker: series for ticker in tickers})
         horizon = RETURN_HORIZON_FIELDS.get(key)
         if horizon:
             prices = close_matrix(tickers, lookback_days=lookback + horizon + 5)
@@ -211,17 +220,16 @@ class FormulaEngine:
         return None
 
     def _fundamental_field_series(self, field_key: str, ticker: str) -> pd.Series:
-        hist = fundamental_history(ticker)
+        from .fundamentals import statement_snapshots
+        hist = statement_snapshots([ticker])
         if hist.empty or "reportDate" not in hist.columns:
             return pd.Series(dtype=float)
-        if "periodType" in hist:
-            hist = hist[hist.periodType.eq("annual")]
         hist = hist.sort_values("reportDate").drop_duplicates("reportDate", keep="last")
         mapping: dict[str, Callable[[pd.DataFrame], pd.Series]] = {
             "roa": lambda h: _safe_div(_pick(h, ["Net Income", "netIncomeToCommon"]), _pick(h, ["Total Assets", "totalAssets"])),
-            "roe": lambda h: _safe_div(_pick(h, ["Net Income", "netIncomeToCommon"]), _pick(h, ["Total Equity", "totalStockholdersEquity"])),
+            "roe": lambda h: _safe_div(_pick(h, ["Net Income", "netIncomeToCommon"]), _pick(h, ["Stockholders Equity", "Total Equity", "totalStockholdersEquity"])),
             "current_ratio": lambda h: _safe_div(_pick(h, ["Current Assets", "totalCurrentAssets"]), _pick(h, ["Current Liabilities", "totalCurrentLiabilities"])),
-            "debt_equity": lambda h: _safe_div(_pick(h, ["Total Debt", "totalDebt"]), _pick(h, ["Total Equity", "totalStockholdersEquity"])),
+            "debt_equity": lambda h: _safe_div(_pick(h, ["Total Debt", "totalDebt"]), _pick(h, ["Stockholders Equity", "Total Equity", "totalStockholdersEquity"])),
             "gross_margin": lambda h: _safe_div(_pick(h, ["Gross Profit", "grossProfit"]), _pick(h, ["Total Revenue", "totalRevenue", "revenue"])),
             "operating_margin": lambda h: _safe_div(_pick(h, ["EBIT", "Operating Income", "operatingIncome"]), _pick(h, ["Total Revenue", "totalRevenue", "revenue"])),
             "mcap": lambda h: pd.to_numeric(_pick(h, ["marketCap", "market_cap", "Market Cap"]), errors="coerce"),
@@ -292,15 +300,15 @@ def formula_templates() -> list[dict[str, str]]:
         {"name": "Low Vol Momentum", "expression": "0.55*rank(momentum_jt)+0.45*rank(-realized_vol_63d)"},
         {"name": "Technical Breakout", "expression": "rank(dist_sma_200)+rank(macd_histogram)+rank(bollinger_pct_b)"},
         {"name": "Quality Balance Sheet", "expression": "rank(roe)+rank(gpa)+rank(interest_coverage)-rank(debt_ebitda)"},
-        {"name": "Piotroski Style", "expression": "if(roa>0,1,0)+if(ocf_net_income>1,1,0)+if(current_ratio>1,1,0)+if(gross_margin>0,1,0)"},
-        {"name": "Altman Style", "expression": "1.2*working_capital_assets+1.4*retained_earnings_assets+3.3*ebit_assets+0.6*market_value_liabilities+sales_assets"},
-        {"name": "Magic Formula", "expression": "rank(earnings_yield)+rank(roic)"},
+        {"name": "Four Profitability and Liquidity Conditions", "expression": "if(roa>0,1,0)+if(ocf_net_income>1,1,0)+if(current_ratio>1,1,0)+if(gross_margin>0,1,0)"},
+        {"name": "Altman Z Score", "expression": "1.2*working_capital_assets+1.4*retained_earnings_assets+3.3*ebit_assets+0.6*market_value_liabilities+sales_assets"},
+        {"name": "EBIT Yield and Accounting ROIC Blend", "expression": "rank(earnings_yield)+rank(roic)"},
         {"name": "Acquirers Multiple", "expression": "rank(-ev_ebit)"},
-        {"name": "Shareholder Yield", "expression": "rank(net_payout_yield)+rank(dividend_yield)"},
-        {"name": "Quality Minus Junk", "expression": "rank(gpa)+rank(roe)+rank(interest_coverage)-rank(debt_ebitda)-rank(realized_vol_63d)"},
+        {"name": "Net Payout Yield", "expression": "rank(net_payout_yield)"},
+        {"name": "Quality, Leverage and Volatility Blend", "expression": "rank(gpa)+rank(roe)+rank(interest_coverage)-rank(debt_ebitda)-rank(realized_vol_63d)"},
         {"name": "Trending Value", "expression": "rank(earnings_yield)+rank(fcf_yield)+rank(momentum_jt)"},
-        {"name": "Conservative Formula", "expression": "rank(-realized_vol_63d)+rank(momentum_jt)+rank(net_payout_yield)"},
-        {"name": "Graham Quality Value", "expression": "rank(-pb_ratio)+rank(current_ratio)+rank(interest_coverage)"},
+        {"name": "Low Volatility, Momentum and Payout Blend", "expression": "rank(-realized_vol_63d)+rank(momentum_jt)+rank(net_payout_yield)"},
+        {"name": "Book Value, Liquidity and Coverage Blend", "expression": "rank(-pb_ratio)+rank(current_ratio)+rank(interest_coverage)"},
     ]
 
 

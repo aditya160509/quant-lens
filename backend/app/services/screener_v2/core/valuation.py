@@ -13,7 +13,7 @@ def historical_valuation_series(symbol, metric="trailing_pe", lookback=756):
     supported = {"trailing_pe", "pb_ratio", "ps_ratio", "p_cf", "ev_ebit", "ev_ebitda", "fcf_yield"}
     if metric not in supported:
         raise ValueError(f"Historical valuation metric unavailable: {metric}")
-    from .fundamentals import statement_snapshots
+    from .fundamentals import statement_snapshots, enterprise_claims
     hist = statement_snapshots([symbol])
     prices = close_matrix([symbol], lookback)
     if hist.empty or prices.empty or symbol not in prices:
@@ -29,13 +29,14 @@ def historical_valuation_series(symbol, metric="trailing_pe", lookback=756):
         "cash": ["Cash And Cash Equivalents"], "ebit": ["EBIT"], "ebitda": ["EBITDA"],
     }.items():
         reports[key] = pd.to_numeric(_pick(hist, fields), errors="coerce")
+    reports["enterprise_claims"] = enterprise_claims(hist)
     reports = reports.dropna(subset=["available_date"]).sort_values("available_date").drop_duplicates("available_date", keep="last")
     daily = pd.DataFrame({"date": prices.index, "price": prices[symbol].values})
     reports["available_date"] = reports.available_date.astype("datetime64[ns]")
     daily["date"] = daily.date.astype("datetime64[ns]")
     daily = pd.merge_asof(daily, reports, left_on="date", right_on="available_date", direction="backward", tolerance=pd.Timedelta(days=550))
     market_cap = daily.price * daily.shares
-    enterprise = market_cap + daily.debt - daily.cash
+    enterprise = market_cap + daily.enterprise_claims - daily.cash
     if metric == "fcf_yield":
         value = daily.fcf / market_cap.where(market_cap > 0)
     else:
@@ -109,13 +110,16 @@ def relative_valuation(panel: pd.DataFrame, ticker: str | None = None, payload: 
     history_series_rows = historical_valuation_series(symbol, history_metric, history_window)
     history_percentile = own_history_percentile_from_series([item.get("valuation_metric") for item in history_series_rows])
     slope_info = re_rating_slope_from_series(history_series_rows)
+    universe_ranks = pd.DataFrame({metric: rank_pct(panel[metric], higher_better=metric == "fcf_yield") for metric in metrics if metric in panel}, index=panel.index)
+    sector_ranks = pd.DataFrame({metric: panel.groupby("sector")[metric].transform(lambda values: rank_pct(values, higher_better=metric == "fcf_yield")) for metric in metrics if metric in panel}, index=panel.index)
     card = {
         "ticker": r.get("ticker"),
         "sector": sector,
         "industry": industry,
         "peer_scope": peer_scope,
-        "absolute_percentile": r.get("valuation_percentile"),
-        "sector_percentile": np.nanmean([x.get("cheapness_percentile") for x in peer_rows if x.get("cheapness_percentile") is not None]),
+        "absolute_valuation": {metric: number_like(r.get(metric)) for metric in metrics},
+        "sector_percentile": number_like(sector_ranks.mean(axis=1).loc[r.name]),
+        "peer_percentile": number_like(pd.Series([x.get("cheapness_percentile") for x in peer_rows], dtype=float).mean()),
         "universe_percentile": np.nanmean([x.get("universe_percentile") for x in universe_rows if x.get("universe_percentile") is not None]),
         "own_history_percentile": history_percentile,
         "re_rating_slope": slope_info,
@@ -126,8 +130,20 @@ def relative_valuation(panel: pd.DataFrame, ticker: str | None = None, payload: 
         for metric in metrics:
             if metric in g.columns:
                 sector_heat.append({"row": str(sec), "col": metric, "value": number_like(rank_pct(panel[metric], higher_better=metric in {"fcf_yield"}).reindex(g.index).mean()), "count": int(len(g)), "median_market_cap": number_like(g["market_cap"].median()) if "market_cap" in g else None})
-    card_fields = [field for field in ["ticker", "sector", "valuation_percentile", "momentum_percentile", "price"] if field in panel]
-    universe_cards = records(panel[card_fields].head(int(payload.get("card_limit") or 100)))
+    cards = panel[["ticker", "sector"]].copy()
+    cards["sector_percentile"] = sector_ranks.mean(axis=1)
+    cards["universe_percentile"] = universe_ranks.mean(axis=1)
+    cards["valuation_metric_coverage"] = universe_ranks.notna().sum(axis=1)
+    universe_cards = records(cards.head(int(payload.get("card_limit") or 100)))
+    absolute = panel.set_index("ticker")
+    for item in universe_cards:
+        ticker = item["ticker"]
+        item["absolute_valuation"] = {metric: number_like(absolute.loc[ticker].get(metric)) for metric in metrics}
+        own = history_series_rows if ticker == symbol else historical_valuation_series(ticker, history_metric, history_window)
+        item["own_history_percentile"] = own_history_percentile_from_series([row["valuation_metric"] for row in own])
+        item["own_history_observations"] = len(own)
+        item["own_history_as_of_date"] = own[-1]["date"] if own else None
+        item["history_metric"] = history_metric
     return {
         "card": clean_json(card),
         "sector_heatmap": clean_json(sector_heat),
@@ -152,10 +168,13 @@ def own_history_percentile_from_series(values: Any) -> float | None:
 def re_rating_slope_from_series(series: list[dict[str, Any]], trailing_periods: int = 21) -> dict[str, Any]:
     recent = series[-trailing_periods:] if len(series) >= trailing_periods else series
     y = np.array([number_like(r.get("history_percentile")) for r in recent], dtype=float)
-    y = y[np.isfinite(y)]
+    valid = np.isfinite(y)
+    y = y[valid]
     if len(y) < 3:
         return {"slope_per_period": None, "slope_per_month": None, "interpretation": "insufficient_history"}
-    x = np.arange(len(y), dtype=float)
-    slope = float(np.polyfit(x, y, 1)[0])
-    return {"slope_per_period": slope, "slope_per_month": slope * 21.0, "interpretation": "re-rating" if slope > 0 else "de-rating" if slope < 0 else "flat"}
+    from scipy.stats import linregress
+    dates = pd.to_datetime([row["date"] for row in recent]).to_numpy(dtype="datetime64[D]")[valid]
+    x = np.busday_count(dates[0], dates).astype(float)
+    slope = float(linregress(x, y).slope)
+    return {"slope_per_weekday": slope, "slope_per_21_weekdays": slope * 21.0, "time_basis": "observed date spacing, weekdays (exchange holidays not removed)", "interpretation": "re-rating" if slope > 0 else "de-rating" if slope < 0 else "flat"}
 

@@ -31,10 +31,10 @@ ROOT = Path(__file__).resolve().parents[5]
 BACKEND_DATA = ROOT / "backend" / "data"
 FACTORS_DATA = ROOT / "factors" / "data"
 MARKET_UNIVERSE = BACKEND_DATA / "market_universe.parquet"
-RESEARCH_MARKET_UNIVERSE = ROOT / "research_exports" / "final_submission_package" / "SUBMISSION_MAIN" / "data_sources" / "parquet" / "market_universe.parquet"
 MARKET_UNIVERSE_HOURLY = BACKEND_DATA / "market_universe_hourly.parquet"
 MASTER_FUNDAMENTALS = BACKEND_DATA / "fundamentals" / "master_fundamentals.parquet"
 CATEGORY7_MACRO = FACTORS_DATA / "processed" / "category7_macro_regime.parquet"
+FX_DAILY = BACKEND_DATA / "canonical" / "fx_daily.parquet"
 FF5_DAILY = BACKEND_DATA / "factors_us" / "ff5_daily.csv"
 MOM_DAILY = BACKEND_DATA / "factors_us" / "momentum_daily.csv"
 
@@ -89,18 +89,40 @@ def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     if "Datetime" in out.columns and "Date" not in out.columns:
         out = out.rename(columns={"Datetime": "Date"})
     if not {"Ticker", "Date", "Close"}.issubset(out.columns):
-        raise ValueError("Market data requires Ticker, Date and unadjusted Close columns")
+        raise ValueError("Market data requires Ticker, Date and source Close columns")
     for col in ["Open", "High", "Low", "Close", "Volume"]:
         if col not in out.columns:
             out[col] = np.nan
     out[["Open", "High", "Low", "Close", "Volume"]] = out[["Open", "High", "Low", "Close", "Volume"]].apply(pd.to_numeric, errors="coerce")
     out["Date"] = pd.to_datetime(out["Date"], errors="coerce").dt.tz_localize(None)
+    if out["Date"].isna().any() or out["Ticker"].isna().any():
+        raise ValueError("Market data contains missing/invalid dates or tickers")
     out["Ticker"] = out["Ticker"].map(normalize_symbol)
-    return out.dropna(subset=["Ticker", "Date", "Close"])[["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]].sort_values(["Ticker", "Date"])
+    if out["Ticker"].eq("").any():
+        raise ValueError("Market data requires nonempty tickers")
+    columns = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
+    duplicated = out.duplicated(["Ticker", "Date"], keep=False)
+    aliases = out.loc[duplicated, columns].drop_duplicates()
+    if aliases.duplicated(["Ticker", "Date"]).any():
+        raise ValueError("Conflicting observed quotes after ticker normalization")
+    alias_count = int(out.duplicated(["Ticker", "Date"]).sum())
+    out = out.drop_duplicates(["Ticker", "Date"])
+    unsupported = out["Close"].notna() & ((out["Close"] <= 0) | ~np.isfinite(out["Close"]))
+    source_integrity = {
+        "identical_alias_rows_removed": alias_count,
+        "unsupported_nonpositive_or_nonfinite_close_rows": int(unsupported.sum()),
+        "unsupported_quote_symbols": sorted(out.loc[unsupported, "Ticker"].unique().tolist()),
+        "policy": "Identical aliases deduplicated; conflicting aliases rejected. Nonpositive/nonfinite closes are unavailable for percentage-return analytics; no replacement prices.",
+    }
+    out.loc[unsupported, ["Open", "High", "Low", "Close", "Volume"]] = np.nan
+    result = out[columns].sort_values(["Ticker", "Date"])
+    result.attrs["source_integrity"] = source_integrity
+    return result
+
 
 
 @lru_cache(maxsize=1)
-def _load_market_ohlcv_versioned(version: float) -> pd.DataFrame:
+def _load_market_ohlcv_versioned(version: int) -> pd.DataFrame:
     if not MARKET_UNIVERSE.exists():
         raise FileNotFoundError(f"Required market dataset is missing: {MARKET_UNIVERSE}")
     source = MARKET_UNIVERSE
@@ -120,16 +142,20 @@ def load_hourly_ohlcv() -> pd.DataFrame:
 
 
 @lru_cache(maxsize=1)
-def _available_symbols_versioned(version: float) -> tuple[str, ...]:
+def _available_symbols_versioned(version: int, fundamentals_version: int) -> tuple[str, ...]:
     df = load_market_ohlcv()
     if df.empty:
         return ()
-    counts = df.groupby("Ticker")["Close"].count().sort_values(ascending=False)
-    return tuple(str(x) for x in counts.index)
+    fundamentals = load_fundamentals()
+    if "ticker" not in fundamentals:
+        raise FileNotFoundError("Equity universe requires a local fundamentals ticker inventory")
+    equities = set(fundamentals.ticker)
+    counts = df.loc[df.Ticker.isin(equities)].groupby("Ticker")["Close"].count().sort_values(ascending=False)
+    return tuple(str(x) for x in counts[counts > 0].index)
 
 
 def available_symbols() -> tuple[str, ...]:
-    return _available_symbols_versioned(_path_version(MARKET_UNIVERSE))
+    return _available_symbols_versioned(_path_version(MARKET_UNIVERSE), _path_version(MASTER_FUNDAMENTALS))
 
 
 class UnknownSymbolsError(ValueError):
@@ -137,7 +163,7 @@ class UnknownSymbolsError(ValueError):
 
     def __init__(self, missing: list[str]):
         self.missing = missing
-        super().__init__(f"Unknown tickers (not in local market data): {', '.join(missing)}")
+        super().__init__(f"Unknown or unsupported tickers (not in the local equity universe): {', '.join(missing)}")
 
 
 def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: int = 5000) -> list[str]:
@@ -216,7 +242,7 @@ def returns_matrix(symbols: Iterable[str], lookback_days: int = 756, min_coverag
 
 
 @lru_cache(maxsize=1)
-def _load_fundamentals_versioned(version: float) -> pd.DataFrame:
+def _load_fundamentals_versioned(version: int) -> pd.DataFrame:
     if not MASTER_FUNDAMENTALS.exists():
         return pd.DataFrame(columns=["ticker"])
     df = pd.read_parquet(MASTER_FUNDAMENTALS, engine="pyarrow")
@@ -252,13 +278,33 @@ def fundamental_history(symbol: str) -> pd.DataFrame:
 
 
 @lru_cache(maxsize=1)
-def load_macro() -> pd.DataFrame:
+def _load_macro_versioned(version: int) -> pd.DataFrame:
     if CATEGORY7_MACRO.exists():
         df = pd.read_parquet(CATEGORY7_MACRO, engine="pyarrow")
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
         return df.dropna(subset=["date"]).sort_values("date")
     return pd.DataFrame(columns=["date"])
+
+
+def load_macro() -> pd.DataFrame:
+    frame = _load_macro_versioned(_path_version(CATEGORY7_MACRO))
+    cutoff = AS_OF.get()
+    return frame.loc[frame.date <= cutoff].copy() if cutoff is not None else frame.copy()
+
+
+@lru_cache(maxsize=1)
+def _load_fx_versioned(version: int) -> pd.DataFrame:
+    if not FX_DAILY.exists():
+        raise FileNotFoundError(f"Required FX dataset is missing: {FX_DAILY}")
+    return _standardize_ohlcv(_read_parquet(FX_DAILY))
+
+
+def load_fx() -> pd.DataFrame:
+    """Observed canonical FX quotes, bounded by the active research date."""
+    frame = _load_fx_versioned(_path_version(FX_DAILY))
+    cutoff = AS_OF.get()
+    return frame.loc[frame.Date <= cutoff].copy() if cutoff is not None else frame.copy()
 
 
 def _parse_ken_french_csv(path: Path) -> pd.DataFrame:
@@ -315,6 +361,7 @@ def data_inventory() -> dict[str, Any]:
         "hourly_universe": {"exists": MARKET_UNIVERSE_HOURLY.exists(), "rows": int(len(load_hourly_ohlcv())) if MARKET_UNIVERSE_HOURLY.exists() else 0},
         "master_fundamentals": {"exists": MASTER_FUNDAMENTALS.exists(), "rows": int(len(load_fundamentals()))},
         "macro": {"exists": CATEGORY7_MACRO.exists(), "rows": int(len(load_macro()))},
+        "fx_daily": {"exists": FX_DAILY.exists(), "rows": int(len(load_fx())) if FX_DAILY.exists() else 0},
         "ff5_daily": {"exists": FF5_DAILY.exists(), "rows": int(len(load_factor_returns()))},
         "momentum_daily": {"exists": MOM_DAILY.exists()},
     }

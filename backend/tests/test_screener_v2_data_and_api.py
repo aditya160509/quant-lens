@@ -81,3 +81,51 @@ def test_manifest_constraints_and_indicator_inputs_are_enforced():
             normalize_payload(get_feature('05').inputs, {'top_n': value})
     with pytest.raises(ValueError):
         normalize_payload(get_feature('01').inputs, {'periods': {'adx_period': 1}})
+
+
+def test_market_source_deduplicates_only_identical_quotes_and_discloses_unusable_prices():
+    import pandas as pd
+    frame = pd.DataFrame({'Ticker': ['AAPL'], 'Date': ['2025-01-01'], 'Close': [100.]})
+    result = data_loader._standardize_ohlcv(pd.concat([frame, frame]))
+    assert len(result) == 1
+    assert result.attrs['source_integrity']['identical_alias_rows_removed'] == 1
+    with pytest.raises(ValueError, match='Conflicting'):
+        data_loader._standardize_ohlcv(pd.concat([frame, frame.assign(Close=105)]))
+    invalid = data_loader._standardize_ohlcv(frame.assign(Close=0))
+    assert pd.isna(invalid.Close.iloc[0])
+    assert invalid.attrs['source_integrity']['unsupported_nonpositive_or_nonfinite_close_rows'] == 1
+    with pytest.raises(ValueError, match='invalid dates'):
+        data_loader._standardize_ohlcv(frame.assign(Date='bad'))
+
+
+def test_equity_inventory_does_not_confuse_reporting_and_trading_currency(monkeypatch):
+    import pandas as pd
+    monkeypatch.setattr(data_loader, 'load_market_ohlcv', lambda: pd.DataFrame({'Ticker': ['AAA', 'BBB', 'CCC'], 'Close': [10., 20., 30.]}))
+    monkeypatch.setattr(data_loader, 'load_fundamentals', lambda: pd.DataFrame({'ticker': ['AAA', 'BBB'], 'currency': ['USD', 'EUR']}))
+    data_loader._available_symbols_versioned.cache_clear()
+    try:
+        assert data_loader._available_symbols_versioned(1, 1) == ('AAA', 'BBB')
+    finally:
+        data_loader._available_symbols_versioned.cache_clear()
+
+
+def test_fx_and_macro_observations_respect_as_of_date(monkeypatch, tmp_path):
+    import pandas as pd
+    fx = tmp_path / 'fx.parquet'
+    macro = tmp_path / 'macro.parquet'
+    pd.DataFrame({'Ticker': ['USDINR=X'] * 2, 'Date': pd.to_datetime(['2025-01-01', '2025-01-03']),
+                  'Close': [85., 86.]}).to_parquet(fx)
+    pd.DataFrame({'date': pd.to_datetime(['2025-01-01', '2025-01-03']),
+                  'dgs10': [4.1, 4.2]}).to_parquet(macro)
+    monkeypatch.setattr(data_loader, 'FX_DAILY', fx)
+    monkeypatch.setattr(data_loader, 'CATEGORY7_MACRO', macro)
+    data_loader._load_fx_versioned.cache_clear()
+    data_loader._load_macro_versioned.cache_clear()
+    try:
+        with data_loader.as_of_context('2025-01-02'):
+            assert data_loader.load_fx().Close.tolist() == [85.]
+            assert data_loader.load_macro().dgs10.tolist() == [4.1]
+        assert len(data_loader.load_fx()) == len(data_loader.load_macro()) == 2
+    finally:
+        data_loader._load_fx_versioned.cache_clear()
+        data_loader._load_macro_versioned.cache_clear()

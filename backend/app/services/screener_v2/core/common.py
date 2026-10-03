@@ -94,19 +94,22 @@ def matrix_records(matrix: pd.DataFrame, value_name: str = "value") -> list[dict
 
 
 def access_meta(payload: dict | None = None, issues: list[str] | None = None) -> dict[str, Any]:
-    from .data_loader import AS_OF, MARKET_UNIVERSE, MASTER_FUNDAMENTALS, available_symbols, parse_symbols
+    from .data_loader import AS_OF, MARKET_UNIVERSE, MASTER_FUNDAMENTALS, FF5_DAILY, MOM_DAILY, CATEGORY7_MACRO, FX_DAILY, available_symbols, parse_symbols, load_market_ohlcv
     payload = payload or {}
     def version(path):
         return {"path": str(path), "exists": path.exists(), "modified_ns": path.stat().st_mtime_ns if path.exists() else None}
     requested = parse_symbols(payload)
     current = len(available_symbols())
     cap = int(payload.get("max_symbols") or payload.get("max_tickers") or 5000)
-    return {"compute_mode": "local", "data_policy": "observed prices; no filling; conservative statement availability",
+    return {"compute_mode": "local", "data_policy": "observed prices; no filling; conservative statement availability", "return_basis": "source Close returns; source manifest describes an adjusted-close proxy without a corporate-action guarantee; total-return status is unverified",
             "as_of_date": str((AS_OF.get() or pd.Timestamp(payload.get("as_of_date"))).date()),
-            "data_sources": {"prices": version(MARKET_UNIVERSE), "fundamentals": version(MASTER_FUNDAMENTALS)},
+            "source_integrity": load_market_ohlcv().attrs.get("source_integrity", {}),
+            "data_sources": {"prices": version(MARKET_UNIVERSE), "fundamentals": version(MASTER_FUNDAMENTALS), "ff5": version(FF5_DAILY), "momentum_factor": version(MOM_DAILY), "macro": version(CATEGORY7_MACRO), "fx": version(FX_DAILY)},
             "universe_count": len(requested), "local_universe_count": current, "universe_cap": cap,
-            "universe_order": "fixed local coverage order; not historical index membership",
+            "industry_group_basis": "local static mapping of vendor industry labels; not verified company-level GICS",
+            "universe_order": "fixed local coverage order among equities in the fundamentals inventory; not historical index membership",
+            "universe_currency": "global equity inventory; quote/statement currency distinction is under audit; canonical FX data exists but portfolio conversion is not yet integrated",
             "fundamental_availability_lag_days": 90, "access_issues": issues or [],
             "limitations": ["No historical filing vintages or revision timestamps; 90-day lag does not eliminate restatement bias.",
                             "No historical index membership or delisting payoff data; results are conditional on the chosen local universe.",
-                            "Current descriptive sector and industry labels are not historical classifications."]}
+                            "Current descriptive sector and industry labels are not historical classifications.", "No ADR/depositary-unit conversion history or separate historical financial-currency metadata; statement/quote share and currency compatibility remain source-data limitations."]}

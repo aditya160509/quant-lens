@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
-from ..core.academic import academic_strategy_scores, altman_history, full_strategy_performance_metadata, full_strategy_performance_table, strategy_leaderboard
+from ..core.academic import ACADEMIC_STRATEGIES, academic_strategy_scores, altman_history, full_strategy_performance_metadata, full_strategy_performance_table, strategy_leaderboard
 from ..core.common import access_meta, matrix_records, records, response
 from ..core.panel import metric_panel
 from ..core.screener import apply_filters
@@ -32,8 +32,8 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         raise ValueError(f"Unknown or unsupported academic strategy: {strategy}")
     ranked = strategies.sort_values(strategy, ascending=False)
     shared_cache = {}
-    backtest = score_backtest(list(ranked["ticker"]), ranked.set_index("ticker")[strategy], int(payload.get("lookback_days") or 756), int(payload.get("top_n") or 50), long_short=bool(payload.get("long_short")), score_at=point_in_time_scorer(symbols, payload, "academic", strategy, shared_cache))
-    numeric = strategies.select_dtypes("number").drop(columns=["altman_z_score"], errors="ignore")
+    backtest = score_backtest(symbols, ranked.set_index("ticker")[strategy], int(payload.get("lookback_days") or 756), int(payload.get("top_n") or 50), long_short=bool(payload.get("long_short")), score_at=point_in_time_scorer(symbols, payload, "academic", strategy, shared_cache))
+    numeric = strategies[[name for name in ACADEMIC_STRATEGIES if name in strategies]]
     focus = str(payload.get("focus_ticker") or ranked.iloc[0]["ticker"]) if not ranked.empty else ""
     return response(
         FEATURE_ID,
@@ -49,7 +49,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         tables={
             "strategy_leaderboard": records(strategy_leaderboard(strategies)),
             "per_strategy_stock_list": records(ranked.head(int(payload.get("top_n") or 50))),
-            "piotroski_breakdown": records(strategies[[c for c in strategies.columns if c.startswith("piotroski_") or c in {"ticker", "sector"}]].sort_values("piotroski_f_score", ascending=False).head(100)),
+            "piotroski_breakdown": records(strategies[[c for c in strategies.columns if c.startswith("piotroski_") or (c.startswith("f") and c[1:2].isdigit()) or c in {"ticker", "sector"}]].sort_values("piotroski_f_score", ascending=False).head(100)),
             "altman_z_score_status": records(strategies[["ticker", "sector", "altman_z_score", "altman_z_double_prime", "altman_status", "altman_piotroski_overlay"]].sort_values("altman_z_score", ascending=False).head(100)),
             "altman_z_score_8q_trend": altman_history(focus, 8) if focus else [],
             "historical_strategy_statistics": [backtest.get("stats", {})],
@@ -60,6 +60,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
                 int(payload.get("strategy_perf_limit") or 24),
                 payload=payload,
                 shared_cache=shared_cache,
+                symbols=symbols,
             ),
             "historical_strategy_performance_metadata": [full_strategy_performance_metadata(strategies, int(payload.get("strategy_perf_limit") or 24))],
         },
