@@ -47,8 +47,21 @@ class Spec:
     extra: dict[str, Any] = field(default_factory=dict)
 
     def name(self) -> str:
-        parts = [f"{d}={getattr(self, d)}" for d in DIMENSIONS if getattr(self, d) not in {"full", "none", "all", "raw", "base", "nw_auto", "equal"}]
+        parts = [f"{d}={getattr(self, d)}" for d in DIMENSIONS if getattr(self, d) != Spec.__dataclass_fields__[d].default]
         return "base" if not parts else "; ".join(parts)
+
+
+def control_variants(panel: Panel) -> list[str]:
+    """Base plus each control set that is a distinct regression once the signal itself is removed."""
+
+    seen = {tuple(panel.controls)}
+    out = ["base"]
+    for v in CONTROL_VARIANTS:
+        resolved = tuple(c for c in CONTROL_SETS[v] if c != panel.config["signal"])
+        if resolved not in seen:
+            seen.add(resolved)
+            out.append(v)
+    return out
 
 
 def dimension_values(panel: Panel, payload: dict[str, Any]) -> dict[str, list[str]]:
@@ -60,7 +73,7 @@ def dimension_values(panel: Panel, payload: dict[str, Any]) -> dict[str, list[st
         "crisis": ["none", *CRISES, *(["exclude_custom"] if custom_exclusion else [])],
         "universe": UNIVERSES,
         "transform": TRANSFORMS,
-        "controls": ["base", *CONTROL_VARIANTS],
+        "controls": control_variants(panel),
         "standard_errors": ["nw_auto", *[f"nw_{l}" for l in NW_LAGS]],
         "weighting": WEIGHTINGS,
     }
@@ -141,7 +154,7 @@ class SpecEvaluator:
             sig = sig.where(amask)
         sig = sig.loc[dmask.to_numpy()]
         dep = p.dependent.loc[sig.index]
-        names = self.base_controls if spec.controls == "base" else CONTROL_SETS[spec.controls]
+        names = self.base_controls if spec.controls == "base" else [c for c in CONTROL_SETS[spec.controls] if c != p.config["signal"]]
         regs = {"signal": sig, **{n: self.controls[n].loc[sig.index] for n in names}}
         slopes = fm_slopes(dep, regs)
         row: dict[str, Any] = {"specification": spec.name(), **{d: getattr(spec, d) for d in DIMENSIONS}}

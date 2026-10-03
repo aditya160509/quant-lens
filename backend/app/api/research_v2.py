@@ -10,7 +10,9 @@ job so the job index stays small.
 from __future__ import annotations
 
 import json
+import multiprocessing
 import uuid
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any, Dict
 
@@ -18,9 +20,10 @@ import pandas as pd
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
-from app.services.research_v2.core.data_loader import BACKEND_DATA, UPLOAD_DIR, UnknownSymbolsError, available_symbols, static_sectors
+from app.services.research_v2.core.data_loader import BACKEND_DATA, UPLOAD_DIR, UnknownSymbolsError, available_symbols, static_sectors, us_equity_symbols
 from app.services.research_v2.core.holdout import all_locks, all_windows, lock_specification, release_window
-from app.services.research_v2.registry import feature_manifest, get_feature, run_feature
+from app.services.research_v2.registry import feature_manifest, get_feature
+from app.services.research_v2.worker import run_in_worker
 from app.services.studio.jobs import JobStore
 
 router = APIRouter(prefix="/labs/research/v2", tags=["research-v2"])
@@ -50,9 +53,20 @@ def _clean(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in payload.items() if v not in ("", None, [])}
 
 
+_POOL: ProcessPoolExecutor | None = None
+
+
+def _pool() -> ProcessPoolExecutor:
+    """Spawned one-shot workers (at most 2): each job's memory is released when its process exits."""
+    global _POOL
+    if _POOL is None:
+        _POOL = ProcessPoolExecutor(max_workers=2, mp_context=multiprocessing.get_context("spawn"), max_tasks_per_child=1)
+    return _POOL
+
+
 def _execute(job_id: str, feature_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
-        result = run_feature(feature_id, payload)
+        result = _pool().submit(run_in_worker, feature_id, payload).result()
     except UnknownSymbolsError as exc:
         raise ValueError(str(exc)) from exc
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -75,6 +89,13 @@ def search_symbols(q: str = Query("", max_length=40), limit: int = Query(20, ge=
     hits = [s for s in available_symbols() if s.startswith(query)] if query else []
     hits += [s for s in available_symbols() if query and query in s and s not in hits]
     return {"results": [{"ticker": s, "sector": sectors.get(s)} for s in hits[:limit]]}
+
+
+@router.get("/universe")
+def universe() -> Dict[str, Any]:
+    """US common equities in coverage order with their sector, for building custom universes in the UI."""
+    sectors = static_sectors()
+    return {"symbols": [{"ticker": s, "sector": sectors.get(s), "rank": i + 1} for i, s in enumerate(us_equity_symbols())]}
 
 
 @router.post("/uploads")

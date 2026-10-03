@@ -42,11 +42,13 @@ export default function GlobalLayout({ children }) {
     const isAuthPage = pathname?.startsWith('/login') || 
                        pathname?.startsWith('/signup') || 
                        pathname?.startsWith('/forgot-password');
+    // Workspace modules render their own full-screen chrome and command palette
+    const isWorkspace = pathname?.startsWith('/research');
 
     return (
         <div className="min-h-screen flex flex-col bg-terminal-black text-terminal-text font-sans selection:bg-terminal-yellow selection:text-terminal-black">
             {/* Top Nav Bar - Hidden on Auth Pages only */}
-            {!isAuthPage && (
+            {!isAuthPage && !isWorkspace && (
                 <header className={`h-12 border-b border-terminal-gray ${pathname === '/' ? 'bg-transparent absolute top-0 left-0 right-0 z-50' : 'bg-terminal-dark'} flex items-center gap-3 overflow-hidden px-3 sm:px-4 shrink-0`}>
                     <div className="flex min-w-0 flex-1 items-center gap-4 lg:gap-8">
                         <Link href="/" className="shrink-0 text-terminal-yellow font-bold tracking-[0.3em] text-lg hover:opacity-80 transition-opacity flex items-center gap-2">
@@ -97,7 +99,7 @@ export default function GlobalLayout({ children }) {
             </main>
 
             {/* Terminal Overlay - Global, triggered by ⌘K */}
-            <TerminalOverlay />
+            {!isWorkspace && <TerminalOverlay />}
         </div>
     );
 }

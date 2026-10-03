@@ -42,7 +42,11 @@ def _read_parquet(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
         return pd.DataFrame(columns=columns or [])
     if pl is not None and columns:
         try:
-            return pl.scan_parquet(str(path)).select(columns).collect().to_pandas()
+            # Strings as categoricals and floats as float32 before pandas sees them: the full market
+            # file otherwise peaks near 3 GB while loading (millions of Python ticker strings).
+            lf = pl.scan_parquet(str(path)).select(columns)
+            lf = lf.with_columns(pl.col(pl.Utf8).cast(pl.Categorical), pl.col(pl.Float64).cast(pl.Float32))
+            return lf.collect().to_pandas()
         except Exception:
             pass
     try:
@@ -54,7 +58,7 @@ def _read_parquet(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
 def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
-    out = df.rename(columns={c: str(c).strip().title() for c in df.columns}).copy()
+    out = df.rename(columns={c: str(c).strip().title() for c in df.columns})
     if "Datetime" in out.columns and "Date" not in out.columns:
         out = out.rename(columns={"Datetime": "Date"})
     if "Ticker" not in out.columns:
@@ -64,28 +68,85 @@ def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     for col in ["Open", "High", "Low", "Close", "Volume"]:
         if col not in out.columns:
             out[col] = np.nan
-        out[col] = pd.to_numeric(out[col], errors="coerce")
+        # float32 halves the resident market file; 7 significant digits is ample for prices and volume.
+        out[col] = pd.to_numeric(out[col], errors="coerce", downcast="float").astype("float32")
     out["Date"] = pd.to_datetime(out["Date"], errors="coerce").dt.tz_localize(None)
-    out["Ticker"] = out["Ticker"].map(normalize_symbol)
+    tick = out["Ticker"].astype("category")
+    out["Ticker"] = tick.cat.rename_categories([normalize_symbol(c) for c in tick.cat.categories]) if tick.cat.categories.map(normalize_symbol).is_unique else tick.map(normalize_symbol)
     clean = out.dropna(subset=["Ticker", "Date", "Close"])[["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]].sort_values(["Ticker", "Date"])
     clean["Ticker"] = clean["Ticker"].astype("category")
     return clean
 
 
-@lru_cache(maxsize=1)
+def _market_source() -> Path:
+    return MARKET_UNIVERSE if MARKET_UNIVERSE.exists() else RESEARCH_MARKET_UNIVERSE
+
+
 def load_market_ohlcv() -> pd.DataFrame:
-    source = MARKET_UNIVERSE if MARKET_UNIVERSE.exists() else RESEARCH_MARKET_UNIVERSE
+    """Whole market file. Not cached and not used on job paths: prefer ``ohlcv_for_symbols``."""
+
+    source = _market_source()
     cols = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
+    if pl is not None and source.exists():
+        try:
+            lf = pl.scan_parquet(str(source)).select(cols).drop_nulls(["Ticker", "Date", "Close"])
+            tickers = lf.select(pl.col("Ticker").unique()).collect()["Ticker"].to_list()
+            mapping = {t: normalize_symbol(t) for t in tickers}
+            out = (
+                lf.with_columns(pl.col("Ticker").replace_strict(mapping), pl.col(["Open", "High", "Low", "Close", "Volume"]).cast(pl.Float32))
+                .filter(pl.col("Ticker") != "")
+                .sort(["Ticker", "Date"])
+                .with_columns(pl.col("Ticker").cast(pl.Categorical))
+                .collect(engine="streaming")
+                .to_pandas()
+            )
+            out["Ticker"] = out["Ticker"].astype("category")
+            return out
+        except Exception:
+            pass
     return _standardize_ohlcv(_read_parquet(source, cols))
 
 
 @lru_cache(maxsize=1)
-def available_symbols() -> tuple[str, ...]:
+def _market_summary() -> tuple[tuple[str, ...], int]:
+    """Small per-symbol close counts (symbols by coverage, total rows) without loading prices."""
+
+    source = _market_source()
+    if pl is not None and source.exists():
+        try:
+            raw = (
+                pl.scan_parquet(str(source)).select(["Ticker", "Close", "Date"]).drop_nulls(["Ticker", "Date", "Close"])
+                .group_by("Ticker").agg(pl.len().alias("n")).collect()
+            )
+            counts: dict[str, int] = {}
+            for t, n in zip(raw["Ticker"].to_list(), raw["n"].to_list()):
+                k = normalize_symbol(t)
+                if k:
+                    counts[k] = counts.get(k, 0) + int(n)
+            order = sorted(counts, key=lambda k: (-counts[k], k))
+            return tuple(order), int(sum(counts.values()))
+        except Exception:
+            pass
     df = load_market_ohlcv()
     if df.empty:
-        return ()
+        return (), 0
     counts = df.groupby("Ticker", observed=True)["Close"].count().sort_values(ascending=False)
-    return tuple(str(x) for x in counts.index)
+    return tuple(str(x) for x in counts.index), int(len(df))
+
+
+def available_symbols() -> tuple[str, ...]:
+    return _market_summary()[0]
+
+
+@lru_cache(maxsize=1)
+def _raw_tickers() -> dict[str, tuple[str, ...]]:
+    source = _market_source()
+    raw = pl.scan_parquet(str(source)).select(pl.col("Ticker").unique()).collect()["Ticker"].to_list()
+    out: dict[str, list[str]] = {}
+    for t in raw:
+        if t is not None:
+            out.setdefault(normalize_symbol(t), []).append(t)
+    return {k: tuple(v) for k, v in out.items()}
 
 
 class UnknownSymbolsError(ValueError):
@@ -94,6 +155,9 @@ class UnknownSymbolsError(ValueError):
     def __init__(self, missing: list[str]):
         self.missing = missing
         super().__init__(f"Unknown tickers (not in local market data): {', '.join(missing[:25])}")
+
+    def __reduce__(self):  # keeps the message intact when raised in a worker process
+        return (type(self), (self.missing,))
 
 
 # Named cross-sectional universes. Cross-sectional tests must not mix markets
@@ -135,11 +199,29 @@ def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: i
 
 def ohlcv_for_symbols(symbols: Iterable[str], lookback_days: int | None = None) -> pd.DataFrame:
     normalized = {normalize_symbol(s) for s in symbols if str(s).strip()}
-    df = load_market_ohlcv()
-    out = df[df["Ticker"].isin(normalized)]
-    if lookback_days and not out.empty:
-        cutoff = out["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)
-        out = out[out["Date"] >= cutoff]
+    source = _market_source()
+    out = None
+    if pl is not None and source.exists():
+        try:
+            tmap = _raw_tickers()
+            raw = [r for n in normalized for r in tmap.get(n, ())]
+            cols = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
+            lf = pl.scan_parquet(str(source)).select(cols).filter(pl.col("Ticker").is_in(raw)).drop_nulls(["Ticker", "Date", "Close"])
+            if lookback_days:
+                # Same cutoff as before: the latest date among the requested symbols minus 2x lookback.
+                latest = lf.select(pl.col("Date").max()).collect().item()
+                if latest is not None:
+                    lf = lf.filter(pl.col("Date") >= pl.lit(latest) - pl.duration(days=int(lookback_days) * 2))
+            out = lf.with_columns(pl.col(["Open", "High", "Low", "Close", "Volume"]).cast(pl.Float32)).collect().to_pandas()
+            out["Ticker"] = out["Ticker"].map(normalize_symbol).astype("category")
+        except Exception:
+            out = None
+    if out is None:
+        df = load_market_ohlcv()
+        out = df[df["Ticker"].isin(normalized)]
+        if lookback_days and not out.empty:
+            cutoff = out["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)
+            out = out[out["Date"] >= cutoff]
     return out.sort_values(["Ticker", "Date"])
 
 
@@ -260,7 +342,6 @@ def load_instrument_upload(path_value: Any) -> pd.DataFrame:
     return out.dropna(subset=["date", "instrument"]).sort_values(["date", "ticker"])
 
 
-@lru_cache(maxsize=1)
 def load_fundamentals() -> pd.DataFrame:
     if not MASTER_FUNDAMENTALS.exists():
         return pd.DataFrame(columns=["ticker"])
@@ -274,11 +355,37 @@ def load_fundamentals() -> pd.DataFrame:
     return out.dropna(subset=["ticker"])
 
 
+def _fundamentals_cols(columns: list[str], symbols: Iterable[str] | None = None) -> pd.DataFrame:
+    """Selected fundamentals columns (optionally only some tickers), tickers normalized."""
+
+    if not MASTER_FUNDAMENTALS.exists():
+        return pd.DataFrame(columns=["ticker"])
+    if pl is not None:
+        try:
+            lf = pl.scan_parquet(str(MASTER_FUNDAMENTALS))
+            have = set(lf.collect_schema().names())
+            if "ticker" not in have:
+                return pd.DataFrame(columns=["ticker"])
+            lf = lf.select([c for c in columns if c in have])
+            lf = lf.with_columns(pl.col("ticker").cast(pl.Utf8).str.strip_chars().str.to_uppercase().str.replace_all(r"[.\-]", "_"))
+            if symbols is not None:
+                lf = lf.filter(pl.col("ticker").is_in([normalize_symbol(s) for s in symbols]))
+            out = lf.drop_nulls(["ticker"]).collect().to_pandas()
+            if "reportDate" in out.columns:
+                out["reportDate"] = pd.to_datetime(out["reportDate"], errors="coerce")
+            return out
+        except Exception:
+            pass
+    df = load_fundamentals()
+    df = df[[c for c in columns if c in df.columns]]
+    return df if symbols is None else df[df["ticker"].isin([normalize_symbol(s) for s in symbols])]
+
+
 @lru_cache(maxsize=1)
 def static_sectors() -> pd.Series:
     """Sector per ticker. Sector membership is treated as time-invariant."""
 
-    df = load_fundamentals()
+    df = _fundamentals_cols(["ticker", "sector", "reportDate"])
     if df.empty or "sector" not in df.columns:
         return pd.Series(dtype=object)
     out = df.dropna(subset=["sector"]).sort_values("reportDate").groupby("ticker")["sector"].last()
@@ -300,10 +407,10 @@ def point_in_time_fundamental(field: str, dates: pd.DatetimeIndex, symbols: Iter
     """
 
     symbols = [normalize_symbol(s) for s in symbols]
-    df = load_fundamentals()
-    if df.empty or field not in df.columns or "reportDate" not in df.columns:
+    sub = _fundamentals_cols(["ticker", "reportDate", "periodType", field], symbols)
+    if sub.empty or field not in sub.columns or "reportDate" not in sub.columns:
         return pd.DataFrame(np.nan, index=dates, columns=symbols)
-    sub = df[df["ticker"].isin(symbols)][["ticker", "reportDate", "periodType", field]].dropna(subset=["reportDate", field])
+    sub = sub.dropna(subset=["reportDate", field])
     if field in FLOW_FIELDS and "periodType" in sub.columns:
         sub = sub[sub["periodType"] == "annual"]
     if sub.empty:
@@ -325,10 +432,10 @@ def annual_growth(field: str, dates: pd.DatetimeIndex, symbols: Iterable[str], l
     """Year-over-year growth of an annual-report field, point in time."""
 
     symbols = [normalize_symbol(s) for s in symbols]
-    df = load_fundamentals()
+    df = _fundamentals_cols(["ticker", "reportDate", "periodType", field], symbols)
     if df.empty or field not in df.columns:
         return pd.DataFrame(np.nan, index=dates, columns=symbols)
-    sub = df[(df["ticker"].isin(symbols)) & (df.get("periodType") == "annual")][["ticker", "reportDate", field]].dropna()
+    sub = df[df.get("periodType") == "annual"][["ticker", "reportDate", field]].dropna()
     if sub.empty:
         return pd.DataFrame(np.nan, index=dates, columns=symbols)
     sub = sub.sort_values(["ticker", "reportDate"]).drop_duplicates(["ticker", "reportDate"], keep="last")
@@ -344,7 +451,7 @@ def annual_growth(field: str, dates: pd.DatetimeIndex, symbols: Iterable[str], l
 
 
 def fundamentals_coverage_start() -> pd.Timestamp | None:
-    df = load_fundamentals()
+    df = _fundamentals_cols(["ticker", "reportDate"])
     if df.empty or "reportDate" not in df.columns:
         return None
     return pd.Timestamp(df["reportDate"].min()) + pd.Timedelta(days=90)
@@ -442,13 +549,14 @@ def load_macro() -> pd.DataFrame:
 
 
 def data_inventory() -> dict[str, Any]:
-    market = load_market_ohlcv()
+    n_symbols = len(available_symbols())
+    n_rows = _market_summary()[1]
     macro = load_macro()
     macro_cols = {str(c).lower() for c in macro.columns}
     return {
         "market_universe": str(MARKET_UNIVERSE if MARKET_UNIVERSE.exists() else RESEARCH_MARKET_UNIVERSE),
-        "market_rows": int(len(market)),
-        "market_symbols": int(market["Ticker"].nunique()) if not market.empty else 0,
+        "market_rows": n_rows,
+        "market_symbols": n_symbols,
         "fundamentals": MASTER_FUNDAMENTALS.exists(),
         "factor_returns": not load_factor_returns().empty,
         "macro": not macro.empty,

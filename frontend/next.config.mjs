@@ -60,7 +60,9 @@ const nextConfig = {
   // Experimental features for performance
   experimental: {
     // Optimize package imports
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons', 'd3', 'framer-motion'],
+    // Cap the dev compiler's memory; Turbopack evicts caches above this instead of growing to 4+ GB.
+    turbopackMemoryLimit: 1536 * 1024 * 1024,
   },
 
   turbopack: {

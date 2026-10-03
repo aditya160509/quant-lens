@@ -198,7 +198,8 @@ def normalize_config(payload: dict[str, Any], default_limit: int = 400) -> dict[
     if isinstance(controls, str):
         key = controls.strip().lower()
         controls = CONTROL_SETS.get(key, [c.strip() for c in key.split(",") if c.strip()])
-    controls = [str(c).lower() for c in controls]
+    # A control identical to the signal makes every cross-section singular
+    controls = [str(c).lower() for c in controls if str(c).lower() != signal]
     unknown = [c for c in controls if c not in CONTROLS]
     if unknown:
         raise ValueError(f"Unknown controls: {', '.join(unknown)}")

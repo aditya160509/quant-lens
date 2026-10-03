@@ -69,6 +69,12 @@ def test_manifest_declares_every_feature(client: TestClient) -> None:
         assert sum(o["primary"] for o in f["outputs"]) == 1
 
 
+def test_universe_lists_us_equities_with_sectors_in_coverage_order(client: TestClient) -> None:
+    symbols = client.get("/api/labs/research/v2/universe").json()["symbols"]
+    assert symbols and [s["rank"] for s in symbols[:3]] == [1, 2, 3]
+    assert all(s["sector"] for s in symbols[:50])
+
+
 def test_upload_validates_columns(client: TestClient) -> None:
     bad = client.post("/api/labs/research/v2/uploads", params={"kind": "signal"}, files={"file": ("s.csv", b"a,b\n1,2\n", "text/csv")})
     assert bad.status_code == 422
@@ -88,8 +94,8 @@ def test_every_render_hint_has_a_frontend_renderer() -> None:
     import re
     from pathlib import Path
 
-    src = (Path(__file__).resolve().parents[2] / "frontend/src/components/research-v2/renderers.jsx").read_text()
-    block = src[src.index("export const RENDERERS = {"):]
+    src = (Path(__file__).resolve().parents[2] / "frontend/src/modules/research/outputs/registry.tsx").read_text()
+    block = src[src.index("export const VIEWS"):]
     block = block[: block.index("};")]
     renderers = set(re.findall(r"(\w+):\s*\w+", block))
     hints = {o["render"] for f in api.feature_manifest() for o in f["outputs"]}

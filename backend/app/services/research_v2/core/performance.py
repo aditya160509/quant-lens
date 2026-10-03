@@ -68,12 +68,10 @@ def _fm_kernel(y: np.ndarray, x: np.ndarray, min_obs: int) -> tuple[np.ndarray, 
                 for j in range(k):
                     xx[pos, j] = x[t, i, j]
                 pos += 1
-        xtx = xx.T @ xx
-        xty = xx.T @ yy
-        try:
-            beta = np.linalg.solve(xtx, xty)
-        except Exception:
-            beta = np.linalg.pinv(xtx) @ xty
+        # Rank-deficient cross-sections (collinear regressors) have no unique slope; leave the month missing
+        beta, _, rank, _ = np.linalg.lstsq(xx, yy, 1e-10)
+        if rank < k:
+            continue
         pred = xx @ beta
         resid = yy - pred
         rss = 0.0

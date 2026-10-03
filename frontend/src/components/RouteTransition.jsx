@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 export default function RouteTransition({ children }) {
   const pathname = usePathname();
 
-  return <FadeIn key={pathname}>{children}</FadeIn>;
+  // Workspace modules keep one mounted shell across their routes
+  const key = pathname?.startsWith("/research") ? "/research" : pathname;
+  return <FadeIn key={key}>{children}</FadeIn>;
 }
 
 function FadeIn({ children }) {

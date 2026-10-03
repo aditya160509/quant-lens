@@ -262,3 +262,35 @@ Already decided from this research: keep recharts through **shadcn Chart** for s
 - Lighthouse accessibility ≥ 95; the page is usable at 375 px wide.
 - A Playwright run executes every feature with a preset and captures a screenshot; visual diffs reviewed.
 - Bundle: Research V2 routes load only the renderers for the visible tab.
+
+## Memory: get dev servers near zero (plan, 2026-10-03)
+
+Done so far (2026-10-03):
+- `next.config.mjs` caps the Turbopack dev compiler with `experimental.turbopackMemoryLimit` (1.5 GB). The dev server dropped from 4.67 GB to 1.16 GB.
+- `core/data_loader.py` `load_market_ohlcv` filters, sorts and compacts in Polars, with category tickers and float32 prices. Peak load memory dropped from 2.8 to 1.4 GB, and the resident market file from 625 to 323 MB. 29 research_v2 tests pass.
+
+Targets: backend about 150 MB idle and about 300 MB during a study; frontend about 200 MB (prod mode).
+
+Backend, highest impact first:
+1. Query the parquet files lazily (DuckDB or Polars `scan_parquet`) per job: only the job's tickers, columns and date range. Stop loading the whole market file.
+2. Rewrite the market file sorted by ticker and date, partitioned by year, with float32 and dictionary-encoded tickers, so queries skip most of it.
+3. Remove the `lru_cache` on the large frames (OHLCV, fundamentals). Cache only small lookups (symbols, sectors).
+4. Run jobs in a short-lived worker subprocess (1-2 concurrent) so memory returns to the OS when a job ends.
+5. Lazy-import heavy libraries (statsmodels, sklearn, ML stack) inside the features that use them. They add about 300 MB at startup.
+6. Cache job results on disk instead of inputs in RAM.
+
+Frontend:
+1. Verify against a production build (`next build && next start`, about 150-250 MB) instead of `next dev`. Add a launch.json entry for it.
+2. Give the dev server a research-only entry so it doesn't compile the legacy app (gsap, three.js, old chart engine).
+3. Delete `components/research-v2/*` and `app/labs/research-v2/*` once the new workspace is verified.
+4. Lower `turbopackMemoryLimit` to about 1 GB after that.
+
+Results (2026-10-03, backend steps 1, 3, 4; frontend step 1 done):
+- Step 1 done: `ohlcv_for_symbols` scans the parquet with a ticker/date filter; `available_symbols` and row counts come from a small cached per-symbol summary; fundamentals reads only the needed columns and tickers (`_fundamentals_cols`). Step 2 (rewrite/partition the file) not done.
+- Step 3 done: no `lru_cache` on `load_market_ohlcv` or `load_fundamentals`. Only symbols, sectors and the ticker map are cached.
+- Step 4 done: `api/research_v2.py` runs jobs in a spawned `ProcessPoolExecutor` (2 workers, `max_tasks_per_child=1`, entry `worker.py`). Job API unchanged.
+- Measured peak RSS: server after importing the app 485 MB (a full market load used to push it to about 1.77 GB). After one F01 and one F02 job the server stays at 496 MB. The worker process peaks at about 1.15 GB and exits after each job.
+- Step 5 not done: the idle 485 MB is the whole app (sklearn, statsmodels, scipy, matplotlib, numba, polars all imported by other routers); lazy imports there are not cheap.
+- Frontend step 1 done: `.claude/launch.json` has `frontend-prod`.
+
+Start with backend steps 1, 3 and 4.

@@ -44,6 +44,10 @@ Studio is one professional quantitative research workspace with six internal mod
 
 The workspace must feel like a focused IDE. It must not become a dashboard made of unrelated rectangular cards. Dense information belongs in resizable panels, canvases, inspectors, virtualized tables, drawers, and command-driven workflows.
 
+### Shared workspace shell (decided 2026-10-03)
+
+Studio runs inside the same workspace shell as every analysis module: top bar, module rail, ⌘K palette, theme, fonts, chart engine (`frontend/src/charts`), tables, run history and chart notes. Only the layout differs: Studio uses an IDE layout (files, editor, terminal, variables, results in tabs) where analysis modules use the feature list, results, inspector and runs dock. Portfolio and Factors modes reuse the standalone modules' backends and views rather than rebuilding them. Design reference: `backend/app/services/research_v2/FRONTEND.md`.
+
 ## 3. Non-negotiable constraints
 
 - [ ] The original Studio workflow, route, and strongest interactions are the product reference. Existing component code is reusable material, not a preservation requirement.
