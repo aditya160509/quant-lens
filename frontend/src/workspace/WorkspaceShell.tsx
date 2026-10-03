@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { SHORTCUTS, useLayout, type Region } from "./layout";
-import { prefClasses, usePrefs, type Accent, type Density } from "./prefs";
+import { prefClasses, usePrefs, type Accent, type Density, type LineWeight, type Palette } from "./prefs";
 import { Segmented, Tooltip } from "./ui";
 
 export type Theme = "dark" | "light";
@@ -237,6 +237,13 @@ function SettingsPopover({ themeClass, className }: { themeClass: string; classN
               {ACCENTS.map((a) => <button key={a.id} type="button" className="sw" style={{ background: a.color }} aria-label={`${a.id} accent`} aria-pressed={p.accent === a.id} onClick={() => p.set({ accent: a.id })} />)}
             </span>
           </div>
+          <div className="sep" />
+          <div className="hd">Charts</div>
+          <div style={{ padding: "0 8px 6px", display: "grid", gap: 6 }}>
+            <Segmented<Palette> label="Series colours" value={p.palette} onChange={(palette) => p.set({ palette })} options={[{ value: "default", label: "Default" }, { value: "colorblind", label: "Safe" }, { value: "vivid", label: "Vivid" }, { value: "mono", label: "Mono" }]} />
+            <Segmented<LineWeight> label="Line weight" value={p.lineWeight} onChange={(lineWeight) => p.set({ lineWeight })} options={[{ value: "thin", label: "Thin" }, { value: "regular", label: "Regular" }, { value: "bold", label: "Bold" }]} />
+          </div>
+          <div className="row">Gridlines<button type="button" className="toggle" aria-pressed={p.grid} aria-label="Gridlines" onClick={() => p.set({ grid: !p.grid })} /></div>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

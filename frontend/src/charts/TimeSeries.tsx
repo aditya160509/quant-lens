@@ -243,7 +243,7 @@ export function TimeSeries({
                 {p.zUp ? <path d={p.zUp} fill="var(--up)" fillOpacity={0.16} /> : null}
                 {p.zDn ? <path d={p.zDn} fill="var(--down)" fillOpacity={0.16} /> : null}
                 {p.fill ? <path d={p.fill} fill={`url(#${uid}-${p.s.key}-fill)`} /> : null}
-                <path d={p.d} fill="none" stroke={p.color} strokeWidth={p.s.width ?? (p.s.muted ? 1 : 1.6)} strokeOpacity={p.s.muted ? 0.28 : 1}
+                <path d={p.d} fill="none" stroke={p.color} style={{ strokeWidth: p.s.width ?? (p.s.muted ? 1 : "var(--lw, 1.6)") }} strokeOpacity={p.s.muted ? 0.28 : 1}
                   strokeDasharray={p.s.dash ? "5 4" : undefined} strokeLinejoin="round" strokeLinecap="round" />
               </g>
             ))}

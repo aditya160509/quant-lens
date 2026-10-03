@@ -380,3 +380,10 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .outline-row { display: flex; align-items: center; gap: 6px; padding-left: 8px; }
 .outline-row input { accent-color: var(--accent); width: 13px; height: 13px; flex: none; }
 .outline-row .outline-item { flex: 1; min-width: 0; }
+
+/* Chart style preferences (Settings > Charts). */
+.ws-tokens.pal-colorblind { --s1: #56B4E9; --s2: #E69F00; --s3: #009E73; --s4: #CC79A7; --s5: #D55E00; --s6: #0072B2; }
+.ws-tokens.pal-vivid { --s1: oklch(0.7 0.21 255); --s2: oklch(0.8 0.18 70); --s3: oklch(0.75 0.2 150); --s4: oklch(0.68 0.24 320); --s5: oklch(0.7 0.22 28); --s6: oklch(0.8 0.15 200); }
+.ws-tokens.pal-mono { --s1: var(--text); --s2: color-mix(in oklch, var(--text) 70%, transparent); --s3: color-mix(in oklch, var(--text) 50%, transparent); --s4: color-mix(in oklch, var(--accent) 90%, transparent); --s5: color-mix(in oklch, var(--text) 35%, transparent); --s6: color-mix(in oklch, var(--text) 25%, transparent); }
+.ws-tokens.no-grid { --grid: transparent; }
+.lw-thin { --lw: 1.1; } .lw-regular { --lw: 1.6; } .lw-bold { --lw: 2.4; }
