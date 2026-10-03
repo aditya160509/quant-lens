@@ -46,6 +46,8 @@ AS_OF = ContextVar("screener_as_of", default=None)
 @contextmanager
 def as_of_context(value):
     date = pd.Timestamp(value) if value else None
+    if date is not None and date.tzinfo is not None:
+        raise ValueError("as_of_date must be an unzoned calendar date")
     if date is not None and pd.isna(date):
         raise ValueError("Invalid as_of_date")
     token = AS_OF.set(date)
@@ -86,10 +88,8 @@ def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     out = df.rename(columns=rename).copy()
     if "Datetime" in out.columns and "Date" not in out.columns:
         out = out.rename(columns={"Datetime": "Date"})
-    if "Ticker" not in out.columns:
-        return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
-    if "Close" not in out.columns and "Adj Close" in out.columns:
-        out["Close"] = out["Adj Close"]
+    if not {"Ticker", "Date", "Close"}.issubset(out.columns):
+        raise ValueError("Market data requires Ticker, Date and unadjusted Close columns")
     for col in ["Open", "High", "Low", "Close", "Volume"]:
         if col not in out.columns:
             out[col] = np.nan
@@ -142,7 +142,11 @@ class UnknownSymbolsError(ValueError):
 
 def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: int = 5000) -> list[str]:
     payload = payload or {}
-    raw = payload.get("tickers") or payload.get("symbols") or payload.get("universe")
+    raw = next((payload[key] for key in ["tickers", "symbols", "universe"] if key in payload and payload[key] is not None), None)
+    if isinstance(raw, dict):
+        raise ValueError("Tickers must be a string or list, not an object")
+    if isinstance(raw, (list, tuple)) and not raw:
+        raise ValueError("Explicit ticker list is empty")
     if payload.get("universe_id"):
         if raw:
             raise ValueError("Use either universe_id or explicit universe/tickers")
@@ -170,6 +174,8 @@ def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: i
     cap = int(payload.get("max_symbols") or payload.get("max_tickers") or max_symbols)
     if not 1 <= cap <= max_symbols:
         raise ValueError(f"max_symbols must be between 1 and {max_symbols}")
+    if label not in {"", "default", "all", "full", "master", "master_universe", "market_universe", "whole"} and len(requested) > cap:
+        raise ValueError(f"Explicit universe exceeds max_symbols={cap}; raise the cap instead of dropping tickers")
     return requested[:cap]
 
 

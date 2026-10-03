@@ -2,6 +2,12 @@
 
 
 def field(key, type='text', default=None, group='Specification', help='', **constraints):
+    if key in {'max_symbols', 'top_n', 'card_limit', 'strategy_perf_limit'}:
+        constraints = {'min': 1, 'max': 5000, **constraints}
+    if key == 'lookback_days':
+        constraints = {'min': 1, 'max': 10000, **constraints}
+    if key == 'transaction_cost_bps':
+        constraints = {'min': 0, 'max': 999, **constraints}
     return {'key': key, 'label': key.replace('_', ' ').title(), 'type': type, 'default': default,
             'group': group, 'help': help or f'Configure {key.replace("_", " ")}.', **constraints}
 
@@ -26,6 +32,7 @@ RANGE_FILTERS = {
     'atr_pct': 'ATR as share of observed close', 'adx': 'ADX', 'stochastic': 'Stochastic K', 'williams_r': 'Williams R',
     'ivol': '63-session FF3 residual volatility', 'max_factor': 'Maximum daily return over 21 sessions',
     'prox52': 'Price to 252-session high', 'high_proximity': 'Return from 252-session high', 'vratio': 'Current volume to mean trailing volume',
+    'yang_zhang_vol': '63-session Yang-Zhang volatility scaled to 21 sessions; historical estimate, not a forecast',
     'amihud_percentile': 'Amihud liquidity percentile', 'score': 'Core quant score',
     'bollinger_width_percentile': 'Trailing Bollinger width percentile', 'prox52_percentile': 'Cross-sectional proximity percentile',
 }
@@ -49,7 +56,8 @@ def enrich(inputs):
 def merge_inputs(*groups):
     fields = {}
     for group in groups:
-        fields.update({item['key']: item for item in group})
+        for item in group:
+            fields[item['key']] = {**fields.get(item['key'], {}), **item}
     return list(fields.values())
 
 
@@ -88,6 +96,12 @@ def normalize_payload(inputs, payload):
         if definition.get('options') and value not in definition['options']:
             raise ValueError(f'Unsupported {key}: {value}')
         result[key] = value
+    period_keys = {'rsi_period', 'stochastic_period', 'stochastic_d_period', 'adx_period', 'atr_period', 'bollinger_period', 'bollinger_std_multiple', 'macd_fast_period', 'macd_slow_period', 'macd_signal_period', 'cross_lookback_days'}
+    direct_periods = {key: result.pop(key) for key in period_keys if key in result}
+    if direct_periods:
+        if 'periods' in result and not isinstance(result['periods'], dict):
+            raise ValueError('periods requires a JSON object')
+        result['periods'] = {**direct_periods, **result.get('periods', {})}
     if 'periods' in result:
         if not isinstance(result['periods'], dict):
             raise ValueError('periods requires a JSON object')
@@ -101,4 +115,6 @@ def normalize_payload(inputs, payload):
             if key != 'bollinger_std_multiple' and numeric != int(numeric):
                 raise ValueError(f'{key} requires an integer')
             result[key] = numeric if key == 'bollinger_std_multiple' else int(numeric)
+    if result.get('macd_slow_period', 26) <= result.get('macd_fast_period', 12):
+        raise ValueError('MACD slow period must exceed fast period')
     return result

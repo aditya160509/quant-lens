@@ -43,3 +43,41 @@ def test_csv_preserves_fields(monkeypatch):
     assert result.json()['score_min'] == 80
     assert result.json()['tickers'] == ['AAPL']
     assert client.post('/api/screener-v2/run/01/csv', files={'file': ('tickers.csv', b'AAPL')}, data={'payload': '[]'}).status_code == 422
+
+
+def test_missing_dataset_and_missing_job_result_are_explicit(monkeypatch, tmp_path):
+    app = FastAPI()
+    app.include_router(screener_v2.router, prefix='/api')
+    client = TestClient(app)
+    def missing(*args):
+        raise FileNotFoundError('Required market dataset is missing')
+    monkeypatch.setattr(screener_v2, 'run_feature', missing)
+    assert client.post('/api/screener-v2/run/01', json={'payload': {}}).status_code == 503
+    monkeypatch.setattr(screener_v2.JOBS, 'get', lambda _: {'job_id': 'x', 'status': 'completed', 'progress': 1, 'error': None, 'result': {'result_file': 'missing.json'}})
+    monkeypatch.setattr(screener_v2, 'RESULTS_DIR', tmp_path)
+    assert client.get('/api/screener-v2/jobs/x').status_code == 503
+
+
+def test_upload_is_sandboxed_and_invalid_symbols_do_not_write(monkeypatch, tmp_path):
+    import json
+    from app.services.screener_v2.core import state
+    monkeypatch.setattr(data_loader, 'UPLOADS_DIR', tmp_path / 'screener_v2' / 'uploads')
+    monkeypatch.setattr(state, 'STATE_PATH', tmp_path / 'state.sqlite3')
+    monkeypatch.setattr(data_loader, 'available_symbols', lambda: ('AAPL', 'MSFT'))
+    saved = data_loader.store_universe_upload(b'ticker\nAAPL\nMSFT\n', '../../outside.csv')
+    files = list((tmp_path / 'screener_v2' / 'uploads').glob('*.json'))
+    assert len(files) == 1
+    assert json.loads(files[0].read_text())['symbols'] == ['AAPL', 'MSFT']
+    with pytest.raises(ValueError):
+        data_loader.store_universe_upload(b'ticker\nXYZ\n', 'bad.csv')
+    assert len(list(files[0].parent.glob('*.json'))) == 1
+
+
+def test_manifest_constraints_and_indicator_inputs_are_enforced():
+    from app.services.screener_v2.registry import get_feature
+    from app.services.screener_v2.features.inputs import normalize_payload
+    for value in [0, -1, 1.5]:
+        with pytest.raises(ValueError):
+            normalize_payload(get_feature('05').inputs, {'top_n': value})
+    with pytest.raises(ValueError):
+        normalize_payload(get_feature('01').inputs, {'periods': {'adx_period': 1}})

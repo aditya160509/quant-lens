@@ -8,11 +8,11 @@ STATE_PATH = BACKEND_DATA / 'screener_v2' / 'screens.sqlite3'
 
 
 def compare_and_store(screen_id: str, rows: list[dict], as_of_date: str, rank_shift: int = 10) -> list[dict]:
-    if not screen_id.strip() or len(screen_id) > 120:
+    if not screen_id.strip() or len(screen_id) > 120 or rank_shift < 1:
         raise ValueError('screen_id must contain 1-120 characters')
     current = {r['ticker']: {'rank': i + 1, 'score': r.get('core_quant_score')} for i, r in enumerate(rows)}
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(STATE_PATH, timeout=30) as conn:
+    with _connection() as conn:
         conn.execute('CREATE TABLE IF NOT EXISTS snapshots (screen_id TEXT PRIMARY KEY, as_of_date TEXT, members TEXT NOT NULL)')
         conn.execute('CREATE TABLE IF NOT EXISTS events (screen_id TEXT, as_of_date TEXT, event TEXT NOT NULL)')
         conn.execute('BEGIN IMMEDIATE')
@@ -130,3 +130,45 @@ def alert_history(screen_id: str) -> list[dict]:
     with _connection() as conn:
         conn.execute('CREATE TABLE IF NOT EXISTS alert_history (screen_id TEXT, date TEXT, ticker TEXT, type TEXT, metric TEXT, payload TEXT, PRIMARY KEY (screen_id, date, ticker, type, metric))')
         return [{'date': row[0], **json.loads(row[1])} for row in conn.execute('SELECT date, payload FROM alert_history WHERE screen_id=? ORDER BY date', (screen_id,))]
+
+
+def _schedule_schema(conn):
+    conn.execute('CREATE TABLE IF NOT EXISTS schedules (screen_id TEXT PRIMARY KEY, interval_seconds INTEGER NOT NULL, next_due REAL NOT NULL, enabled INTEGER NOT NULL, last_job_id TEXT, error TEXT)')
+
+
+def set_schedule(screen_id: str, interval_seconds: int, enabled: bool = True, now=None):
+    import time
+    get_screen(screen_id)
+    if not 60 <= interval_seconds <= 604800:
+        raise ValueError('Schedule interval must be 60-604800 seconds')
+    now = time.time() if now is None else float(now)
+    with _connection() as conn:
+        _schedule_schema(conn)
+        conn.execute('INSERT OR REPLACE INTO schedules VALUES (?, ?, ?, ?, NULL, NULL)',
+                     (screen_id, interval_seconds, now + interval_seconds, int(enabled)))
+    return {'screen_id': screen_id, 'interval_seconds': interval_seconds, 'next_due': now + interval_seconds, 'enabled': enabled}
+
+
+def list_schedules():
+    with _connection() as conn:
+        _schedule_schema(conn)
+        columns = ['screen_id', 'interval_seconds', 'next_due', 'enabled', 'last_job_id', 'error']
+        return [dict(zip(columns, row)) for row in conn.execute('SELECT * FROM schedules ORDER BY screen_id')]
+
+
+def claim_due_schedules(now=None):
+    import time
+    now = time.time() if now is None else float(now)
+    with _connection() as conn:
+        _schedule_schema(conn)
+        conn.execute('BEGIN IMMEDIATE')
+        rows = list(conn.execute('SELECT screen_id, interval_seconds, next_due FROM schedules WHERE enabled=1 AND next_due<=?', (now,)))
+        for screen_id, interval, due in rows:
+            conn.execute('UPDATE schedules SET next_due=? WHERE screen_id=?', (now + interval, screen_id))
+        return [{'screen_id': row[0], 'due': row[2]} for row in rows]
+
+
+def schedule_result(screen_id, job_id=None, error=None):
+    with _connection() as conn:
+        _schedule_schema(conn)
+        conn.execute('UPDATE schedules SET last_job_id=?, error=? WHERE screen_id=?', (job_id, error, screen_id))
