@@ -32,10 +32,14 @@ export function toPayload(feature: FeatureSpec, form: FormState): Record<string,
   return out;
 }
 
+/** Inputs a study cannot run without. The API spec has no required flag yet, so they are listed here. */
+const REQUIRED: Record<string, string[]> = { "08": ["discovery_date"], "09": ["treated_unit", "treatment_date"] };
+
 export function validate(feature: FeatureSpec, form: FormState): Record<string, string> {
   const errors: Record<string, string> = {};
   for (const f of feature.inputs) {
     const v = form[f.key];
+    if (REQUIRED[feature.id]?.includes(f.key) && !form.event_csv_path && (v === "" || v === null || v === undefined || (Array.isArray(v) && !v.length))) errors[f.key] = "Required";
     if (f.type === "json" && typeof v === "string" && v.trim()) {
       try { JSON.parse(v); } catch { errors[f.key] = "Not valid JSON"; }
     }
