@@ -294,3 +294,10 @@ Results (2026-10-03, backend steps 1, 3, 4; frontend step 1 done):
 - Frontend step 1 done: `.claude/launch.json` has `frontend-prod`.
 
 Start with backend steps 1, 3 and 4.
+
+Frontend steps 2-4 results (2026-10-03):
+- Deleted `app/labs/research-v2` and `components/research-v2` (no other imports or links found); `/labs/research-v2` and subpaths redirect to `/research` (next.config redirects, temporary).
+- `outputs/registry.tsx` loads plots/tables/robustness views per name with `next/dynamic` (ssr false, skeleton); VIEWS/CHART_VIEWS/viewFor unchanged.
+- Charts: all chart components wrapped in `memo`; `Svg` coalesces pointer-move to one call per animation frame.
+- `turbopackMemoryLimit` now 1 GB; `optimizePackageImports` adds the installed radix packages.
+- Dev server RSS after /research/canonical: see commit notes (about 350 MB before the request). `next build` could not be measured: it fails on a type error in `outputs/robustness.tsx:194` (withSwitch `setV` type), outside this task's files.
