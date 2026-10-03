@@ -34,13 +34,13 @@ export function Diverging({ rows, all, format = fmtTick, labelWidth = 140, value
   const h = rowHeight ? `${rowHeight}px` : undefined;
   const hovered = list.find((r) => r.label === hover);
 
-  const renderRow = (r: DivergingRow) => {
+  const renderRow = (r: DivergingRow, i = -1) => {
     const seg = (v: number, c: string, from: "left" | "right") => (
       <div className="dv-bar" style={{ position: "absolute", top: 5, bottom: 5, [from]: "50%", width: `${(Math.abs(v) / max) * 50}%`, background: c, opacity: 0.85, borderRadius: from === "left" ? "2px 0 0 2px" : "0 2px 2px 0" }} />
     );
     const split = r.neg !== undefined || r.pos !== undefined;
     return (
-      <div key={r.label} className="dv-row" role={onSelect ? "button" : undefined} tabIndex={onSelect ? 0 : undefined}
+      <div key={`${r.label}-${i}`} className="dv-row" role={onSelect ? "button" : undefined} tabIndex={onSelect ? 0 : undefined}
         style={{ gridTemplateColumns: `${labelWidth}px 1fr ${valueWidth}px`, minHeight: h, cursor: onSelect ? "pointer" : undefined, fontSize: 12 }}
         onMouseEnter={() => setHover(r.label)} onMouseLeave={() => setHover(null)}
         onClick={() => onSelect?.(r)} onKeyDown={(e) => { if (e.key === "Enter") onSelect?.(r); }}>

@@ -28,7 +28,7 @@ export function BarList({ bars, format = (v) => v.toFixed(2), max }: { bars: Bar
             const x0 = x(Math.min(0, b.value));
             const w = Math.max(1, Math.abs(x(b.value) - x(0)));
             return (
-              <g key={b.label}>
+              <g key={`${b.label}-${i}`}>
                 <text x={0} y={top + 12} fontSize={12} fill="var(--text)" style={{ fontFamily: "var(--font)" }}>{b.label}</text>
                 <text x={width} y={top + 12} textAnchor="end" fontSize={11.5} fill="var(--text-2)">{format(b.value)}</text>
                 <rect x={0} y={top + 18} width={width} height={6} rx={3} fill="var(--grid)" />

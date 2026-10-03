@@ -1,13 +1,14 @@
 "use client";
 
 import { createElement, useState, useRef, type ReactNode } from "react";
-import { BookOpen, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
+import { BookOpen, Check, ChevronDown, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
 import { downloadCsv, downloadPng, downloadSvg } from "@/charts/export";
 import { useLayout } from "@/workspace/layout";
 import { MenuItem, PopMenu, Tooltip, type MenuAt } from "@/workspace/ui";
 import { label, out } from "./format";
 import type { Item } from "./layouts";
 import { CHART_VIEWS, viewFor } from "./outputs/registry";
+import { Explore, ExploreControls, VIEW_LABEL, defaults, useExplore, viewsFor, type ViewKind } from "./outputs/explore";
 import type { FeatureResult, FeatureSpec } from "./types";
 
 export function OutputCard({ item, feature, result, maximized, onToggleMax, onHide, scope }: {
@@ -25,7 +26,13 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const viewName = item.view ?? spec?.render ?? "dataTable";
   const rows = out(result, key);
   const isChart = CHART_VIEWS.has(viewName);
-  const [asTable, setAsTable] = useState(false);
+  const cfgId = `${scope}:${key}:${item.view ?? ""}`;
+  const custom = useExplore((st) => st.configs[cfgId]);
+  const setCustom = useExplore((st) => st.set);
+  const asTable = custom?.kind === "table";
+  const setAsTable = (f: (v: boolean) => boolean) => setCustom(cfgId, f(asTable) ? { kind: "table" } : null);
+  const [viewMenu, setViewMenu] = useState<MenuAt | null>(null);
+  const kinds: ViewKind[] = rows.length ? viewsFor(rows) : [];
   const [menu, setMenu] = useState<MenuAt | null>(null);
   const [about, setAbout] = useState(false);
   const title = item.title ?? spec?.title ?? label(key);
@@ -51,6 +58,11 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
           {hint ? <span className="sub">{hint}</span> : null}
         </div>
         <div className="tools">
+          {kinds.length > 1 && viewName !== "latex" ? (
+            <button className="btn sm ghost view-as" aria-haspopup="menu" aria-label="View as" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setViewMenu({ x: r.right - 200, y: r.bottom + 4 }); }}>
+              {custom ? VIEW_LABEL[custom.kind] : "View"}<ChevronDown size={11} />
+            </button>
+          ) : null}
           {canTable ? (
             <Tooltip label={asTable ? "Show chart" : "Show table"}>
               <button className="btn sm icon ghost" onClick={() => setAsTable((v) => !v)} aria-label={asTable ? "Show chart" : "Show table"} aria-pressed={asTable}>{asTable ? <BarChart3 size={13} /> : <Table2 size={13} />}</button>
@@ -74,8 +86,21 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
         </div>
       </header>
       <div ref={body} className={`card-b${item.flush ? " flush" : ""}`}>
-        {createElement(viewFor(asTable && isChart ? "dataTable" : viewName), { rows, result, feature, spec, keys: item.keys, opts: item.opts, scope })}
+        {custom ? (
+          <>
+            <ExploreControls rows={rows} config={custom} onChange={(c) => setCustom(cfgId, c)} />
+            <Explore rows={rows} config={custom} />
+          </>
+        ) : createElement(viewFor(viewName), { rows, result, feature, spec, keys: item.keys, opts: item.opts, scope })}
       </div>
+      <PopMenu at={viewMenu} onClose={() => setViewMenu(null)} width={200}>
+        <div className="hd">View as</div>
+        <MenuItem icon={!custom ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => setCustom(cfgId, null)}>Designed view</MenuItem>
+        <div className="sep" />
+        {kinds.map((k) => (
+          <MenuItem key={k} icon={custom?.kind === k ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => setCustom(cfgId, defaults(rows, k))}>{VIEW_LABEL[k]}</MenuItem>
+        ))}
+      </PopMenu>
       <PopMenu at={menu} onClose={() => setMenu(null)}>
         {rows.length ? <MenuItem icon={<Copy size={13} />} onClick={copy}>Copy data</MenuItem> : null}
         {onHide ? <MenuItem icon={<EyeOff size={13} />} onClick={onHide}>Hide</MenuItem> : null}

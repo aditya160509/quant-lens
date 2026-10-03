@@ -37,19 +37,19 @@ export function Heatmap({ rows, cols, values, format = (v) => v.toFixed(3), cent
         <thead>
           <tr>
             <th style={{ textAlign: "left", color: "var(--text-3)", fontFamily: "var(--font)", fontWeight: 500, fontSize: 11.5, padding: "0 6px", whiteSpace: "nowrap" }}>{rowTitle}</th>
-            {cols.map((c, j) => <th key={c} style={{ color: hover?.[1] === j ? "var(--text)" : "var(--text-3)", fontWeight: 500, padding: "0 4px 4px", whiteSpace: "nowrap" }}>{c}</th>)}
+            {cols.map((c, j) => <th key={`${c}-${j}`} style={{ color: hover?.[1] === j ? "var(--text)" : "var(--text-3)", fontWeight: 500, padding: "0 4px 4px", whiteSpace: "nowrap" }}>{c}</th>)}
             {margin ? <th style={{ color: "var(--text-3)", fontWeight: 500, padding: "0 4px 4px", fontFamily: "var(--font)", whiteSpace: "nowrap" }}>{margin.label}</th> : null}
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={r}>
+            <tr key={`${r}-${i}`}>
               <th scope="row" style={{ textAlign: "left", color: hover?.[0] === i || highlightRow === i ? "var(--text)" : "var(--text-2)", fontWeight: highlightRow === i ? 600 : 450, padding: "0 6px", whiteSpace: "nowrap", fontFamily: "var(--font)", fontSize: 12 }}>{r}</th>
               {cols.map((c, j) => {
                 const v = values[i]?.[j] ?? null;
                 const active = hover?.[0] === i && hover?.[1] === j;
                 return (
-                  <td key={c} onPointerEnter={() => setHover([i, j])} onPointerLeave={() => setHover(null)}
+                  <td key={`${c}-${j}`} onPointerEnter={() => setHover([i, j])} onPointerLeave={() => setHover(null)}
                     style={{
                       height: 34, minWidth: 58, textAlign: "center", borderRadius: 6, background: fill(v), color: "var(--text)",
                       boxShadow: active ? "inset 0 0 0 1.5px var(--text)" : outline?.(i, j) ? "inset 0 0 0 1.5px var(--warn)" : undefined,
