@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..core.common import response
-from ..core.decay import run_decay
 from .inputs import SIGNAL, UNIVERSE, field, output
 
 FEATURE_ID = "08"
@@ -40,5 +38,8 @@ OUTPUTS = [
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    from ..core.common import response
+    from ..core.decay import run_decay
+
     out = run_decay(payload or {})
     return response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])

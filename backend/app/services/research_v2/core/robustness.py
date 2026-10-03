@@ -16,7 +16,7 @@ import pandas as pd
 
 from .common import latex_table
 from .estimators import fm_slopes, sort_portfolios
-from .panel import CONTROL_SETS, Panel, _apply_transform, _weights, build_panel, control_for
+from .panel import CONTROL_SETS, Panel, _transform_frame, _weights, build_panel, control_for
 from .stats import auto_nw_lag, mean_test
 
 CRISES = {
@@ -147,7 +147,7 @@ class SpecEvaluator:
         p = self.panel
         sig = p.signal if signal is None else signal
         if spec.transform != "raw":
-            sig = _apply_transform(p.with_signal(sig), spec.transform).signal
+            sig = _transform_frame(sig.reindex_like(p.signal), spec.transform)
         dmask = self.date_mask(spec)
         amask = self.asset_mask(spec)
         if amask is not None:

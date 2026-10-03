@@ -18,11 +18,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from scipy import stats
-import statsmodels.api as sm
-from statsmodels.stats.diagnostic import acorr_ljungbox, het_breuschpagan, het_white, linear_reset
-from statsmodels.stats.outliers_influence import OLSInfluence, variance_inflation_factor
-from statsmodels.stats.stattools import durbin_watson, jarque_bera
-
 from .estimators import fama_macbeth
 from .panel import Panel, build_panel
 from .performance import acf_frame
@@ -32,6 +27,11 @@ MAX_POOLED_ROWS = 40000
 
 
 def run_diagnostics(payload: dict[str, Any]) -> dict[str, Any]:
+    import statsmodels.api as sm
+    from statsmodels.stats.diagnostic import acorr_ljungbox, het_breuschpagan, het_white, linear_reset
+    from statsmodels.stats.outliers_influence import variance_inflation_factor
+    from statsmodels.stats.stattools import durbin_watson, jarque_bera
+
     panel = build_panel(payload)
     alpha = float(payload.get("significance_level") or 0.05)
     top_n = int(payload.get("influential_top") or 10)
@@ -148,6 +148,8 @@ def _time_demeaned(panel: Panel, controls: list[str]) -> pd.DataFrame:
 
 
 def _wooldridge_serial(panel: Panel, controls: list[str]) -> dict[str, Any]:
+    import statsmodels.api as sm
+
     """Wooldridge (2002) test: in first differences, corr(de_t, de_{t-1}) = -0.5 under no serial correlation."""
 
     stacked = panel.stacked(controls).swaplevel().sort_index()
@@ -182,19 +184,32 @@ def _month_influence(lam: pd.Series, top_n: int) -> pd.DataFrame:
 
 
 def _observation_influence(fit: Any, pooled: pd.DataFrame, top_n: int) -> pd.DataFrame:
+    from statsmodels.stats.outliers_influence import OLSInfluence
+
     infl = OLSInfluence(fit)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        dfbetas = pd.DataFrame(infl.dfbetas, index=pooled.index, columns=fit.params.index)
-        dffits = pd.Series(infl.dffits[0], index=pooled.index)
         cooks = pd.Series(infl.cooks_distance[0], index=pooled.index)
     top = cooks.nlargest(top_n).index
+    # Closed-form leave-one-out DFBETAS for the top rows only (the statsmodels
+    # path refits the model once per observation).
+    pos = pooled.index.get_indexer(top)
+    exog = np.asarray(fit.model.exog, dtype=float)
+    xtxi = np.asarray(fit.normalized_cov_params, dtype=float)
+    h = infl.hat_matrix_diag
+    e = np.asarray(fit.resid, dtype=float)
+    n, k = exog.shape
+    s2_i = (float(fit.ssr) - e ** 2 / (1 - h)) / (n - k - 1)
+    sig = list(fit.params.index).index("signal")
+    dfbeta_signal = (exog[pos] @ xtxi[:, sig]) * e[pos] / (1 - h[pos]) / np.sqrt(s2_i[pos] * xtxi[sig, sig])
+    dfbetas_top = pd.Series(dfbeta_signal, index=top)
+    dffits = pd.Series(e / np.sqrt(s2_i * (1 - h)) * np.sqrt(h / (1 - h)), index=pooled.index)
     out = pd.DataFrame({
         "date": [d for d, _ in top],
         "ticker": [tk for _, tk in top],
         "cooks_distance": cooks.loc[top].values,
         "dffits": dffits.loc[top].values,
-        "dfbeta_signal": dfbetas.loc[top, "signal"].values,
+        "dfbeta_signal": dfbetas_top.values,
     })
     n, k = len(pooled), len(fit.params)
     out["dffits_threshold"] = 2 * np.sqrt(k / n)

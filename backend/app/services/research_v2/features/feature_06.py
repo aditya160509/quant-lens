@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..core.common import response
-from ..core.specification import run_specification
 from .inputs import SIGNAL, UNIVERSE, field, output
 
 FEATURE_ID = "06"
@@ -37,5 +35,8 @@ OUTPUTS = [
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    from ..core.common import response
+    from ..core.specification import run_specification
+
     out = run_specification(payload or {})
     return response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])

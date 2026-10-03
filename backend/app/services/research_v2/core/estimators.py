@@ -34,7 +34,10 @@ def fm_slopes(dependent: pd.DataFrame, regressors: dict[str, pd.DataFrame], min_
     x = np.empty((len(idx), len(cols), len(names) + 1), dtype=np.float64)
     x[:, :, 0] = 1.0
     for j, name in enumerate(names, start=1):
-        x[:, :, j] = regressors[name].reindex(index=idx, columns=cols).to_numpy(dtype=np.float64)
+        r = regressors[name]
+        if not (r.shape == dependent.shape and r.index.equals(idx) and np.array_equal(np.asarray(r.columns), np.asarray(cols))):
+            r = r.reindex(index=idx, columns=cols)
+        x[:, :, j] = r.to_numpy(dtype=np.float64)
     if weights is not None:  # WLS: scale each row by sqrt(w); missing or non-positive weights drop the asset
         w = weights.reindex(index=idx, columns=cols).to_numpy(dtype=np.float64)
         root = np.sqrt(np.where(w > 0, w, np.nan))

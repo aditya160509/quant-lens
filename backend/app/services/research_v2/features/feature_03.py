@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..core.common import response
-from ..core.placebo import run_placebo
 from .inputs import BASE, field, output
 
 FEATURE_ID = "03"
@@ -38,5 +36,8 @@ OUTPUTS = [
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    from ..core.common import response
+    from ..core.placebo import run_placebo
+
     out = run_placebo(payload or {})
     return response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])

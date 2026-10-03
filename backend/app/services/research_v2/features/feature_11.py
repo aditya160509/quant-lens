@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..core.common import response
-from ..core.zoo import run_zoo
 from .inputs import SIGNAL, UNIVERSE, field, output
 
 FEATURE_ID = "11"
@@ -32,5 +30,8 @@ OUTPUTS = [
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    from ..core.common import response
+    from ..core.zoo import run_zoo
+
     out = run_zoo(payload or {})
     return response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])

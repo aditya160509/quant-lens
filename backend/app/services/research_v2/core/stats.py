@@ -19,8 +19,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from scipy import stats
-import statsmodels.api as sm
-from arch.bootstrap import StationaryBootstrap
 
 
 def nw_se(series: pd.Series | np.ndarray, lag: int = 4) -> float:
@@ -62,6 +60,8 @@ def ols(y: pd.Series, x: pd.DataFrame, cov: str = "nonrobust", lags: int | None 
 
     frame = pd.concat([pd.Series(y, name="__y"), pd.DataFrame(x)], axis=1).replace([np.inf, -np.inf], np.nan).dropna()
     names = [c for c in frame.columns if c != "__y"]
+    import statsmodels.api as sm
+
     exog = sm.add_constant(frame[names], has_constant="add") if add_const else frame[names]
     if len(frame) <= exog.shape[1] + 2:
         empty = pd.Series(np.nan, index=exog.columns)
@@ -92,6 +92,8 @@ def stationary_bootstrap_means(data: np.ndarray, reps: int, block: float | None 
     arr = arr[np.isfinite(arr).all(axis=1)]
     if len(arr) < 8:
         return np.empty((0, arr.shape[1]))
+    from arch.bootstrap import StationaryBootstrap
+
     bs = StationaryBootstrap(block or default_block_length(len(arr)), arr, seed=seed)
     return np.asarray([pos[0].mean(axis=0) for pos, _ in bs.bootstrap(int(reps))])
 

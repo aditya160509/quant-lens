@@ -31,7 +31,7 @@ UNIVERSE = [
     field("universe", "Universe", "ticker_list", "us_equities", "Universe", help_="'us_equities' (default) or a comma-separated ticker list. Unknown tickers are rejected."),
     field("max_symbols", "Universe size", "number", 400, "Universe", min=30, max=2000, help_="Largest-coverage names first."),
     field("universe_filters", "Universe filters", "multiselect", [], "Universe", UNIVERSE_FILTERS, "Size filters use point-in-time market-cap terciles."),
-    field("lookback_days", "Lookback (calendar days)", "number", 3650, "Universe", min=730, max=11000),
+    field("lookback_days", "Lookback (calendar days)", "number", 3650, "Universe", min=730, max=11000, help_="Length of the formation window in calendar days, counted back from the latest data date (1825 = 5 years, 3650 = 10 years). Earlier history, up to twice this length, is loaded only to warm up signals such as 12-month momentum. Local data starts in 2016, so values above about 3650 add nothing."),
 ]
 
 SIGNAL = [

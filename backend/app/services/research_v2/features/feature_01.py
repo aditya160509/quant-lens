@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..core.canonical import run_canonical
-from ..core.common import response
 from .inputs import BASE, field, output
 
 FEATURE_ID = "01"
@@ -50,5 +48,8 @@ OUTPUTS = [
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    from ..core.common import response
+    from ..core.canonical import run_canonical
+
     out = run_canonical(payload or {})
     return response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])

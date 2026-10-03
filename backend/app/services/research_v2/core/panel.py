@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 import math
+import warnings
 from typing import Any
 
 import numpy as np
@@ -156,7 +157,8 @@ def build_panel(payload: dict[str, Any], default_limit: int = 400) -> Panel:
         if start is not None:
             caveats.append(f"Fundamental inputs are point-in-time with a 90-day filing lag; they exist only from {start.date()} onward, so earlier months drop out.")
 
-    idx = formation
+    # lookback_days defines the formation window; earlier history is fetched (2x) only to warm up signals.
+    idx = formation[formation >= all_dates[-1] - pd.Timedelta(days=lookback)] if len(all_dates) else formation
     protected = get_window(study_key(cfg, payload.get("universe")))
     if protected and not payload.get("_evaluate_protected"):
         start_ts = pd.Timestamp(protected["start"])
@@ -426,22 +428,33 @@ def _universe_mask(filters: list[str], market_cap: pd.DataFrame, symbols: list[s
     return mask
 
 
+def _transform_frame(sig: pd.DataFrame, kind: str) -> pd.DataFrame:
+    """Cross-sectional signal transform on a formation-date x ticker frame (numpy for the hot paths)."""
+
+    v = sig.to_numpy(dtype=np.float64)
+    if kind == "winsorize":
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            lo, hi = np.nanquantile(v, [0.01, 0.99], axis=1)
+        return pd.DataFrame(np.minimum(np.maximum(v, lo[:, None]), hi[:, None]), index=sig.index, columns=sig.columns)
+    if kind == "rank":
+        return sig.rank(axis=1, pct=True)
+    if kind == "zscore":
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            mean = np.nanmean(v, axis=1)
+            std = np.nanstd(v, axis=1, ddof=1)
+        std[std == 0] = np.nan
+        return pd.DataFrame((v - mean[:, None]) / std[:, None], index=sig.index, columns=sig.columns)
+    if kind == "decile":
+        return np.ceil(sig.rank(axis=1, pct=True) * 10)
+    raise ValueError("signal_transform must be raw, winsorize, rank, zscore or decile")
+
+
 def _apply_transform(panel: Panel, kind: str) -> Panel:
-    sig = panel.signal
     if kind == "raw":
         return panel
-    if kind == "winsorize":
-        lo, hi = sig.quantile(0.01, axis=1), sig.quantile(0.99, axis=1)
-        out = sig.clip(lower=lo, upper=hi, axis=0)
-    elif kind == "rank":
-        out = sig.rank(axis=1, pct=True)
-    elif kind == "zscore":
-        out = sig.sub(sig.mean(axis=1), axis=0).div(sig.std(axis=1).replace(0, np.nan), axis=0)
-    elif kind == "decile":
-        out = np.ceil(sig.rank(axis=1, pct=True) * 10)
-    else:
-        raise ValueError("signal_transform must be raw, winsorize, rank, zscore or decile")
-    return panel.with_signal(out, signal_transform=kind)
+    return panel.with_signal(_transform_frame(panel.signal, kind), signal_transform=kind)
 
 
 def _monthly_factors(dates: pd.DatetimeIndex) -> pd.DataFrame:

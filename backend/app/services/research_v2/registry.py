@@ -49,5 +49,8 @@ def feature_manifest() -> list[dict[str, Any]]:
 
 
 def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    feature = get_feature(feature_id)
-    return _load(feature.module).run(payload or {})
+    key = normalize_id(feature_id)
+    module = next((m for m in FEATURE_MODULES if m.rsplit("_", 1)[1] == key), None)
+    if module is None:
+        raise KeyError(f"Unknown Research V2 feature {feature_id}")
+    return _load(module).run(payload or {})  # load only this feature, not the whole manifest

@@ -301,3 +301,22 @@ Frontend steps 2-4 results (2026-10-03):
 - Charts: all chart components wrapped in `memo`; `Svg` coalesces pointer-move to one call per animation frame.
 - `turbopackMemoryLimit` now 1 GB; `optimizePackageImports` adds the installed radix packages.
 - Dev server RSS after /research/canonical: see commit notes (about 350 MB before the request). `next build` could not be measured: it fails on a type error in `outputs/robustness.tsx:194` (withSwitch `setV` type), outside this task's files.
+
+### Perf pass (2026-10-03): default-payload wall time per job, seconds, in-process, results unchanged
+
+| Feature | Before | After | Change |
+|---|---|---|---|
+| F01 canonical | 4.8 | 3.2-3.6 | cold-start only |
+| F02 robustness | 29.2 | 16.6-19 | numpy winsorize/zscore, no reindex when aligned, vectorised portfolio sorts |
+| F03 placebo | 4.7 | 4.0 | vectorised sorts |
+| F04 regimes | 4.5 (Markov fit, randomised) | 4.5 | none |
+| F05 diagnostics | 68.1 | 1.1-3.0 | closed-form leave-one-out DFFITS/DFBETAS (statsmodels refit 40k OLS models) |
+| F06 publication | 4.4 | 4.3 | none |
+| F07 causal (all designs) | 9.6 | 9.7 | none |
+| F08 decay | 25.3 | 25 | tried analytic Jacobian: no gain and different near-degenerate fits, reverted |
+| F09 synthetic | 12.6 | 12.6 | dominated by pysyncon Nelder-Mead/SLSQP |
+| F11 zoo | 1.1 | 1.0 | none |
+
+Timings taken on a loaded machine (load average 4-6); treat differences under 20% as noise. F05 and F02 equality checked against saved baseline JSON (1e-6 relative).
+Memory: the API process no longer imports statsmodels, arch, matplotlib or numba for `/features` (RSS after `/features` 317 -> 206 MB; router import alone 150 MB). The full `main` app still idles at about 485 MB because other routers import sklearn and statsmodels eagerly (not changed). Each job process peaks at 0.5-1 GB and exits (`max_tasks_per_child=1`); a warm pool was not adopted because it would keep that memory resident. `run_feature` now loads only the requested feature module (saves about 0.7 s per job process).
+`lookback_days` now defines the formation window (latest data date minus lookback); earlier history, up to 2x, is loaded only to warm up signals. Previously the data cut was 2x lookback with no trim, so 1825/2555/3650 were identical on the ~10-year local data. With the default 3650 the earliest few months now drop out of default results.
