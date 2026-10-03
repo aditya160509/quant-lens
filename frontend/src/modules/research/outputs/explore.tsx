@@ -125,6 +125,9 @@ function transformed(rows: Row[], ys: string[], t: ExploreConfig["transform"]): 
   return out;
 }
 
+/** Series label; keeps the overlay suffix " · B" upper-case. */
+const seriesLabel = (y: string) => (y.endsWith(" · B") ? `${label(y.slice(0, -4))} · B` : label(y));
+
 const text = (v: unknown) => (v === null || v === undefined ? "–" : typeof v === "string" ? v : String(v));
 
 /** Draws rows the way the config says. */
@@ -140,12 +143,12 @@ export function Explore({ rows, config }: { rows: Row[]; config: ExploreConfig }
     const xKey = x ?? "date";
     if (p[xKey] === "date") {
       return <TimeSeries data={data} x={xKey} height={280} zeroFill={config.zeroFill}
-        series={ys.map((y) => ({ key: y, label: label(y), kind }))} refLines={transform === "rebase" ? [{ y: 100, dash: true }] : undefined} />;
+        series={ys.map((y) => ({ key: y, label: seriesLabel(y), kind, dash: y.endsWith(" · B") }))} refLines={transform === "rebase" ? [{ y: 100, dash: true }] : undefined} />;
     }
     // Numeric x: ordered line through the points.
     const sorted = [...data].filter((r) => isNum(r[xKey])).sort((a, b) => (a[xKey] as number) - (b[xKey] as number));
     return <XYPlot points={[]} xLabel={label(xKey)} yLabel={ys.map(label).join(", ")} height={280}
-      lines={ys.map((y) => ({ label: label(y), points: sorted.filter((r) => isNum(r[y])).map((r) => ({ x: r[xKey] as number, y: r[y] as number })) }))} />;
+      lines={ys.map((y) => ({ label: seriesLabel(y), dash: y.endsWith(" · B"), points: sorted.filter((r) => isNum(r[y])).map((r) => ({ x: r[xKey] as number, y: r[y] as number })) }))} />;
   }
 
   if (kind === "bars" || kind === "hbars") {
@@ -226,4 +229,26 @@ export function ExploreControls({ rows, config, onChange }: { rows: Row[]; confi
       ) : null}
     </div>
   );
+}
+
+/**
+ * Two runs of the same output on one time axis: run B's numeric columns are added with a " · B"
+ * suffix, joined on the shared date (or first) column. Returns the merged rows and the line config.
+ */
+export function overlay(a: Row[], b: Row[]): { rows: Row[]; config: ExploreConfig } | null {
+  const p = profile(a);
+  const x = Object.keys(p).find((c) => p[c] === "date") ?? Object.keys(p).find((c) => p[c] === "number");
+  if (!x) return null;
+  const ys = Object.keys(p).filter((c) => p[c] === "number" && c !== x).slice(0, 2);
+  if (!ys.length) return null;
+  const byX = new Map<string, Row>();
+  for (const r of a) byX.set(String(r[x]), { [x]: r[x], ...Object.fromEntries(ys.map((y) => [y, r[y]])) });
+  for (const r of b) {
+    const k = String(r[x]);
+    const row = byX.get(k) ?? { [x]: r[x] };
+    for (const y of ys) row[`${y} · B`] = r[y];
+    byX.set(k, row);
+  }
+  const rows = [...byX.values()].sort((m, n) => (String(m[x]) < String(n[x]) ? -1 : 1));
+  return { rows, config: { kind: "line", x, ys: ys.flatMap((y) => [y, `${y} · B`]) } };
 }

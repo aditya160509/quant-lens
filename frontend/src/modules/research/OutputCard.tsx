@@ -8,7 +8,8 @@ import { MenuItem, PopMenu, Tooltip, type MenuAt } from "@/workspace/ui";
 import { label, out } from "./format";
 import type { Item } from "./layouts";
 import { CHART_VIEWS, viewFor } from "./outputs/registry";
-import { Explore, ExploreControls, VIEW_LABEL, defaults, useExplore, viewsFor, type ViewKind } from "./outputs/explore";
+import { Explore, ExploreControls, VIEW_LABEL, defaults, overlay, useExplore, viewsFor, type ViewKind } from "./outputs/explore";
+import { useJob, useRuns } from "./api";
 import type { FeatureResult, FeatureSpec } from "./types";
 
 export function OutputCard({ item, feature, result, maximized, onToggleMax, onHide, onMove, onSpan, scope }: {
@@ -35,6 +36,14 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const setAsTable = (f: (v: boolean) => boolean) => setCustom(cfgId, f(asTable) ? { kind: "table" } : null);
   const [viewMenu, setViewMenu] = useState<MenuAt | null>(null);
   const kinds: ViewKind[] = rows.length ? viewsFor(rows) : [];
+  // Overlay: the same output from another finished run of this feature, drawn on one axis.
+  const currentJob = scope.split(":")[1];
+  const others = useRuns((st) => st.runs).filter((r) => r.featureId === feature.id && r.status === "completed" && r.jobId !== currentJob).slice(0, 6);
+  const [overlayId, setOverlayId] = useState<string | null>(null);
+  const other = useJob(overlayId);
+  const otherRows = other.data?.result ? out(other.data.result, key) : [];
+  const merged = overlayId && otherRows.length ? overlay(rows, otherRows) : null;
+  const canOverlay = kinds.some((k) => k === "line");
   const [menu, setMenu] = useState<MenuAt | null>(null);
   const [about, setAbout] = useState(false);
   const title = item.title ?? spec?.title ?? label(key);
@@ -88,7 +97,15 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
         </div>
       </header>
       <div ref={body} className={`card-b${item.flush ? " flush" : ""}`}>
-        {custom ? (
+        {overlayId ? (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: 12, color: "var(--text-3)" }}>
+              <span>Overlay: <b style={{ color: "var(--text)", fontWeight: 500 }}>B</b> = run from {new Date(others.find((r) => r.jobId === overlayId)?.startedAt ?? 0).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+              <button className="btn sm ghost" style={{ marginLeft: "auto" }} onClick={() => setOverlayId(null)}><X size={12} />Remove overlay</button>
+            </div>
+            {merged ? <Explore rows={merged.rows} config={merged.config} /> : <div style={{ color: "var(--text-3)", fontSize: 12.5 }}>{other.isLoading ? "Loading run B…" : "That run is no longer on the server, or has no data for this output."}</div>}
+          </div>
+        ) : custom ? (
           <>
             <ExploreControls rows={rows} config={custom} onChange={(c) => setCustom(cfgId, c)} />
             <Explore rows={rows} config={custom} />
@@ -102,6 +119,12 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
         {kinds.map((k) => (
           <MenuItem key={k} icon={custom?.kind === k ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => setCustom(cfgId, defaults(rows, k))}>{VIEW_LABEL[k]}</MenuItem>
         ))}
+        {canOverlay && others.length ? <><div className="sep" /><div className="hd">Overlay another run</div>
+          {others.map((r) => (
+            <MenuItem key={r.jobId} icon={overlayId === r.jobId ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => setOverlayId(r.jobId)}>
+              {new Date(r.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}{r.sweep ? ` · ${label(r.sweep.key)} ${r.sweep.value}` : ""}
+            </MenuItem>
+          ))}</> : null}
       </PopMenu>
       <PopMenu at={menu} onClose={() => setMenu(null)}>
         {rows.length ? <MenuItem icon={<Copy size={13} />} onClick={copy}>Copy data</MenuItem> : null}
