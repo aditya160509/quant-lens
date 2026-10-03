@@ -62,10 +62,9 @@ export function StudyForm({ feature, form, setForm, errors }: {
   errors: Record<string, string>;
 }) {
   const hasUniverse = feature.inputs.some((f) => f.type === "ticker_list");
-  const linked = hasUniverse ? new Set(["max_symbols"]) : new Set<string>();
-  const groups = useMemo(() => feature.inputs.filter((f) => !linked.has(f.key)).reduce<Record<string, InputSpec[]>>((acc, f) => ({ ...acc, [f.group]: [...(acc[f.group] ?? []), f] }), {}), [feature, linked]);
+  const groups = useMemo(() => feature.inputs.filter((f) => !(hasUniverse && f.key === "max_symbols")).reduce<Record<string, InputSpec[]>>((acc, f) => ({ ...acc, [f.group]: [...(acc[f.group] ?? []), f] }), {}), [feature, hasUniverse]);
   const names = Object.keys(groups);
-  const [open, setOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(names.map((g, i) => [g, i < 2])));
+  const [open, setOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(names.map((g, i) => [g, i < 2 || groups[g].some((f) => REQUIRED[feature.id]?.includes(f.key))])));
   const set = (key: string) => (value: unknown) => setForm((cur) => ({ ...cur, [key]: value }));
   const maxField = feature.inputs.find((f) => f.key === "max_symbols");
 
@@ -78,8 +77,8 @@ export function StudyForm({ feature, form, setForm, errors }: {
       {names.map((group) => {
         const fields = groups[group];
         const n = fields.filter((f) => isChanged(f, form[f.key])).length;
-        const isOpen = open[group] ?? false;
         const hasError = fields.some((f) => errors[f.key]);
+        const isOpen = (open[group] ?? false) || hasError;
         return (
           <section key={group} style={{ borderBottom: "1px solid var(--line)" }}>
             <button type="button" onClick={() => setOpen((o) => ({ ...o, [group]: !isOpen }))} aria-expanded={isOpen}
