@@ -298,7 +298,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .ov-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-2); flex: none; }
 .ov-arrow { margin-left: auto; color: var(--text-3); opacity: 0; transform: translate(-3px, 3px); transition: opacity 0.18s, transform 0.18s var(--ease); }
 .ov-card:hover .ov-arrow { opacity: 1; transform: none; }
-.ov-desc { margin: 12px 0 16px; color: var(--text-3); font-size: 12.5px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ov-desc { margin: 10px 0 12px; color: var(--text-3); font-size: 12.5px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ov-head { font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* command palette */
@@ -387,3 +387,21 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .ws-tokens.pal-mono { --s1: var(--text); --s2: color-mix(in oklch, var(--text) 70%, transparent); --s3: color-mix(in oklch, var(--text) 50%, transparent); --s4: color-mix(in oklch, var(--accent) 90%, transparent); --s5: color-mix(in oklch, var(--text) 35%, transparent); --s6: color-mix(in oklch, var(--text) 25%, transparent); }
 .ws-tokens.no-grid { --grid: transparent; }
 .lw-thin { --lw: 1.1; } .lw-regular { --lw: 1.6; } .lw-bold { --lw: 2.4; }
+
+/* Overview: stats strip, numbered stages, verdict edge on each card. */
+.ov-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0; border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--line); background: var(--panel); }
+.ov-stats > div { padding: 12px 16px; border-left: 1px solid var(--line); }
+.ov-stats > div:first-child { border-left: 0; }
+.ov-stats .l { font-size: 11.5px; color: var(--text-3); }
+.ov-stats .v { margin-top: 4px; font: 500 20px/1.2 var(--mono); letter-spacing: -0.03em; color: var(--text); }
+.ov-stage { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.ov-stage .n { width: 20px; height: 20px; display: inline-grid; place-items: center; border-radius: 6px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); font: 500 11px var(--mono); color: var(--text-2); align-self: center; }
+.ov-stage h2 { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
+.ov-stage p { color: var(--text-3); font-size: 12.5px; }
+.ov-card.t-up { box-shadow: inset 2px 0 0 var(--up), inset 0 0 0 1px var(--line); }
+.ov-card.t-down { box-shadow: inset 2px 0 0 var(--down), inset 0 0 0 1px var(--line); }
+.ov-card.t-warn { box-shadow: inset 2px 0 0 var(--warn), inset 0 0 0 1px var(--line); }
+.ov-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-top: 10px; border-top: 1px solid var(--grid); }
+.ov-metrics span { display: block; font-size: 11px; color: var(--text-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-metrics b { font-weight: 500; font-size: 13.5px; color: var(--text); }
+@media (max-width: 640px) { .ov-stats > div:nth-child(n+4) { border-top: 1px solid var(--line); } }
