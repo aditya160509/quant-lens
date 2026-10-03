@@ -61,6 +61,10 @@ Rules:
 
 ## Phase 4: Frontend
 
+**Codex and other agents: do not do this phase.** The frontend rebuild is done by Claude only. Agents may change `frontend/src/lib/api.js` or the module's `api.js` just enough to call the correct backend routes, and must delete fake or demo data. Nothing else in the frontend: no new components, no redesign, no CSS. Make the backend manifest (`INPUTS`/`OUTPUTS` with render hints) complete so the frontend can be built from it.
+
+Target, for reference:
+
 `frontend/src/components/<module>/`:
 
 | File | Role |
