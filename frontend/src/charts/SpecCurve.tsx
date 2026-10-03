@@ -1,7 +1,7 @@
 "use client";
 
 import { scaleLinear } from "d3";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { AxisLabel, AxisY, GridY, Readout, ReadoutRow, Svg, crisp, robustExtent, useWidth, usePointerIndex } from "./core";
 
 export type Spec = {
@@ -34,7 +34,7 @@ const RIGHT = 12;
  * Collapsed, the ledger shows one row per decision with a mark where a spec departs from the base;
  * expanded, it shows one row per choice.
  */
-export function SpecCurve({ specs, dimensions, formatChoice = (_, v) => v, formatValue = (v) => v.toFixed(4), yLabel = "Estimate", onHover }: Props) {
+function SpecCurveImpl({ specs, dimensions, formatChoice = (_, v) => v, formatValue = (v) => v.toFixed(4), yLabel = "Estimate", onHover }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [expanded, setExpanded] = useState(false);
   const sorted = useMemo(() => [...specs].sort((a, b) => a.estimate - b.estimate), [specs]);
@@ -171,3 +171,5 @@ function mode(values: (string | undefined)[]): string {
 }
 
 const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+export const SpecCurve = memo(SpecCurveImpl);

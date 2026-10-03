@@ -1,7 +1,7 @@
 "use client";
 
 import { area as d3area, curveMonotoneX, curveStepAfter, line as d3line, scaleLinear, scaleTime } from "d3";
-import { useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { MessageSquarePlus, Minus, RotateCcw, X } from "lucide-react";
 import { useNotes } from "./annotations";
 import {
@@ -56,7 +56,7 @@ const RIBBON_H = 14;
  * linked hover across charts, drag-to-zoom (double-click resets), event markers, shaded regions,
  * a categorical ribbon and notes pinned to dates.
  */
-export function TimeSeries({
+function TimeSeriesImpl({
   data, x = "date", series: seriesProp, band, refLines = [], markers = [], regions = [], ribbon, highlight, height = 260,
   format = fmtTick, yLabel, notesKey, legend = true, robust = false, zeroFill = false, bars, toolbar,
 }: TimeSeriesProps) {
@@ -376,3 +376,5 @@ export function TimeSeries({
     </div>
   );
 }
+
+export const TimeSeries = memo(TimeSeriesImpl);

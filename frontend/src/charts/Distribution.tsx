@@ -2,7 +2,7 @@
 
 import { bin, extent } from "d3";
 import { scaleLinear } from "d3";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { AxisLabel, AxisX, Readout, ReadoutRow, Svg, crisp, useWidth } from "./core";
 
 type Props = {
@@ -20,7 +20,7 @@ type Props = {
  * Null or sampling distribution as a histogram, with the observed statistic marked
  * and the tail beyond it shaded, so the shaded share reads as the p-value.
  */
-export function Distribution({ values, observed = null, tail = "right", xLabel = "Statistic", observedLabel = "Observed", height = 220, format = (v) => v.toFixed(2) }: Props) {
+function DistributionImpl({ values, observed = null, tail = "right", xLabel = "Statistic", observedLabel = "Observed", height = 220, format = (v) => v.toFixed(2) }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const M = { top: 26, right: 12, bottom: 30, left: 12 };
@@ -86,3 +86,5 @@ export function Distribution({ values, observed = null, tail = "right", xLabel =
     </div>
   );
 }
+
+export const Distribution = memo(DistributionImpl);

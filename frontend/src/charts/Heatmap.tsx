@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { diverging } from "./core";
 
 type Props = {
@@ -19,7 +19,7 @@ type Props = {
 };
 
 /** Matrix heatmap rendered as a table so values stay readable and selectable; colour encodes magnitude. */
-export function Heatmap({ rows, cols, values, format = (v) => v.toFixed(3), centered = true, margin, rowTitle = "", colTitle, highlightRow, outline }: Props) {
+function HeatmapImpl({ rows, cols, values, format = (v) => v.toFixed(3), centered = true, margin, rowTitle = "", colTitle, highlightRow, outline }: Props) {
   const [hover, setHover] = useState<[number, number] | null>(null);
   const flat = values.flat().filter((v): v is number => v !== null && Number.isFinite(v));
   const maxAbs = Math.max(1e-12, ...flat.map(Math.abs));
@@ -71,3 +71,5 @@ export function Heatmap({ rows, cols, values, format = (v) => v.toFixed(3), cent
     </div>
   );
 }
+
+export const Heatmap = memo(HeatmapImpl);

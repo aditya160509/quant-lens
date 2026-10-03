@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { fmtTick } from "./core";
 
 export type DivergingRow = {
@@ -27,7 +27,7 @@ export type DivergingProps = {
 const tone = (v: number) => (v > 0 ? "var(--up)" : v < 0 ? "var(--down)" : "var(--text-3)");
 
 /** Horizontal bars growing left (negative) or right (positive) from a centre axis. */
-export function Diverging({ rows, all, format = fmtTick, labelWidth = 140, valueWidth = 72, rowHeight, onSelect }: DivergingProps) {
+function DivergingImpl({ rows, all, format = fmtTick, labelWidth = 140, valueWidth = 72, rowHeight, onSelect }: DivergingProps) {
   const [hover, setHover] = useState<string | null>(null);
   const list = all ? [all, ...rows] : rows;
   const max = Math.max(1e-9, ...list.flatMap((r) => [Math.abs(r.value), Math.abs(r.neg ?? 0), Math.abs(r.pos ?? 0)]));
@@ -68,3 +68,5 @@ export function Diverging({ rows, all, format = fmtTick, labelWidth = 140, value
     </div>
   );
 }
+
+export const Diverging = memo(DivergingImpl);

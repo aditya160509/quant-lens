@@ -1,7 +1,7 @@
 "use client";
 
 import { line as d3line, scaleLinear } from "d3";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { AxisLabel, AxisX, AxisY, GridY, Legend, Readout, ReadoutRow, ReadoutTitle, SERIES, Svg, crisp, fmtTick, nearest, robustExtent, useWidth } from "./core";
 
 export type PRSeries = { label: string; color?: string; points: { x: number; y: number; lo?: number | null; hi?: number | null }[]; bandStyle?: "whiskers" | "ribbon" };
@@ -28,7 +28,7 @@ const M = { top: 16, right: 16, bottom: 34, left: 56 };
  * Estimates with confidence intervals over a numeric x: event studies, bandwidth sensitivity,
  * placebo cutoffs. Several series are dodged so their intervals never overlap.
  */
-export function PointRange({ series, xLabel, yLabel, height = 300, event = null, shadePre = false, format = fmtTick, formatX = (v) => String(v), refY = 0, robust = true, highlightX = null }: Props) {
+function PointRangeImpl({ series, xLabel, yLabel, height = 300, event = null, shadePre = false, format = fmtTick, formatX = (v) => String(v), refY = 0, robust = true, highlightX = null }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hoverX, setHoverX] = useState<number | null>(null);
   const allX = useMemo(() => [...new Set(series.flatMap((s) => s.points.map((p) => p.x)))].sort((a, b) => a - b), [series]);
@@ -110,3 +110,5 @@ export function PointRange({ series, xLabel, yLabel, height = 300, event = null,
     </div>
   );
 }
+
+export const PointRange = memo(PointRangeImpl);

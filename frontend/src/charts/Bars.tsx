@@ -1,7 +1,7 @@
 "use client";
 
 import { scaleBand, scaleLinear } from "d3";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { AxisY, GridY, Readout, ReadoutRow, ReadoutTitle, Svg, crisp, fmtTick, useWidth } from "./core";
 
 export type BarDatum = { label: string; value: number; lo?: number | null; hi?: number | null; color?: string; detail?: [string, string][] };
@@ -22,7 +22,7 @@ type Props = {
 const M = { top: 18, right: 12, bottom: 30, left: 48 };
 
 /** Vertical bars with optional confidence whiskers, reference lines and per-bar readout. */
-export function Bars({ bars, height = 240, format = fmtTick, refLines = [], signed = true, valueLabels, yLabel, hideLabels }: Props) {
+function BarsImpl({ bars, height = 240, format = fmtTick, refLines = [], signed = true, valueLabels, yLabel, hideLabels }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const showValues = valueLabels ?? bars.length <= 12;
@@ -82,3 +82,5 @@ export function Bars({ bars, height = 240, format = fmtTick, refLines = [], sign
     </div>
   );
 }
+
+export const Bars = memo(BarsImpl);

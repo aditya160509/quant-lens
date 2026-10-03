@@ -1,7 +1,7 @@
 "use client";
 
 import { extent, scaleBand, scaleSqrt } from "d3";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Readout, ReadoutRow, ReadoutTitle, Svg, diverging, fmtTick, useWidth } from "./core";
 
 export type DotCell = { x: string | number; y: string | number; value: number; size?: number };
@@ -20,7 +20,7 @@ export type DotGridProps = {
 const M = { top: 8, right: 8, bottom: 40, left: 52 };
 
 /** Parameter-sweep grid: one dot per (x, y) pair, coloured by the metric on a diverging scale. */
-export function DotGrid({ cells, xLabel, yLabel, metricLabel = "Value", height = 240, format = fmtTick, selected, onSelect }: DotGridProps) {
+function DotGridImpl({ cells, xLabel, yLabel, metricLabel = "Value", height = 240, format = fmtTick, selected, onSelect }: DotGridProps) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<DotCell | null>(null);
   const xv = [...new Set(cells.map((c) => c.x))].sort((a, b) => (typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b))));
@@ -67,3 +67,5 @@ export function DotGrid({ cells, xLabel, yLabel, metricLabel = "Value", height =
     </div>
   );
 }
+
+export const DotGrid = memo(DotGridImpl);

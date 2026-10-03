@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { scaleLinear } from "d3";
 import { useWidth } from "./core";
 
@@ -9,7 +10,7 @@ export type Bar = { label: string; value: number; note?: string; tone?: "accent"
  * Ranked horizontal bars with direct labels: name and value on one line, the bar beneath,
  * an optional note under it. Diverging around zero when any value is negative.
  */
-export function BarList({ bars, format = (v) => v.toFixed(2), max }: { bars: Bar[]; format?: (v: number) => string; max?: number }) {
+function BarListImpl({ bars, format = (v) => v.toFixed(2), max }: { bars: Bar[]; format?: (v: number) => string; max?: number }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const hasNotes = bars.some((b) => b.note);
   const ROW = hasNotes ? 46 : 32;
@@ -43,3 +44,5 @@ export function BarList({ bars, format = (v) => v.toFixed(2), max }: { bars: Bar
     </div>
   );
 }
+
+export const BarList = memo(BarListImpl);

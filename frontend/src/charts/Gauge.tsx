@@ -1,11 +1,12 @@
 "use client";
 
+import { memo } from "react";
 import { motion } from "framer-motion";
 
 type Zone = { to: number; color: string; label: string };
 
 /** Semicircular gauge with coloured zones and an animated needle. Values beyond the scale pin to the ends. */
-export function Gauge({ value, min = 0, max = 100, zones, label, sub }: { value: number; min?: number; max?: number; zones: Zone[]; label: string; sub?: string }) {
+function GaugeImpl({ value, min = 0, max = 100, zones, label, sub }: { value: number; min?: number; max?: number; zones: Zone[]; label: string; sub?: string }) {
   const W = 260, H = 150, cx = W / 2, cy = 132, R = 104;
   const frac = (v: number) => Math.max(0, Math.min(1, (v - min) / (max - min)));
   const pt = (f: number, r = R) => [cx - r * Math.cos(Math.PI * f), cy - r * Math.sin(Math.PI * f)] as const;
@@ -36,3 +37,5 @@ export function Gauge({ value, min = 0, max = 100, zones, label, sub }: { value:
     </div>
   );
 }
+
+export const Gauge = memo(GaugeImpl);

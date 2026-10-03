@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useCallback, useLayoutEffect, useRef, useState, type ReactNode, type SVGProps } from "react";
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type SVGProps } from "react";
 import { create } from "zustand";
 import type { ScaleLinear } from "d3";
 import { EyeOff } from "lucide-react";
@@ -31,10 +31,27 @@ export const crisp = (v: number) => Math.round(v) + 0.5;
 
 type SvgProps = Omit<SVGProps<SVGSVGElement>, "ref" | "width" | "height"> & { width: number; height: number; label: string; children: ReactNode };
 
-export const Svg = forwardRef<SVGSVGElement, SvgProps>(function Svg({ width, height, label, children, style, ...rest }, ref) {
+export const Svg = forwardRef<SVGSVGElement, SvgProps>(function Svg({ width, height, label, children, style, onPointerMove, ...rest }, ref) {
+  // Coalesce pointer-move bursts to one handler call per animation frame.
+  const latest = useRef<React.PointerEvent<SVGSVGElement> | null>(null);
+  const frame = useRef(0);
+  const handler = useRef(onPointerMove);
+  useEffect(() => { handler.current = onPointerMove; });
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  const move = onPointerMove ? (e: React.PointerEvent<SVGSVGElement>) => {
+    latest.current = Object.create(e, { currentTarget: { value: e.currentTarget } });
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      if (latest.current) handler.current?.(latest.current);
+      latest.current = null;
+    });
+  } : undefined;
+  const leave = rest.onPointerLeave;
   return (
     <svg ref={ref} width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}
-      style={{ display: "block", overflow: "visible", fontFamily: "var(--mono)", touchAction: "pan-y", userSelect: "none", ...style }} {...rest}>
+      style={{ display: "block", overflow: "visible", fontFamily: "var(--mono)", touchAction: "pan-y", userSelect: "none", ...style }} {...rest} onPointerMove={move}
+      onPointerLeave={leave ? (e) => { cancelAnimationFrame(frame.current); frame.current = 0; latest.current = null; leave(e); } : undefined}>
       {children}
     </svg>
   );

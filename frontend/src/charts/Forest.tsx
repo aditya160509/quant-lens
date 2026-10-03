@@ -1,7 +1,7 @@
 "use client";
 
 import { scaleLinear } from "d3";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Svg, crisp, fmtTick, useWidth } from "./core";
 
 export type ForestRow = { label: string; sub?: string; estimate: number; lo: number | null; hi: number | null; tone?: "up" | "down" | "muted" | "accent"; note?: string; bold?: boolean };
@@ -10,7 +10,7 @@ export type ForestRow = { label: string; sub?: string; estimate: number; lo: num
  * Forest plot: one row per estimate with its confidence interval, a zero line,
  * and the numbers printed on the right so the chart doubles as a table.
  */
-export function Forest({ rows, format = (v: number) => v.toFixed(4), refX = 0, refLabel }: { rows: ForestRow[]; format?: (v: number) => string; refX?: number | null; refLabel?: string }) {
+function ForestImpl({ rows, format = (v: number) => v.toFixed(4), refX = 0, refLabel }: { rows: ForestRow[]; format?: (v: number) => string; refX?: number | null; refLabel?: string }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const ROW = 34;
@@ -64,3 +64,5 @@ export function Forest({ rows, format = (v: number) => v.toFixed(4), refX = 0, r
     </div>
   );
 }
+
+export const Forest = memo(ForestImpl);

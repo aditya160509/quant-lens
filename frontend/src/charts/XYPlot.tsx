@@ -1,7 +1,7 @@
 "use client";
 
 import { line as d3line, scaleLinear } from "d3";
-import { useMemo, useState, type ReactNode } from "react";
+import { memo, useMemo, useState, type ReactNode } from "react";
 import { AxisLabel, AxisX, AxisY, GridX, GridY, Legend, Readout, ReadoutRow, ReadoutTitle, SERIES, Svg, crisp, fmtTick, robustExtent, useWidth } from "./core";
 
 export type XYPoint = { x: number; y: number; label?: string; group?: string; size?: number; emphasis?: boolean; detail?: [string, string][] };
@@ -29,7 +29,7 @@ type Props = {
 const M = { top: 14, right: 16, bottom: 34, left: 52 };
 
 /** Scatter plot with optional fitted lines, reference lines, quadrant labels and nearest-point readout. */
-export function XYPlot({
+function XYPlotImpl({
   points, lines = [], xLabel, yLabel, height = 300, refX = [], refY = [], diagonal = false, quadrants, labelPoints = false,
   groupColors, formatX = fmtTick, formatY = fmtTick, robust = false, square = false, footer,
 }: Props) {
@@ -136,3 +136,5 @@ export function XYPlot({
     </div>
   );
 }
+
+export const XYPlot = memo(XYPlotImpl);
