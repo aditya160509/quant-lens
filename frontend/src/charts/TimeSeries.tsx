@@ -2,7 +2,7 @@
 
 import { area as d3area, curveMonotoneX, curveStepAfter, line as d3line, scaleLinear, scaleTime } from "d3";
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { MessageSquarePlus, RotateCcw, X } from "lucide-react";
+import { MessageSquarePlus, Minus, RotateCcw, X } from "lucide-react";
 import { useNotes } from "./annotations";
 import {
   AxisTag, GridY, Legend, Readout, ReadoutRow, ReadoutTitle, SERIES, Svg, crisp, fmtDate, fmtTick, nearest, parseDate, robustExtent, useCrosshair, useWidth,
@@ -69,6 +69,7 @@ export function TimeSeries({
   const [zoom, setZoom] = useState<[number, number] | null>(null);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const [noting, setNoting] = useState(false);
+  const [leveling, setLeveling] = useState(false);
   const [draft, setDraft] = useState<{ t: number; text: string } | null>(null);
   const hoverT = useCrosshair((s) => s.t);
   const setHover = useCrosshair((s) => s.set);
@@ -146,6 +147,12 @@ export function TimeSeries({
     const r = e.currentTarget.getBoundingClientRect();
     const t = pxToT(Math.max(x0, Math.min(x1, e.clientX - r.left)));
     if (noting) { setDraft({ t: times[nearest(times, t)], text: "" }); setNoting(false); return; }
+    if (leveling && notesKey) {
+      const y = ys.invert(e.clientY - r.top);
+      addNote(notesKey, { id: `lvl-${Date.now()}`, t: 0, y: Number(y.toPrecision(4)), text: "" });
+      setLeveling(false);
+      return;
+    }
     setDrag({ from: t, to: t });
     e.currentTarget.setPointerCapture(e.pointerId);
   };
@@ -176,6 +183,11 @@ export function TimeSeries({
           {toolbar}
           {zoom ? <button className="btn sm ghost" onClick={() => setZoom(null)}><RotateCcw size={11} />Reset zoom</button> : null}
           {notesKey ? (
+            <button className="btn sm ghost" aria-pressed={leveling} onClick={() => { setLeveling((v) => !v); setNoting(false); }} style={leveling ? { color: "var(--accent)" } : undefined} title="Draw a horizontal level">
+              <Minus size={12} />{leveling ? "Click a level" : "Level"}
+            </button>
+          ) : null}
+          {notesKey ? (
             <button className="btn sm ghost" aria-pressed={noting} onClick={() => setNoting((n) => !n)} style={noting ? { color: "var(--accent)" } : undefined}>
               <MessageSquarePlus size={12} />{noting ? "Click a date" : "Note"}
             </button>
@@ -185,7 +197,7 @@ export function TimeSeries({
       {width > 0 ? (
         <Svg ref={svgRef} width={width} height={height} label={`${series.map((s) => s.label).join(", ")} over time`}
           onPointerMove={onMove} onPointerLeave={() => { setHover(null, null); }} onPointerDown={onDown} onPointerUp={onUp}
-          onDoubleClick={() => setZoom(null)} style={{ cursor: noting ? "copy" : "crosshair" }}>
+          onDoubleClick={() => setZoom(null)} style={{ cursor: noting || leveling ? "copy" : "crosshair" }}>
           <defs>
             <clipPath id={`${uid}-clip`}><rect x={x0} y={M.top - 2} width={x1 - x0} height={plotH + 4} /></clipPath>
             {paths.filter((p) => p.fill).map((p) => (
@@ -222,6 +234,12 @@ export function TimeSeries({
 
           <g clipPath={`url(#${uid}-clip)`}>
             {bandPath ? <path d={bandPath} fill={band?.color ?? "var(--band)"} /> : null}
+            {notes.filter((n) => n.y !== undefined).map((n) => (
+              <g key={n.id}>
+                <line x1={x0} x2={x1} y1={crisp(ys(n.y!))} y2={crisp(ys(n.y!))} stroke="var(--accent)" strokeOpacity={0.9} />
+                <text x={x1 - 4} y={ys(n.y!) - 4} textAnchor="end" fontSize={10.5} fill="var(--accent)" style={{ fontFamily: "var(--mono)" }}>{format(n.y!)}</text>
+              </g>
+            ))}
             {refLines.map((l, i) => (
               <g key={i}>
                 <line x1={x0} x2={x1} y1={crisp(ys(l.y))} y2={crisp(ys(l.y))} stroke={l.color ?? "var(--text-3)"} strokeDasharray={l.dash === false ? undefined : "4 4"} strokeOpacity={0.8} />
@@ -271,7 +289,7 @@ export function TimeSeries({
             );
           })}
 
-          {notes.filter((n) => n.t >= tDomain[0] && n.t <= tDomain[1]).map((n) => {
+          {notes.filter((n) => n.y === undefined && n.t >= tDomain[0] && n.t <= tDomain[1]).map((n) => {
             const nx = xs(n.t);
             const row = rows[nearest(times, n.t)];
             const v = row ? num(row.r[series[0].key]) : null;
@@ -349,7 +367,7 @@ export function TimeSeries({
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
           {notes.map((n) => (
             <span key={n.id} className="chip accent" style={{ height: 24 }}>
-              <span className="num" style={{ fontSize: 11 }}>{fmtDate(n.t)}</span>{n.text}
+              <span className="num" style={{ fontSize: 11 }}>{n.y !== undefined ? `Level ${format(n.y)}` : fmtDate(n.t)}</span>{n.text}
               <button aria-label="Delete note" onClick={() => removeNote(notesKey, n.id)} style={{ display: "grid", placeItems: "center" }}><X size={11} /></button>
             </span>
           ))}

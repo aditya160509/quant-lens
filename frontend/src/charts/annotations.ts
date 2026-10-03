@@ -3,7 +3,8 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-export type Note = { id: string; t: number; text: string };
+/** A date note, or with `y` set, a horizontal level drawn across the chart. */
+export type Note = { id: string; t: number; text: string; y?: number };
 
 type NotesStore = {
   notes: Record<string, Note[]>;
