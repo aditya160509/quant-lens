@@ -76,6 +76,22 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
     return () => window.removeEventListener("research:jump", onJump);
   }, [layout]);
 
+  // [ and ] step through the section tabs, outside text fields.
+  const sectionIds = sections.map((x) => x.id).join(",");
+  useEffect(() => {
+    const ids = sectionIds.split(",").filter(Boolean);
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.metaKey || e.ctrlKey || e.altKey || !ids.length || (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))) return;
+      if (e.key !== "[" && e.key !== "]") return;
+      e.preventDefault();
+      setTab((cur) => { const i = Math.max(0, ids.indexOf(cur)); return ids[(i + (e.key === "]" ? 1 : ids.length - 1)) % ids.length]; });
+      setMaxKey(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sectionIds]);
+
   const scope = `${feature.id}:${run.jobId ?? "draft"}`;
   const maxItem = maxKey && active ? active.items.find((i) => i.keys[0] === maxKey) : null;
 

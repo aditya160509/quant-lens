@@ -112,7 +112,7 @@ function Outline({ feature, run }: { feature: FeatureSpec; run: FeatureRun }) {
   );
 }
 
-const KEYS: [string, string][] = [["⌘K", "Search everything"], ["⌘↵", "Run the study"], ["⌘B", "Feature list"], ["⌘I", "Inspector"], ["⌘J", "Runs and log"], ["Esc", "Close an expanded card"]];
+const KEYS: [string, string][] = [["⌘K", "Search everything"], ["⌘↵", "Run the study"], ["⌘B", "Feature list"], ["⌘I", "Inspector"], ["⌘J", "Runs and log"], ["[ ]", "Previous / next section"], ["Esc", "Close an expanded card"]];
 
 export function OverviewInspector({ runs }: { runs: RunRecord[] }) {
   return (
