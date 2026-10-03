@@ -45,15 +45,10 @@ def normalize_symbol(symbol: Any) -> str:
 def _read_parquet(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=columns or [])
-    if pl is not None and columns:
-        try:
-            return pl.scan_parquet(str(path)).select(columns).collect().to_pandas()
-        except Exception:
-            pass
-    try:
-        return pd.read_parquet(path, columns=columns, engine="pyarrow")
-    except Exception:
-        return pd.read_parquet(path, engine="pyarrow")
+    if pl is not None:
+        scan = pl.scan_parquet(str(path))
+        return (scan.select(columns) if columns else scan).collect().to_pandas()
+    return pd.read_parquet(path, columns=columns, engine="pyarrow")
 
 
 def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
@@ -97,15 +92,24 @@ def available_symbols() -> tuple[str, ...]:
     return tuple(str(x) for x in counts.index)
 
 
+class UnknownSymbolsError(ValueError):
+    """Explicit symbols must all belong to the local price universe."""
+
+    def __init__(self, missing: list[str]):
+        self.missing = missing
+        super().__init__(f"Unknown tickers (not in local market data): {', '.join(missing)}")
+
+
 def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: int = 5000) -> list[str]:
     payload = payload or {}
     raw = payload.get("tickers") or payload.get("symbols") or payload.get("universe")
     universe = list(available_symbols())
-    existing = set(universe)
-    raw_label = str(raw or "").strip().lower()
-    if raw is None or raw_label in {"", "default", "sp500", "s&p 500"}:
+    label = str(raw or "").strip().lower()
+    if label in {"sp500", "s&p 500"}:
+        raise ValueError("S&P 500 membership data is unavailable; use master or explicit tickers")
+    if raw is None or label in {"", "default"}:
         requested = universe[:default_limit]
-    elif raw_label in {"all", "full", "master", "master_universe", "market_universe", "whole"}:
+    elif label in {"all", "full", "master", "master_universe", "market_universe", "whole"}:
         requested = universe
     elif isinstance(raw, str):
         requested = [normalize_symbol(x) for x in re.split(r"[,;\s]+", raw) if x.strip()]
@@ -113,11 +117,14 @@ def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: i
         requested = [normalize_symbol(x) for x in raw if str(x).strip()]
     else:
         requested = [normalize_symbol(raw)]
-    out = [s for s in requested if s in existing]
-    if not out:
-        out = universe[:default_limit]
+    requested = list(dict.fromkeys(requested))
+    missing = [symbol for symbol in requested if symbol not in set(universe)]
+    if missing:
+        raise UnknownSymbolsError(missing)
     cap = int(payload.get("max_symbols") or payload.get("max_tickers") or max_symbols)
-    return out[: max(1, min(cap, max_symbols))]
+    if not 1 <= cap <= max_symbols:
+        raise ValueError(f"max_symbols must be between 1 and {max_symbols}")
+    return requested[:cap]
 
 
 def ohlcv_for_symbols(symbols: Iterable[str], lookback_days: int | None = None) -> pd.DataFrame:

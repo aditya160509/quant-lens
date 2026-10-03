@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from importlib import import_module
+from functools import lru_cache
 from typing import Any, Callable
 
 
@@ -17,15 +18,12 @@ class ScreenerFeature:
 
 
 def _load(module: str):
-    try:
-        return import_module(f"app.services.screener_v2.features.{module}")
-    except ModuleNotFoundError:
-        return import_module(f"backend.app.services.screener_v2.features.{module}")
-
+    return import_module(f"{__package__}.features.{module}")
 
 _MODULES = [f"feature_{i:02d}" for i in range(1, 9)]
 
 
+@lru_cache(maxsize=1)
 def _build_registry() -> dict[str, ScreenerFeature]:
     registry: dict[str, ScreenerFeature] = {}
     for module_name in _MODULES:
@@ -41,20 +39,18 @@ def _build_registry() -> dict[str, ScreenerFeature]:
     return registry
 
 
-FEATURES = _build_registry()
-
-
 def get_feature(feature_id: int | str) -> ScreenerFeature:
     key = str(feature_id).replace("feature-", "").replace("feature_", "").zfill(2)
-    if key not in FEATURES:
+    registry = _build_registry()
+    if key not in registry:
         raise KeyError(f"Unknown Screener V2 feature {feature_id}")
-    return FEATURES[key]
+    return registry[key]
 
 
 def feature_manifest() -> list[dict[str, Any]]:
     return [
         {"id": f.id, "name": f.name, "inputs": f.inputs, "outputs": f.outputs}
-        for f in FEATURES.values()
+        for f in _build_registry().values()
     ]
 
 

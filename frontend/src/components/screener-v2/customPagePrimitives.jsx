@@ -20,7 +20,7 @@ import {
   YAxis,
 } from "recharts";
 import { AlertTriangle, ChevronDown, Copy, Maximize2, Play, Search, SlidersHorizontal, TerminalSquare, X } from "lucide-react";
-import { runScreenerV2Feature } from "@/lib/api";
+import { runScreenerV2Feature } from "./api";
 import { getScreenerV2Feature, SCREENER_OUTPUT_BOOKS, SCREENER_V2_FEATURES } from "./registry";
 
 const TOKENS = {
@@ -46,7 +46,6 @@ const TOKENS = {
 };
 
 const SERIES = ["#F5A400", "#22C55E", "#E8D18A", "#EF4444", "#14B8A6", "#8B5CF6", "#60A5FA", "#EC4899"];
-const DEMO_TICKERS = ["NVDA", "MSFT", "AAPL", "META", "AMZN", "GOOGL", "JPM", "XOM", "LLY", "AVGO", "COST", "V", "MA", "ADBE"];
 
 function rowsFrom(data) {
   if (!data) return [];
@@ -90,127 +89,6 @@ function pick(response, section) {
     if (root?.[key] != null) return root[key];
   }
   return null;
-}
-
-function demoRows(count = 16) {
-  return DEMO_TICKERS.slice(0, count).map((ticker, i) => ({
-    rank: i + 1,
-    ticker,
-    company_name: `${ticker} Corporation`,
-    sector: ["Technology", "Consumer", "Financials", "Energy", "Healthcare"][i % 5],
-    core_quant_score: 94 - i * 3.1,
-    valuation_percentile: 35 + ((i * 17) % 61),
-    quality_percentile: 55 + ((i * 11) % 42),
-    momentum_percentile: 91 - ((i * 7) % 55),
-    low_vol_percentile: 48 + ((i * 5) % 38),
-    market_cap: 2.2e12 / (i + 1),
-    return_6m: 0.31 - i * 0.025,
-    beta_effective: 0.72 + i * 0.06,
-  }));
-}
-
-function demoSeries(length = 96, key = "strategy", base = 1) {
-  let v = base;
-  return Array.from({ length }, (_, i) => {
-    v *= 1 + Math.sin(i / 7) * 0.006 + 0.0017;
-    return { date: `D${i + 1}`, [key]: Number(v.toFixed(4)), benchmark: Number((1 + i * 0.0012 + Math.sin(i / 11) * 0.018).toFixed(4)) };
-  });
-}
-
-function demoHeatmap(labels = ["Value", "Quality", "Momentum", "Low Vol", "Liquidity"]) {
-  return labels.flatMap((row, i) => labels.map((col, j) => ({ row, col, value: i === j ? 1 : Number((Math.cos((i + 1) * (j + 2)) * 0.55).toFixed(2)) })));
-}
-
-function makeDemoResponse(featureId, form = {}) {
-  const ranked = demoRows(Number(form.top_n || 16));
-  const base = {
-    feature_id: featureId,
-    status: "preview",
-    summary_cards: [
-      { label: "Universe", value: form.universe === "master" ? "4,000+" : String(form.universe || "master") },
-      { label: "Returned", value: ranked.length },
-      { label: "Top Score", value: ranked[0]?.core_quant_score },
-      { label: "Mode", value: "Local preview" },
-    ],
-    charts: {},
-    tables: {},
-    meta: { access_issues: ["API route is not wired yet; rendering deterministic local preview data."] },
-  };
-  if (featureId === "01") {
-    base.tables.ranked_screener_table = ranked;
-    base.tables.saved_screens = [];
-    base.charts.filter_funnel_waterfall = [
-      { name: "Universe", value: 4200 },
-      { name: "Liquidity", value: 2600 },
-      { name: "Fundamental", value: 1300 },
-      { name: "Score", value: 180 },
-      { name: "Selected", value: ranked.length },
-    ];
-    base.charts.cross_sectional_percentile_context = ranked;
-    base.charts.heatmap_view = ranked.map((r) => ({ row: r.sector, col: r.ticker, value: r.core_quant_score }));
-    base.charts.quick_look_card = { ticker: form.focus_ticker || "AAPL", chart_full: demoSeries(120, "price", 180), metrics: ranked[0] };
-    base.charts.market_cap_bucket_distribution = ["Mega", "Large", "Mid", "Small"].map((bucket, i) => ({ bucket, count: 1200 - i * 240, avg_score: 58 + i * 6 }));
-  }
-  if (featureId === "02") {
-    base.tables.formula_result_table = ranked.map((r) => ({ ...r, formula_score: r.core_quant_score + 2 }));
-    base.tables.formula_validation_panel = [{ status: "valid", formula: form.formula, diagnostics: "Parsed with local preview evaluator" }];
-    base.charts.historical_formula_backtest = demoSeries(120, "formula");
-    base.charts.factor_zoo_comparison = ["Value", "Momentum", "Quality", "Low Vol"].map((factor, i) => ({ factor, score: 64 + i * 7 }));
-  }
-  if (featureId === "03") {
-    base.tables.composite_score_universe_ranking = ranked;
-    base.tables.score_transparency_decomposition = ["Value", "Momentum", "Quality", "Low Vol"].map((component, i) => ({ component, weight: [0.3, 0.3, 0.25, 0.15][i], mean_score: 62 + i * 6 }));
-    base.tables.per_stock_score_decomposition = base.tables.score_transparency_decomposition.map((r) => ({ ticker: "NVDA", ...r, contribution: r.weight * r.mean_score }));
-    base.tables.component_ic_ir_leaderboard = ["valuation_percentile", "momentum_percentile", "quality_percentile"].map((component, i) => ({ component, mean_ic: 0.08 + i * 0.03, ic_ir: 0.4 + i * 0.25 }));
-    base.charts.factor_correlation_heatmap = demoHeatmap();
-    base.charts.composite_vs_factor_backtest = demoSeries(120, "composite");
-    base.tables.regime_conditional_composite_breakdown = ["Low Vol", "Normal", "High Vol"].map((regime, i) => ({ regime, avg_return: 0.06 - i * 0.025, hit_rate: 0.62 - i * 0.05 }));
-  }
-  if (featureId === "04") {
-    base.tables.strategy_leaderboard = ["magic_formula", "quality_minus_junk", "trending_value", "low_vol"].map((strategy, i) => ({ strategy, avg_score: 81 - i * 5, top_decile_count: 18 - i * 3, coverage: 0.9 - i * 0.04 }));
-    base.tables.per_strategy_stock_list = ranked;
-    base.tables.piotroski_breakdown = ranked.map((r, i) => ({ ticker: r.ticker, piotroski_f_score: 9 - (i % 4), f5_leverage_field_used: i % 2 ? "long_term_debt" : "total_debt_fallback" }));
-    base.tables.altman_z_score_status = ranked.map((r, i) => ({ ticker: r.ticker, altman_z_score: 4.8 - i * 0.18, altman_status: i > 8 ? "Grey" : "Safe" }));
-    base.charts.strategy_correlation_matrix = demoHeatmap(["Magic", "Piotroski", "Altman", "Momentum", "LowVol"]);
-    base.charts.historical_strategy_performance = demoSeries(120, "strategy");
-    base.tables.historical_strategy_performance_all = base.tables.strategy_leaderboard.map((r) => ({ strategy: r.strategy, sharpe: 0.9 + Math.random() * 0.4, annualized_return: 0.12, max_drawdown: -0.18 }));
-    base.tables.historical_strategy_performance_metadata = [{ evaluated_strategy_count: 4, excluded_due_to_limit: "proxy/helper columns excluded" }];
-  }
-  if (featureId === "05") {
-    base.charts.equity_curve = demoSeries(160, "strategy");
-    base.tables.full_performance_statistics = [{ total_return: 0.84, annualized_return: 0.18, annualized_vol: 0.21, sharpe: 0.88, max_drawdown: -0.19 }];
-    base.charts.rolling_performance = demoSeries(80, "rolling_sharpe", 0.8);
-    base.tables.holding_period_sensitivity = [21, 42, 63, 126].map((hold) => ({ hold, sharpe: 0.7 + hold / 400, turnover: 0.35 - hold / 800 }));
-    base.tables.rebalancing_date_sensitivity = Array.from({ length: 8 }, (_, i) => ({ rebalance_offset_days: i, sharpe: 0.71 + Math.sin(i) * 0.08 }));
-    base.tables.rebalancing_date_sensitivity_by_weekday = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map((weekday, i) => ({ weekday, sharpe: 0.7 + i * 0.04, rebalance_count: 152 - i }));
-    base.tables.turnover_report = demoSeries(16, "turnover", 0.22);
-    base.tables.sector_attribution = ["Tech", "Healthcare", "Energy", "Financials"].map((sector, i) => ({ sector, contribution: 0.09 - i * 0.025 }));
-    base.tables.regime_conditional_performance = ["Low Vol", "Normal", "High Vol"].map((regime, i) => ({ regime, return: 0.11 - i * 0.04, sharpe: 1.1 - i * 0.25 }));
-    base.charts.monte_carlo_sharpe_distribution = Array.from({ length: 40 }, (_, i) => ({ bucket: (0.2 + i * 0.04).toFixed(2), count: Math.round(22 * Math.exp(-Math.pow(i - 18, 2) / 120)) }));
-    base.tables.stock_level_attribution = ranked.map((r, i) => ({ ticker: r.ticker, contribution: 0.05 - i * 0.006 }));
-  }
-  if (featureId === "06") {
-    base.charts.alert_feed = ranked.slice(0, 8).map((r, i) => ({ ticker: r.ticker, type: i % 2 ? "SCORE_BREAKOUT" : "VOLUME_SPIKE", severity: i < 3 ? "high" : "medium", value: r.core_quant_score }));
-    base.tables.alert_performance_tracker = [{ alert_type: "SCORE_BREAKOUT", precision: 0.62, count: 42 }, { alert_type: "VOLUME_SPIKE", precision: 0.55, count: 31 }];
-    base.tables.alert_performance_tracker_historical = [
-      { alert_type: "GOLDEN_CROSS", hit_rates: { "1d": 0.51, "5d": 0.57, "21d": 0.62 }, sample_sizes: { "1d": 91, "5d": 87, "21d": 73 }, method: "same_session_historical_replay" },
-      { alert_type: "RSI_EXTREME", hit_rates: { "1d": 0.48, "5d": 0.53, "21d": 0.56 }, sample_sizes: { "1d": 144, "5d": 139, "21d": 121 }, method: "same_session_historical_replay" },
-    ];
-    base.tables.screen_entry_exit_log = ranked.slice(0, 8).map((r, i) => ({ ticker: r.ticker, action: i % 2 ? "ENTER" : "EXIT", score: r.core_quant_score }));
-  }
-  if (featureId === "07") {
-    base.charts.four_dimension_valuation_card = { ticker: form.focus_ticker || "AAPL", valuation: 72, sector: 61, own_history: 84, momentum: 58 };
-    base.charts.sector_valuation_landscape_heatmap = ranked.map((r) => ({ row: r.sector, col: r.ticker, value: r.valuation_percentile }));
-    base.charts.own_history_percentile_time_series = demoSeries(120, "percentile", 0.48).map((r, i) => ({ date: r.date, percentile: 50 + Math.sin(i / 8) * 24 }));
-    base.tables.peer_comparison_table = ranked;
-    base.tables.universe_percentile_table = ranked.map((r) => ({ ticker: r.ticker, trailing_pe_pct: r.valuation_percentile, pb_pct: 100 - r.valuation_percentile, ev_ebitda_pct: r.quality_percentile }));
-  }
-  if (featureId === "08") {
-    base.tables.instant_download = [{ format: form.export_format || "tsv", rows: ranked.length, bytes: 48212, status: "ready" }];
-    base.tables.screen_result_api_endpoint = [{ method: "POST", endpoint: "/api/labs/screener/v2/feature/08/run", wired: false }];
-    base.charts.change_report = ranked.slice(0, 10).map((r, i) => ({ ticker: r.ticker, status: i % 3 === 0 ? "NEW" : i % 3 === 1 ? "UP" : "DOWN", rank_change: 14 - i * 3 }));
-  }
-  return base;
 }
 
 function Field({ field, value, onChange }) {
@@ -486,8 +364,8 @@ export function ScreenerV2Workbench({ featureId, sections: explicitSections, pag
   const feature = getScreenerV2Feature(featureId);
   const sections = explicitSections || SCREENER_OUTPUT_BOOKS[feature.id] || [];
   const [form, setForm] = useState(feature.defaults || {});
-  const [response, setResponse] = useState(() => makeDemoResponse(feature.id, feature.defaults));
-  const [status, setStatus] = useState("LOCAL PREVIEW");
+  const [response, setResponse] = useState(null);
+  const [status, setStatus] = useState("READY");
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(sections[0]?.id);
   async function run() {
@@ -496,9 +374,9 @@ export function ScreenerV2Workbench({ featureId, sections: explicitSections, pag
       const result = await runScreenerV2Feature(feature.id, form);
       setResponse(result);
       setStatus("API LIVE");
-    } catch {
-      setResponse(makeDemoResponse(feature.id, form));
-      setStatus("LOCAL PREVIEW");
+    } catch (error) {
+      setResponse(null);
+      setStatus(`Run failed: ${error.message}`);
     } finally {
       setLoading(false);
     }
