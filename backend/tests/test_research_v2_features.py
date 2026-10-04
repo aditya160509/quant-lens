@@ -39,5 +39,5 @@ def test_feature_returns_declared_outputs(fid: str, event_upload: str) -> None:
     json.dumps(result)  # fully JSON-serialisable
     present = set(result["charts"]) | set(result["tables"])
     declared = next(f for f in feature_manifest() if f["id"] == fid)["outputs"]
-    missing = [o["key"] for o in declared if o["key"] not in present]
+    missing = [o["key"] for o in declared if o["key"] not in present and not o.get("conditional")]
     assert not missing, f"feature {fid} is missing declared outputs {missing}"

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .inputs import BASE, field, output
+from .merge import merged_inputs, merged_outputs, run_merged
 
 FEATURE_ID = "01"
 FEATURE_NAME = "Canonical Test Engine"
@@ -23,6 +24,7 @@ INPUTS = BASE + [
     field("event_window_months", "Calendar-time holding (months)", "select", 6, "Sorts", [3, 6, 12, 24]),
     field("event_quantile", "Calendar-time event threshold", "number", 0.8, "Sorts", min=0.5, max=0.95, help_="Event = signal rank crosses above this percentile."),
 ]
+INPUTS = merged_inputs(INPUTS, "05", "Model checks")
 
 OUTPUTS = [
     output("fama_macbeth_regression", "Fama-MacBeth regression", "tables", "regressionTable", "Time-series means of monthly cross-sectional slopes with Newey-West SEs.", primary=True),
@@ -45,6 +47,7 @@ OUTPUTS = [
     output("latex_export", "LaTeX", "tables", "latex"),
     output("csv_export", "CSV", "tables", "csv"),
 ]
+OUTPUTS = merged_outputs(OUTPUTS, "05", "model_checks", "Model checks")
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -52,4 +55,5 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     from ..core.canonical import run_canonical
 
     out = run_canonical(payload or {})
-    return response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])
+    result = response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])
+    return run_merged(result, "05", payload or {}, "model_checks", "Model checks")

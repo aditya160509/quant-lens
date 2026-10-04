@@ -176,6 +176,12 @@ def us_equity_symbols() -> tuple[str, ...]:
 
 def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: int = 5000) -> list[str]:
     payload = payload or {}
+    from ..universes import has_controls, select_symbols
+
+    explicit = payload.get("tickers") or payload.get("symbols")
+    if has_controls(payload) and (explicit or str(payload.get("universe") or "").strip().lower() in US_UNIVERSE_LABELS | GLOBAL_UNIVERSE_LABELS | {""}):
+        base = [normalize_symbol(x) for x in (explicit if isinstance(explicit, (list, tuple)) else re.split(r"[,;\s]+", str(explicit)) if explicit else []) if str(x).strip()] or None
+        return select_symbols(payload, default_limit, max_symbols, base)
     raw = payload.get("tickers") or payload.get("symbols") or payload.get("universe") or payload.get("asset_universe")
     cap = int(payload.get("max_symbols") or payload.get("max_tickers") or default_limit or max_symbols)
     cap = max(1, min(cap, max_symbols))

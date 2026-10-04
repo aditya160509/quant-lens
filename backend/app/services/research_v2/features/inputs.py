@@ -78,7 +78,7 @@ CITATIONS = {
 }
 # Fields hidden unless the design is selected (feature 07), by group.
 F07_GROUP_DESIGNS = {"DiD": ["did", "all"], "Event study": ["event_study", "all"], "Regression discontinuity": ["rdd", "all"], "Instrumental variables": ["iv", "all"]}
-F07_UNGROUPED = {"treatment_date": ["did", "event_study", "all"], "treated_unit": ["did", "event_study", "all"], "event_csv_path": ["did", "event_study", "all"], "outcome_variable": ["did", "all"]}
+F07_UNGROUPED = {"treatment_date": ["did", "event_study", "synthetic", "all"], "treated_unit": ["did", "event_study", "synthetic", "all"], "event_csv_path": ["did", "event_study", "synthetic", "all"], "outcome_variable": ["did", "all"]}
 CONFLICTS = {"signal_csv_path": ["signal"], "treated_unit": ["event_csv_path"], "event_csv_path": ["treated_unit"], "donor_list": [], "instrument_csv_path": ["instrument"]}
 DEPENDS_OTHER = {
     "instrument_csv_path": {"field": "instrument", "values": ["uploaded"]},

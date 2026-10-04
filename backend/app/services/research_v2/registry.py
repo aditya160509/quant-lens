@@ -55,6 +55,12 @@ def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) ->
     module = next((m for m in FEATURE_MODULES if m.rsplit("_", 1)[1] == key), None)
     if module is None:
         raise KeyError(f"Unknown Research V2 feature {feature_id}")
-    from .core.signal_service import attach_lookahead
+    from .audit import attach_audit, shared_panel
 
-    return attach_lookahead(_load(module).run(payload or {}))  # meta.lookahead for signal_expr runs
+    payload = payload or {}
+    with shared_panel() as panels:  # one panel per payload; also feeds meta.data_audit and meta.costs
+        result = _load(module).run(payload)  # load only this feature, not the whole manifest
+        from .core.signal_service import attach_lookahead
+
+        result = attach_lookahead(result)  # meta.lookahead for signal_expr runs
+        return attach_audit(result, panels, payload)

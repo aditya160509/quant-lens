@@ -6,6 +6,7 @@ from typing import Any
 
 from ..core.common import response
 from ..core.robustness import DIMENSIONS, run_robustness
+from .merge import merged_inputs, merged_outputs, run_merged
 from .inputs import BASE, field, output
 
 FEATURE_ID = "02"
@@ -39,8 +40,11 @@ OUTPUTS = [
     output("skipped_specifications", "Skipped specifications", "tables", "dataTable"),
     output("latex_export", "LaTeX", "tables", "latex"),
 ]
+INPUTS = merged_inputs(INPUTS, "04", "Regimes")
+OUTPUTS = merged_outputs(OUTPUTS, "04", "regimes", "Regimes")
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     out = run_robustness(payload or {})
-    return response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])
+    result = response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])
+    return run_merged(result, "04", payload or {}, "regimes", "Regimes")

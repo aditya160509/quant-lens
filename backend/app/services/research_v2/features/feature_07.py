@@ -7,13 +7,14 @@ from typing import Any
 from ..core.causal import DESIGNS, OUTCOMES, RUNNING_VARIABLES, run_causal
 from ..core.common import response
 from .inputs import UNIVERSE, field, output
+from .merge import merge_result, merged_inputs, merged_outputs
 
 FEATURE_ID = "07"
 FEATURE_NAME = "Causal Identification Engine"
 DESCRIPTION = "Difference-in-differences with staggered-timing estimators, abnormal-return event studies, cross-sectional regression discontinuity and instrumental variables, each with its full diagnostic battery."
 
 INPUTS = UNIVERSE + [
-    field("identification_design", "Design", "select", "event_study", "Design", [*DESIGNS, "all"]),
+    field("identification_design", "Design", "select", "event_study", "Design", [*DESIGNS, "synthetic", "all"]),
     field("event_csv_path", "Event / treatment file", "file", "", "Treatment", help_="CSV with ticker and treatment_date (event_date). Required for staggered DiD and multi-event studies."),
     field("treated_unit", "Treated ticker(s)", "ticker_list", "", "Treatment", help_="Used when no file is uploaded."),
     field("treatment_date", "Treatment / event date", "date", None, "Treatment"),
@@ -82,8 +83,22 @@ OUTPUTS = [
     output("iv_tests", "Endogeneity and over-identification", "tables", "dataTable"),
     output("iv_assessment", "Instrument assessment", "tables", "keyValue"),
 ]
+INPUTS = merged_inputs(INPUTS, "09", "Synthetic control")
+OUTPUTS = merged_outputs(OUTPUTS, "09", "synthetic", "Synthetic control", conditional=True)
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    out = run_causal(payload or {})
-    return response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])
+    payload = payload or {}
+    parts = [d.strip() for d in str(payload.get("identification_design") or "event_study").lower().split(",") if d.strip()]
+    synthetic = "synthetic" in parts
+    rest = [d for d in parts if d != "synthetic"]
+    if synthetic:
+        from ..core.synthetic import run_synthetic
+
+        syn = response("09", *(lambda o: (o["summary"], o["charts"], o["tables"], o["meta"]))(run_synthetic(payload)))
+        if not rest:
+            syn["feature_id"] = FEATURE_ID
+            return syn
+    out = run_causal({**payload, "identification_design": ",".join(rest)})
+    result = response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])
+    return merge_result(result, syn, "synthetic", "Synthetic control") if synthetic else result

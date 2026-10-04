@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .merge import merged_inputs, merged_outputs, run_merged
 from .inputs import SIGNAL, UNIVERSE, field, output
 
 FEATURE_ID = "08"
@@ -35,6 +36,8 @@ OUTPUTS = [
     output("arbitrage_vs_datamining", "Arbitrage vs data mining", "tables", "keyValue"),
     output("international_replication", "International replication", "tables", "dataTable"),
 ]
+INPUTS = merged_inputs(INPUTS, "11", "Factor zoo")
+OUTPUTS = merged_outputs(OUTPUTS, "11", "factor_zoo", "Factor zoo")
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -42,4 +45,5 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     from ..core.decay import run_decay
 
     out = run_decay(payload or {})
-    return response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])
+    result = response(FEATURE_ID, out["summary"], out["charts"], out["tables"], out["meta"])
+    return run_merged(result, "11", payload or {}, "factor_zoo", "Factor zoo")
