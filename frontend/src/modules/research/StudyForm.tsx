@@ -40,17 +40,6 @@ export function toPayload(feature: FeatureSpec, form: FormState): Record<string,
   return out;
 }
 
-/** Groups that only matter for one choice of another setting, e.g. RD settings only for the RD design. */
-const CONDITIONAL: Record<string, { field: string; groups: Record<string, string[]> }> = {
-  "07": { field: "identification_design", groups: { DiD: ["did"], "Event study": ["event_study"], "Regression discontinuity": ["rdd"], "Instrumental variables": ["iv"], Treatment: ["did", "event_study"] } },
-};
-const groupApplies = (featureId: string, group: string, form: FormState) => {
-  const c = CONDITIONAL[featureId];
-  const want = c?.groups[group];
-  const v = c ? String(form[c.field] ?? "") : "";
-  return !want || v === "all" || want.includes(v);
-};
-
 /** Inputs a study cannot run without. The API spec has no required flag yet, so they are listed here. */
 const REQUIRED: Record<string, string[]> = { "08": ["discovery_date"], "09": ["treated_unit", "treatment_date"] };
 
@@ -94,7 +83,7 @@ export function StudyForm({ feature, form, setForm, errors }: {
   const hasLevels = feature.inputs.some((f) => f.level);
   const shownLevels = LEVELS.slice(0, LEVELS.indexOf(level) + 1);
   const groups = useMemo(() => feature.inputs.filter((f) => !(hasUniverse && f.key === "max_symbols") && (!hasLevels || shownLevels.includes(levelOf(f)) || (form[f.key] !== undefined && isChanged(f, form[f.key]))) && applies(f, form)).reduce<Record<string, InputSpec[]>>((acc, f) => ({ ...acc, [f.group]: [...(acc[f.group] ?? []), f] }), {}), [feature, hasUniverse, hasLevels, shownLevels, form]);
-  const names = Object.keys(groups).filter((g) => groupApplies(feature.id, g, form));
+  const names = Object.keys(groups);
   const [open, setOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(names.map((g, i) => [g, i < 2 || groups[g].some((f) => REQUIRED[feature.id]?.includes(f.key))])));
   const set = (key: string) => (value: unknown) => setForm((cur) => ({ ...cur, [key]: value }));
   const maxField = feature.inputs.find((f) => f.key === "max_symbols");
@@ -389,14 +378,16 @@ export const decodeSettings = (s: string): FormState | null => { try { return JS
 function MarketFilters({ form, set }: { form: FormState; set: (k: string, v: unknown) => void }) {
   const uni = useUniverses();
   const [open, setOpen] = useState(false);
-  if (uni.isError || !uni.data?.length) return null;
-  const regions = [...new Map(uni.data.map((u) => [u.region, 0])).keys()];
-  const types = [...new Map(uni.data.map((u) => [u.asset_type, 0])).keys()];
+  // Country × asset-type rows only; the aggregate rows ("global", regions) would double count.
+  const rows = (uni.data ?? []).filter((u) => u.id.includes("."));
+  if (uni.isError || !rows.length) return null;
+  const regions = [...new Map(rows.map((u) => [u.region, 0])).keys()];
+  const types = [...new Map(rows.map((u) => [u.asset_type, 0])).keys()];
   const sel = (k: string) => (Array.isArray(form[k]) ? (form[k] as string[]) : []);
   const toggle = (k: string, v: string) => { const cur = sel(k); set(k, cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]); };
   const pickedRegions = sel("regions"), pickedTypes = sel("asset_types");
-  const count = uni.data.filter((u) => (!pickedRegions.length || pickedRegions.includes(u.region)) && (!pickedTypes.length || pickedTypes.includes(u.asset_type))).reduce((a, u) => a + u.count, 0);
-  const total = uni.data.reduce((a, u) => a + u.count, 0);
+  const count = rows.filter((u) => (!pickedRegions.length || pickedRegions.includes(u.region)) && (!pickedTypes.length || pickedTypes.includes(u.asset_type))).reduce((a, u) => a + u.count, 0);
+  const total = rows.reduce((a, u) => a + u.count, 0);
   return (
     <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
       <button type="button" className="btn sm ghost" style={{ justifySelf: "start" }} onClick={() => setOpen((v) => !v)}>

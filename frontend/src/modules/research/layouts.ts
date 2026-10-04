@@ -343,11 +343,33 @@ const EXPORT_RENDERS = new Set(["latex", "csv", "pdf"]);
 const WIDE = new Set(["specificationCurve", "byChoice", "robustnessMatrix", "regressionTable", "publicationTable", "eventStudy", "lineChart", "coefficientPath", "heatmap", "regimeRibbon", "decayCurve", "syntheticPath", "reportCard", "dataTable"]);
 
 /** The purpose-built layout, or one generated from the manifest so new outputs always appear. */
+/**
+ * Pages merged in the backend (section B): a feature's result also carries another feature's outputs
+ * under a prefix. They get one section each, laid out like the source feature.
+ */
+const MERGES: Record<string, { prefix: string; from: string; label: string }[]> = {
+  "01": [{ prefix: "model_checks__", from: "05", label: "Model checks" }],
+  "02": [{ prefix: "regimes__", from: "04", label: "By regime" }],
+  "07": [{ prefix: "synthetic__", from: "09", label: "Synthetic control" }],
+  "08": [{ prefix: "factor_zoo__", from: "11", label: "Novelty" }],
+};
+
+function mergedSections(featureId: string): Section[] {
+  return (MERGES[featureId] ?? []).map((m) => ({
+    id: m.prefix.replace(/_+$/, ""),
+    label: m.label,
+    items: (LAYOUTS[m.from]?.sections ?? []).filter((sec) => sec.id !== "export").flatMap((sec) => sec.items).map((i) => ({ ...i, keys: i.keys.map((k) => m.prefix + k) })),
+  }));
+}
+
 export function layoutFor(feature: FeatureSpec): FeatureLayout {
-  const custom = LAYOUTS[feature.id];
+  const own = LAYOUTS[feature.id];
+  const merged = mergedSections(feature.id);
+  const custom = own && merged.length ? { ...own, sections: [...own.sections.filter((x) => x.id !== "export"), ...merged, ...own.sections.filter((x) => x.id === "export")] } : own;
   const placed = new Set(custom?.sections.flatMap((s) => s.items.flatMap((i) => i.keys)) ?? []);
   const prose = new Set(["summaryLine", "verdict"]);
-  const extra = feature.outputs.filter((o) => !placed.has(o.key) && !EXPORT_RENDERS.has(o.render) && !(custom && prose.has(o.render)) && o.render !== "decisionLedger");
+  const prefixes = (MERGES[feature.id] ?? []).map((m) => m.prefix);
+  const extra = feature.outputs.filter((o) => !placed.has(o.key) && !prefixes.some((pre) => o.key.startsWith(pre) && /(latex|csv|pdf|export)/i.test(o.render)) && !EXPORT_RENDERS.has(o.render) && !(custom && prose.has(o.render)) && o.render !== "decisionLedger");
   if (custom) {
     return extra.length ? { ...custom, sections: [...custom.sections, { id: "more", label: "More", items: extra.map((o) => card(o.key, WIDE.has(o.render) ? 12 : 6)) }] } : custom;
   }

@@ -31,7 +31,10 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const rows = out(result, key);
   const isChart = CHART_VIEWS.has(viewName);
   const cfgId = `${feature.id}:${key}:${item.view ?? ""}`;
-  const custom = useExplore((st) => st.configs[cfgId]);
+  const own = useExplore((st) => st.configs[cfgId]);
+  const typeDefault = useExplore((st) => st.configs[`type:${viewName}`]);
+  // A reader's default for this kind of output applies until they choose something for this card.
+  const custom = own ?? (typeDefault && rows.length && viewsFor(rows).includes(typeDefault.kind) ? defaults(rows, typeDefault.kind) : undefined);
   const setCustom = useExplore((st) => st.set);
   const asTable = custom?.kind === "table";
   const setAsTable = (f: (v: boolean) => boolean) => setCustom(cfgId, f(asTable) ? { kind: "table" } : null);
@@ -122,6 +125,8 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
         {kinds.map((k) => (
           <MenuItem key={k} icon={custom?.kind === k ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => setCustom(cfgId, defaults(rows, k))}>{VIEW_LABEL[k]}</MenuItem>
         ))}
+        {custom ? <><div className="sep" /><MenuItem icon={<span style={{ width: 13 }} />} onClick={() => setCustom(`type:${viewName}`, { kind: custom.kind })}>Use {VIEW_LABEL[custom.kind]} for every output like this</MenuItem></> : null}
+        {typeDefault ? <MenuItem icon={<span style={{ width: 13 }} />} onClick={() => setCustom(`type:${viewName}`, null)}>Forget the default for this output type</MenuItem> : null}
         {canOverlay && others.length ? <><div className="sep" /><div className="hd">Overlay another run</div>
           {others.map((r) => (
             <MenuItem key={r.jobId} icon={overlayId === r.jobId ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => setOverlayId(r.jobId)}>

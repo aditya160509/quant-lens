@@ -9,6 +9,7 @@ import { DUR } from "@/workspace/prefs";
 import { Chip, Segmented } from "@/workspace/ui";
 import { reportUrl, shareJob, submitBatch, submitReportCard, submitValidation, useActiveSignal, useJob, useLibrary, type ReportCard } from "./api";
 import type { FeatureSpec } from "./types";
+import { label } from "./format";
 
 type Mode = "card" | "batch" | "validate";
 
@@ -71,6 +72,8 @@ export function ReportCardPage({ features }: { features: FeatureSpec[] }) {
   );
 }
 
+const DIM_LABEL: Record<string, string> = { significance: "Pricing", factor_zoo: "Novelty", diagnostics: "Model checks" };
+
 const GRADE_TONE: Record<string, string> = { A: "var(--up)", B: "var(--up)", C: "var(--warn)", D: "var(--down)", F: "var(--down)" };
 
 function Card({ r, jobId }: { r: ReportCard; jobId: string }) {
@@ -95,7 +98,7 @@ function Card({ r, jobId }: { r: ReportCard; jobId: string }) {
           <motion.div key={g.dimension} className="rc-grade" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: DUR.base, delay: Math.min(0.12, i * 0.015) }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
               <span className="g" style={{ color: GRADE_TONE[g.grade[0]] ?? "var(--text)" }}>{g.grade}</span>
-              <span className="d">{g.dimension}</span>
+              <span className="d">{DIM_LABEL[g.dimension] ?? label(g.dimension)}</span>
             </div>
             <div className="bar"><span style={{ width: `${Math.max(2, Math.min(100, g.score))}%`, background: GRADE_TONE[g.grade[0]] ?? "var(--accent)" }} /></div>
             {g.metric ? <div className="m"><span>{g.metric.label}</span><b className="num">{typeof g.metric.value === "number" ? Number(g.metric.value.toPrecision(3)) : g.metric.value}</b></div> : null}

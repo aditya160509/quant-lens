@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { Bars } from "@/charts/Bars";
@@ -28,9 +28,26 @@ export type ExploreConfig = {
   group?: string;
   sort?: "none" | "asc" | "desc";
   limit?: number;
-  transform?: "none" | "cumulative" | "rebase" | "zscore" | "rank";
+  transform?: "none" | "cumulative" | "rebase" | "zscore" | "rank" | "log";
   zeroFill?: boolean;
+  /** One small chart per value of this column. */
+  facet?: string;
+  /** Group rows by a column and reduce numbers before drawing. */
+  agg?: { by: string; fn: "mean" | "median" | "sum" | "count" };
+  /** Chart and table side by side. */
+  split?: boolean;
 };
+
+/** Column roles by name, so defaults pick the estimate and not its standard error or bounds. */
+const BOUND = /(^|_)(lo|hi|lower|upper|ci|se|std_err|stderr|p|p_value|pval|n|count|obs)(_|$|\d)/i;
+const PRIMARY = /(beta|coef|estimate|effect|return|ret|spread|alpha|lambda|premium|value|sharpe|t_stat|tstat|ic|mean)/i;
+const byRole = (cols: string[]) => [...cols].sort((a, b) => Number(BOUND.test(a)) - Number(BOUND.test(b)) || Number(PRIMARY.test(b)) - Number(PRIMARY.test(a)));
+/** "beta" → its interval columns, when the output has them ("lower_95"/"upper_95", "beta_lo"/"beta_hi", "ci_low"/"ci_high"). */
+function bandFor(cols: string[], y: string): { lo: string; hi: string } | undefined {
+  const lo = cols.find((c) => new RegExp(`^(${y}_)?(lo|lower|ci_lo|ci_low)(_?\\d+)?$`, "i").test(c));
+  const hi = cols.find((c) => new RegExp(`^(${y}_)?(hi|upper|ci_hi|ci_high)(_?\\d+)?$`, "i").test(c));
+  return lo && hi ? { lo, hi } : undefined;
+}
 
 export const VIEW_LABEL: Record<ViewKind, string> = {
   line: "Line", area: "Area", step: "Step", bars: "Columns", hbars: "Bars (diverging)",
@@ -75,13 +92,13 @@ export function viewsFor(rows: Row[]): ViewKind[] {
 /** Sensible starting columns for a kind, so switching views never shows an empty chart. */
 export function defaults(rows: Row[], kind: ViewKind): ExploreConfig {
   const p = profile(rows);
-  const nums = Object.keys(p).filter((c) => p[c] === "number");
+  const nums = byRole(Object.keys(p).filter((c) => p[c] === "number"));
   const dates = Object.keys(p).filter((c) => p[c] === "date");
   const cats = Object.keys(p).filter((c) => p[c] === "text");
   const timeX = dates[0] ?? nums[0];
   switch (kind) {
     case "line": case "area": case "step":
-      return { kind, x: timeX, ys: nums.filter((c) => c !== timeX).slice(0, 3), transform: "none" };
+      return { kind, x: timeX, ys: nums.filter((c) => c !== timeX && !BOUND.test(c)).slice(0, 2).concat(nums.filter((c) => c !== timeX && !BOUND.test(c)).length ? [] : nums.filter((c) => c !== timeX).slice(0, 1)), transform: "none" };
     case "bars": case "hbars":
       return { kind, x: cats[0] ?? dates[0] ?? nums[0], ys: [nums.find((c) => c !== (cats[0] ?? nums[0])) ?? nums[0]], sort: kind === "hbars" ? "desc" : "none", limit: 40 };
     case "scatter":
@@ -117,6 +134,7 @@ function transformed(rows: Row[], ys: string[], t: ExploreConfig["transform"]): 
       const sd = Math.sqrt(f.reduce((a, b) => a + (b - m) ** 2, 0) / Math.max(1, f.length - 1)) || 1;
       out.forEach((r, i) => { const v = vals[i]; if (v !== null) r[y] = (v - m) / sd; });
     }
+    if (t === "log") out.forEach((r, i) => { const v = vals[i]; r[y] = v !== null && v > 0 ? Math.log10(v) : null; });
     if (t === "rank") {
       const order = vals.map((v, i) => [v, i] as const).filter(([v]) => v !== null).sort((a, b) => (a[0] as number) - (b[0] as number));
       order.forEach(([, i], k) => { out[i][y] = order.length > 1 ? k / (order.length - 1) : 0.5; });
@@ -132,6 +150,46 @@ const text = (v: unknown) => (v === null || v === undefined ? "–" : typeof v =
 
 /** Draws rows the way the config says. */
 export function Explore({ rows, config }: { rows: Row[]; config: ExploreConfig }) {
+  const base = useMemo(() => (config.agg ? aggregate(rows, config.agg, config.ys ?? []) : rows), [rows, config.agg, config.ys]);
+  if (config.split && config.kind !== "table") {
+    return (
+      <div className="x-split">
+        <div style={{ minWidth: 0 }}><Explore rows={base} config={{ ...config, split: false, agg: undefined }} /></div>
+        <div style={{ minWidth: 0, maxHeight: 360, overflow: "auto" }}><DataTable rows={base} /></div>
+      </div>
+    );
+  }
+  if (config.facet && config.kind !== "table") {
+    const groups = [...new Set(base.map((r) => text(r[config.facet!])))].slice(0, 12);
+    return (
+      <div className="x-facets">
+        {groups.map((g) => (
+          <div key={g} className="x-facet">
+            <div className="x-facet-h">{label(g)}</div>
+            <Explore rows={base.filter((r) => text(r[config.facet!]) === g)} config={{ ...config, facet: undefined, agg: undefined, split: false }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return <ExploreOne rows={base} config={config} />;
+}
+
+function aggregate(rows: Row[], agg: NonNullable<ExploreConfig["agg"]>, ys: string[]): Row[] {
+  const by = new Map<string, Row[]>();
+  for (const r of rows) { const k = text(r[agg.by]); by.set(k, [...(by.get(k) ?? []), r]); }
+  const nums = ys.length ? ys : Object.keys(profile(rows)).filter((c) => profile(rows)[c] === "number");
+  return [...by.entries()].map(([k, rs]) => {
+    const out: Row = { [agg.by]: k, count: rs.length };
+    for (const y of nums) {
+      const v = rs.map((r) => r[y]).filter(isNum).sort((a, b) => a - b);
+      out[y] = !v.length ? null : agg.fn === "sum" ? v.reduce((a, b) => a + b, 0) : agg.fn === "median" ? v[Math.floor(v.length / 2)] : agg.fn === "count" ? v.length : v.reduce((a, b) => a + b, 0) / v.length;
+    }
+    return out;
+  });
+}
+
+function ExploreOne({ rows, config }: { rows: Row[]; config: ExploreConfig }) {
   const { kind, x, ys = [], group, sort = "none", limit, transform } = config;
   const data = useMemo(() => transformed(rows, ys, transform), [rows, ys, transform]);
   if (!rows.length) return null;
@@ -142,8 +200,12 @@ export function Explore({ rows, config }: { rows: Row[]; config: ExploreConfig }
     const p = profile(rows);
     const xKey = x ?? "date";
     if (p[xKey] === "date") {
-      return <TimeSeries data={data} x={xKey} height={280} zeroFill={config.zeroFill}
-        series={ys.map((y) => ({ key: y, label: seriesLabel(y), kind, dash: y.endsWith(" · B") }))} refLines={transform === "rebase" ? [{ y: 100, dash: true }] : undefined} />;
+      const cols = Object.keys(p);
+      const band = ys.length === 1 && (!transform || transform === "none") ? bandFor(cols, ys[0]) : undefined;
+      const sig = cols.find((c) => p[c] === "bool" && /signif|reject|pass/i.test(c));
+      return <TimeSeries data={data} x={xKey} height={config.facet ? 180 : 280} zeroFill={config.zeroFill}
+        series={ys.map((y) => ({ key: y, label: seriesLabel(y), kind, dash: y.endsWith(" · B") }))} band={band}
+        highlight={sig} refLines={transform === "rebase" ? [{ y: 100, dash: true }] : transform === "log" ? undefined : [{ y: 0, dash: false, color: "var(--line-3)" }]} />;
     }
     // Numeric x: ordered line through the points.
     const sorted = [...data].filter((r) => isNum(r[xKey])).sort((a, b) => (a[xKey] as number) - (b[xKey] as number));
@@ -185,6 +247,7 @@ export function Explore({ rows, config }: { rows: Row[]; config: ExploreConfig }
 
 /** Column and transform pickers for the chosen view. */
 export function ExploreControls({ rows, config, onChange }: { rows: Row[]; config: ExploreConfig; onChange: (c: ExploreConfig) => void }) {
+  const [open, setOpen] = useState(false);
   const p = profile(rows);
   const cols = Object.keys(p);
   const nums = cols.filter((c) => p[c] === "number");
@@ -205,8 +268,15 @@ export function ExploreControls({ rows, config, onChange }: { rows: Row[]; confi
     onChange({ ...config, ys: multi ? (cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c]) : [c] });
   };
   if (k === "table") return null;
+  const summary = [config.x && k !== "histogram" ? `${label(config.x)} →` : "", (config.ys ?? []).map(label).join(", "), config.transform && config.transform !== "none" ? `· ${config.transform}` : "", config.facet ? `· by ${label(config.facet)}` : "", config.agg ? `· ${config.agg.fn} by ${label(config.agg.by)}` : ""].filter(Boolean).join(" ");
+  if (!open) return <button type="button" className="xsum" onClick={() => setOpen(true)}><span>{summary || "Choose columns"}</span><span className="act">Customize</span></button>;
   return (
     <div className="xctl">
+      <button type="button" className="btn sm ghost" style={{ order: 99, marginLeft: "auto" }} onClick={() => setOpen(false)}>Done</button>
+      {cats.length ? sel("Small multiples", config.facet, cats, (v) => onChange({ ...config, facet: v }), true) : null}
+      {cats.length ? sel("Group by", config.agg?.by, cats, (v) => onChange({ ...config, agg: v ? { by: v, fn: config.agg?.fn ?? "mean" } : undefined }), true) : null}
+      {config.agg ? sel("Reduce", config.agg.fn, ["mean", "median", "sum", "count"], (v) => onChange({ ...config, agg: { by: config.agg!.by, fn: (v ?? "mean") as "mean" } })) : null}
+      <label className="xc"><span>Layout</span><button type="button" className="pill" aria-pressed={Boolean(config.split)} onClick={() => onChange({ ...config, split: !config.split })}>Chart + table</button></label>
       {k !== "histogram" && !(k === "heatmap" && !config.x) ? sel(k === "heatmap" ? "Columns" : "X", config.x, k === "scatter" ? nums : k === "heatmap" ? cats : cols, (v) => onChange({ ...config, x: v }), k === "heatmap") : null}
       {k === "scatter" || k === "heatmap" ? sel(k === "heatmap" ? "Rows" : "Colour", config.group, cats, (v) => onChange({ ...config, group: v }), k === "scatter") : null}
       <div className="xc ys">
@@ -217,7 +287,7 @@ export function ExploreControls({ rows, config, onChange }: { rows: Row[]; confi
           ))}
         </div>
       </div>
-      {k === "line" || k === "area" || k === "step" ? sel("Transform", config.transform ?? "none", ["none", "cumulative", "rebase", "zscore", "rank"], (v) => onChange({ ...config, transform: (v ?? "none") as ExploreConfig["transform"] })) : null}
+      {k === "line" || k === "area" || k === "step" ? sel("Transform", config.transform ?? "none", ["none", "cumulative", "rebase", "zscore", "rank", "log"], (v) => onChange({ ...config, transform: (v ?? "none") as ExploreConfig["transform"] })) : null}
       {k === "area" ? (
         <label className="xc"><span>Fill</span><button type="button" className="pill" aria-pressed={Boolean(config.zeroFill)} onClick={() => onChange({ ...config, zeroFill: !config.zeroFill })}>Green / red at zero</button></label>
       ) : null}

@@ -33,11 +33,13 @@ export type Page = { id: string; label: string; icon: LucideIcon; question: stri
 export const PAGES: Page[] = [
   { id: "signal", slug: "signal", label: "Signal", icon: FlaskConical, question: "Write, load or combine the signal you want to test.", features: [] },
   { id: "report", slug: "report", label: "Report card", icon: ClipboardCheck, question: "One verdict across every test, graded like a referee would.", features: [] },
-  { id: "pricing", label: "Pricing tests", icon: Sigma, question: "Does the signal price returns, and is the model well specified?", features: ["01", "05"] },
-  { id: "robustness", label: "Robustness", icon: GitFork, question: "Does it survive other choices, fake signals and other regimes?", features: ["02", "03", "04"] },
-  { id: "causal", label: "Causal", icon: Crosshair, question: "Is the effect causal, from DiD to synthetic control?", features: ["07", "09"] },
-  { id: "decay", label: "Decay & novelty", icon: Hourglass, question: "Is it fading, and is it new or a known factor?", features: ["08", "11"] },
+  { id: "pricing", label: "Pricing tests", icon: Sigma, question: "Does the signal price returns, and is the model well specified?", features: ["01"] },
+  { id: "robustness", label: "Robustness", icon: GitFork, question: "Does it survive other choices, fake signals and other regimes?", features: ["02", "03"] },
+  { id: "causal", label: "Causal", icon: Crosshair, question: "Is the effect causal, from DiD to synthetic control?", features: ["07"] },
+  { id: "decay", label: "Decay & novelty", icon: Hourglass, question: "Is it fading, and is it new or a known factor?", features: ["08"] },
 ];
-export const pageOf = (featureId: string | null) => (featureId ? PAGES.find((p) => p.features.includes(featureId)) ?? null : null);
+/** Features now shown inside another page (backend merges); their old URLs still open on their own. */
+const MERGED_INTO: Record<string, string> = { "05": "01", "04": "02", "09": "07", "11": "08", "06": "01" };
+export const pageOf = (featureId: string | null) => (featureId ? PAGES.find((p) => p.features.includes(featureId) || p.features.includes(MERGED_INTO[featureId] ?? "")) ?? null : null);
 export const pageHref = (p: Page) => (p.slug ? `/research/${p.slug}` : featureHref(p.features[0]));
 export const specialPage = (slug: string | undefined) => PAGES.find((p) => p.slug && p.slug === slug) ?? null;

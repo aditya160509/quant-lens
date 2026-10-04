@@ -14,7 +14,7 @@ import { label } from "./format";
  */
 export function SignalPage() {
   const active = useActiveSignal();
-  const [expr, setExpr] = useState(active.expr ?? "rank(-ts_return(close, 252, skip=21))");
+  const [expr, setExpr] = useState(active.expr ?? "rank(delay(close, 1) / delay(close, 12) - 1)");
   const [name, setName] = useState(active.name ?? "My signal");
   const [check, setCheck] = useState<Validation | null>(null);
   const [checking, setChecking] = useState(false);
@@ -158,7 +158,7 @@ function PreviewPanel({ check, expr }: { check: Validation | null; expr: string 
       </div>
       <div>
         <div className="insp-h">Closest known signals</div>
-        {[...p.corr_known, ...(lit.data ?? []).map((l) => ({ name: l.name, corr: l.corr }))].sort((a, b) => Math.abs(b.corr) - Math.abs(a.corr)).slice(0, 6).map((c) => (
+        {[...new Map([...p.corr_known, ...(lit.data ?? []).map((l) => ({ name: l.name, corr: l.corr }))].map((c) => [c.name.toLowerCase(), { ...c, name: label(c.name) }])).values()].sort((a, b) => Math.abs(b.corr) - Math.abs(a.corr)).slice(0, 6).map((c) => (
           <div key={c.name} className="kv-row"><span>{c.name}</span><b className="num" style={{ color: Math.abs(c.corr) > 0.7 ? "var(--warn)" : "var(--text)" }}>{c.corr.toFixed(2)}</b></div>
         ))}
         {p.corr_known.some((c) => Math.abs(c.corr) > 0.7) ? <p style={{ fontSize: 12, color: "var(--warn)", marginTop: 6 }}>Correlation above 0.7 with a known signal: test the residual with “orthogonalize against” in the study settings.</p> : null}
