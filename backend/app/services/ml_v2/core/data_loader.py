@@ -101,12 +101,21 @@ def load_market_ohlcv() -> pd.DataFrame:
     for col in ["Open", "High", "Low", "Close", "Volume"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df["Ticker"] = df["Ticker"].map(normalize_symbol)
-    return df.dropna(subset=["Ticker", "Date", "Close"]).sort_values(["Ticker", "Date"])
+    invalid = df["Close"] <= 0
+    df.loc[invalid, ["Open", "High", "Low", "Close", "Volume"]] = np.nan
+    keys = ["Ticker", "Date"]
+    observations = df.dropna(subset=keys)
+    duplicate = observations.duplicated(keys, keep=False)
+    if duplicate.any():
+        unique_rows = observations.loc[duplicate].drop_duplicates()
+        if unique_rows.duplicated(keys, keep=False).any():
+            raise ValueError("Conflicting price observations after ticker normalization")
+    return observations.drop_duplicates(keys).sort_values(keys)
 
 
 @lru_cache(maxsize=1)
 def load_hourly_ohlcv() -> pd.DataFrame:
-    path = RESEARCH_HOURLY if RESEARCH_HOURLY.exists() else MARKET_UNIVERSE_HOURLY
+    path = MARKET_UNIVERSE_HOURLY
     if not path.exists():
         return pd.DataFrame(columns=["Ticker", "Datetime", "Open", "High", "Low", "Close", "Volume"])
     df = pd.read_parquet(path)
@@ -125,11 +134,11 @@ def load_hourly_ohlcv() -> pd.DataFrame:
     return out.dropna(subset=["Ticker", "Datetime", "Close"]).sort_values(["Ticker", "Datetime"])
 
 
-@lru_cache(maxsize=1)
 def available_symbols(limit: int | None = None, frequency: str = "daily") -> list[str]:
-    df = load_hourly_ohlcv() if normalize_frequency(frequency) == "hourly" and not load_hourly_ohlcv().empty else load_market_ohlcv()
+    df = load_hourly_ohlcv() if normalize_frequency(frequency) == "hourly" else load_market_ohlcv()
     if df.empty:
         return []
+    df = dated(df, "Datetime" if "Datetime" in df else "Date")
     counts = df.groupby("Ticker")["Close"].count().sort_values(ascending=False)
     out = [str(s) for s in counts.index]
     return out[:limit] if limit else out
@@ -137,7 +146,7 @@ def available_symbols(limit: int | None = None, frequency: str = "daily") -> lis
 
 def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: int = 5000) -> list[str]:
     payload = payload or {}
-    raw = payload.get("tickers") or payload.get("symbols") or payload.get("assets") or payload.get("universe")
+    raw = payload.get("tickers") or payload.get("symbols") or payload.get("assets") or payload.get("asset") or payload.get("symbol") or payload.get("universe")
     freq = normalize_frequency(payload.get("frequency") or payload.get("sampling_frequency") or "daily")
     universe = available_symbols(frequency=freq)
     existing = set(universe)

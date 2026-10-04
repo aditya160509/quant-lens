@@ -42,7 +42,7 @@ from .data_loader import (
     sector_map,
     volume_matrix,
 )
-from .validation import chronological_purged_split
+from .validation import chronological_purged_split, purged_date_folds
 
 from .performance import (
     ThreadPoolExecutor,
@@ -1173,54 +1173,37 @@ def run_triple_barrier(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     barrier_side = str(ctx.payload.get("barrier_side") or "bilateral").lower()
     rows = []
     for ticker in ctx.returns.columns:
-        path_rows = high_low_triple_barrier_rows(ctx, ticker, horizon, pt, sl, max_events=120, barrier_mode=barrier_mode, barrier_side=barrier_side)
-        if path_rows:
-            rows.extend(path_rows)
-        else:
-            r = ctx.returns[ticker]
-            fwd = r.shift(-horizon).rolling(horizon).sum()
-            label = np.where(fwd > pt, 1, np.where(fwd < -sl, -1, 0))
-            tmp = pd.DataFrame({"date": r.index, "ticker": ticker, "forward_return": fwd, "label": label, "vol_21": r.rolling(21).std() * math.sqrt(ctx.annualization), "barrier_method": "forward_return_fallback"})
-            rows.extend(tmp.dropna().tail(120).to_dict("records"))
+        rows.extend(high_low_triple_barrier_rows(ctx, ticker, horizon, pt, sl,
+                    max_events=600, barrier_mode=barrier_mode, barrier_side=barrier_side))
     labels = pd.DataFrame(rows)
-    dist = labels.groupby("label").size().reset_index(name="count") if not labels.empty else pd.DataFrame()
-    # 4.2 — Proper meta-label secondary classifier (not sigmoid of forward_return which leaks).
-    # Meta-label = 1 where the primary label's direction matches realized fwd return direction.
-    # We train on contemporaneous features only — vol_21 and ticker hash — predict for full set.
-    if not labels.empty and "label" in labels.columns and "forward_return" in labels.columns and "vol_21" in labels.columns:
-        try:
-            from sklearn.linear_model import LogisticRegression as _LR
-            _meta_target = ((labels["label"] != 0) & (np.sign(labels["label"]) == np.sign(labels["forward_return"].fillna(0)))).astype(int)
-            _meta_feats = pd.DataFrame({
-                "vol_21": pd.to_numeric(labels["vol_21"], errors="coerce").fillna(0.0),
-                "label_abs": labels["label"].abs().astype(float),
-                "ticker_hash": labels["ticker"].apply(lambda x: int(hashlib.blake2b(str(x).encode(), digest_size=4).hexdigest(), 16) % 100 / 100.0) if "ticker" in labels.columns else 0.0,
-            })
-            if len(_meta_feats) >= 60 and _meta_target.nunique() > 1:
-                probabilities = np.full(len(_meta_feats), 0.5, dtype=float)
-                splitter = KFold(n_splits=min(5, max(3, len(_meta_feats) // 40)), shuffle=False)
-                for train_idx, test_idx in splitter.split(_meta_feats):
-                    lo, hi = int(test_idx.min()), int(test_idx.max())
-                    keep = (train_idx < max(0, lo - horizon)) | (train_idx > min(len(_meta_feats) - 1, hi + horizon))
-                    purged_train = train_idx[keep]
-                    if len(purged_train) < 20 or _meta_target.iloc[purged_train].nunique() < 2:
-                        continue
-                    model = _LR(max_iter=300, C=1.0, solver="lbfgs")
-                    model.fit(_meta_feats.iloc[purged_train], _meta_target.iloc[purged_train])
-                    probabilities[test_idx] = model.predict_proba(_meta_feats.iloc[test_idx])[:, 1]
-                labels["meta_probability"] = probabilities
-            else:
-                labels["meta_probability"] = 0.5
-        except Exception:
-            # Neutral fallback. Realized forward returns must never enter a prediction.
-            labels["meta_probability"] = 0.5
+    if labels.empty:
+        raise ValueError("No complete OHLC event windows for triple-barrier labeling")
+    labels = labels.sort_values(["date", "ticker"]).reset_index(drop=True)
+    dist = labels.groupby("label").size().reset_index(name="count")
+    # Primary side is observable at event formation, never the future barrier label.
+    sides = ctx.returns.rolling(21).sum()
+    labels["primary_side"] = [np.sign(sides.loc[pd.Timestamp(d), t])
+                              for d, t in zip(labels["date"], labels["ticker"])]
+    features = labels[["vol_21", "primary_side"]].astype(float)
+    target = (labels["primary_side"] * labels["forward_return"] > 0).astype(int)
+    probabilities = np.full(len(labels), np.nan)
+    for train_idx, test_idx in purged_date_folds(labels, n_splits=3, horizon=horizon, embargo=5):
+        valid_train = features.iloc[train_idx].notna().all(axis=1).to_numpy()
+        valid_test = features.iloc[test_idx].notna().all(axis=1).to_numpy()
+        train_idx, test_idx = train_idx[valid_train], test_idx[valid_test]
+        if len(train_idx) < 30 or target.iloc[train_idx].nunique() < 2:
+            continue
+        model = LogisticRegression(max_iter=500, random_state=7)
+        model.fit(features.iloc[train_idx], target.iloc[train_idx])
+        probabilities[test_idx] = model.predict_proba(features.iloc[test_idx])[:, 1]
+    labels["meta_probability"] = probabilities
     confidence = float(number_like(ctx.payload.get("confidence_level"), 0.90) or 0.90)
     sizing = str(ctx.payload.get("position_sizing") or "probability").lower()
     edge = (2.0 * labels.get("meta_probability", pd.Series(0.5, index=labels.index)) - 1.0).clip(-1.0, 1.0)
     labels["position_size"] = np.where(sizing == "binary", (labels["meta_probability"] >= 0.5).astype(float), edge if sizing == "kelly" else labels["meta_probability"])
     cqr_meta = {"method": "lightgbm_quantile_cqr", "target_coverage": confidence}
     labels, cqr_meta = _lightgbm_cqr_intervals(labels, confidence=confidence, horizon=horizon, annualization=ctx.annualization)
-    coverage = float(((labels["forward_return"] >= labels["cqr_lower"]) & (labels["forward_return"] <= labels["cqr_upper"])).mean()) if not labels.empty else 0.0
+    coverage = cqr_meta.get("test_empirical_coverage")
     coverage_by_date = _rolling_coverage_audit(labels, confidence)
     label_comparison = label_method_comparison(labels)
     barrier_sensitivity = barrier_sensitivity_rows(ctx, horizon)
@@ -1238,7 +1221,7 @@ def run_triple_barrier(payload: dict[str, Any] | None = None) -> dict[str, Any]:
             "barrier_sensitivity_surface": barrier_sensitivity,
         },
         tables={"label_audit": compact_records(labels, limit=800), "barrier_parameters": [{"profit_taking": pt, "stop_loss": sl, "max_holding_period": horizon, "barrier_mode": barrier_mode, "barrier_side": barrier_side}], "label_method_comparison": label_comparison, "barrier_sensitivity": barrier_sensitivity},
-        meta={"implemented_outputs": 9, "method": "high_low_path_triple_barrier_with_forward_return_fallback", **cqr_meta},
+        meta={"implemented_outputs": 9, "method": "high_low_path_triple_barrier", **cqr_meta},
     )
 
 
@@ -1269,7 +1252,7 @@ def high_low_triple_barrier_rows(ctx: MLContext, ticker: str, horizon: int, pt: 
         event_daily_vol = 0.0
         if not vol_series.empty:
             try:
-                event_daily_vol = float(vol_series.reindex([dates.iloc[i]], method="nearest").iloc[0]) / math.sqrt(ctx.annualization)
+                event_daily_vol = float(vol_series.reindex([dates.iloc[i]]).iloc[0]) / math.sqrt(ctx.annualization)
             except Exception:
                 event_daily_vol = 0.0
         pt_i = max(1e-4, pt * event_daily_vol * math.sqrt(horizon)) if barrier_mode in {"ewma", "vol_scaled", "dynamic"} else pt
@@ -1296,7 +1279,7 @@ def high_low_triple_barrier_rows(ctx: MLContext, ticker: str, horizon: int, pt: 
         event_vol = None
         if not vol_series.empty:
             try:
-                aligned_vol = vol_series.reindex([dates.iloc[i]], method="nearest").iloc[0]
+                aligned_vol = vol_series.reindex([dates.iloc[i]]).iloc[0]
                 event_vol = float(aligned_vol) if math.isfinite(float(aligned_vol)) else None
             except Exception:
                 event_vol = None
@@ -1336,69 +1319,50 @@ def barrier_sensitivity_rows(ctx: MLContext, horizon: int) -> list[dict[str, Any
     return rows
 
 
-def _lightgbm_cqr_intervals(labels: pd.DataFrame, confidence: float, horizon: int, annualization: float) -> tuple[pd.DataFrame, dict[str, Any]]:
-    """Fit lower/upper LightGBM quantile models and conformalize on holdout."""
-
-    out = labels.copy()
-    if out.empty:
-        return out, {"method": "lightgbm_quantile_cqr", "status": "empty"}
-    features = pd.DataFrame(
-        {
-            "vol_21": pd.to_numeric(out.get("vol_21"), errors="coerce").fillna(0.0),
-            "abs_forward_return_lag_proxy": pd.to_numeric(out.get("forward_return"), errors="coerce").abs().shift(1).fillna(0.0),
-            "meta_probability": pd.to_numeric(out.get("meta_probability"), errors="coerce").fillna(0.5),
-            "label": pd.to_numeric(out.get("label"), errors="coerce").fillna(0.0),
-        }
-    )
-    vol = features["vol_21"].replace([np.inf, -np.inf], np.nan).fillna(0.0)
-    fwd_abs = pd.to_numeric(out.get("forward_return"), errors="coerce").abs().fillna(0.0)
-    features["vol_percentile_rank"] = vol.rank(pct=True).fillna(0.5)
-    features["vol_regime_high"] = (features["vol_percentile_rank"] > 0.70).astype(float)
-    features["signal_strength"] = (features["meta_probability"] - 0.5).abs() * 2.0
-    features["realized_tail_rank"] = fwd_abs.rank(pct=True).fillna(0.5)
-    features["label_signed_strength"] = features["label"] * features["signal_strength"]
-    y = pd.to_numeric(out["forward_return"], errors="coerce").fillna(0.0)
-    n = len(out)
-    alpha = max(0.01, min(0.40, 1.0 - confidence))
-    train_end = max(30, int(n * 0.60))
-    cal_end = max(train_end + 10, int(n * 0.80))
-    if cal_end >= n or train_end >= n - 5:
-        scale = pd.to_numeric(out["vol_21"], errors="coerce").fillna(0.0) / math.sqrt(max(annualization, 1.0)) * math.sqrt(max(horizon, 1))
-        out["cqr_lower"] = y - stats.norm.ppf(1 - alpha / 2) * scale
-        out["cqr_upper"] = y + stats.norm.ppf(1 - alpha / 2) * scale
-        out["cqr_interval_width"] = out["cqr_upper"] - out["cqr_lower"]
-        return out, {"method": "volatility_fallback_cqr", "status": "too_few_rows_for_quantile_fit"}
-    try:
-        from lightgbm import LGBMRegressor
-
-        lower = LGBMRegressor(objective="quantile", alpha=alpha / 2, n_estimators=160, max_depth=4, learning_rate=0.035, min_child_samples=20, verbose=-1, n_jobs=1, random_state=31)
-        upper = LGBMRegressor(objective="quantile", alpha=1 - alpha / 2, n_estimators=160, max_depth=4, learning_rate=0.035, min_child_samples=20, verbose=-1, n_jobs=1, random_state=37)
-        lower.fit(features.iloc[:train_end], y.iloc[:train_end])
-        upper.fit(features.iloc[:train_end], y.iloc[:train_end])
-        pred_l_cal = np.asarray(lower.predict(features.iloc[train_end:cal_end]), dtype=float)
-        pred_u_cal = np.asarray(upper.predict(features.iloc[train_end:cal_end]), dtype=float)
-        y_cal = y.iloc[train_end:cal_end].to_numpy(dtype=float)
-        nonconformity = np.maximum(pred_l_cal - y_cal, y_cal - pred_u_cal)
-        qhat = float(np.quantile(nonconformity, min(0.999, np.ceil((len(nonconformity) + 1) * confidence) / max(len(nonconformity), 1)))) if len(nonconformity) else 0.0
-        pred_l = np.asarray(lower.predict(features), dtype=float) - max(qhat, 0.0)
-        pred_u = np.asarray(upper.predict(features), dtype=float) + max(qhat, 0.0)
-        out["cqr_lower"] = np.minimum(pred_l, pred_u)
-        out["cqr_upper"] = np.maximum(pred_l, pred_u)
-        out["cqr_interval_width"] = out["cqr_upper"] - out["cqr_lower"]
-        empirical = float(((y.iloc[cal_end:] >= out["cqr_lower"].iloc[cal_end:]) & (y.iloc[cal_end:] <= out["cqr_upper"].iloc[cal_end:])).mean()) if cal_end < n else None
-        return out, {"method": "lightgbm_quantile_cqr", "status": "fit", "calibration_qhat": qhat, "calibration_rows": int(cal_end - train_end), "test_empirical_coverage": empirical}
-    except Exception as exc:
-        scale = pd.to_numeric(out["vol_21"], errors="coerce").fillna(0.0) / math.sqrt(max(annualization, 1.0)) * math.sqrt(max(horizon, 1))
-        out["cqr_lower"] = y - stats.norm.ppf(1 - alpha / 2) * scale
-        out["cqr_upper"] = y + stats.norm.ppf(1 - alpha / 2) * scale
-        out["cqr_interval_width"] = out["cqr_upper"] - out["cqr_lower"]
-        return out, {"method": "volatility_fallback_cqr", "status": "lightgbm_failed", "error": str(exc)}
+def _lightgbm_cqr_intervals(labels: pd.DataFrame, confidence: float, horizon: int, annualization: float):
+    """Quantile regression with disjoint purged training/calibration/test dates."""
+    from sklearn.ensemble import GradientBoostingRegressor
+    out = labels.sort_values(["date", "ticker"]).reset_index(drop=True).copy()
+    for column in ["cqr_lower", "cqr_upper", "cqr_interval_width"]:
+        out[column] = np.nan
+    dates = pd.DatetimeIndex(pd.to_datetime(out["date"]).unique()).sort_values()
+    train_end, calibration_end = int(len(dates) * .6), int(len(dates) * .8)
+    train_dates = dates[:max(0, train_end - horizon - 5)]
+    calibration_dates = dates[train_end:max(train_end, calibration_end - horizon - 5)]
+    test_dates = dates[calibration_end:]
+    features = out[["vol_21", "primary_side"]].astype(float)
+    valid = features.notna().all(axis=1) & out["forward_return"].notna()
+    masks = [valid & pd.to_datetime(out["date"]).isin(part)
+             for part in [train_dates, calibration_dates, test_dates]]
+    train, calibration, test = masks
+    if train.sum() < 30 or calibration.sum() < 10 or test.sum() < 10:
+        return out, {"method": "quantile_cqr", "status": "unavailable", "reason": "Insufficient disjoint event dates"}
+    alpha = 1 - confidence
+    estimators = [GradientBoostingRegressor(loss="quantile", alpha=q, n_estimators=100,
+                  max_depth=2, random_state=7) for q in [alpha / 2, 1 - alpha / 2]]
+    for model in estimators:
+        model.fit(features.loc[train], out.loc[train, "forward_return"])
+    lo, hi = [model.predict(features.loc[calibration]) for model in estimators]
+    y_cal = out.loc[calibration, "forward_return"].to_numpy()
+    scores = np.maximum(lo - y_cal, y_cal - hi)
+    level = min(1., np.ceil((len(scores) + 1) * confidence) / len(scores))
+    correction = max(0., float(np.quantile(scores, level, method="higher")))
+    lo, hi = [model.predict(features.loc[test]) for model in estimators]
+    out.loc[test, "cqr_lower"] = np.minimum(lo, hi) - correction
+    out.loc[test, "cqr_upper"] = np.maximum(lo, hi) + correction
+    out["cqr_interval_width"] = out["cqr_upper"] - out["cqr_lower"]
+    coverage = ((out.loc[test, "forward_return"] >= out.loc[test, "cqr_lower"]) &
+                (out.loc[test, "forward_return"] <= out.loc[test, "cqr_upper"])).mean()
+    return out, {"method": "sklearn_quantile_cqr", "status": "fit",
+                 "calibration_qhat": correction, "calibration_rows": int(calibration.sum()),
+                 "test_rows": int(test.sum()), "test_empirical_coverage": float(coverage),
+                 "coverage_scope": "held_out_test_only", "coverage_guarantee": "Exchangeability not assumed for financial events"}
 
 
 def _rolling_coverage_audit(labels: pd.DataFrame, confidence: float) -> list[dict[str, Any]]:
     if labels.empty or "date" not in labels:
         return []
-    df = labels.copy()
+    df = labels.dropna(subset=["forward_return", "cqr_lower", "cqr_upper"]).copy()
     df["covered"] = ((df["forward_return"] >= df["cqr_lower"]) & (df["forward_return"] <= df["cqr_upper"])).astype(float)
     grouped = df.groupby("date")["covered"].mean().rolling(21, min_periods=5).mean().dropna()
     return [{"date": date_str(d), "target_coverage": confidence, "empirical_coverage": float(v)} for d, v in grouped.tail(160).items()]
@@ -2257,29 +2221,33 @@ def _nuisance_regressor(kind: str, seed: int = 7):
     return Ridge(alpha=2.0)
 
 
-def dml_cross_fit(x: pd.DataFrame, y: pd.Series, factor: str, k_folds: int = 5, nuisance_model: str = "ridge") -> tuple[float, float, float]:
-    """K-fold cross-fitted DML APE for a single factor."""
+def dml_cross_fit(x: pd.DataFrame, y: pd.Series, factor: str, k_folds: int = 5,
+                  nuisance_model: str = "ridge", *, dates=None, horizon=5, embargo=5) -> tuple[float, float, float]:
+    """Chronological cross-fitting with HC3 inference on held-out residuals.
+
+    Effects are conditional associations unless identification assumptions hold.
+    """
+    import statsmodels.api as sm
     others = [c for c in x.columns if c != factor]
     if not others:
-        return 0.0, 1.0, 0.0
-    n = len(x)
-    ef_all = np.zeros(n)
-    ey_all = np.zeros(n)
-    kf = KFold(n_splits=max(2, min(k_folds, 10, n)), shuffle=False)
-    for train_idx, test_idx in kf.split(x):
+        raise ValueError("DML requires at least one nuisance covariate")
+    if dates is None:
+        raise ValueError("DML requires observation dates for purged cross-fitting")
+    folds = purged_date_folds(pd.DataFrame({"date": pd.to_datetime(dates).to_numpy()}),
+                             n_splits=k_folds, horizon=horizon, embargo=embargo)
+    treatments, outcomes = [], []
+    for train_idx, test_idx in folds:
         x_tr, x_te = x.iloc[train_idx], x.iloc[test_idx]
         y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
         m_f = _nuisance_regressor(nuisance_model, seed=11).fit(x_tr[others], x_tr[factor])
         m_y = _nuisance_regressor(nuisance_model, seed=17).fit(x_tr[others], y_tr)
-        ef_all[test_idx] = x_te[factor].to_numpy() - m_f.predict(x_te[others])
-        ey_all[test_idx] = y_te.to_numpy() - m_y.predict(x_te[others])
-    denom = float(np.dot(ef_all, ef_all))
-    if denom < 1e-12:
-        return 0.0, 1.0, 0.0
-    ape = float(np.dot(ef_all, ey_all) / denom)
-    resid = ey_all - ape * ef_all
-    se = float(math.sqrt(np.var(resid) / denom))
-    return ape, se, ape / max(se, 1e-12)
+        treatments.extend(x_te[factor].to_numpy() - m_f.predict(x_te[others]))
+        outcomes.extend(y_te.to_numpy() - m_y.predict(x_te[others]))
+    residual_treatment = np.asarray(treatments)
+    if len(residual_treatment) < 20 or np.dot(residual_treatment, residual_treatment) < 1e-12:
+        raise ValueError("Insufficient residual treatment variation for DML inference")
+    fit = sm.OLS(np.asarray(outcomes), residual_treatment[:, None]).fit(cov_type="HC3")
+    return float(fit.params[0]), float(fit.bse[0]), float(fit.tvalues[0])
 
 
 def hc3_univariate_inference(treatment: pd.Series, y: pd.Series) -> tuple[float, float, float]:
@@ -2793,7 +2761,7 @@ def run_causal_dml(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     rows = []
     network = []
     for factor in factors:
-        ape, se, t = dml_cross_fit(x, y, factor, k_folds=k_folds, nuisance_model=nuisance_model)
+        ape, se, t = dml_cross_fit(x, y, factor, k_folds=k_folds, nuisance_model=nuisance_model, dates=panel["date"], horizon=int((payload or {}).get("prediction_horizon", 5)))
         ols_ic = fast_spearman_ic(x[factor].to_numpy(dtype=float), y.to_numpy(dtype=float))
         bias = ols_ic - ape
         cls = "Causal" if abs(t) > 1.96 and abs(bias) < abs(ols_ic) * 0.5 + 1e-6 else "Proxy" if abs(t) > 1.96 else "Spurious"
@@ -2819,7 +2787,7 @@ def run_causal_dml(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         if len(snap) < max(60, min(3, k_folds) * 20):
             continue
         for factor in factors[:6]:
-            ape_i, _, _ = dml_cross_fit(snap, yy, factor, k_folds=min(3, k_folds), nuisance_model=nuisance_model)
+            ape_i, _, _ = dml_cross_fit(snap, yy, factor, k_folds=min(3, k_folds), nuisance_model=nuisance_model, dates=panel["date"].iloc[:i], horizon=int((payload or {}).get("prediction_horizon", 5)))
             ape_ts.append({"step": i, "factor": factor, "ape": ape_i})
     spurious_fraction = float(np.mean([r["classification"] == "Spurious" for r in rows])) if rows else 0.0
     return response(
@@ -2837,7 +2805,7 @@ def run_causal_dml(payload: dict[str, Any] | None = None) -> dict[str, Any]:
             "rolling_spurious_fraction": [{"date": date_str(d), "spurious_fraction": spurious_fraction} for d in panel["date"].drop_duplicates().tail(80)],
         },
         tables={"causal_ape_table": rows, "causal_network_edges": network, "robust_inference_table": [{"factor": r["factor"], "hc3_slope": r["hc3_slope"], "hc3_se": r["hc3_se"], "hc3_t_stat": r["hc3_t_stat"]} for r in rows]},
-        meta={"implemented_outputs": 9, "nuisance_model": nuisance_model, "dml_folds": k_folds, "cross_fitting": "true_kfold_not_insample", "robust_inference": "HC3_univariate_sandwich", "partial_r2_edges": True},
+        meta={"implemented_outputs": 9, "nuisance_model": nuisance_model, "dml_folds": k_folds, "cross_fitting": "purged_expanding_date_folds", "robust_inference": "HC3_univariate_sandwich", "partial_r2_edges": True},
     )
 
 
