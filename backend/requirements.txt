@@ -93,7 +93,7 @@ rich>=13.0.0
 # =============================================================================
 # OPTIONAL: ML/AI (uncomment if needed)
 # =============================================================================
-# torch>=2.0.0
+torch>=2.2,<3  # ML V2 genuine CPU sequence training
 # transformers>=4.30.0
 # sentence-transformers>=2.2.0
 

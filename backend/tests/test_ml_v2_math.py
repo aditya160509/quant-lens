@@ -26,7 +26,7 @@ def test_spearman_ties_match_scipy():
 
 def test_dml_recovers_known_partial_effect():
     import numpy as np
-    from app.services.ml_v2.core.analytics import dml_cross_fit
+    from app.services.ml_v2.core.dml import dml_cross_fit
     rng = np.random.default_rng(13)
     z = rng.normal(size=900)
     treatment = 0.7 * z + rng.normal(size=900)
@@ -38,7 +38,7 @@ def test_dml_recovers_known_partial_effect():
 
 def test_cqr_predictions_do_not_use_test_outcomes():
     import numpy as np
-    from app.services.ml_v2.core.analytics import _lightgbm_cqr_intervals
+    from app.services.ml_v2.core.barriers import _lightgbm_cqr_intervals
     rng = np.random.default_rng(71)
     frame = pd.DataFrame({"date": pd.date_range("2020-01-01", periods=300),
         "ticker": "AAA", "vol_21": rng.uniform(.1, .4, 300),

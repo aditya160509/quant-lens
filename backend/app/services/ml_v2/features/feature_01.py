@@ -8,8 +8,11 @@ are research-mode only, and how loose frontend/API payloads are normalized.
 from __future__ import annotations
 
 from typing import Any
+from .inputs import inputs, outputs, validate
 
-from app.services.ml_v2.core.analytics import merge_feature_contract, normalize_payload, run_cpcv_engine
+from app.services.ml_v2.core.common import merge_feature_contract
+from app.services.ml_v2.core.performance import normalize_payload
+from app.services.ml_v2.core.cpcv import run_cpcv_engine
 
 
 FEATURE_ID = "01"
@@ -43,7 +46,7 @@ ALIASES = {
 INPUT_CONTRACT = [
     {"key": "symbols", "type": "ticker_list", "required": False, "source": "master_universe.parquet", "description": "Any local ticker universe; defaults to the most-covered local symbols."},
     {"key": "model_type", "type": "select", "options": ["ridge", "lasso", "elastic_net", "linear_svm", "mlp", "random_forest", "extra_trees", "xgboost", "lightgbm", "catboost"], "default": DEFAULTS["model_type"]},
-    {"key": "label_type", "type": "select", "options": ["regression_return", "binary_direction", "triple_barrier"], "default": DEFAULTS["label_type"]},
+    {"key": "label_type", "type": "select", "options": ["regression_return"], "default": DEFAULTS["label_type"]},
     {"key": "prediction_horizon", "type": "integer", "options": [1, 5, 21, 63], "default": DEFAULTS["prediction_horizon"]},
     {"key": "k_folds", "type": "integer", "options": [3, 5, 10], "default": DEFAULTS["k_folds"]},
     {"key": "embargo_period", "type": "integer", "options": [0, 1, 5, 10, 21, 63], "default": DEFAULTS["embargo_period"]},
@@ -79,12 +82,15 @@ IMPLEMENTATION_NOTES = [
 ]
 
 
+INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
+OUTPUTS = outputs(OUTPUT_CONTRACT)
+
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["user_model_upload", "event_times_csv"])
 
 
 def run(payload=None):
-    normalized = normalize_feature_payload(payload)
+    normalized = validate(normalize_feature_payload(payload), INPUTS)
     result = run_cpcv_engine(normalized)
     return merge_feature_contract(
         result,

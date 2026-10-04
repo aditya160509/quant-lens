@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from typing import Any
+from .inputs import inputs, outputs, validate
 
-from app.services.ml_v2.core.analytics import merge_feature_contract, normalize_payload, run_regime_engine
+from app.services.ml_v2.core.common import merge_feature_contract
+from app.services.ml_v2.core.performance import normalize_payload
+from app.services.ml_v2.core.regimes import run_regime_engine
 
 
 FEATURE_ID = "06"
@@ -58,11 +61,14 @@ IMPLEMENTATION_NOTES = [
 ]
 
 
+INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
+OUTPUTS = outputs(OUTPUT_CONTRACT)
+
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["student_t_hmm", "skewed_t_hmm", "ensemble_hmm_full"])
 
 
 def run(payload=None):
-    normalized = normalize_feature_payload(payload)
+    normalized = validate(normalize_feature_payload(payload), INPUTS)
     result = run_regime_engine(normalized)
     return merge_feature_contract(result, feature_title=FEATURE_TITLE, input_contract=INPUT_CONTRACT, output_contract=OUTPUT_CONTRACT, research_only=RESEARCH_ONLY, implementation_notes=IMPLEMENTATION_NOTES, payload=normalized)
