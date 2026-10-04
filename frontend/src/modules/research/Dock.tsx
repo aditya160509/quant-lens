@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Maximize2, Minimize2, Minus, Trash2 } from "lucide-react";
 import { useLayout } from "@/workspace/layout";
 import { Chip, Tabs } from "@/workspace/ui";
@@ -28,6 +28,11 @@ export function Dock({ runs, activeFeature, onMaximize }: { runs: RunRecord[]; a
   const [view, setView] = useState<View>("runs");
   const [onlyThis, setOnlyThis] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
+  useEffect(() => {
+    const on = (e: Event) => { setView("runs"); setPicked((e as CustomEvent<string[]>).detail.slice(0, 2)); };
+    window.addEventListener("research:compare", on);
+    return () => window.removeEventListener("research:compare", on);
+  }, []);
   const pick = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id].slice(-2)));
   const pair = picked.map((id) => runs.find((r) => r.jobId === id)).filter((r): r is RunRecord => Boolean(r));
   const remove = useRuns((s) => s.remove);

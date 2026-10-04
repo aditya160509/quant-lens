@@ -442,3 +442,13 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .proj-btn { width: 100%; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 8px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-2); font-size: 12.5px; }
 .proj-btn:hover { color: var(--text); }
 .proj-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Phone: one column, read-first. Panels, the inspector and the dock step aside. */
+.ws-mobile { display: flex; flex-direction: column; gap: 6px; height: 100%; }
+.ws-mobile > select { height: 36px; }
+.ws-mobile .island { width: 100%; }
+@media (max-width: 760px) {
+  .sticky-bar .tabs { overflow-x: auto; }
+  .out-grid > * { grid-column: 1 / -1 !important; }
+  .rc-hero { flex-wrap: wrap; }
+  .sig-grid { grid-template-columns: 1fr; }
+}

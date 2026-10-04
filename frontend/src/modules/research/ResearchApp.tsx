@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useMemo, useState, useSyncExternalStore } from "react";
-import { Bookmark, History, LayoutGrid, Trash2 } from "lucide-react";
+import { Bookmark, ClipboardCheck, FlaskConical, GitCompare, History, LayoutGrid, Trash2, X } from "lucide-react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import { create } from "zustand";
 import { useLayout } from "@/workspace/layout";
 import { useRegionPanel } from "@/workspace/panels";
 import { useWorkspace } from "@/workspace/WorkspaceShell";
 import { Dot } from "@/workspace/ui";
-import { cancelJob, latestRun, metricsOf, studyPart, useActiveSignal, useBackgroundRuns, useJob, useManifest, useRuns, useSubmitJob } from "./api";
+import { cancelJob, latestRun, metricsOf, studyPart, useActiveSignal, useLibrary, useBackgroundRuns, useJob, useManifest, useRuns, useSubmitJob } from "./api";
 import { PAGES, featureHref, idFromSlug, metaFor, pageHref, pageOf, specialPage } from "./catalog";
 import { SignalPage } from "./SignalPage";
 import { ReportCardPage } from "./ReportCard";
@@ -54,6 +54,7 @@ function ResearchPanels() {
   const router = useRouter();
   const runs = useRuns((s) => s.runs);
   const animate = useLayout((s) => s.animate);
+  const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia("(max-width: 760px)").matches, () => false);
   const shownJob = useSearchParams()?.get("run") ?? (featureId ? runs.find((r) => r.featureId === featureId)?.jobId ?? null : null);
   useBackgroundRuns(manifest.data, shownJob, verdictFor);
   useDoneInTitle(runs);
@@ -106,22 +107,29 @@ function ResearchPanels() {
     ]);
   }, [manifest.data, runs, registerPalette, router]);
 
+  // Actions: pages, the active signal, report card, comparisons; the library as one-step signal loads.
+  const library = useLibrary();
+  useEffect(() => {
+    const go = (href: string) => () => router.push(href);
+    const done = runs.filter((r) => r.status === "completed");
+    registerPalette("research-actions", [
+      ...PAGES.map((p) => ({ id: `page-${p.id}`, group: "Pages", icon: p.icon, label: p.label, keywords: [p.question], run: go(pageHref(p)) })),
+      { id: "act-report", group: "Actions", icon: ClipboardCheck, label: "Run the report card on the active signal", run: go("/research/report") },
+      { id: "act-clear-signal", group: "Actions", icon: X, label: "Use each page's built-in signal (clear formula)", run: () => useActiveSignal.getState().set({ expr: null, name: null }) },
+      ...(done.length >= 2 ? [{ id: "act-compare", group: "Actions", icon: GitCompare, label: "Compare the last two runs", run: () => { useLayout.getState().set("bottom", true, true); window.dispatchEvent(new CustomEvent("research:compare", { detail: [done[0].jobId, done[1].jobId] })); } }] : []),
+      { id: "act-dock", group: "Actions", icon: History, label: "Show runs and log", run: () => useLayout.getState().set("bottom", true, true) },
+      ...(library.data ?? []).map((s) => ({ id: `lib-${s.id}`, group: "Published anomalies", icon: FlaskConical, label: `Test ${s.name}`, meta: s.citation, keywords: [s.category, s.formula], run: () => { useActiveSignal.getState().set({ expr: s.formula, name: s.name }); router.push("/research/signal"); } })),
+    ]);
+  }, [runs, library.data, registerPalette, router]);
+
   const outer = useDefaultLayout({ id: "research-columns-v2", storage: panelStorage });
   const inner = useDefaultLayout({ id: "research-rows-v2", storage: panelStorage });
   const left = useRegionPanel("left");
   const right = useRegionPanel("right");
   const bottom = useRegionPanel("bottom");
 
-  return (
-    <Group orientation="horizontal" id="research-columns-v2" className={animate ? "ws-animate" : undefined} defaultLayout={outer.defaultLayout} onLayoutChanged={outer.onLayoutChanged} style={{ height: "100%" }}>
-      <Panel id="nav" panelRef={left.panelRef} onResize={left.onResize} defaultSize={left.defaultOpen ? 236 : 0} minSize={196} maxSize={340} collapsible collapsedSize={0}>
-        <FeatureNav features={manifest.data ?? []} loading={manifest.isLoading} activeId={featureId} activePage={special?.id ?? pageOf(featureId)?.id ?? null} runs={runs} />
-      </Panel>
-      <Separator className="ws-sep" />
-      <Panel id="center" minSize={460}>
-        <Group orientation="vertical" id="research-rows-v2" className={animate ? "ws-animate" : undefined} defaultLayout={inner.defaultLayout} onLayoutChanged={inner.onLayoutChanged}>
-          <Panel id="results" minSize={260}>
-            {manifest.isError ? (
+  const center = (
+            <>{manifest.isError ? (
               <ErrorState message={(manifest.error as Error).message} onRetry={() => manifest.refetch()} />
             ) : sharedToken ? (
               <SharedView token={sharedToken} features={manifest.data ?? []} />
@@ -133,7 +141,30 @@ function ResearchPanels() {
               <FeatureWorkspace key={feature.id} feature={feature} />
             ) : (
               <Overview features={manifest.data ?? []} loading={manifest.isLoading} runs={runs} />
-            )}
+            )}</>
+  );
+  if (narrow) {
+    return (
+      <div className="ws-mobile">
+        <select className="input" aria-label="Page" value={special ? pageHref(special) : feature ? featureHref(feature.id) : "/research"} onChange={(e) => router.push(e.target.value)}>
+          <option value="/research">Overview</option>
+          {PAGES.map((p) => <option key={p.id} value={pageHref(p)}>{p.label}</option>)}
+        </select>
+        <div style={{ flex: 1, minHeight: 0, display: "flex" }}>{center}</div>
+      </div>
+    );
+  }
+
+  return (
+    <Group orientation="horizontal" id="research-columns-v2" className={animate ? "ws-animate" : undefined} defaultLayout={outer.defaultLayout} onLayoutChanged={outer.onLayoutChanged} style={{ height: "100%" }}>
+      <Panel id="nav" panelRef={left.panelRef} onResize={left.onResize} defaultSize={left.defaultOpen ? 236 : 0} minSize={196} maxSize={340} collapsible collapsedSize={0}>
+        <FeatureNav features={manifest.data ?? []} loading={manifest.isLoading} activeId={featureId} activePage={special?.id ?? pageOf(featureId)?.id ?? null} runs={runs} />
+      </Panel>
+      <Separator className="ws-sep" />
+      <Panel id="center" minSize={460}>
+        <Group orientation="vertical" id="research-rows-v2" className={animate ? "ws-animate" : undefined} defaultLayout={inner.defaultLayout} onLayoutChanged={inner.onLayoutChanged}>
+          <Panel id="results" minSize={260}>
+            {center}
           </Panel>
           <Separator className="ws-sep h" />
           <Panel id="dock" panelRef={bottom.panelRef} onResize={bottom.onResize} defaultSize={bottom.defaultOpen ? 220 : 0} minSize={120} maxSize="85%" collapsible collapsedSize={0}>
@@ -336,3 +367,5 @@ function useDoneInTitle(runs: RunRecord[]) {
     document.addEventListener("visibilitychange", back);
   }, [done, runs]);
 }
+
+const subscribeNarrow = (cb: () => void) => { const m = window.matchMedia("(max-width: 760px)"); m.addEventListener("change", cb); return () => m.removeEventListener("change", cb); };
