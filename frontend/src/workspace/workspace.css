@@ -405,3 +405,40 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .ov-metrics span { display: block; font-size: 11px; color: var(--text-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ov-metrics b { font-weight: 500; font-size: 13.5px; color: var(--text); }
 @media (max-width: 640px) { .ov-stats > div:nth-child(n+4) { border-top: 1px solid var(--line); } }
+.nav-item.sub { height: 28px; padding-left: 38px; font-size: 12.5px; color: var(--text-3); }
+.nav-item.sub[aria-current="page"] { color: var(--text); }
+.page-switch { display: flex; align-items: center; gap: 6px; margin: -6px 0 14px; flex-wrap: wrap; }
+.page-switch .pg { font-size: 11.5px; color: var(--text-4); margin-right: 4px; }
+.page-switch .pill { text-decoration: none; height: 26px; display: inline-flex; align-items: center; }
+.page-switch .pill[aria-selected="true"] { background: var(--text); color: var(--bg); box-shadow: none; }
+
+/* Signal page */
+.sig-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 1000px) { .sig-grid { grid-template-columns: 1fr; } }
+.input.formula { font: 13px/1.6 var(--mono); min-height: 96px; resize: vertical; padding: 10px 12px; width: 100%; }
+.formula-err { position: absolute; inset: 0; padding: 10px 12px; font: 13px/1.6 var(--mono); color: transparent; pointer-events: none; white-space: pre-wrap; word-break: break-word; }
+.formula-err u { text-decoration: wavy underline var(--down); text-underline-offset: 3px; }
+.cov-strip { display: flex; gap: 1px; height: 18px; align-items: stretch; }
+.cov-strip span { flex: 1; border-radius: 1px; min-width: 1px; }
+.kv-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--grid); font-size: 12.5px; }
+.search-in { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 8px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-3); min-width: 280px; }
+.search-in input { background: none; border: 0; outline: 0; color: var(--text); font-size: 12.5px; flex: 1; }
+
+/* Report card */
+.rc-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); }
+.rc-hero { display: flex; align-items: center; gap: 18px; padding: 16px 18px; border-radius: var(--r-lg); background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); }
+.rc-overall { font: 600 44px/1 var(--mono); letter-spacing: -0.04em; width: 64px; text-align: center; }
+.rc-grades { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.rc-grade { padding: 14px; border-radius: var(--r-lg); background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 8px; align-content: start; }
+.rc-grade .g { font: 600 26px/1 var(--mono); }
+.rc-grade .d { font-size: 13px; font-weight: 600; color: var(--text); }
+.rc-grade .bar { height: 4px; border-radius: 2px; background: var(--grid); overflow: hidden; }
+.rc-grade .bar span { display: block; height: 100%; border-radius: 2px; transition: width 0.35s var(--ease); }
+.rc-grade .m { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-3); }
+.rc-grade .m b { color: var(--text); font-weight: 500; }
+.rc-grade p { font-size: 12px; color: var(--text-3); line-height: 1.5; }
+.rc-check { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--grid); font-size: 12.5px; }
+.rc-check .ic { width: 16px; flex: none; display: grid; place-items: center; height: 18px; }
+.proj-btn { width: 100%; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 8px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-2); font-size: 12.5px; }
+.proj-btn:hover { color: var(--text); }
+.proj-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

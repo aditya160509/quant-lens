@@ -137,3 +137,58 @@ export const useRuns = create<RunStore>()(
 export function latestRun(runs: RunRecord[], featureId: string) {
   return runs.find((r) => r.featureId === featureId && r.status === "completed");
 }
+
+// ---------------------------------------------------------------- signals, projects, reports (docs/RESEARCH_V3_CONTRACTS.md)
+
+export type Operator = { name: string; args: string[]; doc: string; example: string; category: string };
+export type Field = { name: string; source: string; doc: string; coverage: number };
+export type LibrarySignal = { id: string; name: string; category: string; formula: string; citation: string; year?: number; expected_sign: 1 | -1 };
+export type Preview = { n_names: number; months: number; histogram: { x0: number; x1: number; count: number }[]; coverage: { month: string; share: number }[]; corr_known: { name: string; corr: number }[] };
+export type Validation = { ok: true; preview: Preview } | { ok: false; error: { message: string; start?: number; end?: number } };
+
+const get = <T,>(path: string) => request<T>(path);
+const post = <T,>(path: string, body: unknown) => request<T>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+export const useOperators = () => useQuery({ queryKey: ["research", "ops"], queryFn: () => get<Operator[]>("/signals/operators"), staleTime: Infinity, retry: false });
+export const useFields = () => useQuery({ queryKey: ["research", "fields"], queryFn: () => get<Field[]>("/signals/fields"), staleTime: Infinity, retry: false });
+export const useLibrary = () => useQuery({ queryKey: ["research", "library"], queryFn: () => get<LibrarySignal[]>("/signals/library"), staleTime: Infinity, retry: false });
+export const validateExpr = (expr: string) => post<Validation>("/signals/validate", { expr });
+export const combineExprs = (exprs: string[], method: string) => post<{ expr: string }>("/signals/combine", { exprs, method });
+export const saveSignal = (name: string, expr: string, project_id?: string) => post<{ id: string; version: number }>("/signals/saved", { name, expr, project_id });
+export const useSavedSignals = () => useQuery({ queryKey: ["research", "saved"], queryFn: () => get<{ id: string; name: string; latest_version: number; updated_at: string }[]>("/signals/saved"), retry: false });
+export const useSavedSignal = (id: string | null) => useQuery({ queryKey: ["research", "saved", id], queryFn: () => get<{ id: string; name: string; versions: { version: number; expr: string; created_at: string }[] }>(`/signals/saved/${id}`), enabled: Boolean(id), retry: false });
+export const useLiterature = (expr: string | null) => useQuery({ queryKey: ["research", "lit", expr], queryFn: () => get<{ library_id: string; name: string; corr: number }[]>(`/literature/match?expr=${encodeURIComponent(expr ?? "")}`), enabled: Boolean(expr), retry: false, staleTime: 60_000 });
+
+export type Project = { id: string; name: string; description?: string; created_at: string };
+export type Ledger = { trials: number; distinct_signals: number; deflated_sharpe_hurdle: number | null; haircut_sharpe?: { observed: number; haircut: number } | null; pbo?: number | null; entries: { job_id: string; feature_id: string; signal: string; t_stat: number | null; sharpe?: number | null; created_at: string }[] };
+export const useProjects = () => useQuery({ queryKey: ["research", "projects"], queryFn: () => get<Project[]>("/projects"), retry: false });
+export const createProject = (name: string, description?: string) => post<Project>("/projects", { name, description });
+export const useLedger = (projectId: string | null) => useQuery({ queryKey: ["research", "ledger", projectId], queryFn: () => get<Ledger>(`/projects/${projectId}/ledger`), enabled: Boolean(projectId), retry: false, refetchInterval: 15_000 });
+export const useHoldout = (projectId: string | null) => useQuery({ queryKey: ["research", "holdout", projectId], queryFn: () => get<{ sealed_after: string | null; unsealed: boolean }>(`/projects/${projectId}/holdout`), enabled: Boolean(projectId), retry: false });
+export const setHoldout = (projectId: string, body: { sealed_after?: string; unseal?: boolean }) => post<unknown>(`/projects/${projectId}/holdout`, body);
+export const preregister = (body: { project_id: string; hypothesis: string; expected_sign: number; primary_test: string; signal: string }) => post<{ id: string }>("/preregistrations", body);
+export const shareJob = (job_id: string) => post<{ token: string }>("/share", { job_id });
+
+export type Universe = { id: string; label: string; region: string; asset_type: string; count: number };
+export const useUniverses = () => useQuery({ queryKey: ["research", "universes"], queryFn: () => get<Universe[]>("/universes"), staleTime: 300_000, retry: false });
+
+export type Grade = { dimension: string; grade: string; score: number; summary: string; metric?: { label: string; value: number | string } };
+export type ReportCard = { grades: Grade[]; overall: { grade: string; score: number; verdict: string }; checklist: { id: string; question: string; pass: boolean | null; detail: string }[]; protocol: { name: string; steps: { id: string; label: string; pass: boolean | null; detail: string }[] }; explain: string[] };
+export const submitReportCard = (payload: Record<string, unknown>) => post<{ job_id: string; status: Job["status"] }>("/report-card/jobs", { payload });
+export const submitBatch = (signals: string[], payload: Record<string, unknown>) => post<{ job_id: string; status: Job["status"] }>("/batch/jobs", { signals, payload });
+export const submitValidation = (payload: Record<string, unknown>, method: string, folds: number, embargo_days: number) => post<{ job_id: string; status: Job["status"] }>("/validation/jobs", { payload, method, folds, embargo_days });
+export const reportUrl = (jobId: string, ext: "tex" | "pdf") => `${BASE}/report/${jobId}.${ext}`;
+
+/** The signal every study uses when set: a formula from the Signal page, applied as `signal_expr`. */
+type ActiveSignal = { expr: string | null; name: string | null; projectId: string | null; set: (p: Partial<Omit<ActiveSignal, "set">>) => void };
+export const useActiveSignal = create<ActiveSignal>()(persist((set) => ({ expr: null, name: null, projectId: null, set: (p) => set(p) }), { name: "research-active-signal", storage: createJSONStorage(() => localStorage) }));
+
+/** A run's payload without the workspace-wide context (signal formula, project), for "settings changed" checks. */
+export const studyPart = (p: Record<string, unknown> | undefined) => {
+  if (!p) return p;
+  const { signal_expr: _a, project_id: _b, ...rest } = p;
+  void _a; void _b;
+  // "12" and 12 are the same setting: compare numbers as numbers, keys in a fixed order.
+  const norm = (v: unknown): unknown => (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : Array.isArray(v) ? v.map(norm) : v);
+  return Object.fromEntries(Object.keys(rest).sort().map((k) => [k, norm(rest[k])]));
+};

@@ -10,8 +10,12 @@ import { useLayout } from "@/workspace/layout";
 import { useRegionPanel } from "@/workspace/panels";
 import { useWorkspace } from "@/workspace/WorkspaceShell";
 import { Dot } from "@/workspace/ui";
-import { cancelJob, latestRun, metricsOf, useBackgroundRuns, useJob, useManifest, useRuns, useSubmitJob } from "./api";
-import { featureHref, idFromSlug, metaFor } from "./catalog";
+import { cancelJob, latestRun, metricsOf, studyPart, useActiveSignal, useBackgroundRuns, useJob, useManifest, useRuns, useSubmitJob } from "./api";
+import { PAGES, featureHref, idFromSlug, metaFor, pageHref, pageOf, specialPage } from "./catalog";
+import { SignalPage } from "./SignalPage";
+import { ReportCardPage } from "./ReportCard";
+import { SharedView } from "./SharedView";
+import { ProjectSwitcher } from "./Projects";
 import { Dock } from "./Dock";
 import { FeatureView } from "./FeatureView";
 import { Inspector, OverviewInspector } from "./Inspector";
@@ -40,8 +44,10 @@ export function ResearchApp() {
 }
 
 function ResearchPanels() {
-  const params = useParams<{ feature?: string }>();
+  const params = useParams<{ feature?: string; token?: string }>();
   const featureId = idFromSlug(params?.feature);
+  const special = specialPage(params?.feature);
+  const sharedToken = (params as { token?: string } | null)?.token ?? null;
   const manifest = useManifest();
   const feature = manifest.data?.find((f) => f.id === featureId) ?? null;
   const { setCrumb, registerPalette } = useWorkspace();
@@ -109,7 +115,7 @@ function ResearchPanels() {
   return (
     <Group orientation="horizontal" id="research-columns-v2" className={animate ? "ws-animate" : undefined} defaultLayout={outer.defaultLayout} onLayoutChanged={outer.onLayoutChanged} style={{ height: "100%" }}>
       <Panel id="nav" panelRef={left.panelRef} onResize={left.onResize} defaultSize={left.defaultOpen ? 236 : 0} minSize={196} maxSize={340} collapsible collapsedSize={0}>
-        <FeatureNav features={manifest.data ?? []} loading={manifest.isLoading} activeId={featureId} runs={runs} />
+        <FeatureNav features={manifest.data ?? []} loading={manifest.isLoading} activeId={featureId} activePage={special?.id ?? pageOf(featureId)?.id ?? null} runs={runs} />
       </Panel>
       <Separator className="ws-sep" />
       <Panel id="center" minSize={460}>
@@ -117,6 +123,12 @@ function ResearchPanels() {
           <Panel id="results" minSize={260}>
             {manifest.isError ? (
               <ErrorState message={(manifest.error as Error).message} onRetry={() => manifest.refetch()} />
+            ) : sharedToken ? (
+              <SharedView token={sharedToken} features={manifest.data ?? []} />
+            ) : special?.id === "signal" ? (
+              <SignalPage />
+            ) : special?.id === "report" ? (
+              <ReportCardPage features={manifest.data ?? []} />
             ) : feature ? (
               <FeatureWorkspace key={feature.id} feature={feature} />
             ) : (
@@ -137,29 +149,41 @@ function ResearchPanels() {
   );
 }
 
-function FeatureNav({ features, loading, activeId, runs }: { features: FeatureSpec[]; loading: boolean; activeId: string | null; runs: RunRecord[] }) {
+function FeatureNav({ features, loading, activeId, activePage, runs }: { features: FeatureSpec[]; loading: boolean; activeId: string | null; activePage: string | null; runs: RunRecord[] }) {
+  const have = new Set(features.map((f) => f.id));
   return (
     <nav className="island" aria-label="Research features">
       <div className="nav-h"><span>Research</span></div>
+      <ProjectSwitcher />
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
-        <Link href="/research" className="nav-item" aria-current={activeId === null ? "page" : undefined}>
+        <Link href="/research" className="nav-item" aria-current={activeId === null && activePage === null ? "page" : undefined}>
           <LayoutGrid size={15} strokeWidth={1.7} />
           <span className="label">Overview</span>
         </Link>
         <div style={{ height: 1, margin: "6px 16px", background: "var(--line)" }} />
-        {loading ? Array.from({ length: 10 }, (_, i) => (
+        {loading ? Array.from({ length: 6 }, (_, i) => (
           <div key={i} className="nav-item"><span className="skel" style={{ width: 15, height: 15 }} /><span className="skel" style={{ width: 90 + ((i * 37) % 60), height: 10 }} /></div>
-        )) : features.map((f) => {
-          const m = metaFor(f.id, f.name);
-          const Icon = m.icon;
-          const live = runs.find((r) => r.featureId === f.id && (r.status === "queued" || r.status === "running"));
-          const last = latestRun(runs, f.id);
+        )) : PAGES.filter((p) => !p.features.length || p.features.some((id) => have.has(id))).map((p) => {
+          const Icon = p.icon;
+          const ids = p.features.filter((id) => have.has(id));
+          const live = runs.some((r) => ids.includes(r.featureId) && (r.status === "queued" || r.status === "running"));
+          const tones = ids.map((id) => latestRun(runs, id)?.tone).filter(Boolean);
+          const tone = tones.includes("down") ? "down" : tones.includes("warn") ? "warn" : tones.includes("up") ? "up" : null;
+          const open = activePage === p.id;
           return (
-            <Link key={f.id} href={featureHref(f.id)} className="nav-item" aria-current={activeId === f.id ? "page" : undefined} title={m.question}>
-              <Icon size={15} strokeWidth={1.7} />
-              <span className="label">{m.name}</span>
-              <Dot live={Boolean(live)} tone={last?.tone ?? null} />
-            </Link>
+            <div key={p.id}>
+              <Link href={pageHref(p)} className="nav-item" aria-current={open && (p.slug || ids.length < 2) ? "page" : undefined} title={p.question}>
+                <Icon size={15} strokeWidth={1.7} />
+                <span className="label">{p.label}</span>
+                <Dot live={live} tone={tone as RunRecord["tone"] ?? null} />
+              </Link>
+              {open && ids.length > 1 ? ids.map((id) => (
+                <Link key={id} href={featureHref(id)} className="nav-item sub" aria-current={activeId === id ? "page" : undefined}>
+                  <span className="label">{metaFor(id).name}</span>
+                  <Dot tone={latestRun(runs, id)?.tone ?? null} />
+                </Link>
+              )) : null}
+            </div>
           );
         })}
       </div>
@@ -207,7 +231,8 @@ function useFeatureRun(feature: FeatureSpec) {
     const errs = validate(feature, form);
     setErrors(errs);
     if (Object.keys(errs).length) return;
-    const base = toPayload(feature, form);
+    const active = useActiveSignal.getState();
+    const base: Record<string, unknown> = { ...toPayload(feature, form), ...(active.expr ? { signal_expr: active.expr } : {}), ...(active.projectId ? { project_id: active.projectId } : {}) };
     const sweep = Object.entries(useSweeps.getState().sweeps[feature.id] ?? {}).map(([k, list]) => [k, sweepValues(list)] as const).filter(([, v]) => v.length);
     // One job per swept value (first swept field); the last submitted job is shown, all appear in the dock.
     const [sweepKey, sweepVals] = sweep[0] ?? [null, [null]];
@@ -237,7 +262,7 @@ function useFeatureRun(feature: FeatureSpec) {
     if (record?.payload) setForm(() => ({ ...defaults, ...record.payload }));
   }, [record, setForm, defaults]);
 
-  const stale = Boolean(record?.payload) && (() => { try { return JSON.stringify(toPayload(feature, form)) !== JSON.stringify(record?.payload); } catch { return true; } })();
+  const stale = Boolean(record?.payload) && (() => { try { return JSON.stringify(studyPart(toPayload(feature, form))) !== JSON.stringify(studyPart(record?.payload)); } catch { return true; } })();
   const status = submit.isPending ? "submitting" : job.data?.status ?? (jobId && job.isLoading ? "loading" : "idle");
   return {
     form, setForm, errors, run, stale, cancel, status, record, restore, jobId,

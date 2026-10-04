@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { History, Keyboard, Play, RotateCcw } from "lucide-react";
 import { Dot, Segmented } from "@/workspace/ui";
 import { featureHref, metaFor } from "./catalog";
+import { studyPart } from "./api";
 import { out } from "./format";
 import { layoutFor } from "./layouts";
 import { cardId, useCardPrefs, useFeaturePrefs } from "./cardPrefs";
@@ -23,7 +24,7 @@ export function Inspector({ feature, run }: { feature: FeatureSpec; run: Feature
   const running = ["submitting", "queued", "running"].includes(run.status);
   const view: View = picked ?? (run.result ? "inspect" : "study");
   const changedFromRun = !running && run.record?.payload !== undefined && (() => {
-    try { return JSON.stringify(toPayload(feature, run.form)) !== JSON.stringify(run.record?.payload); } catch { return true; }
+    try { return JSON.stringify(studyPart(toPayload(feature, run.form))) !== JSON.stringify(studyPart(run.record?.payload)); } catch { return true; }
   })();
 
   useEffect(() => () => select(null), [feature.id, select]);

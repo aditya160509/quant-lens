@@ -1,11 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, FileText, Loader2, Play, Square } from "lucide-react";
 import { DUR } from "@/workspace/prefs";
 import { PopMenu, Tabs, type MenuAt } from "@/workspace/ui";
-import { metaFor } from "./catalog";
+import { featureHref, metaFor, pageOf } from "./catalog";
+import { LedgerChip } from "./Projects";
+import { useActiveSignal } from "./api";
 import { isNum, label, num, out } from "./format";
 import { layoutFor, verdictFor, type Item, type Section } from "./layouts";
 import { arrange, cardId, useCardPrefs, useFeaturePrefs } from "./cardPrefs";
@@ -109,6 +112,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   return (
     <div ref={scroller} className="island results" style={{ overflowY: "auto", overflowX: "hidden" }}>
       <div ref={hero} style={{ padding: "22px 22px 6px" }}>
+        <PageSwitch featureId={feature.id} />
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
           <div className="ov-icon" style={{ width: 40, height: 40, borderRadius: 11 }}><Icon size={19} strokeWidth={1.6} /></div>
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -118,7 +122,11 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
           </div>
           {runButton}
         </div>
-        <RunContext feature={feature} run={run} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <RunContext feature={feature} run={run} />
+          <ActiveSignalChip />
+          <LedgerChip />
+        </div>
         <AnimatePresence initial={false}>
           {result ? (
             <motion.div key={run.jobId ?? "r"} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: DUR.slow, ease: [0.2, 0, 0, 1] }}>
@@ -345,5 +353,31 @@ function Caveats({ items }: { items: string[] }) {
         {items.map((c) => <li key={c}>{c}</li>)}
       </ul>
     </div>
+  );
+}
+
+/** The tests that share this page, as pills: one question, several ways to answer it. */
+function PageSwitch({ featureId }: { featureId: string }) {
+  const page = pageOf(featureId);
+  if (!page || page.features.length < 2) return null;
+  return (
+    <div className="page-switch" role="tablist" aria-label={page.label}>
+      <span className="pg">{page.label}</span>
+      {page.features.map((id) => (
+        <Link key={id} href={featureHref(id)} role="tab" aria-selected={id === featureId} className="pill">{metaFor(id).name}</Link>
+      ))}
+    </div>
+  );
+}
+
+/** When a formula from the Signal page is in use, say so: it replaces the page's own signal setting. */
+function ActiveSignalChip() {
+  const { expr, name, set } = useActiveSignal();
+  if (!expr) return null;
+  return (
+    <span className="chip accent" title={expr} style={{ gap: 6 }}>
+      <Link href="/research/signal" style={{ color: "inherit", textDecoration: "none" }}>Signal: {name ?? "formula"}</Link>
+      <button aria-label="Use the built-in signal instead" onClick={() => set({ expr: null, name: null })} style={{ display: "grid", placeItems: "center" }}>×</button>
+    </span>
   );
 }
