@@ -104,11 +104,28 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
     repurchase = pd.to_numeric(_pick(df, ["Repurchase Of Capital Stock"]), errors="coerce").abs()
     avg_shares = pd.to_numeric(_pick(df, ["Diluted Average Shares", "Basic Average Shares", "Ordinary Shares Number"]), errors="coerce")
     equity_book = pd.to_numeric(_pick(df, ["Stockholders Equity", "Common Stock Equity"]), errors="coerce")
-    shares = pd.to_numeric(_pick(df, ["Ordinary Shares Number", "Share Issued"]), errors="coerce")
+    shares = pd.to_numeric(_pick(df, ["Ordinary Shares Number"]), errors="coerce")
     prices_at_date = close_matrix(symbols, 1)
     last_prices = prices_at_date.iloc[-1].reindex(out.index) if not prices_at_date.empty else pd.Series(np.nan, index=out.index)
     out["shares_outstanding"] = shares
-    out["market_cap"] = last_prices * shares
+    from .currency import instrument_specs, usd_rates
+    specs = instrument_specs(symbols)
+    price_date = prices_at_date.index[-1] if not prices_at_date.empty else cutoff
+    rates = usd_rates([spec.get(key) for spec in specs.values() for key in ['quote_currency', 'financial_currency']], [price_date])
+    def rate_for(symbol, key):
+        currency = specs[symbol].get(key)
+        return rates[currency].iloc[0] if currency in rates else np.nan
+    quote_fx = pd.Series({symbol: rate_for(symbol, 'quote_currency') for symbol in symbols})
+    financial_fx = pd.Series({symbol: rate_for(symbol, 'financial_currency') for symbol in symbols})
+    quote_units = pd.Series({symbol: specs[symbol].get('quoted_units_per_ordinary_share') for symbol in symbols}, dtype=float)
+    cap_usd = last_prices * shares * quote_units * quote_fx
+    out['market_cap_observation_date'] = pd.Series(price_date, index=out.index).where(last_prices.notna())
+    out['market_cap_basis'] = 'observed quote times lagged statement ordinary shares times declared quote-unit multiplier, converted using observed FX; not a current vendor capitalization snapshot'
+    out['market_cap'] = cap_usd / financial_fx
+    out['market_cap_statement_currency'] = out['market_cap']
+    out['financial_currency'] = [specs[symbol].get('financial_currency') for symbol in out.index]
+    out['quote_currency'] = [specs[symbol].get('quote_currency') for symbol in out.index]
+    out['currency_units_unavailable_reason'] = np.where(out.market_cap.notna(), None, 'missing reported ordinary shares, verified financial/quote currency, quote share units, or exact-date FX')
     out["enterprise_value"] = out["market_cap"] + enterprise_claims(df) - cash
     out["enterprise_value_basis"] = "observed market cap + debt + preferred equity + noncontrolling interests - cash; missing claims remain unknown"
     out["trailing_pe"] = _safe_div(out["market_cap"], net_income.where(net_income > 0))
@@ -185,6 +202,9 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
         + rank_pct(out["ocf_net_income"]) * 0.15
         + rank_pct(out["gross_margin"].fillna(out["gross_margin_calc"])) * 0.1
     )
+    out['market_cap'] = cap_usd
+    out['enterprise_value'] = out['enterprise_value'] * financial_fx
+    out['market_value_currency'] = 'USD'
     return out.reset_index(drop=True).replace([np.inf, -np.inf], np.nan)
 
 

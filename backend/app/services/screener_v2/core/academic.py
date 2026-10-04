@@ -37,7 +37,7 @@ def academic_strategy_scores(panel: pd.DataFrame) -> pd.DataFrame:
     out["low_vol"] = rank_pct(field("realized_vol_252d"), higher_better=False)
     out["sloan_accruals"] = rank_pct(field("accruals_assets"), higher_better=False)
     ncav = field("current_assets") - field("total_liabilities")
-    market_cap = field("market_cap")
+    market_cap = field("market_cap_statement_currency")
     out["graham_net_net"] = ((2 / 3) * ncav > market_cap).astype(float).where(ncav.notna() & market_cap.notna()) * 100
     out["high_dividend_low_payout"] = (rank_pct(field("dividend_yield")) + rank_pct(field("payout_ratio"), higher_better=False)) / 2
     out["interest_coverage_distress"] = rank_pct(field("interest_coverage"), higher_better=False)

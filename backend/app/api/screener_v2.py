@@ -128,12 +128,15 @@ def _execute(job_id: str, feature_id: str, payload: dict[str, Any]) -> dict[str,
 
 def _submit_feature(feature_id, payload, idempotency_key=None):
     from app.services.screener_v2.features.inputs import normalize_payload
-    from app.services.screener_v2.core.data_loader import MARKET_UNIVERSE, MASTER_FUNDAMENTALS, FF5_DAILY, MOM_DAILY, CATEGORY7_MACRO, load_market_ohlcv
+    from app.services.screener_v2.core.data_loader import MARKET_UNIVERSE, MASTER_FUNDAMENTALS, FF5_DAILY, MOM_DAILY, CATEGORY7_MACRO, FX_DAILY, default_as_of
+    from app.services.screener_v2.core.currency import instrument_context
     feature = get_feature(feature_id)
     payload = normalize_payload(feature.inputs, payload)
     parse_symbols(payload)
-    payload = {**payload, "as_of_date": payload.get("as_of_date") or str(load_market_ohlcv().Date.max().date())}
-    versions = {path.name: path.stat().st_mtime_ns if path.exists() else None for path in [MARKET_UNIVERSE, MASTER_FUNDAMENTALS, FF5_DAILY, MOM_DAILY, CATEGORY7_MACRO]}
+    with instrument_context(payload):
+        pass
+    payload = {**payload, "as_of_date": payload.get("as_of_date") or default_as_of(payload)}
+    versions = {path.name: path.stat().st_mtime_ns if path.exists() else None for path in [MARKET_UNIVERSE, MASTER_FUNDAMENTALS, FF5_DAILY, MOM_DAILY, CATEGORY7_MACRO, FX_DAILY]}
     job = JOBS.create(job_type=f"screener_v2_{feature.id}", params={"feature_id": feature.id, "payload": payload, "data_versions": versions}, idempotency_key=idempotency_key)
     if job["status"] == "queued":
         JOBS.submit(job["job_id"], _execute, job["job_id"], feature.id, payload)

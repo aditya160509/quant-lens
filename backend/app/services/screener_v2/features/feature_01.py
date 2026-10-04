@@ -31,9 +31,10 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     ranked = top_table(filtered, n=top_n)
     market_cap_bucket_distribution = []
     if bool(payload.get("include_market_cap_buckets", True)) and not filtered.empty and "market_cap" in filtered:
-        bucketed = filtered.assign(
-            market_cap_bucket=pd.qcut(filtered["market_cap"].rank(method="first"), q=min(5, max(1, len(filtered))), duplicates="drop").astype(str)
-        )
+        observed_caps = filtered[filtered.market_cap.notna()]
+        bucketed = observed_caps.assign(
+            market_cap_bucket=pd.qcut(observed_caps["market_cap"].rank(method="first"), q=min(5, max(1, len(observed_caps))), duplicates="drop").astype(str)
+        ) if not observed_caps.empty else observed_caps.assign(market_cap_bucket=pd.Series(dtype=str))
         market_cap_bucket_distribution = records(
             bucketed.groupby("market_cap_bucket").agg(count=("ticker", "count"), avg_score=("core_quant_score", "mean")).reset_index()
         )
@@ -69,6 +70,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         summary_cards=[
             {"label": "Universe loaded", "value": len(panel)},
             {"label": "After filters", "value": len(filtered)},
+            {"label": "Valuation-ready stocks", "value": int(filtered.valuation_percentile.notna().sum())},
             {"label": "Top score", "value": float(filtered["core_quant_score"].max()) if not filtered.empty else None},
             {"label": "Focus ticker", "value": ql.get("ticker")},
         ],

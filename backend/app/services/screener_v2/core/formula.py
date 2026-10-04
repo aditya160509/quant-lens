@@ -247,10 +247,14 @@ class FormulaEngine:
         daily = pd.DataFrame({"date": prices.index.astype("datetime64[ns]")})
         merged = pd.merge_asof(daily, reports, left_on="date", right_on="available", direction="backward", tolerance=pd.Timedelta(days=550))
         if field_key == "mcap":
-            shares = pd.to_numeric(_pick(hist, ["Ordinary Shares Number", "Share Issued"]), errors="coerce")
+            shares = pd.to_numeric(_pick(hist, ["Ordinary Shares Number"]), errors="coerce")
             reports["value"] = shares.to_numpy()
             merged = pd.merge_asof(daily, reports, left_on="date", right_on="available", direction="backward", tolerance=pd.Timedelta(days=550))
-            merged["value"] *= prices[ticker].to_numpy()
+            from .currency import instrument_specs, usd_price_matrix
+            spec = instrument_specs([ticker])[ticker]
+            units = spec.get('quoted_units_per_ordinary_share')
+            usd = usd_price_matrix(prices, {ticker: spec})
+            merged['value'] *= usd[ticker].to_numpy() * (units if units is not None else np.nan)
         return pd.Series(merged.value.to_numpy(), index=prices.index)
 
     def _time_series_call(self, name: str, field_name: str | None, args: list[Any]) -> pd.Series:

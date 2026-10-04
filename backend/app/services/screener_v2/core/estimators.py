@@ -39,6 +39,17 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
         raw_ohlcv = raw_ohlcv[raw_ohlcv["Date"] <= as_of_date]
         prices = raw_ohlcv.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index().tail(max(lookback_days, 260))
         volumes = raw_ohlcv.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index().reindex(prices.index).tail(max(lookback_days, 260))
+    from .currency import CONFIG
+    config = CONFIG.get()
+    calendar_symbol = config.get("calendar_ticker", "SPY")
+    if calendar_symbol:
+        calendar_quotes = ohlcv_for_symbols([config.get('calendar_ticker', 'SPY')])
+        if calendar_quotes.empty:
+            raise ValueError('calendar_ticker has no observed sessions')
+        session_dates = pd.DatetimeIndex(calendar_quotes.Date.drop_duplicates().sort_values().tail(max(lookback_days, 260)))
+        prices = prices.reindex(session_dates)
+        volumes = volumes.reindex(session_dates)
+        raw_ohlcv = raw_ohlcv[raw_ohlcv.Date.isin(session_dates)]
     if prices.empty:
         return pd.DataFrame(columns=["ticker"])
     volumes = volumes.reindex(prices.index) if not volumes.empty else pd.DataFrame(index=prices.index, columns=prices.columns)
@@ -49,6 +60,7 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     latest = prices.iloc[-1]
     out = pd.DataFrame(index=prices.columns)
     out["ticker"] = out.index
+    out["price_observation_date"] = pd.Series(prices.index[-1], index=out.index).where(latest.notna())
     out["open"] = opens.iloc[-1].reindex(out.index)
     out["high"] = highs.iloc[-1].reindex(out.index)
     out["low"] = lows.iloc[-1].reindex(out.index)
@@ -59,7 +71,12 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["volume_20d"] = volumes.tail(20).mean().where(volumes.tail(20).count().eq(20))
     out["volume_spike_ratio"] = _safe_div(out["volume_today"], out["volume_20d"])
     out["vratio"] = out["volume_spike_ratio"]
-    out["dollar_volume_20d"] = (volumes * prices).tail(20).mean().where((volumes * prices).tail(20).count().eq(20))
+    from .currency import usd_price_matrix
+    usd_prices = usd_price_matrix(prices)
+    out["price_usd"] = usd_prices.iloc[-1]
+    traded_usd = volumes * usd_prices
+    out["dollar_volume_20d"] = traded_usd.tail(20).mean().where(traded_usd.tail(20).count().eq(20))
+    out["dollar_volume_currency"] = "USD"
     for days, key in [(1, "return_1d"), (5, "return_1w"), (21, "return_1m"), (63, "return_3m"), (126, "return_6m"), (252, "return_12m")]:
         if len(prices) > days:
             out[key] = prices.iloc[-1] / prices.shift(days).iloc[-1] - 1.0
@@ -165,28 +182,33 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["consecutive_up_days"] = up.apply(_trailing_true_count)
     out["consecutive_down_days"] = down.apply(_trailing_true_count)
     out["short_term_reversal_flag"] = ((rank_pct(out["return_1w"], higher_better=False) >= 90) | (rank_pct(out["return_1m"], higher_better=False) >= 90)).astype(float)
-    spy_available = "SPY" in rets.columns
-    sufficient_history = len(rets) >= 252
+    usd_returns = usd_prices.pct_change(fill_method=None)
+    out["beta_return_currency"] = "USD"
+    spy_available = "SPY" in usd_returns.columns
+    sufficient_history = len(usd_returns) >= 252
     if spy_available and sufficient_history:
-        market = rets["SPY"].tail(252)
+        market = usd_returns["SPY"].tail(252)
         var = market.var()
-        out["beta_252"] = rets.tail(252).apply(lambda col: col.cov(market)).reindex(out.index) / var if var else np.nan
-        complete_beta = rets.tail(252).notna().sum().eq(252) & market.notna().all()
+        out["beta_252"] = usd_returns.tail(252).apply(lambda col: col.cov(market)).reindex(out.index) / var if var else np.nan
+        complete_beta = usd_returns.tail(252).notna().sum().eq(252) & market.notna().all()
         out["beta_252"] = out["beta_252"].where(complete_beta.reindex(out.index))
         out["beta_252_unavailable_reason"] = np.where(out["beta_252"].notna(), None, "missing returns in 252-session window")
     else:
         out["beta_252"] = np.nan
         out["beta_252_unavailable_reason"] = "insufficient_history" if not sufficient_history else "spy_series_missing"
         out["relative_return_3m_spy"] = np.nan
-    if "SPY" in prices.columns and len(prices) > 63:
-        spy_return = prices["SPY"].iloc[-1] / prices["SPY"].shift(63).iloc[-1] - 1
-        out["relative_return_3m_spy"] = out["return_3m"] - spy_return
-    out["amihud_20d"] = (rets.abs().tail(20) / (volumes.tail(20) * prices.tail(20)).replace(0, np.nan)).mean()
+    if "SPY" in usd_prices.columns and len(prices) > 63:
+        spy_return = usd_prices["SPY"].iloc[-1] / usd_prices["SPY"].shift(63).iloc[-1] - 1
+        out["relative_return_3m_spy"] = (usd_prices.iloc[-1] / usd_prices.shift(63).iloc[-1] - 1) - spy_return
+    amihud_observations = rets.abs().tail(20) / (volumes.tail(20) * usd_prices.tail(20)).replace(0, np.nan)
+    out["amihud_20d"] = amihud_observations.mean().where(amihud_observations.count().eq(20))
     out["amihud_percentile"] = rank_pct(out["amihud_20d"], higher_better=False)
     ff = load_factor_returns()
-    out["ivol_ff3_63d"] = _idiosyncratic_vol(rets.tail(63), ff)
+    out["ivol_ff3_63d"] = _idiosyncratic_vol(usd_returns.tail(63), ff)
     yz_window = 63
-    log_overnight = np.log(opens / prices.shift(1)).replace([np.inf, -np.inf], np.nan)
+    valid_ohlc = opens.gt(0) & highs.gt(0) & lows.gt(0) & prices.gt(0)
+    opens, highs, lows = opens.where(valid_ohlc), highs.where(valid_ohlc), lows.where(valid_ohlc)
+    log_overnight = np.log(opens / prices.shift(1).where(prices.shift(1).gt(0))).replace([np.inf, -np.inf], np.nan)
     log_open_close = np.log(prices / opens).replace([np.inf, -np.inf], np.nan)
     rs_daily = (
         np.log(highs / opens) * np.log(highs / prices)

@@ -218,18 +218,36 @@ def ohlcv_for_symbols(symbols: Iterable[str], lookback_days: int | None = None) 
     return out.sort_values(["Ticker", "Date"])
 
 
+def default_as_of(payload):
+    """Default to the selected observed session calendar, not another asset's newer quote."""
+    symbol = normalize_symbol(payload.get('calendar_ticker') or 'SPY')
+    quotes = ohlcv_for_symbols([symbol])
+    if quotes.empty:
+        raise ValueError(f'Calendar instrument {symbol} has no observed dates')
+    return str(quotes.Date.max().date())
+
+
+def _session_matrix(frame, lookback_days):
+    from .currency import CONFIG
+    calendar = CONFIG.get().get('calendar_ticker')
+    if calendar:
+        dates = ohlcv_for_symbols([calendar]).Date.drop_duplicates().sort_values().tail(int(lookback_days))
+        return frame.reindex(pd.DatetimeIndex(dates))
+    return frame.tail(int(lookback_days))
+
+
 def close_matrix(symbols: Iterable[str], lookback_days: int = 756) -> pd.DataFrame:
     if AS_OF.get() is not None:
         raw = ohlcv_for_symbols(symbols)
-        return raw.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index().tail(int(lookback_days))
-    return cached_close_matrix(symbol_key(symbols), int(lookback_days)).copy()
+        return _session_matrix(raw.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index(), lookback_days)
+    return _session_matrix(cached_close_matrix(symbol_key(symbols), int(lookback_days)).copy(), lookback_days)
 
 
 def volume_matrix(symbols: Iterable[str], lookback_days: int = 756) -> pd.DataFrame:
     if AS_OF.get() is not None:
         raw = ohlcv_for_symbols(symbols)
-        return raw.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index().tail(int(lookback_days))
-    return cached_volume_matrix(symbol_key(symbols), int(lookback_days)).copy()
+        return _session_matrix(raw.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index(), lookback_days)
+    return _session_matrix(cached_volume_matrix(symbol_key(symbols), int(lookback_days)).copy(), lookback_days)
 
 
 def returns_matrix(symbols: Iterable[str], lookback_days: int = 756, min_coverage: float = 0.55) -> pd.DataFrame:

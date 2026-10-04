@@ -98,17 +98,23 @@ def access_meta(payload: dict | None = None, issues: list[str] | None = None) ->
     payload = payload or {}
     def version(path):
         return {"path": str(path), "exists": path.exists(), "modified_ns": path.stat().st_mtime_ns if path.exists() else None}
+    from .currency import CONFIG
     requested = parse_symbols(payload)
     current = len(available_symbols())
     cap = int(payload.get("max_symbols") or payload.get("max_tickers") or 5000)
     return {"compute_mode": "local", "data_policy": "observed prices; no filling; conservative statement availability", "return_basis": "source Close returns; source manifest describes an adjusted-close proxy without a corporate-action guarantee; total-return status is unverified",
             "as_of_date": str((AS_OF.get() or pd.Timestamp(payload.get("as_of_date"))).date()),
             "source_integrity": load_market_ohlcv().attrs.get("source_integrity", {}),
+            "instrument_metadata": CONFIG.get().get("instruments", {}),
+            "instrument_metadata_policy": "Explicit caller declarations or dated source fields; US bare-symbol USD quote denomination rule does not infer financial currency or ADR/share units",
+            "indicator_session_basis": CONFIG.get().get("calendar_ticker", "SPY") + " observed session grid; missing venue quotes remain unavailable",
+            "signal_return_currency": "native quote currency; beta, FF3 residual volatility, SPY-relative returns and portfolio returns use USD",
+            "currency_policy": "No filled FX. Explicit instrument declarations apply throughout the requested history. Native statement amounts carry financial_currency; market/enterprise values are USD.",
             "data_sources": {"prices": version(MARKET_UNIVERSE), "fundamentals": version(MASTER_FUNDAMENTALS), "ff5": version(FF5_DAILY), "momentum_factor": version(MOM_DAILY), "macro": version(CATEGORY7_MACRO), "fx": version(FX_DAILY)},
             "universe_count": len(requested), "local_universe_count": current, "universe_cap": cap,
             "industry_group_basis": "local static mapping of vendor industry labels; not verified company-level GICS",
             "universe_order": "fixed local coverage order among equities in the fundamentals inventory; not historical index membership",
-            "universe_currency": "global equity inventory; quote/statement currency distinction is under audit; canonical FX data exists but portfolio conversion is not yet integrated",
+            "universe_currency": "USD market values, dollar volume and portfolio returns use exact-date observed FX. Instrument financial currency and quote share units must be explicitly available; unsupported valuations remain null.",
             "fundamental_availability_lag_days": 90, "access_issues": issues or [],
             "limitations": ["No historical filing vintages or revision timestamps; 90-day lag does not eliminate restatement bias.",
                             "No historical index membership or delisting payoff data; results are conditional on the chosen local universe.",

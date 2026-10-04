@@ -36,15 +36,20 @@ def score_backtest(
     weekday: int | None = None,
 ) -> dict[str, Any]:
     from .backtest import simulate
+    from .currency import CONFIG, instrument_specs, usd_price_matrix
     if score_at is None:
         raise ValueError("Historical backtests require a point-in-time score provider; current scores cannot be backfilled")
     if sector_neutral:
         raise ValueError("Sector-neutral execution is unavailable without historical sector membership")
-    source_prices = close_matrix(list(dict.fromkeys(symbols + ["SPY"])), lookback_days=(lookback_days + 252) * 2)
-    if "SPY" not in source_prices or source_prices["SPY"].notna().sum() < 254:
-        raise ValueError("Backtest trading calendar requires at least 254 observed SPY sessions")
-    calendar = pd.DatetimeIndex(ohlcv_for_symbols(["SPY"]).Date.drop_duplicates().sort_values().tail(lookback_days + 252))
-    prices = source_prices.reindex(index=calendar, columns=symbols)
+    calendar_symbol = CONFIG.get().get("calendar_ticker", "SPY")
+    specs = instrument_specs(symbols)
+    if any(spec.get("quote_currency") != "USD" for spec in specs.values()) and not CONFIG.get().get("explicit_calendar"):
+        raise ValueError("Non-USD portfolios require explicit instrument_metadata and calendar_ticker")
+    source_prices = close_matrix(list(dict.fromkeys(symbols + [calendar_symbol, "SPY"])), lookback_days=(lookback_days + 252) * 2)
+    if calendar_symbol not in source_prices or source_prices[calendar_symbol].notna().sum() < 254:
+        raise ValueError("Backtest trading calendar requires at least 254 observed calendar instrument sessions")
+    calendar = pd.DatetimeIndex(ohlcv_for_symbols([calendar_symbol]).Date.drop_duplicates().sort_values().tail(lookback_days + 252))
+    prices = usd_price_matrix(source_prices.reindex(index=calendar, columns=symbols), specs, strict=True)
     result = simulate(prices, score_at, top_n=top_n, rebalance_days=rebalance_days,
                       cost_bps=cost_bps, offset=rebalance_offset_days, long_short=long_short,
                       score_weighted=score_weighted, weekday=weekday)
@@ -106,6 +111,9 @@ def score_backtest(
             "which can inflate results versus a survivorship-bias-corrected backtest. True correction requires delisted-security history not present locally."
         ),
     }
+    stats["portfolio_currency"] = "USD"
+    stats["calendar_ticker"] = calendar_symbol
+    stats["fx_policy"] = "exact-date observed spot rates; no filling; missing conversion invalidates the run"
     curve = pd.DataFrame({"date": equity.index, "strategy": equity.values, "benchmark": benchmark.reindex(equity.index).values, "drawdown": drawdown.values})
     rolling = pd.DataFrame({"date": strategy.index})
     for window in [63, 252, 756]:

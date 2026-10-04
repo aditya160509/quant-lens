@@ -49,7 +49,7 @@ def local_data(tmp_path, monkeypatch):
     for index, ticker in enumerate(['AAA', 'BBB', 'CCC']):
         for year in [2021, 2022, 2023, 2024]:
             growth = year - 2020 + index
-            reports.append({'ticker': ticker, 'reportDate': pd.Timestamp(f'{year}-12-31'), 'periodType': 'annual', 'sector': 'Technology', 'industry': 'Software',
+            reports.append({'ticker': ticker, 'reportDate': pd.Timestamp(f'{year}-12-31'), 'periodType': 'annual', 'currency': 'USD', 'quoteCurrency': 'USD', 'financialCurrency': 'USD', 'quoted_units_per_ordinary_share': 1., 'sector': 'Technology', 'industry': 'Software',
                             'Total Assets': 1000. + growth * 100, 'Stockholders Equity': 600., 'Total Equity': 600., 'Total Revenue': 500. + growth * 100,
                             'Net Income': 50. + growth * 20, 'Gross Profit': 200. + growth * 50, 'EBIT': 100., 'EBITDA': 120., 'Operating Cash Flow': 140.,
                             'Free Cash Flow': 100., 'Cash And Cash Equivalents': 100., 'Current Assets': 400., 'Current Liabilities': 200., 'Total Debt': 200.,
@@ -258,6 +258,147 @@ def test_nonstock_weekends_do_not_change_the_us_backtest_calendar(local_data):
     coin = pd.DataFrame({'Ticker': 'COIN_TEST', 'Date': dates, 'Open': 100., 'High': 101., 'Low': 99., 'Close': 100., 'Volume': 1000.})
     local_data['market'] = pd.concat([local_data['market'], coin], ignore_index=True)
     clear_performance_caches()
-    result = score_backtest(['AAA', 'COIN_TEST'], pd.Series({'AAA': 1.}), lookback_days=60, top_n=1, score_at=lambda date: pd.Series({'AAA': 1.}))
+    from app.services.screener_v2.core.currency import instrument_context
+    with instrument_context({'instrument_metadata': {'COIN_TEST': {'quote_currency': 'USD'}}}):
+        result = score_backtest(['AAA', 'COIN_TEST'], pd.Series({'AAA': 1.}), lookback_days=60, top_n=1, score_at=lambda date: pd.Series({'AAA': 1.}))
     assert len(result['daily_returns']) == 60
     assert all(date.weekday() < 5 for date in result['daily_returns'].index)
+
+
+def test_fx_valuation_uses_quote_units_and_reporting_currency(local_data, monkeypatch):
+    import pandas as pd
+    from app.services.screener_v2.core import data_loader
+    from app.services.screener_v2.core.currency import instrument_context
+    from app.services.screener_v2.core.fundamentals import latest_fundamental_features
+    from app.services.screener_v2.core.valuation import historical_valuation_series
+    dates = local_data['market'].query("Ticker == 'AAA'").Date
+    monkeypatch.setattr(data_loader, 'load_fx', lambda: pd.DataFrame({'Ticker': 'EURUSD=X', 'Date': dates, 'Close': 3.}))
+    payload = {'instrument_metadata': {'AAA': {'quote_currency': 'EUR', 'financial_currency': 'USD', 'quoted_units_per_ordinary_share': .5}}, 'calendar_ticker': 'AAA'}
+    date = dates.max()
+    price = local_data['market'].query("Ticker == 'AAA'").Close.iloc[-1]
+    with data_loader.as_of_context(date), instrument_context(payload):
+        row = latest_fundamental_features(['AAA']).iloc[0]
+        history = historical_valuation_series('AAA', lookback=252)
+    assert row.market_cap == pytest.approx(price * 10 * .5 * 3)
+    assert row.enterprise_value == pytest.approx(row.market_cap + 200 - 100)
+    assert row.trailing_pe == pytest.approx(row.market_cap / 130)
+    assert history[-1]['valuation_metric'] == pytest.approx(row.trailing_pe)
+
+
+def test_unknown_share_and_currency_metadata_does_not_manufacture_valuation(local_data):
+    import pandas as pd
+    from app.services.screener_v2.core import data_loader
+    from app.services.screener_v2.core.fundamentals import latest_fundamental_features
+    local_data['fund'] = local_data['fund'].drop(columns=['financialCurrency', 'quoted_units_per_ordinary_share'])
+    with data_loader.as_of_context(local_data['market'].Date.max()):
+        row = latest_fundamental_features(['AAA']).iloc[0]
+    assert pd.isna(row.market_cap)
+    assert pd.isna(row.trailing_pe)
+    assert row.roic == pytest.approx(100 * .75 / 700)
+    assert row.currency_units_unavailable_reason is not None
+
+
+def test_foreign_portfolio_returns_include_observed_fx_and_reject_missing_marks(local_data, monkeypatch):
+    import numpy as np
+    import pandas as pd
+    from app.services.screener_v2.core import data_loader
+    from app.services.screener_v2.core.currency import instrument_context
+    from app.services.screener_v2.core.validation import score_backtest
+    stock = local_data['market'].query("Ticker == 'AAA'").reset_index(drop=True)
+    fx = pd.DataFrame({'Ticker': 'EURUSD=X', 'Date': stock.Date, 'Close': 1 + np.arange(len(stock)) / 1000})
+    monkeypatch.setattr(data_loader, 'load_fx', lambda: fx)
+    payload = {'instrument_metadata': {'AAA': {'quote_currency': 'EUR'}}, 'calendar_ticker': 'AAA'}
+    with instrument_context(payload):
+        result = score_backtest(['AAA'], pd.Series({'AAA': 1.}), lookback_days=60, top_n=1, cost_bps=0, score_at=lambda date: pd.Series({'AAA': 1.}))
+        usd = pd.Series(stock.Close.to_numpy() * fx.Close.to_numpy(), index=stock.Date)
+        # Initial decision executes on the second simulation session; thereafter the position is held.
+        returns = result['daily_returns']
+        assert returns.iloc[2:].to_numpy() == pytest.approx(usd.pct_change().reindex(returns.index).iloc[2:].to_numpy())
+        assert result['stats']['portfolio_currency'] == 'USD'
+        fx = fx.iloc[:-1]
+        with pytest.raises(ValueError, match='exact-date FX'):
+            score_backtest(['AAA'], pd.Series({'AAA': 1.}), lookback_days=60, top_n=1, score_at=lambda date: pd.Series({'AAA': 1.}))
+
+
+def test_future_currency_metadata_cannot_change_past_valuation(local_data):
+    import pandas as pd
+    from app.services.screener_v2.core import data_loader
+    from app.services.screener_v2.core.currency import instrument_context
+    from app.services.screener_v2.core.fundamentals import latest_fundamental_features
+    cutoff = pd.Timestamp('2024-08-01')
+    with data_loader.as_of_context(cutoff), instrument_context({}):
+        before = latest_fundamental_features(['AAA']).iloc[0]
+    future = local_data['fund'].query("ticker == 'AAA'").tail(1).copy()
+    future['reportDate'] = pd.Timestamp('2026-01-01')
+    future['quoteCurrency'] = 'EUR'
+    future['quoted_units_per_ordinary_share'] = .125
+    local_data['fund'] = pd.concat([local_data['fund'], future], ignore_index=True)
+    with data_loader.as_of_context(cutoff), instrument_context({}):
+        after = latest_fundamental_features(['AAA']).iloc[0]
+    assert after.market_cap == pytest.approx(before.market_cap)
+    assert after.trailing_pe == pytest.approx(before.trailing_pe)
+
+
+def test_default_date_uses_observed_calendar_not_newer_unrelated_asset(local_data):
+    import pandas as pd
+    from app.services.screener_v2.registry import run_feature
+    from app.services.screener_v2.core.performance import clear_performance_caches
+    calendar_date = local_data['market'].Date.max()
+    unrelated = local_data['market'].tail(1).copy()
+    unrelated['Ticker'] = 'UNRELATED'
+    unrelated['Date'] = calendar_date + pd.Timedelta(days=20)
+    local_data['market'] = pd.concat([local_data['market'], unrelated], ignore_index=True)
+    clear_performance_caches()
+    result = run_feature('01', {'tickers': ['AAA']})
+    assert result['meta']['as_of_date'] == str(calendar_date.date())
+
+
+def test_dollar_volume_and_beta_use_usd_rather_than_native_currency(local_data, monkeypatch):
+    import numpy as np
+    import pandas as pd
+    from app.services.screener_v2.core import data_loader
+    from app.services.screener_v2.core.currency import instrument_context
+    from app.services.screener_v2.core.estimators import latest_technical_features
+    stock = local_data['market'].query("Ticker == 'AAA'").reset_index(drop=True)
+    fx = pd.DataFrame({'Ticker': 'EURUSD=X', 'Date': stock.Date, 'Close': 2 + .1 * np.sin(np.arange(len(stock)) / 12)})
+    monkeypatch.setattr(data_loader, 'load_fx', lambda: fx)
+    with instrument_context({'instrument_metadata': {'AAA': {'quote_currency': 'EUR'}}}):
+        row = latest_technical_features(['AAA']).iloc[0]
+    usd_prices = pd.Series(stock.Close.to_numpy() * fx.Close.to_numpy(), index=stock.Date)
+    spy = local_data['market'].query("Ticker == 'SPY'").set_index('Date').Close.pct_change().tail(252)
+    usd_return = usd_prices.pct_change().tail(252)
+    assert row.dollar_volume_20d == pytest.approx((stock.Close * fx.Close * stock.Volume).tail(20).mean())
+    assert row.beta_252 == pytest.approx(usd_return.cov(spy) / spy.var())
+
+
+def test_explicit_foreign_calendar_controls_indicators_and_execution_sessions(local_data):
+    import pandas as pd
+    from app.services.screener_v2.core.currency import instrument_context
+    from app.services.screener_v2.core.estimators import latest_technical_features
+    from app.services.screener_v2.core.validation import score_backtest
+    from app.services.screener_v2.core.performance import clear_performance_caches
+    stock_mask = local_data['market'].Ticker.eq('AAA')
+    friday = stock_mask & local_data['market'].Date.dt.weekday.eq(4)
+    local_data['market'].loc[friday, 'Date'] += pd.Timedelta(days=2)
+    clear_performance_caches()
+    stock = local_data['market'].loc[stock_mask].sort_values('Date')
+    with instrument_context({'calendar_ticker': 'AAA'}):
+        technical = latest_technical_features(['AAA']).iloc[0]
+        result = score_backtest(['AAA'], pd.Series({'AAA': 1.}), lookback_days=60, top_n=1, cost_bps=0, score_at=lambda date: pd.Series({'AAA': 1.}))
+    assert technical.sma_20 == pytest.approx(stock.Close.tail(20).mean())
+    assert technical.return_1m == pytest.approx(stock.Close.iloc[-1] / stock.Close.iloc[-22] - 1)
+    assert len(result['daily_returns']) == 60
+    assert any(date.weekday() == 6 for date in result['daily_returns'].index)
+    assert not any(date.weekday() == 4 for date in result['daily_returns'].index)
+
+
+def test_issued_shares_are_not_a_proxy_for_outstanding_ordinary_shares(local_data):
+    import pandas as pd
+    from app.services.screener_v2.core.data_loader import as_of_context
+    from app.services.screener_v2.core.fundamentals import latest_fundamental_features
+    local_data['fund']['Share Issued'] = 1000.
+    local_data['fund']['Ordinary Shares Number'] = float('nan')
+    with as_of_context(local_data['market'].Date.max()):
+        row = latest_fundamental_features(['AAA']).iloc[0]
+    assert pd.isna(row.market_cap)
+    assert pd.isna(row.trailing_pe)

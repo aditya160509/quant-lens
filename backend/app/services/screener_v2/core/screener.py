@@ -69,7 +69,7 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
         apply("Industry group filter", filtered["industry_group"].astype(str).str.lower().isin(allowed))
     for col, lo_key, hi_key, label in [
         ("market_cap", "market_cap_min", "market_cap_max", "Market cap"),
-        ("price", "price_min", "price_max", "Price"),
+        ("price_usd", "price_min", "price_max", "Price"),
         ("dollar_volume_20d", "dollar_volume_min", "dollar_volume_max", "Dollar volume"),
         ("trailing_pe", "pe_min", "pe_max", "P/E"),
         ("roic", "roic_min", "roic_max", "ROIC"),
@@ -121,7 +121,7 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
     if payload.get("exclude_negative_pe") and "trailing_pe" in filtered:
         apply("Negative P/E exclusion", pd.to_numeric(filtered["trailing_pe"], errors="coerce") > 0)
     if payload.get("exclude_penny_stocks", True):
-        apply("Penny stock exclusion", pd.to_numeric(filtered.get("price", 0), errors="coerce").fillna(0) >= 1.0)
+        apply("Penny stock exclusion", pd.to_numeric(filtered["price_usd"], errors="coerce").ge(1.0))
     if payload.get("sma_bullish_only"):
         apply("SMA bullish", pd.to_numeric(filtered.get("sma50_above_sma200", 0), errors="coerce").fillna(0) > 0)
     if payload.get("golden_cross_within_n_days"):
@@ -139,6 +139,7 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
 
 def top_table(panel: pd.DataFrame, n: int = DEFAULT_TOP_N) -> pd.DataFrame:
     cols = [
+        "currency_units_unavailable_reason", "quote_currency", "financial_currency", "market_value_currency", "market_cap_statement_currency", "price_usd", "market_cap_observation_date", "market_cap_basis", "price_observation_date",
         "rank",
         "ticker",
         "company_name",

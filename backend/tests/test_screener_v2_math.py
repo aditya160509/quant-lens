@@ -168,3 +168,18 @@ def test_macro_attribution_uses_only_prior_observations_and_expires(monkeypatch)
     assert result.loc['prior_VIX_below_20', 'compounded_return'] == pytest.approx(.1)
     assert result.loc['prior_VIX_at_least_20', 'compounded_return'] == pytest.approx(-.2)
     assert result.loc['unavailable', 'sessions'] == 1
+
+
+def test_fx_direct_inverse_minor_units_and_no_filling(monkeypatch):
+    import pandas as pd
+    from app.services.screener_v2.core import data_loader
+    from app.services.screener_v2.core.currency import usd_rates, instrument_context
+    dates = pd.to_datetime(['2025-01-01', '2025-01-02'])
+    fx = pd.DataFrame({'Ticker': ['EURUSD=X', 'USDINR=X', 'GBPUSD=X'], 'Date': [dates[0]] * 3, 'Close': [1.2, 80., 1.25]})
+    monkeypatch.setattr(data_loader, 'load_fx', lambda: fx)
+    rates = usd_rates(['USD', 'EUR', 'INR', 'GBp', 'SAR', None], dates)
+    assert rates.iloc[0][['USD', 'EUR', 'INR', 'GBp']].tolist() == pytest.approx([1., 1.2, 1 / 80, .0125])
+    assert rates.iloc[1][['EUR', 'INR', 'GBp', 'SAR']].isna().all()
+    with pytest.raises(ValueError, match='positive'):
+        with instrument_context({'instrument_metadata': {'AAA': {'quoted_units_per_ordinary_share': 0}}}):
+            pass

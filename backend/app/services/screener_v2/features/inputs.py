@@ -13,7 +13,9 @@ def field(key, type='text', default=None, group='Specification', help='', **cons
 
 
 def shared_inputs():
-    return [field('universe', 'ticker_list', 'master', 'Universe', 'Local equities with observed prices and a fundamentals inventory entry, or explicit eligible tickers; current coverage is not historical index membership.'),
+    return [field('instrument_metadata', 'json', None, 'Currency', 'Per ticker: quote_currency, financial_currency and quoted_units_per_ordinary_share. Explicit static declarations apply to the entire requested history; do not supply current-only metadata for changed listings.'),
+            field('calendar_ticker', 'ticker', None, 'Currency', 'Observed session calendar instrument. Required for non-USD portfolios; missing held quotes invalidate a run.'),
+            field('universe', 'ticker_list', 'master', 'Universe', 'Local equities with observed prices and a fundamentals inventory entry, or explicit eligible tickers; current coverage is not historical index membership.'),
             field('max_symbols', 'number', 500, 'Universe', min=1, max=5000),
             field('lookback_days', 'number', 756, 'Window', min=1, max=10000),
             field('top_n', 'number', 50, 'Selection', min=1, max=5000),
@@ -23,7 +25,7 @@ def shared_inputs():
 
 
 RANGE_FILTERS = {
-    'market_cap': 'Market capitalization', 'price': 'Observed close', 'dollar_volume': '20-session mean price times volume',
+    'market_cap': 'Market capitalization', 'price': 'Observed close converted to USD using exact-date FX', 'dollar_volume': '20-session mean price times volume',
     'pe': 'Trailing twelve month P/E', 'roic': 'Statement-derived return on invested capital', 'pb': 'Price to book',
     'p_cf': 'Price to positive trailing cash flow', 'ev_ebit': 'Enterprise value to EBIT', 'interest_coverage': 'EBIT to interest expense',
     'revenue_growth_yoy': 'Annual revenue growth', 'eps_growth_yoy': 'Annual EPS change scaled by absolute prior EPS',

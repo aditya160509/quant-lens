@@ -57,21 +57,22 @@ def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) ->
     feature = get_feature(feature_id)
     module = _load(feature.module)
     runner: Callable[[dict[str, Any] | None], dict[str, Any]] = getattr(module, "run")
-    from .core.data_loader import as_of_context, load_market_ohlcv
+    from .core.data_loader import as_of_context, load_market_ohlcv, default_as_of
+    from .core.currency import instrument_context
     from .features.inputs import normalize_payload
     payload = normalize_payload(feature.inputs, payload or {})
     import pandas as pd
     latest = load_market_ohlcv().Date.max()
     if pd.isna(latest):
         raise ValueError("Market dataset has no observed dates")
-    cutoff = payload.get("as_of_date") or str(latest.date())
+    cutoff = payload.get("as_of_date") or default_as_of(payload)
     date = pd.Timestamp(cutoff)
     if pd.isna(date) or date.tzinfo is not None or date != date.normalize():
         raise ValueError("as_of_date must be an unzoned calendar date")
     if date > latest.normalize():
         raise ValueError("as_of_date exceeds the latest observed market date")
     payload = {**payload, "as_of_date": cutoff}
-    with as_of_context(cutoff):
+    with as_of_context(cutoff), instrument_context(payload):
         result = runner(payload or {})
         if (payload or {}).get("screen_id"):
             from .core.state import save_run

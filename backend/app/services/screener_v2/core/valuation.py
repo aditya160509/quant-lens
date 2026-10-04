@@ -22,7 +22,7 @@ def historical_valuation_series(symbol, metric="trailing_pe", lookback=756):
         return []
     reports = pd.DataFrame({"available_date": pd.to_datetime(hist.reportDate) + pd.Timedelta(days=90)})
     for key, fields in {
-        "shares": ["Ordinary Shares Number", "Share Issued"],
+        "shares": ["Ordinary Shares Number"],
         "income": ["Net Income"], "equity": ["Stockholders Equity", "Total Equity"],
         "revenue": ["Total Revenue"], "ocf": ["Operating Cash Flow"],
         "fcf": ["Free Cash Flow"], "debt": ["Total Debt"],
@@ -35,7 +35,13 @@ def historical_valuation_series(symbol, metric="trailing_pe", lookback=756):
     reports["available_date"] = reports.available_date.astype("datetime64[ns]")
     daily["date"] = daily.date.astype("datetime64[ns]")
     daily = pd.merge_asof(daily, reports, left_on="date", right_on="available_date", direction="backward", tolerance=pd.Timedelta(days=550))
-    market_cap = daily.price * daily.shares
+    from .currency import instrument_specs, usd_rates
+    spec = instrument_specs([symbol])[symbol]
+    rates = usd_rates([spec.get('quote_currency'), spec.get('financial_currency')], daily.date)
+    quote_rate = rates[spec['quote_currency']].to_numpy() if spec.get('quote_currency') in rates else np.nan
+    financial_rate = rates[spec['financial_currency']].to_numpy() if spec.get('financial_currency') in rates else np.nan
+    units = spec.get('quoted_units_per_ordinary_share')
+    market_cap = daily.price * daily.shares * (units if units is not None else np.nan) * quote_rate / financial_rate
     enterprise = market_cap + daily.enterprise_claims - daily.cash
     if metric == "fcf_yield":
         value = daily.fcf / market_cap.where(market_cap > 0)
@@ -76,6 +82,8 @@ def relative_valuation(panel: pd.DataFrame, ticker: str | None = None, payload: 
         peer_scope = "industry"
     elif payload.get("peer_scope") == "market_cap_bucket":
         cap = pd.to_numeric(panel["market_cap"], errors="coerce")
+        if not cap.notna().any():
+            raise ValueError("Market-cap peer buckets require verified currency/share-unit metadata and observed FX")
         bucket = pd.qcut(cap.rank(method="first"), q=min(5, max(1, cap.notna().sum())), labels=False, duplicates="drop")
         row_bucket = bucket.reindex(row.index).iloc[0]
         peers = panel[bucket.eq(row_bucket)].copy()
@@ -120,7 +128,7 @@ def relative_valuation(panel: pd.DataFrame, ticker: str | None = None, payload: 
         "absolute_valuation": {metric: number_like(r.get(metric)) for metric in metrics},
         "sector_percentile": number_like(sector_ranks.mean(axis=1).loc[r.name]),
         "peer_percentile": number_like(pd.Series([x.get("cheapness_percentile") for x in peer_rows], dtype=float).mean()),
-        "universe_percentile": np.nanmean([x.get("universe_percentile") for x in universe_rows if x.get("universe_percentile") is not None]),
+        "universe_percentile": number_like(pd.Series([x.get("universe_percentile") for x in universe_rows], dtype=float).mean()),
         "own_history_percentile": history_percentile,
         "re_rating_slope": slope_info,
         "momentum_percentile": r.get("momentum_percentile"),

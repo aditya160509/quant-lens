@@ -129,3 +129,13 @@ def test_fx_and_macro_observations_respect_as_of_date(monkeypatch, tmp_path):
     finally:
         data_loader._load_fx_versioned.cache_clear()
         data_loader._load_macro_versioned.cache_clear()
+
+
+def test_invalid_instrument_metadata_is_rejected_before_job_creation(monkeypatch):
+    app = FastAPI()
+    app.include_router(screener_v2.router, prefix='/api')
+    client = TestClient(app)
+    monkeypatch.setattr(screener_v2, 'parse_symbols', lambda payload: ['AAPL'])
+    response = client.post('/api/screener-v2/feature/01/jobs', json={'payload': {'tickers': ['AAPL'], 'instrument_metadata': {'AAPL': {'quoted_units_per_ordinary_share': 0}}}})
+    assert response.status_code == 422
+    assert 'positive' in response.json()['detail']
