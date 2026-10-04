@@ -90,6 +90,7 @@ export function Card({ r, jobId }: { r: ReportCard; jobId: string }) {
           <a className="btn sm ghost" href={reportUrl(jobId, "tex")}><Download size={12} />LaTeX</a>
           <a className="btn sm ghost" href={reportUrl(jobId, "pdf")}><Download size={12} />PDF</a>
           <button className="btn sm ghost" onClick={() => shareJob(jobId).then((s) => { const url = `${location.origin}/research/shared/${s.token}`; void navigator.clipboard?.writeText(url); setShared(url); }).catch(() => setShared("Sharing is not available on this server"))}><Link2 size={12} />{shared ? "Link copied" : "Share"}</button>
+          <button className="btn sm ghost" onClick={() => shareJob(jobId).then((s) => { const url = `${location.origin}/research/shared/${s.token}?embed=1`; void navigator.clipboard?.writeText(`<iframe src="${url}" width="100%" height="720" style="border:0;border-radius:12px" loading="lazy"></iframe>`); setShared("embed"); }).catch(() => setShared("Embedding is not available on this server"))}>{shared === "embed" ? "Embed code copied" : "Embed"}</button>
         </span>
       </motion.div>
 
@@ -97,10 +98,10 @@ export function Card({ r, jobId }: { r: ReportCard; jobId: string }) {
         {r.grades.map((g, i) => (
           <motion.div key={g.dimension} className="rc-grade" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: DUR.base, delay: Math.min(0.12, i * 0.015) }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span className="g" style={{ color: GRADE_TONE[g.grade[0]] ?? "var(--text)" }}>{g.grade}</span>
+              <span className={`g${g.grade.length > 2 ? " na" : ""}`} style={{ color: GRADE_TONE[g.grade[0]] ?? "var(--text-4)" }}>{g.grade}</span>
               <span className="d">{DIM_LABEL[g.dimension] ?? label(g.dimension)}</span>
             </div>
-            <div className="bar"><span style={{ width: `${Math.max(2, Math.min(100, g.score))}%`, background: GRADE_TONE[g.grade[0]] ?? "var(--accent)" }} /></div>
+            <div className="bar">{GRADE_TONE[g.grade[0]] ? <span style={{ width: `${Math.max(2, Math.min(100, g.score))}%`, background: GRADE_TONE[g.grade[0]] }} /> : null}</div>
             {g.metric ? <div className="m"><span>{g.metric.label}</span><b className="num">{typeof g.metric.value === "number" ? Number(g.metric.value.toPrecision(3)) : g.metric.value}</b></div> : null}
             <p>{g.summary}</p>
           </motion.div>

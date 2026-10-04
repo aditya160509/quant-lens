@@ -23,10 +23,9 @@ const ago = (t: number) => {
 
 /** The order a signal moves through: does it price, does it survive, is it causal, is it publishable. */
 const STAGES: { id: string; label: string; intro: string; ids: string[] }[] = [
-  { id: "test", label: "Test", intro: "Does the signal earn a premium, and is the model well specified?", ids: ["01", "05"] },
-  { id: "stress", label: "Stress", intro: "Does it survive other choices, fake signals and different market regimes?", ids: ["02", "03", "04"] },
-  { id: "explain", label: "Explain", intro: "Is the effect causal, and is it fading as it gets traded?", ids: ["07", "09", "08"] },
-  { id: "publish", label: "Publish", intro: "Does it clear the factor-zoo hurdle, and what goes in the paper?", ids: ["11", "06"] },
+  { id: "test", label: "Test", intro: "Does the signal earn a premium? Model checks run with it.", ids: ["01"] },
+  { id: "stress", label: "Stress", intro: "Does it survive other choices, fake signals and different market regimes?", ids: ["02", "03"] },
+  { id: "explain", label: "Explain", intro: "Is the effect causal, and is it fading or already a known factor?", ids: ["07", "08"] },
 ];
 
 const TONE_TEXT = { up: "Pass", down: "Fail", warn: "Mixed" } as const;
@@ -36,8 +35,7 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
   const last = features.map((f) => latestRun(runs, f.id)).filter((r): r is RunRecord => Boolean(r));
   const count = (t: RunRecord["tone"]) => last.filter((r) => r.tone === t).length;
   const byId = new Map(features.map((f) => [f.id, f]));
-  const placed = new Set(STAGES.flatMap((s) => s.ids));
-  const stages = [...STAGES, { id: "other", label: "Other", intro: "", ids: features.map((f) => f.id).filter((id) => !placed.has(id)) }].filter((s) => s.ids.some((id) => byId.has(id)));
+  const stages = STAGES.filter((s) => s.ids.some((id) => byId.has(id)));
   const stats: [string, string | number, string?][] = [
     ["Tests", features.length || "–"],
     ["Tested", `${last.length}/${features.length || 0}`],

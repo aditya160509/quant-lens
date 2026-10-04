@@ -458,3 +458,10 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .wb-sel { position: absolute; top: 3px; bottom: 3px; border-radius: 4px; background: color-mix(in oklch, var(--accent) 26%, transparent); box-shadow: inset 0 0 0 1px var(--accent-line, var(--accent)); }
 .wb-handle { position: absolute; top: -2px; bottom: -2px; width: 4px; margin-left: -2px; border-radius: 2px; background: var(--accent); }
 .wb-ticks { display: flex; justify-content: space-between; font: 10.5px var(--mono); color: var(--text-4); }
+.sig-try { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--grid); }
+.sig-try > span { font-size: 11.5px; color: var(--text-4); margin-right: 2px; }
+.sig-try .pill { height: 24px; font-size: 11.5px; }
+.card-h h3 { display: inline-flex; align-items: center; gap: 6px; }
+.rc-grade .g.na { font-size: 15px; letter-spacing: 0; }
+.verdict-explain { font-size: 12.5px; color: var(--text-3); line-height: 1.55; margin: 2px 2px 0; max-width: 900px; }
+[data-embed] .ws-top, [data-embed] .ws-rail { display: none !important; }

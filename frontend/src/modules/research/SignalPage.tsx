@@ -56,12 +56,12 @@ export function SignalPage() {
 
         <div className="sig-grid">
           <section className="card" style={{ height: "auto" }}>
-            <header className="card-h"><div><h3>Formula</h3><span className="sub">Operators and fields autocomplete as you type. Ranks and z-scores are cross-sectional, per month.</span></div></header>
+            <header className="card-h"><div><h3>Formula</h3><span className="sub">Autocompletes operators and fields. Monthly data; ranks are per month.</span></div></header>
             <div className="card-b">
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} aria-label="Signal name" style={{ marginBottom: 8, fontWeight: 500 }} />
               <FormulaEditor value={expr} onChange={setExpr} error={check && !check.ok ? check.error : null} words={[...(ops.data ?? []).map((o) => ({ w: o.name, hint: `${o.name}(${o.args.join(", ")})`, doc: o.doc })), ...(fields.data ?? []).map((f) => ({ w: f.name, hint: `${f.source} · ${Math.round(f.coverage * 100)}% coverage`, doc: f.doc }))]} />
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 12, color: check?.ok ? "var(--up)" : check ? "var(--down)" : "var(--text-3)" }}>
+                <span style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5, color: check?.ok ? "var(--up)" : check ? "var(--down)" : "var(--text-3)" }}>
                   {checking ? "Checking…" : check?.ok ? <><Check size={12} /> Valid · {check.preview.n_names} names · {check.preview.months} months</> : check && !check.ok ? check.error.message : "Not checked yet"}
                 </span>
                 <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
@@ -70,6 +70,10 @@ export function SignalPage() {
                   <button className="btn primary sm" onClick={use} disabled={!check?.ok && !offline}>{isActive ? <><Check size={12} />In use</> : "Use this signal"}</button>
                   <Link className="btn sm" href="/research/report" onClick={use}><ClipboardCheck size={12} />Run report card</Link>
                 </span>
+              </div>
+              <div className="sig-try">
+                <span>Try</span>
+                {EXAMPLES.map((x) => <button key={x.label} type="button" className="pill" title={x.expr} onClick={() => { setExpr(x.expr); setName(x.label); }}>{x.label}</button>)}
               </div>
             </div>
           </section>
@@ -95,6 +99,14 @@ export function SignalPage() {
     </div>
   );
 }
+
+const EXAMPLES = [
+  { label: "Momentum 12-1", expr: "rank(delay(close, 1) / delay(close, 12) - 1)" },
+  { label: "Short-term reversal", expr: "rank(-returns)" },
+  { label: "Low volatility", expr: "rank(-ts_std(returns, 12))" },
+  { label: "Sector-neutral momentum", expr: "neutralize(rank(delay(close, 1) / delay(close, 12) - 1), sector)" },
+  { label: "Illiquidity", expr: "rank(ts_mean(abs(returns) / dollar_volume, 12))" },
+];
 
 type Word = { w: string; hint: string; doc: string };
 
@@ -150,7 +162,7 @@ function PreviewPanel({ check, expr }: { check: Validation | null; expr: string 
     <div style={{ display: "grid", gap: 14 }}>
       <div>
         <div className="insp-h">Distribution (pooled)</div>
-        <Bars bars={p.histogram.map((b) => ({ label: Number(((b.x0 + b.x1) / 2).toPrecision(2)).toString(), value: b.count }))} height={130} signed={false} hideLabels={p.histogram.length > 20} valueLabels={false} />
+        <Bars bars={p.histogram.map((b) => ({ label: Number(((b.x0 + b.x1) / 2).toPrecision(2)).toString(), value: b.count }))} height={130} signed={false} hideLabels={p.histogram.length > 12} valueLabels={false} />
       </div>
       <div>
         <div className="insp-h">Coverage by month {low ? <span style={{ color: "var(--warn)" }}>· {low} months below 50%</span> : null}</div>
@@ -161,7 +173,8 @@ function PreviewPanel({ check, expr }: { check: Validation | null; expr: string 
         {[...new Map([...p.corr_known, ...(lit.data ?? []).map((l) => ({ name: l.name, corr: l.corr }))].map((c) => [c.name.toLowerCase(), { ...c, name: label(c.name) }])).values()].sort((a, b) => Math.abs(b.corr) - Math.abs(a.corr)).slice(0, 6).map((c) => (
           <div key={c.name} className="kv-row"><span>{c.name}</span><b className="num" style={{ color: Math.abs(c.corr) > 0.7 ? "var(--warn)" : "var(--text)" }}>{c.corr.toFixed(2)}</b></div>
         ))}
-        {p.corr_known.some((c) => Math.abs(c.corr) > 0.7) ? <p style={{ fontSize: 12, color: "var(--warn)", marginTop: 6 }}>Correlation above 0.7 with a known signal: test the residual with “orthogonalize against” in the study settings.</p> : null}
+        {p.corr_known.some((c) => Math.abs(c.corr) > 0.995) ? <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 6 }}>This formula is a known signal ({label(p.corr_known.find((c) => Math.abs(c.corr) > 0.995)!.name)}). Change it, or test it as the benchmark.</p>
+          : p.corr_known.some((c) => Math.abs(c.corr) > 0.7) ? <p style={{ fontSize: 12, color: "var(--warn)", marginTop: 6 }}>Correlation above 0.7 with a known signal: test the residual with “orthogonalize against” in the study settings.</p> : null}
       </div>
     </div>
   );

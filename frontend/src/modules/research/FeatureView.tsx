@@ -253,6 +253,7 @@ function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: Featu
           </p>
         </div>
       ) : null}
+      {explain(cards).length ? <p className="verdict-explain">{explain(cards).join(" ")}</p> : null}
       {cards.length ? (
         <div className="kpis">
           {cards.map((c) => (
@@ -390,4 +391,20 @@ function repeatsKpis(result: FeatureResult, item: Item): boolean {
   const shown = new Set((result.summary_cards ?? []).map((c) => (isNum(c.value) ? Number(c.value.toPrecision(6)) : null)).filter((v): v is number => v !== null));
   const nums = Object.values(rows[0]).filter(isNum).map((v) => Number(v.toPrecision(6)));
   return nums.length > 0 && nums.length <= 4 && nums.every((v) => shown.has(v));
+}
+
+/**
+ * What the headline numbers mean, in words, from fixed templates (no model): t-statistics against
+ * the usual and factor-zoo hurdles, p-values against 5%, Sharpe ratios against costs-free noise.
+ */
+function explain(cards: { label: string; value: unknown }[]): string[] {
+  const out: string[] = [];
+  const t = cards.find((c) => /t[- ]?stat|\bt\b/i.test(c.label) && isNum(c.value));
+  if (t && isNum(t.value)) {
+    const a = Math.abs(t.value);
+    out.push(a >= 3 ? `A t-statistic of ${t.value.toFixed(2)} clears even the factor-zoo hurdle of 3.` : a >= 2 ? `A t-statistic of ${t.value.toFixed(2)} is significant at 5% on its own, but below the factor-zoo hurdle of 3 that applies after many tried signals.` : `A t-statistic of ${t.value.toFixed(2)} is within what chance alone produces; it is not evidence of a premium.`);
+  }
+  const p = cards.find((c) => /\bp\b|p-value|p value/i.test(c.label) && isNum(c.value));
+  if (p && isNum(p.value)) out.push(p.value < 0.05 ? `${p.label} of ${p.value.toFixed(3)} rejects the null at 5%.` : `${p.label} of ${p.value.toFixed(3)} does not reject the null at 5%.`);
+  return out.slice(0, 2);
 }

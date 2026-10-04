@@ -48,6 +48,12 @@ function ResearchPanels() {
   const featureId = idFromSlug(params?.feature);
   const special = specialPage(params?.feature);
   const sharedToken = (params as { token?: string } | null)?.token ?? null;
+  const embed = useSearchParams()?.get("embed") === "1";
+  useEffect(() => {
+    if (!embed) return;
+    document.documentElement.dataset.embed = "1";
+    return () => { delete document.documentElement.dataset.embed; };
+  }, [embed]);
   const manifest = useManifest();
   const feature = manifest.data?.find((f) => f.id === featureId) ?? null;
   const { setCrumb, registerPalette } = useWorkspace();
@@ -59,7 +65,7 @@ function ResearchPanels() {
   useBackgroundRuns(manifest.data, shownJob, verdictFor);
   useDoneInTitle(runs);
 
-  useEffect(() => setCrumb(feature ? metaFor(feature.id, feature.name).name : "Overview"), [feature, setCrumb]);
+  useEffect(() => setCrumb(special ? special.label : sharedToken ? "Shared run" : feature ? metaFor(feature.id, feature.name).name : "Overview"), [feature, special, sharedToken, setCrumb]);
 
   useEffect(() => {
     if (!animate) return;
@@ -143,6 +149,8 @@ function ResearchPanels() {
               <Overview features={manifest.data ?? []} loading={manifest.isLoading} runs={runs} />
             )}</>
   );
+  // Embedded share: the content alone, no workspace chrome, for an iframe on another site.
+  if (sharedToken && embed) return <div style={{ height: "100%", display: "flex" }}>{center}</div>;
   if (narrow) {
     return (
       <div className="ws-mobile">
