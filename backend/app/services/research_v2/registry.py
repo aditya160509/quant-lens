@@ -55,4 +55,6 @@ def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) ->
     module = next((m for m in FEATURE_MODULES if m.rsplit("_", 1)[1] == key), None)
     if module is None:
         raise KeyError(f"Unknown Research V2 feature {feature_id}")
-    return _load(module).run(payload or {})  # load only this feature, not the whole manifest
+    from .core.signal_service import attach_lookahead
+
+    return attach_lookahead(_load(module).run(payload or {}))  # meta.lookahead for signal_expr runs

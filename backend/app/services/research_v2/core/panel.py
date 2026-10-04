@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 
 from .holdout import get_window, study_key
+from .signal_service import custom_signal, finalize_signal
 from .data_loader import (
     UnknownSymbolsError,
     annual_growth,
@@ -143,7 +144,7 @@ def build_panel(payload: dict[str, Any], default_limit: int = 400) -> Panel:
     formation = all_dates[::-1][horizon::step][::-1] if len(all_dates) > horizon else all_dates[:0]
     ctx = {"close_m": close_m, "returns": returns, "daily": daily, "market_cap": market_cap, "factors": factors, "symbols": symbols, "dates": all_dates}
 
-    signal = compute_signal(cfg["signal"], ctx, payload)
+    signal = finalize_signal(compute_signal(cfg["signal"], ctx, payload), ctx, payload)  # orthogonalize_against + look-ahead guard
     dependent = compute_dependent(cfg["dependent_variable"], horizon, ctx)
     control_names = [c for c in cfg["controls"] if c != _control_alias(cfg["signal"])]
     controls = {name: compute_control(name, ctx) for name in control_names}
@@ -194,10 +195,13 @@ def build_panel(payload: dict[str, Any], default_limit: int = 400) -> Panel:
 
 def normalize_config(payload: dict[str, Any], default_limit: int = 400) -> dict[str, Any]:
     signal = str(payload.get("signal") or payload.get("signal_definition") or "momentum").lower()
+    custom = bool(payload.get("signal_expr") or payload.get("signal_ref"))
     aliases = {"book_to_market": "value", "market_cap": "size", "short_reversal": "reversal", "1m_reversal": "reversal", "volatility": "low_vol", "realized_vol": "low_vol", "asset_growth": "investment", "roe": "quality"}
     signal = aliases.get(signal, signal)
     upload = payload.get("signal_csv_path") or payload.get("signal_upload_path")
-    if upload:
+    if custom:
+        signal = "custom"  # a formula (signal_expr / signal_ref) overrides `signal`
+    elif upload:
         signal = "uploaded"
     elif signal not in SIGNALS:
         raise ValueError(f"Unknown signal '{signal}'. Choose one of: {', '.join(SIGNALS)}")
@@ -226,6 +230,8 @@ def normalize_config(payload: dict[str, Any], default_limit: int = 400) -> dict[
         raise ValueError(f"Unknown universe filters: {', '.join(bad)}")
     return {
         "signal": signal,
+        "signal_expr": payload.get("signal_expr"),
+        "signal_ref": payload.get("signal_ref"),
         "signal_upload": upload,
         "controls": controls,
         "weighting": str(payload.get("weighting") or payload.get("weighting_scheme") or "equal").lower(),
@@ -252,6 +258,8 @@ def _control_alias(signal: str) -> str:
 
 def compute_signal(name: str, ctx: dict[str, Any], payload: dict[str, Any] | None = None) -> pd.DataFrame:
     close_m, returns, dates, symbols = ctx["close_m"], ctx["returns"], ctx["dates"], ctx["symbols"]
+    if name == "custom":
+        return custom_signal(ctx, payload)
     if name == "uploaded":
         upload = load_signal_upload((payload or {}).get("signal_csv_path") or (payload or {}).get("signal_upload_path"))
         if upload.empty:
@@ -480,6 +488,8 @@ def _monthly_macro(dates: pd.DatetimeIndex) -> pd.DataFrame:
 def signal_for(panel: Panel, name: str, payload: dict[str, Any] | None = None) -> pd.DataFrame:
     """Compute another signal on the same panel (used by double sorts and robustness)."""
 
+    if name == "custom" and not payload:
+        payload = {"signal_expr": panel.config.get("signal_expr"), "signal_ref": panel.config.get("signal_ref")}
     return compute_signal(name, panel.context, payload).reindex(index=panel.dates, columns=panel.symbols)
 
 
