@@ -38,28 +38,14 @@ from app.services.ml.strategy_overlap import StrategyOverlapDetector, analyze_st
 from app.services.ml.embedding import EmbeddingEngine, create_embedding
 from app.services.ml.regime_quality import RegimeSeparationAnalyzer, analyze_regime_separation
 from app.services.ml.summary import SummaryEngine, score_signals, compute_position_sizing
-from app.services.ml_v2.registry import ML_V2_FEATURES, run_feature as run_ml_v2_feature
+from app.api.ml_v2 import router as ml_v2_router
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.get("/ml/v2/features")
-async def list_ml_v2_features():
-    """List available ML V2 feature contracts."""
-    return {"features": [{"id": f.id, "title": f.title, "status": f.status} for f in ML_V2_FEATURES.values()]}
-
-
-@router.post("/ml/v2/features/{feature_id}/run")
-async def execute_ml_v2_feature(feature_id: str, payload: Dict[str, Any] = Body(default={})):
-    """Execute one ML V2 feature without blocking the event loop."""
-    try:
-        return await asyncio.to_thread(run_ml_v2_feature, feature_id, payload)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+router.include_router(ml_v2_router)
 
 # =============================================================================
 # THREAD-SAFE CACHE WITH TTL

@@ -40,3 +40,38 @@ def test_as_of_excludes_future_quotes(quotes):
         assert closes.index.max() == quotes[20]
     finally:
         loader.AS_OF_DATE.reset(token)
+
+@pytest.fixture
+def client(monkeypatch, tmp_path):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api import ml_v2 as api
+    from app.services.studio.jobs import JobStore
+    store = JobStore(path=tmp_path / "jobs.json")
+    monkeypatch.setattr(api, "JOBS", store)
+    monkeypatch.setattr(api, "ROOT", tmp_path)
+    app = FastAPI()
+    app.include_router(api.router, prefix="/api")
+    with TestClient(app) as client:
+        yield client
+    store.shutdown()
+
+def test_api_maps_unknown_symbols_to_422(client, monkeypatch):
+    from app.api import ml_v2 as api
+    def reject(*args):
+        raise ValueError("Unknown ML V2 symbols: MISSING")
+    monkeypatch.setattr(api, "run_feature", reject)
+    response = client.post("/api/ml/v2/features/01/run", json={"symbols": ["MISSING"]})
+    assert response.status_code == 422
+    assert "MISSING" in response.json()["detail"]
+
+def test_universe_upload_is_sandboxed(client, quotes, tmp_path):
+    response = client.post("/api/ml/v2/uploads?kind=universe", files={"file": ("../../escape.csv", b"ticker\nAAA\n", "text/csv")})
+    assert response.status_code == 200
+    identifier = response.json()["upload_id"]
+    assert (tmp_path / "uploads" / f"{identifier}.json").is_file()
+    assert response.json()["symbols"] == ["AAA"]
+
+def test_unknown_job_is_404(client):
+    assert client.get("/api/ml/v2/jobs/missing").status_code == 404
+    assert client.post("/api/ml/v2/jobs/missing/cancel").status_code == 404

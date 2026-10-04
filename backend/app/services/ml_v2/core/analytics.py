@@ -717,6 +717,11 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         catboost_available = True
     except Exception:
         catboost_available = False
+    requested_family = str(ctx.payload.get("model_family", "all"))
+    if requested_family != "all":
+        if requested_family not in models:
+            raise ValueError(f"Requested model family {requested_family} is unavailable")
+        models = {requested_family: models[requested_family]}
     perf = []
     preds = {}
     x_train, x_test = x.iloc[train_idx], x.iloc[test_idx]
@@ -1386,8 +1391,12 @@ def hrp_weights(cov: pd.DataFrame, linkage_method: str = "ward") -> tuple[pd.Ser
             continue
         split = len(cluster) // 2
         left, right = cluster[:split], cluster[split:]
-        var_l = float(np.dot(np.ones(len(left)) / len(left), ordered_cov.loc[left, left].values @ (np.ones(len(left)) / len(left))))
-        var_r = float(np.dot(np.ones(len(right)) / len(right), ordered_cov.loc[right, right].values @ (np.ones(len(right)) / len(right))))
+        def cluster_variance(members):
+            sub = ordered_cov.loc[members, members].to_numpy()
+            inverse = 1. / np.diag(sub)
+            inverse /= inverse.sum()
+            return float(inverse @ sub @ inverse)
+        var_l, var_r = cluster_variance(left), cluster_variance(right)
         alpha = 1.0 - var_l / max(var_l + var_r, 1e-12)
         weights[left] *= alpha
         weights[right] *= 1.0 - alpha
@@ -1490,17 +1499,21 @@ def herc_weights(cov: pd.DataFrame) -> tuple[pd.Series, list[dict[str, Any]]]:
 
 def run_hrp_optimizer(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     ctx = load_context(payload, min_symbols=8)
-    rets = ctx.returns.iloc[:, : min(80, ctx.returns.shape[1])]
+    rets = ctx.returns.replace([np.inf, -np.inf], np.nan).dropna()
+    if len(rets) < 30:
+        raise ValueError("HRP requires at least 30 complete simultaneous return observations")
     estimator = str((payload or {}).get("covariance_estimator") or "ledoit_wolf").lower()
     variant = str((payload or {}).get("optimization_variant") or "standard_hrp").lower()
-    if "oas" in estimator:
+    if estimator == "sample":
+        cov = rets.cov()
+    elif "oas" in estimator:
         cov = pd.DataFrame(OAS().fit(rets).covariance_, index=rets.columns, columns=rets.columns)
     elif "ewma" in estimator:
         cov = ewma_covariance(rets, halflife=63)
     elif "rmt" in estimator:
         cov = rmt_cleaned_covariance(rets)
     else:
-        cov = cached_ledoit_cov((tuple(rets.columns), date_str(rets.index.min()), date_str(rets.index.max()), len(rets)), rets)
+        cov = pd.DataFrame(LedoitWolf().fit(rets).covariance_, index=rets.columns, columns=rets.columns)
     if "nco" in variant:
         weights = nco_weights(rets)
         order = list(weights.sort_values(ascending=False).index)
@@ -1517,8 +1530,9 @@ def run_hrp_optimizer(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         idx = np.array([i for i, a in enumerate(assets) if ctx.sectors.get(a, "Unknown") == sector], dtype=int)
         constraints.append({"type": "ineq", "fun": lambda w, idx=idx: float(sector_cap - np.sum(w[idx]))})
     bounded = minimize(lambda w: float(np.sum((w - w0) ** 2)), w0, method="SLSQP", bounds=[(min_weight, max_weight)] * len(w0), constraints=constraints, options={"maxiter": 250, "ftol": 1e-10})
-    if bounded.success:
-        weights = pd.Series(bounded.x / max(float(np.sum(bounded.x)), 1e-12), index=assets)
+    if not bounded.success:
+        raise ValueError(f"Portfolio constraints are infeasible: {bounded.message}")
+    weights = pd.Series(bounded.x, index=assets)
     eq_w = pd.Series(1 / len(weights), index=weights.index)
     port = rets @ weights
     eq_port = rets @ eq_w
@@ -1542,7 +1556,9 @@ def run_hrp_optimizer(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     raw_bl = np.maximum(raw_bl, 0.0)
     bl_seed = raw_bl / max(float(raw_bl.sum()), 1e-12) if raw_bl.sum() > 0 else w0
     bl_opt = minimize(lambda w: float((w @ sigma @ w) - 2.0 * posterior @ w / risk_aversion), bl_seed, method="SLSQP", bounds=[(min_weight, max_weight)] * len(w0), constraints=constraints, options={"maxiter": 250, "ftol": 1e-10})
-    bl_weights = bl_opt.x if bl_opt.success else bl_seed
+    if not bl_opt.success:
+        raise ValueError(f"Black-Litterman constraints are infeasible: {bl_opt.message}")
+    bl_weights = bl_opt.x
     bl_weights = bl_weights / max(float(bl_weights.sum()), 1e-12)
     bl = pd.DataFrame({"asset": assets, "equilibrium_return": pi, "view_return": q, "posterior_return": posterior, "posterior_weight": bl_weights})
     return response(

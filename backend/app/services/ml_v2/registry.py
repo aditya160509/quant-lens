@@ -69,3 +69,14 @@ def run_feature(feature_id: str | int, payload: dict[str, Any] | None = None) ->
     finally:
         AS_OF_DATE.reset(token)
 
+
+
+def feature_manifest():
+    from .features.inputs import inputs, outputs
+    manifest = []
+    for feature in ML_V2_FEATURES.values():
+        module = importlib.import_module(f"app.services.ml_v2.features.{feature.module}")
+        manifest.append({"id": feature.id, "title": module.FEATURE_TITLE,
+            "status": feature.status, "inputs": inputs(module.INPUT_CONTRACT, module.DEFAULTS),
+            "outputs": outputs(module.OUTPUT_CONTRACT), "known_limitations": module.RESEARCH_ONLY})
+    return manifest

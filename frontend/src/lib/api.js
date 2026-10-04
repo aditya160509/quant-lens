@@ -1031,7 +1031,9 @@ export async function runMlV2Feature(featureId, payload = {}) {
 }
 
 export async function searchMlV2Symbols(query = "", options = {}) {
-    return searchFactorsV2Symbols(query, options);
+    const params = new URLSearchParams({ q: query, limit: String(options.limit || 25) });
+    const res = await fetch(`${API_BASE_URL}/ml/v2/symbols?${params}`);
+    return handleResponse(res, "Failed to search ML V2 symbols");
 }
 
 export async function runScreenerV2Feature(featureId, payload = {}) {

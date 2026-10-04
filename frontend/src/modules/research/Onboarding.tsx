@@ -20,7 +20,7 @@ function load(): State {
 /** Dismissible 60-second first run; progress persists on this device. */
 export function Onboarding() {
   const [st, setSt] = useState<State | null>(null);
-  useEffect(() => { setSt(load()); }, []);
+  useEffect(() => { const id = setTimeout(() => setSt(load()), 0); return () => clearTimeout(id); }, []);
   const save = (n: State) => { setSt(n); try { localStorage.setItem(KEY, JSON.stringify(n)); } catch { /* ignore */ } };
   if (!st || st.dismissed || st.done.length >= STEPS.length) return null;
   const toggle = (i: number) => save({ ...st, done: st.done.includes(i) ? st.done.filter((d) => d !== i) : [...st.done, i] });
