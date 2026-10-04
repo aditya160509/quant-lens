@@ -81,3 +81,29 @@ export function downloadBase64(base64: string, name: string, type: string) {
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   download(name, new Blob([bytes], { type }));
 }
+
+/** Copy the chart as a PNG to the clipboard; falls back to a download when unsupported. */
+export async function copyPng(svg: SVGSVGElement, name = "chart", scale = 3): Promise<boolean> {
+  const src = serializeSvg(svg);
+  const { width, height } = svg.viewBox.baseVal;
+  const img = new Image();
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(src)}`;
+  await img.decode();
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return false;
+  ctx.scale(scale, scale);
+  ctx.drawImage(img, 0, 0, width, height);
+  const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/png"));
+  if (!blob) return false;
+  try {
+    if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) throw new Error("no clipboard");
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    return true;
+  } catch {
+    download(`${name}.png`, blob);
+    return false;
+  }
+}

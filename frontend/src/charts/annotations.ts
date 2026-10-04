@@ -4,7 +4,11 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 /** A date note, or with `y` set, a horizontal level drawn across the chart. */
-export type Note = { id: string; t: number; text: string; y?: number };
+export type Note = {
+  id: string; t: number; text: string; y?: number;
+  /** Drawings: two-click trend line or rectangle. Absent on notes and levels (backward compatible). */
+  kind?: "trend" | "rect"; t1?: number; y1?: number; t2?: number; y2?: number;
+};
 
 type NotesStore = {
   notes: Record<string, Note[]>;

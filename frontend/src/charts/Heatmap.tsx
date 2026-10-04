@@ -13,13 +13,15 @@ type Props = {
   /** Extra right-hand column, e.g. a long-short spread per row. */
   margin?: { label: string; values: (number | null)[] };
   rowTitle?: string;
+  /** Optional upper header row grouping consecutive columns, e.g. one group per model. Spans should sum to cols.length. */
+  colGroups?: { label: string; span: number }[];
   colTitle?: string;
   highlightRow?: number;
   outline?: (r: number, c: number) => boolean;
 };
 
 /** Matrix heatmap rendered as a table so values stay readable and selectable; colour encodes magnitude. */
-function HeatmapImpl({ rows, cols, values, format = (v) => v.toFixed(3), centered = true, margin, rowTitle = "", colTitle, highlightRow, outline }: Props) {
+function HeatmapImpl({ rows, cols, values, format = (v) => v.toFixed(3), centered = true, margin, rowTitle = "", colGroups, colTitle, highlightRow, outline }: Props) {
   const [hover, setHover] = useState<[number, number] | null>(null);
   const flat = values.flat().filter((v): v is number => v !== null && Number.isFinite(v));
   const maxAbs = Math.max(1e-12, ...flat.map(Math.abs));
@@ -35,6 +37,13 @@ function HeatmapImpl({ rows, cols, values, format = (v) => v.toFixed(3), centere
       {colTitle ? <div style={{ fontSize: 11.5, color: "var(--text-3)", margin: "0 0 6px", paddingLeft: 120 }}>{colTitle} →</div> : null}
       <table role="grid" style={{ borderCollapse: "separate", borderSpacing: 3, width: "100%", fontFamily: "var(--mono)", fontSize: 11.5 }}>
         <thead>
+          {colGroups?.length ? (
+            <tr>
+              <th />
+              {colGroups.map((g, i) => <th key={`${g.label}-${i}`} colSpan={g.span} style={{ color: "var(--text-2)", fontFamily: "var(--font)", fontWeight: 600, fontSize: 11.5, padding: "0 4px 3px", borderBottom: "1px solid var(--line, var(--text-4))", whiteSpace: "nowrap" }}>{g.label}</th>)}
+              {margin ? <th /> : null}
+            </tr>
+          ) : null}
           <tr>
             <th style={{ textAlign: "left", color: "var(--text-3)", fontFamily: "var(--font)", fontWeight: 500, fontSize: 11.5, padding: "0 6px", whiteSpace: "nowrap" }}>{rowTitle}</th>
             {cols.map((c, j) => <th key={`${c}-${j}`} style={{ color: hover?.[1] === j ? "var(--text)" : "var(--text-3)", fontWeight: 500, padding: "0 4px 4px", whiteSpace: "nowrap" }}>{c}</th>)}

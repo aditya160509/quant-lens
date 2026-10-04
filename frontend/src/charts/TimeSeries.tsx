@@ -1,9 +1,11 @@
 "use client";
 
 import { area as d3area, curveMonotoneX, curveStepAfter, line as d3line, scaleLinear, scaleTime } from "d3";
-import { memo, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { MessageSquarePlus, Minus, RotateCcw, X } from "lucide-react";
+import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Camera, MessageSquarePlus, Minus, RectangleHorizontal, RotateCcw, TrendingUp, X } from "lucide-react";
 import { useNotes } from "./annotations";
+import { useDataWindow } from "./dataWindow";
+import { copyPng } from "./export";
 import {
   AxisTag, GridY, Legend, Readout, ReadoutRow, ReadoutTitle, SERIES, Svg, crisp, fmtDate, fmtTick, nearest, parseDate, robustExtent, useCrosshair, useWidth,
 } from "./core";
@@ -70,6 +72,10 @@ function TimeSeriesImpl({
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const [noting, setNoting] = useState(false);
   const [leveling, setLeveling] = useState(false);
+  const [tool, setTool] = useState<"trend" | "rect" | null>(null);
+  const [anchor, setAnchor] = useState<{ t: number; y: number } | null>(null);
+  const [cursor, setCursor] = useState<{ t: number; y: number } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [draft, setDraft] = useState<{ t: number; text: string } | null>(null);
   const hoverT = useCrosshair((s) => s.t);
   const setHover = useCrosshair((s) => s.set);
@@ -82,6 +88,27 @@ function TimeSeriesImpl({
     .filter((d): d is { r: Row; t: number } => d.t !== null)
     .sort((a, b) => a.t - b.t), [data, x]);
   const times = useMemo(() => rows.map((d) => d.t), [rows]);
+  const register = useDataWindow((s) => s.register);
+  const unregister = useDataWindow((s) => s.unregister);
+  const seriesRef = useRef({ rows, times, series, format });
+  seriesRef.current = { rows, times, series, format };
+  const seriesSig = series.filter((s) => !s.muted).map((s, i) => `${s.label}|${s.color ?? SERIES[i % SERIES.length]}`).join(";");
+  const dwTitle = yLabel ?? series[0]?.label ?? "Chart";
+  useEffect(() => {
+    const shown = seriesRef.current.series.filter((s) => !s.muted);
+    register({
+      chartId: uid, title: dwTitle,
+      series: shown.map((s) => ({ label: s.label, color: s.color ?? SERIES[seriesRef.current.series.indexOf(s) % SERIES.length] })),
+      valueAt: (t) => {
+        const c = seriesRef.current;
+        if (!c.times.length || t < c.times[0] || t > c.times[c.times.length - 1]) return shown.map(() => null);
+        const row = c.rows[nearest(c.times, t)];
+        return shown.map((s) => { const v = row.r[s.key]; return typeof v === "number" && Number.isFinite(v) ? c.format(v) : null; });
+      },
+    });
+    return () => unregister(uid);
+  }, [uid, seriesSig, dwTitle, register, unregister]);
+
   const visible = useMemo(() => (zoom ? rows.filter((d) => d.t >= zoom[0] && d.t <= zoom[1]) : rows), [rows, zoom]);
 
   const ribbonH = ribbon ? RIBBON_H + 8 : 0;
@@ -140,6 +167,7 @@ function TimeSeriesImpl({
     const px = Math.max(x0, Math.min(x1, e.clientX - r.left));
     const t = pxToT(px);
     if (drag) setDrag({ ...drag, to: t });
+    if (anchor) setCursor({ t, y: ys.invert(e.clientY - r.top) });
     if (times.length) setHover(times[nearest(times, t)], uid);
   };
   const onDown = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -147,6 +175,13 @@ function TimeSeriesImpl({
     const r = e.currentTarget.getBoundingClientRect();
     const t = pxToT(Math.max(x0, Math.min(x1, e.clientX - r.left)));
     if (noting) { setDraft({ t: times[nearest(times, t)], text: "" }); setNoting(false); return; }
+    if (tool && notesKey) {
+      const pt = { t, y: ys.invert(e.clientY - r.top) };
+      if (!anchor) { setAnchor(pt); setCursor(pt); return; }
+      addNote(notesKey, { id: `${tool}-${Date.now()}`, kind: tool, t: anchor.t, text: "", t1: anchor.t, y1: Number(anchor.y.toPrecision(5)), t2: pt.t, y2: Number(pt.y.toPrecision(5)) });
+      setAnchor(null); setCursor(null); setTool(null);
+      return;
+    }
     if (leveling && notesKey) {
       const y = ys.invert(e.clientY - r.top);
       addNote(notesKey, { id: `lvl-${Date.now()}`, t: 0, y: Number(y.toPrecision(4)), text: "" });
@@ -183,7 +218,20 @@ function TimeSeriesImpl({
           {toolbar}
           {zoom ? <button className="btn sm ghost" onClick={() => setZoom(null)}><RotateCcw size={11} />Reset zoom</button> : null}
           {notesKey ? (
-            <button className="btn sm ghost" aria-pressed={leveling} onClick={() => { setLeveling((v) => !v); setNoting(false); }} style={leveling ? { color: "var(--accent)" } : undefined} title="Draw a horizontal level">
+            <button className="btn sm ghost" aria-pressed={tool === "trend"} onClick={() => { setTool((v) => (v === "trend" ? null : "trend")); setAnchor(null); setLeveling(false); setNoting(false); }} style={tool === "trend" ? { color: "var(--accent)" } : undefined} title="Trend line: click two points">
+              <TrendingUp size={12} />{tool === "trend" ? (anchor ? "Click end" : "Click start") : "Trend"}
+            </button>
+          ) : null}
+          {notesKey ? (
+            <button className="btn sm ghost" aria-pressed={tool === "rect"} onClick={() => { setTool((v) => (v === "rect" ? null : "rect")); setAnchor(null); setLeveling(false); setNoting(false); }} style={tool === "rect" ? { color: "var(--accent)" } : undefined} title="Rectangle: click two corners">
+              <RectangleHorizontal size={12} />{tool === "rect" ? (anchor ? "Click corner" : "Click start") : "Box"}
+            </button>
+          ) : null}
+          <button className="btn sm ghost" aria-label="Copy chart as image" title="Copy chart as PNG" onClick={async () => { if (svgRef.current && await copyPng(svgRef.current, "chart")) { setCopied(true); setTimeout(() => setCopied(false), 1500); } }}>
+            <Camera size={12} />{copied ? "Copied" : ""}
+          </button>
+          {notesKey ? (
+            <button className="btn sm ghost" aria-pressed={leveling} onClick={() => { setLeveling((v) => !v); setNoting(false); setTool(null); setAnchor(null); }} style={leveling ? { color: "var(--accent)" } : undefined} title="Draw a horizontal level">
               <Minus size={12} />{leveling ? "Click a level" : "Level"}
             </button>
           ) : null}
@@ -197,7 +245,7 @@ function TimeSeriesImpl({
       {width > 0 ? (
         <Svg ref={svgRef} width={width} height={height} label={`${series.map((s) => s.label).join(", ")} over time`}
           onPointerMove={onMove} onPointerLeave={() => { setHover(null, null); }} onPointerDown={onDown} onPointerUp={onUp}
-          onDoubleClick={() => setZoom(null)} style={{ cursor: noting || leveling ? "copy" : "crosshair" }}>
+          onDoubleClick={() => setZoom(null)} style={{ cursor: noting || leveling || tool ? "copy" : "crosshair" }}>
           <defs>
             <clipPath id={`${uid}-clip`}><rect x={x0} y={M.top - 2} width={x1 - x0} height={plotH + 4} /></clipPath>
             {paths.filter((p) => p.fill).map((p) => (
@@ -234,12 +282,18 @@ function TimeSeriesImpl({
 
           <g clipPath={`url(#${uid}-clip)`}>
             {bandPath ? <path d={bandPath} fill={band?.color ?? "var(--band)"} /> : null}
-            {notes.filter((n) => n.y !== undefined).map((n) => (
+            {notes.filter((n) => n.y !== undefined && !n.kind).map((n) => (
               <g key={n.id}>
                 <line x1={x0} x2={x1} y1={crisp(ys(n.y!))} y2={crisp(ys(n.y!))} stroke="var(--accent)" strokeOpacity={0.9} />
                 <text x={x1 - 4} y={ys(n.y!) - 4} textAnchor="end" fontSize={10.5} fill="var(--accent)" style={{ fontFamily: "var(--mono)" }}>{format(n.y!)}</text>
               </g>
             ))}
+            {[...notes.filter((n) => n.kind && n.t1 !== undefined), ...(anchor && cursor && tool ? [{ id: "draft", kind: tool, t1: anchor.t, y1: anchor.y, t2: cursor.t, y2: cursor.y, t: 0, text: "" }] : [])].map((n) => {
+              const ax = xs(n.t1!), ay = ys(n.y1!), bx = xs(n.t2!), by = ys(n.y2!);
+              return n.kind === "rect"
+                ? <rect key={n.id} x={Math.min(ax, bx)} y={Math.min(ay, by)} width={Math.abs(bx - ax)} height={Math.abs(by - ay)} fill="var(--accent)" fillOpacity={0.1} stroke="var(--accent)" strokeOpacity={0.8} />
+                : <line key={n.id} x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--accent)" strokeWidth={1.5} strokeOpacity={0.9} />;
+            })}
             {refLines.map((l, i) => (
               <g key={i}>
                 <line x1={x0} x2={x1} y1={crisp(ys(l.y))} y2={crisp(ys(l.y))} stroke={l.color ?? "var(--text-3)"} strokeDasharray={l.dash === false ? undefined : "4 4"} strokeOpacity={0.8} />
@@ -289,7 +343,7 @@ function TimeSeriesImpl({
             );
           })}
 
-          {notes.filter((n) => n.y === undefined && n.t >= tDomain[0] && n.t <= tDomain[1]).map((n) => {
+          {notes.filter((n) => n.y === undefined && !n.kind && n.t >= tDomain[0] && n.t <= tDomain[1]).map((n) => {
             const nx = xs(n.t);
             const row = rows[nearest(times, n.t)];
             const v = row ? num(row.r[series[0].key]) : null;
@@ -367,7 +421,7 @@ function TimeSeriesImpl({
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
           {notes.map((n) => (
             <span key={n.id} className="chip accent" style={{ height: 24 }}>
-              <span className="num" style={{ fontSize: 11 }}>{n.y !== undefined ? `Level ${format(n.y)}` : fmtDate(n.t)}</span>{n.text}
+              <span className="num" style={{ fontSize: 11 }}>{n.kind ? (n.kind === "rect" ? "Box" : "Trend") : n.y !== undefined ? `Level ${format(n.y)}` : fmtDate(n.t)}</span>{n.text}
               <button aria-label="Delete note" onClick={() => removeNote(notesKey, n.id)} style={{ display: "grid", placeItems: "center" }}><X size={11} /></button>
             </span>
           ))}
