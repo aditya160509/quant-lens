@@ -76,7 +76,7 @@ const DIM_LABEL: Record<string, string> = { significance: "Pricing", factor_zoo:
 
 const GRADE_TONE: Record<string, string> = { A: "var(--up)", B: "var(--up)", C: "var(--warn)", D: "var(--down)", F: "var(--down)" };
 
-function Card({ r, jobId }: { r: ReportCard; jobId: string }) {
+export function Card({ r, jobId }: { r: ReportCard; jobId: string }) {
   const [shared, setShared] = useState<string | null>(null);
   return (
     <div style={{ display: "grid", gap: 12, marginTop: 14 }}>

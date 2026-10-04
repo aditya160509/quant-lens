@@ -5,6 +5,8 @@ import { API_BASE_URL } from "@/lib/apiBase";
 import { layoutFor, verdictFor } from "./layouts";
 import { metaFor } from "./catalog";
 import { OutputCard } from "./OutputCard";
+import { Card } from "./ReportCard";
+import type { ReportCard as ReportCardT } from "./api";
 import { out } from "./format";
 import type { FeatureResult, FeatureSpec } from "./types";
 
@@ -20,6 +22,17 @@ export function SharedView({ token, features }: { token: string; features: Featu
     retry: false,
   });
   const feature = q.data ? features.find((f) => f.id === q.data.feature_id) : undefined;
+  if (q.data && q.data.feature_id === "report_card") {
+    return (
+      <div className="island" style={{ overflowY: "auto" }}>
+        <div style={{ padding: "22px 22px 30px" }}>
+          <div style={{ fontSize: 11.5, color: "var(--text-4)" }}>Shared report card · read-only · {new Date(q.data.created_at).toLocaleString()}</div>
+          <Card r={q.data.result as unknown as ReportCardT} jobId={token} />
+        </div>
+      </div>
+    );
+  }
+  if (q.data && !feature) return <div className="island" style={{ padding: 24, color: "var(--text-3)" }}>This shared run is a {q.data.feature_id.replace(/_/g, " ")}, which has no read-only view yet.</div>;
   if (q.isError) return <div className="island" style={{ padding: 24, color: "var(--text-3)" }}>{(q.error as Error).message}</div>;
   if (!q.data || !feature) return <div className="island" style={{ padding: 24, color: "var(--text-3)" }}>Loading shared run…</div>;
   const result = q.data.result;

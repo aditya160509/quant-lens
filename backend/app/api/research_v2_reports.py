@@ -16,6 +16,7 @@ from app.api import research_v2 as core_api
 from app.services.research_v2 import reports, universes
 from app.services.research_v2.core.data_loader import UnknownSymbolsError
 from app.services.research_v2.worker import run_special
+from app.services.research_v2.store import get_store
 
 router = APIRouter(prefix="/labs/research/v2", tags=["research-v2-reports"])
 
@@ -46,6 +47,8 @@ def _execute(job_id: str, kind: str, payload: Dict[str, Any], args: Dict[str, An
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(result, default=str))
     tmp.replace(path)
+    # Persist like feature jobs so report cards, screens and validations survive restarts and can be shared.
+    get_store().save_job(job_id, kind, payload, "completed", 1.0, result, project_id=payload.get("project_id"))
     return {"result_file": path.name, "bytes": path.stat().st_size}
 
 
@@ -53,6 +56,7 @@ def _submit(kind: str, payload: Dict[str, Any], args: Dict[str, Any]) -> Dict[st
     payload = core_api._clean(payload)
     job = core_api.JOBS.create(job_type=f"research_v2_{kind}", params={"kind": kind, "payload": payload, "args": args})
     if job["status"] == "queued":
+        get_store().save_job(job["job_id"], kind, payload, job["status"], project_id=payload.get("project_id"))
         core_api.JOBS.submit(job["job_id"], _execute, job["job_id"], kind, payload, args)
     return {"job_id": job["job_id"], "status": job["status"], "kind": kind}
 
