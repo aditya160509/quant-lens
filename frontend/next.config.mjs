@@ -72,6 +72,8 @@ const nextConfig = {
   // The old Research V2 UI was replaced by the /research workspace.
   async redirects() {
     return [
+      { source: '/labs/research', destination: '/research', permanent: false },
+      { source: '/labs/research/:path*', destination: '/research', permanent: false },
       { source: '/labs/research-v2', destination: '/research', permanent: false },
       { source: '/labs/research-v2/:path*', destination: '/research', permanent: false },
     ];
