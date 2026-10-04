@@ -45,7 +45,9 @@ def get_feature(feature_id: int | str) -> ResearchFeature:
 
 
 def feature_manifest() -> list[dict[str, Any]]:
-    return [{"id": f.id, "name": f.name, "description": f.description, "inputs": f.inputs, "outputs": f.outputs} for f in features().values()]
+    from .features.inputs import annotate
+
+    return [{"id": f.id, "name": f.name, "description": f.description, "inputs": annotate(f.id, f.inputs), "outputs": f.outputs} for f in features().values()]
 
 
 def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) -> dict[str, Any]:

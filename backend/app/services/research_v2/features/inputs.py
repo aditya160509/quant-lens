@@ -49,3 +49,70 @@ SPEC = [
 ]
 
 BASE = UNIVERSE + SIGNAL + SPEC
+
+
+# ---------------------------------------------------------------------------
+# Input metadata served by GET /features: required, depends_on, conflicts_with,
+# unit, level and citation on every input, so the frontend stops hard-coding rules.
+
+QUICK_KEYS = {"universe", "max_symbols", "lookback_days", "signal", "signal_csv_path", "forward_months", "weighting", "identification_design", "treated_unit", "treatment_date", "event_csv_path", "discovery_date", "publication_date", "conditioning_variable", "mode", "sort_portfolios"}
+EXPERT_KEYS = {"nw_lag", "se_type", "fixed_effects", "bootstrap_replications", "permutation_replications", "max_specifications", "weighting_philosophy", "kernel", "polynomial_order", "bandwidth", "rd_design", "iv_estimator", "iv_controls", "cluster", "cs_control_group", "matches_per_treated", "anticipation_months", "estimation_window", "contamination_days", "double_sort_type", "rolling_window", "conformal_alpha", "universe_filters", "signal_transform"}
+UNIT_BY_KEY = {"lookback_days": "days", "forward_months": "months", "event_window_months": "months", "rolling_window": "months", "pre_period_months": "months", "post_period_months": "months", "anticipation_months": "months", "estimation_window": "days", "contamination_days": "days", "nw_lag": "months", "max_symbols": "tickers", "donor_limit": "tickers", "event_quantile": "percentile", "spread_bps": "bps", "commission_bps": "bps", "embargo_days": "days", "cutoff": "USD bn or rank", "min_price": "USD", "min_dollar_volume": "USD", "min_listing_months": "months", "conformal_alpha": "probability"}
+CITATIONS = {
+    "nw_lag": "Newey and West (1987)",
+    "se_type": "Petersen (2009); Driscoll and Kraay (1998)",
+    "sort_portfolios": "Fama and French (1993)",
+    "factor_benchmark": "Fama and French (2015); Carhart (1997)",
+    "double_sort_type": "Fama and French (1993)",
+    "bandwidth": "Calonico, Cattaneo and Titiunik (2014)",
+    "kernel": "Calonico, Cattaneo and Titiunik (2014)",
+    "cs_control_group": "Callaway and Sant'Anna (2021)",
+    "universe_filters": "Hou, Xue and Zhang (2020)",
+    "discovery_date": "McLean and Pontiff (2016)",
+    "weighting": "Hou, Xue and Zhang (2020)",
+    "iv_estimator": "Stock and Yogo (2005)",
+    "scm_variant": "Abadie, Diamond and Hainmueller (2010)",
+    "conformal_alpha": "Chernozhukov, Wuthrich and Zhu (2021)",
+    "permutation_replications": "Harvey, Liu and Zhu (2016)",
+    "max_specifications": "Simonsohn, Simmons and Nelson (2020)",
+}
+# Fields hidden unless the design is selected (feature 07), by group.
+F07_GROUP_DESIGNS = {"DiD": ["did", "all"], "Event study": ["event_study", "all"], "Regression discontinuity": ["rdd", "all"], "Instrumental variables": ["iv", "all"]}
+F07_UNGROUPED = {"treatment_date": ["did", "event_study", "all"], "treated_unit": ["did", "event_study", "all"], "event_csv_path": ["did", "event_study", "all"], "outcome_variable": ["did", "all"]}
+CONFLICTS = {"signal_csv_path": ["signal"], "treated_unit": ["event_csv_path"], "event_csv_path": ["treated_unit"], "donor_list": [], "instrument_csv_path": ["instrument"]}
+DEPENDS_OTHER = {
+    "instrument_csv_path": {"field": "instrument", "values": ["uploaded"]},
+    "donor_list": {"field": "donor_pool", "values": ["user_list"]},
+    "custom_split_date": {"field": "dimensions", "values": ["custom_split"]},
+    "second_signal": {"field": "double_sort_type", "values": ["independent", "sequential"]},
+    "publication_date": {"field": "discovery_date", "values": ["*"]},
+}
+
+
+def annotate(feature_id: str, inputs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Copy of ``inputs`` with the full metadata contract applied for ``feature_id``."""
+
+    out = []
+    for item in inputs:
+        key = item["key"]
+        meta: dict[str, Any] = {"required": False, "depends_on": None, "conflicts_with": list(CONFLICTS.get(key, [])), "unit": UNIT_BY_KEY.get(key, ""), "level": "quick" if key in QUICK_KEYS else "expert" if key in EXPERT_KEYS else "standard"}
+        if key in CITATIONS:
+            meta["citation"] = CITATIONS[key]
+        if key in DEPENDS_OTHER:
+            meta["depends_on"] = DEPENDS_OTHER[key]
+        if feature_id == "07":
+            designs = F07_UNGROUPED.get(key) or F07_GROUP_DESIGNS.get(item.get("group", ""))
+            if designs:
+                meta["depends_on"] = {"field": "identification_design", "values": designs}
+            if key in {"treated_unit", "treatment_date"}:
+                meta.update(required=True, required_unless="event_csv_path")
+            if key == "cutoff":
+                meta["required"] = True
+        if feature_id == "08" and key == "discovery_date":
+            meta.update(required=True, level="quick")
+        if feature_id == "09" and key in {"treated_unit", "treatment_date"}:
+            meta.update(required=True, required_unless="event_csv_path", level="quick")
+        if feature_id == "09" and key == "donor_pool":
+            meta["level"] = "standard"
+        out.append({**item, **{k: v for k, v in meta.items() if k not in item or k in {"required", "depends_on", "conflicts_with", "unit", "level"}}})
+    return out
