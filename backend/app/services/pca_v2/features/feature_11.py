@@ -37,6 +37,7 @@ def run(payload=None):
         ],
         charts={
             "illiquidity_surface_heatmap": matrix_records(liq["amihud_panel"], limit=200),
+            "mp_selected_liquidity_factors": compact_records(liq["liquidity_factors"].rename_axis("date").reset_index(), limit=400),
             "latent_liquidity_factor": compact_records(liq["latent_liquidity"].rename_axis("date").reset_index(), limit=400),
             "liquidity_beta_ranking": liq["liquidity_betas"],
             "position_sizing_liquidity_overlay": liq["liquidation"],
@@ -55,6 +56,15 @@ def run(payload=None):
             "implemented_outputs": 9,
             "illiquidity_measure": illiq_measure,
             "newey_west_lags": 3,
+            "liquidity_k": liq["liquidity_k"],
+            "liquidity_mp": liq["liquidity_mp"],
+            "liquidity_factor_method": liq["liquidity_factor_method"],
+            "augmented_risk_source": "orthogonal liquidity regression on observed sample; not added to existing idiosyncratic risk",
             "quant_unwind_threshold": quant_thresh,
         }),
     )
+
+
+from .inputs import inputs_for
+INPUTS = inputs_for("11")
+OUTPUTS = [{"key":"mp_selected_liquidity_factors","source":"charts","label":"MP selected liquidity factors","render":"line","primary":False},{'key': 'illiquidity_surface_heatmap', 'source': 'charts', 'label': 'Illiquidity Surface Heatmap', 'render': 'heatmap', 'primary': True}, {'key': 'latent_liquidity_factor', 'source': 'charts', 'label': 'Latent Liquidity Factor', 'render': 'bar', 'primary': False}, {'key': 'liquidity_beta_ranking', 'source': 'charts', 'label': 'Liquidity Beta Ranking', 'render': 'bar', 'primary': False}, {'key': 'position_sizing_liquidity_overlay', 'source': 'charts', 'label': 'Position Sizing Liquidity Overlay', 'render': 'bar', 'primary': False}, {'key': 'lavar_decomposition', 'source': 'charts', 'label': 'Lavar Decomposition', 'render': 'bar', 'primary': False}, {'key': 'illiquidity_driven_correlation_heatmap', 'source': 'charts', 'label': 'Illiquidity Driven Correlation Heatmap', 'render': 'heatmap', 'primary': False}, {'key': 'augmented_risk_decomposition', 'source': 'charts', 'label': 'Augmented Risk Decomposition', 'render': 'bar', 'primary': False}, {'key': 'liquidity_risk_scorecard', 'source': 'tables', 'label': 'Liquidity Risk Scorecard', 'render': 'table', 'primary': False}, {'key': 'liquidation_cost_table', 'source': 'tables', 'label': 'Liquidation Cost Table', 'render': 'table', 'primary': False}, {'key': 'quant_unwind_monitor', 'source': 'tables', 'label': 'Quant Unwind Monitor', 'render': 'table', 'primary': False}, {'key': 'illiquidity_augmented_risk_table', 'source': 'tables', 'label': 'Illiquidity Augmented Risk Table', 'render': 'table', 'primary': False}, {'key': 'illiquidity_measure_metadata', 'source': 'tables', 'label': 'Illiquidity Measure Metadata', 'render': 'table', 'primary': False}]

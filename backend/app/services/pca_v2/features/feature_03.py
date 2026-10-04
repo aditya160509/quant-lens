@@ -27,18 +27,11 @@ def run(payload=None):
 
     # Rolling per-factor decomposition (stacked attribution, not just rolling vol)
     roll_window = int(payload.get("rolling_decomp_window") or 21)
-    try:
-        roll_decomp = rolling_risk_decomposition(model, payload, window=roll_window)
-        roll_records = compact_records(
-            roll_decomp.rename(columns={"date": "date"}) if "date" in roll_decomp.columns else roll_decomp.reset_index(names="date"),
-            limit=300,
-        )
-    except Exception:
-        # Fallback: simple rolling vol
-        returns = risk["portfolio_returns"]
-        rolling = returns.rolling(21).std().mul(252 ** 0.5).reset_index()
-        rolling.columns = ["date", "portfolio_vol"]
-        roll_records = compact_records(rolling, limit=300)
+    roll_decomp = rolling_risk_decomposition(model, payload, window=roll_window)
+    roll_records = compact_records(
+        roll_decomp.rename(columns={"date": "date"}) if "date" in roll_decomp.columns else roll_decomp.reset_index(names="date"),
+        limit=300,
+    )
 
     system_pct = sum(r["pct_total_variance"] for r in risk["factor_rows"] if r["component"] != "Idiosyncratic")
     idio_pct = 100 - system_pct
@@ -106,3 +99,8 @@ def _benchmark_pc_correlations(model, payload):
     benchmark_returns = model["returns"].reindex(columns=symbols).fillna(0).to_numpy(dtype=float) @ benchmark_weights
     factors = factor_returns(model, model["k"])
     return [{"component": col, "correlation": float(pd.Series(factors[col].to_numpy()).corr(pd.Series(benchmark_returns)))} for col in factors.columns]
+
+
+from .inputs import inputs_for
+INPUTS = inputs_for("03")
+OUTPUTS = [{'key': 'risk_attribution_stacked_bar', 'source': 'charts', 'label': 'Risk Attribution Stacked Bar', 'render': 'bar', 'primary': True}, {'key': 'factor_var_waterfall', 'source': 'charts', 'label': 'Factor Var Waterfall', 'render': 'bar', 'primary': False}, {'key': 'cvar_decomposition', 'source': 'charts', 'label': 'Cvar Decomposition', 'render': 'bar', 'primary': False}, {'key': 'systematic_vs_idiosyncratic_pie', 'source': 'charts', 'label': 'Systematic Vs Idiosyncratic Pie', 'render': 'bar', 'primary': False}, {'key': 'rolling_risk_decomposition', 'source': 'charts', 'label': 'Rolling Risk Decomposition', 'render': 'line', 'primary': False}, {'key': 'benchmark_correlation_by_pc', 'source': 'charts', 'label': 'Benchmark Correlation By Pc', 'render': 'bar', 'primary': False}, {'key': 'tracking_error_by_factor', 'source': 'charts', 'label': 'Tracking Error By Factor', 'render': 'bar', 'primary': False}, {'key': 'marginal_risk_contribution', 'source': 'tables', 'label': 'Marginal Risk Contribution', 'render': 'table', 'primary': False}, {'key': 'active_risk_attribution', 'source': 'tables', 'label': 'Active Risk Attribution', 'render': 'table', 'primary': False}, {'key': 'var_cvar_table', 'source': 'tables', 'label': 'Var Cvar Table', 'render': 'table', 'primary': False}, {'key': 'active_risk_attribution_table', 'source': 'tables', 'label': 'Active Risk Attribution Table', 'render': 'table', 'primary': False}]

@@ -14,15 +14,17 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from app.services.pca_v2.core.pca_math import mp_density
 from app.services.pca_v2.core.analytics import blend_covariance, compact_records, matrix_records, metadata, response, rmt_model
 
 
 def run(payload=None):
     payload = payload or {}
     model = rmt_model(payload)
+    model = {**model, "cov": model["pca_cov"], "raw_cov": model["pca_raw_cov"], "cleaned_cov": model["pca_cleaned_cov"]}
     evals = model["eigenvalues"]
     total = max(float(evals.sum()), 1e-12)
-    condition_raw = float(evals[0] / max(evals[-1], 1e-12))
+    condition_raw = float(model["raw_eigenvalues"][0] / max(model["raw_eigenvalues"][-1], 1e-12))
     clean_evals = model["cleaned_eigenvalues"]
     condition_clean = float(clean_evals[0] / max(clean_evals[-1], 1e-12))
     spectrum = pd.DataFrame(
@@ -45,7 +47,7 @@ def run(payload=None):
     blended_cov = blend_covariance(model, blend_gamma)
     fitted_sigma2 = model["cov_meta"].get("fitted_sigma2")
     summary = [
-        {"label": "Signal PCs", "value": model["k"], "unit": "count", "detail": "Selected by RMT unless overridden"},
+        {"label": "Retained PCs", "value": model["k"], "unit": "count", "detail": "Selected by RMT unless overridden"},
         {"label": "MP Lambda Max", "value": model["mp"]["lambda_max"], "unit": "eigenvalue"},
         {"label": "Fitted σ²", "value": fitted_sigma2, "unit": "noise_var", "detail": "Iterative moment-matching"},
         {"label": "Raw Condition", "value": condition_raw, "unit": "ratio"},
@@ -57,6 +59,7 @@ def run(payload=None):
         "01",
         summary,
         charts={
+            "mp_density": mp_density(model["mp"]),
             "eigenvalue_spectrum_mp": compact_records(spectrum, limit=300),
             "scree_multi_cutoff": compact_records(spectrum, limit=300),
             "raw_covariance_heatmap": matrix_records(pd.DataFrame(model["cov"], index=model["symbols"], columns=model["symbols"]), limit=80),
@@ -78,8 +81,13 @@ def run(payload=None):
             "outlier_filter_z_threshold": payload.get("outlier_z_threshold", 4.0),
             "condition_number_raw": condition_raw,
             "condition_number_cleaned": condition_clean,
-            "q_ratio": model["mp"].get("q"),
+            "q_ratio": model["mp"].get("q_ratio"),
             "lambda_max": model["mp"].get("lambda_max"),
             "retained_eigenvectors": model["eigenvectors"][:, :model["k"]].tolist(),
         }),
     )
+
+
+from .inputs import inputs_for
+INPUTS = inputs_for("01")
+OUTPUTS = [{'key': 'mp_density', 'source': 'charts', 'label': 'Mp Density', 'render': 'mpDensity', 'primary': True}, {'key': 'eigenvalue_spectrum_mp', 'source': 'charts', 'label': 'Eigenvalue Spectrum Mp', 'render': 'bar', 'primary': False}, {'key': 'scree_multi_cutoff', 'source': 'charts', 'label': 'Scree Multi Cutoff', 'render': 'bar', 'primary': False}, {'key': 'raw_covariance_heatmap', 'source': 'charts', 'label': 'Raw Covariance Heatmap', 'render': 'heatmap', 'primary': False}, {'key': 'cleaned_covariance_heatmap', 'source': 'charts', 'label': 'Cleaned Covariance Heatmap', 'render': 'heatmap', 'primary': False}, {'key': 'blended_covariance_heatmap', 'source': 'charts', 'label': 'Blended Covariance Heatmap', 'render': 'heatmap', 'primary': False}, {'key': 'covariance_difference_heatmap', 'source': 'charts', 'label': 'Covariance Difference Heatmap', 'render': 'heatmap', 'primary': False}, {'key': 'condition_number_panel', 'source': 'charts', 'label': 'Condition Number Panel', 'render': 'bar', 'primary': False}, {'key': 'signal_vs_noise_eigenvalue_table', 'source': 'tables', 'label': 'Signal Vs Noise Eigenvalue Table', 'render': 'table', 'primary': False}, {'key': 'condition_number_table', 'source': 'tables', 'label': 'Condition Number Table', 'render': 'table', 'primary': False}, {'key': 'ledoit_wolf_shrinkage_diagnostic', 'source': 'tables', 'label': 'Ledoit Wolf Shrinkage Diagnostic', 'render': 'table', 'primary': False}, {'key': 'audit_trail', 'source': 'tables', 'label': 'Audit Trail', 'render': 'table', 'primary': False}]

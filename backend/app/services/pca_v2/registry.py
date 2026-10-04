@@ -1,7 +1,7 @@
 """Registry for PCA V2 feature modules.
 
-No API routes are wired here. The registry exists so future routers can import a
-single stable entry point once the backend is ready to expose PCA V2.
+Feature imports are deferred until discovery or execution. The mounted API and
+Python callers share the same declarations and validation.
 """
 
 from __future__ import annotations
@@ -51,6 +51,58 @@ def get_runner(feature_id: str | int) -> Callable[[dict[str, Any] | None], dict[
     return module.run
 
 
-def run_feature(feature_id: str | int, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    return get_runner(feature_id)(payload or {})
+def validate_payload(feature_id, payload):
+    import json
+    import math
+    from .features.inputs import inputs_for
+    if not isinstance(payload, dict):
+        raise TypeError("payload must be an object")
+    payload = dict(payload)
+    for field in inputs_for(normalize_feature_id(feature_id)):
+        key = field["key"]
+        if key not in payload or payload[key] is None or payload[key] == "":
+            continue
+        value = payload[key]
+        if field["type"] == "number":
+            if isinstance(value, bool):
+                raise ValueError(f"{key} must be numeric")
+            number = float(value)
+            if not math.isfinite(number) or (field.get("min") is not None and number < field["min"]) or (field.get("max") is not None and number > field["max"]):
+                raise ValueError(f"{key} outside supported range")
+            payload[key] = number
+        elif field["type"] == "json" and isinstance(value, str):
+            try:
+                payload[key] = json.loads(value)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{key} must contain valid JSON") from exc
+        elif field["type"] == "select" and value not in field["options"]:
+            raise ValueError(f"Unsupported {key}: {value}")
+        elif field["type"] == "boolean" and not isinstance(value, bool):
+            raise ValueError(f"{key} must be boolean")
+    return payload
 
+
+def run_feature(feature_id: str | int, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    feature = get_pca_v2_feature(feature_id)
+    payload = validate_payload(feature.id, payload or {})
+    from .core.uploads import resolve_payload
+    result = get_runner(feature.id)(resolve_payload(payload))
+    module = importlib.import_module(f"app.services.pca_v2.features.{feature.module}")
+    missing = []
+    for output in module.OUTPUTS:
+        source = result.get(output["source"], {})
+        if output["key"] not in source:
+            raise RuntimeError(f"Missing declared output: {output['key']}")
+        if source[output["key"]] is None or source[output["key"]] == [] or source[output["key"]] == {}:
+            missing.append({"key":output["key"], "source":output["source"], "reason":"Not produced: option not enabled or insufficient eligible observations; see study metadata."})
+    result.setdefault("meta", {})["missing_outputs"] = missing
+    return result
+
+
+def feature_manifest():
+    features = []
+    for feature in PCA_V2_FEATURES.values():
+        module = importlib.import_module(f"app.services.pca_v2.features.{feature.module}")
+        features.append({"id": feature.id, "title": feature.title, "status": feature.status,
+                         "inputs": module.INPUTS, "outputs": module.OUTPUTS})
+    return features

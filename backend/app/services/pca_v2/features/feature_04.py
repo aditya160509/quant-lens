@@ -59,7 +59,7 @@ def run(payload=None):
     decay_rows = signal_decay_analysis(model, payload) if run_decay else []
     backtest = residual_ou_backtest(model, payload)
     calendar_signals = ou_signal_table(model, {**payload, "volume_time": False})
-    volume_signals = ou_signal_table(model, {**payload, "volume_time": True})
+    volume_signals = ou_signal_table(model, {**payload, "volume_time": True}) if use_vt else pd.DataFrame()
 
     return response(
         "04",
@@ -94,6 +94,7 @@ def run(payload=None):
         meta=metadata(model, {
             "implemented_outputs": 13,
             "volume_time_adjustment": use_vt,
+            "volume_comparison_status": "computed" if use_vt else "not_requested",
             "ou_method": str(payload.get("ou_method", "ols")).upper(),
             "mle_tickers_estimated": len(mle_rows),
             "signal_decay_computed": run_decay,
@@ -107,3 +108,8 @@ def _volume_time_comparison(calendar, volume):
     merged = calendar[["ticker", "residual_z"]].merge(volume[["ticker", "residual_z"]], on="ticker", suffixes=("_calendar", "_volume"))
     merged["difference"] = merged["residual_z_volume"] - merged["residual_z_calendar"]
     return merged.to_dict("records")
+
+
+from .inputs import inputs_for
+INPUTS = inputs_for("04")
+OUTPUTS = [{'key': 'residual_zscore_distribution', 'source': 'charts', 'label': 'Residual Zscore Distribution', 'render': 'bar', 'primary': True}, {'key': 'residual_spread_timeseries', 'source': 'charts', 'label': 'Residual Spread Timeseries', 'render': 'line', 'primary': False}, {'key': 'half_life_vs_zscore', 'source': 'charts', 'label': 'Half Life Vs Zscore', 'render': 'bar', 'primary': False}, {'key': 'sector_signal_balance', 'source': 'charts', 'label': 'Sector Signal Balance', 'render': 'bar', 'primary': False}, {'key': 'signal_decay_curve', 'source': 'charts', 'label': 'Signal Decay Curve', 'render': 'bar', 'primary': False}, {'key': 'residual_ou_backtest_equity', 'source': 'charts', 'label': 'Residual Ou Backtest Equity', 'render': 'line', 'primary': False}, {'key': 'residual_correlation_heatmap', 'source': 'charts', 'label': 'Residual Correlation Heatmap', 'render': 'heatmap', 'primary': False}, {'key': 'ou_half_life_distribution', 'source': 'charts', 'label': 'Ou Half Life Distribution', 'render': 'bar', 'primary': False}, {'key': 'ou_kappa_distribution', 'source': 'charts', 'label': 'Ou Kappa Distribution', 'render': 'bar', 'primary': False}, {'key': 'ou_sigma_eq_distribution', 'source': 'charts', 'label': 'Ou Sigma Eq Distribution', 'render': 'bar', 'primary': False}, {'key': 'volume_vs_calendar_time', 'source': 'charts', 'label': 'Volume Vs Calendar Time', 'render': 'bar', 'primary': False}, {'key': 'ranked_signal_table', 'source': 'tables', 'label': 'Ranked Signal Table', 'render': 'table', 'primary': False}, {'key': 'ou_parameter_table', 'source': 'tables', 'label': 'Ou Parameter Table', 'render': 'table', 'primary': False}, {'key': 'mle_parameter_table', 'source': 'tables', 'label': 'Mle Parameter Table', 'render': 'table', 'primary': False}, {'key': 'trade_list', 'source': 'tables', 'label': 'Trade List', 'render': 'table', 'primary': False}, {'key': 'signal_decay_table', 'source': 'tables', 'label': 'Signal Decay Table', 'render': 'table', 'primary': False}, {'key': 'residual_ou_backtest_stats', 'source': 'tables', 'label': 'Residual Ou Backtest Stats', 'render': 'table', 'primary': False}]

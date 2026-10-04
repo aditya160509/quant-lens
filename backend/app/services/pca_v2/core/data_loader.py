@@ -49,6 +49,28 @@ CRYPTO_SYMBOLS = [
 EQUITY_PROXY_SYMBOLS = ["SPY", "QQQ", "IWM", "EFA", "EEM", "TLT", "HYG", "LQD", "GLD", "USO", "AAPL", "MSFT", "NVDA", "AMZN"]
 
 
+class UnknownSymbolsError(ValueError):
+    """Requested symbols absent from the selected local dataset."""
+
+    def __init__(self, symbols):
+        self.symbols = sorted(set(symbols))
+        super().__init__("Unknown symbols: " + ", ".join(self.symbols))
+
+
+def complete_returns(prices, rows):
+    """Observed adjacent-price log returns; complete dates, never synthetic zeros."""
+    returns = np.log(prices / prices.shift(1)).replace([np.inf, -np.inf], np.nan)
+    returns = returns.dropna(how="all").tail(rows)
+    coverage = {str(c): float(returns[c].notna().mean()) for c in returns}
+    before = len(returns)
+    result = returns.dropna(how="any")
+    result.attrs["coverage"] = coverage
+    result.attrs["rows_before_complete_case"] = before
+    result.attrs["rows_dropped_missing"] = before - len(result)
+    result.attrs["missing_data_policy"] = "complete_case_no_price_fill"
+    return result
+
+
 def normalize_symbol(symbol: object) -> str:
     return str(symbol).strip().upper().replace(".", "_").replace("-", "_")
 
@@ -205,11 +227,8 @@ def cross_asset_returns_matrix(symbols: Iterable[str], lookback_days: int = 756,
     if ohlcv.empty:
         return pd.DataFrame()
     prices = ohlcv.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index()
-    prices = prices.ffill().dropna(axis=1, thresh=max(30, int(len(prices) * min_coverage)))
-    rets = np.log(prices / prices.shift(1)).replace([np.inf, -np.inf], np.nan)
-    rets = rets.dropna(how="all").tail(lookback_rows(lookback_days, "daily"))
-    rets = rets.dropna(axis=1, thresh=max(30, int(len(rets) * min_coverage))).fillna(0.0)
-    return rets
+    prices = prices.dropna(axis=1, how="all")
+    return complete_returns(prices, lookback_rows(lookback_days, "daily"))
 
 
 @lru_cache(maxsize=1)
@@ -262,10 +281,10 @@ def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: in
     raw = payload.get("tickers") or payload.get("symbols") or payload.get("assets") or payload.get("universe")
     raw_label = str(raw).strip().lower() if raw is not None else ""
     frequency = normalize_frequency(payload.get("sampling_frequency") or payload.get("frequency") or "daily")
-    source_symbols = available_hourly_symbols if frequency == "hourly" and available_hourly_symbols() else available_symbols
+    source_symbols = available_hourly_symbols if frequency == "hourly" else available_symbols
     if raw_label in {"all", "full", "master", "master_universe", "market_universe", "whole"}:
         requested = source_symbols()
-    elif raw is None or raw_label in {"sp500", "s&p 500", "russell1000", "russell 1000", "default"}:
+    elif raw is None or raw_label == "default":
         requested = source_symbols(default_limit)
     elif isinstance(raw, str):
         requested = [normalize_symbol(x) for x in raw.replace(";", ",").split(",") if x.strip()]
@@ -274,24 +293,29 @@ def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: in
     else:
         requested = [normalize_symbol(raw)]
     existing = set(source_symbols())
-    filtered = [s for s in requested if s in existing]
-    if not filtered:
-        filtered = source_symbols(default_limit)
+    missing = [s for s in requested if s not in existing]
+    if missing:
+        raise UnknownSymbolsError(missing)
+    filtered = list(dict.fromkeys(requested))
     max_symbols = int(payload.get("max_symbols") or payload.get("max_tickers") or max_symbols)
-    return filtered[: max(3, min(max_symbols, 5000))]
+    limit = max(3,min(max_symbols,5000))
+    if raw is not None and raw_label not in {"default","all","full","master","master_universe","market_universe","whole"} and len(filtered)>limit:
+        raise ValueError(f"Requested {len(filtered)} symbols exceeds max_symbols={limit}; increase the explicit limit")
+    return filtered[:limit]
 
 
 def ohlcv_for_symbols(symbols: list[str] | tuple[str, ...], lookback_days: int | None = None) -> pd.DataFrame:
     normalized = {normalize_symbol(s) for s in symbols if str(s).strip()}
     df = load_market_ohlcv()
     out = df[df["Ticker"].map(normalize_symbol).isin(normalized)].copy()
+    out["Ticker"] = out["Ticker"].map(normalize_symbol)
     if lookback_days and not out.empty:
         cutoff = out["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)
         out = out[out["Date"] >= cutoff]
     return out.sort_values(["Ticker", "Date"])
 
 
-def returns_matrix(symbols: list[str], lookback_days: int = 504, frequency: str = "daily") -> pd.DataFrame:
+def returns_matrix(symbols: list[str], lookback_days: int = 504, frequency: str = "daily", end_date=None, start_date=None) -> pd.DataFrame:
     frequency = normalize_frequency(frequency)
     normalized = {normalize_symbol(s) for s in symbols if str(s).strip()}
     if frequency == "hourly":
@@ -299,23 +323,23 @@ def returns_matrix(symbols: list[str], lookback_days: int = 504, frequency: str 
         if ohlcv.empty:
             raise ValueError("frequency='hourly' requested but no hourly parquet is available")
         ohlcv = ohlcv[ohlcv["Ticker"].map(normalize_symbol).isin(normalized)].copy()
-        if lookback_days and not ohlcv.empty:
-            cutoff = ohlcv["Datetime"].max() - pd.Timedelta(days=int(lookback_days) * 2)
-            ohlcv = ohlcv[ohlcv["Datetime"] >= cutoff]
+        if end_date:
+            ohlcv = ohlcv[ohlcv["Datetime"] <= pd.Timestamp(end_date)]
         prices = ohlcv.pivot_table(index="Datetime", columns="Ticker", values="Close", aggfunc="last").sort_index()
-        prices = prices.resample("1h").last().ffill()
+        prices = prices.resample("1h").last().dropna(how="all")
     else:
-        ohlcv = ohlcv_for_symbols(symbols, lookback_days=max(lookback_days + 80, lookback_days))
+        ohlcv = ohlcv_for_symbols(symbols)
+        if end_date:
+            ohlcv = ohlcv[ohlcv["Date"] <= pd.Timestamp(end_date)]
         prices = ohlcv.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index()
-    prices = prices.ffill().dropna(axis=1, thresh=max(30, int(len(prices) * 0.75)))
+    prices = prices.dropna(axis=1, how="all")
     if frequency == "weekly":
         prices = prices.resample("W-FRI").last()
     elif frequency == "monthly":
         prices = prices.resample("M").last()
-    rets = np.log(prices / prices.shift(1)).replace([np.inf, -np.inf], np.nan)
-    rets = rets.dropna(how="all").tail(lookback_rows(lookback_days, frequency))
-    rets = rets.dropna(axis=1, thresh=max(30, int(len(rets) * 0.8))).fillna(0.0)
-    return rets
+    if start_date:
+        prices = prices.loc[pd.Timestamp(start_date):]
+    return complete_returns(prices, lookback_rows(lookback_days, frequency))
 
 
 def dollar_volume_matrix(symbols: list[str], lookback_days: int = 504) -> pd.DataFrame:
@@ -323,7 +347,7 @@ def dollar_volume_matrix(symbols: list[str], lookback_days: int = 504) -> pd.Dat
     ohlcv = ohlcv.copy()
     ohlcv["DollarVolume"] = pd.to_numeric(ohlcv["Close"], errors="coerce") * pd.to_numeric(ohlcv["Volume"], errors="coerce")
     dv = ohlcv.pivot_table(index="Date", columns="Ticker", values="DollarVolume", aggfunc="last").sort_index()
-    return dv.ffill().tail(int(lookback_days))
+    return dv.tail(int(lookback_days))
 
 
 def sector_map(symbols: list[str]) -> dict[str, str]:

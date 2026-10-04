@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.optimize import minimize
-from sklearn.covariance import MinCovDet, OAS
+from sklearn.covariance import MinCovDet, OAS, LedoitWolf
 
-from .analytics import compact_records, matrix_records, mp_threshold
+from .analytics import compact_records, matrix_records, mp_threshold, fit_mp_sigma2
 from .data_loader import (
     COMMODITY_FUTURES_SYMBOLS,
     CRYPTO_SYMBOLS,
@@ -23,6 +23,8 @@ from .data_loader import (
     load_cross_asset_ohlcv,
     load_hourly_ohlcv,
     normalize_symbol,
+    available_symbols,
+    UnknownSymbolsError,
 )
 from .performance import batched_corr, fast_cov, frame_fingerprint, safe_pinv
 
@@ -43,13 +45,13 @@ def _as_list(value: Any, default: list[str]) -> list[str]:
         return [x.strip() for x in value.replace(";", ",").split(",") if x.strip()]
     try:
         return [str(x).strip() for x in value if str(x).strip()]
-    except Exception:
-        return default
+    except TypeError as exc:
+        raise ValueError("Cross-asset symbols must be a list or comma-separated string") from exc
 
 
 def symbols_from_payload(payload: dict[str, Any] | None) -> dict[str, list[str]]:
     payload = payload or {}
-    return {
+    symbols = {
         "equity": _as_list(payload.get("equity_symbols") or payload.get("equities"), BLOCK_SYMBOLS["equity"]),
         "fx": _as_list(payload.get("fx_symbols"), BLOCK_SYMBOLS["fx"]),
         "commodities": _as_list(payload.get("commodity_symbols") or payload.get("commodities"), BLOCK_SYMBOLS["commodities"]),
@@ -57,9 +59,16 @@ def symbols_from_payload(payload: dict[str, Any] | None) -> dict[str, list[str]]
         "crypto": _as_list(payload.get("crypto_symbols"), BLOCK_SYMBOLS["crypto"]),
     }
 
+    active = payload.get("blocks")
+    if active is None:
+        return symbols
+    if not isinstance(active, list) or not active or any(block not in symbols for block in active):
+        raise ValueError("blocks must be a nonempty list of equity, fx, commodities, rates or crypto")
+    return {block:symbols[block] for block in active}
+
 
 def _ewma_cov(rets: pd.DataFrame, lam: float = 0.94) -> np.ndarray:
-    x = rets.fillna(0.0).to_numpy(dtype=float)
+    x = rets.to_numpy(dtype=float)
     if len(x) < 2:
         return np.zeros((x.shape[1], x.shape[1]))
     w = np.array([(1 - lam) * lam ** i for i in range(len(x) - 1, -1, -1)], dtype=float)
@@ -68,29 +77,13 @@ def _ewma_cov(rets: pd.DataFrame, lam: float = 0.94) -> np.ndarray:
     return (xc * w[:, None]).T @ xc
 
 
-def _mcd_or_oas(rets: pd.DataFrame) -> tuple[np.ndarray, dict[str, Any]]:
-    x = rets.fillna(0.0).to_numpy(dtype=float)
-    meta = {"estimator": "mcd_student_t_em_proxy"}
-    if x.shape[0] > max(60, x.shape[1] * 3) and x.shape[1] >= 2:
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                est = MinCovDet(random_state=17, support_fraction=0.78).fit(x)
-            meta["support_fraction"] = float(np.mean(est.support_))
-            return est.covariance_, meta
-        except Exception as exc:
-            meta["mcd_fallback"] = str(exc)
-    est = OAS().fit(x)
-    meta["estimator"] = "oas_fallback"
-    meta["shrinkage"] = float(est.shrinkage_)
-    return est.covariance_, meta
 
 
 def _student_t_em(rets: pd.DataFrame, max_iter: int = 50, tol: float = 1e-6) -> tuple[np.ndarray, dict[str, Any]]:
     """Robust multivariate Student-t covariance EM with a shared fitted degrees of freedom."""
-    x = rets.fillna(0.0).to_numpy(dtype=float)
-    if x.shape[0] < 10 or x.shape[1] == 0:
-        return _mcd_or_oas(rets)
+    x = rets.to_numpy(dtype=float)
+    if x.shape[0] < 10 or x.shape[1] == 0 or not np.isfinite(x).all():
+        raise ValueError("Student-t EM requires at least 10 finite observations")
     mu = np.median(x, axis=0)
     sigma = np.cov(x, rowvar=False) + np.eye(x.shape[1]) * 1e-10
     nu = 8.0
@@ -108,7 +101,7 @@ def _student_t_em(rets: pd.DataFrame, max_iter: int = 50, tol: float = 1e-6) -> 
         if np.linalg.norm(sigma - old, ord="fro") <= tol * max(np.linalg.norm(old, ord="fro"), 1e-12):
             converged = True
             break
-    return sigma, {"estimator": "student_t_em", "degrees_of_freedom": nu, "iterations": iteration + 1, "converged": converged}
+    return sigma * nu / (nu-2), {"estimator": "student_t_em", "scatter_to_covariance_multiplier": nu/(nu-2), "degrees_of_freedom": nu, "degrees_of_freedom_method": "fixed_8", "iterations": iteration + 1, "converged": converged}
 
 
 def block_covariance(block: str, rets: pd.DataFrame) -> tuple[np.ndarray, dict[str, Any]]:
@@ -117,12 +110,12 @@ def block_covariance(block: str, rets: pd.DataFrame) -> tuple[np.ndarray, dict[s
     if block == "fx":
         return _ewma_cov(rets, 0.94), {"estimator": "ewma", "lambda": 0.94, "volume_note": "FX volume is not meaningful in local Yahoo-style files."}
     if block in {"commodities", "rates"}:
-        est = OAS().fit(rets.fillna(0.0).to_numpy(dtype=float))
+        est = OAS().fit(rets.to_numpy(dtype=float))
         return est.covariance_, {"estimator": "oas", "shrinkage": float(est.shrinkage_)}
     if block == "crypto":
         return _student_t_em(rets)
-    est = OAS().fit(rets.fillna(0.0).to_numpy(dtype=float))
-    return est.covariance_, {"estimator": "ledoit_wolf_equivalent_oas", "shrinkage": float(est.shrinkage_)}
+    est = LedoitWolf().fit(rets.to_numpy(dtype=float))
+    return est.covariance_, {"estimator": "ledoit_wolf", "shrinkage": float(est.shrinkage_)}
 
 
 def _crypto_volume_filter(symbols: list[str], lookback_days: int, min_positive_ratio: float = 0.50) -> list[dict[str, Any]]:
@@ -168,15 +161,22 @@ def load_cross_asset_blocks(payload: dict[str, Any] | None = None) -> dict[str, 
     min_coverage = float(payload.get("min_coverage") or 0.55)
     blocks = {}
     coverage_rows = []
+    existing = set(available_symbols())
     for block, block_symbols in symbols.items():
+        explicit_keys = {"equity": "equity_symbols", "fx": "fx_symbols", "commodities": "commodity_symbols", "rates": "rates_symbols", "crypto": "crypto_symbols"}
+        missing = [normalize_symbol(value) for value in block_symbols if normalize_symbol(value) not in existing]
+        aliases = {"equity":"equities", "commodities":"commodities", "rates":"rate_symbols"}
+        if (payload.get(explicit_keys[block]) or payload.get(aliases.get(block,""))) and missing:
+            raise UnknownSymbolsError(missing)
         rets = cross_asset_returns_matrix(block_symbols, lookback_days=lookback, min_coverage=min_coverage)
-        if rets.empty and block == "equity":
-            rets = cross_asset_returns_matrix(EQUITY_PROXY_SYMBOLS, lookback_days=lookback, min_coverage=0.50)
+
         blocks[block] = rets
         coverage_rows.append(
             {
                 "asset_class": block,
                 "requested": len(block_symbols),
+                "missing_symbols": missing,
+                "data_coverage": dict(rets.attrs),
                 "loaded": int(rets.shape[1]),
                 "observations": int(rets.shape[0]),
                 "start": str(rets.index.min())[:10] if not rets.empty else None,
@@ -201,16 +201,20 @@ def aligned_cross_asset_returns(blocks: dict[str, pd.DataFrame], calendar_mode: 
         return pd.DataFrame(), class_map, []
     joined = pd.concat(frames, axis=1).sort_index()
     if calendar_mode == "seven_day":
-        joined = joined.asfreq("D").fillna(0.0)
+        joined = joined.asfreq("D")
     else:
         joined = joined[joined.index.dayofweek < 5]
-    joined = joined.dropna(axis=1, thresh=max(30, int(len(joined) * 0.55))).fillna(0.0)
+    before = len(joined)
+    joined = joined.dropna(how="any")
+    if len(joined) < 30:
+        raise ValueError("Cross-asset alignment requires 30 complete observed dates")
     notes = [
         {
             "calendar_mode": calendar_mode,
             "rows": int(len(joined)),
             "assets": int(joined.shape[1]),
-            "weekend_crypto_policy": "Crypto weekend returns are set to zero under equity_day mode; seven_day mode preserves calendar days.",
+            "rows_dropped_missing": before - len(joined),
+            "weekend_crypto_policy": "Complete observed dates only; equity_day excludes weekends, seven_day never invents closed-market returns.",
         }
     ]
     class_map = {c: class_map.get(c, "unknown") for c in joined.columns}
@@ -220,10 +224,14 @@ def aligned_cross_asset_returns(blocks: dict[str, pd.DataFrame], calendar_mode: 
 def dcc_correlation(rets: pd.DataFrame, max_assets: int = 30) -> dict[str, Any]:
     if rets.empty or rets.shape[1] < 2:
         return {"parameters": {"a": 0.0, "b": 0.0}, "latest_corr": [], "average_corr": []}
-    x = rets.iloc[:, :max_assets].fillna(0.0)
-    vol = x.ewm(alpha=0.06, adjust=False).std().replace(0, np.nan).bfill().fillna(x.std().replace(0, 1.0))
-    z = (x / vol).replace([np.inf, -np.inf], np.nan).fillna(0.0).to_numpy(dtype=float)
-    s = np.cov(z, rowvar=False)
+    x = rets.iloc[:, :max_assets].copy()
+    vol = x.ewm(alpha=0.06, adjust=False).std().replace(0, np.nan).clip(lower=1e-8).shift(1)
+    standardized = (x / vol).replace([np.inf, -np.inf], np.nan).dropna(how="any")
+    x = x.loc[standardized.index]
+    z = standardized.to_numpy(dtype=float)
+    train_count = min(126, max(30, len(z)//2))
+    training = z[:train_count]
+    s = np.cov(training, rowvar=False)
     s = np.nan_to_num(s)
 
     def nll(params):
@@ -232,20 +240,28 @@ def dcc_correlation(rets: pd.DataFrame, max_assets: int = 30) -> dict[str, Any]:
             return 1e9
         q = s.copy()
         loss = 0.0
-        for t in range(1, len(z)):
-            q = (1 - a - b) * s + a * np.outer(z[t - 1], z[t - 1]) + b * q
+        for t in range(1, len(training)):
+            q = (1 - a - b) * s + a * np.outer(training[t - 1], training[t - 1]) + b * q
             d = np.sqrt(np.maximum(np.diag(q), 1e-10))
             r = q / np.outer(d, d)
-            r = np.clip((r + r.T) / 2, -0.999, 0.999)
-            sign, logdet = np.linalg.slogdet(r + np.eye(r.shape[0]) * 1e-8)
-            if sign <= 0:
+            r = (r + r.T) / 2
+            np.fill_diagonal(r, 1.0)
+            if not np.isfinite(r).all():
                 return 1e9
-            inv = safe_pinv(r, 1e-8)
-            loss += logdet + float(z[t] @ inv @ z[t])
+            try:
+                lower = np.linalg.cholesky(r + np.eye(r.shape[0])*1e-8)
+            except np.linalg.LinAlgError:
+                return 1e9
+            from scipy.linalg import solve_triangular
+            whitened = solve_triangular(lower, training[t], lower=True, check_finite=False)
+            logdet = 2*float(np.log(np.diag(lower)).sum())
+            loss += logdet + float(whitened @ whitened)
         return loss
 
     res = minimize(nll, x0=np.array([0.04, 0.92]), bounds=[(1e-6, 0.30), (1e-6, 0.995)], method="L-BFGS-B")
-    a, b = (res.x if res.success else np.array([0.04, 0.92]))
+    if not res.success or not np.isfinite(res.fun) or res.fun >= 1e9:
+        raise ValueError(f"DCC parameter fit failed: {res.message}")
+    a, b = res.x
     q = s.copy()
     avg_rows = []
     latest_r = None
@@ -253,12 +269,12 @@ def dcc_correlation(rets: pd.DataFrame, max_assets: int = 30) -> dict[str, Any]:
         q = (1 - a - b) * s + a * np.outer(z[t - 1], z[t - 1]) + b * q
         d = np.sqrt(np.maximum(np.diag(q), 1e-10))
         latest_r = q / np.outer(d, d)
-        if t % max(1, len(z) // 180) == 0 or t == len(z) - 1:
+        if t >= train_count and (t % max(1, len(z) // 180) == 0 or t == len(z) - 1):
             upper = latest_r[np.triu_indices_from(latest_r, 1)]
             avg_rows.append({"date": str(x.index[t])[:10], "dcc_average_correlation": float(np.nanmean(upper))})
     corr = pd.DataFrame(latest_r, index=x.columns, columns=x.columns) if latest_r is not None else batched_corr(x)
     return {
-        "parameters": {"a": float(a), "b": float(b), "converged": bool(res.success)},
+        "parameters": {"a": float(a), "b": float(b), "converged": bool(res.success), "parameter_training_observations": train_count, "parameter_training_end": str(x.index[train_count-1])[:10], "volatility_floor": 1e-8, "historical_policy": "parameters fitted on initial training window; scored after training only"},
         "latest_corr": matrix_records(corr, limit=80),
         "average_corr": avg_rows,
     }
@@ -348,17 +364,27 @@ def cross_asset_feature_outputs(payload: dict[str, Any] | None = None) -> dict[s
     block_meta = []
     block_diag = {}
     for block, rets in blocks.items():
+        columns = [c for c in aligned if class_map[c] == block]
+        rets = aligned[columns]
         cov, meta = block_covariance(block, rets)
         block_meta.append({"asset_class": block, "assets": int(rets.shape[1]), "observations": int(rets.shape[0]), **meta})
         block_diag[block] = cov
 
     sample_cov = aligned.cov()
     cov_values = sample_cov.to_numpy(dtype=float).copy()
-    cross_shrink = float(np.clip(payload.get("cross_block_shrinkage", 0.50), 0.0, 1.0))
+    cross_shrink = float(payload.get("gamma_cross", payload.get("cross_block_shrinkage", 0.40)))
+    if not 0 <= cross_shrink <= 1:
+        raise ValueError("gamma_cross must be in [0,1]")
+    dcc = dcc_correlation(aligned, max_assets=aligned.shape[1])
+    conditional = {(r["row"], r["col"]): r["value"] for r in dcc["latest_corr"]}
+    sample_std = np.sqrt(np.maximum(np.diag(cov_values), 1e-15))
     for i, ci in enumerate(aligned.columns):
         for j, cj in enumerate(aligned.columns):
             if class_map.get(ci) != class_map.get(cj):
-                cov_values[i, j] *= 1.0 - cross_shrink
+                dynamic = conditional.get((ci, cj))
+                if dynamic is None:
+                    raise ValueError("DCC did not produce full cross-asset covariance")
+                cov_values[i, j] = (1-cross_shrink)*dynamic*sample_std[i]*sample_std[j] + cross_shrink*cov_values[i, j]
     # Preserve each block's estimator while shrinking uncertain cross-block covariance.
     for block, cov in block_diag.items():
         cols = [c for c in aligned.columns if class_map.get(c) == block]
@@ -370,8 +396,9 @@ def cross_asset_feature_outputs(payload: dict[str, Any] | None = None) -> dict[s
             cov_values[np.ix_(idx_all, idx_all)] = cov[np.ix_(idx_src, idx_src)]
     cov_values = (cov_values + cov_values.T) / 2.0
     vals_raw, vecs_raw = np.linalg.eigh(cov_values)
+    psd_adjustment = float(np.minimum(vals_raw, 0.0).sum())
     vals_raw = np.maximum(vals_raw, 0.0)
-    mp_all = mp_threshold(vals_raw[::-1], aligned.shape[1], aligned.shape[0])
+    mp_all = mp_threshold(vals_raw[::-1], aligned.shape[1], aligned.shape[0], fit_mp_sigma2(vals_raw, aligned.shape[1], aligned.shape[0]))
     noise = vals_raw <= mp_all["lambda_max"]
     cleaned_vals = vals_raw.copy()
     if noise.any():
@@ -414,10 +441,9 @@ def cross_asset_feature_outputs(payload: dict[str, Any] | None = None) -> dict[s
             idx = [i for i, c in enumerate(aligned.columns) if class_map.get(c) == block]
             loading_share.append({"component": f"PC{pc+1}", "asset_class": block, "loading_share": float(np.sum(vecs[idx, pc] ** 2)) if idx else 0.0})
 
-    dcc = dcc_correlation(aligned, max_assets=int(payload.get("dcc_max_assets") or 30))
     hedge = fx_hedge_ratios(aligned, class_map)
     rolling_block, casci = block_correlation_monitor(aligned, class_map, window=int(payload.get("rolling_window") or 63))
-    crypto_filter = _crypto_volume_filter(block_data["symbols"]["crypto"], block_data["lookback_days"])
+    crypto_filter = _crypto_volume_filter(block_data["symbols"].get("crypto",[]), block_data["lookback_days"])
     cf_mp = _cornish_fisher_mp("crypto", blocks.get("crypto", pd.DataFrame()))
     hourly = load_hourly_ohlcv()
     stress_overlay = stress_date_overlay(aligned, class_map)
@@ -426,7 +452,7 @@ def cross_asset_feature_outputs(payload: dict[str, Any] | None = None) -> dict[s
     for block, rets in blocks.items():
         if not rets.empty:
             ev = np.linalg.eigvalsh(fast_cov(rets))[::-1]
-            threshold = mp_threshold(ev, rets.shape[1], rets.shape[0])
+            threshold = mp_threshold(ev, rets.shape[1], rets.shape[0], fit_mp_sigma2(ev, rets.shape[1], rets.shape[0]))
             block_mp.append({"asset_class": block, "q": float(rets.shape[1] / max(rets.shape[0], 1)), **threshold})
 
     coverage = block_data["coverage"]
@@ -447,6 +473,8 @@ def cross_asset_feature_outputs(payload: dict[str, Any] | None = None) -> dict[s
             "block_correlation_monitor": rolling_block,
             "casci_index": casci,
             "asset_class_pc_loading_share": loading_share,
+            "unified_spectrum_mp": [{"rank": i+1, "eigenvalue": float(v), "lambda_max": mp_all["lambda_max"]} for i,v in enumerate(vals_raw[::-1])],
+            "block_mp_bounds": block_mp,
             "cross_asset_loading_heatmap": loading_rows,
             "cross_asset_factor_returns": compact_records(factor_ts.rename_axis("date").reset_index(), limit=500),
             "dcc_latest_correlation": dcc["latest_corr"],
@@ -480,7 +508,9 @@ def cross_asset_feature_outputs(payload: dict[str, Any] | None = None) -> dict[s
         "meta": {
             "returns": frame_fingerprint(aligned),
             "unified_mp": mp_all,
-            "cross_block_shrinkage": cross_shrink,
+            "gamma_cross": cross_shrink,
+            "gamma_cross_semantics": "0=conditional DCC cross-covariance; 1=unconditional sample cross-covariance",
+            "negative_eigenvalue_mass_before_psd_projection": psd_adjustment,
             "classes": class_map,
             "data_source": "market_universe.parquet + backend/data/prices + largest verified hourly parquet inventory",
             "futures_roll_status": "raw continuous/proxy futures files are used; independent roll-adjusted methodology is still not verified.",

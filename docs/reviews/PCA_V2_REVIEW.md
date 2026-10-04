@@ -259,3 +259,13 @@ These came from a second read of the code and were not in the first pass. Read [
 | A5 | Errors | 28 `except Exception` blocks in `core/`; several (volume-time, bootstrap caps) turn failures into silent fallbacks with `status: ok`. | `core/*.py` |
 | A6 | API | Runs are synchronous; F05 rolling and tensor, F07 bootstrap and F10 cross-asset need background jobs (Studio `JobStore` pattern). | `api/pca_v2.py:27-35` |
 | A7 | Tests | Only `test_pca_v2_remediation.py` (3 tests). Add golden numbers (MP edge vs closed form on simulated white noise; RMT cleaning recovers a planted spiked covariance), a look-ahead guard for F04, and a no-zero-fill test. | `backend/tests/` |
+
+## 9. Backend rebuild status, 2026-10-04
+
+The PCA backend was rebuilt against this review and `V2_REBUILD_PLAYBOOK.md`. See `backend/app/services/pca_v2/DONE.md` for architecture, old-file fate, estimator choices, exact checks and limitations. The existing API mount was retained; shared application files and the frontend were not edited.
+
+Closed backend defects include strict unknown/partial ticker errors, undersized-universe replacement, price forward-fill and zero-return fabrication, historical date filtering, covariance/correlation semantics and Kaiser gating, sign alignment, real MP-density/biplot data, full-sample F04 backtest fitting, non-working signal exits, silent bootstrap caps, MCD fallback, volume-time fallback, mislabeled equity OAS, full-covariance stress Monte Carlo, and missing manifest/jobs/uploads. F06 now has common sector/factor/turnover/tracking-error constraints, actual posterior returns and a historical rolling backtest. F08 supports custom/uploaded groups and causal residual refits. F11 has an IML option, MP-retained component series and corrected HAC inference.
+
+A further numerical defect was found: the original Newey-West covariance formula divided by sample size twice despite using an unnormalized inverse cross-product matrix. The statsmodels reference implementation now supplies HAC standard errors, protected by a golden-number check.
+
+Unavailable items are explicitly rejected or recorded as limitations: cardinality without a mixed-integer quadratic solver, true Kyle without signed intraday flow, turnover illiquidity without historical shares, historical index membership, currency-hedged portfolio attribution and independently verified futures rolls. The frontend still needs Claude's separate rebuild and verification; backend fixture/HTTP success is not a claim of frontend completion.

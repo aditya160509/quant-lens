@@ -31,7 +31,10 @@ def timed(label: str) -> Callable:
 
 
 def contiguous_float_frame(frame: pd.DataFrame) -> np.ndarray:
-    return np.ascontiguousarray(frame.fillna(0.0).to_numpy(dtype=np.float64))
+    x = frame.to_numpy(dtype=np.float64)
+    if not np.isfinite(x).all():
+        raise ValueError("Finite observed returns required")
+    return np.ascontiguousarray(x)
 
 
 def fast_cov(frame: pd.DataFrame) -> np.ndarray:
@@ -50,9 +53,11 @@ def safe_pinv(matrix: np.ndarray, ridge: float = 1e-8) -> np.ndarray:
 
 
 def batched_corr(frame: pd.DataFrame) -> pd.DataFrame:
-    x = frame.fillna(0.0)
+    x = frame.copy()
     std = x.std(ddof=1).replace(0, np.nan)
-    z = ((x - x.mean()) / std).fillna(0.0)
+    z = ((x - x.mean()) / std)
+    if not np.isfinite(z.to_numpy()).all():
+        raise ValueError("Correlation requires finite returns and positive asset variance")
     corr = (z.to_numpy(dtype=float).T @ z.to_numpy(dtype=float)) / max(len(z) - 1, 1)
     return pd.DataFrame(corr, index=x.columns, columns=x.columns)
 

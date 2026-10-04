@@ -43,16 +43,10 @@ def run(payload=None):
     alerts = [{"level": "warning", "message": status, "lambda1_residual": cont["lambda1_residual"]}] if status.endswith("Under-Specified") else []
 
     # Rolling group residual correlation time series (PRIMARY CHART)
-    try:
-        rolling_group_ts = rolling_group_residual_corr(model, payload, window=int(payload.get("residual_window") or 63))
-    except Exception:
-        rolling_group_ts = []
+    rolling_group_ts = rolling_group_residual_corr(model, payload, window=int(payload.get("residual_window") or 63))
     rolling_lambda1 = _rolling_residual_lambda1(model, int(payload.get("residual_window") or 63))
     current_percentile = float(np.mean([r["lambda1_residual"] <= cont["lambda1_residual"] for r in rolling_lambda1]) * 100.0) if rolling_lambda1 else None
-    try:
-        tensor = residual_tensor_hosvd(model, payload)
-    except Exception:
-        tensor = {"core_records": [], "group_singular_values": [], "window_singular_values": [], "time_singular_values": [], "summary": []}
+    tensor = residual_tensor_hosvd(model, payload)
 
     return response(
         "08",
@@ -80,7 +74,7 @@ def run(payload=None):
             "residual_tensor_summary": tensor["summary"],
         },
         alerts=alerts,
-        meta=metadata(model, {"implemented_outputs": 13, "rolling_group_ts_records": len(rolling_group_ts), "residual_tensor": "hosvd_tucker"}),
+        meta=metadata(model, {"implemented_outputs": 13, "rolling_group_ts_records": len(rolling_group_ts), "residual_tensor": "hosvd_tucker", "residual_fit": "causal_rolling" if payload.get("rolling_refit") else "fixed_full_sample_retrospective"}),
     )
 
 
@@ -95,3 +89,8 @@ def _rolling_residual_lambda1(model, window):
         value = float(np.linalg.eigvalsh((corr + corr.T) / 2.0)[-1])
         rows.append({"date": str(resid.index[end - 1])[:10], "lambda1_residual": value})
     return rows
+
+
+from .inputs import inputs_for
+INPUTS = inputs_for("08")
+OUTPUTS = [{'key': 'rolling_group_residual_corr_time_series', 'source': 'charts', 'label': 'Rolling Group Residual Corr Time Series', 'render': 'line', 'primary': True}, {'key': 'residual_correlation_matrix', 'source': 'charts', 'label': 'Residual Correlation Matrix', 'render': 'heatmap', 'primary': False}, {'key': 'residual_lambda1_by_k', 'source': 'charts', 'label': 'Residual Lambda1 By K', 'render': 'bar', 'primary': False}, {'key': 'rolling_residual_lambda1', 'source': 'charts', 'label': 'Rolling Residual Lambda1', 'render': 'line', 'primary': False}, {'key': 'under_specification_diagnostic', 'source': 'charts', 'label': 'Under Specification Diagnostic', 'render': 'bar', 'primary': False}, {'key': 'residual_correlation_by_group', 'source': 'charts', 'label': 'Residual Correlation By Group', 'render': 'bar', 'primary': False}, {'key': 'crisis_overlay_dates', 'source': 'charts', 'label': 'Crisis Overlay Dates', 'render': 'bar', 'primary': False}, {'key': 'residual_frequency_tensor', 'source': 'charts', 'label': 'Residual Frequency Tensor', 'render': 'bar', 'primary': False}, {'key': 'residual_tensor_group_singular_values', 'source': 'charts', 'label': 'Residual Tensor Group Singular Values', 'render': 'bar', 'primary': False}, {'key': 'residual_tensor_window_singular_values', 'source': 'charts', 'label': 'Residual Tensor Window Singular Values', 'render': 'bar', 'primary': False}, {'key': 'residual_tensor_time_singular_values', 'source': 'charts', 'label': 'Residual Tensor Time Singular Values', 'render': 'bar', 'primary': False}, {'key': 'contagion_spike_detector', 'source': 'tables', 'label': 'Contagion Spike Detector', 'render': 'table', 'primary': False}, {'key': 'residual_correlation_regime_alert', 'source': 'tables', 'label': 'Residual Correlation Regime Alert', 'render': 'table', 'primary': False}, {'key': 'residual_tensor_summary', 'source': 'tables', 'label': 'Residual Tensor Summary', 'render': 'table', 'primary': False}]

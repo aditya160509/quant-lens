@@ -56,6 +56,7 @@ def run(payload=None):
         meta=metadata(model, {
             "implemented_outputs": 10,
             "bootstrap_mode": val.get("bootstrap_type", "case"),
+            "band_reliability": "preview_low_replication_count" if val["bootstrap_runs"] < 200 else "research_replication_count",
             "bai_ng_min_IC1_k": min(bng, key=lambda r: r["IC1"])["k"] if bng else None,
             "bai_ng_min_IC2_k": min(bng, key=lambda r: r["IC2"])["k"] if bng else None,
             "bai_ng_min_IC3_k": min(bng, key=lambda r: r["IC3"])["k"] if bng else None,
@@ -73,3 +74,8 @@ def _stability_heatmap(rows):
         return [{"row": r["component"], "col": r["component"], "value": r["mean_cosine"], "min_cosine": r.get("min_cosine"), "std_cosine": r.get("std_cosine")} for r in rows if "component" in r]
     # Fallback: genuineness scorecard cosine
     return [{"row": r["component"], "col": r["component"], "value": r["cosine_mean"]} for r in rows]
+
+
+from .inputs import inputs_for
+INPUTS = inputs_for("07")
+OUTPUTS = [{'key': 'bootstrap_scree_plot', 'source': 'charts', 'label': 'Bootstrap Scree Plot', 'render': 'bar', 'primary': True}, {'key': 'eigenvector_cosine_distribution', 'source': 'charts', 'label': 'Eigenvector Cosine Distribution', 'render': 'bar', 'primary': False}, {'key': 'subsampling_stability_heatmap', 'source': 'charts', 'label': 'Subsampling Stability Heatmap', 'render': 'heatmap', 'primary': False}, {'key': 'bai_ng_criteria_sweep', 'source': 'charts', 'label': 'Bai Ng Criteria Sweep', 'render': 'bar', 'primary': False}, {'key': 'principal_angle_analysis', 'source': 'charts', 'label': 'Principal Angle Analysis', 'render': 'bar', 'primary': False}, {'key': 'factor_genuineness_scorecard', 'source': 'tables', 'label': 'Factor Genuineness Scorecard', 'render': 'table', 'primary': False}, {'key': 'bootstrap_eigenvalue_bands', 'source': 'tables', 'label': 'Bootstrap Eigenvalue Bands', 'render': 'table', 'primary': False}, {'key': 'bai_ng_ic_table', 'source': 'tables', 'label': 'Bai Ng Ic Table', 'render': 'table', 'primary': False}, {'key': 'subsampling_stability_table', 'source': 'tables', 'label': 'Subsampling Stability Table', 'render': 'table', 'primary': False}, {'key': 'principal_angle_table', 'source': 'tables', 'label': 'Principal Angle Table', 'render': 'table', 'primary': False}]

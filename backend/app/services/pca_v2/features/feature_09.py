@@ -18,6 +18,15 @@ def run(payload=None):
     payload = payload or {}
     model = rmt_model(payload)
     stress = stress_scenarios(model, payload)
+    comparison = []
+    portfolios = payload.get("portfolios") or []
+    if not isinstance(portfolios, list) or len(portfolios)>4:
+        raise ValueError("portfolios must be a list of at most four named weight objects")
+    for index, portfolio in enumerate(portfolios):
+        if not isinstance(portfolio, dict) or not isinstance(portfolio.get("weights"), dict):
+            raise ValueError("Each comparison portfolio requires weights")
+        result = stress_scenarios(model, {**payload, "weights": portfolio["weights"]})
+        comparison += [{"portfolio":portfolio.get("name",f"Portfolio {index+1}"), **row} for row in result["scenario_rows"]]
     pdf_base64 = stress_pdf_report_base64(model, stress)
 
     hist_worst = stress.get("historical_worst_day_scenarios", [])
@@ -32,7 +41,7 @@ def run(payload=None):
             {"label": "Stress CVaR", "value": stress["stress_cvar"], "unit": "return"},
         ],
         charts={
-            "pc_scenario_pnl_heatmap": stress["scenario_rows"],
+            "pc_scenario_pnl_heatmap": comparison or stress["scenario_rows"],
             "scenario_sensitivity_table_chart": stress["scenario_rows"],
             "maximum_loss_scenario_identifier": [stress["worst_scenario"]],
             "mahalanobis_historical_analog": stress["analogs"],
@@ -51,7 +60,12 @@ def run(payload=None):
         meta=metadata(model, {
             "implemented_outputs": 12,
             "pdf_export": "generated" if pdf_base64 else "reportlab_unavailable",
-            "stress_var_method": "10K Monte Carlo + 2K parametric",
+            "stress_var_method": "10K Monte Carlo from full empirical factor covariance + 2K parametric",
             "joint_shocks_applied": bool(joint_result),
         }),
     )
+
+
+from .inputs import inputs_for
+INPUTS = inputs_for("09")
+OUTPUTS = [{'key': 'pc_scenario_pnl_heatmap', 'source': 'charts', 'label': 'Pc Scenario Pnl Heatmap', 'render': 'heatmap', 'primary': True}, {'key': 'scenario_sensitivity_table_chart', 'source': 'charts', 'label': 'Scenario Sensitivity Table Chart', 'render': 'bar', 'primary': False}, {'key': 'maximum_loss_scenario_identifier', 'source': 'charts', 'label': 'Maximum Loss Scenario Identifier', 'render': 'bar', 'primary': False}, {'key': 'mahalanobis_historical_analog', 'source': 'charts', 'label': 'Mahalanobis Historical Analog', 'render': 'bar', 'primary': False}, {'key': 'historical_worst_day_scenarios_chart', 'source': 'charts', 'label': 'Historical Worst Day Scenarios Chart', 'render': 'bar', 'primary': False}, {'key': 'joint_scenario_pnl_chart', 'source': 'charts', 'label': 'Joint Scenario Pnl Chart', 'render': 'bar', 'primary': False}, {'key': 'scenario_sensitivity_table', 'source': 'tables', 'label': 'Scenario Sensitivity Table', 'render': 'table', 'primary': False}, {'key': 'position_level_pnl_waterfall', 'source': 'tables', 'label': 'Position Level Pnl Waterfall', 'render': 'table', 'primary': False}, {'key': 'historical_analog_table', 'source': 'tables', 'label': 'Historical Analog Table', 'render': 'table', 'primary': False}, {'key': 'stress_var_cvar', 'source': 'tables', 'label': 'Stress Var Cvar', 'render': 'table', 'primary': False}, {'key': 'historical_worst_day_table', 'source': 'tables', 'label': 'Historical Worst Day Table', 'render': 'table', 'primary': False}, {'key': 'joint_scenario_table', 'source': 'tables', 'label': 'Joint Scenario Table', 'render': 'table', 'primary': False}, {'key': 'pdf_export', 'source': 'tables', 'label': 'Pdf Export', 'render': 'table', 'primary': False}]

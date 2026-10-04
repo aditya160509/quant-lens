@@ -1,7 +1,7 @@
 """PCA V2 backend service package.
 
-This package is intentionally backend-only for now. It mirrors the Factors V2
-and Volatility V2 service shape without wiring routers or frontend routes.
+The registry defers feature imports. HTTP routes are mounted at /api/labs/pca/v2;
+the frontend rebuild remains a separate responsibility.
 """
 
 from __future__ import annotations

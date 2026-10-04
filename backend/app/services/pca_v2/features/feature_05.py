@@ -23,7 +23,7 @@ from app.services.pca_v2.core.analytics import (
     rolling_loading_evolution,
     rolling_pca_metrics,
     rmt_model,
-    tensor_hosvd_proxy,
+    tensor_hosvd,
 )
 
 
@@ -43,7 +43,7 @@ def run(payload=None):
     )
     bp_series = roll[roll["window"].eq(63)].sort_values("date").set_index("date")["pc1_share"] if not roll.empty and (roll["window"] == 63).any() else pd.Series(dtype=float)
     bai_perron = bai_perron_breakpoints(bp_series, max_breaks=int(payload.get("max_breaks") or 3), min_segment=int(payload.get("break_min_segment") or 8))
-    tensor = tensor_hosvd_proxy(model, payload)
+    tensor = tensor_hosvd(model, payload)
 
     # PC1 percentile rank per window
     pc1_pct = pc1_percentile_rank(roll, history_window=int(payload.get("percentile_history_window") or 252))
@@ -62,7 +62,7 @@ def run(payload=None):
     alert_rows = (
         latest[
             (latest["pc1_zscore"].abs() > 2)
-            | (latest["pc1_cosine_stability"] < 0.85)
+            | (latest["pc1_cosine_stability"] < float(payload.get("cosine_threshold", 0.85)))
         ]
         if not latest.empty
         else pd.DataFrame()
@@ -81,7 +81,7 @@ def run(payload=None):
     if not roll.empty and pa_col in roll.columns:
         latest_pa = roll.sort_values("date").groupby("window").tail(1)
         for r in latest_pa.itertuples():
-            if getattr(r, pa_col, 0) > 15:
+            if getattr(r, pa_col, 0) > float(payload.get("angle_threshold", 15.0)):
                 alerts.append({"level": "warning", "message": f"Large principal angle ({getattr(r, pa_col):.1f}°) on {int(r.window)}D window", "window": int(r.window)})
 
     return response(
@@ -149,10 +149,15 @@ def _regime_summary(roll, breakpoints):
     base = roll[roll["window"].eq(63)].sort_values("date")
     if base.empty:
         return []
-    dates = [pd.Timestamp(base["date"].min())] + sorted(pd.Timestamp(row.get("date")) for row in breakpoints if row.get("date")) + [pd.Timestamp(base["date"].max())]
+    dates = [pd.Timestamp(base["date"].min())] + sorted(pd.Timestamp(row.get("break_date")) for row in breakpoints if row.get("break_date")) + [pd.Timestamp(base["date"].max())]
     rows = []
     for start, end in zip(dates[:-1], dates[1:]):
         sample = base[(pd.to_datetime(base["date"]) >= start) & (pd.to_datetime(base["date"]) <= end)]
         if len(sample):
             rows.append({"start_date": str(start.date()), "end_date": str(end.date()), "duration_days": int((end - start).days), "avg_pc1_share": float(sample["pc1_share"].mean()), "min_cosine_stability": float(sample["pc1_cosine_stability"].min())})
     return rows
+
+
+from .inputs import inputs_for
+INPUTS = inputs_for("05")
+OUTPUTS = [{'key': 'rolling_pc1_share', 'source': 'charts', 'label': 'Rolling Pc1 Share', 'render': 'line', 'primary': True}, {'key': 'eigenvector_drift', 'source': 'charts', 'label': 'Eigenvector Drift', 'render': 'bar', 'primary': False}, {'key': 'cusum_structural_break', 'source': 'charts', 'label': 'Cusum Structural Break', 'render': 'bar', 'primary': False}, {'key': 'eigenvalue_ratio_time_series', 'source': 'charts', 'label': 'Eigenvalue Ratio Time Series', 'render': 'line', 'primary': False}, {'key': 'pc1_loading_evolution_heatmap', 'source': 'charts', 'label': 'Pc1 Loading Evolution Heatmap', 'render': 'heatmap', 'primary': False}, {'key': 'principal_angle_time_series', 'source': 'charts', 'label': 'Principal Angle Time Series', 'render': 'line', 'primary': False}, {'key': 'multi_eigenvalue_time_series', 'source': 'charts', 'label': 'Multi Eigenvalue Time Series', 'render': 'line', 'primary': False}, {'key': 'multi_pc_cosine_drift', 'source': 'charts', 'label': 'Multi Pc Cosine Drift', 'render': 'bar', 'primary': False}, {'key': 'crisis_annotation_bands', 'source': 'charts', 'label': 'Crisis Annotation Bands', 'render': 'bar', 'primary': False}, {'key': 'multi_frequency_regime_tensor', 'source': 'charts', 'label': 'Multi Frequency Regime Tensor', 'render': 'bar', 'primary': False}, {'key': 'tensor_factor_singular_values', 'source': 'charts', 'label': 'Tensor Factor Singular Values', 'render': 'bar', 'primary': False}, {'key': 'tensor_window_singular_values', 'source': 'charts', 'label': 'Tensor Window Singular Values', 'render': 'bar', 'primary': False}, {'key': 'tensor_time_singular_values', 'source': 'charts', 'label': 'Tensor Time Singular Values', 'render': 'bar', 'primary': False}, {'key': 'current_regime_readout', 'source': 'tables', 'label': 'Current Regime Readout', 'render': 'table', 'primary': False}, {'key': 'breakpoint_table', 'source': 'tables', 'label': 'Breakpoint Table', 'render': 'table', 'primary': False}, {'key': 'bai_perron_breakpoint_table', 'source': 'tables', 'label': 'Bai Perron Breakpoint Table', 'render': 'table', 'primary': False}, {'key': 'pc1_percentile_rank_table', 'source': 'tables', 'label': 'Pc1 Percentile Rank Table', 'render': 'table', 'primary': False}, {'key': 'regime_summary_table', 'source': 'tables', 'label': 'Regime Summary Table', 'render': 'table', 'primary': False}]

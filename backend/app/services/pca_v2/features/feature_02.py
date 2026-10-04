@@ -52,16 +52,16 @@ def run(payload=None):
     rotated = []
     rotated_factor_corr = []
     if rotation_type == "varimax":
-        rot = varimax(model["eigenvectors"][:, :k])
+        rot = varimax(model["orthonormal_eigenvectors"][:, :k])
         for i, ticker in enumerate(model["symbols"]):
             row = {"ticker": ticker, "sector": model["sectors"].get(ticker, "Unknown")}
             for pc in range(k):
                 row[f"PC{pc+1}"] = float(rot[i, pc])
             rotated.append(row)
     elif rotation_type == "promax":
-        rot = promax(model["eigenvectors"][:, :k])
-        rotated_scores = model["returns"].to_numpy(dtype=float) @ rot
-        phi = pd.DataFrame(np.corrcoef(rotated_scores, rowvar=False), index=[f"PC{i+1}" for i in range(k)], columns=[f"PC{i+1}" for i in range(k)])
+        rot = promax(model["orthonormal_eigenvectors"][:, :k])
+        rotated_scores = model["analysis_returns"].to_numpy(dtype=float) @ rot
+        phi = pd.DataFrame(np.atleast_2d(np.corrcoef(rotated_scores, rowvar=False)), index=[f"PC{i+1}" for i in range(k)], columns=[f"PC{i+1}" for i in range(k)])
         rotated_factor_corr = [{"row": row, "col": col, "value": float(phi.loc[row, col])} for row in phi.index for col in phi.columns]
         for i, ticker in enumerate(model["symbols"]):
             row = {"ticker": ticker, "sector": model["sectors"].get(ticker, "Unknown")}
@@ -71,7 +71,7 @@ def run(payload=None):
 
     top_rows = []
     for pc in range(k):
-        vals = model["eigenvectors"][:, pc]
+        vals = model["orthonormal_eigenvectors"][:, pc]
         order = np.argsort(vals)
         for side, idxs in (("negative", order[:10]), ("positive", order[-10:][::-1])):
             for idx in idxs:
@@ -89,13 +89,10 @@ def run(payload=None):
     r2_table = asset_r2(model)
 
     # Hoyer sparsity
-    hoyer = hoyer_sparsity(model["eigenvectors"][:, :k])
+    hoyer = hoyer_sparsity(model["orthonormal_eigenvectors"][:, :k])
 
     # Hierarchical PCA (optional toggle via payload; compute always but only expose if requested or as default enrichment)
-    try:
-        hpca = hierarchical_pca(model["returns"], model["sectors"], k_intra=int(payload.get("hpca_k_intra") or 2), k_cross=int(payload.get("hpca_k_cross") or 3))
-    except Exception:
-        hpca = {"cluster_loadings": {}, "cross_factor_returns": [], "cross_eigenvalues": [], "cross_column_names": []}
+    hpca = hierarchical_pca(model["returns"], model["sectors"], k_intra=int(payload.get("hpca_k_intra") or 2), k_cross=int(payload.get("hpca_k_cross") or 3))
 
     return response(
         "02",
@@ -105,6 +102,7 @@ def run(payload=None):
             {"label": "Universe", "value": len(model["symbols"]), "unit": "assets"},
         ],
         charts={
+            "pca_biplot": {"scores": [{"date": str(date), "x": float(row.iloc[0]), "y": float(row.iloc[1]) if k > 1 else 0.0} for date, row in f.iterrows()], "loadings": [{"ticker": ticker, "x": float(model["orthonormal_eigenvectors"][i, 0]), "y": float(model["orthonormal_eigenvectors"][i, 1]) if k > 1 else 0.0} for i, ticker in enumerate(model["symbols"])]},
             "loading_matrix_heatmap": loadings,
             "factor_return_time_series": compact_records(f.reset_index(names="date"), limit=500),
             "explained_variance_bar": explained_variance_records(model, limit=30),
@@ -124,12 +122,12 @@ def run(payload=None):
             "hoyer_sparsity_table": hoyer,
             "promax_factor_correlation": rotated_factor_corr,
         },
-        meta=metadata(model, {"rotation": rotation_type, "implemented_outputs": 10, "hpca_cluster_count": len(hpca.get("cluster_loadings", {}))}),
+        meta=metadata(model, {"rotation": rotation_type, "promax_phi_method": "empirical_score_correlation", "implemented_outputs": 10, "hpca_cluster_count": len(hpca.get("cluster_loadings", {}))}),
     )
 
 
-def _cluster_map(loadings):
-    clusters = {}
-    for row in loadings:
-        clusters.setdefault(row.get("sector") or "Unknown", []).append(row)
-    return [{"cluster": sector, "asset_count": len(rows), "avg_abs_pc1": float(np.mean([abs(r.get("PC1", 0)) for r in rows]))} for sector, rows in clusters.items()]
+
+
+from .inputs import inputs_for
+INPUTS = inputs_for("02")
+OUTPUTS = [{'key': 'pca_biplot', 'source': 'charts', 'label': 'Pca Biplot', 'render': 'biplot', 'primary': True}, {'key': 'loading_matrix_heatmap', 'source': 'charts', 'label': 'Loading Matrix Heatmap', 'render': 'heatmap', 'primary': False}, {'key': 'factor_return_time_series', 'source': 'charts', 'label': 'Factor Return Time Series', 'render': 'line', 'primary': False}, {'key': 'explained_variance_bar', 'source': 'charts', 'label': 'Explained Variance Bar', 'render': 'bar', 'primary': False}, {'key': 'rotated_loading_matrix', 'source': 'charts', 'label': 'Rotated Loading Matrix', 'render': 'bar', 'primary': False}, {'key': 'hierarchical_pca_cluster_map', 'source': 'charts', 'label': 'Hierarchical Pca Cluster Map', 'render': 'bar', 'primary': False}, {'key': 'hpca_cross_factor_returns', 'source': 'charts', 'label': 'Hpca Cross Factor Returns', 'render': 'bar', 'primary': False}, {'key': 'hoyer_sparsity_by_pc', 'source': 'charts', 'label': 'Hoyer Sparsity By Pc', 'render': 'bar', 'primary': False}, {'key': 'promax_factor_correlation', 'source': 'charts', 'label': 'Promax Factor Correlation', 'render': 'bar', 'primary': False}, {'key': 'top_n_loading_table', 'source': 'tables', 'label': 'Top N Loading Table', 'render': 'table', 'primary': False}, {'key': 'factor_return_statistics', 'source': 'tables', 'label': 'Factor Return Statistics', 'render': 'table', 'primary': False}, {'key': 'pc_interpretation_panel', 'source': 'tables', 'label': 'Pc Interpretation Panel', 'render': 'table', 'primary': False}, {'key': 'full_loading_matrix', 'source': 'tables', 'label': 'Full Loading Matrix', 'render': 'table', 'primary': False}, {'key': 'eigenvector_json', 'source': 'tables', 'label': 'Eigenvector Json', 'render': 'table', 'primary': False}, {'key': 'asset_r2_table', 'source': 'tables', 'label': 'Asset R2 Table', 'render': 'table', 'primary': False}, {'key': 'hoyer_sparsity_table', 'source': 'tables', 'label': 'Hoyer Sparsity Table', 'render': 'table', 'primary': False}, {'key': 'promax_factor_correlation', 'source': 'tables', 'label': 'Promax Factor Correlation', 'render': 'table', 'primary': False}]
