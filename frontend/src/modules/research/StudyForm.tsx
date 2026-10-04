@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { AnimatePresence, motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { Children, useMemo, useRef, useState } from "react";
 import { BookOpen, ChevronDown, Link2, Info, Loader2, Repeat, RotateCcw, Save, Trash2, Upload, X } from "lucide-react";
 import { MenuItem, PopMenu, Segmented, Tooltip, type MenuAt } from "@/workspace/ui";
 import { uploadFile, useUniverse } from "./api";
@@ -213,7 +213,7 @@ function Field({ field: f, value, error, onChange, onReset, sweep, onSweep, chil
           </button>
         ) : null}
       </span>
-      {sweep !== undefined ? <input className="input num" value={sweep} placeholder="Values, e.g. 5, 10, 20" aria-label={`${f.label} sweep values`} onChange={(e) => onSweep?.(e.target.value)} /> : children ?? <Control field={f} value={value} onChange={onChange} />}
+      {sweep !== undefined ? <input className="input num" value={sweep} placeholder="Values, e.g. 5, 10, 20" aria-label={`${f.label} sweep values`} onChange={(e) => onSweep?.(e.target.value)} /> : (Children.toArray(children).length ? children : null) ?? (f.key === "lookback_days" ? <WindowBrush field={f} value={Number(value ?? f.default ?? 3650)} onChange={onChange} /> : <Control field={f} value={value} onChange={onChange} />)}
       {error ? <span className="err">{error}</span> : null}
     </div>
   );
@@ -404,6 +404,63 @@ function MarketFilters({ form, set }: { form: FormState; set: (k: string, v: unk
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Market episodes drawn on the window timeline, so a chosen window shows what it includes. */
+const EPISODES: { from: string; to: string; label: string }[] = [
+  { from: "2007-10", to: "2009-03", label: "GFC" },
+  { from: "2011-07", to: "2011-10", label: "Euro crisis" },
+  { from: "2015-08", to: "2016-02", label: "China / oil" },
+  { from: "2020-02", to: "2020-04", label: "COVID" },
+  { from: "2022-01", to: "2022-10", label: "Rate shock" },
+];
+
+/**
+ * The sample window as a timeline: drag the start edge (the window always ends at the latest data),
+ * with crises shaded and preset lengths. Writes lookback_days.
+ */
+function WindowBrush({ field: f, value, onChange }: { field: InputSpec; value: number; onChange: (v: unknown) => void }) {
+  // The window ends at the latest data, i.e. now; read once per mount, not on every render.
+  const [end] = useState(() => Date.now());
+  const maxDays = f.max ?? 11000, minDays = f.min ?? 365;
+  const t0 = end - maxDays * 864e5;
+  const x = (t: number) => Math.max(0, Math.min(100, ((t - t0) / (end - t0)) * 100));
+  const startPct = x(end - value * 864e5);
+  const track = useRef<HTMLDivElement>(null);
+  const drag = (clientX: number) => {
+    const r = track.current?.getBoundingClientRect();
+    if (!r) return;
+    const pct = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    const days = Math.round(((end - (t0 + pct * (end - t0))) / 864e5) / 30) * 30;
+    onChange(Math.max(minDays, Math.min(maxDays, days)));
+  };
+  const years = (value / 365.25).toFixed(1).replace(/\.0$/, "");
+  const startYear = new Date(end - value * 864e5).getFullYear();
+  const ticks = Array.from({ length: 7 }, (_, i) => t0 + (i / 6) * (end - t0));
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      <div ref={track} className="wb-track" role="slider" aria-label={f.label} aria-valuemin={minDays} aria-valuemax={maxDays} aria-valuenow={value} tabIndex={0}
+        onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture?.(e.pointerId); drag(e.clientX); }}
+        onPointerMove={(e) => { if (e.buttons) drag(e.clientX); }}
+        onKeyDown={(e) => { if (e.key === "ArrowLeft") onChange(Math.min(maxDays, value + 365)); if (e.key === "ArrowRight") onChange(Math.max(minDays, value - 365)); }}>
+        {EPISODES.map((ep) => {
+          const a = x(Date.parse(ep.from + "-01")), b = x(Date.parse(ep.to + "-28"));
+          return b > 0 ? <span key={ep.label} className="wb-ep" style={{ left: `${a}%`, width: `${Math.max(0.6, b - a)}%` }} title={ep.label} /> : null;
+        })}
+        <span className="wb-sel" style={{ left: `${startPct}%`, right: 0 }} />
+        <span className="wb-handle" style={{ left: `${startPct}%` }} />
+      </div>
+      <div className="wb-ticks">{ticks.map((t, i) => <span key={i}>{new Date(t).getFullYear()}</span>)}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <span className="num" style={{ fontSize: 12, color: "var(--text-2)" }}>{startYear} → latest · {years} years</span>
+        <span style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+          {[3, 5, 7, 10, 15, 20].filter((y) => y * 365 <= maxDays && y * 365 >= minDays).map((y) => (
+            <button key={y} type="button" className="pill" style={{ height: 22, fontSize: 11 }} aria-pressed={Math.abs(value - y * 365) < 40} onClick={() => onChange(y * 365)}>{y}y</button>
+          ))}
+        </span>
+      </div>
     </div>
   );
 }
