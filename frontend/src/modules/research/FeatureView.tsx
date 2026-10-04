@@ -41,7 +41,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   const hero = useRef<HTMLDivElement>(null);
   const running = RUNNING.has(run.status);
   const result = run.result;
-  const visible = (s: Section) => (result ? s.items.filter((i) => i.keys.some((k) => out(result, k).length > 0)) : s.items);
+  const visible = (s: Section) => (result ? s.items.filter((i) => i.keys.some((k) => out(result, k).length > 0) && !repeatsKpis(result, i)) : s.items);
   const shown = (s: Section) => arrange(visible(s), prefs);
   const hiddenIn = (s: Section) => visible(s).filter((i) => prefs[cardId(i)]?.hidden);
   const sections = result ? layout.sections.filter((s) => visible(s).length) : layout.sections;
@@ -380,4 +380,14 @@ function ActiveSignalChip() {
       <button aria-label="Use the built-in signal instead" onClick={() => set({ expr: null, name: null })} style={{ display: "grid", placeItems: "center" }}>×</button>
     </span>
   );
+}
+
+/** A one-row output whose every number already sits in the key stats strip adds nothing; leave it out. */
+function repeatsKpis(result: FeatureResult, item: Item): boolean {
+  if (item.keys.length !== 1 || item.view) return false;
+  const rows = out(result, item.keys[0]);
+  if (rows.length !== 1) return false;
+  const shown = new Set((result.summary_cards ?? []).map((c) => (isNum(c.value) ? Number(c.value.toPrecision(6)) : null)).filter((v): v is number => v !== null));
+  const nums = Object.values(rows[0]).filter(isNum).map((v) => Number(v.toPrecision(6)));
+  return nums.length > 0 && nums.length <= 4 && nums.every((v) => shown.has(v));
 }

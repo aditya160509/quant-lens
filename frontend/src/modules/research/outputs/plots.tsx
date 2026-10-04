@@ -7,7 +7,6 @@ import { Bars } from "@/charts/Bars";
 import { SERIES, fmtTick, parseDate, robustExtent, useWidth } from "@/charts/core";
 import { Distribution } from "@/charts/Distribution";
 import { Forest, type ForestRow } from "@/charts/Forest";
-import { Gauge } from "@/charts/Gauge";
 import { Heatmap } from "@/charts/Heatmap";
 import { PointRange, type PRSeries } from "@/charts/PointRange";
 import { TimeSeries } from "@/charts/TimeSeries";
@@ -556,12 +555,30 @@ export function CorrelationMap({ rows }: ViewProps) {
 
 // ---------------------------------------------------------------- gauges and rulers
 
+/** Vitality as a flat ruler with zones (not a dial): where today's strength sits against in-sample. */
 export function VitalityGauge({ rows }: ViewProps) {
   const r = rows[0];
   if (!r || !isNum(r.vitality_score)) return <Empty />;
-  return <Gauge value={r.vitality_score as number} min={-100} max={150} label="Vitality score"
-    zones={[{ to: 0, color: "var(--down)", label: "Dead" }, { to: 30, color: "var(--s5)", label: "Fading" }, { to: 70, color: "var(--warn)", label: "Weakened" }, { to: 150, color: "var(--up)", label: "Alive" }]}
-    sub={`Last ${num(r.recent_window_months)} months at ${num(r.vitality_score, 0)}% of the in-sample strength (${num(r.in_sample_mean, 4)}). Zone: ${label(r.zone)}.`} />;
+  const v = r.vitality_score as number, lo = -100, hi = 150;
+  const pos = (x: number) => `${((Math.max(lo, Math.min(hi, x)) - lo) / (hi - lo)) * 100}%`;
+  const zones = [{ from: lo, to: 0, color: "var(--down)", label: "Dead" }, { from: 0, to: 30, color: "var(--s5)", label: "Fading" }, { from: 30, to: 70, color: "var(--warn)", label: "Weakened" }, { from: 70, to: hi, color: "var(--up)", label: "Alive" }];
+  const zone = zones.find((z) => v <= z.to) ?? zones[zones.length - 1];
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <span className="num" style={{ fontSize: 30, fontWeight: 500, letterSpacing: "-0.03em", color: zone.color }}>{num(v, 0)}%</span>
+        <span style={{ color: "var(--text-3)", fontSize: 12.5 }}>of in-sample strength · <b style={{ color: zone.color }}>{zone.label}</b></span>
+      </div>
+      <div style={{ position: "relative", height: 10, borderRadius: 5, overflow: "hidden", display: "flex" }}>
+        {zones.map((z) => <span key={z.label} style={{ width: `${((z.to - z.from) / (hi - lo)) * 100}%`, background: z.color, opacity: 0.35 }} />)}
+      </div>
+      <div style={{ position: "relative", height: 14, marginTop: -12 }}>
+        <span style={{ position: "absolute", left: pos(v), top: -6, width: 3, height: 18, marginLeft: -1.5, borderRadius: 2, background: "var(--text)" }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-4)" }}>{[-100, 0, 30, 70, 150].map((t) => <span key={t} className="num">{t}%</span>)}</div>
+      <p style={{ color: "var(--text-3)", fontSize: 12 }}>Last {num(r.recent_window_months)} months at {num(v, 0)}% of the in-sample strength ({num(r.in_sample_mean, 4)}).</p>
+    </div>
+  );
 }
 
 /** Observed t against every multiple-testing hurdle on one ruler. */
