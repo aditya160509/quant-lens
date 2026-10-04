@@ -7,6 +7,7 @@ missing FRED/yfinance/Ken-French artifacts but is not invoked by feature runs.
 from __future__ import annotations
 
 from functools import lru_cache
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Iterable, Any
 import math
@@ -18,6 +19,14 @@ try:
     import polars as pl
 except Exception:  # pragma: no cover
     pl = None
+
+
+AS_OF_DATE = ContextVar("ml_v2_as_of_date", default=None)
+
+
+def dated(frame, column):
+    cutoff = AS_OF_DATE.get()
+    return frame.loc[frame[column] <= cutoff].copy() if cutoff is not None else frame
 
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -165,13 +174,13 @@ def ohlcv_for_symbols(symbols: Iterable[str], lookback_days: int | None = None, 
     normalized = {normalize_symbol(s) for s in symbols if str(s).strip()}
     if freq == "hourly":
         df = load_hourly_ohlcv()
-        out = df[df["Ticker"].isin(normalized)].copy()
+        out = dated(df[df["Ticker"].isin(normalized)].copy(), "Datetime")
         if lookback_days and not out.empty:
             cutoff = out["Datetime"].max() - pd.Timedelta(days=int(lookback_days) * 2)
             out = out[out["Datetime"] >= cutoff]
         return out.rename(columns={"Datetime": "Date"}).sort_values(["Ticker", "Date"])
     df = load_market_ohlcv()
-    out = df[df["Ticker"].isin(normalized)].copy()
+    out = dated(df[df["Ticker"].isin(normalized)].copy(), "Date")
     if lookback_days and not out.empty:
         cutoff = out["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)
         out = out[out["Date"] >= cutoff]

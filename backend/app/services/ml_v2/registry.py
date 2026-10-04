@@ -53,5 +53,19 @@ def get_runner(feature_id: str | int) -> Callable[[dict[str, Any] | None], dict[
 
 
 def run_feature(feature_id: str | int, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    return get_runner(feature_id)(payload or {})
+    from .core.data_loader import AS_OF_DATE
+    import pandas as pd
+    request = dict(payload or {})
+    cutoff = request.get("as_of_date")
+    cutoff = pd.Timestamp(cutoff) if cutoff is not None else None
+    if cutoff is not None:
+        if pd.isna(cutoff):
+            raise ValueError("as_of_date must be a valid date")
+        if cutoff.tzinfo is not None:
+            cutoff = cutoff.tz_convert("UTC").tz_localize(None)
+    token = AS_OF_DATE.set(cutoff)
+    try:
+        return get_runner(feature_id)(request)
+    finally:
+        AS_OF_DATE.reset(token)
 

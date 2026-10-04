@@ -36,6 +36,7 @@ from typing import Any, Iterable
 
 import numpy as np
 import pandas as pd
+from scipy.stats import rankdata
 from sklearn.covariance import LedoitWolf, OAS
 
 
@@ -304,8 +305,8 @@ def fast_spearman_ic(x: np.ndarray, y: np.ndarray) -> float:
         return 0.0
     xv = x[valid]
     yv = y[valid]
-    rx = np.argsort(np.argsort(xv)).astype(float)
-    ry = np.argsort(np.argsort(yv)).astype(float)
+    rx = rankdata(xv, method="average")
+    ry = rankdata(yv, method="average")
     rx -= rx.mean()
     ry -= ry.mean()
     denom = float(np.sqrt(np.dot(rx, rx)) * np.sqrt(np.dot(ry, ry)))
@@ -345,8 +346,8 @@ def vectorized_ic_series(
             continue
         sv, fv = sv[valid], fv[valid]
         # float32 for rank arrays — halves memory bandwidth
-        rs = np.argsort(np.argsort(sv, kind="quicksort"), kind="quicksort").astype(np.float32)
-        rf = np.argsort(np.argsort(fv, kind="quicksort"), kind="quicksort").astype(np.float32)
+        rs = rankdata(sv, method="average")
+        rf = rankdata(fv, method="average")
         rs -= rs.mean()
         rf -= rf.mean()
         denom = float(np.linalg.norm(rs) * np.linalg.norm(rf))

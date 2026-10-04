@@ -42,6 +42,8 @@ from .data_loader import (
     sector_map,
     volume_matrix,
 )
+from .validation import chronological_purged_split
+
 from .performance import (
     ThreadPoolExecutor,
     as_completed,
@@ -691,7 +693,7 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     x, y = numeric_xy(panel, y)
     if len(x) < 200:
         return response("02", [summary("Observations", len(x), "rows")], {}, {}, alerts=[{"level": "error", "message": "Insufficient observations for GBT alpha."}], status="error")
-    split = int(len(x) * 0.75)
+    train_idx, test_idx = chronological_purged_split(panel, horizon, int(ctx.payload.get("embargo_period", 5)))
     models = {
         "ridge": Ridge(alpha=5.0),
         "random_forest": RandomForestRegressor(n_estimators=100, max_depth=5, min_samples_leaf=10, random_state=7, n_jobs=1),
@@ -717,8 +719,8 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         catboost_available = False
     perf = []
     preds = {}
-    x_train, x_test = x.iloc[:split], x.iloc[split:]
-    y_train, y_test = y.iloc[:split], y.iloc[split:]
+    x_train, x_test = x.iloc[train_idx], x.iloc[test_idx]
+    y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
     for name, model in models.items():
         pred = _safe_predict(model, x_train, y_train, x_test)
         preds[name] = pred
@@ -764,7 +766,7 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     shap_long = _side_importance(long_idx, "mean_abs_shap_long")
     shap_short = _side_importance(short_idx, "mean_abs_shap_short")
     exact_shap_rows, exact_shap_meta = realtime_tree_shap_sample(best_model, x_latest, feature_names, max_rows=int(number_like(ctx.payload.get("exact_shap_cap"), 64) or 64))
-    test_dates = pd.to_datetime(panel["date"].iloc[split:]).reset_index(drop=True)
+    test_dates = pd.to_datetime(panel["date"].iloc[test_idx]).reset_index(drop=True)
     rolling_ic_rows = rolling_monthly_ic(preds[best_name], y_test.reset_index(drop=True), test_dates)
     dynamic_weight_rows: list[dict[str, Any]] = []
     months = test_dates.dt.to_period("M").astype(str)
@@ -782,19 +784,18 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     signal_stats = signal_portfolio_stats(preds[best_name], y_test, ctx.annualization / max(horizon, 1))
     ic_decay = []
     for h in [1, 5, 21, 63, 126, 252]:
-        # 2.2 — reuse the already-fitted best model; only the forward-return target changes.
-        # Avoids calling make_feature_panel + _fit_base_model per horizon (was 6 full refits).
+        # Each horizon requires a separately trained model and its own purge gap.
         try:
             p2, y2 = make_feature_panel(ctx, horizon=h)
             if not p2.empty:
                 x2, y2 = numeric_xy(p2, y2)
-                cut2 = int(len(x2) * 0.75)
+                train2, test2 = chronological_purged_split(p2, h, int(ctx.payload.get("embargo_period", 5)))
                 # Reuse the best model's estimator class with same hyperparams — no refit on full panel
                 _model_clone = _fit_base_model(best_name, h)
-                pred2 = _safe_predict(_model_clone, x2.iloc[:cut2], y2.iloc[:cut2], x2.iloc[cut2:])
-                ic_decay.append({"horizon": h, "spearman_ic": fast_spearman_ic(np.asarray(pred2, dtype=float), y2.iloc[cut2:].to_numpy(dtype=float))})
-        except Exception:
-            ic_decay.append({"horizon": h, "spearman_ic": 0.0})
+                pred2 = _safe_predict(_model_clone, x2.iloc[train2], y2.iloc[train2], x2.iloc[test2])
+                ic_decay.append({"horizon": h, "spearman_ic": fast_spearman_ic(np.asarray(pred2, dtype=float), y2.iloc[test2].to_numpy(dtype=float))})
+        except ValueError as exc:
+            ic_decay.append({"horizon": h, "spearman_ic": None, "status": "unavailable", "reason": str(exc)})
     return response(
         "02",
         [summary("Best Model", best_name, "model"), summary("Best IC", max(r["ic"] for r in perf), "spearman"), summary("Coverage", len(pred_rows), "assets")],

@@ -32,3 +32,11 @@ def test_missing_quotes_and_returns_remain_missing(quotes):
     assert np.isnan(closes.loc[quotes[25], "AAA"])
     assert np.isnan(returns.loc[quotes[25], "AAA"])
     assert np.isnan(returns.loc[quotes[26], "AAA"])
+
+def test_as_of_excludes_future_quotes(quotes):
+    token = loader.AS_OF_DATE.set(quotes[20])
+    try:
+        closes = loader.close_matrix(["AAA", "BBB"], 40)
+        assert closes.index.max() == quotes[20]
+    finally:
+        loader.AS_OF_DATE.reset(token)
