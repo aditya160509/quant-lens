@@ -232,3 +232,113 @@ The inputs decide what users can test, so this is where we give maximum freedom 
 4. **[B+F]** Multiple-testing ledger, holdout vault and pre-registration (A3).
 5. **[F]** Signal editor UI, the View-as upgrades and the report card UI (C1–C2).
 6. **[B+F]** Costs and capacity (A5), the SDK (A25), sharing (A24), then AI helpers (A7).
+
+---
+
+## F. Build checklist (status as of 2026-10-04)
+
+`[x]` done and verified · `[~]` done with a data limit · `[ ]` not in this batch (by decision)
+
+### B. Remove / merge
+- [x] B1 Diagnostics merged into Pricing tests as "Model checks"
+- [x] B2 Publication table moved under Export (no longer a nav page)
+- [x] B3 Synthetic control merged into Causal designs (design "synthetic")
+- [x] B4 Regimes merged into Robustness as "By regime"
+- [x] B5 Device-only overview stats replaced by stats strip, stages, project ledger
+- [x] B6 Old `/labs/research/*` pages deleted (15), redirected to `/research`
+- [x] B7 Rare options folded behind Quick / Standard / Expert levels
+- [x] B8 Outputs that only repeat the key stats are hidden
+- [x] B9 Vitality dial replaced by a zone ruler
+- [ ] B10 Merge Studio and Research projects (later)
+- [x] Result: 6 pages: Signal, Report card, Pricing tests, Robustness, Causal, Decay & novelty; old URLs still work
+
+### A1. Your own signal
+- [x] Formula language (safe parser, ~25 operators, ~60 fields, PIT fundamentals)
+- [x] Formula editor (autocomplete, error underline, live histogram/coverage/known-factor correlation)
+- [ ] Python signal upload (not needed this batch)
+- [x] Signal library: 55 published anomalies with citations, one-click load
+- [x] Signal combiner (equal, IC, inverse variance, rank average) + orthogonalize against known signals
+- [x] Saved signals with versions
+
+### A2. Trust / data
+- [~] Point-in-time fundamentals with filing lag, lag shown in every run's data audit
+- [~] Survivorship: reported on every run, "not handled" (file has no delisted names)
+- [x] Data audit per run (universe size and coverage by month, missing share, adjustments)
+- [x] All universes in the parquet: 40 country × asset-type groups, ~4,157 tickers, region / asset-type / price / liquidity / listing-age filters, lazy scans for larger data
+- [x] Look-ahead guard on every signal run
+
+### A3. Overfitting control
+- [x] Multiple-testing ledger per project (trials, deflated Sharpe hurdle, Harvey–Liu haircut, PBO)
+- [x] Holdout vault (seal a date; jobs cut data after it; unseal once)
+- [x] Walk-forward and purged CV with embargo, PBO
+- [x] Pre-registration (hypothesis, sign, primary test); results marked pre-registered
+
+### A4. One verdict
+- [x] Report card: A–F per dimension, overall grade, one run across 7 tests
+- [x] Referee-style report export: LaTeX, PDF, Markdown
+- [~] Referee checklist (microcaps, NYSE breakpoints, VW vs EW, January, costs, decay); NYSE breakpoints blank (no exchange field), decay needs a discovery date
+
+### A5. Costs and implementability
+- [x] Cost model (spread, commission, sqrt impact), net Sharpe, break-even bps
+- [x] Capacity estimate
+- [x] Long-only variant
+
+### A6. Collaboration and persistence
+- [x] Persistent runs and results (SQLite), survive restarts
+- [x] Projects (switcher, ledger, holdout, preregistration)
+- [x] Share links, read-only view (feature runs and report cards)
+- [ ] Python SDK and REST API (excluded)
+- [ ] Scheduled re-runs and alerts (excluded)
+- [ ] Embed (not needed this batch)
+
+### A7. Explanations without AI
+- [x] Plain-language explanation on the report card, built from templates
+- [x] Literature lookup: nearest published anomalies by correlation
+- [ ] Idea → formula with an LLM (excluded: no AI this batch)
+
+### A7b. Protocol and screening
+- [x] Novy-Marx & Velikov (2023) "Assaying Anomalies" protocol steps on the report card
+- [x] Batch screening with BHY-corrected p-values
+- [ ] Research agent (excluded)
+
+### A8. Pricing tiers
+- [ ] Not this batch (by decision)
+
+### C1. View as
+- [x] Role-aware default columns; CI band, zero line and significance kept
+- [x] Small multiples, group-and-reduce, log transform, chart + table split
+- [x] Compact toolbar; default view per output type
+- [x] Overlay another run (B dashed)
+
+### C2. New screens
+- [x] Signal page
+- [x] Report card page (with batch screen and walk-forward)
+- [x] Multiple-testing ledger chip on every feature page
+
+### C3. Premium polish
+- [x] Data window (values of every chart at the crosshair)
+- [x] Floating/section navigation (page pills, section tabs, `[` `]` keys)
+- [x] Trend line, rectangle, level and note drawing tools; copy chart to clipboard
+- [x] Grouped two-level table headers
+- [x] Command palette actions (pages, report card, compare, every anomaly)
+- [x] Onboarding (3-step first run)
+- [x] Phone layout (one column, page picker)
+- [x] Visual regression tests (4 pages × dark/light, baselines on installed Chrome)
+
+### C4. Known issues
+- [x] Overlay picker works across restarts (runs persist)
+- [x] "Settings changed" no longer fires on "12" vs 12 or on the active formula/project
+- [x] Regimes randomness / slow features addressed in the speed pass (Diagnostics 68s → 1–3s, Robustness 29s → ~17s)
+- [~] Idle backend memory ~485 MB (other modules import sklearn/statsmodels eagerly)
+
+### E. Inputs
+- [x] Quick / Standard / Expert levels
+- [x] Universe builder at full scale with live instrument count
+- [x] Sample-window timeline brush with crisis shading and presets
+- [x] Formula input on the Signal page with field autocomplete and coverage
+- [x] Units, valid ranges, "why this default" tooltips with citations; sweep toggle
+- [x] Linked inputs from the API (depends_on, conflicts warning, required)
+- [x] Literature presets (Fama-French, Novy-Marx & Velikov, Jegadeesh-Titman, HXZ, HLZ)
+- [x] Shareable settings link (Python SDK call excluded)
+- [x] Input rules served by the API
+- [x] "N settings changed since the run on screen" before running
