@@ -164,6 +164,11 @@ def build_panel(payload: dict[str, Any], default_limit: int = 400) -> Panel:
         start_ts = pd.Timestamp(protected["start"])
         idx = idx[idx + pd.DateOffset(months=horizon) < start_ts]
         caveats.append(f"A protected out-of-sample window from {protected['start']} is reserved for this study and excluded here.")
+    if payload.get("_sealed_after"):
+        from ..store.seal import apply_seal
+
+        idx = apply_seal(idx, payload["_sealed_after"], horizon)
+        caveats.append(f"Project holdout sealed: data after {payload['_sealed_after']} is excluded.")
     panel = Panel(
         symbols=symbols,
         dates=idx,

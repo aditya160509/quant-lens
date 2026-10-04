@@ -129,6 +129,7 @@ app.include_router(research_quantitative.router, prefix="/api", tags=["quantitat
 # Mounted under /api/labs/factors/v2 so legacy /api/labs/factors remains untouched.
 app.include_router(factors_v2.router, prefix="/api", tags=["factors-v2"])
 app.include_router(research_v2.router, prefix="/api", tags=["research-v2"])
+from app.api import research_v2_projects; app.include_router(research_v2_projects.router, prefix="/api", tags=["research-v2-projects"])
 
 # Research Router (Cluster E)
 app.include_router(research_e.router, tags=["research-e"])

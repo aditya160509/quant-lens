@@ -24,6 +24,7 @@ from app.services.research_v2.core.data_loader import BACKEND_DATA, UPLOAD_DIR, 
 from app.services.research_v2.core.holdout import all_locks, all_windows, lock_specification, release_window
 from app.services.research_v2.registry import feature_manifest, get_feature
 from app.services.research_v2.worker import run_in_worker
+from app.services.research_v2.store import get_store
 from app.services.studio.jobs import JobStore
 
 router = APIRouter(prefix="/labs/research/v2", tags=["research-v2"])
@@ -65,10 +66,14 @@ def _pool() -> ProcessPoolExecutor:
 
 
 def _execute(job_id: str, feature_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    store, pid = get_store(), payload.get("project_id")
+    run_payload = {**payload, "_sealed_after": store.sealed_after(pid)} if pid else payload
     try:
-        result = _pool().submit(run_in_worker, feature_id, payload).result()
+        result = _pool().submit(run_in_worker, feature_id, run_payload).result()
     except UnknownSymbolsError as exc:
         raise ValueError(str(exc)) from exc
+    result.setdefault("meta", {})["preregistered"] = store.is_preregistered(pid, payload)
+    store.save_job(job_id, feature_id, payload, "completed", 1.0, result, project_id=pid)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     path = RESULTS_DIR / f"{job_id}.json"
     tmp = path.with_suffix(".tmp")
@@ -131,6 +136,7 @@ def create_job(feature_id: str, request: RunRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     payload = _clean(request.payload)
     job = JOBS.create(job_type=f"research_v2_{feature.id}", params={"feature_id": feature.id, "payload": payload})
+    get_store().save_job(job["job_id"], feature.id, payload, job["status"], project_id=payload.get("project_id"))
     if job["status"] == "queued":
         JOBS.submit(job["job_id"], _execute, job["job_id"], feature.id, payload)
     return {"job_id": job["job_id"], "status": job["status"], "feature_id": feature.id}
@@ -140,7 +146,13 @@ def create_job(feature_id: str, request: RunRequest) -> Dict[str, Any]:
 def job_status(job_id: str) -> Dict[str, Any]:
     job = JOBS.get(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Unknown job")
+        row = get_store().get_job(job_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Unknown job")
+        out = {"job_id": job_id, "type": f"research_v2_{row['feature_id']}", "status": row["status"], "created_at": row["created_at"], "updated_at": row["finished_at"] or row["created_at"], "progress": row["progress"], "error": row["error"]}
+        if row["result"]:
+            out["result"] = row["result"]
+        return out
     out = {k: job[k] for k in ("job_id", "type", "status", "created_at", "updated_at", "progress", "error")}
     if job["status"] == "completed" and job.get("result"):
         path = RESULTS_DIR / job["result"]["result_file"]
