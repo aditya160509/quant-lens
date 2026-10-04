@@ -82,9 +82,7 @@ def clean_json(value: Any) -> Any:  # A01 — type-identity checks, no isinstanc
     if t is dict:
         return {k if t is str else str(k): clean_json(v) for k, v in value.items()}
     if t is np.ndarray:
-        arr = value.astype(float)
-        arr = np.where(np.isfinite(arr), arr, 0.0)
-        return arr.tolist()
+        return clean_json(value.tolist())
     if t is pd.Timestamp:
         return value.strftime("%Y-%m-%d")
     if t is pd.Series:
@@ -141,7 +139,6 @@ def matrix_records(matrix: pd.DataFrame | np.ndarray, labels: Iterable[str] | No
         rows_lbl = base[: min(limit, arr.shape[0])]
         cols_lbl = base[: min(limit, arr.shape[1])]
         arr = arr[: len(rows_lbl), : len(cols_lbl)]
-    arr = np.where(np.isfinite(arr), arr, 0.0)
     n_r, n_c = arr.shape
     return [
         {"row": rows_lbl[i], "col": cols_lbl[j], "value": arr[i, j]}
@@ -245,9 +242,8 @@ def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> ML
     lookback = int(number_like(payload.get("lookback_days") or payload.get("window_days") or payload.get("training_window"), 756) or 756)
     frequency = str(payload.get("frequency") or payload.get("sampling_frequency") or "daily")
     rets = returns_matrix(symbols, lookback_days=max(lookback, 90), frequency=frequency)
-    if rets.shape[1] < min_symbols:
-        symbols = parse_symbols({}, default_limit=max(80, min_symbols), max_symbols=max_symbols)
-        rets = returns_matrix(symbols, lookback_days=max(lookback, 90), frequency=frequency)
+    if rets.empty:
+        raise ValueError("Insufficient price history for the requested symbols")
     symbols = [str(c) for c in rets.columns]
     closes = close_matrix(symbols, lookback_days=max(lookback, 90), frequency=frequency).reindex(columns=symbols)
     volumes = volume_matrix(symbols, lookback_days=max(lookback, 90), frequency=frequency).reindex(columns=symbols)
@@ -255,9 +251,9 @@ def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> ML
     return MLContext(
         payload=payload,
         symbols=symbols,
-        returns=rets.fillna(0.0),
-        closes=closes.ffill(),
-        volumes=volumes.ffill(),
+        returns=rets,
+        closes=closes,
+        volumes=volumes,
         ohlcv=ohlcv,
         sectors=sector_map(symbols),
         market_caps=market_caps(symbols),
@@ -275,20 +271,8 @@ def load_context_cached(payload: dict[str, Any] | None, *, min_symbols: int = 12
     """
     from .performance import cache_key as _ck
     p = payload or {}
-    key = _ck(
-        str(sorted(p.get("symbols", []))),
-        str(p.get("lookback_days", 756)),
-        str(p.get("frequency", "daily")),
-        str(p.get("max_symbols", 120)),
-        str(min_symbols),
-    )
-    if key in _CONTEXT_CACHE:
-        return _CONTEXT_CACHE[key]
-    ctx = load_context(payload, min_symbols=min_symbols)
-    if len(_CONTEXT_CACHE) > 4:
-        del _CONTEXT_CACHE[next(iter(_CONTEXT_CACHE))]
-    _CONTEXT_CACHE[key] = ctx
-    return ctx
+    # Contexts contain request-local settings and data; do not share them between runs.
+    return load_context(payload, min_symbols=min_symbols)
 
 
 def _build_ticker_features(
@@ -357,7 +341,6 @@ def _build_ticker_features(
         }
     )
     feat["sector"] = sectors.get(ticker, "Unknown")
-    feat["market_cap"] = market_caps_.get(ticker, 1.0)
     feat = feat.replace([np.inf, -np.inf], np.nan).dropna(subset=["target_return", "mom_21", "vol_21"])
     if feat.empty:
         return [], []
@@ -366,17 +349,9 @@ def _build_ticker_features(
 
 def make_feature_panel(ctx: MLContext, horizon: int = 5) -> tuple[pd.DataFrame, pd.Series]:
     rets = ctx.returns
-    closes = ctx.closes.reindex(rets.index).ffill()
-    vols = ctx.volumes.reindex(rets.index).ffill()
+    closes = ctx.closes.reindex(rets.index)
+    vols = ctx.volumes.reindex(rets.index)
     horizon = max(int(horizon), 1)
-    key = cache_key(("feature_panel", list(rets.columns), str(rets.index.min()), str(rets.index.max()), len(rets), horizon, ctx.frequency))
-    cached = disk_get(key)
-    if cached is not None:
-        panel = pd.DataFrame(cached.get("rows") or [])
-        y_vals = cached.get("y") or []
-        if not panel.empty:
-            return panel, pd.Series(y_vals, index=panel.index, name="target_return")
-
     rows: list[dict[str, Any]] = []
     y_vals: list[float] = []
     max_workers = max(1, min(8, len(rets.columns)))
@@ -397,18 +372,15 @@ def make_feature_panel(ctx: MLContext, horizon: int = 5) -> tuple[pd.DataFrame, 
             for ticker in rets.columns
         }
         for future in as_completed(futures):
-            try:
-                ticker_rows, ticker_y = future.result()
-                rows.extend(ticker_rows)
-                y_vals.extend(ticker_y)
-            except Exception:
-                continue
+            ticker_rows, ticker_y = future.result()
+            rows.extend(ticker_rows)
+            y_vals.extend(ticker_y)
 
     panel = pd.DataFrame(rows)
     if panel.empty:
         return pd.DataFrame(), pd.Series(dtype=float)
-    disk_set(key, {"rows": rows, "y": y_vals})
-    return panel, pd.Series(y_vals, index=panel.index, name="target_return")
+    panel = panel.sort_values(["date", "ticker"], kind="stable").reset_index(drop=True)
+    return panel, panel["target_return"].copy()
 
 
 def numeric_xy(panel: pd.DataFrame, y: pd.Series | None = None) -> tuple[pd.DataFrame, pd.Series]:
@@ -416,7 +388,7 @@ def numeric_xy(panel: pd.DataFrame, y: pd.Series | None = None) -> tuple[pd.Data
         "ret_1d", "mom_5", "mom_21", "mom_63", "reversal_5",
         "vol_21", "vol_63", "drawdown_63", "volume_z_21", "amihud_21",
         "hl_amihud_21", "corwin_schultz_21", "dollar_vol_mom",
-        "turnover_rate", "max_factor_21", "high_52w", "market_cap",
+        "turnover_rate", "max_factor_21", "high_52w",
     ]
     x = panel[[c for c in cols if c in panel.columns]].replace([np.inf, -np.inf], np.nan).fillna(0.0)
     target = y if y is not None else panel.get("target_return", pd.Series(dtype=float))

@@ -143,11 +143,21 @@ def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: in
         requested = [normalize_symbol(x) for x in raw if str(x).strip()]
     else:
         requested = [normalize_symbol(raw)]
-    filtered = [s for s in requested if s in existing]
-    if not filtered:
-        filtered = universe[:default_limit]
+    if raw_label in {"sp500", "s&p 500"}:
+        raise ValueError("S&P 500 membership is unavailable; supply an explicit ticker list.")
+    missing = sorted(set(requested) - existing)
+    if missing:
+        raise ValueError("Unknown ML V2 symbols: " + ", ".join(missing))
     cap = int(payload.get("max_symbols") or payload.get("max_tickers") or max_symbols)
-    return filtered[: max(3, min(cap, max_symbols))]
+    if not 1 <= cap <= max_symbols:
+        raise ValueError(f"max_symbols must be between 1 and {max_symbols}")
+    requested = list(dict.fromkeys(requested))
+    if raw is not None and raw_label not in {"", "default", "all", "full", "master", "master_universe", "market_universe", "whole"} and len(requested) > cap:
+        raise ValueError(f"Requested {len(requested)} symbols exceeds max_symbols={cap}")
+    if not requested:
+        raise ValueError("No market observations available for the requested universe")
+    return requested[:cap]
+
 
 
 def ohlcv_for_symbols(symbols: Iterable[str], lookback_days: int | None = None, frequency: str = "daily") -> pd.DataFrame:
@@ -174,30 +184,30 @@ def returns_matrix(symbols: Iterable[str], lookback_days: int = 504, frequency: 
     if ohlcv.empty:
         return pd.DataFrame()
     prices = ohlcv.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index()
-    prices = prices.ffill().dropna(axis=1, thresh=max(20, int(len(prices) * min_coverage)))
+    prices = prices.where(prices > 0)
     if freq == "hourly":
-        prices = prices.resample("1h").last().ffill()
+        prices = prices.resample("1h").last()
     elif freq == "weekly":
         prices = prices.resample("W-FRI").last()
     elif freq == "monthly":
         prices = prices.resample("M").last()
     rets = np.log(prices / prices.shift(1)).replace([np.inf, -np.inf], np.nan)
     rets = rets.dropna(how="all").tail(lookback_rows(lookback_days, freq))
-    return rets.dropna(axis=1, thresh=max(20, int(len(rets) * min_coverage))).fillna(0.0)
+    return rets
 
 
 def close_matrix(symbols: Iterable[str], lookback_days: int = 504, frequency: str = "daily") -> pd.DataFrame:
     ohlcv = ohlcv_for_symbols(list(symbols), lookback_days=max(int(lookback_days) + 120, int(lookback_days)), frequency=frequency)
     if ohlcv.empty:
         return pd.DataFrame()
-    return ohlcv.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index().ffill().tail(lookback_rows(lookback_days, frequency))
+    return ohlcv.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index().tail(lookback_rows(lookback_days, frequency))
 
 
 def volume_matrix(symbols: Iterable[str], lookback_days: int = 504, frequency: str = "daily") -> pd.DataFrame:
     ohlcv = ohlcv_for_symbols(list(symbols), lookback_days=max(int(lookback_days) + 120, int(lookback_days)), frequency=frequency)
     if ohlcv.empty:
         return pd.DataFrame()
-    return ohlcv.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index().ffill().tail(lookback_rows(lookback_days, frequency))
+    return ohlcv.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index().tail(lookback_rows(lookback_days, frequency))
 
 
 @lru_cache(maxsize=1)
