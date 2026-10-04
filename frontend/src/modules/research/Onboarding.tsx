@@ -8,7 +8,7 @@ const KEY = "research-onboarding-v1";
 const STEPS = [
   { label: "Load momentum on the Signal page", href: "/research/signal" },
   { label: "Run the report card", href: "/research/report" },
-  { label: "Open Robustness", href: "/research/signal" },
+  { label: "Open Robustness", href: "/research/robustness" },
 ];
 type State = { done: number[]; dismissed: boolean };
 

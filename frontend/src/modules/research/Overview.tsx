@@ -9,6 +9,7 @@ import { latestRun, useJob } from "./api";
 import { cardId, usePins, type Pin } from "./cardPrefs";
 import { layoutFor } from "./layouts";
 import { OutputCard } from "./OutputCard";
+import { Onboarding } from "./Onboarding";
 import { featureHref, metaFor } from "./catalog";
 import type { FeatureSpec, RunRecord } from "./types";
 
@@ -59,6 +60,7 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
           ))}
         </div>
 
+        <Onboarding />
         <Board features={features} />
 
         {stages.map((stage, si) => (

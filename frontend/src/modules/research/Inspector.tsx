@@ -8,6 +8,7 @@ import { featureHref, metaFor } from "./catalog";
 import { studyPart } from "./api";
 import { out } from "./format";
 import { layoutFor } from "./layouts";
+import { DataWindow } from "./DataWindow";
 import { cardId, useCardPrefs, useFeaturePrefs } from "./cardPrefs";
 import type { FeatureRun } from "./ResearchApp";
 import { useSelection } from "./selection";
@@ -41,7 +42,14 @@ export function Inspector({ feature, run }: { feature: FeatureSpec; run: Feature
             {changedFromRun ? (
               <div style={{ display: "flex", alignItems: "center", gap: 8, margin: 10, padding: "8px 10px", borderRadius: 9, background: "var(--accent-soft)", fontSize: 12, color: "var(--text-2)" }}>
                 <History size={13} style={{ color: "var(--accent)", flex: "none" }} />
-                <span style={{ flex: 1 }}>Settings differ from the run on screen.</span>
+                <span style={{ flex: 1 }}>
+                  {(() => {
+                    const a = studyPart(toPayload(feature, run.form)) ?? {}, b = studyPart(run.record?.payload) ?? {};
+                    const keys = Object.keys({ ...a, ...b }).filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+                    const name = (k: string) => feature.inputs.find((f) => f.key === k)?.label ?? k;
+                    return keys.length ? <>{keys.length} setting{keys.length > 1 ? "s" : ""} changed since the run on screen: {keys.slice(0, 4).map(name).join(", ")}{keys.length > 4 ? "…" : ""}</> : "Settings differ from the run on screen.";
+                  })()}
+                </span>
                 <button className="btn sm ghost" onClick={run.restore}>Restore</button>
               </div>
             ) : null}
@@ -71,6 +79,10 @@ export function Inspector({ feature, run }: { feature: FeatureSpec; run: Feature
             ) : (
               <p style={{ color: "var(--text-3)", fontSize: 12.5, lineHeight: 1.55 }}>Point at a specification on the curve, or any chart, to see every detail here.</p>
             )}
+          </section>
+          <section style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
+            <h4 className="insp-h">Data window</h4>
+            <DataWindow />
           </section>
           <Outline feature={feature} run={run} />
         </div>

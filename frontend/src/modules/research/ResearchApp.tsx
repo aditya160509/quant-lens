@@ -23,7 +23,7 @@ import { verdictFor } from "./layouts";
 import { Overview } from "./Overview";
 import { sweepValues, useStudies, useSweeps } from "./store";
 import { useViews } from "@/workspace/views";
-import { defaultsFor, toPayload, validate, type FormState } from "./StudyForm";
+import { decodeSettings, defaultsFor, toPayload, validate, type FormState } from "./StudyForm";
 import type { FeatureSpec, RunRecord } from "./types";
 
 /** Panel sizes persist per device; reads are safe during server rendering and in private windows. */
@@ -226,6 +226,15 @@ function useFeatureRun(feature: FeatureSpec) {
   }, [job.data, jobId, feature, record, updateRun, logRun]);
 
   const setForm = useCallback((updater: (cur: FormState) => FormState) => setFormStore(feature.id, updater, defaults), [feature.id, defaults, setFormStore]);
+
+  // A shared link carries its settings in ?s=; apply them once, then drop the parameter.
+  const shared = search?.get("s");
+  useEffect(() => {
+    if (!shared) return;
+    const v = decodeSettings(shared);
+    if (v) setForm(() => ({ ...defaults, ...v }));
+    const u = new URL(window.location.href); u.searchParams.delete("s"); router.replace(u.pathname + u.search, { scroll: false });
+  }, [shared, setForm, defaults, router]);
 
   const run = useCallback(() => {
     const errs = validate(feature, form);
