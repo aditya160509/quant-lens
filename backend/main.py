@@ -23,9 +23,7 @@ from app.api import labs, portfolio, cluster_b, options, markets, security, orde
 from app.api import portfolio_risk_api  # Portfolio Risk VaR System
 from app.api import liquidity_api  # Liquidity Intelligence Engine
 from app.api import screener_api  # QUANT360 Screener
-from app.api import research_beta, research_macro_shock, research_style_map, research_regimes, research_correlation
 from app.api import prices
-from app.api import research_fg  # Cluster F+G
 from app.api import markets_daily  # Markets Daily Cognition Terminal
 from app.api import nse_india  # NSE India Stock Market API (FREE)
 from app.api import research_quantitative  # Quantitative Math Lab
@@ -112,11 +110,6 @@ app.include_router(portfolio_risk_api.router, prefix="/api/portfolio-risk", tags
 app.include_router(prices.router, tags=["prices"])
 
 # Research Routers (Cluster D)
-app.include_router(research_beta.router, prefix="/api/research", tags=["research"])
-app.include_router(research_macro_shock.router, prefix="/api/research", tags=["research"])
-app.include_router(research_style_map.router, prefix="/api/research", tags=["research"])
-app.include_router(research_regimes.router, prefix="/api/research", tags=["research"])
-app.include_router(research_correlation.router, prefix="/api/research", tags=["research"])
 
 # Quantitative Math Lab - SDE, Kalman, Cointegration, Spectral
 app.include_router(research_quantitative.router, prefix="/api", tags=["quantitative-lab"])
@@ -132,7 +125,6 @@ from app.api import research_v2_projects; app.include_router(research_v2_project
 # Research Router (Cluster E)
 
 # Research Router (Cluster F+G)
-app.include_router(research_fg.router, prefix="/api", tags=["research-fg"])
 
 
 # Markets Daily Cognition Terminal Router
