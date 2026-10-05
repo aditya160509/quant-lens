@@ -134,7 +134,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
             </motion.div>
           ) : null}
         </AnimatePresence>
-        {running ? <Progress startedAt={run.startedAt} status={run.status} /> : null}
+        {running ? <Progress startedAt={run.startedAt} status={run.status} progress={run.progress} /> : null}
       </div>
 
       <div className={`sticky-bar${stuck ? " stuck" : ""}`}>
@@ -271,15 +271,19 @@ function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: Featu
 /** Headline numbers: enough precision to see small slopes, never more than four decimals. */
 const kpi = (v: number) => (Number.isInteger(v) ? num(v) : Math.abs(v) < 0.1 ? num(v, 4) : Math.abs(v) < 10 ? num(v, 3) : num(v, 1));
 
-function Progress({ startedAt, status }: { startedAt: number | null; status: string }) {
+/** Elapsed time, plus the stage and percent when the API reports them ({ percent, message }). */
+function Progress({ startedAt, status, progress }: { startedAt: number | null; status: string; progress?: unknown }) {
+  const p = progress && typeof progress === "object" ? progress as { percent?: number; message?: string } : null;
+  const percent = typeof p?.percent === "number" ? Math.max(0, Math.min(100, p.percent)) : null;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 200); return () => clearInterval(id); }, []);
   const secs = startedAt ? Math.max(0, (now - startedAt) / 1000) : 0;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16, padding: "10px 14px", borderRadius: 10, background: "var(--panel)", boxShadow: "inset 0 0 0 1px var(--line)", fontSize: 12.5, color: "var(--text-2)" }}>
       <Loader2 size={14} className="spin" style={{ color: "var(--accent)" }} />
-      <span>{status === "queued" ? "Queued" : status === "submitting" ? "Submitting the study" : "Estimating"}</span>
-      <div className="progress"><i /></div>
+      <span>{status === "queued" ? "Queued" : status === "submitting" ? "Submitting the study" : p?.message || "Estimating"}</span>
+      <div className="progress">{percent !== null && percent > 0 ? <i style={{ animation: "none", width: `${percent}%`, transition: "width .4s var(--ease)" }} /> : <i />}</div>
+      {percent !== null && percent > 0 ? <span className="num" style={{ color: "var(--text-3)" }}>{Math.round(percent)}%</span> : null}
       <span className="num" style={{ marginLeft: "auto", color: "var(--text-3)" }}>{secs.toFixed(1)}s</span>
     </div>
   );

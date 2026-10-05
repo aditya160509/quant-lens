@@ -100,6 +100,12 @@ def available_symbols(limit: int | None = None, frequency: str = "daily") -> lis
     return out[:limit] if limit else out
 
 
+DEFAULT_UNIVERSE = (
+    "AAPL", "MSFT", "AMZN", "GOOGL", "META", "NVDA", "JPM", "BAC", "WFC", "GS", "XOM", "CVX", "COP", "JNJ", "PFE", "MRK", "UNH",
+    "PG", "KO", "PEP", "WMT", "COST", "HD", "MCD", "DIS", "CSCO", "ORCL", "IBM", "ADBE", "CAT", "BA", "GE", "MMM", "HON", "T", "VZ",
+)
+
+
 def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: int = 5000) -> list[str]:
     payload = payload or {}
     raw = payload.get("tickers") or payload.get("symbols") or payload.get("assets") or payload.get("asset") or payload.get("symbol") or payload.get("universe")
@@ -107,7 +113,9 @@ def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: in
     existing = set(universe)
     raw_label = str(raw or "").strip().lower()
     if raw is None or raw_label in {"", "default", "sp500", "s&p 500"}:
-        requested = universe[:default_limit]
+        # A fixed default of liquid US large caps on one exchange calendar, so a first run is complete;
+        # a coverage-ranked default mixes crypto, FX and foreign listings whose calendars leave gaps.
+        requested = [s for s in DEFAULT_UNIVERSE if s in existing][:default_limit] or universe[:default_limit]
     elif raw_label in {"all", "full", "master", "master_universe", "market_universe", "whole"}:
         requested = universe
     elif isinstance(raw, str):

@@ -105,7 +105,9 @@ def run_vol_forecasting(payload: dict[str, Any] | None = None) -> dict[str, Any]
     daily_variance = returns.pow(2)*ctx.annualization
     features = pd.DataFrame({"date":returns.index,"daily_variance":daily_variance,
         "weekly_variance":daily_variance.rolling(5).mean(),"monthly_variance":daily_variance.rolling(21).mean()})
-    features["peer_variance"] = ctx.returns.drop(columns=[asset]).pow(2).mean(axis=1,skipna=False)*ctx.annualization
+    # Average over peers observed that day; a date needs at least two, so one short history cannot void the panel.
+    peers = ctx.returns.drop(columns=[asset]).pow(2)
+    features["peer_variance"] = peers.mean(axis=1).where(peers.notna().sum(axis=1)>=2)*ctx.annualization
     suite = str(ctx.payload.get("model_suite","har_ml"))
     models = {"HAR-Ridge":Ridge(alpha=1),"HAR-GBM":GradientBoostingRegressor(n_estimators=80,max_depth=2,random_state=3),
         "HAR-X-ElasticNet":ElasticNet(alpha=1e-4,l1_ratio=.35,max_iter=3000)}

@@ -69,7 +69,7 @@ export type Job = {
   status: Exclude<JobStatus, "idle" | "submitting">;
   created_at?: string;
   updated_at?: string;
-  progress?: number | string | null;
+  progress?: number | string | { percent?: number; message?: string } | null;
   error?: string | null;
   result?: FeatureResult;
 };

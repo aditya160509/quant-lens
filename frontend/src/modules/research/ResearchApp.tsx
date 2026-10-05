@@ -323,7 +323,7 @@ function useFeatureRun(feature: FeatureSpec) {
   const stale = Boolean(record?.payload) && (() => { try { return JSON.stringify(studyPart(toPayload(feature, form))) !== JSON.stringify(studyPart(record?.payload)); } catch { return true; } })();
   const status = submit.isPending ? "submitting" : job.data?.status ?? (jobId && job.isLoading ? "loading" : "idle");
   return {
-    form, setForm, errors, run, stale, cancel, status, record, restore, jobId,
+    form, setForm, errors, run, stale, cancel, status, record, restore, jobId, progress: job.data?.progress,
     reset: () => { resetForm(feature.id); setErrors({}); },
     result: job.data?.status === "completed" ? job.data.result ?? null : null,
     error: submit.error?.message ?? (job.error as Error | null)?.message ?? (job.data?.status === "failed" ? job.data.error ?? "The run failed." : null),
