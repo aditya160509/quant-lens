@@ -11,7 +11,7 @@ def quotes(monkeypatch):
             for ticker in ["AAA", "BBB"] for i, date in enumerate(dates)
             if not (ticker == "AAA" and i == 25)]
     frame = pd.DataFrame(rows)
-    monkeypatch.setattr(loader, "load_market_ohlcv", lambda: frame)
+    monkeypatch.setattr(loader, "load_market_ohlcv", lambda *a, **k: frame)
     monkeypatch.setattr(loader, "available_symbols", lambda **kwargs: ["AAA", "BBB"])
     return dates
 

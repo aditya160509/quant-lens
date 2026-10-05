@@ -40,8 +40,7 @@ def local_market(monkeypatch):
             rows.append({"Ticker": ticker, "Date": date, "Open": price * .999,
                          "High": price * 1.01, "Low": price * .99, "Close": price, "Volume": 100000.})
     frame = pd.DataFrame(rows)
-    monkeypatch.setattr(data_loader, "load_market_ohlcv", lambda: frame)
-    monkeypatch.setattr(data_loader, "load_hourly_ohlcv", lambda: pd.DataFrame())
+    monkeypatch.setattr(data_loader, "load_market_ohlcv", lambda *a, **k: frame)
     monkeypatch.setattr(data_loader, "available_symbols", lambda **kwargs: symbols)
     monkeypatch.setattr(data_loader, "load_macro", lambda: pd.DataFrame(columns=["date"]))
     monkeypatch.setattr(data_loader, "load_fama_french", lambda: pd.DataFrame(columns=["date"]))

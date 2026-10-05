@@ -10,15 +10,11 @@ from functools import lru_cache
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Iterable, Any
-import math
 
 import numpy as np
 import pandas as pd
 
-try:
-    import polars as pl
-except Exception:  # pragma: no cover
-    pl = None
+import polars as pl
 
 
 AS_OF_DATE = ContextVar("ml_v2_as_of_date", default=None)
@@ -33,8 +29,6 @@ ROOT = Path(__file__).resolve().parents[5]
 BACKEND_DATA = ROOT / "backend" / "data"
 FACTORS_DATA = ROOT / "factors" / "data"
 MARKET_UNIVERSE = BACKEND_DATA / "market_universe.parquet"
-MARKET_UNIVERSE_HOURLY = BACKEND_DATA / "market_universe_hourly.parquet"
-RESEARCH_HOURLY = ROOT / "research_exports" / "final_submission_package" / "SUBMISSION_MAIN" / "data_sources" / "parquet" / "market_universe_hourly.parquet"
 MASTER_FUNDAMENTALS = BACKEND_DATA / "fundamentals" / "master_fundamentals.parquet"
 CATEGORY7_MACRO = FACTORS_DATA / "processed" / "category7_macro_regime.parquet"
 FF_DAILY = FACTORS_DATA / "raw" / "fama_french" / "F-F_Research_Data_Factors_daily.csv"
@@ -46,111 +40,70 @@ def normalize_symbol(symbol: Any) -> str:
     return str(symbol).strip().upper().replace(".", "_").replace("-", "_")
 
 
-def denormalize_candidates(symbol: str) -> set[str]:
-    raw = str(symbol).strip()
-    return {raw, raw.upper(), raw.replace("_", "-"), raw.replace("-", "_"), raw.upper().replace("_", "-"), raw.upper().replace("-", "_")}
-
-
 def normalize_frequency(frequency: Any = "daily") -> str:
-    raw = str(frequency or "daily").strip().lower().replace("-", "_")
-    if raw in {"h", "1h", "hour", "hourly", "intraday"}:
-        return "hourly"
-    if raw in {"w", "week", "weekly"}:
-        return "weekly"
-    if raw in {"m", "month", "monthly"}:
-        return "monthly"
-    if raw in {"daily", "day", "d", "1d"}:
-        return "daily"
-    raise ValueError(f"Unsupported frequency: {frequency}")
+    raw = str(frequency or "daily").strip().lower()
+    if raw not in {"daily", "day", "d", "1d"}:
+        raise ValueError(f"Unsupported frequency: {frequency}; ML V2 supports daily OHLCV only")
+    return "daily"
 
 
-def annualization_factor(frequency: Any = "daily", asset_class: str | None = None) -> float:
-    freq = normalize_frequency(frequency)
-    if freq == "hourly":
-        return 365.0 * 24.0 if str(asset_class or "").lower() == "crypto" else 252.0 * 6.5
-    if freq == "weekly":
-        return 52.0
-    if freq == "monthly":
-        return 12.0
+def annualization_factor(frequency: Any = "daily") -> float:
+    normalize_frequency(frequency)
     return 252.0
 
 
-def lookback_rows(lookback_days: int | float, frequency: Any = "daily") -> int:
-    days = max(float(lookback_days or 1), 1.0)
-    freq = normalize_frequency(frequency)
-    if freq == "hourly":
-        return max(100, int(math.ceil(days * 6.5)))
-    if freq == "weekly":
-        return max(12, int(math.ceil(days / 5.0)))
-    if freq == "monthly":
-        return max(6, int(math.ceil(days / 21.0)))
-    return max(30, int(days))
+def lookback_rows(lookback_days: int | float) -> int:
+    return max(30, int(max(float(lookback_days or 1), 1.0)))
 
 
-@lru_cache(maxsize=1)
-def load_market_ohlcv() -> pd.DataFrame:
-    columns = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
+_PRICE_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
+_TICKER = pl.col("Ticker").str.strip_chars().str.to_uppercase().str.replace_all(r"[.\-]", "_")
+
+
+@lru_cache(maxsize=8)
+def _symbol_counts(cutoff: pd.Timestamp | None) -> tuple[str, ...]:
+    """Symbols ordered by number of valid daily closes (cached; one projected scan of three columns)."""
+    if not MARKET_UNIVERSE.exists():
+        return ()
+    lazy = pl.scan_parquet(str(MARKET_UNIVERSE)).select(["Ticker", "Date", "Close"])
+    if cutoff is not None:
+        lazy = lazy.filter(pl.col("Date").cast(pl.Datetime("us")) <= cutoff.to_pydatetime())
+    counts = (lazy.filter(pl.col("Close") > 0).with_columns(_TICKER.alias("Ticker"))
+              .group_by("Ticker").agg(pl.col("Date").n_unique().alias("n")).sort(["n", "Ticker"], descending=[True, False]).collect())
+    return tuple(counts["Ticker"].to_list())
+
+
+def load_market_ohlcv(symbols: Iterable[str] | None = None) -> pd.DataFrame:
+    """Validated daily OHLCV for `symbols` (all symbols when None); only requested symbols are materialised."""
+    columns = ["Ticker", "Date", *_PRICE_COLUMNS]
     if not MARKET_UNIVERSE.exists():
         return pd.DataFrame(columns=columns)
-    if pl is not None:
-        try:
-            df = pl.scan_parquet(str(MARKET_UNIVERSE)).select([c for c in columns if c]).collect().to_pandas()
-        except Exception:
-            df = pd.read_parquet(MARKET_UNIVERSE, columns=columns)
-    else:
-        df = pd.read_parquet(MARKET_UNIVERSE, columns=columns)
+    lazy = pl.scan_parquet(str(MARKET_UNIVERSE)).select(columns).with_columns(_TICKER.alias("Ticker"))
+    if symbols is not None:
+        lazy = lazy.filter(pl.col("Ticker").is_in(sorted({normalize_symbol(s) for s in symbols})))
+    df = lazy.collect().to_pandas()
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    for col in ["Open", "High", "Low", "Close", "Volume"]:
+    for col in _PRICE_COLUMNS:
         df[col] = pd.to_numeric(df[col], errors="coerce")
-    df["Ticker"] = df["Ticker"].map(normalize_symbol)
-    invalid = df["Close"] <= 0
-    df.loc[invalid, ["Open", "High", "Low", "Close", "Volume"]] = np.nan
+    df.loc[~(df["Close"] > 0), _PRICE_COLUMNS] = np.nan
     keys = ["Ticker", "Date"]
     observations = df.dropna(subset=keys)
     duplicate = observations.duplicated(keys, keep=False)
-    if duplicate.any():
-        unique_rows = observations.loc[duplicate].drop_duplicates()
-        if unique_rows.duplicated(keys, keep=False).any():
-            raise ValueError("Conflicting price observations after ticker normalization")
+    if duplicate.any() and observations.loc[duplicate].drop_duplicates().duplicated(keys, keep=False).any():
+        raise ValueError("Conflicting price observations after ticker normalization")
     return observations.drop_duplicates(keys).sort_values(keys)
 
 
-@lru_cache(maxsize=1)
-def load_hourly_ohlcv() -> pd.DataFrame:
-    path = MARKET_UNIVERSE_HOURLY
-    if not path.exists():
-        return pd.DataFrame(columns=["Ticker", "Datetime", "Open", "High", "Low", "Close", "Volume"])
-    df = pd.read_parquet(path)
-    rename = {c: str(c).strip().title() for c in df.columns}
-    df = df.rename(columns=rename)
-    if "Date" in df.columns and "Datetime" not in df.columns:
-        df = df.rename(columns={"Date": "Datetime"})
-    keep = [c for c in ["Ticker", "Datetime", "Open", "High", "Low", "Close", "Volume"] if c in df.columns]
-    out = df[keep].copy()
-    out["Datetime"] = pd.to_datetime(out["Datetime"], errors="coerce")
-    out["Ticker"] = out["Ticker"].map(normalize_symbol)
-    for col in ["Open", "High", "Low", "Close", "Volume"]:
-        if col not in out.columns:
-            out[col] = np.nan
-        out[col] = pd.to_numeric(out[col], errors="coerce")
-    return out.dropna(subset=["Ticker", "Datetime", "Close"]).sort_values(["Ticker", "Datetime"])
-
-
 def available_symbols(limit: int | None = None, frequency: str = "daily") -> list[str]:
-    df = load_hourly_ohlcv() if normalize_frequency(frequency) == "hourly" else load_market_ohlcv()
-    if df.empty:
-        return []
-    df = dated(df, "Datetime" if "Datetime" in df else "Date")
-    counts = df.groupby("Ticker")["Close"].count().sort_values(ascending=False)
-    out = [str(s) for s in counts.index]
+    normalize_frequency(frequency)
+    out = list(_symbol_counts(AS_OF_DATE.get()))
     return out[:limit] if limit else out
 
 
 def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: int = 5000) -> list[str]:
     payload = payload or {}
     raw = payload.get("tickers") or payload.get("symbols") or payload.get("assets") or payload.get("asset") or payload.get("symbol") or payload.get("universe")
-    freq = normalize_frequency(payload.get("frequency") or payload.get("sampling_frequency") or "daily")
-    universe = available_symbols(frequency=freq)
+    universe = available_symbols(frequency=payload.get("frequency") or "daily")
     existing = set(universe)
     raw_label = str(raw or "").strip().lower()
     if raw is None or raw_label in {"", "default", "sp500", "s&p 500"}:
@@ -179,55 +132,41 @@ def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: in
     return requested[:cap]
 
 
-
 def ohlcv_for_symbols(symbols: Iterable[str], lookback_days: int | None = None, frequency: str = "daily") -> pd.DataFrame:
-    freq = normalize_frequency(frequency)
-    normalized = {normalize_symbol(s) for s in symbols if str(s).strip()}
-    if freq == "hourly":
-        df = load_hourly_ohlcv()
-        out = dated(df[df["Ticker"].isin(normalized)].copy(), "Datetime")
-        if lookback_days and not out.empty:
-            cutoff = out["Datetime"].max() - pd.Timedelta(days=int(lookback_days) * 2)
-            out = out[out["Datetime"] >= cutoff]
-        return out.rename(columns={"Datetime": "Date"}).sort_values(["Ticker", "Date"])
-    df = load_market_ohlcv()
-    out = dated(df[df["Ticker"].isin(normalized)].copy(), "Date")
+    normalize_frequency(frequency)
+    out = dated(load_market_ohlcv(list(symbols)), "Date")
     if lookback_days and not out.empty:
-        cutoff = out["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)
-        out = out[out["Date"] >= cutoff]
+        out = out[out["Date"] >= out["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)]
     return out.sort_values(["Ticker", "Date"])
 
 
-def returns_matrix(symbols: Iterable[str], lookback_days: int = 504, frequency: str = "daily", min_coverage: float = 0.70) -> pd.DataFrame:
-    freq = normalize_frequency(frequency)
-    ohlcv = ohlcv_for_symbols(list(symbols), lookback_days=max(int(lookback_days) + 120, int(lookback_days)), frequency=freq)
-    if ohlcv.empty:
-        return pd.DataFrame()
-    prices = ohlcv.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index()
-    prices = prices.where(prices > 0)
-    if freq == "hourly":
-        prices = prices.resample("1h").last()
-    elif freq == "weekly":
-        prices = prices.resample("W-FRI").last()
-    elif freq == "monthly":
-        prices = prices.resample("M").last()
+def _wide(ohlcv: pd.DataFrame, field: str) -> pd.DataFrame:
+    return ohlcv.pivot(index="Date", columns="Ticker", values=field).sort_index()
+
+
+def returns_from_ohlcv(ohlcv: pd.DataFrame, lookback_days: int) -> pd.DataFrame:
+    prices = _wide(ohlcv, "Close")
     rets = np.log(prices / prices.shift(1)).replace([np.inf, -np.inf], np.nan)
-    rets = rets.dropna(how="all").tail(lookback_rows(lookback_days, freq))
-    return rets
+    return rets.dropna(how="all").tail(lookback_rows(lookback_days))
+
+
+def _fetch(symbols: Iterable[str], lookback_days: int, frequency: str) -> pd.DataFrame:
+    return ohlcv_for_symbols(list(symbols), lookback_days=int(lookback_days) + 120, frequency=frequency)
+
+
+def returns_matrix(symbols: Iterable[str], lookback_days: int = 504, frequency: str = "daily") -> pd.DataFrame:
+    ohlcv = _fetch(symbols, lookback_days, frequency)
+    return pd.DataFrame() if ohlcv.empty else returns_from_ohlcv(ohlcv, lookback_days)
 
 
 def close_matrix(symbols: Iterable[str], lookback_days: int = 504, frequency: str = "daily") -> pd.DataFrame:
-    ohlcv = ohlcv_for_symbols(list(symbols), lookback_days=max(int(lookback_days) + 120, int(lookback_days)), frequency=frequency)
-    if ohlcv.empty:
-        return pd.DataFrame()
-    return ohlcv.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index().tail(lookback_rows(lookback_days, frequency))
+    ohlcv = _fetch(symbols, lookback_days, frequency)
+    return pd.DataFrame() if ohlcv.empty else _wide(ohlcv, "Close").tail(lookback_rows(lookback_days))
 
 
 def volume_matrix(symbols: Iterable[str], lookback_days: int = 504, frequency: str = "daily") -> pd.DataFrame:
-    ohlcv = ohlcv_for_symbols(list(symbols), lookback_days=max(int(lookback_days) + 120, int(lookback_days)), frequency=frequency)
-    if ohlcv.empty:
-        return pd.DataFrame()
-    return ohlcv.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index().tail(lookback_rows(lookback_days, frequency))
+    ohlcv = _fetch(symbols, lookback_days, frequency)
+    return pd.DataFrame() if ohlcv.empty else _wide(ohlcv, "Volume").tail(lookback_rows(lookback_days))
 
 
 @lru_cache(maxsize=1)
@@ -322,22 +261,15 @@ def load_fama_french() -> pd.DataFrame:
 
 
 def data_inventory() -> dict[str, Any]:
-    daily = load_market_ohlcv()
-    hourly = load_hourly_ohlcv()
     macro = load_macro()
     ff = load_fama_french()
     return {
         "market_universe_parquet": str(MARKET_UNIVERSE),
         "market_universe_exists": MARKET_UNIVERSE.exists(),
-        "daily_rows": int(len(daily)),
-        "daily_tickers": int(daily["Ticker"].nunique()) if not daily.empty else 0,
-        "hourly_rows": int(len(hourly)),
-        "hourly_tickers": int(hourly["Ticker"].nunique()) if not hourly.empty else 0,
-        "hourly_source": str(MARKET_UNIVERSE_HOURLY),
+        "daily_tickers": len(_symbol_counts(None)),
         "macro_rows": int(len(macro)),
         "macro_columns": [str(c) for c in macro.columns[:50]],
         "fama_french_rows": int(len(ff)),
         "fama_french_columns": [str(c) for c in ff.columns[:30]],
         "fundamentals_exists": MASTER_FUNDAMENTALS.exists(),
     }
-

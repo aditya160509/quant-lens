@@ -5,7 +5,7 @@ from typing import Any
 import math
 import numpy as np
 import pandas as pd
-from .data_loader import annualization_factor, normalize_frequency, close_matrix, market_caps, ohlcv_for_symbols, parse_symbols, returns_matrix, sector_map, volume_matrix
+from .data_loader import annualization_factor, normalize_frequency, lookback_rows, market_caps, ohlcv_for_symbols, parse_symbols, returns_from_ohlcv, sector_map
 from .performance import ThreadPoolExecutor, as_completed
 from .common import number_like
 from .estimators import corwin_schultz_spread, high_low_amihud
@@ -38,13 +38,16 @@ def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> ML
     frequency = normalize_frequency(frequency)
     if frequency != "daily":
         raise ValueError("ML V2 feature engines currently support daily OHLCV only")
-    rets = returns_matrix(symbols, lookback_days=max(lookback, 90), frequency=frequency)
-    if rets.empty:
+    window = max(lookback, 90)
+    ohlcv = ohlcv_for_symbols(symbols, lookback_days=window + 120, frequency=frequency)
+    if ohlcv.empty:
         raise ValueError("Insufficient price history for the requested symbols")
+    rets = returns_from_ohlcv(ohlcv, window)
     symbols = [str(c) for c in rets.columns]
-    closes = close_matrix(symbols, lookback_days=max(lookback, 90), frequency=frequency).reindex(columns=symbols)
-    volumes = volume_matrix(symbols, lookback_days=max(lookback, 90), frequency=frequency).reindex(columns=symbols)
-    ohlcv = ohlcv_for_symbols(symbols, lookback_days=max(lookback, 90), frequency=frequency)
+    ohlcv = ohlcv[ohlcv["Ticker"].isin(symbols)]
+    tail = lookback_rows(window)
+    closes = ohlcv.pivot(index="Date", columns="Ticker", values="Close").sort_index().tail(tail).reindex(columns=symbols)
+    volumes = ohlcv.pivot(index="Date", columns="Ticker", values="Volume").sort_index().tail(tail).reindex(columns=symbols)
     return MLContext(
         payload=payload,
         symbols=symbols,
