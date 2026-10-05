@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 import warnings
 from typing import Any
 
@@ -169,6 +170,16 @@ def fit_decay_models(rolling: pd.Series, discovery: pd.Timestamp, which: str = "
     return out
 
 
+def _boot_half_lives(draws: list, resid: np.ndarray, fitted: np.ndarray, index: pd.Index, discovery: pd.Timestamp, block: int, n: int) -> list[float]:
+    out = []
+    for starts in draws:
+        boot = np.concatenate([resid[s:s + block] for s in starts])[:n]
+        res = fit_decay_models(pd.Series(fitted + boot, index=index), discovery, "exponential").get("exponential", {})
+        if res.get("available") and np.isfinite(res.get("half_life", np.nan)):
+            out.append(res["half_life"])
+    return out
+
+
 def half_life_bootstrap(rolling: pd.Series, discovery: pd.Timestamp, reps: int, block: int = 12, seed: int = 0) -> tuple[float, float]:
     """90% CI for the exponential half-life from a moving-block bootstrap of the fit residuals."""
 
@@ -179,13 +190,18 @@ def half_life_bootstrap(rolling: pd.Series, discovery: pd.Timestamp, reps: int, 
     resid = (rolling - fitted).to_numpy()
     n = len(resid)
     rng = np.random.default_rng(seed)
-    halves = []
-    for _ in range(int(reps)):
-        starts = rng.integers(0, max(1, n - block + 1), size=int(np.ceil(n / block)))
-        boot = np.concatenate([resid[s:s + block] for s in starts])[:n]
-        res = fit_decay_models(pd.Series(fitted.to_numpy() + boot, index=rolling.index), discovery, "exponential").get("exponential", {})
-        if res.get("available") and np.isfinite(res.get("half_life", np.nan)):
-            halves.append(res["half_life"])
+    n_blocks = int(np.ceil(n / block))
+    draws = [rng.integers(0, max(1, n - block + 1), size=n_blocks) for _ in range(int(reps))]  # drawn serially so results do not depend on worker count
+    base_fit = fitted.to_numpy()
+    chunks = [draws[i::8] for i in range(8)]
+    from joblib import Parallel, delayed
+    from joblib.externals.loky import get_reusable_executor
+
+    try:
+        parts = Parallel(n_jobs=min(8, os.cpu_count() or 1))(delayed(_boot_half_lives)(c, resid, base_fit, rolling.index, discovery, block, n) for c in chunks)
+    finally:  # loky keeps idle workers for 300 s, which stalls the one-shot job process at exit
+        get_reusable_executor().shutdown(wait=True)
+    halves = [h for part in parts for h in part]
     if len(halves) < 20:
         return np.nan, np.nan
     lo, hi = float(np.percentile(halves, 5)), float(np.percentile(halves, 95))

@@ -46,6 +46,7 @@ SPEC = [
     field("rebalancing_frequency", "Rebalancing", "select", "monthly", "Specification", ["monthly", "quarterly", "annual"]),
     field("controls", "Controls", "select", "none", "Specification", list(CONTROL_SETS)),
     field("weighting", "Portfolio weighting", "select", "equal", "Specification", ["equal", "value", "rank"]),
+    field("borrow_cost_bps", "Short borrow cost (bps per year)", "number", 0, "Specification", min=0, max=2000, help_="Annual fee on the short leg, deducted from the long-short return in meta.costs (net Sharpe, break-even, capacity). Zero for long-only."),
 ]
 
 BASE = UNIVERSE + SIGNAL + SPEC
@@ -57,7 +58,7 @@ BASE = UNIVERSE + SIGNAL + SPEC
 
 QUICK_KEYS = {"universe", "max_symbols", "lookback_days", "signal", "signal_csv_path", "forward_months", "weighting", "identification_design", "treated_unit", "treatment_date", "event_csv_path", "discovery_date", "publication_date", "conditioning_variable", "mode", "sort_portfolios"}
 EXPERT_KEYS = {"nw_lag", "se_type", "fixed_effects", "bootstrap_replications", "permutation_replications", "max_specifications", "weighting_philosophy", "kernel", "polynomial_order", "bandwidth", "rd_design", "iv_estimator", "iv_controls", "cluster", "cs_control_group", "matches_per_treated", "anticipation_months", "estimation_window", "contamination_days", "double_sort_type", "rolling_window", "conformal_alpha", "universe_filters", "signal_transform"}
-UNIT_BY_KEY = {"lookback_days": "days", "forward_months": "months", "event_window_months": "months", "rolling_window": "months", "pre_period_months": "months", "post_period_months": "months", "anticipation_months": "months", "estimation_window": "days", "contamination_days": "days", "nw_lag": "months", "max_symbols": "tickers", "donor_limit": "tickers", "event_quantile": "percentile", "spread_bps": "bps", "commission_bps": "bps", "embargo_days": "days", "cutoff": "USD bn or rank", "min_price": "USD", "min_dollar_volume": "USD", "min_listing_months": "months", "conformal_alpha": "probability"}
+UNIT_BY_KEY = {"lookback_days": "days", "forward_months": "months", "event_window_months": "months", "rolling_window": "months", "pre_period_months": "months", "post_period_months": "months", "anticipation_months": "months", "estimation_window": "days", "contamination_days": "days", "nw_lag": "months", "max_symbols": "tickers", "donor_limit": "tickers", "event_quantile": "percentile", "spread_bps": "bps", "borrow_cost_bps": "bps per year", "commission_bps": "bps", "embargo_days": "days", "cutoff": "USD bn or rank", "min_price": "USD", "min_dollar_volume": "USD", "min_listing_months": "months", "conformal_alpha": "probability"}
 CITATIONS = {
     "nw_lag": "Newey and West (1987)",
     "se_type": "Petersen (2009); Driscoll and Kraay (1998)",

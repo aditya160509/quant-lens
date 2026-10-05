@@ -163,7 +163,7 @@ def run_regime(payload: dict[str, Any]) -> dict[str, Any]:
         {"label": "Interaction t", "value": next((r["t_stat"] for r in interaction if r["term"] == "signal_x_regime"), None)},
         {"label": "Amplification", "value": amp.get("amplification_factor")},
     ]
-    return {"summary": summary, "charts": charts, "tables": tables, "meta": {"config": panel.config, "research_caveats": panel.caveats}}
+    return {"summary": summary, "charts": charts, "tables": tables, "meta": {"config": panel.config, "research_caveats": list(panel.caveats) + ([markov["caveat"]] if markov.get("caveat") else [])}}
 
 
 def interaction_regression(stacked: pd.DataFrame, regime: pd.Series) -> list[dict[str, Any]]:
@@ -247,18 +247,28 @@ def markov_switching(lam: pd.Series) -> dict[str, Any]:
     y = lam.dropna()
     if len(y) < 48:
         return {"summary": {"status": "needs at least 48 months"}, "probabilities": pd.DataFrame()}
+    # Deterministic start: split months by trailing volatility (no random restarts), so repeated runs give identical fits.
+    vol = y.rolling(6, min_periods=3).std().bfill()
+    hi = (vol > vol.median()).to_numpy()
+    yv = y.to_numpy(float)
+    start = np.array([0.9, 0.1, yv[~hi].mean(), yv[hi].mean(), max(yv[~hi].var(), 1e-8), max(yv[hi].var(), 1e-8)])
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            fit = MarkovRegression(y.reset_index(drop=True), k_regimes=2, trend="c", switching_variance=True).fit(disp=False, search_reps=20)
+            fit = MarkovRegression(y.reset_index(drop=True), k_regimes=2, trend="c", switching_variance=True).fit(disp=False, start_params=start)
         params = fit.params
         means = [float(params[f"const[{i}]"]) for i in range(2)]
         high = int(np.argmax(means))
         probs = pd.DataFrame({"date": y.index, "state_high_premium_probability": fit.smoothed_marginal_probabilities[high].to_numpy()})
         durations = fit.expected_durations
         return {"summary": {"premium_state_low": min(means), "premium_state_high": max(means), "expected_duration_high": float(durations[high]), "expected_duration_low": float(durations[1 - high]), "log_likelihood": float(fit.llf), "aic": float(fit.aic), "bic": float(fit.bic)}, "probabilities": probs}
-    except Exception as exc:  # optimisation can fail on short or flat series
-        return {"summary": {"status": f"did not converge: {exc.__class__.__name__}"}, "probabilities": pd.DataFrame()}
+    except Exception as exc:  # LinAlgError or non-convergence: fall back to the volatility split
+        hi_s = pd.Series(hi, index=y.index)
+        m_hi, m_lo = float(y[hi_s].mean()), float(y[~hi_s].mean())
+        high_state = hi_s if m_hi >= m_lo else ~hi_s
+        runs = lambda m: float(len(m) / max(int((m != m.shift()).sum()), 1))  # noqa: E731  mean run length
+        note = f"Markov-switching fit failed ({exc.__class__.__name__}); showing a simple split of months by trailing 6-month volatility above or below its median instead."
+        return {"summary": {"premium_state_low": min(m_hi, m_lo), "premium_state_high": max(m_hi, m_lo), "expected_duration_high": runs(high_state), "expected_duration_low": runs(high_state), "fallback": "volatility_threshold", "caveat": note}, "probabilities": pd.DataFrame({"date": y.index, "state_high_premium_probability": high_state.astype(float).to_numpy()}), "caveat": note}
 
 
 STRESS_ORDER = ["crisis", "high", "both_on", "on", "recession", "medium", "other", "off", "expansion", "low"]

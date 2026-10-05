@@ -79,7 +79,8 @@ def data_audit(panel: Any | None, payload: dict[str, Any] | None = None) -> dict
 def cost_model(payload: dict[str, Any]) -> dict[str, Any]:
     raw = payload.get("cost_model") or {}
     impact = str(raw.get("impact", DEFAULT_COSTS["impact"])).lower()
-    return {"spread_bps": float(raw.get("spread_bps", DEFAULT_COSTS["spread_bps"])), "commission_bps": float(raw.get("commission_bps", DEFAULT_COSTS["commission_bps"])), "impact": impact if impact in {"none", "sqrt"} else "sqrt"}
+    borrow = float(raw.get("borrow_cost_bps", payload.get("borrow_cost_bps", 0.0)) or 0.0)
+    return {"borrow_cost_bps": borrow, "spread_bps": float(raw.get("spread_bps", DEFAULT_COSTS["spread_bps"])), "commission_bps": float(raw.get("commission_bps", DEFAULT_COSTS["commission_bps"])), "impact": impact if impact in {"none", "sqrt"} else "sqrt"}
 
 
 def _leg_weights(rank: pd.DataFrame, top: bool, q: float = 0.2) -> pd.DataFrame:
@@ -121,13 +122,16 @@ def cost_analysis(panel: Any, payload: dict[str, Any]) -> dict[str, Any]:
                 cols = [c for c in dw.columns if c in adv.columns]
                 q += (dw[cols] ** 1.5 * sig[cols] / np.sqrt(adv[cols])).sum(axis=1, min_count=1).fillna(0.0)
     g_mean, lin_mean, q_mean = float(gross.mean()), float(lin.mean()), float(q.mean())
-    net = gross - lin - np.sqrt(aum) * q
     h = panel.holding_months
+    # Short leg pays the annual borrow fee on its (unit) weight for each holding period; none for long-only.
+    borrow = pd.Series(0.0 if long_only else cm["borrow_cost_bps"] / 1e4 * h / 12, index=traded.index)
+    net = gross - lin - np.sqrt(aum) * q - borrow
     ann = np.sqrt(12 / h)
     sharpe = lambda s: float(s.mean() / s.std() * ann) if s.std() else None  # noqa: E731
     capacity = None
     if cm["impact"] == "sqrt" and q_mean > 0:
-        capacity = float(((g_mean - lin_mean) / q_mean) ** 2) if g_mean > lin_mean else 0.0
+        net0 = g_mean - lin_mean - float(borrow.mean())
+        capacity = float((net0 / q_mean) ** 2) if net0 > 0 else 0.0
     turnover = float(traded.mean() / len(legs) / 2)
     return {
         "available": True,
@@ -136,13 +140,14 @@ def cost_analysis(panel: Any, payload: dict[str, Any]) -> dict[str, Any]:
         "aum_usd": aum,
         "gross_sharpe": sharpe(gross),
         "net_sharpe": sharpe(net),
-        "breakeven_bps": float(g_mean / traded.mean() * 1e4) if traded.mean() > 0 else None,
+        "breakeven_bps": float((g_mean - float(borrow.mean())) / traded.mean() * 1e4) if traded.mean() > 0 else None,
         "breakeven_basis": "one-way cost in bps per dollar traded at which the mean return is zero",
         "turnover": turnover,
         "turnover_basis": "mean one-way share of each leg traded per rebalance",
         "annual_turnover": turnover * 12 / max(h, 1),
         "capacity_usd": capacity,
         "capacity_basis": "AUM per leg where square-root-law impact removes the mean return after spread and commission",
+        "borrow_cost_per_period": float(borrow.mean()),
         "mean_gross_return": g_mean,
         "mean_net_return": float(net.mean()),
     }

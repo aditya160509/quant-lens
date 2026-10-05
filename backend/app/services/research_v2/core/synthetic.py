@@ -144,6 +144,27 @@ def run_synthetic(payload: dict[str, Any]) -> dict[str, Any]:
     return {"summary": summary, "charts": charts, "tables": tables, "meta": {"research_caveats": ["Outcome is the log cumulative return from the start of the window."]}}
 
 
+def _fast_synth():
+    """pysyncon Synth whose inner QP uses the analytic gradient (same optimum, ~20x fewer function calls)."""
+
+    from pysyncon import Synth
+    from scipy.optimize import Bounds, LinearConstraint, minimize
+
+    last: dict[str, np.ndarray] = {}  # warm start: consecutive V candidates have nearby optima (strictly convex QP, same solution)
+
+    class FastSynth(Synth):
+        @staticmethod
+        def w_optimize(V_mat, X0, X1, qp_method="SLSQP", qp_options={"maxiter": 1000}):
+            n_c = X0.shape[1]
+            P = X0.T @ V_mat @ X0
+            q = X1.T @ V_mat @ X0
+            res = minimize(lambda x: 0.5 * x @ P @ x - q @ x, last.get("w", np.full(n_c, 1 / n_c)), jac=lambda x: P @ x - q, bounds=Bounds(np.zeros(n_c), np.ones(n_c)), constraints=LinearConstraint(np.ones(n_c), 1.0, 1.0), method=qp_method, options=qp_options)
+            last["w"] = np.clip(res["x"], 0.0, 1.0)
+            return res["x"], float(res["fun"])
+
+    return FastSynth
+
+
 def _fit_variant(variant: str, y: pd.DataFrame, treated: str, donors: list[str], pre_mask: np.ndarray, payload: dict[str, Any]) -> dict[str, Any]:
     from pysyncon import AugSynth, Dataprep, RobustSynth, Synth
 
@@ -159,7 +180,7 @@ def _fit_variant(variant: str, y: pd.DataFrame, treated: str, donors: list[str],
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         if variant == "classic":
-            model = Synth()
+            model = _fast_synth()()
             model.fit(dataprep=dp)
             w = model.weights(round=6).reindex(donors).fillna(0)
             details = {"method": "classic SCM (Abadie-Diamond-Hainmueller), predictor weights V optimised", "loss_v": float(getattr(model, "loss_V", np.nan))}
