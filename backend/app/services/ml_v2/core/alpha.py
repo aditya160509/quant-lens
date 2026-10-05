@@ -98,7 +98,7 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
                           "validation_ic":fast_spearman_ic(prediction,vy.to_numpy())})
     best = min(selection,key=lambda row:row["validation_mae"])["model"]
     # Model choice and ensemble weights are locked before observing final holdout outcomes.
-    positive = np.array([max(row["validation_ic"],0.) for row in selection])
+    positive = np.array([max(row["validation_ic"],0.) if np.isfinite(row["validation_ic"]) else 0. for row in selection])
     weights = positive / positive.sum() if positive.sum() > 0 else np.array([float(row["model"] == best) for row in selection])
     imputer = SimpleImputer(strategy="median", keep_empty_features=True)
     tx = imputer.fit_transform(raw.iloc[train]); ex = imputer.transform(raw.iloc[test])

@@ -135,7 +135,7 @@ def _run_sequence_alpha(payload=None):
             forecasts.append({"architecture": architecture, "month": str(month), "ic": ic})
         comparisons.append({"architecture": architecture,
             "spearman_ic": fast_spearman_ic(pred, actual),
-            "monthly_ic_ir": float(np.mean(ics) / np.std(ics, ddof=1)) if len(ics) > 1 and np.std(ics, ddof=1) > 1e-12 else None,
+            "monthly_ic_ir": float(np.mean(ics) / np.std(ics, ddof=1)) if len(ics) > 1 and np.isfinite(ics).all() and np.std(ics, ddof=1) > 1e-12 else None,
             "mae": float(np.mean(np.abs(pred - actual))), "training_time_seconds": duration,
             "train_samples": int(train_mask.sum()), "test_samples": int(test_mask.sum())})
     return response("12", [summary("Models", len(names)), summary("Test samples", int(test_mask.sum()))],

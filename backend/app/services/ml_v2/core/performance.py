@@ -299,10 +299,10 @@ LARS_PATH = _try_import("sklearn.linear_model", "lars_path")
 # ---------------------------------------------------------------------------
 
 def fast_spearman_ic(x: np.ndarray, y: np.ndarray) -> float:
-    """Spearman IC without scipy p-value overhead (S24)."""
+    """Spearman IC without scipy p-value overhead; NaN when fewer than 4 pairs or a constant side (undefined, not zero)."""
     valid = np.isfinite(x) & np.isfinite(y)
     if valid.sum() < 4:
-        return 0.0
+        return float("nan")
     xv = x[valid]
     yv = y[valid]
     rx = rankdata(xv, method="average")
@@ -310,7 +310,7 @@ def fast_spearman_ic(x: np.ndarray, y: np.ndarray) -> float:
     rx -= rx.mean()
     ry -= ry.mean()
     denom = float(np.sqrt(np.dot(rx, rx)) * np.sqrt(np.dot(ry, ry)))
-    return float(np.dot(rx, ry) / denom) if denom > 1e-12 else 0.0
+    return float(np.dot(rx, ry) / denom) if denom > 1e-12 else float("nan")
 
 
 def vectorized_ic_series(
