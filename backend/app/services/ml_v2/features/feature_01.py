@@ -14,7 +14,7 @@ from app.services.ml_v2.core.common import merge_feature_contract
 
 
 FEATURE_ID = "01"
-FEATURE_TITLE = "Purged K-Fold and Combinatorial Purged Cross-Validation Engine"
+FEATURE_TITLE = "Combinatorial Purged Cross-Validation Engine"
 
 DEFAULTS: dict[str, Any] = {
     "model_type": "ridge",
@@ -55,9 +55,11 @@ OUTPUT_CONTRACT = [
         ("backtest_paths_chart", "charts", "line_bundle"),
         ("probability_of_backtest_overfitting", "charts", "metric_panel"),
         ("deflated_sharpe_ratio", "charts", "metric_panel"),
+        ("embargo_sensitivity", "charts", "table"),
         ("per_fold_performance", "tables", "table"),
         ("cpcv_path_metrics", "tables", "table")]]
 INPUT_CONTRACT.extend([
+    {"key":"calculate_embargo_sensitivity","type":"boolean","default":False},
     {"key": "strategy_returns", "type": "dated_strategy_matrix", "required": False,
      "description": "Actual complete time-by-strategy return matrix, with dates, for CSCV PBO and DSR"},
     {"key": "pbo_partitions", "type": "integer", "options": [4, 6, 8, 10, 12], "default": 8},

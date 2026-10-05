@@ -74,3 +74,15 @@ def test_hrp_two_independent_assets_matches_inverse_variance():
     from app.services.ml_v2.core.allocation import hrp_weights
     weights,_,_ = hrp_weights(pd.DataFrame([[1.,0.],[0.,4.]],index=["A","B"],columns=["A","B"]))
     np.testing.assert_allclose(weights.to_numpy(),[.8,.2])
+
+
+def test_gjr_news_impact_uses_squared_shock_once():
+    import pytest
+    from types import SimpleNamespace
+    from app.services.ml_v2.core.volatility import news_impact_curve
+    fit = SimpleNamespace(params=pd.Series({'omega':1.,'alpha[1]':.1,'gamma[1]':.2,'beta[1]':.7}),conditional_volatility=[2.])
+    rows = news_impact_curve(fit,'GJR-GARCH','normal')
+    positive = next(row['next_variance'] for row in rows if row['shock_sigma']==2.)
+    negative = next(row['next_variance'] for row in rows if row['shock_sigma']==-2.)
+    assert positive == pytest.approx(5.4)
+    assert negative == pytest.approx(8.6)

@@ -40,11 +40,14 @@ def arch_family_vol_models(returns: pd.Series, ann: float, cap: int = 1000) -> t
     dists = ["normal", "t", "skewt", "ged"]
     rows: list[dict[str, Any]] = []
     fit_objects: list[tuple[str, str, Any]] = []
+    failures = []
     for spec_name, spec_kwargs in specs:
         for dist in dists:
             try:
                 model = arch_model(r, mean="Constant", dist=dist, rescale=False, **spec_kwargs)
                 fit = model.fit(disp="off", show_warning=False, options={"maxiter": 80})
+                if fit.convergence_flag:
+                    raise ValueError(f"Optimizer did not converge: code {fit.convergence_flag}")
                 forecast = fit.forecast(horizon=1, reindex=False).variance.iloc[-1, 0]
                 rows.append({
                     "model": spec_name,
@@ -55,8 +58,8 @@ def arch_family_vol_models(returns: pd.Series, ann: float, cap: int = 1000) -> t
                     "forecast_vol": float(math.sqrt(max(forecast, 0.0)) / 100.0 * math.sqrt(ann)),
                 })
                 fit_objects.append((spec_name, dist, fit))
-            except Exception:
-                continue
+            except Exception as exc:
+                failures.append({"model":spec_name,"distribution":dist,"status":"failed","reason":str(exc)[:300]})
     if not rows:
         return [], [], [], "fit_failed"
     aic = np.asarray([row["aic"] for row in rows], dtype=float)
@@ -67,22 +70,29 @@ def arch_family_vol_models(returns: pd.Series, ann: float, cap: int = 1000) -> t
     weight_rows = [{"model": row["model"], "distribution": row["distribution"], "ensemble_weight": row["akaike_weight"], "forecast_vol": row["forecast_vol"]} for row in rows]
     best = fit_objects[int(np.nanargmin(aic))]
     news_rows = news_impact_curve(best[2], best[0], best[1])
-    return rows, weight_rows, news_rows, "fit"
+    return rows+failures, weight_rows, news_rows, "partial_fit" if failures else "fit"
 
 
 
 def news_impact_curve(fit: Any, model_name: str, dist: str) -> list[dict[str, Any]]:
+    if model_name not in {"GARCH","GJR-GARCH","EGARCH","APARCH"}:
+        return []
     params = {str(k): float(v) for k, v in fit.params.items()}
     omega = params.get("omega", 0.0)
     alpha = params.get("alpha[1]", params.get("alpha[1]", 0.05))
     gamma = params.get("gamma[1]", params.get("gamma[1]", 0.0))
     beta = params.get("beta[1]", 0.85)
-    last_var = float(np.nanmean(np.asarray(fit.conditional_volatility)[-63:] ** 2)) if hasattr(fit, "conditional_volatility") else 1.0
+    last_var = float(np.asarray(fit.conditional_volatility)[-1] ** 2) if hasattr(fit, "conditional_volatility") else 1.0
     rows = []
     for shock in np.linspace(-4, 4, 41):
         if "EGARCH" in model_name:
             log_var = omega + beta * math.log(max(last_var, 1e-12)) + alpha * (abs(shock) - math.sqrt(2 / math.pi)) + gamma * shock
             var = math.exp(log_var)
+        elif model_name == "APARCH":
+            delta = params.get("delta",2.)
+            epsilon = shock * math.sqrt(last_var)
+            power = omega + alpha * (abs(epsilon)-gamma*epsilon)**delta + beta*last_var**(delta/2)
+            var = max(power,0.)**(2/delta)
         else:
             asym = gamma if shock < 0 else 0.0
             var = omega + (alpha + asym) * (shock * math.sqrt(last_var)) ** 2 + beta * last_var
@@ -158,8 +168,8 @@ def run_vol_forecasting(payload: dict[str, Any] | None = None) -> dict[str, Any]
     if suite == "arch_family":
         if horizons != [1]: raise ValueError("ARCH-family selection currently supports forecast_horizons=[1] only")
         arch_rows,arch_weights,news,status = arch_family_vol_models(returns,ctx.annualization,int(ctx.payload.get("garch_fit_cap",1000)))
-        if status != "fit": raise ValueError(f"ARCH-family forecasting unavailable: {status}")
-        terms = [{"model":row["model"],"distribution":row["distribution"],"horizon":1,"forecast_vol":row["forecast_vol"]} for row in arch_rows]
+        if status not in {"fit","partial_fit"}: raise ValueError(f"ARCH-family forecasting unavailable: {status}")
+        terms = [{"model":row["model"],"distribution":row["distribution"],"horizon":1,"forecast_vol":row["forecast_vol"]} for row in arch_rows if "forecast_vol" in row]
     estimates = [{"estimator":"close_to_close","current_vol":float(returns.rolling(21).std().iloc[-1]*np.sqrt(ctx.annualization))}]
     bars = ctx.ohlcv.loc[ctx.ohlcv.Ticker==asset].set_index("Date")
     for name,estimator in [("garman_klass",garman_klass_vol),("yang_zhang",yang_zhang_vol)]:
@@ -170,6 +180,8 @@ def run_vol_forecasting(payload: dict[str, Any] | None = None) -> dict[str, Any]
             "realized_vs_predicted":forecasts,"model_confidence_intervals":intervals,"realized_vol_estimator_comparison":estimates,
             "garch_model_selection":arch_rows,"garch_leverage_news_impact_curve":news,"ensemble_vol_forecast_weights":arch_weights},
         tables={"forecast_tournament":errors,"forecast_rows":forecasts,"garch_model_selection":arch_rows},
+        status="warning" if status == "partial_fit" else "ok",
+        alerts=[{"level":"warning","message":"Some ARCH candidates failed; model-selection rows include reasons"}] if status == "partial_fit" else [],
         meta={"asset":asset,"forecast_target":"annualized_mean_future_squared_log_returns","validation":"purged_chronological_per_horizon",
             "intervals":"90_percent_absolute_residual_calibration_before_holdout; dependent data coverage not guaranteed",
-            "arch_family_status":status,"unavailable_models":unavailable,"macro":"excluded without verified release vintages","unsupported_removed":["GINN","jump_decomposition","smoothed_vol_regimes","spillover_causality"]})
+            "arch_family_status":status,"unavailable_models":unavailable,"news_impact":"GARCH/GJR/EGARCH/APARCH only; FIGARCH curve unavailable","macro":"excluded without verified release vintages","unsupported_removed":["GINN","jump_decomposition","smoothed_vol_regimes","spillover_causality"]})

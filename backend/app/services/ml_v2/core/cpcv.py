@@ -98,7 +98,7 @@ def run_cpcv_engine(payload=None):
     sharpes = [row["sharpe"] for row in metrics]
     histogram = [{"sharpe": value} for value in sharpes]
     comparison = [{"method": method, "sharpe": float(np.mean([row[key] for row in split_rows]))}
-                  for method, key in [("naive_kfold", "naive_sharpe"), ("purged_kfold", "purged_sharpe")]]
+                  for method, key in [("naive_cpcv", "naive_sharpe"), ("purged_cpcv", "purged_sharpe")]]
     from .stats import cscv_pbo, deflated_sharpe_probability
     diagnostics = {"pbo": None, "dsr": None, "status": "unavailable",
                    "reason": "Supply a dated strategy_returns matrix of actual strategy configurations"}
@@ -121,11 +121,17 @@ def run_cpcv_engine(payload=None):
         diagnostics = {"pbo": pbo_result["pbo"], "dsr": dsr, "status": "computed",
                        "combinations": pbo_result["combinations"], "strategy_count": matrix.shape[1],
                        "source": "caller_supplied_actual_strategy_returns"}
+    sensitivity = []
+    if request.get("calculate_embargo_sensitivity",False):
+        for gap in [0,5,10,21]:
+            rerun = run_cpcv_engine({**request,"embargo_period":gap,"calculate_embargo_sensitivity":False})
+            values = [row["sharpe"] for row in rerun["tables"]["cpcv_path_metrics"]]
+            sensitivity.append({"embargo_sessions":gap,"mean_path_sharpe":float(np.mean(values)),"paths":len(values)})
     return response("01", [summary("CPCV Mean Sharpe", float(np.mean(sharpes))), summary("Paths", paths_count)],
         charts={"cpcv_sharpe_distribution": histogram, "purged_vs_naive_cv_comparison": comparison,
                 "backtest_paths_chart": curves,
                 "probability_of_backtest_overfitting": [diagnostics],
-                "deflated_sharpe_ratio": [diagnostics]},
+                "deflated_sharpe_ratio": [diagnostics],"embargo_sensitivity":sensitivity},
         tables={"per_fold_performance": split_rows, "cpcv_path_metrics": metrics},
         meta={"validation": "date_groups_event_overlap_purge_and_embargo", "paths": paths_count,
               "split_count": len(combinations_list), "performance": "nonoverlapping_label_payoff_diagnostics_gross_of_costs; not executable order backtests",
