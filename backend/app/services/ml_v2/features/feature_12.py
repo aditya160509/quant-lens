@@ -1,7 +1,5 @@
 """Feature 12: actual sequence-model training and held-out evaluation."""
 from .inputs import inputs, outputs, validate
-from app.services.ml_v2.core.sequence import run_sequence_alpha
-from app.services.ml_v2.core.performance import normalize_payload
 
 FEATURE_ID = "12"
 FEATURE_TITLE = "Sequence Alpha: Patch and Inverted Transformers, LSTM and MLP"
@@ -31,7 +29,9 @@ INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
 OUTPUTS = outputs(OUTPUT_CONTRACT)
 
 def normalize_feature_payload(payload):
+    from app.services.ml_v2.core.performance import normalize_payload
     return validate(normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES), INPUTS)
 
 def run(payload=None):
+    from app.services.ml_v2.core.sequence import run_sequence_alpha
     return run_sequence_alpha(normalize_feature_payload(payload))

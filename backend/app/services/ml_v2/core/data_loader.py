@@ -59,7 +59,9 @@ def normalize_frequency(frequency: Any = "daily") -> str:
         return "weekly"
     if raw in {"m", "month", "monthly"}:
         return "monthly"
-    return "daily"
+    if raw in {"daily", "day", "d", "1d"}:
+        return "daily"
+    raise ValueError(f"Unsupported frequency: {frequency}")
 
 
 def annualization_factor(frequency: Any = "daily", asset_class: str | None = None) -> float:
@@ -252,12 +254,12 @@ def sector_map(symbols: Iterable[str]) -> dict[str, str]:
 def market_caps(symbols: Iterable[str]) -> dict[str, float]:
     meta = load_fundamentals_metadata()
     if meta.empty or "marketCap" not in meta.columns:
-        return {str(s): 1.0 for s in symbols}
+        return {str(s): None for s in symbols}
     mapping = dict(zip(meta["ticker"], pd.to_numeric(meta["marketCap"], errors="coerce")))
     out = {}
     for s in symbols:
         v = mapping.get(normalize_symbol(s), np.nan)
-        out[str(s)] = float(v) if pd.notna(v) and float(v) > 0 else 1.0
+        out[str(s)] = float(v) if pd.notna(v) and float(v) > 0 else None
     return out
 
 
@@ -331,7 +333,7 @@ def data_inventory() -> dict[str, Any]:
         "daily_tickers": int(daily["Ticker"].nunique()) if not daily.empty else 0,
         "hourly_rows": int(len(hourly)),
         "hourly_tickers": int(hourly["Ticker"].nunique()) if not hourly.empty else 0,
-        "hourly_source": str(RESEARCH_HOURLY if RESEARCH_HOURLY.exists() else MARKET_UNIVERSE_HOURLY),
+        "hourly_source": str(MARKET_UNIVERSE_HOURLY),
         "macro_rows": int(len(macro)),
         "macro_columns": [str(c) for c in macro.columns[:50]],
         "fama_french_rows": int(len(ff)),

@@ -4,6 +4,7 @@ import asyncio
 import csv
 import io
 import json
+import importlib
 import uuid
 from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile
 from app.services.ml_v2.registry import feature_manifest, get_ml_v2_feature, run_feature
@@ -52,6 +53,9 @@ def _execute_job(job_id, feature_id, payload):
 def create_job(feature_id: str, payload: dict = Body(default={})):
     try:
         feature = get_ml_v2_feature(feature_id)
+        module = importlib.import_module(f"app.services.ml_v2.features.{feature.module}")
+        from app.services.ml_v2.features.inputs import validate
+        payload = validate(module.normalize_feature_payload(payload), module.INPUTS)
         parse_symbols(payload)
         job = JOBS.create(job_type=f"ml_v2_{feature.id}", params={"feature_id": feature.id, "payload": payload})
         JOBS.submit(job["job_id"], _execute_job, job["job_id"], feature.id, payload)

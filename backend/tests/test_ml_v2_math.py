@@ -51,3 +51,26 @@ def test_cqr_predictions_do_not_use_test_outcomes():
     np.testing.assert_allclose(before.cqr_upper, after.cqr_upper, equal_nan=True)
     assert audit["test_rows"] == 60
     assert before.cqr_lower.iloc[:240].isna().all()
+
+def test_cscv_detects_complete_selection_reversal():
+    import numpy as np
+    from app.services.ml_v2.core.stats import cscv_pbo
+    returns = np.array([1., 2., 3., 4., -1., -2., -3., -4.]) * .01
+    result = cscv_pbo(np.column_stack([returns, -returns]), partitions=4)
+    assert result["combinations"] == 6
+    assert result["pbo"] == 1.
+
+def test_cpcv_purges_all_assets_by_dates():
+    import numpy as np
+    from app.services.ml_v2.core.cpcv import purged_complement
+    dates = pd.Series(np.tile(pd.date_range("2024-01-01", periods=30), 2))
+    train = purged_complement(dates, pd.date_range("2024-01-11", periods=3), 3, 2)
+    assert not dates.iloc[train].between("2024-01-08", "2024-01-18").any()
+    assert len(train) == 38
+
+
+def test_hrp_two_independent_assets_matches_inverse_variance():
+    import numpy as np
+    from app.services.ml_v2.core.allocation import hrp_weights
+    weights,_,_ = hrp_weights(pd.DataFrame([[1.,0.],[0.,4.]],index=["A","B"],columns=["A","B"]))
+    np.testing.assert_allclose(weights.to_numpy(),[.8,.2])

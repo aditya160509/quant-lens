@@ -1,27 +1,14 @@
 """ML V2 estimators implementation."""
 from __future__ import annotations
-from dataclasses import dataclass
-from itertools import combinations
-from typing import Any, Iterable
-import base64
-import hashlib
+from typing import Any
 import math
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.cluster.hierarchy import linkage, leaves_list
-from scipy.optimize import minimize
-from sklearn.covariance import LedoitWolf, OAS
-from sklearn.decomposition import PCA
 from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, GradientBoostingRegressor
-from sklearn.linear_model import ElasticNet, Lasso, Ridge, LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, roc_auc_score
-from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import KFold
-from sklearn.preprocessing import StandardScaler
-from .data_loader import annualization_factor, close_matrix, data_inventory, load_fama_french, load_macro, market_caps, ohlcv_for_symbols, parse_symbols, returns_matrix, sector_map, volume_matrix
-from .performance import ThreadPoolExecutor, as_completed, cache_key, cached_ledoit_cov, data_inventory_cached, disk_get, disk_set, equity_from_returns, fast_spearman_ic, max_drawdown, normalize_payload, precompute_date_strings, ridge_fit_fast, sharpe, sortino, vectorized_ic_series, _CONTEXT_CACHE
-from .validation import chronological_purged_split, purged_date_folds
+from sklearn.linear_model import ElasticNet, Lasso, Ridge
+from sklearn.metrics import mean_absolute_error
+from .performance import equity_from_returns, fast_spearman_ic, max_drawdown, sharpe
 from .common import compact_records
 
 
@@ -29,6 +16,9 @@ def _fit_base_model(model_type: str = "ridge", random_state: int = 7):  # P10
     """P10 — Uses module-level optional registry to avoid repeated import failures."""
     from .performance import XGBOOST, LGBM, CATBOOST
     mt = str(model_type or "ridge").lower()
+    optional = {"xgboost":XGBOOST,"lightgbm":LGBM,"catboost":CATBOOST}
+    if mt in optional and optional[mt] is None:
+        raise ValueError(f"Requested model {mt} is unavailable")
     if "xgb" in mt and XGBOOST is not None:
         return XGBOOST(n_estimators=80, max_depth=3, learning_rate=0.05, subsample=0.8, colsample_bytree=0.8, random_state=random_state, n_jobs=1, verbosity=0)
     if ("light" in mt or "lgb" in mt) and LGBM is not None:
@@ -54,37 +44,15 @@ def _fit_base_model(model_type: str = "ridge", random_state: int = 7):  # P10
 
 
 def _safe_predict(model, x_train, y_train, x_test):
-    model.fit(x_train, y_train)
-    return np.asarray(model.predict(x_test), dtype=float)
+    from sklearn.impute import SimpleImputer
+    imputer = SimpleImputer(strategy="median",keep_empty_features=True)
+    observed_train = imputer.fit_transform(x_train)
+    observed_test = imputer.transform(x_test)
+    model.fit(observed_train, y_train)
+    return np.asarray(model.predict(observed_test), dtype=float)
 
 
 
-def realtime_tree_shap_sample(model: Any, x_latest: pd.DataFrame, feature_names: list[str], *, max_rows: int = 64) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Run exact TreeSHAP on a capped latest-book sample when it is cheap."""
-
-    if x_latest.empty or not feature_names:
-        return [], {"exact_shap_status": "empty"}
-    model_name = model.__class__.__name__.lower()
-    tree_like = hasattr(model, "feature_importances_") or any(tag in model_name for tag in ("xgb", "lgbm", "catboost", "forest", "tree", "gradientboosting"))
-    if not tree_like:
-        return [], {"exact_shap_status": "unsupported_model"}
-    try:
-        import shap  # type: ignore
-
-        sample = x_latest[feature_names].replace([np.inf, -np.inf], np.nan).fillna(0.0).head(max(1, int(max_rows)))
-        explainer = shap.TreeExplainer(model)
-        values = explainer.shap_values(sample)
-        if isinstance(values, list):
-            values = values[0]
-        arr = np.asarray(values, dtype=float)
-        if arr.ndim == 3:
-            arr = arr[:, :, 0]
-        mean_abs = np.nanmean(np.abs(arr), axis=0)
-        denom = max(float(np.nansum(mean_abs)), 1e-12)
-        rows = pd.DataFrame({"feature": feature_names, "exact_mean_abs_shap": mean_abs / denom}).sort_values("exact_mean_abs_shap", ascending=False)
-        return compact_records(rows), {"exact_shap_status": "fit", "exact_shap_rows": int(len(sample))}
-    except Exception as exc:
-        return [], {"exact_shap_status": "failed", "exact_shap_error": str(exc)[:180]}
 
 
 
@@ -102,58 +70,12 @@ def rolling_monthly_ic(pred: np.ndarray, actual: pd.Series, dates: pd.Series) ->
 
 
 
-def ice_plot_rows(model: Any, x_ref: pd.DataFrame, features: list[str], points: int = 16, samples: int = 32) -> list[dict[str, Any]]:
-    if x_ref.empty or not features:
-        return []
-    base = x_ref.replace([np.inf, -np.inf], np.nan).fillna(0.0).head(max(1, samples)).copy()
-    rows: list[dict[str, Any]] = []
-    for feature in features[:6]:
-        vals = pd.to_numeric(base[feature], errors="coerce")
-        lo, hi = float(vals.quantile(0.05)), float(vals.quantile(0.95))
-        if not math.isfinite(lo) or not math.isfinite(hi) or abs(hi - lo) < 1e-12:
-            continue
-        for grid_value in np.linspace(lo, hi, points):
-            probe = base.copy()
-            probe[feature] = grid_value
-            try:
-                pred = np.asarray(model.predict(probe), dtype=float)
-            except Exception:
-                continue
-            rows.append({"feature": feature, "value": float(grid_value), "mean_prediction": float(np.nanmean(pred)), "p10_prediction": float(np.nanpercentile(pred, 10)), "p90_prediction": float(np.nanpercentile(pred, 90))})
-    return rows
 
 
 
-def hyperparam_landscape(x_train: pd.DataFrame, y_train: pd.Series, x_test: pd.DataFrame, y_test: pd.Series) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for depth in [2, 3, 4]:
-        for lr in [0.025, 0.05, 0.08]:
-            model = GradientBoostingRegressor(n_estimators=60, max_depth=depth, learning_rate=lr, random_state=100 + depth)
-            pred = _safe_predict(model, x_train, y_train, x_test)
-            rows.append({"max_depth": depth, "learning_rate": lr, "ic": fast_spearman_ic(np.asarray(pred, dtype=float), y_test.to_numpy(dtype=float)), "mae": float(mean_absolute_error(y_test, pred))})
-    return rows
 
 
 
-def signal_portfolio_stats(pred: np.ndarray, actual: pd.Series, ann: float) -> list[dict[str, Any]]:
-    p = np.asarray(pred, dtype=float)
-    yv = actual.to_numpy(dtype=float)
-    valid = np.isfinite(p) & np.isfinite(yv)
-    if valid.sum() < 10:
-        return []
-    p = p[valid]
-    yv = yv[valid]
-    signal = np.sign(p)
-    ret = signal * yv
-    eq = equity_from_returns(ret)
-    return [
-        {"metric": "annualized_return", "value": float(np.nanmean(ret) * ann)},
-        {"metric": "sharpe", "value": sharpe(ret, ann)},
-        {"metric": "hit_rate", "value": float(np.mean(np.sign(p) == np.sign(yv)))},
-        {"metric": "max_drawdown", "value": max_drawdown(eq)},
-        {"metric": "turnover_proxy", "value": float(np.mean(np.abs(np.diff(signal))) if len(signal) > 1 else 0.0)},
-        {"metric": "ic", "value": fast_spearman_ic(p, yv)},
-    ]
 
 
 

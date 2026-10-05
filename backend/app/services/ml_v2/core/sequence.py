@@ -8,7 +8,7 @@ from sklearn.impute import SimpleImputer
 from .validation import chronological_purged_split
 
 
-def run_sequence_alpha(payload=None):
+def _run_sequence_alpha(payload=None):
     import torch
     from torch import nn
     from .panel import load_context, make_feature_panel, numeric_xy
@@ -145,3 +145,12 @@ def run_sequence_alpha(payload=None):
               "normalization": "training_only", "missing_feature_policy": "training_median_imputation; quote gaps never imputed", "as_of_date": str(ctx.closes.index.max()),
               "architecture_scope": "Channel-independent patch encoder; inverted variable-token encoder; LSTM; MLP. TFT/Mamba excluded.",
               "attribution": "Attention and integrated-gradient outputs excluded until implemented"})
+
+
+# PyTorch initialization uses global RNG state; serialize requests for reproducibility.
+import threading
+_TRAINING_LOCK = threading.Lock()
+
+def run_sequence_alpha(payload=None):
+    with _TRAINING_LOCK:
+        return _run_sequence_alpha(payload)

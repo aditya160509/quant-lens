@@ -35,7 +35,7 @@ def path_returns(panel, predictions, horizon):
 
 def run_cpcv_engine(payload=None):
     from .panel import load_context, make_feature_panel, numeric_xy
-    from .estimators import _fit_base_model
+    from .estimators import _fit_base_model, _safe_predict
     from .common import response, summary
     request = payload or {}
     ctx = load_context(request)
@@ -66,11 +66,9 @@ def run_cpcv_engine(payload=None):
         if len(train) < 30:
             raise ValueError("CPCV split has insufficient purged training observations")
         model = _fit_base_model(model_name, 7)
-        model.fit(X.iloc[train], target.iloc[train])
-        prediction = model.predict(X.iloc[test])
+        prediction = _safe_predict(model,X.iloc[train],target.iloc[train],X.iloc[test])
         naive_train = np.flatnonzero(~pd.to_datetime(panel.date).isin(held_dates).to_numpy())
-        naive_model = _fit_base_model(model_name, 7).fit(X.iloc[naive_train], target.iloc[naive_train])
-        naive_prediction = naive_model.predict(X.iloc[test])
+        naive_prediction = _safe_predict(_fit_base_model(model_name,7),X.iloc[naive_train],target.iloc[naive_train],X.iloc[test])
         oos_returns = path_returns(panel.iloc[test], prediction, horizon)
         naive_returns = path_returns(panel.iloc[test], naive_prediction, horizon)
         split_rows.append({"split": number + 1, "test_groups": list(combo),
@@ -94,19 +92,43 @@ def run_cpcv_engine(payload=None):
         values = [row["return"] for row in returns]
         metrics.append({"path": path_id, "sharpe": sharpe(values, ctx.annualization / horizon),
                         "observations": len(values)})
-        equity = equity_from_returns(values)
+        equity = np.cumprod(1 + np.asarray(values,dtype=float))
         curves.extend({"path": path_id, "date": row["date"], "equity": float(value)}
                       for row, value in zip(returns, equity))
     sharpes = [row["sharpe"] for row in metrics]
     histogram = [{"sharpe": value} for value in sharpes]
     comparison = [{"method": method, "sharpe": float(np.mean([row[key] for row in split_rows]))}
                   for method, key in [("naive_kfold", "naive_sharpe"), ("purged_kfold", "purged_sharpe")]]
+    from .stats import cscv_pbo, deflated_sharpe_probability
+    diagnostics = {"pbo": None, "dsr": None, "status": "unavailable",
+                   "reason": "Supply a dated strategy_returns matrix of actual strategy configurations"}
+    supplied = request.get("strategy_returns")
+    if supplied is not None:
+        if not isinstance(supplied, dict) or "dates" not in supplied or "returns" not in supplied:
+            raise ValueError("strategy_returns requires dates and returns fields")
+        observed_dates = pd.to_datetime(supplied["dates"], errors="raise")
+        matrix = np.asarray(supplied["returns"], dtype=float)
+        if matrix.ndim != 2 or len(observed_dates) != len(matrix) or len(matrix) > 10000 or matrix.shape[1] > 100:
+            raise ValueError("Invalid dated strategy return matrix dimensions")
+        if not observed_dates.is_monotonic_increasing or observed_dates.has_duplicates or observed_dates.max() > ctx.returns.index.max():
+            raise ValueError("Strategy dates must be unique, chronological and within as_of_date")
+        pbo_result = cscv_pbo(matrix, int(request.get("pbo_partitions", 8)))
+        trial_sr = matrix.mean(0) / matrix.std(0, ddof=1)
+        chosen = int(request.get("selected_strategy", 0))
+        if not 0 <= chosen < matrix.shape[1]:
+            raise ValueError("selected_strategy is outside supplied strategy matrix")
+        dsr = deflated_sharpe_probability(matrix[:, chosen], matrix.shape[1], float(trial_sr.var(ddof=1)))
+        diagnostics = {"pbo": pbo_result["pbo"], "dsr": dsr, "status": "computed",
+                       "combinations": pbo_result["combinations"], "strategy_count": matrix.shape[1],
+                       "source": "caller_supplied_actual_strategy_returns"}
     return response("01", [summary("CPCV Mean Sharpe", float(np.mean(sharpes))), summary("Paths", paths_count)],
         charts={"cpcv_sharpe_distribution": histogram, "purged_vs_naive_cv_comparison": comparison,
-                "backtest_paths_chart": curves},
+                "backtest_paths_chart": curves,
+                "probability_of_backtest_overfitting": [diagnostics],
+                "deflated_sharpe_ratio": [diagnostics]},
         tables={"per_fold_performance": split_rows, "cpcv_path_metrics": metrics},
         meta={"validation": "date_groups_event_overlap_purge_and_embargo", "paths": paths_count,
-              "split_count": len(combinations_list), "performance": "nonoverlapping_horizon_portfolios_gross_of_costs",
-              "pbo": "Not produced: requires multiple strategy configurations and CSCV, not fraction below a path median",
-              "dsr": "Not produced: independent trial Sharpe variance and higher moments are not supplied",
+              "split_count": len(combinations_list), "performance": "nonoverlapping_label_payoff_diagnostics_gross_of_costs; not executable order backtests",
+              "pbo": diagnostics["status"],
+              "dsr": diagnostics["status"],
               "sector_basis": "time_invariant_current_snapshot"})

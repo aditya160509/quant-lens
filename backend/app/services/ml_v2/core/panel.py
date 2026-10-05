@@ -1,27 +1,12 @@
 """ML V2 panel implementation."""
 from __future__ import annotations
 from dataclasses import dataclass
-from itertools import combinations
-from typing import Any, Iterable
-import base64
-import hashlib
+from typing import Any
 import math
 import numpy as np
 import pandas as pd
-from scipy import stats
-from scipy.cluster.hierarchy import linkage, leaves_list
-from scipy.optimize import minimize
-from sklearn.covariance import LedoitWolf, OAS
-from sklearn.decomposition import PCA
-from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, GradientBoostingRegressor
-from sklearn.linear_model import ElasticNet, Lasso, Ridge, LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, roc_auc_score
-from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import KFold
-from sklearn.preprocessing import StandardScaler
-from .data_loader import annualization_factor, close_matrix, data_inventory, load_fama_french, load_macro, market_caps, ohlcv_for_symbols, parse_symbols, returns_matrix, sector_map, volume_matrix
-from .performance import ThreadPoolExecutor, as_completed, cache_key, cached_ledoit_cov, data_inventory_cached, disk_get, disk_set, equity_from_returns, fast_spearman_ic, max_drawdown, normalize_payload, precompute_date_strings, ridge_fit_fast, sharpe, sortino, vectorized_ic_series, _CONTEXT_CACHE
-from .validation import chronological_purged_split, purged_date_folds
+from .data_loader import annualization_factor, normalize_frequency, close_matrix, market_caps, ohlcv_for_symbols, parse_symbols, returns_matrix, sector_map, volume_matrix
+from .performance import ThreadPoolExecutor, as_completed
 from .common import number_like
 from .estimators import corwin_schultz_spread, high_low_amihud
 
@@ -50,6 +35,9 @@ def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> ML
     symbols = parse_symbols(payload, default_limit=default_limit, max_symbols=max_symbols)
     lookback = int(number_like(payload.get("lookback_days") or payload.get("window_days") or payload.get("training_window"), 756) or 756)
     frequency = str(payload.get("frequency") or payload.get("sampling_frequency") or "daily")
+    frequency = normalize_frequency(frequency)
+    if frequency != "daily":
+        raise ValueError("ML V2 feature engines currently support daily OHLCV only")
     rets = returns_matrix(symbols, lookback_days=max(lookback, 90), frequency=frequency)
     if rets.empty:
         raise ValueError("Insufficient price history for the requested symbols")
@@ -79,8 +67,6 @@ def load_context_cached(payload: dict[str, Any] | None, *, min_symbols: int = 12
     Features 01/02/07/08/11/12 all call load_context with the same payload;
     this eliminates 4 data loading operations per duplicate feature call.
     """
-    from .performance import cache_key as _ck
-    p = payload or {}
     # Contexts contain request-local settings and data; do not share them between runs.
     return load_context(payload, min_symbols=min_symbols)
 
@@ -96,6 +82,7 @@ def _build_ticker_features(
     market_caps_: dict[str, float],
     annualization: float,
     horizon: int,
+    include_unlabelled: bool = False,
 ) -> tuple[list[dict[str, Any]], list[float]]:
     r = rets[ticker]
     c = closes[ticker] if ticker in closes else pd.Series(index=rets.index, dtype=float)
@@ -119,14 +106,8 @@ def _build_ticker_features(
     if not ohlcv_t.empty:
         date_col = "Date" if "Date" in ohlcv_t.columns else "date" if "date" in ohlcv_t.columns else None
         ohlcv_t_idx = ohlcv_t.set_index(date_col) if date_col else ohlcv_t
-        try:
-            cs_spread = corwin_schultz_spread(ohlcv_t_idx, window=21).reindex(rets.index).ffill()
-        except Exception:
-            pass
-        try:
-            hl_amihud = high_low_amihud(ohlcv_t_idx, window=21).reindex(rets.index).ffill()
-        except Exception:
-            pass
+        cs_spread = corwin_schultz_spread(ohlcv_t_idx, window=21).reindex(rets.index)
+        hl_amihud = high_low_amihud(ohlcv_t_idx, window=21).reindex(rets.index)
 
     feat = pd.DataFrame(
         {
@@ -152,14 +133,14 @@ def _build_ticker_features(
         }
     )
     feat["sector"] = sectors.get(ticker, "Unknown")
-    feat = feat.replace([np.inf, -np.inf], np.nan).dropna(subset=["target_return", "mom_21", "vol_21"])
+    feat = feat.replace([np.inf, -np.inf], np.nan).dropna(subset=["mom_21", "vol_21"] + ([] if include_unlabelled else ["target_return"]))
     if feat.empty:
         return [], []
     return feat.to_dict("records"), feat["target_return"].tolist()
 
 
 
-def make_feature_panel(ctx: MLContext, horizon: int = 5) -> tuple[pd.DataFrame, pd.Series]:
+def make_feature_panel(ctx: MLContext, horizon: int = 5, *, include_unlabelled: bool = False) -> tuple[pd.DataFrame, pd.Series]:
     rets = ctx.returns
     closes = ctx.closes.reindex(rets.index)
     vols = ctx.volumes.reindex(rets.index)
@@ -180,6 +161,7 @@ def make_feature_panel(ctx: MLContext, horizon: int = 5) -> tuple[pd.DataFrame, 
                 ctx.market_caps,
                 ctx.annualization,
                 horizon,
+                include_unlabelled,
             ): ticker
             for ticker in rets.columns
         }
@@ -203,7 +185,7 @@ def numeric_xy(panel: pd.DataFrame, y: pd.Series | None = None) -> tuple[pd.Data
         "hl_amihud_21", "corwin_schultz_21", "dollar_vol_mom",
         "turnover_rate", "max_factor_21", "high_52w",
     ]
-    x = panel[[c for c in cols if c in panel.columns]].replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    x = panel[[c for c in cols if c in panel.columns]].replace([np.inf, -np.inf], np.nan)
     target = y if y is not None else panel.get("target_return", pd.Series(dtype=float))
-    return x, pd.to_numeric(target, errors="coerce").fillna(0.0)
+    return x, pd.to_numeric(target, errors="coerce")
 

@@ -1,210 +1,94 @@
-"""ML V2 microstructure implementation."""
+"""Historical daily OHLCV estimators and causal cross-sectional portfolios."""
 from __future__ import annotations
-from dataclasses import dataclass
-from itertools import combinations
-from typing import Any, Iterable
-import base64
-import hashlib
-import math
+from typing import Any
 import numpy as np
 import pandas as pd
-from scipy import stats
-from scipy.cluster.hierarchy import linkage, leaves_list
-from scipy.optimize import minimize
-from sklearn.covariance import LedoitWolf, OAS
-from sklearn.decomposition import PCA
-from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, GradientBoostingRegressor
-from sklearn.linear_model import ElasticNet, Lasso, Ridge, LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, roc_auc_score
-from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import KFold
-from sklearn.preprocessing import StandardScaler
-from .data_loader import annualization_factor, close_matrix, data_inventory, load_fama_french, load_macro, market_caps, ohlcv_for_symbols, parse_symbols, returns_matrix, sector_map, volume_matrix
-from .performance import ThreadPoolExecutor, as_completed, cache_key, cached_ledoit_cov, data_inventory_cached, disk_get, disk_set, equity_from_returns, fast_spearman_ic, max_drawdown, normalize_payload, precompute_date_strings, ridge_fit_fast, sharpe, sortino, vectorized_ic_series, _CONTEXT_CACHE
-from .validation import chronological_purged_split, purged_date_folds
-from .common import clean_json, compact_records, matrix_records, response, summary
-from .estimators import _ohlcv_lower, corwin_schultz_spread, high_low_amihud
-from .panel import MLContext, load_context
+from .common import compact_records, matrix_records, response, summary
+from .estimators import corwin_schultz_spread, high_low_amihud
+from .panel import load_context
+from .portfolio import execute_portfolio
+from .performance import fast_spearman_ic
+
+
+def market_residual_ivol(returns, annualization, window=21):
+    """Rolling OLS with intercept and equal-weight market, residual df = n-2."""
+    market = returns.mean(axis=1,skipna=False)
+    market_var = market.rolling(window).var(ddof=1)
+    covariance = returns.rolling(window).cov(market)
+    residual_variance = returns.rolling(window).var(ddof=1) - covariance.pow(2).div(market_var,axis=0)
+    return np.sqrt(residual_variance.clip(lower=0)*(window-1)/(window-2)*annualization)
 
 
 def run_microstructure(payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    ctx = load_context(payload, min_symbols=12)
-    rets, closes, vols = ctx.returns, ctx.closes.reindex(ctx.returns.index), ctx.volumes.reindex(ctx.returns.index)
-    # S10 — Vectorized latest signal table: all (T×N) operations done at once
-    dollar = (closes * vols).replace(0, np.nan)
-    amihud_panel = (rets.abs() / dollar).rolling(21).mean() * 1e8
-    logv = np.log(vols.replace(0, np.nan))
-    vol_z_panel = (logv - logv.rolling(21).mean()) / logv.rolling(21).std().replace(0, np.nan)
-    max_factor_panel = rets.rolling(21).max()
-    high52_panel = closes / closes.rolling(252).max().replace(0, np.nan)
-    mkt_ret = rets.mean(axis=1)
-    ivol_panel = rets.sub(mkt_ret, axis=0).rolling(21).std() * math.sqrt(ctx.annualization)
-    # Roll spread: 2*sqrt(max(0, -Cov(dr_t, dr_{t-1}))) per ticker
-    roll_cov_panel = rets.rolling(22).cov(rets.shift(1))
-    roll_spread_panel = 2.0 * np.sqrt((-roll_cov_panel).clip(lower=0))
-
-    # Snapshot at latest date
-    amihud_latest = amihud_panel.iloc[-1]
-    vol_z_latest = vol_z_panel.iloc[-1]
-    max_factor_latest = max_factor_panel.iloc[-1]
-    high52_latest = high52_panel.iloc[-1]
-    ivol_latest = ivol_panel.iloc[-1]
-    roll_spread_latest = roll_spread_panel.iloc[-1]
-
-    latest = []
-    for t in rets.columns:
-        # OHLCV-dependent signals still need per-ticker lookup — keep minimal
-        ohlcv_t = ctx.ohlcv[ctx.ohlcv["Ticker"] == t] if "Ticker" in ctx.ohlcv.columns else pd.DataFrame()
-        hl_amihud = np.nan
-        cs_spread = np.nan
-        dollar_vol_mom = np.nan
-        turnover_rate = np.nan
-        if not ohlcv_t.empty:
-            ohlcv_t_idx = ohlcv_t.set_index("Date") if "Date" in ohlcv_t.columns else ohlcv_t
-            for col in ["Open", "High", "Low", "Close", "Volume"]:
-                if col not in ohlcv_t_idx.columns:
-                    ohlcv_t_idx[col] = np.nan
-            try:
-                hl_amihud = float(high_low_amihud(ohlcv_t_idx, window=21).iloc[-1])
-            except Exception:
-                pass
-            try:
-                cs_spread = float(corwin_schultz_spread(ohlcv_t_idx, window=21).iloc[-1])
-            except Exception:
-                pass
-            try:
-                ohlcv_l = _ohlcv_lower(ohlcv_t_idx)
-                dv = (ohlcv_l["close"] * ohlcv_l["volume"]).replace(0, np.nan)
-                dollar_vol_mom = float(np.log(dv.rolling(63).mean().iloc[-1] / dv.rolling(252).mean().iloc[-1]))
-            except Exception:
-                pass
-            try:
-                v = vols[t]
-                turnover_rate = float(v.iloc[-1] / max(v.tail(21).mean(), 1e-8))
-            except Exception:
-                pass
-        latest.append({
-            "ticker": t,
-            "amihud": float(amihud_latest.get(t, np.nan)),
-            "hl_amihud": hl_amihud,
-            "roll_spread": float(roll_spread_latest.get(t, np.nan)),
-            "corwin_schultz_spread": cs_spread,
-            "dollar_vol_momentum": dollar_vol_mom,
-            "turnover_rate": turnover_rate,
-            "max_factor": float(max_factor_latest.get(t, np.nan)),
-            "high_52w_proximity": float(high52_latest.get(t, np.nan)),
-            "ivol": float(ivol_latest.get(t, np.nan)),
-            "volume_surprise": float(vol_z_latest.get(t, np.nan)),
-            "sector": ctx.sectors.get(t, "Unknown"),
-        })
-    df = pd.DataFrame(latest).replace([np.inf, -np.inf], np.nan).fillna(0.0)
-    signals = ["amihud", "hl_amihud", "roll_spread", "corwin_schultz_spread", "max_factor", "high_52w_proximity", "ivol", "volume_surprise", "dollar_vol_momentum", "turnover_rate"]
-    aliases = {"52w_high": "high_52w_proximity"}
-    requested = (payload or {}).get("signal_families")
-    if requested:
-        requested = {aliases.get(str(s), str(s)) for s in requested}
-        signals = [s for s in signals if s in requested]
-    signals = [s for s in signals if s in df.columns]
-    leaderboard = []
-    fwd = rets.shift(-5).rolling(5).sum()
-    try:
-        stacked_fwd = fwd.tail(126).stack(future_stack=True).rename("forward_return").reset_index()
-    except (TypeError, ValueError):
-        stacked_fwd = fwd.tail(126).stack(dropna=False).rename("forward_return").reset_index()
-    stacked_fwd.columns = ["date", "ticker", "forward_return"]
-    stacked_fwd["date_code"] = pd.factorize(stacked_fwd["date"])[0]
-    for sig in signals:
-        sig_map = df.set_index("ticker")[sig]
-        sig_vals = stacked_fwd["ticker"].map(sig_map).to_numpy(dtype=float)
-        vals = vectorized_ic_series(sig_vals, stacked_fwd["forward_return"].to_numpy(dtype=float), stacked_fwd["date_code"].to_numpy())
-        leaderboard.append({"signal": sig, "economic_mechanism": _signal_mechanism(sig), "rolling_21d_ic": float(np.nanmean(vals[-21:]) if vals else 0.0), "rolling_63d_ic": float(np.nanmean(vals[-63:]) if vals else 0.0), "ic_ir": float(np.nanmean(vals) / max(np.nanstd(vals), 1e-8)) if vals else 0.0, "ic_decay_ratio": float(abs(np.nanmean(vals[-21:])) / max(abs(np.nanmean(vals[-63:])), 1e-8)) if vals else 0.0})
-    monitor = pd.DataFrame({"date": rets.index, "amihud": (rets.abs() / (closes * vols).replace(0, np.nan)).mean(axis=1).rolling(21).mean() * 1e8, "ivol": rets.sub(rets.mean(axis=1), axis=0).rolling(21).std().mean(axis=1)})
-    amihud_surface = amihud_time_surface(rets, closes, vols, ctx.sectors)
-    return response(
-        "10",
-        [summary("Signals", len(signals), "count"), summary("Top Signal", max(leaderboard, key=lambda r: abs(r["ic_ir"]))["signal"], "name"), summary("Universe", len(df), "assets")],
-        charts={
-            "microstructure_ic_leaderboard": leaderboard,
-            "amihud_illiquidity_surface": compact_records(df.sort_values("amihud", ascending=False), limit=500),
-            "roll_spread_cross_section": compact_records(df[["ticker", "roll_spread", "sector"]], limit=500),
-            "max_factor_distribution": compact_records(df[["ticker", "max_factor", "sector"]], limit=500),
-            "52_week_high_proximity_heatmap": [{"row": r["sector"], "col": r["ticker"], "value": r["high_52w_proximity"]} for r in latest[:500]],
-            "ivol_cross_sectional_sort": _quintile_sort(df, "ivol"),
-            "volume_surprise_signal": compact_records(df.sort_values("volume_surprise", ascending=False), limit=500),
-            "microstructure_signal_correlation_matrix": matrix_records(df[signals].corr().fillna(0.0)),
-            "liquidity_regime_monitor": compact_records(monitor.dropna(), limit=300),
-            "signal_backtest": _micro_signal_backtest(df, ctx),
-            "corwin_schultz_spread_cross_section": compact_records(df[["ticker", "corwin_schultz_spread", "sector"]].dropna(), limit=500),
-            "hl_amihud_vs_standard_amihud": compact_records(df[["ticker", "amihud", "hl_amihud"]].dropna(), limit=500),
-            "amihud_time_surface": amihud_surface,
-        },
-        tables={"microstructure_table": compact_records(df, limit=800), "ic_leaderboard": leaderboard, "amihud_time_surface": amihud_surface},
-        meta={"implemented_outputs": 13, "no_tick_data": "Roll/Amihud/HL-Amihud/Corwin-Schultz daily estimators from OHLCV.", "new_signals": ["hl_amihud", "corwin_schultz_spread", "dollar_vol_momentum", "turnover_rate"]},
-    )
-
-
-
-def _signal_mechanism(sig: str) -> str:
-    return {
-        "amihud": "liquidity risk premium",
-        "hl_amihud": "high-low liquidity risk premium",
-        "roll_spread": "implicit transaction cost",
-        "corwin_schultz_spread": "Corwin-Schultz bid-ask spread from high-low ratios",
-        "max_factor": "lottery demand / retail speculation",
-        "high_52w_proximity": "anchoring and momentum leadership",
-        "ivol": "idiosyncratic volatility puzzle",
-        "volume_surprise": "informed trading proxy",
-        "dollar_vol_momentum": "institutional attention and liquidity growth",
-        "turnover_rate": "investor attention and speculative activity",
-    }.get(sig, "price-volume anomaly")
-
-
-
-def amihud_time_surface(rets: pd.DataFrame, closes: pd.DataFrame, vols: pd.DataFrame, sectors: dict[str, str]) -> list[dict[str, Any]]:
-    dollar = (closes * vols).replace(0, np.nan)
-    amihud = (rets.abs() / dollar).replace([np.inf, -np.inf], np.nan) * 1e8
-    rows = []
-    for month, frame in amihud.tail(504).groupby(pd.to_datetime(amihud.tail(504).index).to_period("M")):
-        vals = frame.mean(axis=0).dropna()
-        if vals.empty:
-            continue
-        sector_vals: dict[str, list[float]] = {}
-        for ticker, value in vals.items():
-            sector_vals.setdefault(sectors.get(str(ticker), "Unknown"), []).append(float(value))
-        for sector, values in sector_vals.items():
-            rows.append({"month": str(month), "sector": sector, "amihud": float(np.nanmean(values)), "assets": int(len(values))})
-    return rows[-240:]
-
-
-
-def _quintile_sort(df: pd.DataFrame, col: str) -> list[dict[str, Any]]:
-    out = df.copy()
-    out["quintile"] = pd.qcut(out[col].rank(method="first"), 5, labels=["Q1", "Q2", "Q3", "Q4", "Q5"])
-    return clean_json(out.groupby("quintile", observed=True)[col].agg(["mean", "count"]).reset_index().to_dict("records"))
-
-
-
-def _micro_signal_backtest(df: pd.DataFrame, ctx: MLContext) -> list[dict[str, Any]]:
-    rows = []
-    signals = [c for c in ["amihud", "hl_amihud", "roll_spread", "corwin_schultz_spread", "max_factor", "high_52w_proximity", "ivol", "volume_surprise", "dollar_vol_momentum", "turnover_rate"] if c in df.columns]
-    for sig in signals:
-        valid_df = df[["ticker", sig]].replace([np.inf, -np.inf], np.nan).dropna()
-        valid_df = valid_df[valid_df["ticker"].isin(ctx.returns.columns)]
-        if len(valid_df) < 6:
-            rows.append({"signal": sig, "annualized_return": 0.0, "sharpe": 0.0, "max_drawdown": 0.0, "turnover_proxy": 0.0, "valid_assets": int(len(valid_df))})
-            continue
-        n = max(1, len(valid_df) // 10)
-        long = valid_df.nlargest(n, sig)["ticker"]
-        short = valid_df.nsmallest(n, sig)["ticker"]
-        spread = ctx.returns.reindex(columns=list(long)).mean(axis=1) - ctx.returns.reindex(columns=list(short)).mean(axis=1)
-        spread = spread.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-        rows.append({
-            "signal": sig,
-            "annualized_return": float(spread.mean() * ctx.annualization),
-            "sharpe": sharpe(spread, ctx.annualization),
-            "max_drawdown": max_drawdown(equity_from_returns(spread)),
-            "turnover_proxy": 2 * n / max(len(valid_df), 1),
-            "valid_assets": int(len(valid_df)),
-        })
-    return rows
-
+    ctx = load_context(payload,min_symbols=12)
+    logs = ctx.returns
+    returns = np.expm1(logs)
+    close = ctx.closes.reindex(logs.index); volume = ctx.volumes.reindex(logs.index)
+    window = int(ctx.payload.get("amihud_window",21))
+    if str(ctx.payload.get("ic_protocol","daily_forward_ic")) != "daily_forward_ic":
+        raise ValueError("Only historical daily_forward_ic is supported")
+    if str(ctx.payload.get("ivol_model","market_residual")) != "market_residual":
+        raise ValueError("Only rolling market OLS residual IVOL is supported")
+    notional = (close*volume).where((close>0)&(volume>0))
+    logvolume = np.log(volume.where(volume>0))
+    price_changes = close.diff()
+    roll_covariance = price_changes.rolling(21).cov(price_changes.shift(1))
+    panels = {"amihud":(returns.abs()/notional).rolling(window).mean()*1e8,
+        "roll_spread":2*np.sqrt((-roll_covariance).clip(lower=0)),
+        "max_factor":returns.rolling(21).max(),"high_52w_proximity":close/close.rolling(252).max(),
+        "ivol":market_residual_ivol(returns,ctx.annualization),
+        "volume_surprise":(logvolume-logvolume.rolling(21).mean())/logvolume.rolling(21).std().replace(0,np.nan),
+        "dollar_vol_momentum":np.log(notional.rolling(63).mean()/notional.rolling(252).mean()),
+        "turnover_rate":volume/volume.rolling(21).mean().replace(0,np.nan)}
+    for key, estimator in [("hl_amihud",high_low_amihud),("corwin_schultz_spread",corwin_schultz_spread)]:
+        columns = {}
+        for ticker, group in ctx.ohlcv.groupby("Ticker",sort=False):
+            columns[ticker] = estimator(group.set_index("Date"),window=window).reindex(logs.index)
+        panels[key] = pd.DataFrame(columns,index=logs.index).reindex(columns=logs.columns)
+    aliases = {"52w_high":"high_52w_proximity"}
+    requested = ctx.payload.get("signal_families",list(panels))
+    signals = [aliases.get(str(key),str(key)) for key in requested]
+    if not signals or set(signals)-set(panels):
+        raise ValueError("Select supported signal families")
+    forward = np.expm1(logs.shift(-5).rolling(5).sum())
+    leaderboard, backtests = [], []
+    snapshots = pd.DataFrame({key:values.iloc[-1] for key,values in panels.items()})
+    snapshots["ticker"] = snapshots.index
+    snapshots["sector"] = snapshots.ticker.map(ctx.sectors).fillna("Unknown")
+    for key in signals:
+        values = panels[key].replace([np.inf,-np.inf],np.nan)
+        daily = []
+        targets = {}
+        for date, row in values.iterrows():
+            valid = pd.concat([row.rename("signal"),forward.loc[date].rename("forward")],axis=1).dropna()
+            if len(valid)>=4 and valid.signal.nunique()>1 and valid.forward.nunique()>1:
+                daily.append(fast_spearman_ic(valid.signal.to_numpy(),valid.forward.to_numpy()))
+            observed = row.dropna().sort_values(kind="stable")
+            if len(observed)>=4:
+                n = max(1,len(observed)//5)
+                targets[date] = {**{ticker:-.5/n for ticker in observed.index[:n]},
+                                 **{ticker:.5/n for ticker in observed.index[-n:]}}
+        ic = np.array(daily)
+        leaderboard.append({"signal":key,"mean_daily_ic":float(ic.mean()) if len(ic) else None,
+            "ic_ir":float(ic.mean()/ic.std(ddof=1)) if len(ic)>1 and ic.std(ddof=1)>0 else None,
+            "observations_dates":len(ic)})
+        accounting = execute_portfolio(logs,targets,float(ctx.payload.get("cost_bps",10)))
+        backtests.extend({"signal":key,**row} for row in accounting)
+    surface = compact_records(panels["amihud"].rename_axis("date").reset_index(),limit=1000)
+    snapshot_rows = compact_records(snapshots.reset_index(drop=True),limit=1000)
+    return response("10",[summary("Signals",len(signals),"count"),summary("Universe",len(snapshots),"assets")],
+        charts={"microstructure_ic_leaderboard":leaderboard,"amihud_illiquidity_surface":snapshot_rows,
+            "roll_spread_cross_section":compact_records(snapshots[["ticker","roll_spread"]]),
+            "max_factor_distribution":compact_records(snapshots[["ticker","max_factor"]]),
+            "52_week_high_proximity_heatmap":compact_records(snapshots[["ticker","high_52w_proximity"]]),
+            "ivol_cross_sectional_sort":compact_records(snapshots[["ticker","ivol"]].sort_values("ivol")),
+            "volume_surprise_signal":compact_records(snapshots[["ticker","volume_surprise"]]),
+            "microstructure_signal_correlation_matrix":matrix_records(snapshots[signals].corr()),
+            "liquidity_regime_monitor":compact_records(pd.DataFrame({"date":logs.index,"mean_amihud":panels["amihud"].mean(axis=1)})),
+            "signal_backtest":backtests,"corwin_schultz_spread_cross_section":compact_records(snapshots[["ticker","corwin_schultz_spread"]]),
+            "hl_amihud_vs_standard_amihud":compact_records(snapshots[["ticker","amihud","hl_amihud"]]),"amihud_time_surface":surface},
+        tables={"microstructure_table":snapshot_rows,"ic_leaderboard":leaderboard,"amihud_time_surface":surface},
+        meta={"ic_protocol":"same_date_signals_vs_next_5_session_returns","backtest":"daily_reselection_next_close_execution_actual_turnover",
+            "ivol":"rolling_OLS_intercept_and_equal_weight_market","roll_spread_units":"native_quote_price; daily estimator, not observed quotes",
+            "notional_units":"native quote currency times shares; not USD", "volume_ratio":"relative to rolling mean, not shares-outstanding turnover",
+            "return_currency":"native currencies; FX and borrow costs excluded"})

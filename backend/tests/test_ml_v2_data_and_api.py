@@ -75,3 +75,25 @@ def test_universe_upload_is_sandboxed(client, quotes, tmp_path):
 def test_unknown_job_is_404(client):
     assert client.get("/api/ml/v2/jobs/missing").status_code == 404
     assert client.post("/api/ml/v2/jobs/missing/cancel").status_code == 404
+
+
+def test_job_rejects_unsupported_feature_options_before_enqueue(client, quotes):
+    response = client.post("/api/ml/v2/features/07/jobs",json={"symbols":["AAA"],"model_library":["fake_model"]})
+    assert response.status_code == 422
+
+
+def test_job_persists_and_returns_completed_artifact(client, quotes, monkeypatch):
+    import time
+    from app.api import ml_v2 as api
+    monkeypatch.setattr(api,"run_feature",lambda *args: {"status":"ok","summary_cards":[],"charts":{},"tables":{}})
+    response = client.post("/api/ml/v2/features/07/jobs",json={"symbols":["AAA"]})
+    assert response.status_code == 200
+    identifier = response.json()["job_id"]
+    deadline = time.monotonic()+5
+    while time.monotonic()<deadline:
+        result = client.get(f"/api/ml/v2/jobs/{identifier}").json()
+        if result["status"] in {"completed","failed"}:
+            break
+        time.sleep(.02)
+    assert result["status"] == "completed"
+    assert result["result"]["status"] == "ok"

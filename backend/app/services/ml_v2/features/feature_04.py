@@ -6,8 +6,6 @@ from typing import Any
 from .inputs import inputs, outputs, validate
 
 from app.services.ml_v2.core.common import merge_feature_contract
-from app.services.ml_v2.core.performance import normalize_payload
-from app.services.ml_v2.core.barriers import run_triple_barrier
 
 
 FEATURE_ID = "04"
@@ -29,17 +27,7 @@ DEFAULTS: dict[str, Any] = {
 
 ALIASES = {"pt": "profit_taking_barrier", "sl": "stop_loss_barrier", "holding_period": "max_holding_period", "horizon": "max_holding_period"}
 
-INPUT_CONTRACT = [
-    {"key": "symbols", "type": "ticker_list", "required": False},
-    {"key": "profit_taking_barrier", "type": "float", "default": 0.05},
-    {"key": "stop_loss_barrier", "type": "float", "default": 0.03},
-    {"key": "max_holding_period", "type": "integer", "options": [5, 10, 21, 63], "default": 21},
-    {"key": "barrier_mode", "type": "select", "options": ["fixed", "vol_scaled"], "default": "fixed"},
-    {"key": "barrier_side", "type": "select", "options": ["bilateral", "long_only", "short_only"], "default": "bilateral"},
-    {"key": "position_sizing", "type": "select", "options": ["probability", "kelly", "binary"], "default": "probability"},
-    {"key": "primary_side_model", "type": "select", "options": ["momentum_sign", "external_model_upload", "feature_02_predictions"], "default": "momentum_sign"},
-    {"key": "confidence_level", "type": "select", "options": [0.8, 0.9, 0.95], "default": 0.9},
-]
+INPUT_CONTRACT = [{'key': 'symbols', 'type': 'ticker_list', 'required': False}, {'key': 'profit_taking_barrier', 'type': 'float', 'default': 0.05}, {'key': 'stop_loss_barrier', 'type': 'float', 'default': 0.03}, {'key': 'max_holding_period', 'type': 'integer', 'options': [5, 10, 21, 63], 'default': 21}, {'key': 'barrier_mode', 'type': 'select', 'options': ['fixed', 'vol_scaled'], 'default': 'fixed'}, {'key': 'barrier_side', 'type': 'select', 'options': ['bilateral'], 'default': 'bilateral'}, {'key': 'position_sizing', 'type': 'select', 'options': ['probability', 'binary'], 'default': 'probability'}, {'key': 'primary_side_model', 'type': 'select', 'options': ['momentum_sign'], 'default': 'momentum_sign'}, {'key': 'confidence_level', 'type': 'select', 'options': [0.8, 0.9, 0.95], 'default': 0.9}]
 
 OUTPUT_CONTRACT = [
     {"key": "triple_barrier_label_distribution", "location": "charts", "renderer": "bar", "status": "live"},
@@ -56,20 +44,19 @@ OUTPUT_CONTRACT = [
 ]
 
 RESEARCH_ONLY = ["external primary model upload", "feature-store event timestamp ingestion"]
-IMPLEMENTATION_NOTES = [
-    "Labels are generated from forward local returns with explicit PT/SL/max-hold barriers.",
-    "CQR bands use LightGBM lower/upper quantile models with chronological conformal calibration and volatility fallback only when the quantile fit is unavailable.",
-]
+IMPLEMENTATION_NOTES = ['Labels use actual high/low paths; ambiguous same-bar ordering is unidentified.', 'CQR uses sklearn quantile models with separate purged training/calibration/test dates; unavailable fits are disclosed, never replaced by a volatility band.']
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
 OUTPUTS = outputs(OUTPUT_CONTRACT)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    from app.services.ml_v2.core.performance import normalize_payload
     return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["external_model_upload", "quantile_cqr"])
 
 
 def run(payload=None):
+    from app.services.ml_v2.core.barriers import run_triple_barrier
     normalized = validate(normalize_feature_payload(payload), INPUTS)
     result = run_triple_barrier(normalized)
     return merge_feature_contract(result, feature_title=FEATURE_TITLE, input_contract=INPUT_CONTRACT, output_contract=OUTPUT_CONTRACT, research_only=RESEARCH_ONLY, implementation_notes=IMPLEMENTATION_NOTES, payload=normalized)

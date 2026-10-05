@@ -6,8 +6,6 @@ from typing import Any
 from .inputs import inputs, outputs, validate
 
 from app.services.ml_v2.core.common import merge_feature_contract
-from app.services.ml_v2.core.performance import normalize_payload
-from app.services.ml_v2.core.microstructure import run_microstructure
 
 
 FEATURE_ID = "10"
@@ -15,7 +13,7 @@ FEATURE_TITLE = "Market Microstructure Signal Observatory"
 
 DEFAULTS: dict[str, Any] = {
     "signal_families": ["amihud", "hl_amihud", "roll_spread", "corwin_schultz_spread", "max_factor", "52w_high", "ivol", "volume_surprise"],
-    "ic_protocol": "purged_kfold_proxy",
+    "ic_protocol": "daily_forward_ic",
     "lookback_days": 756,
     "max_symbols": 250,
     "compute_mode": "realtime",
@@ -26,10 +24,12 @@ ALIASES = {"signals": "signal_families", "protocol": "ic_protocol"}
 INPUT_CONTRACT = [
     {"key": "symbols", "type": "ticker_list", "required": False, "source": "master_universe.parquet"},
     {"key": "signal_families", "type": "multi_select", "options": ["amihud", "hl_amihud", "roll_spread", "corwin_schultz_spread", "max_factor", "52w_high", "ivol", "volume_surprise", "dollar_vol_momentum", "turnover_rate"], "default": DEFAULTS["signal_families"]},
-    {"key": "ic_protocol", "type": "select", "options": ["purged_kfold_proxy", "cpcv_research"], "default": "purged_kfold_proxy"},
+    {"key": "ic_protocol", "type": "select", "options": ["daily_forward_ic"], "default": "daily_forward_ic"},
     {"key": "amihud_window", "type": "integer", "options": [21, 63], "default": 21},
-    {"key": "ivol_model", "type": "select", "options": ["market_residual", "ff3", "ff5_mom"], "default": "market_residual"},
+    {"key": "ivol_model", "type": "select", "options": ["market_residual"], "default": "market_residual"},
 ]
+
+INPUT_CONTRACT.append({"key":"cost_bps","type":"float","range":[0,1000],"default":10})
 
 OUTPUT_CONTRACT = [
     {"key": "microstructure_ic_leaderboard", "location": "charts", "renderer": "table", "status": "live"},
@@ -51,20 +51,19 @@ OUTPUT_CONTRACT = [
 ]
 
 RESEARCH_ONLY = ["true bid-ask spread from quote data", "order-flow imbalance", "signed volume", "intraday Lee-Ready classification"]
-IMPLEMENTATION_NOTES = [
-    "Repo has OHLCV, not tick-level quotes. Realtime implementation uses accepted daily microstructure estimators.",
-    "Amihud, high-low Amihud, Roll, Corwin-Schultz, MAX, 52-week high proximity, IVOL, dollar-volume momentum, turnover, and volume surprise are computed from local panels.",
-]
+IMPLEMENTATION_NOTES = ['This engine uses daily OHLCV estimators, not observed bid-ask quotes or order flow.', 'Rolling market OLS residual IVOL, price-change Roll spreads and historical signal IC use observed panels.', 'Volume ratios and notional values are explicitly relative/native-currency quantities, not shares turnover or USD.']
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
 OUTPUTS = outputs(OUTPUT_CONTRACT)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    from app.services.ml_v2.core.performance import normalize_payload
     return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["quote_data", "order_book", "signed_volume", "cpcv_research"])
 
 
 def run(payload=None):
+    from app.services.ml_v2.core.microstructure import run_microstructure
     normalized = validate(normalize_feature_payload(payload), INPUTS)
     result = run_microstructure(normalized)
     return merge_feature_contract(result, feature_title=FEATURE_TITLE, input_contract=INPUT_CONTRACT, output_contract=OUTPUT_CONTRACT, research_only=RESEARCH_ONLY, implementation_notes=IMPLEMENTATION_NOTES, payload=normalized)

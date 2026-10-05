@@ -1,28 +1,14 @@
 """ML V2 dml implementation."""
 from __future__ import annotations
-from dataclasses import dataclass
-from itertools import combinations
-from typing import Any, Iterable
-import base64
-import hashlib
+from typing import Any
 import math
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.cluster.hierarchy import linkage, leaves_list
-from scipy.optimize import minimize
-from sklearn.covariance import LedoitWolf, OAS
-from sklearn.decomposition import PCA
-from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, GradientBoostingRegressor
-from sklearn.linear_model import ElasticNet, Lasso, Ridge, LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, roc_auc_score
-from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import KFold
-from sklearn.preprocessing import StandardScaler
-from .data_loader import annualization_factor, close_matrix, data_inventory, load_fama_french, load_macro, market_caps, ohlcv_for_symbols, parse_symbols, returns_matrix, sector_map, volume_matrix
-from .performance import ThreadPoolExecutor, as_completed, cache_key, cached_ledoit_cov, data_inventory_cached, disk_get, disk_set, equity_from_returns, fast_spearman_ic, max_drawdown, normalize_payload, precompute_date_strings, ridge_fit_fast, sharpe, sortino, vectorized_ic_series, _CONTEXT_CACHE
-from .validation import chronological_purged_split, purged_date_folds
-from .common import date_str, number_like, response, summary
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import ElasticNet, Ridge
+from .validation import purged_date_folds
+from .common import date_str, response, summary
 from .panel import load_context, make_feature_panel, numeric_xy
 
 
@@ -33,10 +19,14 @@ def _nuisance_regressor(kind: str, seed: int = 7):
             from lightgbm import LGBMRegressor
 
             return LGBMRegressor(n_estimators=80, max_depth=3, learning_rate=0.05, min_child_samples=20, random_state=seed, n_jobs=1, verbose=-1)
-        except Exception:
-            return Ridge(alpha=2.0)
+        except ImportError as exc:
+            raise ValueError("LightGBM nuisance model is unavailable") from exc
     if "forest" in kind:
         return RandomForestRegressor(n_estimators=80, max_depth=4, min_samples_leaf=12, random_state=seed, n_jobs=1)
+    if kind == "elastic_net":
+        return ElasticNet(alpha=.0001, l1_ratio=.5, max_iter=5000)
+    if kind != "ridge":
+        raise ValueError(f"Unknown nuisance model {kind}")
     return Ridge(alpha=2.0)
 
 
@@ -53,16 +43,28 @@ def dml_cross_fit(x: pd.DataFrame, y: pd.Series, factor: str, k_folds: int = 5,
         raise ValueError("DML requires at least one nuisance covariate")
     if dates is None:
         raise ValueError("DML requires observation dates for purged cross-fitting")
-    folds = purged_date_folds(pd.DataFrame({"date": pd.to_datetime(dates).to_numpy()}),
+    valid = x[factor].notna() & y.notna()
+    observed_dates = pd.Series(pd.to_datetime(dates).to_numpy()).loc[valid.to_numpy()].reset_index(drop=True)
+    x = x.loc[valid].reset_index(drop=True); y = y.loc[valid].reset_index(drop=True)
+    if len(x)<40:
+        raise ValueError("Insufficient observed treatment/outcome rows")
+    folds = purged_date_folds(pd.DataFrame({"date": observed_dates.to_numpy()}),
                              n_splits=k_folds, horizon=horizon, embargo=embargo)
     treatments, outcomes = [], []
     for train_idx, test_idx in folds:
         x_tr, x_te = x.iloc[train_idx], x.iloc[test_idx]
         y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
-        m_f = _nuisance_regressor(nuisance_model, seed=11).fit(x_tr[others], x_tr[factor])
-        m_y = _nuisance_regressor(nuisance_model, seed=17).fit(x_tr[others], y_tr)
-        treatments.extend(x_te[factor].to_numpy() - m_f.predict(x_te[others]))
-        outcomes.extend(y_te.to_numpy() - m_y.predict(x_te[others]))
+        from sklearn.impute import SimpleImputer
+        imputer = SimpleImputer(strategy="median",keep_empty_features=True)
+        observed_others = [col for col in others if x_tr[col].notna().any()]
+        if not observed_others:
+            raise ValueError("No observed training nuisance covariates")
+        train_covariates = imputer.fit_transform(x_tr[observed_others])
+        test_covariates = imputer.transform(x_te[observed_others])
+        m_f = _nuisance_regressor(nuisance_model, seed=11).fit(train_covariates, x_tr[factor])
+        m_y = _nuisance_regressor(nuisance_model, seed=17).fit(train_covariates, y_tr)
+        treatments.extend(x_te[factor].to_numpy() - m_f.predict(test_covariates))
+        outcomes.extend(y_te.to_numpy() - m_y.predict(test_covariates))
     residual_treatment = np.asarray(treatments)
     if len(residual_treatment) < 20 or np.dot(residual_treatment, residual_treatment) < 1e-12:
         raise ValueError("Insufficient residual treatment variation for DML inference")
@@ -98,59 +100,55 @@ def hc3_univariate_inference(treatment: pd.Series, y: pd.Series) -> tuple[float,
 
 
 def run_causal_dml(payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    ctx = load_context(payload, min_symbols=12)
-    panel, y = make_feature_panel(ctx, horizon=int(number_like((payload or {}).get("prediction_horizon"), 5) or 5))
+    request = payload or {}
+    ctx = load_context(request)
+    horizon = int(request.get("prediction_horizon", 5))
+    panel, y = make_feature_panel(ctx, horizon=horizon)
     x, y = numeric_xy(panel, y)
-    factors = list(x.columns)
-    k_folds = int(number_like((payload or {}).get("dml_folds"), 5) or 5)
-    nuisance_model = str((payload or {}).get("nuisance_model") or (payload or {}).get("dml_nuisance_model") or "ridge")
-    rows = []
-    network = []
-    for factor in factors:
-        ape, se, t = dml_cross_fit(x, y, factor, k_folds=k_folds, nuisance_model=nuisance_model, dates=panel["date"], horizon=int((payload or {}).get("prediction_horizon", 5)))
-        ols_ic = fast_spearman_ic(x[factor].to_numpy(dtype=float), y.to_numpy(dtype=float))
-        bias = ols_ic - ape
-        cls = "Causal" if abs(t) > 1.96 and abs(bias) < abs(ols_ic) * 0.5 + 1e-6 else "Proxy" if abs(t) > 1.96 else "Spurious"
-        hc3_slope, hc3_se, hc3_t = hc3_univariate_inference(x[factor], y)
-        others = [c for c in factors if c != factor]
-        if not others:
+    folds = int(request.get("dml_folds", 5))
+    nuisance = str(request.get("nuisance_model", "ridge"))
+    significance = float(request.get("significance_threshold", .95))
+    threshold = stats.norm.ppf((1 + significance) / 2)
+    rows, unavailable = [], []
+    for factor in x.columns:
+        try:
+            ape, se, t = dml_cross_fit(x, y, factor, k_folds=folds, nuisance_model=nuisance,
+                                    dates=panel["date"], horizon=horizon)
+        except ValueError as exc:
+            unavailable.append({"factor": factor, "status": "unidentified", "reason": str(exc)})
             continue
-        nuisance_f = _nuisance_regressor(nuisance_model, seed=23).fit(x[others], x[factor])
-        ef = x[factor] - nuisance_f.predict(x[others])
-        r2 = float(max(0.0, 1.0 - np.var(ef) / max(np.var(x[factor]), 1e-12)))
-        rows.append({"factor": factor, "ols_ic": ols_ic, "dml_ape": ape, "dml_se": se, "confounding_bias": bias, "ape_t_stat": t, "hc3_slope": hc3_slope, "hc3_se": hc3_se, "hc3_t_stat": hc3_t, "classification": cls, "nuisance_r2": r2, "recommended_weight_adjustment": max(ape, 0.0)})
-        coefs = np.abs(np.asarray(getattr(nuisance_f, "coef_", []))).ravel()
-        if not len(coefs) and hasattr(nuisance_f, "feature_importances_"):
-            coefs = np.abs(np.asarray(nuisance_f.feature_importances_)).ravel()
-        for other, coef in zip(others, coefs):
-            if coef > np.percentile(coefs, 75):
-                edge_r2 = float((coef / max(float(coefs.sum()), 1e-12)) * r2)
-                network.append({"source": other, "target": factor, "weight": edge_r2, "coef_importance": float(coef), "partial_r2_proxy": edge_r2})
-    ape_ts = []
-    for i in range(126, len(x), max(1, len(x)//120)):
-        snap = x.iloc[:i]
-        yy = y.iloc[:i]
-        if len(snap) < max(60, min(3, k_folds) * 20):
-            continue
-        for factor in factors[:6]:
-            ape_i, _, _ = dml_cross_fit(snap, yy, factor, k_folds=min(3, k_folds), nuisance_model=nuisance_model, dates=panel["date"].iloc[:i], horizon=int((payload or {}).get("prediction_horizon", 5)))
-            ape_ts.append({"step": i, "factor": factor, "ape": ape_i})
-    spurious_fraction = float(np.mean([r["classification"] == "Spurious" for r in rows])) if rows else 0.0
-    return response(
-        "11",
-        [summary("Causal Factors", sum(r["classification"] == "Causal" for r in rows), "count"), summary("Spurious Fraction", spurious_fraction, "ratio"), summary("Factors", len(rows), "count"), summary("DML Folds", k_folds, "k")],
-        charts={
-            "causal_ape_leaderboard": rows,
-            "confounding_bias_decomposition": [{"factor": r["factor"], "ape_component": r["dml_ape"], "confounding_bias": r["confounding_bias"]} for r in rows],
-            "ape_time_series": ape_ts,
-            "spurious_factor_detection_log": [{"factor": r["factor"], "classification": r["classification"], "ape_t_stat": r["ape_t_stat"]} for r in rows if r["classification"] == "Spurious"],
-            "nuisance_model_r2_table": [{"factor": r["factor"], "nuisance_r2": r["nuisance_r2"]} for r in rows],
-            "robust_inference_table": [{"factor": r["factor"], "hc3_slope": r["hc3_slope"], "hc3_se": r["hc3_se"], "hc3_t_stat": r["hc3_t_stat"], "dml_t_stat": r["ape_t_stat"]} for r in rows],
-            "causal_factor_network": network,
-            "dml_vs_ols_backtest_comparison": [{"method": "ols_ic_weighted", "sharpe": sharpe(y, ctx.annualization)}, {"method": "dml_ape_weighted", "sharpe": sharpe([r["dml_ape"] for r in rows], ctx.annualization)}],
-            "rolling_spurious_fraction": [{"date": date_str(d), "spurious_fraction": spurious_fraction} for d in panel["date"].drop_duplicates().tail(80)],
-        },
-        tables={"causal_ape_table": rows, "causal_network_edges": network, "robust_inference_table": [{"factor": r["factor"], "hc3_slope": r["hc3_slope"], "hc3_se": r["hc3_se"], "hc3_t_stat": r["hc3_t_stat"]} for r in rows]},
-        meta={"implemented_outputs": 9, "nuisance_model": nuisance_model, "dml_folds": k_folds, "cross_fitting": "purged_expanding_date_folds", "robust_inference": "HC3_univariate_sandwich", "partial_r2_edges": True},
-    )
-
+        ols_slope, ols_se, ols_t = hc3_univariate_inference(x[factor], y)
+        rows.append({"factor": factor, "dml_ape": ape, "dml_se": se, "ape_t_stat": t,
+                     "lower": ape - threshold * se, "upper": ape + threshold * se,
+                     "univariate_slope": ols_slope, "hc3_se": ols_se, "hc3_t_stat": ols_t,
+                     "adjustment_vs_univariate_slope": ols_slope - ape,
+                     "classification": "significant_conditional_association" if abs(t) > threshold else "not_significant",
+                     "signed_weight": ape})
+    if not rows:
+        raise ValueError("No factors have identifiable held-out residual variation")
+    history = []
+    dates = pd.DatetimeIndex(pd.to_datetime(panel.date).unique()).sort_values()
+    window = int(request.get("rolling_window", 252))
+    for end in range(max(80, window), len(dates), 63):
+        mask = pd.to_datetime(panel.date).isin(dates[max(0, end-window):end])
+        snap, target = x.loc[mask].reset_index(drop=True), y.loc[mask].reset_index(drop=True)
+        snap_dates = panel.loc[mask, "date"].reset_index(drop=True)
+        for factor in [row["factor"] for row in rows[:6]]:
+            try:
+                ape, se, _ = dml_cross_fit(snap, target, factor, k_folds=min(3, folds),
+                                         nuisance_model=nuisance, dates=snap_dates, horizon=horizon)
+            except ValueError:
+                continue
+            history.append({"date": date_str(dates[end]), "factor": factor, "ape": ape, "se": se})
+    robust = [{"factor": row["factor"], "dml_ape": row["dml_ape"], "dml_se": row["dml_se"],
+               "univariate_slope": row["univariate_slope"], "hc3_se": row["hc3_se"]} for row in rows]
+    return response("11", [summary("Identified factors", len(rows)), summary("Unidentified factors", len(unavailable))],
+        charts={"conditional_ape_leaderboard": rows, "ape_time_series": history,
+                "adjustment_vs_univariate_slope": rows, "robust_inference_table": robust},
+        tables={"conditional_ape_table": rows, "unidentified_factors": unavailable, "robust_inference_table": robust},
+        status="warning" if unavailable else "ok",
+        alerts=[{"level": "warning", "message": "Some factors are unidentified; see unidentified_factors"}] if unavailable else [],
+        meta={"cross_fitting": "purged_expanding_date_folds", "robust_inference": "HC3_on_held_out_residuals",
+              "causal_identification": "Not established by observational OHLCV; estimates are conditional associations",
+              "as_of_date": date_str(ctx.returns.index.max()), "nuisance_model": nuisance,
+              "sector_basis": "time_invariant_current_snapshot"})

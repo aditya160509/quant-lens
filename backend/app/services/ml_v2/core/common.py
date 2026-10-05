@@ -1,30 +1,16 @@
 """ML V2 common implementation."""
 from __future__ import annotations
-from dataclasses import dataclass
-from itertools import combinations
 from typing import Any, Iterable
-import base64
-import hashlib
 import math
 import numpy as np
 import pandas as pd
-from scipy import stats
-from scipy.cluster.hierarchy import linkage, leaves_list
-from scipy.optimize import minimize
-from sklearn.covariance import LedoitWolf, OAS
-from sklearn.decomposition import PCA
-from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, GradientBoostingRegressor
-from sklearn.linear_model import ElasticNet, Lasso, Ridge, LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, roc_auc_score
-from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import KFold
-from sklearn.preprocessing import StandardScaler
-from .data_loader import annualization_factor, close_matrix, data_inventory, load_fama_french, load_macro, market_caps, ohlcv_for_symbols, parse_symbols, returns_matrix, sector_map, volume_matrix
-from .performance import ThreadPoolExecutor, as_completed, cache_key, cached_ledoit_cov, data_inventory_cached, disk_get, disk_set, equity_from_returns, fast_spearman_ic, max_drawdown, normalize_payload, precompute_date_strings, ridge_fit_fast, sharpe, sortino, vectorized_ic_series, _CONTEXT_CACHE
-from .validation import chronological_purged_split, purged_date_folds
 
 
 def clean_json(value: Any) -> Any:  # A01 — type-identity checks, no isinstance MRO
+    if value is pd.NA or value is pd.NaT:
+        return None
+    if isinstance(value, np.bool_):
+        return bool(value)
     t = type(value)
     if t is float:
         return value if (value == value and value != float("inf") and value != float("-inf")) else None
@@ -82,7 +68,7 @@ def compact_records(df: pd.DataFrame | None, limit: int = 500) -> list[dict[str,
         idx = np.unique(np.round(np.linspace(0, len(out) - 1, limit)).astype(int))
         out = out.iloc[idx]
     for col in out.columns:
-        if np.issubdtype(out[col].dtype, np.datetime64):
+        if pd.api.types.is_datetime64_any_dtype(out[col]):
             out[col] = pd.to_datetime(out[col], errors="coerce").dt.strftime("%Y-%m-%d")
     return clean_json(out.to_dict("records"))
 
@@ -162,7 +148,7 @@ def merge_feature_contract(
             "research_only_components": research_only or [],
             "implementation_notes": implementation_notes or [],
             "research_mode_requested": requested_research,
-            "contract_version": "ml_v2.2026-06-11",
+            "contract_version": "ml_v2.2026-10-05",
         }
     )
     out["meta"] = clean_json(meta)

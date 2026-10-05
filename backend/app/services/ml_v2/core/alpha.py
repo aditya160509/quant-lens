@@ -1,177 +1,151 @@
-"""ML V2 alpha implementation."""
+"""Purged alpha evaluation, train-only model selection and genuine SHAP."""
 from __future__ import annotations
-from dataclasses import dataclass
-from itertools import combinations
-from typing import Any, Iterable
-import base64
-import hashlib
-import math
+from typing import Any
 import numpy as np
 import pandas as pd
-from scipy import stats
-from scipy.cluster.hierarchy import linkage, leaves_list
-from scipy.optimize import minimize
-from sklearn.covariance import LedoitWolf, OAS
-from sklearn.decomposition import PCA
+from sklearn.base import clone
 from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, GradientBoostingRegressor
-from sklearn.linear_model import ElasticNet, Lasso, Ridge, LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, roc_auc_score
-from sklearn.mixture import GaussianMixture
-from sklearn.model_selection import KFold
-from sklearn.preprocessing import StandardScaler
-from .data_loader import annualization_factor, close_matrix, data_inventory, load_fama_french, load_macro, market_caps, ohlcv_for_symbols, parse_symbols, returns_matrix, sector_map, volume_matrix
-from .performance import ThreadPoolExecutor, as_completed, cache_key, cached_ledoit_cov, data_inventory_cached, disk_get, disk_set, equity_from_returns, fast_spearman_ic, max_drawdown, normalize_payload, precompute_date_strings, ridge_fit_fast, sharpe, sortino, vectorized_ic_series, _CONTEXT_CACHE
-from .validation import chronological_purged_split, purged_date_folds
-from .common import compact_records, number_like, response, summary
-from .estimators import _fit_base_model, _safe_predict, hyperparam_landscape, ice_plot_rows, realtime_tree_shap_sample, rolling_monthly_ic, signal_portfolio_stats
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import Ridge
+from sklearn.metrics import mean_absolute_error
+from .performance import fast_spearman_ic
+from .validation import chronological_purged_split
+from .common import compact_records, response, summary
+from .estimators import rolling_monthly_ic
 from .panel import load_context, make_feature_panel, numeric_xy
 
 
 def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     ctx = load_context(payload, min_symbols=12)
-    horizon = int(number_like(ctx.payload.get("prediction_horizon"), 5) or 5)
-    panel, y = make_feature_panel(ctx, horizon=horizon)
-    x, y = numeric_xy(panel, y)
-    if len(x) < 200:
-        return response("02", [summary("Observations", len(x), "rows")], {}, {}, alerts=[{"level": "error", "message": "Insufficient observations for GBT alpha."}], status="error")
-    train_idx, test_idx = chronological_purged_split(panel, horizon, int(ctx.payload.get("embargo_period", 5)))
-    models = {
-        "ridge": Ridge(alpha=5.0),
+    sectors = ctx.payload.get("sector_filter")
+    minimum = float(ctx.payload.get("minimum_formation_notional",0))
+    if minimum < 0:
+        raise ValueError("minimum_formation_notional must be nonnegative")
+    liquidity = (ctx.closes.iloc[:63]*ctx.volumes.iloc[:63]).mean()
+    allowed = [symbol for symbol in ctx.symbols if (not sectors or ctx.sectors.get(symbol) in sectors) and liquidity.get(symbol,0)>=minimum]
+    if not allowed:
+        raise ValueError("No assets satisfy formation-history universe filters")
+    ctx.symbols = allowed
+    ctx.returns = ctx.returns[allowed]; ctx.closes = ctx.closes[allowed]; ctx.volumes = ctx.volumes[allowed]
+    ctx.ohlcv = ctx.ohlcv.loc[ctx.ohlcv.Ticker.isin(allowed)]
+    horizon = int(ctx.payload.get("prediction_horizon", 5))
+    panel, target = make_feature_panel(ctx, horizon=horizon)
+    columns = list(numeric_xy(panel, target)[0].columns)
+    raw = panel[columns].replace([np.inf, -np.inf], np.nan)
+    train, test = chronological_purged_split(panel, horizon, int(ctx.payload.get("embargo_period", 5)))
+    inner_train, validation = chronological_purged_split(panel.iloc[train].reset_index(drop=True), horizon, 5)
+    weighting = ctx.payload.get("sample_weighting","equal")
+    if weighting not in {"equal","time_decay"}:
+        raise ValueError("Unsupported sample_weighting")
+    def fit(estimator,features,outcomes):
+        dates = pd.to_datetime(panel.loc[outcomes.index,"date"])
+        age = (dates.max()-dates).dt.days.to_numpy()
+        weights = np.exp(-np.log(2)*age/252) if weighting == "time_decay" else np.ones(len(outcomes))
+        return estimator.fit(features,outcomes,sample_weight=weights)
+    models = {"ridge": Ridge(alpha=5),
         "random_forest": RandomForestRegressor(n_estimators=100, max_depth=5, min_samples_leaf=10, random_state=7, n_jobs=1),
         "extra_trees": ExtraTreesRegressor(n_estimators=100, max_depth=5, min_samples_leaf=10, random_state=11, n_jobs=1),
-        "gradient_boosting": GradientBoostingRegressor(n_estimators=100, max_depth=3, learning_rate=0.04, random_state=13),
-    }
-    try:
-        from xgboost import XGBRegressor
-        models["xgboost"] = XGBRegressor(n_estimators=80, max_depth=3, learning_rate=0.05, subsample=0.8, colsample_bytree=0.8, random_state=17, n_jobs=1, verbosity=0)
-    except Exception:
-        pass
-    try:
-        from lightgbm import LGBMRegressor
-        models["lightgbm"] = LGBMRegressor(n_estimators=100, max_depth=4, learning_rate=0.04, random_state=19, verbose=-1, n_jobs=1)
-    except Exception:
-        pass
-    catboost_available = False
-    try:
-        from catboost import CatBoostRegressor
-        models["catboost"] = CatBoostRegressor(loss_function="RMSE", iterations=120, depth=4, learning_rate=0.04, random_seed=23, verbose=False, allow_writing_files=False)
-        catboost_available = True
-    except Exception:
-        catboost_available = False
-    requested_family = str(ctx.payload.get("model_family", "all"))
-    if requested_family != "all":
-        if requested_family not in models:
-            raise ValueError(f"Requested model family {requested_family} is unavailable")
-        models = {requested_family: models[requested_family]}
-    perf = []
-    preds = {}
-    x_train, x_test = x.iloc[train_idx], x.iloc[test_idx]
-    y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
-    for name, model in models.items():
-        pred = _safe_predict(model, x_train, y_train, x_test)
-        preds[name] = pred
-        ic = fast_spearman_ic(np.asarray(pred, dtype=float), y_test.to_numpy(dtype=float))
-        perf.append({"model": name, "ic": ic, "mae": float(mean_absolute_error(y_test, pred)), "ic_weight": max(ic, 0.0)})
-    total_ic = sum(r["ic_weight"] for r in perf)
-    for r in perf:
-        r["ensemble_weight"] = float(r["ic_weight"] / total_ic) if total_ic > 0 else float(1.0 / len(perf))
-    ens = sum(np.asarray(preds[r["model"]]) * r["ensemble_weight"] for r in perf)
-    latest_panel = panel.sort_values("date").drop_duplicates("ticker", keep="last").copy()
-    x_latest, _ = numeric_xy(latest_panel)
-    best_name = max(perf, key=lambda r: r["ic"])["model"]
-    best_model = models[best_name].fit(x_train, y_train)
-    latest_pred = np.asarray(best_model.predict(x_latest), dtype=float)
-    pred_rows = latest_panel[["date", "ticker", "sector"]].copy()
-    pred_rows["prediction"] = latest_pred
-    pred_rows["rank"] = pred_rows["prediction"].rank(ascending=False, method="first")
-    feature_names = list(x.columns)
-    if hasattr(best_model, "feature_importances_"):
-        importances = np.asarray(best_model.feature_importances_, dtype=float)
-    elif hasattr(best_model, "coef_"):
-        coef = np.asarray(best_model.coef_, dtype=float)
-        importances = np.mean(np.abs(coef), axis=0) if coef.ndim > 1 else np.abs(coef)
-    else:
-        importances = np.ones(len(feature_names))
-    base_importance = importances / max(importances.sum(), 1e-12)
-    shap_proxy = pd.DataFrame({"feature": feature_names, "mean_abs_shap": base_importance}).sort_values("mean_abs_shap", ascending=False)
-    n_top = max(1, len(pred_rows) // 10)
-    long_idx = pred_rows.nsmallest(n_top, "rank").index
-    short_idx = pred_rows.nlargest(n_top, "rank").index
-
-    def _side_importance(indices: pd.Index, value_col: str) -> pd.DataFrame:
-        side_x = x_latest.reindex(indices)[feature_names].replace([np.inf, -np.inf], np.nan).fillna(0.0)
-        if side_x.empty:
-            side = base_importance.copy()
-        else:
-            scale = side_x.abs().mean().reindex(feature_names).fillna(0.0).to_numpy(dtype=float)
-            scale = scale / max(float(scale.sum()), 1e-12) if scale.sum() > 0 else np.ones_like(base_importance) / max(len(base_importance), 1)
-            side = base_importance * (0.5 + scale)
-            side = side / max(float(side.sum()), 1e-12)
-        return pd.DataFrame({"feature": feature_names, value_col: side}).sort_values(value_col, ascending=False)
-
-    shap_long = _side_importance(long_idx, "mean_abs_shap_long")
-    shap_short = _side_importance(short_idx, "mean_abs_shap_short")
-    exact_shap_rows, exact_shap_meta = realtime_tree_shap_sample(best_model, x_latest, feature_names, max_rows=int(number_like(ctx.payload.get("exact_shap_cap"), 64) or 64))
-    test_dates = pd.to_datetime(panel["date"].iloc[test_idx]).reset_index(drop=True)
-    rolling_ic_rows = rolling_monthly_ic(preds[best_name], y_test.reset_index(drop=True), test_dates)
-    dynamic_weight_rows: list[dict[str, Any]] = []
-    months = test_dates.dt.to_period("M").astype(str)
-    for month in months.drop_duplicates():
-        mask = (months == month).to_numpy()
-        if mask.sum() < 8:
-            continue
-        month_ic = {name: max(0.0, fast_spearman_ic(np.asarray(pred)[mask], y_test.reset_index(drop=True).to_numpy()[mask])) for name, pred in preds.items()}
-        denom = sum(month_ic.values())
-        for name, value in month_ic.items():
-            dynamic_weight_rows.append({"month": month, "model": name, "rolling_ic": value, "ensemble_weight": value / denom if denom > 0 else 1.0 / len(month_ic)})
-    top_features = list(shap_proxy.head(6)["feature"])
-    ice_rows = ice_plot_rows(best_model, x_latest[feature_names], top_features)
-    hparam_rows = hyperparam_landscape(x_train, y_train, x_test, y_test)
-    signal_stats = signal_portfolio_stats(preds[best_name], y_test, ctx.annualization / max(horizon, 1))
-    ic_decay = []
-    for h in [1, 5, 21, 63, 126, 252]:
-        # Each horizon requires a separately trained model and its own purge gap.
+        "gradient_boosting": GradientBoostingRegressor(n_estimators=100, max_depth=3, learning_rate=.04, random_state=13)}
+    missing = []
+    for family, module, name, kwargs in [
+        ("xgboost", "xgboost", "XGBRegressor", {"n_estimators":80,"max_depth":3,"n_jobs":1,"random_state":17}),
+        ("lightgbm", "lightgbm", "LGBMRegressor", {"n_estimators":100,"max_depth":4,"n_jobs":1,"random_state":19,"verbosity":-1}),
+        ("catboost", "catboost", "CatBoostRegressor", {"iterations":100,"depth":4,"random_seed":23,"verbose":False,"allow_writing_files":False})]:
         try:
-            p2, y2 = make_feature_panel(ctx, horizon=h)
-            if not p2.empty:
-                x2, y2 = numeric_xy(p2, y2)
-                train2, test2 = chronological_purged_split(p2, h, int(ctx.payload.get("embargo_period", 5)))
-                # Reuse the best model's estimator class with same hyperparams — no refit on full panel
-                _model_clone = _fit_base_model(best_name, h)
-                pred2 = _safe_predict(_model_clone, x2.iloc[train2], y2.iloc[train2], x2.iloc[test2])
-                ic_decay.append({"horizon": h, "spearman_ic": fast_spearman_ic(np.asarray(pred2, dtype=float), y2.iloc[test2].to_numpy(dtype=float))})
-        except ValueError as exc:
-            ic_decay.append({"horizon": h, "spearman_ic": None, "status": "unavailable", "reason": str(exc)})
-    return response(
-        "02",
-        [summary("Best Model", best_name, "model"), summary("Best IC", max(r["ic"] for r in perf), "spearman"), summary("Coverage", len(pred_rows), "assets")],
-        charts={
-            "prediction_rank_table": compact_records(pred_rows.sort_values("rank"), limit=300),
-            "shap_feature_importance": compact_records(shap_proxy),
-            "shap_long_side_importance": compact_records(shap_long),
-            "shap_short_side_importance": compact_records(shap_short),
-            "exact_shap_sample_importance": exact_shap_rows,
-            "model_ic_leaderboard": perf,
-            "rolling_monthly_ic_series": rolling_ic_rows,
-            "ic_weighted_ensemble_weights": dynamic_weight_rows or perf,
-            "ic_decay_profile": ic_decay,
-            "shap_beeswarm_proxy": [],
-            "shap_waterfall_top_signal": [],
-            "ice_partial_dependence": ice_rows,
-            "hyperparameter_landscape": hparam_rows,
-            "signal_to_portfolio_stats": signal_stats,
-            "prediction_distribution": compact_records(pd.DataFrame({"prediction": latest_pred})),
-            "top_bottom_signal_spread": [{"bucket": "top_decile", "mean_prediction": float(pred_rows.nsmallest(max(1, len(pred_rows)//10), "rank")["prediction"].mean())}, {"bucket": "bottom_decile", "mean_prediction": float(pred_rows.nlargest(max(1, len(pred_rows)//10), "rank")["prediction"].mean())}],
-        },
-        tables={
-            "current_predictions": compact_records(pred_rows.sort_values("rank"), limit=500),
-            "model_performance": perf,
-            "feature_importance": compact_records(shap_proxy),
-            "rolling_monthly_ic": rolling_ic_rows,
-            "hyperparameter_landscape": hparam_rows,
-            "signal_to_portfolio_stats": signal_stats,
-            "training_audit": [{"observations": len(x), "features": len(feature_names), "train_rows": split, "test_rows": len(x) - split}],
-        },
-        meta={"implemented_outputs": 16, "catboost_available": catboost_available, "shap_mode": "capped_exact_tree_shap_or_explicitly_unavailable_no_fabricated_values", "rolling_ensemble_weights": bool(dynamic_weight_rows), "ice_samples": len(ice_rows), **exact_shap_meta},
-    )
-
+            import importlib
+            models[family] = getattr(importlib.import_module(module), name)(**kwargs)
+        except ImportError:
+            missing.append(family)
+    family = str(ctx.payload.get("model_family", "all"))
+    if family != "all":
+        if family not in models:
+            raise ValueError(f"Requested model family {family} is unavailable")
+        models = {family: models[family]}
+    inner_imputer = SimpleImputer(strategy="median", keep_empty_features=True)
+    ix = inner_imputer.fit_transform(raw.iloc[train[inner_train]])
+    vx = inner_imputer.transform(raw.iloc[train[validation]])
+    iy = target.iloc[train[inner_train]]; vy = target.iloc[train[validation]]
+    tuning = str(ctx.payload.get("tuning_mode", "platform_defaults"))
+    trials = []
+    if tuning == "manual":
+        parameters = ctx.payload.get("hyperparameters")
+        if not isinstance(parameters, dict) or not parameters or family == "all":
+            raise ValueError("Manual tuning requires one model_family and a hyperparameters object")
+        if set(parameters) - set(models[family].get_params()):
+            raise ValueError("Unknown estimator hyperparameter")
+        models[family].set_params(**parameters)
+    elif tuning == "optuna_research":
+        import optuna
+        count = int(ctx.payload.get("optuna_trials", 10))
+        if not 1 <= count <= 50:
+            raise ValueError("optuna_trials must be between 1 and 50")
+        for name, model in models.items():
+            def objective(trial):
+                params = {"alpha":trial.suggest_float("alpha", .001, 100, log=True)} if name == "ridge" else {
+                    "depth" if name == "catboost" else "max_depth":trial.suggest_int("depth" if name == "catboost" else "max_depth", 2, 6)}
+                fitted = fit(clone(model).set_params(**params),ix,iy)
+                return float(mean_absolute_error(vy, fitted.predict(vx)))
+            study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=7))
+            study.optimize(objective, n_trials=count)
+            model.set_params(**study.best_params)
+            trials.extend({"model":name,"trial":t.number,"validation_mae":t.value,"parameters":t.params} for t in study.trials)
+    elif tuning != "platform_defaults":
+        raise ValueError("Unsupported tuning_mode")
+    selection = []
+    for name, model in models.items():
+        prediction = fit(clone(model),ix,iy).predict(vx)
+        selection.append({"model":name,"validation_mae":float(mean_absolute_error(vy,prediction)),
+                          "validation_ic":fast_spearman_ic(prediction,vy.to_numpy())})
+    best = min(selection,key=lambda row:row["validation_mae"])["model"]
+    # Model choice and ensemble weights are locked before observing final holdout outcomes.
+    positive = np.array([max(row["validation_ic"],0.) for row in selection])
+    weights = positive / positive.sum() if positive.sum() > 0 else np.array([float(row["model"] == best) for row in selection])
+    imputer = SimpleImputer(strategy="median", keep_empty_features=True)
+    tx = imputer.fit_transform(raw.iloc[train]); ex = imputer.transform(raw.iloc[test])
+    predictions = {}; performance = []
+    for row, weight in zip(selection,weights):
+        model = fit(clone(models[row["model"]]),tx,target.iloc[train])
+        predictions[row["model"]] = model.predict(ex)
+        performance.append({**row,"ensemble_weight":float(weight),"test_ic":fast_spearman_ic(predictions[row["model"]],target.iloc[test].to_numpy()),
+                            "test_mae":float(mean_absolute_error(target.iloc[test],predictions[row["model"]]))})
+    live, _ = make_feature_panel(ctx,horizon=horizon,include_unlabelled=True)
+    live = live.sort_values("date").drop_duplicates("ticker",keep="last")
+    live_imputer = SimpleImputer(strategy="median", keep_empty_features=True)
+    fit_x = live_imputer.fit_transform(raw); latest_x = live_imputer.transform(live[columns])
+    production = fit(clone(models[best]),fit_x,target)
+    current = live[["date","ticker","sector"]].copy()
+    current["prediction"] = production.predict(latest_x)
+    current["rank"] = current.prediction.rank(ascending=False,method="first")
+    exact, beeswarm, waterfall = [], [], []
+    shap_status = "unavailable"
+    try:
+        import shap
+        cap = int(ctx.payload.get("exact_shap_cap",64))
+        if not 1 <= cap <= 256:
+            raise ValueError("exact_shap_cap must be between 1 and 256")
+        sample = latest_x[:cap]
+        explainer = shap.LinearExplainer(production,fit_x[:min(256,len(fit_x))]) if best == "ridge" else shap.TreeExplainer(production)
+        explanation = explainer(sample)
+        values = np.asarray(explanation.values)
+        exact = [{"feature":col,"mean_abs_shap":float(np.abs(values[:,j]).mean())} for j,col in enumerate(columns)]
+        beeswarm = [{"ticker":str(current.ticker.iloc[i]),"feature":col,"feature_value":float(sample[i,j]),"shap_value":float(values[i,j])} for i in range(len(sample)) for j,col in enumerate(columns)]
+        if len(sample):
+            waterfall = [{"feature":col,"shap_value":float(values[0,j])} for j,col in enumerate(columns)]
+        shap_status = "exact"
+    except ImportError as exc:
+        shap_status = f"unavailable: {exc}"
+    ensemble = sum(predictions[row["model"]] * weight for row,weight in zip(selection,weights))
+    evaluations = panel.iloc[test][["date","ticker"]].copy()
+    evaluations["prediction"] = ensemble; evaluations["actual_forward_return"] = target.iloc[test].to_numpy()
+    monthly = rolling_monthly_ic(ensemble,target.iloc[test],pd.to_datetime(panel.date.iloc[test]).reset_index(drop=True))
+    return response("02",[summary("Selected Model",best,"model"),summary("Coverage",len(current),"assets")],
+        charts={"prediction_rank_table":compact_records(current.sort_values("rank")),"shap_feature_importance":exact,
+                "shap_beeswarm":beeswarm,"shap_waterfall_top_signal":waterfall,
+                "model_ic_leaderboard":performance,"rolling_monthly_ic_series":monthly},
+        tables={"current_predictions":compact_records(current.sort_values("rank")),"model_performance":performance,
+                "heldout_predictions":compact_records(evaluations,limit=10000),"tuning_trials":trials,
+                "training_audit":[{"train_rows":len(train),"test_rows":len(test),"validation_rows":len(validation),"selected_model":best}]},
+        meta={"selection":"nested_purged_training_validation_mae","ensemble_weights":"training_validation_positive_ic_or_best_validation_model",
+              "shap_status":shap_status,"shap_base_value":float(np.asarray(explanation.base_values).reshape(-1)[0]) if shap_status == "exact" else None,
+              "optional_libraries_unavailable":missing,"live_refit":"all_available_matured_labels","imputation":"training_median","sample_weighting":weighting,"universe_filter":"initial_63_observed_rows_notional; native_quote_units",
+              "sector_metadata":"current_snapshot; not a historical classifier"})
