@@ -23,13 +23,11 @@ import PCAGodModeLab from '@/components/labs/PCAGodModeLab';
 import MLLabDashboard from '@/components/labs/MLLabDashboard';
 import QuantitativeLab from '@/components/labs/QuantitativeLab';
 
-import ResearchPage from './research/page';
 import RegimesHubPage from './regimes/page';
 // Strategy Lab has been deprecated - use /labs/studio for Sovereign Algo Studio
 
 
 const TABS = [
-    { id: "research", label: "RESEARCH", icon: Globe },
     { id: "factors", label: "FACTORS", icon: Layers },
     { id: "volatility", label: "VOL", icon: Activity },
     { id: "regimes", label: "REGIMES", icon: RefreshCw },
@@ -54,7 +52,7 @@ function ClientTime() {
 
 
 export default function LabsPage() {
-    const [activeTab, setActiveTab] = useState("research");
+    const [activeTab, setActiveTab] = useState("factors");
 
     return (
         <PageGrid>
@@ -187,16 +185,6 @@ export default function LabsPage() {
                     <div className="flex-1 overflow-auto p-4" style={{
                         background: 'var(--background)',
                     }}>
-                        <Tabs.Content value="research" className="h-full outline-none">
-                            <div className="h-full" style={{
-                                background: 'var(--card)',
-                                border: '1px solid var(--border)',
-                                borderRadius: '6px',
-                                overflow: 'hidden',
-                            }}>
-                                <ResearchPage />
-                            </div>
-                        </Tabs.Content>
                         <Tabs.Content value="factors" className="h-full outline-none">
                             <FactorsHubPage />
                         </Tabs.Content>
