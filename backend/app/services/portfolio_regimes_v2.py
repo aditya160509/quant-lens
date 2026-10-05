@@ -52,7 +52,8 @@ from app.services.portfolio_core import (
 
 ANNUAL_FACTOR = 252
 DEFAULT_WINDOW_YEARS = 2
-DB_PATH = os.path.join(os.path.dirname(__file__), 'regime_database.db')
+DB_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'cache', 'regime_database.db')
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # Market proxies
 MARKET_PROXIES = {
