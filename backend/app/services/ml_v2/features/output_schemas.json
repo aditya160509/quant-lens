@@ -1,0 +1,3633 @@
+{
+ "01.charts.backtest_paths_chart": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "path",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "equity",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "01.charts.cpcv_sharpe_distribution": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "sharpe",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "01.charts.deflated_sharpe_ratio": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "pbo",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "dsr",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "status",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "reason",
+    "type": "string",
+    "nullable": true
+   }
+  ]
+ },
+ "01.charts.embargo_sensitivity": {
+  "shape": "records",
+  "columns": []
+ },
+ "01.charts.probability_of_backtest_overfitting": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "pbo",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "dsr",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "status",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "reason",
+    "type": "string",
+    "nullable": true
+   }
+  ]
+ },
+ "01.charts.purged_vs_naive_cv_comparison": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "method",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "sharpe",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "01.tables.cpcv_path_metrics": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "path",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "sharpe",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "observations",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "01.tables.per_fold_performance": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "split",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_groups",
+    "type": "object",
+    "nullable": true
+   },
+   {
+    "name": "training_observations",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_observations",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "purged_observations",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "embargo_sessions",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_start",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "test_end",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "purged_sharpe",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "naive_sharpe",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ic",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "02.charts.model_ic_leaderboard": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "validation_mae",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "validation_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ensemble_weight",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_mae",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "02.charts.prediction_rank_table": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "sector",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "rank",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "02.charts.rolling_monthly_ic_series": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "month",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "rolling_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "observations",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "02.charts.shap_beeswarm": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "feature",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "feature_value",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "shap_value",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "02.charts.shap_feature_importance": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "feature",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "mean_abs_shap",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "02.charts.shap_waterfall_top_signal": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "feature",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "shap_value",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "02.tables.current_predictions": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "sector",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "rank",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "02.tables.heldout_predictions": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "actual_forward_return",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "02.tables.model_performance": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "validation_mae",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "validation_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ensemble_weight",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_mae",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "02.tables.training_audit": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "train_rows",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_rows",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "validation_rows",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "selected_model",
+    "type": "string",
+    "nullable": true
+   }
+  ]
+ },
+ "02.tables.tuning_trials": {
+  "shape": "records",
+  "columns": []
+ },
+ "03.charts.ensemble_vol_forecast_weights": {
+  "shape": "records",
+  "columns": []
+ },
+ "03.charts.forecast_error_distribution": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "horizon",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "mae",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "qlike",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "interval_coverage",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "03.charts.garch_leverage_news_impact_curve": {
+  "shape": "records",
+  "columns": []
+ },
+ "03.charts.garch_model_selection": {
+  "shape": "records",
+  "columns": []
+ },
+ "03.charts.model_confidence_intervals": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "horizon",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "lower",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "upper",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "03.charts.realized_vol_estimator_comparison": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "estimator",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "current_vol",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "03.charts.realized_vs_predicted": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "horizon",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "forecast_vol",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "realized_vol",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "03.charts.vol_forecast_panel": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "horizon",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "forecast_vol",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "realized_vol",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "03.charts.vol_term_structure": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "horizon",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "forecast_vol",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "formation_date",
+    "type": "date",
+    "nullable": true
+   }
+  ]
+ },
+ "03.tables.forecast_rows": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "horizon",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "forecast_vol",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "realized_vol",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "03.tables.forecast_tournament": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "horizon",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "mae",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "qlike",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "interval_coverage",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "03.tables.garch_model_selection": {
+  "shape": "records",
+  "columns": []
+ },
+ "04.charts.barrier_hit_path_examples": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "forward_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "label",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "vol_21",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "touch_date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "touch_type",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "upper_barrier",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "lower_barrier",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "barrier_method",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "primary_side",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "meta_probability",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "position_size",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cqr_lower",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cqr_upper",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cqr_interval_width",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "04.charts.barrier_sensitivity_surface": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "profit_taking",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "stop_loss",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "events",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ambiguous_events",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "positive_rate",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "negative_rate",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "neutral_rate",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "04.charts.cqr_coverage_audit": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "target_coverage",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "empirical_coverage",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "04.charts.cqr_interval_width_distribution": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "interval_width",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "04.charts.event_outcome_timeline": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "forward_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "label",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "vol_21",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "touch_date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "touch_type",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "upper_barrier",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "lower_barrier",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "barrier_method",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "primary_side",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "meta_probability",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "position_size",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cqr_lower",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cqr_upper",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cqr_interval_width",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "04.charts.label_method_comparison": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "method",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "events",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ambiguous",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "positive_rate",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "negative_rate",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "neutral_rate",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "04.charts.meta_label_probability_distribution": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "meta_probability",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "04.charts.triple_barrier_label_distribution": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "label",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "count",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "04.tables.barrier_parameters": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "profit_taking",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "stop_loss",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "max_holding_period",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "barrier_mode",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "barrier_side",
+    "type": "string",
+    "nullable": true
+   }
+  ]
+ },
+ "04.tables.barrier_sensitivity": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "profit_taking",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "stop_loss",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "events",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ambiguous_events",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "positive_rate",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "negative_rate",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "neutral_rate",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "04.tables.label_audit": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "forward_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "label",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "vol_21",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "touch_date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "touch_type",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "upper_barrier",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "lower_barrier",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "barrier_method",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "primary_side",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "meta_probability",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "position_size",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cqr_lower",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cqr_upper",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cqr_interval_width",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "04.tables.label_method_comparison": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "method",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "events",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ambiguous",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "positive_rate",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "negative_rate",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "neutral_rate",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "05.charts.bl_vs_pure_hrp_weight_comparison": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "asset",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "allocation_weight",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "black_litterman",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "05.charts.black_litterman_posterior_return_vector": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "asset",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "reference_prior_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "posterior_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "posterior_weight",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "05.charts.cluster_dendrograms": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "left",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "right",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "distance",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "count",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "05.charts.hrp_weight_vector": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "asset",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "weight",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "sector",
+    "type": "string",
+    "nullable": true
+   }
+  ]
+ },
+ "05.charts.quasi_diagonalized_covariance_heatmap": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "row",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "col",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "value",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "05.charts.risk_contribution_decomposition": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "asset",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "risk_contribution",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "05.charts.walk_forward_allocation": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "gross_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "net_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "turnover",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cost_fraction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "equity",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "05.tables.allocation_training_audit": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "formation_date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "training_end",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "assets",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "05.tables.black_litterman": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "asset",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "reference_prior_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "posterior_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "posterior_weight",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "05.tables.hrp_weights": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "asset",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "weight",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "sector",
+    "type": "string",
+    "nullable": true
+   }
+  ]
+ },
+ "06.charts.correlation_network_density": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "density",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "absolute_correlation_threshold",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "06.charts.ensemble_vs_hmm_comparison": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "oos_agreement",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "observations",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "06.charts.parallel_gmm_regime_probabilities": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "component_1",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "component_2",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "component_3",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "06.charts.pc1_variance_monitor": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "pc1_explained_variance",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "06.charts.regime_conditional_asset_returns": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "asset",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "regime",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "mean_log_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "observations",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "06.charts.regime_probability_time_series": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "dominant_state",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "state_1",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "state_2",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "state_3",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "06.charts.regime_transition_heatmap": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "row",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "col",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "value",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "06.tables.current_regime_probabilities": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "dominant_state",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "state_1",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "state_2",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "state_3",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "06.tables.training_audit": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "train_dates",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_dates",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "training_end",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "hmm_converged",
+    "type": "boolean",
+    "nullable": true
+   }
+  ]
+ },
+ "06.tables.transition_matrix": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "row",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "col",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "value",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.charts.dma_vs_obs_vs_static_bma": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "dma_prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "obs_prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "static_bma_prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ensemble_prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "realized",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "model_dispersion_std",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.charts.live_model_weight_dashboard": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "dma_weight",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "obs_weight",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.charts.model_performance_tracker": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "mae",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "rmse",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "directional_accuracy",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.charts.model_weight_evolution": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "weight",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.charts.obs_regret_curve": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "obs_cumulative_loss",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "best_fixed_model_loss",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "obs_regret",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.charts.obs_weight_evolution": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "weight",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.charts.prediction_calibration_curve": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "bucket",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "mean_prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "mean_realized",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "observations",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.tables.current_model_weights": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "dma_weight",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "obs_weight",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.tables.model_performance_tracker": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "model",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "mae",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "rmse",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "directional_accuracy",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.tables.obs_regret_log": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "obs_cumulative_loss",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "best_fixed_model_loss",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "obs_regret",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.tables.score_log": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "dma_prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "obs_prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "static_bma_prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ensemble_prediction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "realized",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "model_dispersion_std",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "07.tables.training_audit": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "train_rows",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_rows",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "label_horizon_sessions",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "08.charts.composite_signal_distribution": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "score",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "08.charts.factor_correlation_heatmap": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "row",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "col",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "value",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "08.charts.ic_weighted_composite_weights": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "factor",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "weight",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "training_mean_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "training_ic_ir",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "08.charts.long_short_backtest": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "gross_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "net_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "turnover",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cost_fraction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "equity",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "08.charts.walk_forward_weight_stability": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "factor",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "weight",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "training_mean_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "training_ic_ir",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "08.tables.factor_weights": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "factor",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "weight",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "training_mean_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "training_ic_ir",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "08.tables.latest_composite_scores": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "score",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "08.tables.training_audit": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "training_start",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "training_end",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "training_dates",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "09.charts.cointegration_network": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "source",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "target",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "pvalue",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "09.charts.entry_exit_signal_timeline": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "direction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "zscore",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "09.charts.hedge_ratio_path": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "hedge_ratio",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "intercept",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "spread",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "zscore",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   }
+  ]
+ },
+ "09.charts.pair_backtest_equity": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "gross_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "net_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "turnover",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cost_fraction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "equity",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "09.charts.pair_candidate_leaderboard": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "asset_a",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "asset_b",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "formation_correlation",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "engle_granger_statistic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "engle_granger_pvalue",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cointegrated",
+    "type": "boolean",
+    "nullable": true
+   },
+   {
+    "name": "formation_observations",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "09.charts.spread_zscore_timeseries": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "hedge_ratio",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "intercept",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "spread",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "zscore",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   }
+  ]
+ },
+ "09.tables.hedge_ratio": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "hedge_ratio",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "intercept",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "spread",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "zscore",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   }
+  ]
+ },
+ "09.tables.pair_candidates": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "asset_a",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "asset_b",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "formation_correlation",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "engle_granger_statistic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "engle_granger_pvalue",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cointegrated",
+    "type": "boolean",
+    "nullable": true
+   },
+   {
+    "name": "formation_observations",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "09.tables.spread_timeseries": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "hedge_ratio",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "intercept",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "spread",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "zscore",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   }
+  ]
+ },
+ "09.tables.training_audit": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "formation_end",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "formation_sessions",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "selected_pair",
+    "type": "object",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.52_week_high_proximity_heatmap": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "high_52w_proximity",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.amihud_illiquidity_surface": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "amihud",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "roll_spread",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "max_factor",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "high_52w_proximity",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ivol",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "volume_surprise",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "dollar_vol_momentum",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "turnover_rate",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "hl_amihud",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "corwin_schultz_spread",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "sector",
+    "type": "string",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.amihud_time_surface": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "AAPL",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "AMZN",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "BA",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "BAC",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "CAT",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "CSCO",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "CVX",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "DIS",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "GE",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "GOOGL",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "HD",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "IBM",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "INTC",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "JNJ",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "JPM",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "KO",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "MCD",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "META",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "MRK",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "MSFT",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "NKE",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "NVDA",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ORCL",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "PEP",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "PFE",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "PG",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "T",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "VZ",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "WMT",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "XOM",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.corwin_schultz_spread_cross_section": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "corwin_schultz_spread",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.hl_amihud_vs_standard_amihud": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "amihud",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "hl_amihud",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.ivol_cross_sectional_sort": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "ivol",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.liquidity_regime_monitor": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "mean_amihud",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.max_factor_distribution": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "max_factor",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.microstructure_ic_leaderboard": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "signal",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "mean_daily_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ic_ir",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "observations_dates",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.microstructure_signal_correlation_matrix": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "row",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "col",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "value",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.roll_spread_cross_section": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "roll_spread",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.signal_backtest": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "signal",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "gross_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "net_return",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "turnover",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "cost_fraction",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "equity",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.charts.volume_surprise_signal": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "volume_surprise",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.tables.amihud_time_surface": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "AAPL",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "AMZN",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "BA",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "BAC",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "CAT",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "CSCO",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "CVX",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "DIS",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "GE",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "GOOGL",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "HD",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "IBM",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "INTC",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "JNJ",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "JPM",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "KO",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "MCD",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "META",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "MRK",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "MSFT",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "NKE",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "NVDA",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ORCL",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "PEP",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "PFE",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "PG",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "T",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "VZ",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "WMT",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "XOM",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.tables.ic_leaderboard": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "signal",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "mean_daily_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ic_ir",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "observations_dates",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "10.tables.microstructure_table": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "amihud",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "roll_spread",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "max_factor",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "high_52w_proximity",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ivol",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "volume_surprise",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "dollar_vol_momentum",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "turnover_rate",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "hl_amihud",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "corwin_schultz_spread",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ticker",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "sector",
+    "type": "string",
+    "nullable": true
+   }
+  ]
+ },
+ "11.charts.adjustment_vs_univariate_slope": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "factor",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "dml_ape",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "dml_se",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ape_t_stat",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "lower",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "upper",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "univariate_slope",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "hc3_se",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "hc3_t_stat",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "adjustment_vs_univariate_slope",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "classification",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "signed_weight",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "11.charts.ape_time_series": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "date",
+    "type": "date",
+    "nullable": true
+   },
+   {
+    "name": "factor",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "ape",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "se",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "11.charts.conditional_ape_leaderboard": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "factor",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "dml_ape",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "dml_se",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ape_t_stat",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "lower",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "upper",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "univariate_slope",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "hc3_se",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "hc3_t_stat",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "adjustment_vs_univariate_slope",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "classification",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "signed_weight",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "11.charts.robust_inference_table": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "factor",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "dml_ape",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "dml_se",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "univariate_slope",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "hc3_se",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "11.tables.conditional_ape_table": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "factor",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "dml_ape",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "dml_se",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "ape_t_stat",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "lower",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "upper",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "univariate_slope",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "hc3_se",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "hc3_t_stat",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "adjustment_vs_univariate_slope",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "classification",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "signed_weight",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "11.tables.robust_inference_table": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "factor",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "dml_ape",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "dml_se",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "univariate_slope",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "hc3_se",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "11.tables.unidentified_factors": {
+  "shape": "records",
+  "columns": []
+ },
+ "12.charts.architecture_comparison": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "architecture",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "spearman_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "monthly_ic_ir",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "mae",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "training_time_seconds",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "train_samples",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_samples",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "12.charts.monthly_oos_ic": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "architecture",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "month",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "ic",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "12.charts.training_loss": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "architecture",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "epoch",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "training_mse",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ },
+ "12.tables.architecture_comparison": {
+  "shape": "records",
+  "dynamic_columns": false,
+  "columns": [
+   {
+    "name": "architecture",
+    "type": "string",
+    "nullable": true
+   },
+   {
+    "name": "spearman_ic",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "monthly_ic_ir",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "mae",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "training_time_seconds",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "train_samples",
+    "type": "number",
+    "nullable": true
+   },
+   {
+    "name": "test_samples",
+    "type": "number",
+    "nullable": true
+   }
+  ]
+ }
+}

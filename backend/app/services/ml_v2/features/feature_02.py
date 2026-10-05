@@ -12,6 +12,7 @@ FEATURE_ID = "02"
 FEATURE_TITLE = "Gradient-Boosted Tree Alpha Engine with Full Attribution"
 
 DEFAULTS: dict[str, Any] = {
+    "embargo_period": 5,
     "model_family": "all",
     "feature_set": "ohlcv_factor_library",
     "prediction_target": "next_period_return",
@@ -19,7 +20,6 @@ DEFAULTS: dict[str, Any] = {
     "tuning_mode": "platform_defaults",
     "lookback_days": 756,
     "max_symbols": 120,
-    "compute_mode": "realtime",
 }
 
 ALIASES = {"model": "model_family", "target": "prediction_target", "horizon": "prediction_horizon", "symbols_csv": "symbols"}
@@ -50,11 +50,11 @@ IMPLEMENTATION_NOTES = ["Model selection, tuning and ensemble weights use nested
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     from app.services.ml_v2.core.performance import normalize_payload
-    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["optuna_trials", "exact_shap", "catboost"])
+    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES)
 
 
 def run(payload=None):

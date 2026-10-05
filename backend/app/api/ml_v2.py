@@ -7,7 +7,9 @@ import json
 import importlib
 import uuid
 from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile
-from app.services.ml_v2.registry import feature_manifest, get_ml_v2_feature, run_feature
+from app.services.ml_v2.core.common import PROGRESS, JobCancelled
+from app.services.ml_v2.features.inputs import DEPRECATED_INPUTS, validate
+from app.services.ml_v2.registry import CONTRACT_VERSION, feature_manifest, get_ml_v2_feature, run_feature
 from app.services.ml_v2.core.data_loader import BACKEND_DATA, available_symbols, parse_symbols
 from app.services.studio.jobs import JobStore
 
@@ -15,9 +17,40 @@ router = APIRouter(prefix="/ml/v2")
 ROOT = BACKEND_DATA / "ml_v2"
 JOBS = JobStore(path=ROOT / "jobs.json")
 
+def _feature_module(feature_id: str):
+    return importlib.import_module(f"app.services.ml_v2.features.{get_ml_v2_feature(feature_id).module}")
+
+
+def _validated(feature_id: str, payload: dict) -> dict:
+    module = _feature_module(feature_id)
+    checked = validate(module.normalize_feature_payload(payload), module.INPUTS)
+    parse_symbols(checked)
+    return checked
+
+
 @router.get("/features")
 def list_features():
-    return {"features": feature_manifest()}
+    return {"contract_version": CONTRACT_VERSION, "deprecated_inputs": list(DEPRECATED_INPUTS), "features": feature_manifest()}
+
+
+@router.get("/features/{feature_id}")
+def get_feature(feature_id: str):
+    try:
+        feature = get_ml_v2_feature(feature_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return next(row for row in feature_manifest() if row["id"] == feature.id)
+
+
+@router.post("/features/{feature_id}/validate")
+def validate_inputs(feature_id: str, payload: dict = Body(default={})):
+    """Check a form payload without running anything; returns the payload with defaults applied."""
+    try:
+        return {"valid": True, "payload": _validated(feature_id, payload)}
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 @router.get("/symbols")
 def symbols(q: str = Query("", max_length=40), limit: int = Query(25, ge=1, le=100)):
@@ -36,10 +69,22 @@ async def execute(feature_id: str, payload: dict = Body(default={})):
     except FileNotFoundError as exc:
         raise HTTPException(503, str(exc)) from exc
 
+def _checkpoint(job_id: str):
+    def report(percent: int, message: str) -> None:
+        job = JOBS.get(job_id)
+        if job is None or job["status"] == "cancelled":
+            raise JobCancelled("Job cancelled")
+        JOBS.update(job_id, progress={"percent": percent, "message": message})
+    return report
+
+
 def _execute_job(job_id, feature_id, payload):
-    result = run_feature(feature_id, payload)
-    if result.get("status") == "error":
-        raise ValueError(result.get("alerts") or "Feature execution failed")
+    token = PROGRESS.set(_checkpoint(job_id))
+    try:
+        result = run_feature(feature_id, payload)
+    finally:
+        PROGRESS.reset(token)
+    _checkpoint(job_id)(95, "Writing result")
     directory = ROOT / "results"
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{job_id}.json"
@@ -53,10 +98,7 @@ def _execute_job(job_id, feature_id, payload):
 def create_job(feature_id: str, payload: dict = Body(default={})):
     try:
         feature = get_ml_v2_feature(feature_id)
-        module = importlib.import_module(f"app.services.ml_v2.features.{feature.module}")
-        from app.services.ml_v2.features.inputs import validate
-        payload = validate(module.normalize_feature_payload(payload), module.INPUTS)
-        parse_symbols(payload)
+        payload = _validated(feature_id, payload)
         job = JOBS.create(job_type=f"ml_v2_{feature.id}", params={"feature_id": feature.id, "payload": payload})
         JOBS.submit(job["job_id"], _execute_job, job["job_id"], feature.id, payload)
         return {"job_id": job["job_id"], "status": job["status"]}
@@ -65,18 +107,31 @@ def create_job(feature_id: str, payload: dict = Body(default={})):
     except (ValueError, TypeError) as exc:
         raise HTTPException(422, str(exc)) from exc
 
+def _read_result(job: dict) -> dict:
+    path = ROOT / "results" / job["result"]["result_file"]
+    if not path.is_file():
+        raise HTTPException(503, "Completed result artifact is missing")
+    return json.loads(path.read_text())
+
 @router.get("/jobs/{job_id}")
-def job_status(job_id: str):
+def job_status(job_id: str, include_result: bool = Query(True)):
     job = JOBS.get(job_id)
     if job is None:
         raise HTTPException(404, "Unknown ML V2 job")
     out = {key: job[key] for key in ["job_id", "status", "progress", "error"]}
-    if job["status"] == "completed":
-        path = ROOT / "results" / job["result"]["result_file"]
-        if not path.is_file():
-            raise HTTPException(503, "Completed result artifact is missing")
-        out["result"] = json.loads(path.read_text())
+    out.update(feature_id=job["params"]["feature_id"], created_at=job["created_at"], updated_at=job["updated_at"])
+    if job["status"] == "completed" and include_result:
+        out["result"] = _read_result(job)
     return out
+
+@router.get("/jobs/{job_id}/result")
+def job_result(job_id: str):
+    job = JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Unknown ML V2 job")
+    if job["status"] != "completed":
+        raise HTTPException(409, f"Job is {job['status']}; no result available")
+    return _read_result(job)
 
 @router.post("/jobs/{job_id}/cancel")
 def cancel_job(job_id: str):
@@ -84,7 +139,7 @@ def cancel_job(job_id: str):
     if job is None:
         raise HTTPException(404, "Unknown ML V2 job")
     return {"job_id": job_id, "status": job["status"],
-            "note": "Cancellation suppresses publication; an active estimator finishes."}
+            "note": "Cancellation takes effect at the next stage checkpoint; a model fit already running completes before the job stops."}
 
 @router.post("/uploads")
 async def upload(kind: str = Query("universe"), file: UploadFile = File(...)):

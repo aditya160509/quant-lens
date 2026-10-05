@@ -16,7 +16,6 @@ DEFAULTS: dict[str, Any] = {
     "ic_protocol": "daily_forward_ic",
     "lookback_days": 756,
     "max_symbols": 250,
-    "compute_mode": "realtime",
 }
 
 ALIASES = {"signals": "signal_families", "protocol": "ic_protocol"}
@@ -55,11 +54,11 @@ IMPLEMENTATION_NOTES = ['This engine uses daily OHLCV estimators, not observed b
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     from app.services.ml_v2.core.performance import normalize_payload
-    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["quote_data", "order_book", "signed_volume", "cpcv_research"])
+    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES)
 
 
 def run(payload=None):

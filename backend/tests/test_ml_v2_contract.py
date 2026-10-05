@@ -12,7 +12,7 @@ def test_manifest_has_complete_feature_contracts():
         assert feature['inputs'] and feature['outputs']
         assert len({row['key'] for row in feature['inputs']}) == len(feature['inputs'])
         assert all({'key','type','label','group','default','help'} <= set(row) for row in feature['inputs'])
-        assert all({'key','source','render_hint','label','primary'} <= set(row) for row in feature['outputs'])
+        assert all({'id','title','type','path','encoding','schema','primary'} <= set(row) for row in feature['outputs'])
         assert all('proxy' not in row.get('status','') for row in feature['outputs'])
 
 

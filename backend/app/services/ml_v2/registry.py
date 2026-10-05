@@ -1,8 +1,4 @@
-"""Registry for ML V2 feature modules.
-
-No API routes are wired here. Future routers can import this single stable
-entry point once ML V2 is ready to expose.
-"""
+"""Registry for ML V2 feature modules: feature ids, lazy runners and the manifest served by the API."""
 
 from __future__ import annotations
 
@@ -71,12 +67,14 @@ def run_feature(feature_id: str | int, payload: dict[str, Any] | None = None) ->
 
 
 
-def feature_manifest():
-    from .features.inputs import inputs, outputs
+CONTRACT_VERSION = "ml_v2.2026-10-05"
+
+
+def feature_manifest() -> list[dict[str, Any]]:
+    """Every feature with its form inputs and result outputs, built from the feature modules."""
     manifest = []
     for feature in ML_V2_FEATURES.values():
         module = importlib.import_module(f"app.services.ml_v2.features.{feature.module}")
-        manifest.append({"id": feature.id, "title": module.FEATURE_TITLE,
-            "status": feature.status, "inputs": inputs(module.INPUT_CONTRACT, module.DEFAULTS),
-            "outputs": outputs(module.OUTPUT_CONTRACT), "known_limitations": module.RESEARCH_ONLY})
+        manifest.append({"id": feature.id, "title": module.FEATURE_TITLE, "status": feature.status,
+                         "inputs": module.INPUTS, "outputs": module.OUTPUTS, "known_limitations": module.RESEARCH_ONLY})
     return manifest

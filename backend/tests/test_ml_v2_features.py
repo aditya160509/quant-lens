@@ -64,4 +64,4 @@ def test_feature_runs_on_local_observations(local_market, feature):
     json.dumps(result, allow_nan=False)
     from importlib import import_module
     contract = import_module(f"app.services.ml_v2.features.feature_{feature}").OUTPUTS
-    assert all(row["key"] in result[row["source"]] for row in contract)
+    assert all(row["id"] in result[row["location"]] for row in contract)

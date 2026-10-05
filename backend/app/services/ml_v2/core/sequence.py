@@ -12,7 +12,7 @@ def _run_sequence_alpha(payload=None):
     import torch
     from torch import nn
     from .panel import load_context, make_feature_panel, numeric_xy
-    from .common import response, summary
+    from .common import report_progress, response, summary
     request = payload or {}
     names = request.get("architectures", ["patchtst"])
     supported = {"patchtst", "itransformer", "lstm", "mlp"}
@@ -102,7 +102,8 @@ def _run_sequence_alpha(payload=None):
 
     comparisons, forecasts, history = [], [], []
     dates = pd.to_datetime(panel["date"].iloc[positions[test_mask]]).reset_index(drop=True)
-    for architecture in names:
+    for step, architecture in enumerate(names):
+        report_progress(35 + 60 * step // len(names), f"Training {architecture}")
         torch.manual_seed(seed)
         model = Encoder(architecture)
         optimizer = torch.optim.AdamW(model.parameters(), lr=.001)

@@ -18,7 +18,6 @@ DEFAULTS: dict[str, Any] = {
     "exit_z": 0.5,
     "lookback_days": 756,
     "max_symbols": 120,
-    "compute_mode": "realtime",
 }
 
 ALIASES = {"entry": "entry_z", "exit": "exit_z", "corr": "min_correlation"}
@@ -44,11 +43,11 @@ IMPLEMENTATION_NOTES = ["Engle-Granger selects the pair using initial formation 
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     from app.services.ml_v2.core.performance import normalize_payload
-    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["johansen", "kalman", "ppo_threshold"])
+    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES)
 
 
 def run(payload=None):

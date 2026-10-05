@@ -71,7 +71,6 @@ def normalize_payload(
     *,
     defaults: dict[str, Any],
     aliases: dict[str, str] | None = None,
-    research_keys: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     """P12 — One dict copy + one pass; no intermediate dicts."""
     out = defaults.copy()
@@ -82,7 +81,4 @@ def normalize_payload(
         if v is None:
             continue
         out[al.get(k, k)] = v
-    if research_keys and any(out.get(k) for k in research_keys):
-        out["research_mode"] = True
-        out["compute_mode"] = "research"
     return out

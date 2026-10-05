@@ -39,7 +39,7 @@ def run_triple_barrier(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     features = labels[["vol_21", "primary_side"]].astype(float)
     target = (labels["primary_side"] * labels["forward_return"] > 0).astype(int)
     probabilities = np.full(len(labels), np.nan)
-    for train_idx, test_idx in purged_date_folds(labels, n_splits=3, horizon=horizon, embargo=5):
+    for train_idx, test_idx in purged_date_folds(labels, n_splits=3, horizon=horizon, embargo=int(ctx.payload.get("embargo_period", 5))):
         valid_train = (features.iloc[train_idx].notna().all(axis=1) & labels["forward_return"].iloc[train_idx].notna()).to_numpy()
         valid_test = features.iloc[test_idx].notna().all(axis=1).to_numpy()
         train_idx, test_idx = train_idx[valid_train], test_idx[valid_test]

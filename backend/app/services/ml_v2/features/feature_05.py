@@ -17,7 +17,6 @@ DEFAULTS: dict[str, Any] = {
     "optimization_variant": "standard_hrp",
     "max_symbols": 80,
     "lookback_days": 756,
-    "compute_mode": "realtime",
 }
 
 ALIASES = {"estimator": "covariance_estimator", "linkage": "clustering_linkage", "variant": "optimization_variant"}
@@ -44,11 +43,11 @@ IMPLEMENTATION_NOTES = ["Actual HRP inverse-variance bisection, constrained nest
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     from app.services.ml_v2.core.performance import normalize_payload
-    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["rl_rebalancing", "ppo_training", "nco_full"])
+    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES)
 
 
 def run(payload=None):

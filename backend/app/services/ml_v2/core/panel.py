@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from .data_loader import annualization_factor, normalize_frequency, lookback_rows, market_caps, ohlcv_for_symbols, parse_symbols, returns_from_ohlcv, sector_map
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from .common import number_like
+from .common import number_like, report_progress
 from .estimators import corwin_schultz_spread, high_low_amihud
 
 
@@ -23,7 +23,6 @@ class MLContext:
     market_caps: dict[str, float]
     frequency: str
     annualization: float
-    compute_mode: str
 
 
 def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> MLContext:
@@ -31,7 +30,9 @@ def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> ML
     full = str(payload.get("universe") or payload.get("symbols") or "").strip().lower() in {"all", "full", "master", "master_universe", "whole"}
     max_symbols = int(number_like(payload.get("max_symbols") or payload.get("max_tickers"), 120 if not full else 5000) or 120)
     default_limit = max(min_symbols, min(max_symbols, 160 if not full else max_symbols))
+    report_progress(5, "Resolving symbols")
     symbols = parse_symbols(payload, default_limit=default_limit, max_symbols=max_symbols)
+    report_progress(10, "Loading prices")
     lookback = int(number_like(payload.get("lookback_days") or payload.get("window_days") or payload.get("training_window"), 756) or 756)
     frequency = str(payload.get("frequency") or payload.get("sampling_frequency") or "daily")
     frequency = normalize_frequency(frequency)
@@ -47,6 +48,7 @@ def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> ML
     tail = lookback_rows(window)
     closes = ohlcv.pivot(index="Date", columns="Ticker", values="Close").sort_index().tail(tail).reindex(columns=symbols)
     volumes = ohlcv.pivot(index="Date", columns="Ticker", values="Volume").sort_index().tail(tail).reindex(columns=symbols)
+    report_progress(25, "Prices loaded")
     return MLContext(
         payload=payload,
         symbols=symbols,
@@ -58,7 +60,6 @@ def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> ML
         market_caps=market_caps(symbols),
         frequency=frequency,
         annualization=annualization_factor(frequency),
-        compute_mode="research" if payload.get("research_mode") or str(payload.get("compute_mode", "")).lower() == "research" else "realtime",
     )
 
 
@@ -130,6 +131,7 @@ def _build_ticker_features(
 
 
 def make_feature_panel(ctx: MLContext, horizon: int = 5, *, include_unlabelled: bool = False) -> tuple[pd.DataFrame, pd.Series]:
+    report_progress(30, "Building feature panel")
     rets = ctx.returns
     closes = ctx.closes.reindex(rets.index)
     vols = ctx.volumes.reindex(rets.index)

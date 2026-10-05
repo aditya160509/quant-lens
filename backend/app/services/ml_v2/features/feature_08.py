@@ -12,6 +12,7 @@ FEATURE_ID = "08"
 FEATURE_TITLE = "Multi-Factor IC-Weighted Composite Signal Optimizer"
 
 DEFAULTS: dict[str, Any] = {
+    "embargo_period": 5,
     "factor_library": "ohlcv_factor_library",
     "weighting_scheme": "ic_ir",
     "orthogonalization": "gram_schmidt",
@@ -19,7 +20,6 @@ DEFAULTS: dict[str, Any] = {
     "prediction_horizon": 5,
     "lookback_days": 756,
     "max_symbols": 120,
-    "compute_mode": "realtime",
 }
 
 ALIASES = {"factors": "factor_library", "scheme": "weighting_scheme", "horizon": "prediction_horizon"}
@@ -33,11 +33,11 @@ IMPLEMENTATION_NOTES = ['Historical IC, IC-IR and covariance-shrinkage weights u
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     from app.services.ml_v2.core.performance import normalize_payload
-    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["custom_factor_csv", "fama_macbeth", "dml_ape"])
+    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES)
 
 
 def run(payload=None):

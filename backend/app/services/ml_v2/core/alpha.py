@@ -10,7 +10,7 @@ from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error
 from .performance import fast_spearman_ic
 from .validation import chronological_purged_split
-from .common import compact_records, response, summary
+from .common import compact_records, report_progress, response, summary
 from .estimators import rolling_monthly_ic
 from .panel import load_context, make_feature_panel, numeric_xy
 
@@ -33,7 +33,7 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     columns = list(numeric_xy(panel, target)[0].columns)
     raw = panel[columns].replace([np.inf, -np.inf], np.nan)
     train, test = chronological_purged_split(panel, horizon, int(ctx.payload.get("embargo_period", 5)))
-    inner_train, validation = chronological_purged_split(panel.iloc[train].reset_index(drop=True), horizon, 5)
+    inner_train, validation = chronological_purged_split(panel.iloc[train].reset_index(drop=True), horizon, int(ctx.payload.get("embargo_period", 5)))
     weighting = ctx.payload.get("sample_weighting","equal")
     if weighting not in {"equal","time_decay"}:
         raise ValueError("Unsupported sample_weighting")
@@ -92,7 +92,8 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     elif tuning != "platform_defaults":
         raise ValueError("Unsupported tuning_mode")
     selection = []
-    for name, model in models.items():
+    for step, (name, model) in enumerate(models.items()):
+        report_progress(40 + 30 * step // len(models), f"Validating {name}")
         prediction = fit(clone(model),ix,iy).predict(vx)
         selection.append({"model":name,"validation_mae":float(mean_absolute_error(vy,prediction)),
                           "validation_ic":fast_spearman_ic(prediction,vy.to_numpy())})

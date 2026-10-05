@@ -35,7 +35,7 @@ def path_returns(panel, predictions, horizon):
 def run_cpcv_engine(payload=None):
     from .panel import load_context, make_feature_panel, numeric_xy
     from .estimators import _fit_base_model, _safe_predict
-    from .common import response, summary
+    from .common import report_progress, response, summary
     request = payload or {}
     ctx = load_context(request)
     horizon = int(request.get("prediction_horizon", 5))
@@ -59,6 +59,7 @@ def run_cpcv_engine(payload=None):
     split_rows = []
     model_name = request.get("model_type", "ridge")
     for number, combo in enumerate(combinations_list):
+        report_progress(30 + 65 * number // len(combinations_list), f"CPCV split {number + 1} of {len(combinations_list)}")
         held_dates = np.concatenate([date_groups[g] for g in combo])
         test = np.flatnonzero(pd.to_datetime(panel.date).isin(held_dates).to_numpy())
         train = purged_complement(panel.date, held_dates, horizon, embargo)

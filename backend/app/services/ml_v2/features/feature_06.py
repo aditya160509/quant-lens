@@ -19,7 +19,6 @@ DEFAULTS: dict[str, Any] = {
     "regime_alert_threshold": 0.65,
     "lookback_days": 756,
     "max_symbols": 120,
-    "compute_mode": "realtime",
 }
 
 ALIASES = {"states": "hmm_state_count", "components": "gmm_component_count", "graph_threshold": "random_graph_threshold"}
@@ -45,11 +44,11 @@ IMPLEMENTATION_NOTES = ["HMM, scaler and parallel GMM fit only the initial train
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     from app.services.ml_v2.core.performance import normalize_payload
-    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["student_t_hmm", "skewed_t_hmm", "ensemble_hmm_full"])
+    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES)
 
 
 def run(payload=None):

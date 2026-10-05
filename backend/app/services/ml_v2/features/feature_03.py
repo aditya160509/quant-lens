@@ -17,7 +17,6 @@ DEFAULTS: dict[str, Any] = {
     "model_suite": "har_ml",
     "lookback_days": 756,
     "max_symbols": 80,
-    "compute_mode": "realtime",
 }
 
 ALIASES = {"symbol": "asset", "ticker": "asset", "horizon": "forecast_horizons"}
@@ -40,11 +39,11 @@ IMPLEMENTATION_NOTES = ["Direct per-horizon HAR forecasts use future squared-ret
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     from app.services.ml_v2.core.performance import normalize_payload
-    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["ginn", "gpu_training"])
+    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES)
 
 
 def run(payload=None):

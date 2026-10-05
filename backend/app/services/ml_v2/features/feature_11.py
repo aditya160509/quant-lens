@@ -12,6 +12,7 @@ FEATURE_ID = "11"
 FEATURE_TITLE = "Conditional Factor Association Engine"
 
 DEFAULTS: dict[str, Any] = {
+    "embargo_period": 5,
     "factor_library": "ohlcv_factor_library",
     "dml_folds": 5,
     "nuisance_model": "ridge",
@@ -20,7 +21,6 @@ DEFAULTS: dict[str, Any] = {
     "spurious_factor_action": "flag_only",
     "lookback_days": 756,
     "max_symbols": 120,
-    "compute_mode": "realtime",
 }
 
 ALIASES = {"folds": "dml_folds", "model": "nuisance_model", "confidence": "significance_threshold"}
@@ -38,11 +38,11 @@ IMPLEMENTATION_NOTES = [
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     from app.services.ml_v2.core.performance import normalize_payload
-    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["optuna", "auto_prune"])
+    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES)
 
 
 def run(payload=None):

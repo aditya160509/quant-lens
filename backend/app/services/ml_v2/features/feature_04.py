@@ -12,6 +12,7 @@ FEATURE_ID = "04"
 FEATURE_TITLE = "Meta-Labeling and Triple-Barrier Label Engine"
 
 DEFAULTS: dict[str, Any] = {
+    "embargo_period": 5,
     "profit_taking_barrier": 0.05,
     "stop_loss_barrier": 0.03,
     "max_holding_period": 21,
@@ -22,7 +23,6 @@ DEFAULTS: dict[str, Any] = {
     "position_sizing": "probability",
     "lookback_days": 756,
     "max_symbols": 120,
-    "compute_mode": "realtime",
 }
 
 ALIASES = {"pt": "profit_taking_barrier", "sl": "stop_loss_barrier", "holding_period": "max_holding_period", "horizon": "max_holding_period"}
@@ -39,6 +39,7 @@ OUTPUT_CONTRACT = [
     {"key": "label_method_comparison", "location": "charts", "renderer": "bar", "status": "live"},
     {"key": "barrier_sensitivity_surface", "location": "charts", "renderer": "heatmap", "status": "live"},
     {"key": "label_audit", "location": "tables", "renderer": "table", "status": "live"},
+    {"key": "label_method_comparison", "location": "tables", "renderer": "table", "status": "live"},
     {"key": "barrier_parameters", "location": "tables", "renderer": "table", "status": "live"},
     {"key": "barrier_sensitivity", "location": "tables", "renderer": "table", "status": "live"},
 ]
@@ -48,11 +49,11 @@ IMPLEMENTATION_NOTES = ['Labels use actual high/low paths; ambiguous same-bar or
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     from app.services.ml_v2.core.performance import normalize_payload
-    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["external_model_upload", "quantile_cqr"])
+    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES)
 
 
 def run(payload=None):

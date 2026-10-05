@@ -12,6 +12,7 @@ FEATURE_ID = "07"
 FEATURE_TITLE = "Bayesian Online Learning and Dynamic Model Averaging Engine"
 
 DEFAULTS: dict[str, Any] = {
+    "embargo_period": 5,
     "model_library": ["momentum", "reversal", "low_vol", "ridge", "extra_trees"],
     "ensemble_method": "dma",
     "forgetting_factor": 0.97,
@@ -20,7 +21,6 @@ DEFAULTS: dict[str, Any] = {
     "scoring_rule": "squared_error",
     "lookback_days": 756,
     "max_symbols": 120,
-    "compute_mode": "realtime",
 }
 
 ALIASES = {"lambda": "forgetting_factor", "method": "ensemble_method", "horizon": "prediction_horizon"}
@@ -49,11 +49,11 @@ IMPLEMENTATION_NOTES = ["Weights update by complete formation-date batches only 
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     from app.services.ml_v2.core.performance import normalize_payload
-    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["obs_full", "distributional_models", "lstm"])
+    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES)
 
 
 def run(payload=None):

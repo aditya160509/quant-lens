@@ -25,7 +25,6 @@ DEFAULTS: dict[str, Any] = {
     "cpcv_k_test_groups": 2,
     "lookback_days": 756,
     "max_symbols": 80,
-    "compute_mode": "realtime",
 }
 
 ALIASES = {
@@ -80,11 +79,11 @@ IMPLEMENTATION_NOTES = [
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     from app.services.ml_v2.core.performance import normalize_payload
-    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES, research_keys=["user_model_upload", "event_times_csv"])
+    return normalize_payload(payload, defaults=DEFAULTS, aliases=ALIASES)
 
 
 def run(payload=None):

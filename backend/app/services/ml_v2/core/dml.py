@@ -79,8 +79,9 @@ def hc3_univariate_inference(treatment: pd.Series, y: pd.Series) -> tuple[float,
     x = pd.to_numeric(treatment, errors="coerce").replace([np.inf, -np.inf], np.nan)
     yy = pd.to_numeric(y, errors="coerce").replace([np.inf, -np.inf], np.nan)
     valid = x.notna() & yy.notna()
+    undefined = (float("nan"),) * 3
     if valid.sum() < 12:
-        return 0.0, 0.0, 0.0
+        return undefined
     xv = x[valid].to_numpy(dtype=float)
     yv = yy[valid].to_numpy(dtype=float)
     X = np.column_stack([np.ones(len(xv)), xv])
@@ -94,8 +95,8 @@ def hc3_univariate_inference(treatment: pd.Series, y: pd.Series) -> tuple[float,
         se = math.sqrt(max(float(cov[1, 1]), 0.0))
         slope = float(beta[1])
         return slope, se, slope / max(se, 1e-12)
-    except Exception:
-        return 0.0, 0.0, 0.0
+    except np.linalg.LinAlgError:
+        return undefined
 
 
 
@@ -113,7 +114,7 @@ def run_causal_dml(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     for factor in x.columns:
         try:
             ape, se, t = dml_cross_fit(x, y, factor, k_folds=folds, nuisance_model=nuisance,
-                                    dates=panel["date"], horizon=horizon)
+                                    dates=panel["date"], horizon=horizon, embargo=int(request.get("embargo_period", 5)))
         except ValueError as exc:
             unavailable.append({"factor": factor, "status": "unidentified", "reason": str(exc)})
             continue
@@ -136,7 +137,7 @@ def run_causal_dml(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         for factor in [row["factor"] for row in rows[:6]]:
             try:
                 ape, se, _ = dml_cross_fit(snap, target, factor, k_folds=min(3, folds),
-                                         nuisance_model=nuisance, dates=snap_dates, horizon=horizon)
+                                         nuisance_model=nuisance, dates=snap_dates, horizon=horizon, embargo=int(request.get("embargo_period", 5)))
             except ValueError:
                 continue
             history.append({"date": date_str(dates[end]), "factor": factor, "ape": ape, "se": se})

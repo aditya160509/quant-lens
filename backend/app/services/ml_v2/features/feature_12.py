@@ -6,7 +6,7 @@ FEATURE_TITLE = "Sequence Alpha: Patch and Inverted Transformers, LSTM and MLP"
 DEFAULTS = {"architectures": ["patchtst"], "sequence_length": 63, "patch_length": 21,
             "transformer_depth": 2, "attention_heads": 4, "dropout_rate": .1,
             "epochs": 15, "prediction_horizon": 5, "lookback_days": 756, "max_symbols": 20,
-            "embargo_period": 5, "random_seed": 7, "compute_mode": "research"}
+            "embargo_period": 5, "random_seed": 7}
 ALIASES = {"models": "architectures", "horizon": "prediction_horizon"}
 INPUT_CONTRACT = [
     {"key": "symbols", "type": "ticker_list"},
@@ -26,7 +26,7 @@ OUTPUT_CONTRACT = [
 RESEARCH_ONLY = ["TFT, Mamba, integrated gradients and trained attention visualizations are not implemented and are not selectable"]
 IMPLEMENTATION_NOTES = ["Actual CPU PyTorch training, with measured durations and training-only normalization."]
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
-OUTPUTS = outputs(OUTPUT_CONTRACT)
+OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 def normalize_feature_payload(payload):
     from app.services.ml_v2.core.performance import normalize_payload

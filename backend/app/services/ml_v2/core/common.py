@@ -1,9 +1,24 @@
 """ML V2 common implementation."""
 from __future__ import annotations
-from typing import Any, Iterable
+from contextvars import ContextVar
+from typing import Any, Callable, Iterable
 import math
 import numpy as np
 import pandas as pd
+
+
+PROGRESS: ContextVar[Callable[[int, str], None] | None] = ContextVar("ml_v2_progress", default=None)
+
+
+class JobCancelled(RuntimeError):
+    """Raised at a progress checkpoint after the caller cancelled the job."""
+
+
+def report_progress(percent: int, message: str) -> None:
+    """Publish a coarse stage to the running job (no-op outside a job); raises JobCancelled once cancelled."""
+    callback = PROGRESS.get()
+    if callback is not None:
+        callback(percent, message)
 
 
 def clean_json(value: Any) -> Any:  # A01 — type-identity checks, no isinstance MRO
@@ -139,7 +154,6 @@ def merge_feature_contract(
         return clean_json(out)
 
     meta = dict(out.get("meta") or {})
-    requested_research = bool((payload or {}).get("research_mode")) or str((payload or {}).get("compute_mode", "")).lower() == "research"
     meta.update(
         {
             "feature_title": feature_title,
@@ -147,7 +161,6 @@ def merge_feature_contract(
             "output_contract": output_contract,
             "research_only_components": research_only or [],
             "implementation_notes": implementation_notes or [],
-            "research_mode_requested": requested_research,
             "contract_version": "ml_v2.2026-10-05",
         }
     )
