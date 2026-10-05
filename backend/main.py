@@ -24,12 +24,10 @@ from app.api import portfolio_risk_api  # Portfolio Risk VaR System
 from app.api import liquidity_api  # Liquidity Intelligence Engine
 from app.api import screener_api  # QUANT360 Screener
 from app.api import research_beta, research_macro_shock, research_style_map, research_regimes, research_correlation
-from app.api import prices, quotes
-from app.api import research_e  # Cluster E
+from app.api import prices
 from app.api import research_fg  # Cluster F+G
 from app.api import markets_daily  # Markets Daily Cognition Terminal
 from app.api import nse_india  # NSE India Stock Market API (FREE)
-from app.api import research_stats  # Institutional Statistical Lab
 from app.api import research_quantitative  # Quantitative Math Lab
 from app.api import factors_v2  # Factors V2 - 14-feature institutional factor intelligence
 from app.api import research_v2  # Research V2 - empirical finance test battery
@@ -112,7 +110,6 @@ app.include_router(portfolio_risk_api.router, prefix="/api/portfolio-risk", tags
 
 # Price/Quote Routers
 app.include_router(prices.router, tags=["prices"])
-app.include_router(quotes.router, tags=["quotes"])
 
 # Research Routers (Cluster D)
 app.include_router(research_beta.router, prefix="/api/research", tags=["research"])
@@ -120,7 +117,6 @@ app.include_router(research_macro_shock.router, prefix="/api/research", tags=["r
 app.include_router(research_style_map.router, prefix="/api/research", tags=["research"])
 app.include_router(research_regimes.router, prefix="/api/research", tags=["research"])
 app.include_router(research_correlation.router, prefix="/api/research", tags=["research"])
-app.include_router(research_stats.router, prefix="/api", tags=["research-stats"])
 
 # Quantitative Math Lab - SDE, Kalman, Cointegration, Spectral
 app.include_router(research_quantitative.router, prefix="/api", tags=["quantitative-lab"])
@@ -134,7 +130,6 @@ from app.api import research_v2_signals; app.include_router(research_v2_signals.
 from app.api import research_v2_projects; app.include_router(research_v2_projects.router, prefix="/api", tags=["research-v2-projects"])
 
 # Research Router (Cluster E)
-app.include_router(research_e.router, tags=["research-e"])
 
 # Research Router (Cluster F+G)
 app.include_router(research_fg.router, prefix="/api", tags=["research-fg"])
@@ -160,8 +155,6 @@ from app.api import pca_eigenphysics
 app.include_router(pca_eigenphysics.router, prefix="/api", tags=["pca-eigenphysics"])
 
 # PCA God Mode Omega - Institutional-Grade PCA System  
-from app.api import pca_god_mode_api
-app.include_router(pca_god_mode_api.router, tags=["pca-god-mode"])
 
 # PCA V2 quantitative feature suite
 from app.api import pca_v2
@@ -193,20 +186,14 @@ from app.api import payments_api
 app.include_router(payments_api.router, prefix="/api", tags=["payments"])
 
 # Accuracy Status API - Check enhancement status
-from app.api import accuracy_status
-app.include_router(accuracy_status.router, tags=["accuracy"])
 
 # Alpha Models API - Momentum and Mean Reversion Intelligence
 from app.api import alpha
 app.include_router(alpha.router, prefix="/api/alpha", tags=["alpha-models"])
 
 # Historical Prices API - CSV-First Data Management
-from app.api import historical_prices_api
-app.include_router(historical_prices_api.router, tags=["historical-prices"])
 
 # Strategy Institutional - God-Mode Architecture
-from app.api import strategy_institutional
-app.include_router(strategy_institutional.router, prefix="/api/strategy-institutional", tags=["strategy-institutional"])
 
 # CLI Kernel Router
 from app.api import cli as cli_api
