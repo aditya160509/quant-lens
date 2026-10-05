@@ -213,3 +213,8 @@ These came from a second read of the code and were not in the first pass. Read [
 | A7 | API | Runs are synchronous `asyncio.to_thread` calls with no job, progress or cancel (CPCV with many paths, DML, HMM will exceed proxy timeouts). Use the Studio `JobStore` pattern from Research V2 and Screener V2. | `ml_api.py:54-62` |
 | A8 | Structure | `analytics.py` is 2,986 lines holding all 12 features. Split one module per feature (Research V2 and Screener V2 layout). `schemas/`, `utils/` and the stale `review.md`, `upgrades.md`, `speed upgrades.md`, `gap_classification.md` should be reconciled or removed, with fates recorded in `DONE.md`. | `ml_v2/` |
 | A9 | Tests | Confirmed: zero `test_ml_v2*` files. Follow the playbook's four test files, including a look-ahead guard (perturbing data after t must not change outputs at t) and a no-forward-fill test. | `backend/tests/` |
+
+
+## Rebuild status, 2026-10-05
+
+Backend feature engines, strict contracts, jobs and date-based validation have been rebuilt. See [ML V2 DONE.md](../../backend/app/services/ml_v2/DONE.md) for implemented subsets, excluded unsupported options, old-file fates and exact verification. All 12 features passed actual local-data smoke runs and 40 backend tests passed. Frontend rebuild remains Claude-owned. Browser acceptance was waived by the user; Jest, lint, TypeScript and production build pass; browser behavior remains unverified.

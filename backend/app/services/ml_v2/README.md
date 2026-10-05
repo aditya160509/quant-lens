@@ -1,3 +1,5 @@
+> Current rebuild status: [DONE.md](DONE.md). The historical README below is retained as evidence; its old checklists are superseded.
+
 # ML V2 Backend Implementation Report
 
 Last updated: 2026-06-11

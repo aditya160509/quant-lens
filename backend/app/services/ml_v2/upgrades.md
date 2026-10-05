@@ -1,3 +1,5 @@
+> Historical audit: superseded for implementation status by [DONE.md](DONE.md). Retained as evidence; its old completeness claims are not current.
+
 ## Implementation Checklist — 2026-06-17
 
 - [x] 1. Scanline feature hero with ambient motion, metadata strip, notes, and run action added to `frontend/src/components/ml-v2/customPagePrimitives.jsx`.
