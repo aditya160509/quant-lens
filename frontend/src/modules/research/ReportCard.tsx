@@ -191,7 +191,7 @@ function Validate({ onRun, result, running }: { onRun: (m: string, folds: number
       <section className="card" style={{ height: "auto" }}>
         <header className="card-h"><div><h3>Out-of-sample validation</h3><span className="sub">Walk-forward, or combinatorial purged cross-validation with an embargo (López de Prado)</span></div></header>
         <div className="card-b rc-bar" style={{ margin: 0 }}>
-          <Segmented label="Method" value={method} onChange={setMethod} options={[{ value: "walk_forward", label: "Walk-forward" }, { value: "cpcv", label: "Purged CV" }]} />
+          <Segmented<string> label="Method" value={method} onChange={setMethod} options={[{ value: "walk_forward", label: "Walk-forward" }, { value: "cpcv", label: "Purged CV" }]} />
           <label className="xc"><span>Folds</span><select value={folds} onChange={(e) => setFolds(Number(e.target.value))}>{[4, 6, 8, 10, 12].map((v) => <option key={v} value={v}>{v}</option>)}</select></label>
           <label className="xc"><span>Embargo</span><select value={embargo} onChange={(e) => setEmbargo(Number(e.target.value))}>{[0, 5, 21, 63].map((v) => <option key={v} value={v}>{v} days</option>)}</select></label>
           <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={running} onClick={() => onRun(method, folds, embargo)}><Play size={11} fill="currentColor" />Validate</button>

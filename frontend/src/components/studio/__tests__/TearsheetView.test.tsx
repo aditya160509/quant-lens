@@ -18,7 +18,7 @@ describe('TearsheetView canonical artifact rendering', () => {
             fillRect: jest.fn(), setTransform: jest.fn(), beginPath: jest.fn(), moveTo: jest.fn(), lineTo: jest.fn(),
             closePath: jest.fn(), fill: jest.fn(), stroke: jest.fn(), fillText: jest.fn(), setLineDash: jest.fn(),
             createLinearGradient: jest.fn(() => gradient),
-        } as unknown as CanvasRenderingContext2D);
+        } as unknown as ReturnType<HTMLCanvasElement['getContext']>);
         useStudioWorkspaceStore.setState({ ticker: 'SPY' });
         useStudioResultStore.getState().setData({
             candles: [], signals: [], trades: [], equityCurve: [1, 1.1, 1.05], runId: 'run-123',

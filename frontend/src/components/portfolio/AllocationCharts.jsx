@@ -3,14 +3,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const COLORS = ['#22c55e', '#eab308', '#ef4444', '#3b82f6', '#a855f7', '#ec4899', '#64748b'];
 
-export default function AllocationCharts({ allocations }) {
-    if (!allocations) return null;
-
-    // Fallback if data is missing
-    const sectors = allocations.sector || [];
-    const assets = allocations.asset_class || [];
-
-    const CustomTooltip = ({ active, payload }) => {
+function CustomTooltip({ active, payload }) {
         if (active && payload && payload.length) {
             const data = payload[0].payload;
             return (
@@ -21,7 +14,16 @@ export default function AllocationCharts({ allocations }) {
             );
         }
         return null;
-    };
+}
+
+
+export default function AllocationCharts({ allocations }) {
+    if (!allocations) return null;
+
+    // Fallback if data is missing
+    const sectors = allocations.sector || [];
+    const assets = allocations.asset_class || [];
+
 
     return (
         <div className="bg-terminal-darker border border-terminal-gray/30 rounded p-4 flex flex-col gap-4">

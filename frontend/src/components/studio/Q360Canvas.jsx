@@ -1023,9 +1023,13 @@ const Q360Canvas = ({
     // Clamp viewport via kernel (deterministic)
     useEffect(() => {
         const c = clampViewport({ offset, scale, count: candles?.length || 0, width: 800 });
-        if (c.offset !== offset) setOffset(c.offset);
-        if (c.scale !== scale) setScale(c.scale);
-    }, [candles?.length]);
+        if (c.offset === offset && c.scale === scale) return;
+        const frame = requestAnimationFrame(() => {
+            if (c.offset !== offset) setOffset(c.offset);
+            if (c.scale !== scale) setScale(c.scale);
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [candles?.length, offset, scale]);
     return (
         <div 
             ref={containerRef} 

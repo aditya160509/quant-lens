@@ -59,10 +59,10 @@ export function SignalPage() {
             <header className="card-h"><div><h3>Formula</h3><span className="sub">Autocompletes operators and fields. Monthly data; ranks are per month.</span></div></header>
             <div className="card-b">
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} aria-label="Signal name" style={{ marginBottom: 8, fontWeight: 500 }} />
-              <FormulaEditor value={expr} onChange={setExpr} error={check && !check.ok ? check.error : null} words={[...(ops.data ?? []).map((o) => ({ w: o.name, hint: `${o.name}(${o.args.join(", ")})`, doc: o.doc })), ...(fields.data ?? []).map((f) => ({ w: f.name, hint: `${f.source} · ${Math.round(f.coverage * 100)}% coverage`, doc: f.doc }))]} />
+              <FormulaEditor value={expr} onChange={setExpr} error={check && check.ok === false ? check.error : null} words={[...(ops.data ?? []).map((o) => ({ w: o.name, hint: `${o.name}(${o.args.join(", ")})`, doc: o.doc })), ...(fields.data ?? []).map((f) => ({ w: f.name, hint: `${f.source} · ${Math.round(f.coverage * 100)}% coverage`, doc: f.doc }))]} />
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5, color: check?.ok ? "var(--up)" : check ? "var(--down)" : "var(--text-3)" }}>
-                  {checking ? "Checking…" : check?.ok ? <><Check size={12} /> Valid · {check.preview.n_names} names · {check.preview.months} months</> : check && !check.ok ? check.error.message : "Not checked yet"}
+                  {checking ? "Checking…" : check?.ok ? <><Check size={12} /> Valid · {check.preview.n_names} names · {check.preview.months} months</> : check && check.ok === false ? check.error.message : "Not checked yet"}
                 </span>
                 <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                   <button className="btn sm ghost" onClick={() => void saveSignal(name, expr, active.projectId ?? undefined)} disabled={!check?.ok}><Save size={12} />Save version</button>
@@ -86,7 +86,7 @@ export function SignalPage() {
 
         <section className="card" style={{ height: "auto", marginTop: 12 }}>
           <header className="card-h">
-            <Segmented label="Signal sources" value={tab} onChange={setTab} options={[{ value: "library", label: "Published anomalies" }, { value: "saved", label: "Saved" }, { value: "combine", label: "Combine" }, { value: "reference", label: "Reference" }]} />
+            <Segmented<"library" | "saved" | "combine" | "reference"> label="Signal sources" value={tab} onChange={setTab} options={[{ value: "library", label: "Published anomalies" }, { value: "saved", label: "Saved" }, { value: "combine", label: "Combine" }, { value: "reference", label: "Reference" }]} />
           </header>
           <div className="card-b">
             {tab === "library" ? <LibraryList onPick={(s) => { setExpr(s.formula); setName(s.name); }} /> : null}
@@ -155,7 +155,7 @@ function FormulaEditor({ value, onChange, error, words }: { value: string; onCha
 
 function PreviewPanel({ check, expr }: { check: Validation | null; expr: string | null }) {
   const lit = useLiterature(expr);
-  if (!check || !check.ok) return <div style={{ color: "var(--text-3)", fontSize: 12.5 }}>A valid formula shows its distribution, monthly coverage and its correlation with known factors here.</div>;
+  if (!check || check.ok === false) return <div style={{ color: "var(--text-3)", fontSize: 12.5 }}>A valid formula shows its distribution, monthly coverage and its correlation with known factors here.</div>;
   const p = check.preview;
   const low = p.coverage.filter((c) => c.share < 0.5).length;
   return (
@@ -253,7 +253,7 @@ function Combine({ current, onResult }: { current: string; onResult: (e: string)
           {(lib.data ?? []).map((s) => <option key={s.id} value={s.formula}>{s.name}</option>)}
         </select>
         <button className="btn sm ghost" onClick={() => setParts((ps) => [...ps, ""])}><Layers size={12} />Add formula</button>
-        <Segmented label="Weighting" value={method} onChange={setMethod} options={[{ value: "equal", label: "Equal" }, { value: "ic", label: "IC" }, { value: "inverse_variance", label: "Inv. var" }, { value: "rank_average", label: "Rank avg" }]} />
+        <Segmented<string> label="Weighting" value={method} onChange={setMethod} options={[{ value: "equal", label: "Equal" }, { value: "ic", label: "IC" }, { value: "inverse_variance", label: "Inv. var" }, { value: "rank_average", label: "Rank avg" }]} />
         <button className="btn primary sm" style={{ marginLeft: "auto" }} disabled={parts.filter(Boolean).length < 2}
           onClick={() => combineExprs(parts.filter(Boolean), method).then((r) => { setErr(null); onResult(r.expr); }).catch((e: Error) => setErr(e.message))}>
           <Sparkles size={12} />Combine

@@ -1,3 +1,4 @@
+/** @typedef {((value: number) => number) & {invert: (pixel: number) => number, ticks: (count?: number) => number[], domain: () => number[], range: () => number[]}} FinancialScale */
 /**
  * Owned financial scales — pure, deterministic, no side effects.
  * Every display metric must be validated with Number.isFinite before
@@ -7,6 +8,7 @@
 /**
  * Linear scale: domain [d0,d1] → range [r0,r1]
  * Returns a function with .invert and .ticks for axis rendering.
+ * @returns {FinancialScale}
  */
 export function createLinearScale(domain, range) {
     const [d0, d1] = domain;
@@ -42,6 +44,7 @@ export function createLinearScale(domain, range) {
  * Price scale: maps value domain to pixel height with top/bottom padding.
  * Supports modes: linear (default), log, percent, indexed100
  * Inverted because canvas y=0 is top.
+ * @returns {FinancialScale}
  */
 export function createPriceScale({ min, max, height, paddingTop = 20, paddingBottom = 30, mode = 'linear', base = 100 }) {
     if (!Number.isFinite(min) || !Number.isFinite(max)) {

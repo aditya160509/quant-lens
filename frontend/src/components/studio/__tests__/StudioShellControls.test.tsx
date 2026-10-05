@@ -26,7 +26,7 @@ describe("Studio shell controls", () => {
   });
 
   it("updates the editor rail through the preference store", () => {
-    render(<StudioActivityRail settingsOpen={false} onToggleSettings={jest.fn()} />);
+    render(<StudioActivityRail settingsOpen={false} onToggleSettings={jest.fn()} dataOpen={false} onToggleData={jest.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle strategy editor" }));
 

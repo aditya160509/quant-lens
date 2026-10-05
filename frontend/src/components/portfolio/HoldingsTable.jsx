@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
 
+function SortIcon({ col, sortConfig }) {
+        if (sortConfig.key !== col) return <span className="text-terminal-dark-gray ml-1">↕</span>;
+        return <span className="text-terminal-yellow ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
+}
+
+
 export default function HoldingsTable({ holdings = [] }) {
     const [sortConfig, setSortConfig] = useState({ key: 'market_value', direction: 'desc' });
 
@@ -21,10 +27,6 @@ export default function HoldingsTable({ holdings = [] }) {
         setSortConfig({ key, direction });
     };
 
-    const SortIcon = ({ col }) => {
-        if (sortConfig.key !== col) return <span className="text-terminal-dark-gray ml-1">↕</span>;
-        return <span className="text-terminal-yellow ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
-    };
 
     return (
         <div className="flex flex-col h-full bg-terminal-darker border border-terminal-gray/30 rounded overflow-hidden">
@@ -37,25 +39,25 @@ export default function HoldingsTable({ holdings = [] }) {
                     <thead className="bg-terminal-black sticky top-0 z-10">
                         <tr className="text-terminal-dim border-b border-terminal-gray/30">
                             <th className="p-3 cursor-pointer hover:text-terminal-text" onClick={() => requestSort('symbol')}>
-                                TICKER <SortIcon col="symbol" />
+                                TICKER <SortIcon sortConfig={sortConfig} col="symbol" />
                             </th>
                             <th className="p-3 text-right cursor-pointer hover:text-terminal-text" onClick={() => requestSort('quantity')}>
-                                QTY <SortIcon col="quantity" />
+                                QTY <SortIcon sortConfig={sortConfig} col="quantity" />
                             </th>
                             <th className="p-3 text-right cursor-pointer hover:text-terminal-text" onClick={() => requestSort('avg_cost')}>
-                                AVG COST <SortIcon col="avg_cost" />
+                                AVG COST <SortIcon sortConfig={sortConfig} col="avg_cost" />
                             </th>
                             <th className="p-3 text-right cursor-pointer hover:text-terminal-text" onClick={() => requestSort('current_price')}>
-                                PRICE <SortIcon col="current_price" />
+                                PRICE <SortIcon sortConfig={sortConfig} col="current_price" />
                             </th>
                             <th className="p-3 text-right cursor-pointer hover:text-terminal-text" onClick={() => requestSort('market_value')}>
-                                VALUE <SortIcon col="market_value" />
+                                VALUE <SortIcon sortConfig={sortConfig} col="market_value" />
                             </th>
                             <th className="p-3 text-right cursor-pointer hover:text-terminal-text" onClick={() => requestSort('unrealized_pl')}>
-                                P&L <SortIcon col="unrealized_pl" />
+                                P&L <SortIcon sortConfig={sortConfig} col="unrealized_pl" />
                             </th>
                             <th className="p-3 text-right cursor-pointer hover:text-terminal-text" onClick={() => requestSort('weight')}>
-                                WGT <SortIcon col="weight" />
+                                WGT <SortIcon sortConfig={sortConfig} col="weight" />
                             </th>
                             <th className="p-3 text-center">LIQ</th>
                         </tr>
