@@ -10,6 +10,8 @@ This review covers the Machine learning module at `/ml` (12 features). It replac
 
 Several first-pass recommendations changed because the evidence did not support them; they are marked **(changed)**.
 
+> **Final decision: see §13.** Every feature we keep must score 5 on every axis. Anything that can't get there is removed, including heavy infrastructure that doesn't pay for itself. §13 overrides §5–§7 and §11 where they differ.
+
 ---
 
 ## Contents
@@ -406,3 +408,130 @@ Anchors: Danelfin $29–179, AgentTrading $49–199, Koyfin $39–79, Tickeron $
 - Numerai documentation (scoring, staking).
 - Trustpilot pages for Trade Ideas, Composer, TradingView, PortfolioPilot and QuantVue.
 - GitHub stats: Qlib (47k stars), Riskfolio-Lib (4.4k stars, 104k downloads a month), Alphalens (4.4k), skfolio (2.3k).
+
+---
+
+## 13. Final cut: five across the board
+
+**The rule:** a feature ships only if it can score **5** on Demand, Evidence, Differentiation, Decision value and Recurring value, after the upgrades listed for it. Cost is not one of the five, but anything that needs heavy infrastructure for little gain is cut.
+
+**Result:** 12 engines become **4 pages, each scoring 5 on all five axes**, plus **6 new A++ features**. Five engines are removed or moved.
+
+### 13.1 Removed (cannot reach 5)
+
+| Feature | Best reachable | Blocking axis | Decision |
+|---|---|---|---|
+| F12 Sequence models | E1 · D2 · Dec1 · R1 | Evidence: gradient boosting and linear beat deep models on daily data | **Delete.** Remove PyTorch from the ML stack, which saves about 300–600 MB of RAM per worker and about 30 s per run. Gradient boosting with multi-seed covers "does a bigger model help?". |
+| F09 Pairs | E2–3 | Evidence: profits fell from 0.86% to 0.24% a month; the distance method is unprofitable after costs since 2002 | **Delete** from ML. If users ask for it, return later as a watchlist spread monitor (a charting tool, not ML). |
+| F10 Microstructure (standalone page) | E1 | Evidence: 93% of trading-friction anomalies fail replication | **Delete the page.** Keep its 8 cheap daily estimators as optional features inside Alpha (13.2-B), reported with value weights. |
+| F07 Model averaging (DMA/OBS) | D3 · Dem2 | Demand and differentiation | **Delete.** Alpha keeps one honest ensemble: validation-chosen weights on gradient boosting and linear. |
+| F11 DML factor associations | Dem2 for ML users | Wrong audience | **Move to Research** (Factor zoo and Causal), where it scores well. |
+
+**Infrastructure removed with them:**
+- **Torch:** gone (F12).
+- **The shap package:** use LightGBM `pred_contrib`, which gives exact TreeSHAP; keep linear contributions for linear models.
+- **XGBoost and CatBoost:** optional extras, not defaults (LightGBM plus Ridge cover the evidence).
+- **Never add:** stable-baselines/RL, NAS, transformer libraries or GPU paths.
+- **Expected effect:** ML worker idle RAM drops toward about 250 MB; see `RAM_PLAN.md`.
+
+### 13.2 Kept: the four pages, and what makes each a 5
+
+**A. Validate** (F01 CPCV + F04 meta-labelling + all of A1). This is the landing page and the paid core.
+
+| Axis | Today | Upgrades to reach 5 |
+|---|---|---|
+| Demand | 4 | Upload your own returns, predictions or trial matrix (A1.1); the top request on Reddit is "cheap way to kill bad ideas". |
+| Evidence | 5 | CPCV, PBO, DSR, MinBTL and block bootstrap are standard and replicated. |
+| Differentiation | 5 | No product under $100 offers CPCV, PBO, multi-seed and transfer tests in a UI. AgentTrading tests simple rules only. |
+| Decision value | 4 | A one-page HELD UP / MIXED / FAILED verdict against the best control (A1.2), plus an **overfitting autopsy** (13.3-1) naming the exact reason. |
+| Recurring | 2 | **Forward tracking** (13.3-2): freeze a validated model and score it daily on new data; alerts when live results diverge from the backtest. |
+
+Includes:
+- **"Improve my strategy"**: meta-label filter and sizing, always beside the unfiltered strategy (absorbs F04).
+- **Transfer test**: other assets, sectors and later periods.
+- **Plateau map**, **multi-seed**, **leakage badge** and **reproducibility receipt**.
+
+**B. Alpha** (F02 + F08 composite + F10 features + custom formula features). One page for cross-sectional prediction.
+
+| Axis | Today | Upgrades to reach 5 |
+|---|---|---|
+| Demand | 5 | Ranking plus explanation is the most-used ML output. |
+| Evidence | 4 | **Monthly or 21-day horizon by default** (Gu–Kelly–Xiu scale); LightGBM with a Ridge baseline; the IC-weighted composite as a built-in control; value-weight decile reporting. With those, results match the replicated literature. |
+| Differentiation | 3 | **Bring your own features** in the Research formula language; every alpha passes through Validate automatically (controls, multi-seed, transfer). Nobody else joins a formula language, ML and validation. |
+| Decision value | 4 | Ranking with drivers, "what changed since last week" (rank moves explained by SHAP deltas), and capacity and turnover after costs. |
+| Recurring | 3 | **Daily refreshed ranking and alerts** (top-N entries and exits), plus **forward tracking** of the live ranking's IC. |
+
+Includes:
+- the SHAP beeswarm and waterfall (click any name)
+- feature families: momentum, value, quality, volatility, liquidity (the F10 estimators) and custom
+- the composite as a baseline
+- the ensemble tab (gradient boosting and Ridge weights)
+
+**C. Volatility and risk state** (F03 + F06 regimes). Forecasts plus the market's current risk state.
+
+| Axis | Today | Upgrades to reach 5 |
+|---|---|---|
+| Demand | 4 | Add **VaR and expected-shortfall forecasts** and a **position-size helper** (vol-scaled, always beside unmanaged per Cederburg). Watchlist mode for many tickers at once. |
+| Evidence | 5 | HAR-RV first by QLIKE; GJR-GARCH best in stress; **regime-switching model choice** (calm → HAR, stress → GJR), scored against the single model with Diebold–Mariano tests. |
+| Differentiation | 4 | A forecast tournament with significance tests, forward-filtered (no look-ahead) regime probabilities and calibrated intervals. Retail tools show only historical volatility. |
+| Decision value | 4 | A "risk today" card: forecast range for 1, 5 and 21 days, the regime, the suggested size at a target risk, and VaR. |
+| Recurring | 4 | **Daily refresh and alerts:** volatility above the forecast band, regime change, VaR breach. |
+
+**D. Allocation** (F05 with corrected defaults).
+
+| Axis | Today | Upgrades to reach 5 |
+|---|---|---|
+| Demand | 4 | "Allocate my holdings": paste holdings or import a watchlist; rebalance plan with trade list and costs. |
+| Evidence | 3 | **Ledoit–Wolf minimum variance by default**; HRP, inverse-variance and 1/N always shown as controls; walk-forward, net of costs. |
+| Differentiation | 2 | **Allocation uncertainty**: bootstrap weight stability bands and turnover-aware rebalancing (trade only when the gain beats costs). This is missing from Portfolio Visualizer and Koyfin. Every allocation is validated in Validate. |
+| Decision value | 4 | A trade list with sizes, the cost of rebalancing and expected risk change; risk contributions per holding. |
+| Recurring | 3 | **Drift alerts:** weights out of band, risk contribution breach, monthly rebalance reminder with the trade list ready. |
+
+### 13.3 New A++ features (5 on every axis by design)
+
+1. **Overfitting autopsy (inside Validate).** Diagnoses *why* a backtest is lying and ranks the causes with evidence:
+   - leakage (perturbation test)
+   - trial count (DSR haircut)
+   - regime dependence (performance by regime)
+   - cost sensitivity (breakeven bps)
+   - parameter cliff (plateau)
+   - single-asset luck (transfer test)
+   - seed luck (multi-seed)
+
+   Output: "Your Sharpe of 2.1 is mostly explained by 140 trials (DSR 0.18) and one regime (2020–21)."
+   - D5: the core pain. E5: each test is standard. Diff5: nobody does this. Dec5: tells you exactly what to fix. R5: rerun on every iteration.
+2. **Forward tracking (live out-of-sample record).** Freeze any validated model, ranking or allocation. It is scored every day on data it has never seen, with an equity curve, live IC and divergence from the backtest. This is Numerai's live scoring on your own model and your own universe.
+   - E5: true out-of-sample. Diff5. Dec5: whether to trust it with money. R5: daily.
+3. **Model and feature drift monitor.** For each tracked model:
+   - Wasserstein drift per feature against the training window
+   - live IC against backtest IC
+   - "retrain recommended" when either crosses a threshold
+   - D4–5. E5. Diff5. Dec5. R5.
+4. **Verified result page (shareable).** A hash-stamped, read-only page holding the verdict, controls, autopsy and forward record. Edits are impossible; reruns are linked. This is a credibility asset for funds, students and newsletters, and brings in users.
+   - D5. E5. Diff5. Dec4–5. R5 via forward-record updates.
+5. **"What changed" digest.** A weekly or daily email or in-app note. Example: "3 names entered your top 10 (drivers: momentum, quality); regime moved to stress; your tracked model's live IC fell to 0.01."
+   - Recurring 5 by construction; Decision 5.
+6. **Strategy studio (thin).** Signal (Alpha or upload) → optional filter (meta-label) → sizing (vol-scaled or equal, beside unmanaged) → allocation → costs, then one click into Validate. No new engines; it wires the four pages together.
+
+### 13.4 Backend work this implies (light infrastructure only)
+
+| Item | Work | Heavy? |
+|---|---|---|
+| Validate uploads (returns, predictions, trial matrix) | Upload parsing and point-in-time checks, then the existing CPCV, PBO and DSR | No |
+| Controls, multi-seed, plateau, transfer, Monte Carlo | Batch runner reusing the existing engines | No (reuses the job workers; caps seeds and grid size by tier) |
+| Overfitting autopsy | Orchestrates the tests above and ranks causes | No |
+| Forward tracking and drift | Freezes model artifacts (LightGBM text dump, Ridge coefficients, weights) and runs a nightly scoring job | Light: one nightly job, small artifacts |
+| Daily refresh and alerts | Nightly jobs for Alpha rankings, volatility and regime, and allocation drift; alert rules table; email and webhook sender | Light |
+| Formula features in Alpha | Reuse `signal_lang` | No |
+| Regime-switching volatility, VaR and ES | Small additions to `volatility.py` | No |
+| Shrinkage default, allocation bootstrap, turnover-aware rebalance | `allocation.py` changes | No |
+| Remove F07, F09, F10 page, F11 (to Research), F12 and torch | Deletions with graph and `rg` checks | Reduces infrastructure |
+
+### 13.5 Final build order
+
+1. **Cut:** delete F12 and torch, F09, F07 and the F10 page; move F11 to Research; switch Alpha to LightGBM `pred_contrib`; make XGBoost and CatBoost optional.
+2. **Correct defaults:** shrinkage allocation, Alpha at 21 days with Ridge and composite controls, vol sizing beside unmanaged, value-weight reporting.
+3. **Validate core:** uploads, controls, leakage badge, multi-seed, transfer, plateau, Monte Carlo and the **overfitting autopsy**.
+4. **Four-page restructure** of the frontend: Validate, Alpha, Volatility and risk, Allocation.
+5. **Forward tracking, drift monitor and daily refresh with alerts**, then the **"what changed" digest**.
+6. **Verified result pages**, the **thin Strategy studio**, pricing tiers and billing.
