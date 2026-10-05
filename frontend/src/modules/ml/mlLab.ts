@@ -53,10 +53,10 @@ const VIEW: Record<string, Record<string, string>> = {
   "01": { cpcv_sharpe_distribution: "mlSharpeSpread", backtest_paths_chart: "mlPathFan", per_fold_performance: "mlFoldMatrix", probability_of_backtest_overfitting: "mlKpi", deflated_sharpe_ratio: "mlKpi", cpcv_path_metrics: "dataTable" },
   "02": { prediction_rank_table: "mlRankTable", shap_beeswarm: "mlBeeswarm", shap_waterfall_top_signal: "mlWaterfall", model_ic_leaderboard: "mlLeaderboard", rolling_monthly_ic_series: "mlIcBars", training_audit: "mlReceipt" },
   "03": { vol_forecast_panel: "mlVolPanel", realized_vs_predicted: "mlVolScatter", vol_term_structure: "mlTermStructure", forecast_tournament: "mlTournament", forecast_error_distribution: "mlTournament", ensemble_vol_forecast_weights: "mlStacked" },
-  "04": { barrier_hit_path_examples: "mlBarrierScatter", barrier_sensitivity_surface: "mlBarrierSurface", cqr_coverage_audit: "mlCoverage", barrier_parameters: "mlReceipt" },
+  "04": { triple_barrier_label_distribution: "mlLabelMix", barrier_hit_path_examples: "mlBarrierScatter", barrier_sensitivity_surface: "mlBarrierSurface", cqr_coverage_audit: "mlCoverage", barrier_parameters: "mlReceipt" },
   "05": { hrp_weight_vector: "mlWeights", cluster_dendrograms: "mlDendrogram", risk_contribution_decomposition: "mlRiskContrib", walk_forward_allocation: "mlEquity", black_litterman_posterior_return_vector: "mlBlShift", bl_vs_pure_hrp_weight_comparison: "mlBlShift" },
   "06": { regime_probability_time_series: "mlRegimes", parallel_gmm_regime_probabilities: "mlRegimes", regime_transition_heatmap: "mlTransition", transition_matrix: "mlTransition", regime_conditional_asset_returns: "mlRegimeReturns", ensemble_vs_hmm_comparison: "mlKpi", correlation_network_density: "mlKpi", current_regime_probabilities: "mlReceipt", training_audit: "mlReceipt" },
-  "07": { model_weight_evolution: "mlStacked", obs_weight_evolution: "mlStacked", obs_regret_curve: "mlRegret", prediction_calibration_curve: "mlCalibration", training_audit: "mlReceipt" },
+  "07": { live_model_weight_dashboard: "mlLeaderboard", model_weight_evolution: "mlStacked", obs_weight_evolution: "mlStacked", obs_regret_curve: "mlRegret", prediction_calibration_curve: "mlCalibration", training_audit: "mlReceipt" },
   "08": { long_short_backtest: "mlEquity", ic_weighted_composite_weights: "mlWeights", walk_forward_weight_stability: "mlStacked" },
   "09": { spread_zscore_timeseries: "mlZBand", cointegration_network: "mlNetwork", pair_backtest_equity: "mlEquity", training_audit: "mlReceipt" },
   "10": { microstructure_ic_leaderboard: "mlLeaderboard", amihud_illiquidity_surface: "mlCrossSection", signal_backtest: "mlSignalEquity", amihud_time_surface: "mlTimeSurface" },
@@ -153,7 +153,7 @@ const LAYOUTS: Record<string, FeatureLayout> = {
       sec("labels", "Labels", [card("barrier_hit_path_examples", 8, { title: "Which barrier was hit, and when" }), card("triple_barrier_label_distribution", 4, { title: "Label mix" }), card("event_outcome_timeline", 12, { title: "Events over time" })]),
       sec("sensitivity", "Sensitivity", [card("barrier_sensitivity_surface", 7, { title: "Label mix by barrier width" }), card("label_method_comparison", 5, { title: "Fixed vs volatility-scaled barriers" })]),
       sec("meta", "Meta-labels", [card("meta_label_probability_distribution", 6), card("cqr_coverage_audit", 6, { title: "Conformal interval coverage" }), card("cqr_interval_width_distribution", 6)]),
-      data(["barrier_parameters", "label_audit"]),
+      data(["barrier_parameters", "label_audit", "barrier_sensitivity"]),
     ],
   },
   ml05: {
@@ -162,14 +162,14 @@ const LAYOUTS: Record<string, FeatureLayout> = {
       sec("structure", "Cluster structure", [card("cluster_dendrograms", 12, { title: "Clustering tree and reordered correlations" })]),
       sec("backtest", "Walk-forward", [card("walk_forward_allocation", 12, { title: "Monthly refits, next-close execution, net of costs" })]),
       sec("bl", "Black–Litterman", [card("black_litterman_posterior_return_vector", 6, { title: "Prior → posterior returns" }), card("bl_vs_pure_hrp_weight_comparison", 6, { title: "Posterior weight vs allocation" })]),
-      data(["allocation_training_audit"]),
+      data(["hrp_weights", "black_litterman", "quasi_diagonalized_covariance_heatmap", "allocation_training_audit"]),
     ],
   },
   ml06: {
     sections: [
       sec("state", "State", [card("regime_probability_time_series", 12, { title: "Regime probabilities (filtered, no look-ahead)" }), card("regime_transition_heatmap", 6, { title: "Transitions and expected duration" }), card("regime_conditional_asset_returns", 6, { title: "Mean daily return by regime" })]),
       sec("checks", "Checks", [card("pc1_variance_monitor", 8, { title: "First principal component share" }), card("ensemble_vs_hmm_comparison", 4, { title: "Classifier agreement (out of sample)" }), card("parallel_gmm_regime_probabilities", 8, { title: "Gaussian mixture, for comparison" }), card("correlation_network_density", 4)]),
-      data(["current_regime_probabilities", "training_audit"]),
+      data(["current_regime_probabilities", "transition_matrix", "training_audit"]),
     ],
     verdict: (r) => {
       const c = out(r, "current_regime_probabilities")[0];
@@ -180,21 +180,21 @@ const LAYOUTS: Record<string, FeatureLayout> = {
     sections: [
       sec("weights", "Weights", [card("model_weight_evolution", 12, { title: "Dynamic model averaging weights" }), card("live_model_weight_dashboard", 5, { title: "Weights now" }), card("obs_weight_evolution", 7, { title: "Online simplex weights" })]),
       sec("scoring", "Scoring", [card("obs_regret_curve", 7, { title: "Regret against the best single model" }), card("prediction_calibration_curve", 5, { title: "Calibration" }), card("model_performance_tracker", 12)]),
-      data(["dma_vs_obs_vs_static_bma", "training_audit"]),
+      data(["current_model_weights", "dma_vs_obs_vs_static_bma", "score_log", "obs_regret_log", "training_audit"]),
     ],
   },
   ml08: {
     sections: [
       sec("performance", "Performance", [card("long_short_backtest", 12, { title: "Composite long-short, net of costs" })]),
       sec("weights", "Weights", [card("ic_weighted_composite_weights", 5, { title: "Latest factor weights" }), card("walk_forward_weight_stability", 7, { title: "Weights through time" }), card("factor_correlation_heatmap", 7, { title: "Factor correlations" }), card("composite_signal_distribution", 5, { title: "Latest composite scores" })]),
-      data(["latest_composite_scores", "training_audit"]),
+      data(["latest_composite_scores", "factor_weights", "training_audit"]),
     ],
   },
   ml09: {
     sections: [
       sec("trade", "Trade", [card("spread_zscore_timeseries", 12, { title: "Spread z-score and trades" }), card("pair_backtest_equity", 12, { title: "Out-of-sample equity, net of costs" })]),
       sec("selection", "Selection", [card("pair_candidate_leaderboard", 7, { title: "Formation-window screen" }), card("cointegration_network", 5, { title: "Cointegrated pairs" }), card("hedge_ratio_path", 12, { title: "Hedge ratio" })]),
-      data(["training_audit"]),
+      data(["pair_candidates", "spread_timeseries", "hedge_ratio", "entry_exit_signal_timeline", "training_audit"]),
     ],
   },
   ml10: {
@@ -202,12 +202,14 @@ const LAYOUTS: Record<string, FeatureLayout> = {
       sec("signals", "Signals", [card("microstructure_ic_leaderboard", 6, { title: "Signals by daily IC" }), card("signal_backtest", 6, { title: "Long-short by signal" }), card("amihud_illiquidity_surface", 12, { title: "Latest cross-section" })]),
       sec("liquidity", "Liquidity", [card("amihud_time_surface", 8, { title: "Amihud illiquidity over time" }), card("liquidity_regime_monitor", 4), card("hl_amihud_vs_standard_amihud", 6), card("microstructure_signal_correlation_matrix", 6, { title: "Signal correlations" })]),
       sec("cross", "Cross-sections", ["roll_spread_cross_section", "corwin_schultz_spread_cross_section", "max_factor_distribution", "52_week_high_proximity_heatmap", "ivol_cross_sectional_sort", "volume_surprise_signal"].map((k) => card(k, 6))),
+      data(["microstructure_table", "ic_leaderboard"]),
     ],
   },
   ml11: {
     sections: [
       sec("effects", "Effects", [card("conditional_ape_leaderboard", 7, { title: "Adjusted effect per factor (95% CI)" }), card("adjustment_vs_univariate_slope", 5, { title: "Adjusted vs one-factor slope" }), card("ape_time_series", 12, { title: "Effect through time" })]),
       sec("inference", "Inference", [card("robust_inference_table", 12), card("unidentified_factors", 12)]),
+      data(["conditional_ape_table"]),
     ],
   },
   ml12: {
@@ -221,13 +223,13 @@ const V = group(() => import("./views") as Promise<Record<string, unknown>>);
 registerViews({
   mlAuto: V.MlAuto, mlKpi: V.MlKpi, mlReceipt: V.MlReceipt, mlEquity: V.MlEquity, mlSharpeSpread: V.MlSharpeSpread, mlPathFan: V.MlPathFan, mlFoldMatrix: V.MlFoldMatrix,
   mlRankTable: V.MlRankTable, mlBeeswarm: V.MlBeeswarm, mlWaterfall: V.MlWaterfall, mlIcBars: V.MlIcBars, mlLeaderboard: V.MlLeaderboard, mlVolPanel: V.MlVolPanel,
-  mlVolScatter: V.MlVolScatter, mlTermStructure: V.MlTermStructure, mlTournament: V.MlTournament, mlBarrierScatter: V.MlBarrierScatter, mlBarrierSurface: V.MlBarrierSurface,
+  mlVolScatter: V.MlVolScatter, mlTermStructure: V.MlTermStructure, mlTournament: V.MlTournament, mlBarrierScatter: V.MlBarrierScatter, mlBarrierSurface: V.MlBarrierSurface, mlLabelMix: V.MlLabelMix,
   mlCoverage: V.MlCoverage, mlWeights: V.MlWeights, mlRiskContrib: V.MlRiskContrib, mlDendrogram: V.MlDendrogram, mlBlShift: V.MlBlShift, mlRegimes: V.MlRegimes,
   mlTransition: V.MlTransition, mlRegimeReturns: V.MlRegimeReturns, mlStacked: V.MlStacked, mlRegret: V.MlRegret, mlCalibration: V.MlCalibration, mlCrossSection: V.MlCrossSection,
   mlSignalEquity: V.MlSignalEquity, mlTimeSurface: V.MlTimeSurface, mlZBand: V.MlZBand, mlNetwork: V.MlNetwork, mlCoefCI: V.MlCoefCI, mlAdjustment: V.MlAdjustment,
   mlApePaths: V.MlApePaths, mlLoss: V.MlLoss, mlMonthlyIc: V.MlMonthlyIc,
 }, ["mlAuto", "mlEquity", "mlPathFan", "mlBeeswarm", "mlWaterfall", "mlIcBars", "mlLeaderboard", "mlVolPanel", "mlVolScatter", "mlTermStructure", "mlTournament", "mlBarrierScatter",
-  "mlBarrierSurface", "mlCoverage", "mlWeights", "mlRiskContrib", "mlDendrogram", "mlBlShift", "mlRegimes", "mlTransition", "mlRegimeReturns", "mlStacked", "mlRegret", "mlCalibration",
+  "mlBarrierSurface", "mlLabelMix", "mlCoverage", "mlWeights", "mlRiskContrib", "mlDendrogram", "mlBlShift", "mlRegimes", "mlTransition", "mlRegimeReturns", "mlStacked", "mlRegret", "mlCalibration",
   "mlCrossSection", "mlSignalEquity", "mlTimeSurface", "mlZBand", "mlNetwork", "mlCoefCI", "mlAdjustment", "mlApePaths", "mlLoss", "mlMonthlyIc", "mlSharpeSpread"]);
 
 export const ML_LAB: LabConfig = {
@@ -241,6 +243,7 @@ export const ML_LAB: LabConfig = {
   manifest: (raw) => (raw as { features: RawFeature[] }).features.map(toSpec),
   submit: (featureId, payload) => ({ path: `/features/${RAW(featureId)}/jobs`, body: payloadFor(payload) }),
   signal: false,
+  defaultUniverse: "35 US large caps",
   overview: {
     intro: "Twelve machine-learning engines for return prediction, risk and allocation. Every split is chronological and purged, every output says what it was trained on, and anything the data cannot support is marked unavailable rather than approximated.",
     stages: [

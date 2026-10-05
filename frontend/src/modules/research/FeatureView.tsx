@@ -217,7 +217,9 @@ function RunContext({ feature, run }: { feature: FeatureSpec; run: FeatureRun })
   return (
     <div className="ctxbar" style={{ padding: "12px 0 0" }}>
       {groups.map((g) => {
-        const text = g.fields.map((f) => summarize(f, run.form[f.key])).filter(Boolean).slice(0, 3).join(" · ") || "Default";
+        const tickers = g.fields.find((f) => f.type === "ticker_list");
+        const defaultUniverse = g.id === "universe" && tickers && !String(run.form[tickers.key] ?? "").trim() ? lab().defaultUniverse : undefined;
+        const text = defaultUniverse ?? (g.fields.map((f) => summarize(f, run.form[f.key])).filter(Boolean).slice(0, 3).join(" · ") || "Default");
         return (
           <button key={g.id} type="button" className="chip" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setOpen({ id: g.id, at: { x: r.left, y: r.bottom + 4 } }); }}>
             <span style={{ color: "var(--text-4)" }}>{g.label}</span>{text}<ChevronDown size={11} />
@@ -253,7 +255,7 @@ function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: Featu
           </p>
         </div>
       ) : null}
-      {explain(cards).length ? <p className="verdict-explain">{explain(cards).join(" ")}</p> : null}
+      {lab().signal && explain(cards).length ? <p className="verdict-explain">{explain(cards).join(" ")}</p> : null}
       {cards.length ? (
         <div className="kpis">
           {cards.map((c) => (

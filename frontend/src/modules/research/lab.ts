@@ -29,6 +29,8 @@ export type LabConfig = {
   submit: (featureId: string, payload: Record<string, unknown>) => { path: string; body: unknown };
   /** Overview intro and the ordered stages its feature cards are grouped into. */
   overview?: { intro: string; stages: { id: string; label: string; intro: string; ids: string[] }[] };
+  /** What an empty ticker list means for this lab, shown in the Universe chip. */
+  defaultUniverse?: string;
   /** Research extras: Signal and Report card pages, projects, ledger, active signal. */
   signal: boolean;
 };

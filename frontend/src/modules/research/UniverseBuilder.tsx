@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ClipboardPaste, Search, X } from "lucide-react";
 import { Segmented } from "@/workspace/ui";
+import { lab } from "./lab";
 import { useUniverse } from "./api";
 
 type Mode = "all" | "sectors" | "custom";
@@ -53,15 +54,18 @@ export function UniverseBuilder({ value, onChange, maxSymbols, onMaxSymbols }: {
   const unknown = custom.filter((t) => all.length && !known.has(t));
   const count = mode === "all" ? Math.min(maxSymbols ?? all.length, all.length || maxSymbols || 0) : custom.length;
 
+  // A lab with a fixed default (ML) sends an empty list for it; Research sends the whole US market.
+  const preset = lab().defaultUniverse;
   return (
     <div style={{ display: "grid", gap: 10 }}>
       <Segmented<Mode> label="Universe source" value={mode} onChange={(m) => {
         setMode(m);
-        if (m === "all") onChange("us_equities");
+        if (m === "all") onChange(preset ? "" : "us_equities");
         if (m === "sectors") setSectorList(sectors);
-      }} options={[{ value: "all", label: "All US" }, { value: "sectors", label: "Sectors" }, { value: "custom", label: "Custom" }]} />
+      }} options={[{ value: "all", label: preset ? "Default" : "All US" }, { value: "sectors", label: "Sectors" }, { value: "custom", label: "Custom" }]} />
 
-      {mode === "all" ? (
+      {mode === "all" && preset ? <div className="hint">{preset}, all on one exchange calendar, so every held position has a return every day.</div> : null}
+      {mode === "all" && !preset ? (
         <div style={{ display: "grid", gap: 6 }}>
           <div className="hint">US common stocks, ranked by how much price history the data has. The study uses the top names.</div>
           {onMaxSymbols && maxSymbols !== undefined ? (
@@ -130,10 +134,10 @@ export function UniverseBuilder({ value, onChange, maxSymbols, onMaxSymbols }: {
       ) : null}
 
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "var(--text-3)" }}>
-        <span>{mode === "custom" ? "Custom list" : mode === "sectors" ? `${sectors.length} sector${sectors.length === 1 ? "" : "s"}` : "Whole market"}</span>
-        <span className="num">{count.toLocaleString()} stocks{mode === "sectors" && maxSymbols ? `, capped at ${maxSymbols}` : ""}</span>
+        <span>{mode === "custom" ? "Custom list" : mode === "sectors" ? `${sectors.length} sector${sectors.length === 1 ? "" : "s"}` : preset ? "Default" : "Whole market"}</span>
+        <span className="num">{mode === "all" && preset ? preset : `${count.toLocaleString()} stocks`}{mode === "sectors" && maxSymbols ? `, capped at ${maxSymbols}` : ""}</span>
       </div>
-      {mode !== "all" && custom.length ? <button type="button" className="btn sm ghost" style={{ justifySelf: "start" }} onClick={() => { onChange("us_equities"); setSectors([]); setMode("all"); }}>Reset to all US equities</button> : null}
+      {mode !== "all" && custom.length ? <button type="button" className="btn sm ghost" style={{ justifySelf: "start" }} onClick={() => { onChange(preset ? "" : "us_equities"); setSectors([]); setMode("all"); }}>{preset ? "Reset to the default" : "Reset to all US equities"}</button> : null}
     </div>
   );
 }

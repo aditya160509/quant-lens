@@ -380,9 +380,18 @@ export function MlBarrierScatter({ rows, result }: ViewProps) {
       <Stats items={groups.map((g) => [g, `${by(g)} (${pct(by(g) / pts.length, 0)})`] as [string, string])} />
       <XYPlot points={pts} xLabel="Calendar days to first touch" yLabel="Return at touch" formatY={pctFmt}
         refY={[...(pt !== null ? [{ y: pt, label: "profit-taking", color: "var(--up)" }] : []), ...(sl !== null ? [{ y: -sl, label: "stop-loss", color: "var(--down)" }] : [])]}
-        groupColors={{ "Profit Taking": "var(--up)", "Stop Loss": "var(--down)", Vertical: "var(--text-3)" }} />
+        groupColors={{ [label("profit_taking")]: "var(--up)", [label("stop_loss")]: "var(--down)", [label("vertical")]: "var(--text-3)" }} />
     </div>
   );
+}
+
+/** Share of events per label: −1 stop-loss first, 0 time barrier, +1 profit-taking first. */
+export function MlLabelMix({ rows }: ViewProps) {
+  if (!rows.length) return <Empty />;
+  const total = rows.reduce((a, r) => a + (n(r.count) ?? 0), 0) || 1;
+  const name: Record<string, string> = { "-1": "Stop-loss first", "0": "Time barrier", "1": "Profit-taking first" };
+  const color: Record<string, string> = { "-1": "var(--down)", "0": "var(--text-3)", "1": "var(--up)" };
+  return <Bars bars={[...rows].sort((a, b) => Number(a.label) - Number(b.label)).map((r) => { const k = String(Number(r.label)); return { label: name[k] ?? k, value: (n(r.count) ?? 0) / total, color: color[k], detail: [["Events", (n(r.count) ?? 0).toLocaleString()]] as [string, string][] }; })} format={pctFmt} signed={false} />;
 }
 
 /** How the label mix moves with the barrier widths; the chosen pair is outlined. */
@@ -437,21 +446,20 @@ export function MlRiskContrib({ rows }: ViewProps) {
 /** The clustering tree, and the covariance matrix reordered to match it so blocks line up. */
 export function MlDendrogram({ rows, result }: ViewProps) {
   const cov = out(result, "quasi_diagonalized_covariance_heatmap");
-  const leaves = useMemo(() => [...new Set(cov.map((r) => str(r.row)))], [cov]);
-  const weights = out(result, "hrp_weight_vector");
-  const assets = leaves.length ? leaves : weights.map((r) => str(r.asset));
+  // The linkage indexes assets in input order (the weight vector); the covariance arrives already in leaf order.
+  const assets = out(result, "hrp_weight_vector").map((r) => str(r.asset));
+  const order = useMemo(() => [...new Set(cov.map((r) => str(r.row)))], [cov]);
   const merges = rows.map((r) => ({ left: Number(r.left), right: Number(r.right), distance: Number(r.distance), count: n(r.count) ?? undefined })) as Merge[];
   if (!rows.length || assets.length < 2) return <Empty />;
-  const order = leafOrder(merges, assets.length).map((i) => assets[i]);
+  const treeOrder = leafOrder(merges, assets.length).map((i) => assets[i]);
+  const matrix = order.length ? order : treeOrder;
+  const cell = new Map(cov.map((r) => [`${str(r.row)}|${str(r.col)}`, n(r.value)]));
+  const d = matrix.map((a) => Math.sqrt(Math.max(cell.get(`${a}|${a}`) ?? 0, 1e-18)));
   return (
     <div>
       <Dendrogram merges={merges} leaves={assets} />
-      {cov.length ? (() => {
-        const cell = new Map(cov.map((r) => [`${str(r.row)}|${str(r.col)}`, n(r.value)]));
-        const d = order.map((a) => Math.sqrt(Math.max(cell.get(`${a}|${a}`) ?? 0, 1e-18)));
-        return <Heatmap rows={order} cols={order} values={order.map((a, i) => order.map((b, j) => { const c = cell.get(`${a}|${b}`); return c === null || c === undefined ? null : c / (d[i] * d[j]); }))} format={(v) => v.toFixed(2)} />;
-      })() : null}
-      <p className="ml-note">Matrix shows correlations implied by the covariance, in the tree&apos;s leaf order. Square blocks along the diagonal are the clusters HRP splits on.</p>
+      {cov.length ? <Heatmap rows={matrix} cols={matrix} values={matrix.map((a, i) => matrix.map((b, j) => { const c = cell.get(`${a}|${b}`); return c === null || c === undefined ? null : c / (d[i] * d[j]); }))} format={(v) => v.toFixed(2)} /> : null}
+      <p className="ml-note">Correlations implied by the covariance, in HRP&apos;s seriated order. Square blocks along the diagonal are the clusters HRP splits on.{order.length && order.join() !== treeOrder.join() ? " The matrix order is the API's quasi-diagonal order." : ""}</p>
     </div>
   );
 }
