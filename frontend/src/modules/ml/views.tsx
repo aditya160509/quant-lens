@@ -316,7 +316,7 @@ export function MlVolPanel({ rows, result }: ViewProps) {
   if (!rows.length) return <Empty />;
   return (
     <div>
-      <Bar><Picker label="Model" value={model} options={models} onChange={setModel} /><Picker label="Horizon (sessions)" value={h} options={horizons} onChange={setH} /></Bar>
+      <Bar><Picker<string> label="Model" value={model} options={models} onChange={setModel} /><Picker<number> label="Horizon (sessions)" value={h} options={horizons} onChange={setH} /></Bar>
       {tour ? <Stats items={[["MAE", sig(n(tour.mae) ?? NaN)], ["QLIKE", sig(n(tour.qlike) ?? NaN)], ["Interval coverage", isNum(tour.interval_coverage) ? pct(tour.interval_coverage, 0) : "–"]]} /> : null}
       <TimeSeries data={data} x="date" height={280} format={pctFmt}
         series={[{ key: "realized_vol", label: "Realised", color: "var(--text-3)", width: 1 }, { key: "forecast_vol", label: `${model} forecast`, width: 1.8 }]}
@@ -333,7 +333,7 @@ export function MlVolScatter({ rows }: ViewProps) {
   const pts = rows.filter((r) => Number(r.horizon) === h && isNum(r.forecast_vol) && isNum(r.realized_vol)).map((r) => ({ x: r.forecast_vol as number, y: r.realized_vol as number, group: str(r.model) }));
   return (
     <div>
-      <Bar><Picker label="Horizon" value={h} options={horizons} onChange={setH} /></Bar>
+      <Bar><Picker<number> label="Horizon" value={h} options={horizons} onChange={setH} /></Bar>
       <XYPlot points={pts} xLabel="Forecast volatility" yLabel="Realised volatility" diagonal robust formatX={pctFmt} formatY={pctFmt}
         groupColors={Object.fromEntries(models.map((m, i) => [m, SERIES[i % SERIES.length]]))} />
     </div>
@@ -355,7 +355,7 @@ export function MlTournament({ rows }: ViewProps) {
   if (!rows.length) return <Empty />;
   return (
     <div>
-      <Bar><Picker label="Loss" value={metric} options={metrics} onChange={setMetric} /></Bar>
+      <Bar><Picker<string> label="Loss" value={metric} options={metrics} onChange={setMetric} /></Bar>
       <LongHeatmap rows={rows.map((r) => ({ row: r.model, col: `h=${str(r.horizon)}`, value: r[metric] }))} format={metric === "interval_coverage" ? pctFmt : sig} />
     </div>
   );
@@ -404,7 +404,7 @@ export function MlBarrierSurface({ rows, result }: ViewProps) {
   const cell = new Map(rows.map((r) => [`${r.profit_taking}|${r.stop_loss}`, n(r[metric])]));
   return (
     <div>
-      <Bar><Picker label="Metric" value={metric} options={metrics} onChange={setMetric} /></Bar>
+      <Bar><Picker<string> label="Metric" value={metric} options={metrics} onChange={setMetric} /></Bar>
       <Heatmap rows={rs.map((v) => `PT ${pctFmt(v)}`)} cols={cs.map((v) => `SL ${pctFmt(v)}`)} values={rs.map((a) => cs.map((b) => cell.get(`${a}|${b}`) ?? null))} centered={false}
         format={/rate/.test(metric) ? pctFmt : (v) => v.toLocaleString()} rowTitle="Profit-taking" colTitle="Stop-loss"
         outline={(i, j) => rs[i] === Number(chosen.profit_taking) && cs[j] === Number(chosen.stop_loss)} />

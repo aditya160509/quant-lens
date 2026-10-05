@@ -69,13 +69,15 @@ const nextConfig = {
     root: __dirname,
   },
   
-  // The old Research V2 UI was replaced by the /research workspace.
+  // The old Research V2 and ML V2 UIs were replaced by the /research and /ml workspaces.
   async redirects() {
     return [
       { source: '/labs/research', destination: '/research', permanent: false },
       { source: '/labs/research/:path*', destination: '/research', permanent: false },
       { source: '/labs/research-v2', destination: '/research', permanent: false },
       { source: '/labs/research-v2/:path*', destination: '/research', permanent: false },
+      { source: '/labs/ml-v2', destination: '/ml', permanent: false },
+      { source: '/labs/ml-v2/:path*', destination: '/ml', permanent: false },
     ];
   },
 

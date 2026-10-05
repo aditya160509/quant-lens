@@ -1020,22 +1020,6 @@ export async function runFactorsV2All(payload = {}, featurePayloads = {}) {
     return handleResponse(res, "Failed to run all Factors V2 features");
 }
 
-export async function runMlV2Feature(featureId, payload = {}) {
-    const normalized = String(featureId).replace("feature_", "").replace("feature-", "").padStart(2, "0");
-    const res = await fetch(`${API_BASE_URL}/ml/v2/features/${normalized}/run`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
-    return handleResponse(res, `Failed to run ML V2 feature ${normalized}`);
-}
-
-export async function searchMlV2Symbols(query = "", options = {}) {
-    const params = new URLSearchParams({ q: query, limit: String(options.limit || 25) });
-    const res = await fetch(`${API_BASE_URL}/ml/v2/symbols?${params}`);
-    return handleResponse(res, "Failed to search ML V2 symbols");
-}
-
 export async function runScreenerV2Feature(featureId, payload = {}) {
     const normalized = String(featureId).replace("feature_", "").replace("feature-", "").padStart(2, "0");
     const res = await fetch(`${API_BASE_URL}/screener-v2/run/${normalized}`, {
