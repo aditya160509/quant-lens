@@ -4,12 +4,9 @@ from typing import Any
 import math
 import numpy as np
 import pandas as pd
-from scipy import stats
-from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
 from sklearn.linear_model import ElasticNet, Lasso, Ridge
-from sklearn.metrics import mean_absolute_error
-from .performance import equity_from_returns, fast_spearman_ic, max_drawdown, sharpe
-from .common import compact_records
+from .performance import fast_spearman_ic
 
 
 def _fit_base_model(model_type: str = "ridge", random_state: int = 7):  # P10
@@ -42,7 +39,6 @@ def _fit_base_model(model_type: str = "ridge", random_state: int = 7):  # P10
     return Ridge(alpha=5.0)
 
 
-
 def _safe_predict(model, x_train, y_train, x_test):
     from sklearn.impute import SimpleImputer
     imputer = SimpleImputer(strategy="median",keep_empty_features=True)
@@ -50,10 +46,6 @@ def _safe_predict(model, x_train, y_train, x_test):
     observed_test = imputer.transform(x_test)
     model.fit(observed_train, y_train)
     return np.asarray(model.predict(observed_test), dtype=float)
-
-
-
-
 
 
 def rolling_monthly_ic(pred: np.ndarray, actual: pd.Series, dates: pd.Series) -> list[dict[str, Any]]:
@@ -69,21 +61,10 @@ def rolling_monthly_ic(pred: np.ndarray, actual: pd.Series, dates: pd.Series) ->
     return rows[-60:]
 
 
-
-
-
-
-
-
-
-
-
-
 def _ohlcv_lower(ohlcv: pd.DataFrame) -> pd.DataFrame:
     out = ohlcv.copy()
     out.columns = [str(c).lower() for c in out.columns]
     return out
-
 
 
 def garman_klass_vol(ohlcv: pd.DataFrame, window: int = 21, ann: float = 252.0) -> pd.Series:
@@ -94,7 +75,6 @@ def garman_klass_vol(ohlcv: pd.DataFrame, window: int = 21, ann: float = 252.0) 
     c = np.log(df["close"] / df["open"]).replace([np.inf, -np.inf], np.nan)
     gk = (0.5 * (h - l) ** 2 - (2 * np.log(2) - 1) * c ** 2).rolling(window).mean()
     return (gk * ann).apply(lambda x: math.sqrt(max(x, 0.0)) if math.isfinite(x) else np.nan)
-
 
 
 def yang_zhang_vol(ohlcv: pd.DataFrame, window: int = 21, ann: float = 252.0) -> pd.Series:
@@ -110,7 +90,6 @@ def yang_zhang_vol(ohlcv: pd.DataFrame, window: int = 21, ann: float = 252.0) ->
     return yz.apply(lambda x: math.sqrt(max(x, 0.0)) if math.isfinite(x) else np.nan)
 
 
-
 def corwin_schultz_spread(ohlcv: pd.DataFrame, window: int = 21) -> pd.Series:
     """Corwin-Schultz daily bid-ask spread estimator from high-low ratios."""
     df = _ohlcv_lower(ohlcv)
@@ -123,7 +102,6 @@ def corwin_schultz_spread(ohlcv: pd.DataFrame, window: int = 21) -> pd.Series:
     return spread.clip(lower=0.0).rolling(window).mean()
 
 
-
 def high_low_amihud(ohlcv: pd.DataFrame, window: int = 21) -> pd.Series:
     """High-low Amihud variant using (high-low)/close as price impact proxy."""
     df = _ohlcv_lower(ohlcv)
@@ -132,27 +110,6 @@ def high_low_amihud(ohlcv: pd.DataFrame, window: int = 21) -> pd.Series:
     return (hl_range / dollar).rolling(window).mean() * 1e8
 
 
-
 def bipower_variation(returns: pd.Series, window: int = 21) -> pd.Series:
     """Bi-power variation for jump component decomposition."""
     return (returns.abs() * returns.abs().shift(1)).rolling(window).mean() * math.pi / 2
-
-
-
-def ic_decay_ratio(x_col: pd.Series, y: pd.Series, window_short: int = 21, window_long: int = 252) -> float:
-    """IC decay ratio: short-window IC-IR divided by long-window IC-IR."""
-    vals_short, vals_long = [], []
-    step = max(1, len(x_col) // 120)
-    for i in range(window_long, len(x_col), step):
-        s_short = x_col.iloc[max(0, i - window_short):i]
-        y_short = y.iloc[max(0, i - window_short):i]
-        s_long = x_col.iloc[max(0, i - window_long):i]
-        y_long = y.iloc[max(0, i - window_long):i]
-        if len(s_short) > 5:
-            vals_short.append(float(stats.spearmanr(s_short, y_short).correlation or 0.0))
-        if len(s_long) > 5:
-            vals_long.append(float(stats.spearmanr(s_long, y_long).correlation or 0.0))
-    ic_ir_short = float(np.nanmean(vals_short) / max(np.nanstd(vals_short), 1e-8)) if vals_short else 0.0
-    ic_ir_long = float(np.nanmean(vals_long) / max(np.nanstd(vals_long), 1e-8)) if vals_long else 0.0
-    return float(ic_ir_short / max(abs(ic_ir_long), 1e-8))
-

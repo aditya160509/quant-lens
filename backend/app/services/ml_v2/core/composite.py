@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from sklearn.covariance import LedoitWolf
-from .common import response, summary, compact_records, matrix_records
+from .common import response, summary, matrix_records
 from .panel import load_context, make_feature_panel, numeric_xy
 from .performance import fast_spearman_ic
 from .portfolio import execute_portfolio

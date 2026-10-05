@@ -12,7 +12,7 @@ def _run_sequence_alpha(payload=None):
     import torch
     from torch import nn
     from .panel import load_context, make_feature_panel, numeric_xy
-    from .common import response, summary, compact_records
+    from .common import response, summary
     request = payload or {}
     names = request.get("architectures", ["patchtst"])
     supported = {"patchtst", "itransformer", "lstm", "mlp"}

@@ -6,7 +6,7 @@ import math
 import numpy as np
 import pandas as pd
 from .data_loader import annualization_factor, normalize_frequency, lookback_rows, market_caps, ohlcv_for_symbols, parse_symbols, returns_from_ohlcv, sector_map
-from .performance import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from .common import number_like
 from .estimators import corwin_schultz_spread, high_low_amihud
 
@@ -24,7 +24,6 @@ class MLContext:
     frequency: str
     annualization: float
     compute_mode: str
-
 
 
 def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> MLContext:
@@ -61,18 +60,6 @@ def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> ML
         annualization=annualization_factor(frequency),
         compute_mode="research" if payload.get("research_mode") or str(payload.get("compute_mode", "")).lower() == "research" else "realtime",
     )
-
-
-
-def load_context_cached(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> MLContext:
-    """A29 — Cache MLContext for identical payloads within a request batch.
-
-    Features 01/02/07/08/11/12 all call load_context with the same payload;
-    this eliminates 4 data loading operations per duplicate feature call.
-    """
-    # Contexts contain request-local settings and data; do not share them between runs.
-    return load_context(payload, min_symbols=min_symbols)
-
 
 
 def _build_ticker_features(
@@ -142,7 +129,6 @@ def _build_ticker_features(
     return feat.to_dict("records"), feat["target_return"].tolist()
 
 
-
 def make_feature_panel(ctx: MLContext, horizon: int = 5, *, include_unlabelled: bool = False) -> tuple[pd.DataFrame, pd.Series]:
     rets = ctx.returns
     closes = ctx.closes.reindex(rets.index)
@@ -180,7 +166,6 @@ def make_feature_panel(ctx: MLContext, horizon: int = 5, *, include_unlabelled: 
     return panel, panel["target_return"].copy()
 
 
-
 def numeric_xy(panel: pd.DataFrame, y: pd.Series | None = None) -> tuple[pd.DataFrame, pd.Series]:
     cols = [
         "ret_1d", "mom_5", "mom_21", "mom_63", "reversal_5",
@@ -191,4 +176,3 @@ def numeric_xy(panel: pd.DataFrame, y: pd.Series | None = None) -> tuple[pd.Data
     x = panel[[c for c in cols if c in panel.columns]].replace([np.inf, -np.inf], np.nan)
     target = y if y is not None else panel.get("target_return", pd.Series(dtype=float))
     return x, pd.to_numeric(target, errors="coerce")
-

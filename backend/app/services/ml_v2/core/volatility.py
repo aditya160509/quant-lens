@@ -7,16 +7,9 @@ import pandas as pd
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import ElasticNet, Ridge
 from sklearn.metrics import mean_absolute_error
-from sklearn.preprocessing import StandardScaler
-from .data_loader import load_macro
-from .common import compact_records, date_str, number_like, response, summary
-from .estimators import _safe_predict, bipower_variation, garman_klass_vol, yang_zhang_vol
-from .panel import MLContext, load_context
-
-
-def realized_vol_matrix(ctx: MLContext, window: int = 21) -> pd.DataFrame:
-    return ctx.returns.rolling(window).std() * math.sqrt(ctx.annualization)
-
+from .common import date_str, response, summary
+from .estimators import garman_klass_vol, yang_zhang_vol
+from .panel import load_context
 
 
 def arch_family_vol_models(returns: pd.Series, ann: float, cap: int = 1000) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], str]:
@@ -73,7 +66,6 @@ def arch_family_vol_models(returns: pd.Series, ann: float, cap: int = 1000) -> t
     return rows+failures, weight_rows, news_rows, "partial_fit" if failures else "fit"
 
 
-
 def news_impact_curve(fit: Any, model_name: str, dist: str) -> list[dict[str, Any]]:
     if model_name not in {"GARCH","GJR-GARCH","EGARCH","APARCH"}:
         return []
@@ -98,7 +90,6 @@ def news_impact_curve(fit: Any, model_name: str, dist: str) -> list[dict[str, An
             var = omega + (alpha + asym) * (shock * math.sqrt(last_var)) ** 2 + beta * last_var
         rows.append({"shock_sigma": float(shock), "next_variance": float(max(var, 0.0)), "model": model_name, "distribution": dist})
     return rows
-
 
 
 def run_vol_forecasting(payload: dict[str, Any] | None = None) -> dict[str, Any]:

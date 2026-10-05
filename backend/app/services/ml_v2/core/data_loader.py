@@ -164,11 +164,6 @@ def close_matrix(symbols: Iterable[str], lookback_days: int = 504, frequency: st
     return pd.DataFrame() if ohlcv.empty else _wide(ohlcv, "Close").tail(lookback_rows(lookback_days))
 
 
-def volume_matrix(symbols: Iterable[str], lookback_days: int = 504, frequency: str = "daily") -> pd.DataFrame:
-    ohlcv = _fetch(symbols, lookback_days, frequency)
-    return pd.DataFrame() if ohlcv.empty else _wide(ohlcv, "Volume").tail(lookback_rows(lookback_days))
-
-
 @lru_cache(maxsize=1)
 def load_fundamentals_metadata() -> pd.DataFrame:
     if not MASTER_FUNDAMENTALS.exists():

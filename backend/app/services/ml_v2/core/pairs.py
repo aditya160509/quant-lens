@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.stattools import coint
-from .common import compact_records, date_str, response, summary
+from .common import date_str, response, summary
 from .panel import load_context
 from .portfolio import execute_portfolio
 

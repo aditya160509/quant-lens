@@ -4,8 +4,7 @@ from itertools import combinations
 import math
 import numpy as np
 import pandas as pd
-from scipy import stats
-from .performance import fast_spearman_ic, sharpe, equity_from_returns
+from .performance import fast_spearman_ic, sharpe
 
 
 def purged_complement(dates, test_dates, horizon, embargo):

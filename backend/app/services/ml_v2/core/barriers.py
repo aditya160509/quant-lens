@@ -152,7 +152,6 @@ def barrier_sensitivity_rows(ctx: MLContext, horizon: int) -> list[dict[str, Any
 
 def _lightgbm_cqr_intervals(labels: pd.DataFrame, confidence: float, horizon: int, annualization: float):
     """Quantile regression with disjoint purged training/calibration/test dates."""
-    from sklearn.ensemble import GradientBoostingRegressor
     out = labels.sort_values(["date", "ticker"]).reset_index(drop=True).copy()
     for column in ["cqr_lower", "cqr_upper", "cqr_interval_width"]:
         out[column] = np.nan
