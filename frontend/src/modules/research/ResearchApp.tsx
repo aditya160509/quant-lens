@@ -11,7 +11,9 @@ import { useRegionPanel } from "@/workspace/panels";
 import { useWorkspace } from "@/workspace/WorkspaceShell";
 import { Dot } from "@/workspace/ui";
 import { cancelJob, latestRun, metricsOf, studyPart, useActiveSignal, useLibrary, useBackgroundRuns, useJob, useManifest, useRuns, useSubmitJob } from "./api";
-import { PAGES, featureHref, idFromSlug, metaFor, pageHref, pageOf, specialPage } from "./catalog";
+import { featureHref, idFromSlug, metaFor, pageHref, pageOf, specialPage } from "./catalog";
+import { lab, owns, setLab, type LabConfig } from "./lab";
+import { RESEARCH_LAB } from "./researchLab";
 import { SignalPage } from "./SignalPage";
 import { ReportCardPage } from "./ReportCard";
 import { SharedView } from "./SharedView";
@@ -38,12 +40,15 @@ const noopSubscribe = () => () => {};
  * Panel sizes come from this device's storage, so the panel layout renders on the client only;
  * a server render would hydrate with different flex sizes that React does not patch.
  */
-export function ResearchApp() {
+export function ResearchApp({ config = RESEARCH_LAB }: { config?: LabConfig }) {
+  // The lab is set before any child renders; every shared component reads it through lab().
+  setLab(config);
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
-  return mounted ? <ResearchPanels /> : <div className="island" style={{ height: "100%" }} />;
+  return mounted ? <ResearchPanels key={config.id} /> : <div className="island" style={{ height: "100%" }} />;
 }
 
 function ResearchPanels() {
+  const L = lab();
   const params = useParams<{ feature?: string; token?: string }>();
   const featureId = idFromSlug(params?.feature);
   const special = specialPage(params?.feature);
@@ -58,7 +63,8 @@ function ResearchPanels() {
   const feature = manifest.data?.find((f) => f.id === featureId) ?? null;
   const { setCrumb, registerPalette } = useWorkspace();
   const router = useRouter();
-  const runs = useRuns((s) => s.runs);
+  const allRuns = useRuns((s) => s.runs);
+  const runs = useMemo(() => allRuns.filter((r) => owns(r.featureId)), [allRuns]);
   const animate = useLayout((s) => s.animate);
   const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia("(max-width: 760px)").matches, () => false);
   const shownJob = useSearchParams()?.get("run") ?? (featureId ? runs.find((r) => r.featureId === featureId)?.jobId ?? null : null);
@@ -90,20 +96,20 @@ function ResearchPanels() {
             const f = v.form;
             useStudies.setState((s) => ({ forms: { ...s.forms, [v.featureId as string]: f } }));
             router.push(featureHref(v.featureId));
-          } else router.push("/research");
+          } else router.push(L.root);
         } },
         { id: `view-del-${v.id}`, group: "Workspaces", icon: Trash2, label: `Delete view: ${v.name}`, run: () => useViews.getState().remove(v.id) },
       ]),
     ]);
-  }, [views, featureId, registerPalette, router]);
+  }, [views, featureId, registerPalette, router, L.root]);
 
   useEffect(() => {
     if (!manifest.data) return;
-    registerPalette("research", [
-      { id: "research-overview", group: "Research", label: "Overview", icon: LayoutGrid, run: () => router.push("/research") },
+    registerPalette(L.id, [
+      { id: `${L.id}-overview`, group: L.title, label: "Overview", icon: LayoutGrid, run: () => router.push(L.root) },
       ...manifest.data.map((f) => {
         const m = metaFor(f.id, f.name);
-        return { id: `feature-${f.id}`, group: "Research", icon: m.icon, label: m.name, keywords: [f.name, f.description, m.question], meta: latestRun(runs, f.id)?.headline?.split(".")[0], run: () => router.push(featureHref(f.id)) };
+        return { id: `feature-${f.id}`, group: L.title, icon: m.icon, label: m.name, keywords: [f.name, f.description, m.question], meta: latestRun(runs, f.id)?.headline?.split(".")[0], run: () => router.push(featureHref(f.id)) };
       }),
       ...runs.slice(0, 8).map((r) => ({
         id: `run-${r.jobId}`, group: "Recent runs", icon: History, label: `${metaFor(r.featureId, r.featureName).name}${r.signal ? ` · ${r.signal}` : ""}`,
@@ -111,25 +117,27 @@ function ResearchPanels() {
         run: () => router.push(`${featureHref(r.featureId)}?run=${r.jobId}`),
       })),
     ]);
-  }, [manifest.data, runs, registerPalette, router]);
+  }, [manifest.data, runs, registerPalette, router, L]);
 
   // Actions: pages, the active signal, report card, comparisons; the library as one-step signal loads.
-  const library = useLibrary();
+  const library = useLibrary(L.signal);
   useEffect(() => {
     const go = (href: string) => () => router.push(href);
     const done = runs.filter((r) => r.status === "completed");
-    registerPalette("research-actions", [
-      ...PAGES.map((p) => ({ id: `page-${p.id}`, group: "Pages", icon: p.icon, label: p.label, keywords: [p.question], run: go(pageHref(p)) })),
-      { id: "act-report", group: "Actions", icon: ClipboardCheck, label: "Run the report card on the active signal", run: go("/research/report") },
-      { id: "act-clear-signal", group: "Actions", icon: X, label: "Use each page's built-in signal (clear formula)", run: () => useActiveSignal.getState().set({ expr: null, name: null }) },
+    registerPalette(`${L.id}-actions`, [
+      ...L.pages.map((p) => ({ id: `page-${p.id}`, group: "Pages", icon: p.icon, label: p.label, keywords: [p.question], run: go(pageHref(p)) })),
+      ...(L.signal ? [
+        { id: "act-report", group: "Actions", icon: ClipboardCheck, label: "Run the report card on the active signal", run: go(`${L.root}/report`) },
+        { id: "act-clear-signal", group: "Actions", icon: X, label: "Use each page's built-in signal (clear formula)", run: () => useActiveSignal.getState().set({ expr: null, name: null }) },
+      ] : []),
       ...(done.length >= 2 ? [{ id: "act-compare", group: "Actions", icon: GitCompare, label: "Compare the last two runs", run: () => { useLayout.getState().set("bottom", true, true); window.dispatchEvent(new CustomEvent("research:compare", { detail: [done[0].jobId, done[1].jobId] })); } }] : []),
       { id: "act-dock", group: "Actions", icon: History, label: "Show runs and log", run: () => useLayout.getState().set("bottom", true, true) },
-      ...(library.data ?? []).map((s) => ({ id: `lib-${s.id}`, group: "Published anomalies", icon: FlaskConical, label: `Test ${s.name}`, meta: s.citation, keywords: [s.category, s.formula], run: () => { useActiveSignal.getState().set({ expr: s.formula, name: s.name }); router.push("/research/signal"); } })),
+      ...(library.data ?? []).map((s) => ({ id: `lib-${s.id}`, group: "Published anomalies", icon: FlaskConical, label: `Test ${s.name}`, meta: s.citation, keywords: [s.category, s.formula], run: () => { useActiveSignal.getState().set({ expr: s.formula, name: s.name }); router.push(`${L.root}/signal`); } })),
     ]);
-  }, [runs, library.data, registerPalette, router]);
+  }, [runs, library.data, registerPalette, router, L]);
 
-  const outer = useDefaultLayout({ id: "research-columns-v2", storage: panelStorage });
-  const inner = useDefaultLayout({ id: "research-rows-v2", storage: panelStorage });
+  const outer = useDefaultLayout({ id: `${L.id}-columns-v2`, storage: panelStorage });
+  const inner = useDefaultLayout({ id: `${L.id}-rows-v2`, storage: panelStorage });
   const left = useRegionPanel("left");
   const right = useRegionPanel("right");
   const bottom = useRegionPanel("bottom");
@@ -139,9 +147,9 @@ function ResearchPanels() {
               <ErrorState message={(manifest.error as Error).message} onRetry={() => manifest.refetch()} />
             ) : sharedToken ? (
               <SharedView token={sharedToken} features={manifest.data ?? []} />
-            ) : special?.id === "signal" ? (
+            ) : special?.id === "signal" && L.signal ? (
               <SignalPage />
-            ) : special?.id === "report" ? (
+            ) : special?.id === "report" && L.signal ? (
               <ReportCardPage features={manifest.data ?? []} />
             ) : feature ? (
               <FeatureWorkspace key={feature.id} feature={feature} />
@@ -154,9 +162,9 @@ function ResearchPanels() {
   if (narrow) {
     return (
       <div className="ws-mobile">
-        <select className="input" aria-label="Page" value={special ? pageHref(special) : feature ? featureHref(feature.id) : "/research"} onChange={(e) => router.push(e.target.value)}>
-          <option value="/research">Overview</option>
-          {PAGES.map((p) => <option key={p.id} value={pageHref(p)}>{p.label}</option>)}
+        <select className="input" aria-label="Page" value={special ? pageHref(special) : feature ? featureHref(feature.id) : L.root} onChange={(e) => router.push(e.target.value)}>
+          <option value={L.root}>Overview</option>
+          {L.pages.map((p) => <option key={p.id} value={pageHref(p)}>{p.label}</option>)}
         </select>
         <div style={{ flex: 1, minHeight: 0, display: "flex" }}>{center}</div>
       </div>
@@ -164,13 +172,13 @@ function ResearchPanels() {
   }
 
   return (
-    <Group orientation="horizontal" id="research-columns-v2" className={animate ? "ws-animate" : undefined} defaultLayout={outer.defaultLayout} onLayoutChanged={outer.onLayoutChanged} style={{ height: "100%" }}>
+    <Group orientation="horizontal" id={`${L.id}-columns-v2`} className={animate ? "ws-animate" : undefined} defaultLayout={outer.defaultLayout} onLayoutChanged={outer.onLayoutChanged} style={{ height: "100%" }}>
       <Panel id="nav" panelRef={left.panelRef} onResize={left.onResize} defaultSize={left.defaultOpen ? 236 : 0} minSize={196} maxSize={340} collapsible collapsedSize={0}>
         <FeatureNav features={manifest.data ?? []} loading={manifest.isLoading} activeId={featureId} activePage={special?.id ?? pageOf(featureId)?.id ?? null} runs={runs} />
       </Panel>
       <Separator className="ws-sep" />
       <Panel id="center" minSize={460}>
-        <Group orientation="vertical" id="research-rows-v2" className={animate ? "ws-animate" : undefined} defaultLayout={inner.defaultLayout} onLayoutChanged={inner.onLayoutChanged}>
+        <Group orientation="vertical" id={`${L.id}-rows-v2`} className={animate ? "ws-animate" : undefined} defaultLayout={inner.defaultLayout} onLayoutChanged={inner.onLayoutChanged}>
           <Panel id="results" minSize={260}>
             {center}
           </Panel>
@@ -190,19 +198,20 @@ function ResearchPanels() {
 
 function FeatureNav({ features, loading, activeId, activePage, runs }: { features: FeatureSpec[]; loading: boolean; activeId: string | null; activePage: string | null; runs: RunRecord[] }) {
   const have = new Set(features.map((f) => f.id));
+  const L = lab();
   return (
-    <nav className="island" aria-label="Research features">
-      <div className="nav-h"><span>Research</span></div>
-      <ProjectSwitcher />
+    <nav className="island" aria-label={`${L.title} features`}>
+      <div className="nav-h"><span>{L.title}</span></div>
+      {L.signal ? <ProjectSwitcher /> : null}
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
-        <Link href="/research" className="nav-item" aria-current={activeId === null && activePage === null ? "page" : undefined}>
+        <Link href={L.root} className="nav-item" aria-current={activeId === null && activePage === null ? "page" : undefined}>
           <LayoutGrid size={15} strokeWidth={1.7} />
           <span className="label">Overview</span>
         </Link>
         <div style={{ height: 1, margin: "6px 16px", background: "var(--line)" }} />
         {loading ? Array.from({ length: 6 }, (_, i) => (
           <div key={i} className="nav-item"><span className="skel" style={{ width: 15, height: 15 }} /><span className="skel" style={{ width: 90 + ((i * 37) % 60), height: 10 }} /></div>
-        )) : PAGES.filter((p) => !p.features.length || p.features.some((id) => have.has(id))).map((p) => {
+        )) : L.pages.filter((p) => !p.features.length || p.features.some((id) => have.has(id))).map((p) => {
           const Icon = p.icon;
           const ids = p.features.filter((id) => have.has(id));
           const live = runs.some((r) => ids.includes(r.featureId) && (r.status === "queued" || r.status === "running"));
@@ -280,7 +289,8 @@ function useFeatureRun(feature: FeatureSpec) {
     setErrors(errs);
     if (Object.keys(errs).length) return;
     const active = useActiveSignal.getState();
-    const base: Record<string, unknown> = { ...toPayload(feature, form), ...(active.expr ? { signal_expr: active.expr } : {}), ...(active.projectId ? { project_id: active.projectId } : {}) };
+    const context = lab().signal ? { ...(active.expr ? { signal_expr: active.expr } : {}), ...(active.projectId ? { project_id: active.projectId } : {}) } : {};
+    const base: Record<string, unknown> = { ...toPayload(feature, form), ...context };
     const sweep = Object.entries(useSweeps.getState().sweeps[feature.id] ?? {}).map(([k, list]) => [k, sweepValues(list)] as const).filter(([, v]) => v.length);
     // One job per swept value (first swept field); the last submitted job is shown, all appear in the dock.
     const [sweepKey, sweepVals] = sweep[0] ?? [null, [null]];
@@ -352,7 +362,7 @@ function InspectorHost({ feature }: { feature: FeatureSpec }) {
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="island" style={{ alignItems: "center", justifyContent: "center", gap: 10, padding: 24, textAlign: "center" }}>
-      <div style={{ fontWeight: 550, fontSize: 14 }}>Research service is unreachable</div>
+      <div style={{ fontWeight: 550, fontSize: 14 }}>{lab().title} service is unreachable</div>
       <div style={{ color: "var(--text-3)", maxWidth: 420 }}>{message}. Start the backend and retry.</div>
       <button className="btn" onClick={onRetry}>Retry</button>
     </div>

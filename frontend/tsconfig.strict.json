@@ -9,5 +9,5 @@
     "incremental": false,
     "types": ["jest", "node", "@testing-library/jest-dom"]
   },
-  "include": ["next-env.d.ts", "src/workspace/**/*", "src/charts/**/*", "src/modules/**/*", "src/app/research/**/*", "src/lib/apiBase.ts", "src/types/global-css.d.ts"]
+  "include": ["next-env.d.ts", "src/workspace/**/*", "src/charts/**/*", "src/modules/**/*", "src/app/research/**/*", "src/app/ml/**/*", "src/lib/apiBase.ts", "src/types/global-css.d.ts"]
 }

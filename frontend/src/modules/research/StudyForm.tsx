@@ -44,7 +44,13 @@ export function toPayload(feature: FeatureSpec, form: FormState): Record<string,
 const REQUIRED: Record<string, string[]> = { "08": ["discovery_date"], "09": ["treated_unit", "treatment_date"] };
 
 /** A field shows when the API's depends_on rule (if any) matches the current form. */
-export const applies = (f: InputSpec, form: FormState) => !f.depends_on || f.depends_on.values.map(String).includes(String(form[f.depends_on.field] ?? ""));
+export const applies = (f: InputSpec, form: FormState) => {
+  const d = f.depends_on;
+  if (!d) return true;
+  const v = form[d.field];
+  if (d.present) return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length);
+  return (d.values ?? []).map(String).includes(String(v ?? ""));
+};
 
 const LEVELS = ["quick", "standard", "expert"] as const;
 type Level = (typeof LEVELS)[number];

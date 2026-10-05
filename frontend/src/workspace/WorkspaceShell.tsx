@@ -23,7 +23,7 @@ export const MODULES: ModuleLink[] = [
   { id: "research", label: "Research", href: "/research", icon: FlaskConical },
   { id: "screener", label: "Screener", href: "/labs/screener-v2", icon: SlidersHorizontal },
   { id: "factors", label: "Factors", href: "/labs/factors-v2", icon: ChartNetwork },
-  { id: "ml", label: "Machine learning", href: "/labs/ml-v2", icon: BrainCircuit },
+  { id: "ml", label: "Machine learning", href: "/ml", icon: BrainCircuit },
   { id: "pca", label: "PCA", href: "/labs/pca-v2", icon: Orbit },
   { id: "volatility", label: "Volatility", href: "/labs/volatility-v2", icon: Activity },
   { id: "portfolio", label: "Portfolio", href: "/labs/portfolio-v2", icon: PieChart },

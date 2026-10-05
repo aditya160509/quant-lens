@@ -12,7 +12,7 @@ const skeleton = () => <div aria-busy="true" style={{ minHeight: 160 }} />;
 function lazy(load: () => Promise<Mod>, name: string): ComponentType<ViewProps> {
   return dynamic(async () => (await load())[name] as ComponentType<ViewProps>, { ssr: false, loading: skeleton });
 }
-function group(load: () => Promise<Mod>): Views {
+export function group(load: () => Promise<Mod>): Views {
   return new Proxy({} as Views, { get: (c, k: string) => (c[k] ??= lazy(load, k)) });
 }
 const P = group(() => import("./plots") as Promise<Mod>);
@@ -62,4 +62,10 @@ export const CHART_VIEWS = new Set([
 
 export function viewFor(name: string): ComponentType<ViewProps> {
   return VIEWS[name] ?? T.DataTable;
+}
+
+/** Another lab adds its own views; chart views also get SVG and PNG export on their cards. */
+export function registerViews(views: Record<string, ComponentType<ViewProps>>, charts: string[] = []) {
+  Object.assign(VIEWS, views);
+  charts.forEach((c) => CHART_VIEWS.add(c));
 }

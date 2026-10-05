@@ -1,4 +1,5 @@
 import { first, isNum, label, num, out, pval, rowsOf, tstat } from "./format";
+import { lab } from "./lab";
 import type { FeatureResult, FeatureSpec } from "./types";
 
 export type Tone = "up" | "down" | "warn";
@@ -7,7 +8,7 @@ export type Verdict = { headline: string | null; tone: Tone | null };
 /** One card. `keys` lets a single card combine several outputs (e.g. three event-study estimators). */
 export type Item = { keys: string[]; view?: string; span: number; title?: string; hint?: string; opts?: Record<string, unknown>; flush?: boolean };
 export type Section = { id: string; label: string; intro?: string; items: Item[] };
-type FeatureLayout = { sections: Section[]; verdict?: (r: FeatureResult) => Verdict };
+export type FeatureLayout = { sections: Section[]; verdict?: (r: FeatureResult) => Verdict };
 
 const card = (keys: string | string[], span: number, extra: Omit<Item, "keys" | "span"> = {}): Item => ({ keys: Array.isArray(keys) ? keys : [keys], span, ...extra });
 const tests = (keys: string[], span: number, title: string, hint?: string): Item => ({ keys, span, view: "tests", title, hint, flush: true });
@@ -363,7 +364,7 @@ function mergedSections(featureId: string): Section[] {
 }
 
 export function layoutFor(feature: FeatureSpec): FeatureLayout {
-  const own = LAYOUTS[feature.id];
+  const own = LAYOUTS[feature.id] ?? lab().layouts?.[feature.id];
   const merged = mergedSections(feature.id);
   const custom = own && merged.length ? { ...own, sections: [...own.sections.filter((x) => x.id !== "export"), ...merged, ...own.sections.filter((x) => x.id === "export")] } : own;
   const placed = new Set(custom?.sections.flatMap((s) => s.items.flatMap((i) => i.keys)) ?? []);
@@ -383,7 +384,7 @@ export function layoutFor(feature: FeatureSpec): FeatureLayout {
 }
 
 export function verdictFor(feature: FeatureSpec, result: FeatureResult): Verdict {
-  const custom = LAYOUTS[feature.id]?.verdict;
+  const custom = (LAYOUTS[feature.id] ?? lab().layouts?.[feature.id])?.verdict;
   if (custom) return custom(result);
   if (typeof result.meta.headline === "string") return { headline: result.meta.headline, tone: null };
   const prose = feature.outputs.find((o) => o.render === "summaryLine" || o.render === "verdict");

@@ -2,7 +2,7 @@
 
 export type Row = Record<string, unknown>;
 
-export type InputType = "select" | "multiselect" | "boolean" | "number" | "date" | "json" | "file" | "ticker" | "ticker_list" | "text";
+export type InputType = "select" | "multiselect" | "boolean" | "number" | "date" | "json" | "file" | "ticker" | "ticker_list" | "text" | "text_list";
 
 export type InputSpec = {
   key: string;
@@ -16,7 +16,7 @@ export type InputSpec = {
   max?: number;
   /** Rules from the API (docs/RESEARCH_V3_CONTRACTS.md §3); the form falls back to its own maps when absent. */
   required?: boolean;
-  depends_on?: { field: string; values: (string | number | boolean)[] } | null;
+  depends_on?: { field: string; values?: (string | number | boolean)[]; present?: boolean } | null;
   conflicts_with?: string[];
   unit?: string;
   level?: "quick" | "standard" | "expert";
@@ -30,6 +30,10 @@ export type OutputSpec = {
   render: string;
   description?: string;
   primary?: boolean;
+  /** ML contract: column roles (x, y, series, value, bin) and availability. */
+  encoding?: Record<string, unknown>;
+  type?: string;
+  status?: string;
 };
 
 export type FeatureSpec = {

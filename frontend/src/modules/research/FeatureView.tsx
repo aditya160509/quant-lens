@@ -7,6 +7,7 @@ import { AlertTriangle, ChevronDown, FileText, Loader2, Play, Square } from "luc
 import { DUR } from "@/workspace/prefs";
 import { PopMenu, Tabs, type MenuAt } from "@/workspace/ui";
 import { featureHref, metaFor, pageOf } from "./catalog";
+import { lab } from "./lab";
 import { LedgerChip } from "./Projects";
 import { useActiveSignal } from "./api";
 import { isNum, label, num, out } from "./format";
@@ -124,8 +125,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <RunContext feature={feature} run={run} />
-          <ActiveSignalChip />
-          <LedgerChip />
+          {lab().signal ? <><ActiveSignalChip /><LedgerChip /></> : null}
         </div>
         <AnimatePresence initial={false}>
           {result ? (
@@ -377,7 +377,7 @@ function ActiveSignalChip() {
   if (!expr) return null;
   return (
     <span className="chip accent" title={expr} style={{ gap: 6 }}>
-      <Link href="/research/signal" style={{ color: "inherit", textDecoration: "none" }}>Signal: {name ?? "formula"}</Link>
+      <Link href={`${lab().root}/signal`} style={{ color: "inherit", textDecoration: "none" }}>Signal: {name ?? "formula"}</Link>
       <button aria-label="Use the built-in signal instead" onClick={() => set({ expr: null, name: null })} style={{ display: "grid", placeItems: "center" }}>×</button>
     </span>
   );

@@ -11,6 +11,7 @@ import { layoutFor } from "./layouts";
 import { OutputCard } from "./OutputCard";
 import { Onboarding } from "./Onboarding";
 import { featureHref, metaFor } from "./catalog";
+import { lab, owns } from "./lab";
 import type { FeatureSpec, RunRecord } from "./types";
 
 const ago = (t: number) => {
@@ -35,7 +36,8 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
   const last = features.map((f) => latestRun(runs, f.id)).filter((r): r is RunRecord => Boolean(r));
   const count = (t: RunRecord["tone"]) => last.filter((r) => r.tone === t).length;
   const byId = new Map(features.map((f) => [f.id, f]));
-  const stages = STAGES.filter((s) => s.ids.some((id) => byId.has(id)));
+  const L = lab();
+  const stages = (L.overview?.stages ?? STAGES).filter((s) => s.ids.some((id) => byId.has(id)));
   const stats: [string, string | number, string?][] = [
     ["Tests", features.length || "–"],
     ["Tested", `${last.length}/${features.length || 0}`],
@@ -48,9 +50,9 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
   return (
     <div className="island" style={{ overflowY: "auto" }}>
       <div style={{ padding: "26px 26px 34px", maxWidth: 1320, width: "100%" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.025em" }}>Research</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.025em" }}>{L.title}</h1>
         <p style={{ margin: "6px 0 20px", color: "var(--text-3)", maxWidth: 680, fontSize: 13.5, lineHeight: 1.55 }}>
-          Every way to test a trading signal, from asset-pricing regressions to causal designs. Work left to right: test it, stress it, explain it, publish it.
+          {L.overview?.intro ?? "Every way to test a trading signal, from asset-pricing regressions to causal designs. Work left to right: test it, stress it, explain it, publish it."}
         </p>
         <div className="ov-stats">
           {stats.map(([l, v, c]) => (
@@ -58,7 +60,7 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
           ))}
         </div>
 
-        <Onboarding />
+        {L.signal ? <Onboarding /> : null}
         <Board features={features} />
 
         {stages.map((stage, si) => (
@@ -117,7 +119,7 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
 
 /** Pinned outputs from any feature, side by side, each drawn from the run it was pinned from. */
 function Board({ features }: { features: FeatureSpec[] }) {
-  const pins = usePins((s) => s.pins);
+  const pins = usePins((s) => s.pins).filter((p) => owns(p.featureId));
   if (!pins.length || !features.length) return null;
   return (
     <section style={{ marginTop: 26 }}>

@@ -5,14 +5,17 @@ import { useEffect } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { API_BASE_URL } from "@/lib/apiBase";
+import { lab, owns } from "./lab";
+
+/** Universe and symbol lookups read the shared market data, served by the Research API for every lab. */
+const DATA_BASE = `${API_BASE_URL}/labs/research/v2`;
 import type { FeatureResult, FeatureSpec, Job, RunLogEntry, RunRecord } from "./types";
 
-const BASE = `${API_BASE_URL}/labs/research/v2`;
 
 export class ApiError extends Error {}
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, init);
+async function request<T>(path: string, init?: RequestInit, base = lab().base): Promise<T> {
+  const res = await fetch(`${base}${path}`, init);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const detail = (body as { detail?: unknown }).detail;
@@ -23,14 +26,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function useManifest() {
   return useQuery({
-    queryKey: ["research", "manifest"],
-    queryFn: () => request<{ features: FeatureSpec[] }>("/features").then((d) => d.features),
+    queryKey: [lab().id, "manifest"],
+    queryFn: () => request<unknown>("/features").then((d) => lab().manifest(d)),
     staleTime: Infinity,
   });
 }
 
 export function searchSymbols(q: string) {
-  return request<{ results: { ticker: string; sector?: string | null }[] }>(`/symbols?q=${encodeURIComponent(q)}&limit=12`).then((d) => d.results);
+  return request<{ results: { ticker: string; sector?: string | null }[] }>(`/symbols?q=${encodeURIComponent(q)}&limit=12`, undefined, DATA_BASE).then((d) => d.results);
 }
 
 export type UniverseSymbol = { ticker: string; sector: string | null; rank: number };
@@ -39,7 +42,7 @@ export type UniverseSymbol = { ticker: string; sector: string | null; rank: numb
 export function useUniverse(enabled = true) {
   return useQuery({
     queryKey: ["research", "universe"],
-    queryFn: () => request<{ symbols: UniverseSymbol[] }>("/universe").then((d) => d.symbols),
+    queryFn: () => request<{ symbols: UniverseSymbol[] }>("/universe", undefined, DATA_BASE).then((d) => d.symbols),
     staleTime: Infinity,
     enabled,
   });
@@ -59,10 +62,10 @@ export const metricsOf = (result: FeatureResult): Record<string, number> =>
 
 /** Polls every unfinished run except the one on screen, so sweeps and background jobs complete in the dock. */
 export function useBackgroundRuns(features: FeatureSpec[] | undefined, activeJob: string | null, verdict: (f: FeatureSpec, r: FeatureResult) => { headline: string | null; tone: RunRecord["tone"] | null }) {
-  const pending = useRuns((s) => s.runs.filter((r) => (r.status === "queued" || r.status === "running") && r.jobId !== activeJob).map((r) => r.jobId).join(","));
+  const pending = useRuns((s) => s.runs.filter((r) => (r.status === "queued" || r.status === "running") && r.jobId !== activeJob && owns(r.featureId)).map((r) => r.jobId).join(","));
   const ids = pending ? pending.split(",") : [];
   const queries = useQueries({
-    queries: ids.map((id) => ({ queryKey: ["research", "job", id], queryFn: () => request<Job>(`/jobs/${id}`), refetchInterval: 1500, refetchIntervalInBackground: true, retry: 1 })),
+    queries: ids.map((id) => ({ queryKey: [lab().id, "job", id], queryFn: () => request<Job>(`/jobs/${id}`), refetchInterval: 1500, refetchIntervalInBackground: true, retry: 1 })),
   });
   const key = queries.map((q) => q.data?.status ?? "").join(",");
   useEffect(() => {
@@ -86,7 +89,7 @@ export function useBackgroundRuns(features: FeatureSpec[] | undefined, activeJob
 
 export function useJob(jobId: string | null) {
   return useQuery({
-    queryKey: ["research", "job", jobId],
+    queryKey: [lab().id, "job", jobId],
     queryFn: () => request<Job>(`/jobs/${jobId}`),
     enabled: Boolean(jobId),
     staleTime: (q) => (TERMINAL.has(q.state.data?.status ?? "") ? Infinity : 0),
@@ -99,12 +102,10 @@ export function useJob(jobId: string | null) {
 
 export function useSubmitJob(featureId: string) {
   return useMutation({
-    mutationFn: (payload: Record<string, unknown>) =>
-      request<{ job_id: string; status: Job["status"] }>(`/feature/${featureId}/jobs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payload }),
-      }),
+    mutationFn: (payload: Record<string, unknown>) => {
+      const { path, body } = lab().submit(featureId, payload);
+      return request<{ job_id: string; status: Job["status"] }>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    },
   });
 }
 
@@ -153,7 +154,7 @@ const post = <T,>(path: string, body: unknown) => request<T>(path, { method: "PO
 
 export const useOperators = () => useQuery({ queryKey: ["research", "ops"], queryFn: () => getList<Operator>("/signals/operators"), staleTime: Infinity, retry: false });
 export const useFields = () => useQuery({ queryKey: ["research", "fields"], queryFn: () => getList<Field>("/signals/fields"), staleTime: Infinity, retry: false });
-export const useLibrary = () => useQuery({ queryKey: ["research", "library"], queryFn: () => getList<LibrarySignal>("/signals/library"), staleTime: Infinity, retry: false });
+export const useLibrary = (enabled = true) => useQuery({ queryKey: ["research", "library"], queryFn: () => getList<LibrarySignal>("/signals/library"), staleTime: Infinity, retry: false, enabled });
 export const validateExpr = (expr: string) => post<Validation>("/signals/validate", { expr });
 export const combineExprs = (exprs: string[], method: string) => post<{ expr: string }>("/signals/combine", { exprs, method });
 export const saveSignal = (name: string, expr: string, project_id?: string) => post<{ id: string; version: number }>("/signals/saved", { name, expr, project_id });
@@ -172,14 +173,14 @@ export const preregister = (body: { project_id: string; hypothesis: string; expe
 export const shareJob = (job_id: string) => post<{ token: string }>("/share", { job_id });
 
 export type Universe = { id: string; label: string; region: string; asset_type: string; count: number };
-export const useUniverses = () => useQuery({ queryKey: ["research", "universes"], queryFn: () => getList<Universe>("/universes"), staleTime: 300_000, retry: false });
+export const useUniverses = () => useQuery({ queryKey: ["research", "universes"], queryFn: () => request<unknown>("/universes", undefined, DATA_BASE).then((d) => (Array.isArray(d) ? d : Object.values((d ?? {}) as Record<string, unknown>).find(Array.isArray) ?? []) as Universe[]), staleTime: 300_000, retry: false });
 
 export type Grade = { dimension: string; grade: string; score: number; summary: string; metric?: { label: string; value: number | string } };
 export type ReportCard = { grades: Grade[]; overall: { grade: string; score: number; verdict: string }; checklist: { id: string; question: string; pass: boolean | null; detail: string }[]; protocol: { name: string; steps: { id: string; label: string; pass: boolean | null; detail: string }[] }; explain: string[] };
 export const submitReportCard = (payload: Record<string, unknown>) => post<{ job_id: string; status: Job["status"] }>("/report-card/jobs", { payload });
 export const submitBatch = (signals: string[], payload: Record<string, unknown>) => post<{ job_id: string; status: Job["status"] }>("/batch/jobs", { signals, payload });
 export const submitValidation = (payload: Record<string, unknown>, method: string, folds: number, embargo_days: number) => post<{ job_id: string; status: Job["status"] }>("/validation/jobs", { payload, method, folds, embargo_days });
-export const reportUrl = (jobId: string, ext: "tex" | "pdf") => `${BASE}/report/${jobId}.${ext}`;
+export const reportUrl = (jobId: string, ext: "tex" | "pdf") => `${lab().base}/report/${jobId}.${ext}`;
 
 /** The signal every study uses when set: a formula from the Signal page, applied as `signal_expr`. */
 type ActiveSignal = { expr: string | null; name: string | null; projectId: string | null; set: (p: Partial<Omit<ActiveSignal, "set">>) => void };
