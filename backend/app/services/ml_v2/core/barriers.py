@@ -20,19 +20,22 @@ def run_triple_barrier(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     barrier_side = str(ctx.payload.get("barrier_side") or "bilateral").lower()
     if pt <= 0 or sl <= 0 or horizon < 1 or barrier_side != "bilateral":
         raise ValueError("Require positive PT/SL, a positive horizon and bilateral barriers")
+    if barrier_mode not in {"fixed", "vol_scaled"}:
+        raise ValueError(f"Unsupported barrier_mode: {barrier_mode}")
+    if barrier_mode == "vol_scaled" and min(pt, sl) < 0.25:
+        raise ValueError("vol_scaled barriers are multiples of horizon volatility (for example 2.0 and 1.5), not return fractions")
     rows = []
     for ticker in ctx.returns.columns:
         rows.extend(high_low_triple_barrier_rows(ctx, ticker, horizon, pt, sl,
-                    max_events=600, barrier_mode=barrier_mode, barrier_side=barrier_side))
+                    max_events=600, barrier_mode=barrier_mode))
     labels = pd.DataFrame(rows)
     if labels.empty:
         raise ValueError("No complete OHLC event windows for triple-barrier labeling")
     labels = labels.sort_values(["date", "ticker"]).reset_index(drop=True)
     dist = labels.groupby("label").size().reset_index(name="count")
     # Primary side is observable at event formation, never the future barrier label.
-    sides = ctx.returns.rolling(21).sum()
-    labels["primary_side"] = [np.sign(sides[t].reindex([pd.Timestamp(d)]).iloc[0])
-                              for d, t in zip(labels["date"], labels["ticker"])]
+    sides = ctx.returns.rolling(21).sum().stack()
+    labels["primary_side"] = np.sign(sides.reindex(pd.MultiIndex.from_arrays([pd.to_datetime(labels["date"]), labels["ticker"]])).to_numpy())
     features = labels[["vol_21", "primary_side"]].astype(float)
     target = (labels["primary_side"] * labels["forward_return"] > 0).astype(int)
     probabilities = np.full(len(labels), np.nan)
@@ -55,9 +58,13 @@ def run_triple_barrier(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     labels, cqr_meta = _lightgbm_cqr_intervals(labels, confidence=confidence, horizon=horizon, annualization=ctx.annualization)
     coverage = cqr_meta.get("test_empirical_coverage")
     coverage_by_date = _rolling_coverage_audit(labels, confidence)
+    # Compare like with like: the volatility-scaled barrier is set to the same median width as the fixed one.
+    horizon_vol = float(np.nanmedian(labels["vol_21"].astype(float))) / math.sqrt(ctx.annualization) * math.sqrt(horizon)
+    settings = {"fixed": (pt, sl) if barrier_mode == "fixed" else (pt * horizon_vol, sl * horizon_vol),
+                "vol_scaled": (pt, sl) if barrier_mode == "vol_scaled" else (pt / horizon_vol, sl / horizon_vol)}
     label_comparison = []
-    for mode in ["fixed", "vol_scaled"]:
-        events = [event for ticker in ctx.symbols for event in high_low_triple_barrier_rows(ctx,ticker,horizon,pt,sl,max_events=600,barrier_mode=mode)]
+    for mode, (mode_pt, mode_sl) in settings.items():
+        events = [event for ticker in ctx.symbols for event in high_low_triple_barrier_rows(ctx, ticker, horizon, mode_pt, mode_sl, max_events=600, barrier_mode=mode)]
         identified = [event["label"] for event in events if event["label"] is not None]
         label_comparison.append({"method":mode,"events":len(events),"ambiguous":len(events)-len(identified),
             **{name:float(np.mean(np.asarray(identified)==value)) if identified else None for name,value in [("positive_rate",1),("negative_rate",-1),("neutral_rate",0)]}})
@@ -81,78 +88,53 @@ def run_triple_barrier(payload: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 
-def high_low_triple_barrier_rows(ctx: MLContext, ticker: str, horizon: int, pt: float, sl: float, max_events: int = 120, barrier_mode: str = "fixed", barrier_side: str = "bilateral") -> list[dict[str, Any]]:
-    if ctx.ohlcv.empty or "Ticker" not in ctx.ohlcv.columns:
+def high_low_triple_barrier_rows(ctx: MLContext, ticker: str, horizon: int, pt: float, sl: float, max_events: int = 120, barrier_mode: str = "fixed") -> list[dict[str, Any]]:
+    """Bilateral high/low-path barriers. Fixed mode: pt/sl are return fractions; vol_scaled: multiples of horizon volatility."""
+    if barrier_mode not in {"fixed", "vol_scaled"}:
+        raise ValueError(f"Unsupported barrier_mode: {barrier_mode}")
+    df = ctx.ohlcv[ctx.ohlcv["Ticker"] == ticker].sort_values("Date").tail(max_events + horizon + 5)
+    n = len(df)
+    if n <= horizon:
         return []
-    df = ctx.ohlcv[ctx.ohlcv["Ticker"] == ticker].copy()
-    if df.empty:
+    dates = pd.DatetimeIndex(df["Date"])
+    high, low, close = (df[c].to_numpy(dtype=float) for c in ("High", "Low", "Close"))
+    daily_vol = (ctx.returns[ticker].rolling(21).std().reindex(dates).to_numpy(dtype=float) if ticker in ctx.returns else np.full(n, np.nan))
+    first = max(0, n - max_events - horizon)
+    i = np.arange(first, n - horizon)
+    if not len(i):
         return []
-    cols = {c.lower(): c for c in df.columns}
-    required = ["date", "high", "low", "close"]
-    if any(c not in cols for c in required):
-        return []
-    df = df.sort_values(cols["date"]).tail(max_events + horizon + 5)
-    dates = pd.to_datetime(df[cols["date"]]).reset_index(drop=True)
-    high = pd.to_numeric(df[cols["high"]], errors="coerce").to_numpy(dtype=float)
-    low = pd.to_numeric(df[cols["low"]], errors="coerce").to_numpy(dtype=float)
-    close = pd.to_numeric(df[cols["close"]], errors="coerce").to_numpy(dtype=float)
-    vol_series = pd.Series(dtype=float)
-    if ticker in ctx.returns:
-        vol_series = (ctx.returns[ticker].rolling(21).std() * math.sqrt(ctx.annualization)).dropna()
-    rows: list[dict[str, Any]] = []
-    start = max(0, len(df) - max_events - horizon)
-    for i in range(start, max(0, len(df) - horizon)):
-        entry = close[i]
-        if not math.isfinite(entry) or entry <= 0:
-            continue
-        if not np.isfinite(high[i+1:i+horizon+1]).all() or not np.isfinite(low[i+1:i+horizon+1]).all() or not np.isfinite(close[i+1:i+horizon+1]).all():
-            continue
-        event_daily_vol = 0.0
-        if not vol_series.empty:
-            try:
-                event_daily_vol = float(vol_series.reindex([dates.iloc[i]]).iloc[0]) / math.sqrt(ctx.annualization)
-            except Exception:
-                event_daily_vol = 0.0
-        if barrier_mode == "vol_scaled" and (not math.isfinite(event_daily_vol) or event_daily_vol <= 0):
-            continue
-        pt_i = max(1e-4, pt * event_daily_vol * math.sqrt(horizon)) if barrier_mode in {"ewma", "vol_scaled", "dynamic"} else pt
-        sl_i = max(1e-4, sl * event_daily_vol * math.sqrt(horizon)) if barrier_mode in {"ewma", "vol_scaled", "dynamic"} else sl
-        upper = entry * (1 + pt_i) if barrier_side != "short_only" else math.inf
-        lower = entry * (1 - sl_i) if barrier_side != "long_only" else -math.inf
-        label = 0
-        touch_date = dates.iloc[min(i + horizon, len(dates) - 1)]
-        touch_type = "vertical"
-        for j in range(i + 1, min(i + horizon + 1, len(df))):
-            hit_up = math.isfinite(high[j]) and high[j] >= upper
-            hit_down = math.isfinite(low[j]) and low[j] <= lower
-            if hit_up or hit_down:
-                if hit_up and hit_down:
-                    label = None
-                    touch_type = "ambiguous_same_bar_order"
-                else:
-                    label = 1 if hit_up else -1
-                    touch_type = "profit_taking" if hit_up else "stop_loss"
-                touch_date = dates.iloc[j]
-                break
-        exit_idx = int(np.flatnonzero(dates.to_numpy() == touch_date.to_datetime64())[0])
-        if label is None:
-            fwd = np.nan
-        elif label == 1:
-            fwd = upper / entry - 1
-        elif label == -1:
-            fwd = lower / entry - 1
-        else:
-            fwd = close[exit_idx] / entry - 1 if math.isfinite(close[exit_idx]) else np.nan
-        event_vol = None
-        if not vol_series.empty:
-            try:
-                aligned_vol = vol_series.reindex([dates.iloc[i]]).iloc[0]
-                event_vol = float(aligned_vol) if math.isfinite(float(aligned_vol)) else None
-            except Exception:
-                event_vol = None
-        rows.append({"date": date_str(dates.iloc[i]), "ticker": ticker, "forward_return": float(fwd), "label": int(label) if label is not None else None, "vol_21": event_vol, "touch_date": date_str(touch_date), "touch_type": touch_type, "upper_barrier": upper, "lower_barrier": lower, "barrier_method": "high_low_path"})
+    path = np.arange(1, horizon + 1)
+    H, L, C = (a[i[:, None] + path] for a in (high, low, close))
+    entry = close[i]
+    ok = np.isfinite(entry) & (entry > 0) & np.isfinite(H).all(1) & np.isfinite(L).all(1) & np.isfinite(C).all(1)
+    vol = daily_vol[i]
+    if barrier_mode == "vol_scaled":
+        ok &= np.isfinite(vol) & (vol > 0)
+        pt_i = np.maximum(1e-4, pt * vol * math.sqrt(horizon))
+        sl_i = np.maximum(1e-4, sl * vol * math.sqrt(horizon))
+    else:
+        pt_i = np.full(len(i), pt)
+        sl_i = np.full(len(i), sl)
+    upper, lower = entry * (1 + pt_i), entry * (1 - sl_i)
+    up, down = H >= upper[:, None], L <= lower[:, None]
+    touched = up | down
+    hit = touched.any(1)
+    step = np.where(hit, touched.argmax(1), horizon - 1)  # first barrier bar, else the vertical bar
+    row = np.arange(len(i))
+    both = up[row, step] & down[row, step] & hit
+    label = np.where(hit, np.where(up[row, step], 1, -1), 0)
+    forward = np.where(label == 1, upper / entry - 1, np.where(label == -1, lower / entry - 1, C[row, step] / entry - 1))
+    forward = np.where(both, np.nan, forward)
+    rows = []
+    for k in np.flatnonzero(ok):
+        touch = dates[i[k] + 1 + step[k]]
+        kind = "ambiguous_same_bar_order" if both[k] else "profit_taking" if label[k] == 1 else "stop_loss" if label[k] == -1 else "vertical"
+        rows.append({"date": date_str(dates[i[k]]), "ticker": ticker, "forward_return": float(forward[k]),
+                     "label": None if both[k] else int(label[k]),
+                     "vol_21": float(vol[k] * math.sqrt(ctx.annualization)) if np.isfinite(vol[k]) else None,
+                     "touch_date": date_str(touch), "touch_type": kind, "upper_barrier": float(upper[k]),
+                     "lower_barrier": float(lower[k]), "barrier_method": "high_low_path"})
     return clean_json(rows[-max_events:])
-
 
 
 def barrier_sensitivity_rows(ctx: MLContext, horizon: int) -> list[dict[str, Any]]:
