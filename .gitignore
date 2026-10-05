@@ -300,3 +300,6 @@ frontend/bun.lock
 
 # Expansion lists
 expansion_lists.json
+
+# Strategies saved by Studio test runs
+backend/app/studio_v2/storage/strategies/
