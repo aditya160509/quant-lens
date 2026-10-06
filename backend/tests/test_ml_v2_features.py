@@ -108,3 +108,40 @@ def test_stress_probability_is_causal_and_regime_artifact_hands_off(local_market
     handed = run_feature("03", {"symbols": local_market, "max_symbols": 8, "lookback_days": 380, "asset": "T0", "forecast_horizons": [1],
                                 "regime_artifact_id": regimes["meta"]["artifact_id"]})
     assert handed["meta"]["regime_source"] == "supplied regime_artifact_id"
+
+
+def test_allocation_controls_bands_trade_list_and_alpha_views(local_market):
+    from app.services.ml_v2.registry import run_feature
+    base = {"symbols": local_market, "max_symbols": 8, "lookback_days": 380}
+    alpha = run_feature("02", {**base, "model_family": "ridge", "prediction_horizon": 5})
+    result = run_feature("05", {**base, "bootstrap_samples": 8, "alpha_artifact_id": alpha["meta"]["artifact_id"],
+                                "holdings": {"T0": 100, "T1": 50, "T2": 10}, "holdings_unit": "shares"})
+    strategies = {r["strategy"] for r in result["tables"]["controls_summary"]}
+    assert strategies == {"min_variance", "turnover_aware", "standard_hrp", "inverse_variance", "equal_weight"}
+    assert result["meta"]["variant"] == "min_variance" and result["meta"]["estimator"] == "ledoit_wolf"
+    bands = result["tables"]["weight_stability"]
+    assert bands and all(r["p05"] <= r["p95"] + 1e-12 for r in bands)
+    trades = result["tables"]["trade_list"]
+    assert sum(t["trade_weight"] for t in trades) == pytest.approx(0, abs=1e-9)
+    summary = result["tables"]["rebalance_summary"][0]
+    assert summary["turnover"] == pytest.approx(sum(abs(t["trade_weight"]) for t in trades))
+    assert summary["volatility_before"] > 0 and isinstance(summary["trade_recommended"], bool)
+    assert result["meta"]["alpha_views"]["artifact_id"] == alpha["meta"]["artifact_id"]
+
+
+def test_allocation_relaxes_bounds_that_cannot_sum_to_one():
+    from app.services.ml_v2.core.allocation import relax_infeasible_bounds
+    request, notes = relax_infeasible_bounds({"max_weight": .25, "max_sector_weight": .4}, ["A", "B", "C", "D", "E"],
+                                             {"A": "X", "B": "X", "C": "X", "D": "Y", "E": "Z"})
+    assert request["max_weight"] * 5 >= 1 and request["max_sector_weight"] > .4 and len(notes) == 2
+    unchanged, none = relax_infeasible_bounds({"max_weight": .5, "max_sector_weight": .6}, ["A", "B", "C"], {"A": "X", "B": "Y", "C": "Z"})
+    assert unchanged["max_weight"] == .5 and none == []
+
+
+def test_allocation_rebalances_only_when_gain_exceeds_cost():
+    from app.services.ml_v2.core.allocation import rebalance_gain
+    cov = pd.DataFrame(np.diag([.04, .01]) / 252, index=["A", "B"], columns=["A", "B"])
+    current, target = pd.Series({"A": .5, "B": .5}), pd.Series({"A": .3, "B": .7})
+    gain, turnover, cost = rebalance_gain(current, target, cov, 252., 2.5, cost_bps=5)
+    assert gain > cost and turnover == pytest.approx(.4)
+    assert rebalance_gain(current, target, cov, 252., 2.5, cost_bps=1000)[0] < rebalance_gain(current, target, cov, 252., 2.5, cost_bps=1000)[2]
