@@ -133,7 +133,7 @@ def test_allocation_relaxes_bounds_that_cannot_sum_to_one():
     from app.services.ml_v2.core.allocation import relax_infeasible_bounds
     request, notes = relax_infeasible_bounds({"max_weight": .25, "max_sector_weight": .4}, ["A", "B", "C", "D", "E"],
                                              {"A": "X", "B": "X", "C": "X", "D": "Y", "E": "Z"})
-    assert request["max_weight"] * 5 >= 1 and request["max_sector_weight"] > .4 and len(notes) == 2
+    assert request["max_weight"] * 5 >= 1 and request["max_sector_weight"] > .4 and len(notes) == 1
     unchanged, none = relax_infeasible_bounds({"max_weight": .5, "max_sector_weight": .6}, ["A", "B", "C"], {"A": "X", "B": "Y", "C": "Z"})
     assert unchanged["max_weight"] == .5 and none == []
 

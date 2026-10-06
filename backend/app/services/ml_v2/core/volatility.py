@@ -7,7 +7,6 @@ import pandas as pd
 from sklearn.ensemble import GradientBoostingRegressor
 from scipy.stats import chi2, t as student_t
 from sklearn.linear_model import ElasticNet, LinearRegression, Ridge
-from sklearn.metrics import mean_absolute_error
 from .common import build_provenance, date_str, get_artifact, put_artifact, response, summary
 from .estimators import garman_klass_vol, yang_zhang_vol
 from .data_loader import normalize_symbol, universe_label
@@ -438,7 +437,7 @@ def run_vol_forecasting(payload: dict[str, Any] | None = None) -> dict[str, Any]
               "dm_test": "Diebold-Mariano on QLIKE losses, Bartlett variance with lag h-1 and the HLN correction; positive statistic favours Regime-switch",
               "intervals": "90_percent_absolute_residual_calibration_before_holdout; dependent data coverage not guaranteed",
               "var_es": "filtered historical simulation: standardised h-day returns from training rows, scaled by the Regime-switch forecast; Kupiec test on 1-day out-of-sample breaches",
-              "position_size": f"min(max_size, target_volatility / forecast volatility), shown beside unmanaged (size 1); real-time vol-managed portfolios often underperform unmanaged (Cederburg et al., 2020)",
+              "position_size": "min(max_size, target_volatility / forecast volatility), shown beside unmanaged (size 1); real-time vol-managed portfolios often underperform unmanaged (Cederburg et al., 2020)",
               "notes": tournament_note, "arch_family_status": status, "unavailable_models": unavailable,
               "news_impact": "GARCH/GJR/EGARCH/APARCH only; FIGARCH curve unavailable", "macro": "excluded without verified release vintages",
               "unsupported_removed": ["GINN", "jump_decomposition", "smoothed_vol_regimes", "spillover_causality"]})

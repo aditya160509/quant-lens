@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression, Ridge
-from .common import build_provenance, clean_json, compact_records, put_artifact, report_progress, response, summary
+from .common import build_provenance, compact_records, put_artifact, report_progress, response, summary
 from .composite import daily_ic_table
 from .data_loader import point_in_time_fundamentals, universe_label
 from .estimators import rolling_monthly_ic
@@ -409,7 +409,6 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         test_scores["ensemble"] = sum(weights[n] * scale[n] * test_scores[n] for n in names)
 
     report_progress(60, "Scoring controls")
-    centre = xv[train].mean(axis=0)
     ols_cols = [next((c for c in options if c in columns), None) for options in (("mom_12_1", "mom_63"), ("size_proxy",), ("book_to_market", "vol_63"))]
     ols_cols = [c for c in ols_cols if c]
     ols = LinearRegression().fit(x_all[ols_cols].to_numpy(float)[train], yv[train])
@@ -465,7 +464,6 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     order = current.sort_values("rank").index.to_numpy()
     cap = max(1, min(int(request.get("exact_shap_cap", 64)), len(current)))
     sample = order[np.unique(np.round(np.linspace(0, len(order) - 1, cap)).astype(int))]
-    raw_latest = live_all.loc[latest_mask, columns].reset_index(drop=True)
     importance = np.abs(contrib).mean(axis=0)
     shap_importance = [{"feature": c, "family": FEATURE_FAMILY.get(c, "custom"), "mean_abs_shap": float(importance[j])} for j, c in enumerate(columns)]
     shap_importance.sort(key=lambda r: -r["mean_abs_shap"])

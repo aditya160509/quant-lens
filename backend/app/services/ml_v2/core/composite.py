@@ -3,7 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from sklearn.covariance import LedoitWolf
-from .common import response, summary, matrix_records
+from .common import build_provenance, response, summary, matrix_records
+from .data_loader import universe_label
 from .panel import load_context, make_feature_panel, numeric_xy
 from .performance import fast_spearman_ic
 from .portfolio import execute_portfolio
@@ -118,7 +119,10 @@ def run_composite_optimizer(payload=None):
     backtest = execute_portfolio(ctx.returns, targets, float(request.get("cost_bps", 5)))
     latest_date = score_rows[-1]["date"]
     latest = [row for row in score_rows if row["date"] == latest_date]
-    return response("08", [summary("Training refits", len(history)), summary("Latest signals", len(latest))],
+    provenance = build_provenance(ctx.closes, calendar=ctx.calendar, train_window=(history[0]["training_start"], history[-1]["training_end"]),
+                                  test_window=(history[0]["date"], latest_date), purge=horizon, embargo=embargo,
+                                  universe=universe_label(ctx.payload, ctx.symbols), extra={"refits": len(history), "window": window})
+    return response("08", [summary("Training refits", len(history)), summary("Latest signals", len(latest))], provenance=provenance,
         charts={"ic_weighted_composite_weights": [row for row in weights_rows if row["date"]==weights_rows[-1]["date"]],
                 "walk_forward_weight_stability": weights_rows, "composite_signal_distribution": latest,
                 "long_short_backtest": backtest, "factor_correlation_heatmap": matrix_records(normalized.corr())},
