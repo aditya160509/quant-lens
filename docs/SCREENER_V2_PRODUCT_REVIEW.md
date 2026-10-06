@@ -27,6 +27,7 @@ Date: 2026-10-06. This follows the method of `docs/ML_V2_PRODUCT_REVIEW.md`. It 
 11. UI and experience
 12. Pricing, data licence and build order
 13. Sources
+14. What to add: the full [B] / [F] / [B+F] build list (parity, differentiators, UX, data-swap readiness)
 
 ---
 
@@ -433,3 +434,197 @@ Pro undercuts Koyfin Plus and Finviz Elite while offering ranking and proof they
 - `docs/evidence/frontend-review/screener-v2/review.md`
 - `docs/reviews/SELL_10_SCREENER_FACTORS_RESEARCH.md`
 - Local data audit: 4,158 price tickers 1996–2026; 3,833 fundamentals tickers 2021–2025.
+
+---
+
+## 14. What to add: the full build list
+
+**Tags:** `[B]` backend · `[F]` frontend · `[B+F]` both. Status: `[ ]` open.
+
+**Two rules for this list:**
+1. **Parity first.** We do everything the leaders do (Finviz, TradingView, Koyfin, Stock Rover, Portfolio123, Screener.in), because users judge us against them before they see what's different.
+2. **Then the things nobody does.**
+
+**Reuse rule:** everything is built from the ML V2 material, as ML reused Research V2:
+- the LabConfig workspace (`ResearchApp`, Study/Inspect panels, runs, compare, report)
+- chart kit v2, DataTable v2, Exhibit, KpiStrip, RankList, Treemap, Waterfall
+- the uploads module, universe presets, Validate engine, verified pages, takeaway generators and hand-offs
+- the ⌘K palette, tabs, lenses ("View as") and the e2e screenshot harness
+
+New code is only screener-specific.
+
+**Data-swap rule:** all data access goes through one provider interface (§14.10), so real licensed, point-in-time and delisted data drops in later with no feature code changes. Until then the current local files are used. Their caveats show as banners, but nothing is held back.
+
+### 14.1 Universe and data controls (parity)
+1. `[B+F]` Universe presets:
+   - all, large / mid / small / micro by cap
+   - each sector and industry group, ETFs only, high volatility, dividend payers
+   - "same as last run", my watchlists, uploaded CSV, pasted tickers
+2. `[B+F]` Market-cap buckets with live counts in the slider (Nano → Mega); continuous range.
+3. `[B+F]` Exchange, country and currency filters; ADR toggle; price and $1 floor; dollar-volume floors ($100K → $10M).
+4. `[B+F]` "As of" date picker: run any screen as of a past date, using point-in-time values (backend already enforces dated access).
+5. `[F]` Universe summary chip: names, sectors, median cap, coverage per data family.
+6. `[B]` Coverage per metric ("P/B known for 3,612 / 4,158"), used by chips, columns and the formula preview.
+
+### 14.2 Filters and expression bar (parity plus better)
+7. `[F]` Filter chips with operators: >, <, between, =, in, not in, top/bottom N %, top/bottom N names, sector percentile, universe percentile, crossed above/below within N days, rising/falling over N periods.
+8. `[F]` "+ Add filter" catalog: search, groups (Valuation, Quality, Growth, Health, Dividends, Momentum, Technicals, Risk, Liquidity, Composite, Custom), definition, unit, evidence badge, coverage, recently used, favourites.
+9. `[B+F]` **Live count after each filter** while typing (debounced count endpoint), plus a mini histogram of the metric with the threshold handle draggable on it (Koyfin/Stock Rover-level).
+10. `[B+F]` OR groups and nesting: (A and B) or C, as a visual group builder that round-trips to a formula.
+11. `[B+F]` Expression bar on `signal_lang`:
+    - autocomplete for fields, operators and functions
+    - signature help, inline errors with position
+    - a preview (distribution, coverage, correlation with known factors)
+12. `[B+F]` Custom metrics: name a formula, then it becomes a column, filter, sort key and Rank component everywhere (Stock Rover equations, Screener.in custom ratios).
+13. `[B+F]` Historical functions: `lag`, `change`, `ts_mean`, `ts_rank`, `ts_zscore`, `cross_above`, `rising(n)`, `highest/lowest(n)`, plus statement lags by quarter or year.
+14. `[B+F]` Cross-sectional functions: `rank`, `zscore`, `sector_rank`, `sector_zscore`, `industry_*`, `winsorize`, `neutralize(by)`.
+15. `[F]` Template gallery (S4 strategies plus community-style presets), each with citation, plain-English description, evidence and decay note, and "Use", "Fork" and "Test" buttons.
+16. `[B+F]` Plain English → screen (LLM): an editable result, never a black box; it shows the formula it wrote.
+17. `[F]` Undo/redo for filters; "reset to template"; filter enable/disable toggle without deleting it.
+
+### 14.3 Results table (parity with TradingView/Koyfin, then beyond)
+18. `[B+F]` Virtualised table for every name. Server sort, filter and page; no caps; 60 fps scroll.
+19. `[F]` Column sets (Overview, Valuation, Quality, Growth, Momentum, Technicals, Risk, Dividends, Composite, Custom). Plus:
+    - an add/remove column picker with search
+    - drag to reorder, resize, pin left
+    - save as a named column set
+20. `[F]` Per-column modes: absolute, universe percentile, sector percentile, z-score, rank, plus change since the last run.
+21. `[F]` Cell visuals:
+    - inline bars, signed colour, heat tint, percentile ticks
+    - sparklines (price 3M, metric history)
+    - Piotroski dots, Altman zone pill
+    - "unknown" shown as hatched, never blank or zero
+22. `[F]` Row actions: quick-look, why-here, add to watchlist, add to compare, alert on this name, open chart, copy ticker.
+23. `[F]` Multi-select rows: compare, add to watchlist, export selection, send to ML Allocation / Validate / Alpha.
+24. `[F]` Group by sector or industry with subtotals (count, median of each column); collapse and expand.
+25. `[F]` Density toggle, zebra on/off, keyboard navigation (arrows, Enter opens quick-look, Space selects).
+26. `[F]` Sticky summary row: median and mean of each column for the result vs the universe ("your screen is 40% cheaper on P/E than the universe").
+27. `[B+F]` "Changed since last run" column (rank Δ, new / exited badges) on saved screens.
+
+### 14.4 Lenses on the same result (View as)
+28. `[F]` Treemap: size by cap, weight or equal; colour by any column; zoom sector → industry → name; breadcrumb; Esc zooms out (like the T3 reference).
+29. `[F]` Scatter: any two metrics, sector colours, size by cap, quadrant lines at medians, lasso to filter.
+30. `[F]` Sector bars: count, median metric and percentile of the result vs the universe.
+31. `[F]` Funnel: per-filter elimination, the bottleneck highlighted, click a step to see who it removed.
+32. `[F]` Map by country (when global data arrives).
+33. `[F]` Correlation of the result's returns (cluster view, reusing the ML CorrMap).
+
+### 14.5 Quick-look and company pages (parity with Finviz/Koyfin/Stock Rover)
+34. `[B+F]` Quick-look drawer:
+    - price chart (1M → max) with event annotations (earnings, entering/exiting your screens, alerts fired)
+    - key stats strip
+    - ratios as percentile bars vs sector and own history
+    - Piotroski 9-check grid, Altman zone
+    - peers table, valuation lens (S7), and every screen and alert this name is in
+35. `[B+F]` Full company page (shared with ML/Research):
+    - financial statements (annual/quarterly), ratio history charts
+    - segment data when available
+    - factor exposures (FF5 betas), ML Alpha rank and drivers, volatility and risk-today card
+36. `[F]` Compare up to 6 names side by side: metrics table, normalised price chart, percentile radar.
+37. `[B]` Peer finder: same industry plus nearest on size, margin and growth; editable peer set.
+
+### 14.6 Rank (parity with P123 ranking systems, Seeking Alpha grades)
+38. `[B+F]` Ranking-system builder: components (any metric or formula), direction, weight, scope (universe/sector), missing-value policy, nested groups (Value 30% = P/E, EV/EBIT, FCF yield …).
+39. `[F]` Letter grades A–F per factor group per name (Seeking Alpha style), each clickable to its components.
+40. `[B+F]` Per-name decomposition waterfall (reuse the ML waterfall); "what changed in this rank since last week".
+41. `[B+F]` Rank performance: buckets (quintiles/deciles) over time, monotonicity, spread, turnover. Reuse the ML Alpha bucket view.
+42. `[B+F]` "Train an ML ranker on this": ML Alpha with the same features, then side-by-side rules vs learned, held-out.
+43. `[B+F]` Preset ranking systems labelled by formula (Quality-Value-Momentum, Defensive, Shareholder Yield, Low-vol Quality, Growth at a Reasonable Price).
+
+### 14.7 Test (parity with P123/Finviz backtests, then the honesty layer)
+44. `[B+F]` Backtest settings:
+    - rebalance (weekly/monthly/quarterly), holding count or top %, equal / cap / rank / inverse-vol weights
+    - max weight, sector caps, costs and slippage bps, cash yield, benchmark, start/end
+45. `[B+F]` Equity curve vs SPY and the equal-weight universe; drawdown; rolling 12M return and Sharpe; calendar heatmap of monthly returns.
+46. `[B+F]` Trades and holdings history: every buy and sell with dates and prices; holdings on any date; best and worst contributors.
+47. `[B+F]` Attribution: sector, factor (FF5 regression), stock-level.
+48. `[B+F]` Robustness: holding/offset plateau, rebalance-day variants, transfer to other sectors and later periods, regime split. All through ML Validate, with the autopsy and verified page.
+49. `[B]` Trial ledger: every variant run counts toward the deflated Sharpe (shared with ML/Research).
+50. `[F]` Data banner, shown until the data is swapped: point-in-time lag, survivorship, history start.
+51. `[B+F]` Live forward-tracking of a saved strategy: frozen on save, scored daily, live vs backtest chart.
+
+### 14.8 Monitor and alerts (parity with TradingView/Finviz Elite/Screener.in, then beyond)
+52. `[B+F]` Saved screens: name, description, tags, schedule (daily/weekly/intraday later), owner, created and last run, share link.
+53. `[B+F]` Alert rules:
+    - screen entry or exit
+    - rank crosses top N
+    - metric crosses a value or percentile
+    - % move, 52-week high or low, volume surge
+    - earnings date approaching
+    - composite grade change
+54. `[B]` Delivery: in-app inbox, email (Resend/SES), webhook, browser push, Telegram/Discord/Slack. Digest mode with per-rule frequency and quiet hours.
+55. `[B+F]` Alert precision scoreboard: matured hit rate and average forward return per rule vs its universe.
+56. `[B+F]` Watchlists: multiple lists, notes per name, tags, column sets, alerts on the whole list (TradingView watchlist alerts, ungated).
+57. `[B+F]` Weekly "what changed" digest: entries, exits, rank movers with reasons, alert outcomes. Email plus an in-app page.
+58. `[B+F]` Market overview board:
+    - breadth (advancers/decliners, % above 200-day)
+    - sector performance treemap, top movers in your universes, new 52-week highs and lows
+    - factor performance today/week/month (value, momentum, quality, low-vol)
+
+### 14.9 Sharing, community and growth (what makes users come back and bring others)
+59. `[B+F]` Public screen pages: a read-only live result with a "Fork" button. Shareable links, embeds and OG images (like Screener.in public screens and TradingView public scripts).
+60. `[B+F]` Verified result pages for tested screens (hash-stamped; reuse ML).
+61. `[B+F]` Screen gallery: featured, trending (forks, saves), by style; each with live stats (count, 1M performance, alert precision).
+62. `[F]` Share as image: card of the result or a test with key stats (social-ready).
+63. `[B+F]` Comments and notes on screens (private first, later team).
+64. `[B+F]` Team workspaces: shared screens, watchlists, alerts, roles.
+
+### 14.10 Platform, data and engineering
+65. `[B]` **Data provider interface** (`screener_v2/core/provider.py`): `prices()`, `fundamentals(as_of)`, `classifications(as_of)`, `membership(as_of)`, `delistings()`, `estimates()`, `fx()`. The local parquet is the first adapter; a licensed point-in-time vendor is the second. Features never read files directly.
+66. `[B]` Nightly precomputed metric panel: every metric × every name × every date, stored as Parquet and partitioned by date, so a screen is a columnar filter in under 300 ms and counts are instant.
+67. `[B]` Endpoints:
+    - `/screen` (filters/formula → page of rows, sort, columns), `/count`, `/histogram/{metric}`
+    - `/explain/{ticker}` (why-here), `/near-miss`, `/quicklook/{ticker}`, `/compare`
+    - `/rank`, `/backtest`, `/alerts`, `/watchlists`, `/gallery`, `/share`
+68. `[B]` Formula engine unified on `signal_lang`, with `core/formula.py` as a thin adapter and compiled vectorised execution over the panel.
+69. `[B]` Job queue reuse (Studio JobStore) for backtests; caching by settings hash; cancel; progress stages.
+70. `[B]` Accounts and limits per tier: saved screens, alerts, export rows, backtests per day.
+71. `[B]` API and webhooks for Quant tier (keys, rate limits, usage).
+72. `[F]` Offline-friendly URL state for every screen (filters, columns, sort, lens), so links reproduce exactly.
+
+### 14.11 UX and UI (cinema kit, applied)
+73. `[F]` Page shell from `ML_CINEMA_PLAN.md`:
+    - takeaway titles ("Your screen holds 42 names, 38% cheaper than the market on EV/EBIT")
+    - KPI strip, borderless exhibits, direct labels, synced crosshair
+74. `[F]` Onboarding:
+    - 3 starter screens (Quality value, Momentum leaders, Dividend growers) with one-click run
+    - a 4-step coach mark tour; an empty state that teaches
+75. `[F]` ⌘K: add filter by name, open saved screen, jump to ticker, run, test, share, switch column set.
+76. `[F]` Keyboard-first:
+    - `/` focuses the filter search; `f` adds a filter; `c` sets columns; `t` runs Test
+    - `[` and `]` switch lens; Enter on a row opens quick-look
+77. `[F]` Responsive: phone layout with a filter sheet, card list results, swipe to quick-look; tablet two-pane.
+78. `[F]` Light and dark themes; colour-blind-safe palettes; reduced motion; full screen-reader labels and table semantics.
+79. `[F]` Speed feel: optimistic counts, skeletons shaped like the table, instant column toggles, background prefetch of quick-look on hover.
+80. `[F]` Export: CSV, Excel, JSON, tickers list, copy as markdown table; "Export visible columns" vs "all"; PDF report of a screen or test.
+81. `[F]` Notifications centre (bell): alerts, finished backtests, digests, with deep links.
+
+### 14.12 Differentiators (nobody does these well)
+82. `[B+F]` Near-miss explorer with "relax this filter" (A++).
+83. `[B+F]` "Why is this name here" with margins and sector percentiles (A++).
+84. `[B+F]` Screen → proof in one click, with the autopsy and verified page (A++).
+85. `[B+F]` Alert precision scoreboard (A++).
+86. `[B+F]` Plain English → editable formula (A++).
+87. `[B+F]` Filter sensitivity: how the result count and test Sharpe change as each threshold moves (a plateau per filter, reusing Validate's plateau).
+88. `[B+F]` Crowding and consensus flag: how many gallery screens hold a name (popularity as a risk).
+89. `[B+F]` Factor DNA of a screen: FF5 and momentum exposures of the result vs the universe; "your value screen is really a small-cap bet".
+90. `[B+F]` Regime-aware view: how this screen did in Calm/Normal/Stress (reuse ML Market state).
+91. `[B+F]` Screen diff: compare two screens or two dates (who's in A not B, overlap %, metric deltas).
+92. `[B+F]` Strategy studio hook: a screen becomes the Signal step, then ML filter, size, allocate and validate.
+
+### 14.13 Build sequence for this list (on top of §12.3)
+
+| Wave | Items | Why first |
+|---|---|---|
+| 1 Foundation | 65–69, 72, 18–20, 7–9, 11 | Provider interface, precomputed panel and fast endpoints make everything else instant |
+| 2 Parity core | 1–6, 10, 12–14, 21–27, 28–31, 34, 73–80 | Users must find everything they expect from Finviz/Koyfin/TradingView |
+| 3 Rank and Test | 38–51 | P123 parity plus the honesty layer |
+| 4 Monitor | 52–58, 81 | The recurring habit and upgrade driver |
+| 5 Differentiators | 82–92, 16 | Reasons to switch |
+| 6 Growth | 59–64, 35–37, 70–71 | Sharing, teams and tiers |
+
+**Definition of done (`screener-v1`):**
+- every parity item is shipped
+- all A++ items are shipped
+- each page passes the cinema rubric (average 4.5 or higher)
+- swapping to the licensed data provider requires only a new adapter
