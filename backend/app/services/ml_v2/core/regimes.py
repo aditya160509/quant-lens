@@ -131,7 +131,12 @@ def run_regime_engine(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         test_window=(oos_dates[0],oos_dates[-1]),purge=0,embargo=0,universe=universe_label(ctx.payload,ctx.symbols))
     alerts = [{"level":"info","message":f"Current state {labels[-1]+1} probability exceeds configured threshold"}] if probabilities[-1].max()>=alert_threshold else []
     transition_rows = matrix_records(pd.DataFrame(transition,index=[f"state_{i+1}" for i in range(states_count)],columns=[f"state_{i+1}" for i in range(states_count)]))
-    return response("06",[summary("Current State",int(labels[-1]+1),"state"),summary("Correlation network density",density,"ratio")],
+    stay=float(1/max(1-transition[labels[-1],labels[-1]],1e-9))
+    now_stress=float(stress_series.iloc[-1])>=.5
+    sharpes={r["strategy"]:r["sharpe"] for r in exposure_rows}
+    cards=[summary("Regime","stress" if now_stress else "calm","state"),summary("Stress probability",float(stress_series.iloc[-1]),"%"),
+        summary("Expected stay",stay,"days"),summary("Filter vs constant exposure",sharpes["regime_filtered"]-sharpes["constant_exposure"],"Δ Sharpe")]
+    return response("06",cards,
         charts={"regime_probability_time_series":rows,"regime_transition_heatmap":transition_rows,
             "ensemble_vs_hmm_comparison":[{"oos_agreement":float(np.mean(classified==labels)),"observations":len(labels)}],
             "pc1_variance_monitor":pc1,"regime_conditional_asset_returns":conditional,

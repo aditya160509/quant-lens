@@ -344,7 +344,13 @@ def run_hrp_optimizer(payload=None):
     alerts.extend({"level":"warning","message":note} for note in bound_notes)
     if alpha_info and not alpha_info["used"]:
         alerts.append({"level":"warning","message":"Alpha views ignored: "+alpha_info["reason"]})
-    return response("05",[summary("Assets",len(weights)),summary("Refits",len(audit)),summary("Allocation",variant)],
+    chosen=next(r for r in summaries if r["strategy"]==variant)
+    rivals=[r for r in summaries if r["kind"]=="control" and r["sharpe"] is not None and np.isfinite(r["sharpe"])]
+    rival=max(rivals,key=lambda r:r["sharpe"]) if rivals else None
+    cards=[summary("Net Sharpe",chosen["sharpe"],"Sharpe"),summary("Volatility",chosen["annual_volatility"],"%"),
+        summary(f"Best control Sharpe ({rival['strategy'].replace('_',' ')})" if rival else "Best control Sharpe",rival["sharpe"] if rival else None,"Sharpe"),
+        summary("Rebalance cost",trade_summary[0]["total_cost"]/value,"%") if trade_summary else summary("Turnover",chosen["average_turnover"],"%")]
+    return response("05",cards,
         charts={"hrp_weight_vector":weight_rows,"cluster_dendrograms":tree_rows,
                 "quasi_diagonalized_covariance_heatmap":matrix_records(cov.loc[order,order],limit=200),
                 "risk_contribution_decomposition":[{"asset":name,"risk_contribution":float(value_)} for name,value_ in contributions.items()],
