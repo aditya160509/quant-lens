@@ -187,7 +187,7 @@ Higher is better, except Cost (lower is better). Priority = (Demand × Different
 
 ## 6. What to add
 
-Status 2026-10-06: `[x]` done, `[~]` partly done, `[ ]` open.
+Status 2026-10-06 (evening): `[x]` done, `[~]` partly done, `[ ]` open.
 
 ### A1. Validation as the product (the core, and the money)
 
@@ -213,7 +213,7 @@ Status 2026-10-06: `[x]` done, `[~]` partly done, `[ ]` open.
 4. `[x]` **[B+F] Parameter plateau map.** Sweep the one or two key settings and show a heatmap; label results as plateau (robust) or cliff (fragile).
 5. `[x]` **[B] Leakage audit badge.** Perturb data after *t* and confirm results at *t* are unchanged. Show the badge on every result.
 6. `[ ]` **[B+F] Shared trial ledger with Research,** so the deflated Sharpe and PBO count trials across both modules. *(not started)*
-7. `[~]` **[B+F] Reproducibility receipt:** data, code, settings and seed hash, with a "rerun exactly" button. *(receipt and hashes done; "rerun exactly" button not yet)*
+7. `[x]` **[B+F] Reproducibility receipt:** data, code, settings and seed hash, with a "rerun exactly" button. *(receipt, hashes, "load these exact settings" and verified pages done)*
 8. `[x]` **[B+F] Transfer test.** Apply the frozen model or rule to other assets, sectors or later periods it wasn't tuned on. (Requested directly on Reddit.)
 9. `[x]` **[B] Monte Carlo:** block-bootstrap the path or trade sequence for a drawdown and Sharpe distribution (`arch.bootstrap.MovingBlockBootstrap`).
 
@@ -223,8 +223,8 @@ Status 2026-10-06: `[x]` done, `[~]` partly done, `[ ]` open.
     - Alpha predictions → Meta-label filter, Allocation (views) and Composite (as a factor)
     - Regimes → Volatility and risk
 11. `[x]` **[B] Regime-switching volatility model choice:** HAR-RV in calm regimes, GJR-GARCH in stress, scored against the single-model baseline.
-12. `[~]` **[B+F] Sizing options (with controls):** volatility targeting, meta-label probability and Kelly fraction. Always shown against unmanaged sizing, because of the evidence in §4. *(vol targeting and meta-label sizing done; Kelly not added)*
-13. `[ ]` **[F] Strategy studio:** signal → filter → sizing → portfolio → costs, then validated with A1. *(not started)*
+12. `[x]` **[B+F] Sizing options (with controls):** volatility targeting, meta-label probability and Kelly fraction. Always shown against unmanaged sizing, because of the evidence in §4. *(vol targeting, half-Kelly and meta-label sizing, always beside unmanaged)*
+13. `[x]` **[F] Strategy studio:** signal → filter → sizing → portfolio → costs, then validated with A1. *(thin Strategy studio page at /ml/studio)*
 14. `[ ]` **[B] Pairs upgrades:** *(removed: pairs cut in §13)*
     - top-N pairs, not one
     - industry-homogeneous matching
@@ -236,7 +236,7 @@ Status 2026-10-06: `[x]` done, `[~]` partly done, `[ ]` open.
 
 15. `[ ]` **[B] Daily refresh** of the ranking, regime, vol forecasts, pair z-scores and composite scores. *(later: live)*
 16. `[ ]` **[B+F] Alerts:** regime change, a z-score crossing, vol above forecast, top-N ranking changes. Email, webhook and in-app. *(later: live)* *(later: live)*
-17. `[ ]` **[B+F] Model monitoring:** *(later: live)*
+17. `[~]` **[B+F] Model monitoring:** *(feature drift and retrain flag in Alpha done; live IC tracking needs the live layer)*
     - per-feature drift (Wasserstein distance against the training window)
     - live IC against backtest IC
     - a "retrain recommended" flag
@@ -535,5 +535,5 @@ Includes:
 2. ✅ **Correct defaults:** shrinkage allocation, Alpha at 21 days with Ridge and composite controls, vol sizing beside unmanaged, value-weight reporting.
 3. ✅ **Validate core:** uploads, controls, leakage badge, multi-seed, transfer, plateau, Monte Carlo and the **overfitting autopsy**.
 4. ✅ **Four-page restructure** of the frontend: Validate, Alpha, Volatility and risk, Allocation.
-5. **Forward tracking, drift monitor and daily refresh with alerts**, then the **"what changed" digest**.
-6. **Verified result pages**, the **thin Strategy studio**, pricing tiers and billing.
+5. **Forward tracking, drift monitor (done in Alpha) and daily refresh with alerts**, then the **"what changed" digest**.
+6. ✅ **Verified result pages** and the **thin Strategy studio** are done; pricing tiers and billing remain.

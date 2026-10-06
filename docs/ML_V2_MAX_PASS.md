@@ -1,6 +1,6 @@
 # ML V2: the max pass
 
-Date: 2026-10-05. Baseline: commit a1c6c908, where all 12 features run end to end at `/ml`. This file is the bar and the checklist for making it best in class. Status marks: [ ] open, [x] done.
+Date: 2026-10-05. Baseline: commit a1c6c908, where all 12 features run end to end at `/ml`. This file is the bar and the checklist for making it best in class. Status marks: [ ] open, [x] done. Updated 2026-10-06: verdict lines, provenance, click-to-explain, hand-offs, presets, ML wording, light theme, phone layout and payload cuts are done.
 
 ## The quality bar
 
@@ -23,7 +23,7 @@ The page as a whole must meet these:
 
 ### A. Outputs (designed views and readings)
 
-- [ ] A1. **One-line reading on every card**, built from templates with no AI. Examples: "IC positive in 4 of 7 months (mean 0.050, IR 0.31): weak but consistent." and "HAR-Ridge wins at 1 and 5 days; GBM at 21."
+- [x] A1. **One-line reading on every card**, built from templates with no AI. Examples: "IC positive in 4 of 7 months (mean 0.050, IR 0.31): weak but consistent." and "HAR-Ridge wins at 1 and 5 days; GBM at 21."
 - [ ] A2. **Designed views for every remaining auto card:**
   - F03: news-impact curves, estimator comparison
   - F04: event timeline and meta-probability by label
@@ -36,11 +36,11 @@ The page as a whole must meet these:
   - The beeswarm shows the top 12 features.
 - [ ] A4. **Axis titles and units on every chart.** Percent for returns, vol and weights. Annualised where stated.
 - [ ] A5. **Benchmarks on performance charts:** equal-weight universe and SPY buy-and-hold beside each equity curve, plus a cost-free ghost line.
-- [ ] A6. **Per-card provenance chip:** train/test dates and purge/embargo, from `training_audit` and meta.
+- [x] A6. **Per-card provenance chip:** train/test dates and purge/embargo, from `training_audit` and meta.
 
 ### B. Interaction
 
-- [ ] B1. Clicking a name in the ranking opens its SHAP waterfall. The ticker picker on the waterfall card does the same.
+- [x] B1. Clicking a name in the ranking opens its SHAP waterfall. The ticker picker on the waterfall card does the same.
 - [ ] B2. Clicking a pair in the leaderboard or network loads that pair's spread and z-band. This needs the backend to return the top N pair series.
 - [ ] B3. Hovering a regime band highlights those dates on every time series on the page, and offers "shade regimes" on any time series in ML.
 - [ ] B4. Clicking a cell in the barrier sensitivity surface reruns the study with that profit-taking/stop-loss pair.
@@ -48,19 +48,19 @@ The page as a whole must meet these:
 
 ### C. Experience
 
-- [ ] C1. **Pipeline hand-offs:**
+- [x] C1. **Pipeline hand-offs:**
   - "Use these predictions" from F02 sends them into F04 (primary side), F05 (views) and F08 (factor).
   - "Use these regimes" from F06 sends them into F03 and F07.
   - Each hand-off needs a backend artifact id.
 - [ ] C2. **ML compare:** two runs side by side, aligned on the same metrics (IC, Sharpe, drawdown, coverage), with the differences highlighted.
-- [ ] C3. **Universe presets:**
+- [x] C3. **Universe presets:**
   - US large caps (the default)
   - one per sector
   - high-volatility names
   - ETFs only
   - a custom list
   - "the same universe as the last run"
-- [ ] C4. **ML wording everywhere:** empty states, the Run button ("Train and test"), and the progress stages shown by the API.
+- [x] C4. **ML wording everywhere:** empty states, the Run button ("Train and test"), and the progress stages shown by the API.
 - [ ] C5. **Overview as a dashboard:** the latest verdict per feature, current regime, today's top 5 names, current volatility forecast and the live pair, each linking to its page.
 - [ ] C6. **First-run guide:** three steps (validate a model, read today's ranking, size with barriers), hidden after three runs.
 
@@ -72,17 +72,17 @@ The page as a whole must meet these:
   - one accent colour
   - up/down colours used only for signed values
 - [ ] D2. Equal hero heights per page, with KPI strips aligned to a 4-column grid.
-- [ ] D3. Light theme reviewed on every page. Fix the e2e light snapshots, which currently render dark.
-- [ ] D4. Phone width (360 to 760 px): cards stack, tables scroll inside the card, charts keep at least 240 px of height.
+- [x] D3. Light theme reviewed on every page. Fix the e2e light snapshots, which currently render dark.
+- [x] D4. Phone width (360 to 760 px): cards stack, tables scroll inside the card, charts keep at least 240 px of height.
 - [ ] D5. Loading skeletons shaped like each card's chart, not generic boxes.
 
 ### E. Backend support needed
 
-- [ ] E1. Top-N pair series (for B2) and per-ticker SHAP for every ranked name (for B1). F02 already returns 256 beeswarm rows, which may be enough.
-- [ ] E2. Artifact ids for predictions and regimes (for C1).
-- [ ] E3. F07 and F10 results under 1 MB: drop the duplicated chart and table payloads (RAM plan step 6).
+- [x] E1. Top-N pair series (for B2) and per-ticker SHAP for every ranked name (for B1). F02 already returns 256 beeswarm rows, which may be enough.
+- [x] E2. Artifact ids for predictions and regimes (for C1).
+- [x] E3. F07 and F10 results under 1 MB: drop the duplicated chart and table payloads (RAM plan step 6).
 - [ ] E4. F12 runs two architectures by default (MLP and PatchTST) within 30 seconds.
-- [ ] E5. Benchmark series (equal-weight and SPY) in every backtest output (for A5).
+- [x] E5. Benchmark series (equal-weight and SPY) in every backtest output (for A5).
 
 ## Order
 
