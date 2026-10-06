@@ -36,11 +36,13 @@ INPUT_CONTRACT = [
 OUTPUT_CONTRACT = [{"key":key,"location":location,"renderer":"table","status":"live"}
     for location,keys in {"charts":["regime_probability_time_series","regime_transition_heatmap","ensemble_vs_hmm_comparison",
         "pc1_variance_monitor","regime_conditional_asset_returns","correlation_network_density","parallel_gmm_regime_probabilities"],
-        "tables":["transition_matrix","current_regime_probabilities","training_audit"]}.items() for key in keys]
+        "tables":["transition_matrix","current_regime_probabilities","regime_vs_constant_exposure","training_audit"]}.items() for key in keys]
 RESEARCH_ONLY = []
 IMPLEMENTATION_NOTES = ["HMM, scaler and parallel GMM fit only the initial training dates.",
     "Out-of-sample HMM probabilities use causal forward filtering, not smoothing or Viterbi.",
-    "Correlation density is descriptive, not an Erdos-Renyi systemic-risk estimate."]
+    "Correlation density is descriptive, not an Erdos-Renyi systemic-risk estimate.",
+    "Every regime filter is shown beside a constant-exposure control with the same average exposure and beside unmanaged exposure.",
+    "meta.artifact_id identifies the stress-probability series; pass it to Volatility and risk as regime_artifact_id."]
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)

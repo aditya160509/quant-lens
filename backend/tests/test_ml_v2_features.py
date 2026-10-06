@@ -66,3 +66,45 @@ def test_alpha_formula_rejects_unsafe_and_unknown_names(local_market):
     for expr in ("__import__('os')", "close.sum()", "nonexistent_field + 1"):
         with pytest.raises(ValueError, match="Formula bad"):
             run_feature("02", {**base, "formulas": [{"name": "bad", "expr": expr}]})
+
+
+def test_volatility_regime_switch_scored_with_dm_var_es_and_unmanaged_size(local_market):
+    from app.services.ml_v2.registry import run_feature
+    result = run_feature("03", {"symbols": local_market, "max_symbols": 8, "lookback_days": 380, "asset": "T0", "forecast_horizons": [1, 5, 21]})
+    tournament = {(r["model"], r["horizon"]): r for r in result["tables"]["forecast_tournament"]}
+    assert {"HAR-RV", "EWMA", "GJR-GARCH", "Regime-switch"} <= {m for m, _ in tournament}
+    assert tournament[("Regime-switch", 1)]["dm_stat_vs_regime_switch"] is None
+    assert "dm_p_value" in tournament[("EWMA", 5)]
+    today = result["tables"]["risk_today"][0]
+    assert today["regime"] in {"calm", "stress"} and today["unmanaged_size"] == 1.0
+    assert all(today[f"range_{h}d_low"] < 0 < today[f"range_{h}d_high"] for h in (1, 5, 21))
+    levels = {(r["horizon"], r["level"]): r for r in result["tables"]["var_es"]}
+    assert levels[(1, 0.99)]["var"] > levels[(1, 0.95)]["var"] > 0 and levels[(1, 0.95)]["es"] >= levels[(1, 0.95)]["var"]
+    assert {r["strategy"] for r in result["tables"]["position_sizing"]} == {"unmanaged", "vol_targeted"}
+    assert result["provenance"]["purge"] == 21
+
+
+def test_volatility_watchlist_is_capped_and_scores_each_ticker(local_market):
+    from app.services.ml_v2.registry import run_feature
+    result = run_feature("03", {"watchlist": local_market[:3], "lookback_days": 380})
+    assert {r["asset"] for r in result["tables"]["risk_today"]} == set(local_market[:3])
+    with pytest.raises(ValueError, match="at most 50"):
+        run_feature("03", {"watchlist": [f"T{i}" for i in range(51)]})
+
+
+def test_stress_probability_is_causal_and_regime_artifact_hands_off(local_market):
+    from app.services.ml_v2.core.regimes import filtered_stress_probability
+    rng = np.random.default_rng(5)
+    calm, wild = rng.normal(0, .005, 200), rng.normal(0, .03, 100)
+    returns = pd.Series(np.concatenate([calm, wild, calm]), index=pd.bdate_range("2022-01-03", periods=500))
+    base = filtered_stress_probability(returns, 300)
+    altered = returns.copy(); altered.iloc[400:] = 0.5
+    changed = filtered_stress_probability(altered, 300)
+    pd.testing.assert_series_equal(base.iloc[:400], changed.iloc[:400])
+    assert base.iloc[220:290].mean() > base.iloc[:150].mean()
+    from app.services.ml_v2.registry import run_feature
+    regimes = run_feature("06", {"symbols": local_market, "max_symbols": 8, "lookback_days": 380})
+    assert regimes["tables"]["regime_vs_constant_exposure"][0]["strategy"] == "regime_filtered"
+    handed = run_feature("03", {"symbols": local_market, "max_symbols": 8, "lookback_days": 380, "asset": "T0", "forecast_horizons": [1],
+                                "regime_artifact_id": regimes["meta"]["artifact_id"]})
+    assert handed["meta"]["regime_source"] == "supplied regime_artifact_id"
