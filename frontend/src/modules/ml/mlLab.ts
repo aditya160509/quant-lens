@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { API_BASE_URL } from "@/lib/apiBase";
 import type { LabConfig, FeatureMeta, Page } from "@/modules/research/lab";
 import type { FeatureLayout, Item, Section } from "@/modules/research/layouts";
-import { group, registerViews } from "@/modules/research/outputs/registry";
+import { group, registerAlternates, registerViews } from "@/modules/research/outputs/registry";
 import { isNum, out } from "@/modules/research/format";
 import type { FeatureSpec, InputSpec, OutputSpec } from "@/modules/research/types";
 
@@ -277,7 +277,7 @@ const PV = group(() => import("./pageViews") as Promise<Record<string, unknown>>
 registerViews({
   mlProvenance: PV.MlProvenance, mlNext: PV.MlNext, alphaControls: PV.AlphaControls, alphaDeciles: PV.AlphaDeciles, alphaNetCurve: PV.AlphaNetCurve, alphaWhatChanged: PV.AlphaWhatChanged,
   alphaFamilies: PV.AlphaFamilies, alphaDrift: PV.AlphaDrift, alphaEnsemble: PV.AlphaEnsemble, riskToday: PV.RiskToday, riskVarEs: PV.RiskVarEs, strategyCompare: PV.StrategyCompare, riskStress: PV.RiskStress,
-  allocStability: PV.AllocStability, allocTrades: PV.AllocTrades, allocRebalances: PV.AllocRebalances, barrierTimeline: PV.BarrierTimeline, barrierMethods: PV.BarrierMethods, metaProbability: PV.MetaProbability, equityCompare: PV.EquityCompare,
+  allocStability: PV.AllocStability, allocTrades: PV.AllocTrades, allocRebalances: PV.AllocRebalances, alphaSectors: PV.AlphaSectors, allocSectors: PV.AllocSectors, shapImportance: PV.ShapImportance, regimeSpells: PV.RegimeSpells, barrierTimeline: PV.BarrierTimeline, barrierMethods: PV.BarrierMethods, metaProbability: PV.MetaProbability, equityCompare: PV.EquityCompare,
 }, ["barrierTimeline", "metaProbability", "equityCompare", "alphaControls", "alphaDeciles", "alphaNetCurve", "alphaEnsemble", "strategyCompare", "riskStress"]);
 registerViews({
   valVerdict: VV.ValVerdict, valAutopsy: VV.ValAutopsy, valCostCurve: VV.ValCostCurve, valControls: VV.ValControls, valShuffle: VV.ValShuffle, valCpcv: VV.ValCpcv, valMonteCarlo: VV.ValMonteCarlo,
@@ -294,6 +294,15 @@ registerViews({
 }, ["mlAuto", "mlEquity", "mlPathFan", "mlBeeswarm", "mlWaterfall", "mlIcBars", "mlLeaderboard", "mlVolPanel", "mlVolScatter", "mlTermStructure", "mlTournament", "mlBarrierScatter",
   "mlBarrierSurface", "mlLabelMix", "mlCoverage", "mlWeights", "mlRiskContrib", "mlDendrogram", "mlBlShift", "mlRegimes", "mlTransition", "mlRegimeReturns", "mlStacked",
   "mlSharpeSpread"]);
+
+registerAlternates({
+  mlRankTable: [{ label: "By sector", view: "alphaSectors" }],
+  allocStability: [{ label: "By sector", view: "allocSectors" }],
+  mlBeeswarm: [{ label: "Importance ranking", view: "shapImportance" }, { label: "By feature family", view: "alphaFamilies" }],
+  mlVolPanel: [{ label: "Calibration (forecast vs realised)", view: "mlVolScatter" }],
+  mlVolScatter: [{ label: "Through time", view: "mlVolPanel" }],
+  mlRegimes: [{ label: "Spell history", view: "regimeSpells" }],
+});
 
 const StudioPage = dynamic(() => import("./StudioPage").then((m) => m.StudioPage));
 const VerifiedPage = dynamic(() => import("./VerifiedPage").then((m) => m.VerifiedPage));

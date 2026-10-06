@@ -7,11 +7,19 @@ import { useLayout } from "@/workspace/layout";
 import { MenuItem, PopMenu, Tooltip, type MenuAt } from "@/workspace/ui";
 import { label, out } from "./format";
 import type { Item } from "./layouts";
-import { CHART_VIEWS, viewFor } from "./outputs/registry";
+import { ALT_VIEWS, CHART_VIEWS, viewFor } from "./outputs/registry";
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { Explore, ExploreControls, VIEW_LABEL, defaults, overlay, useExplore, viewsFor, type ViewKind } from "./outputs/explore";
 import { useJob, useRuns } from "./api";
 import { cardId, usePins } from "./cardPrefs";
 import type { FeatureResult, FeatureSpec } from "./types";
+
+/** Which designed lens a reader picked for a card, remembered on this device. */
+const useLens = create<{ lens: Record<string, string>; set: (id: string, view: string | null) => void }>()(
+  persist((set) => ({ lens: {}, set: (id, view) => set((s) => { const lens = { ...s.lens }; if (view) lens[id] = view; else delete lens[id]; return { lens }; }) }),
+    { name: "lab-card-lens", storage: createJSONStorage(() => localStorage), version: 1 }),
+);
 
 export function OutputCard({ item, feature, result, maximized, onToggleMax, onHide, onMove, onSpan, scope }: {
   item: Item;
@@ -27,7 +35,12 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const body = useRef<HTMLDivElement>(null);
   const key = item.keys[0];
   const spec = feature.outputs.find((o) => o.key === key);
-  const viewName = item.view ?? spec?.render ?? "dataTable";
+  const designed = item.view ?? spec?.render ?? "dataTable";
+  const lensId = `${feature.id}:${key}:${designed}`;
+  const alts = ALT_VIEWS[designed] ?? [];
+  const lens = useLens((st) => st.lens[lensId]);
+  const setLens = useLens((st) => st.set);
+  const viewName = lens && alts.some((a) => a.view === lens) ? lens : designed;
   const rows = out(result, key);
   const isChart = CHART_VIEWS.has(viewName);
   const cfgId = `${feature.id}:${key}:${item.view ?? ""}`;
@@ -75,7 +88,7 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
           {hint ? <span className="sub">{hint}</span> : null}
         </div>
         <div className="tools">
-          {kinds.length > 1 && viewName !== "latex" ? (
+          {(kinds.length > 1 || alts.length > 0) && viewName !== "latex" ? (
             <button className="btn sm ghost view-as" aria-haspopup="menu" aria-label="View as" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setViewMenu({ x: r.right - 200, y: r.bottom + 4 }); }}>
               {custom ? VIEW_LABEL[custom.kind] : "View"}<ChevronDown size={11} />
             </button>
@@ -120,7 +133,10 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
       </div>
       <PopMenu at={viewMenu} onClose={() => setViewMenu(null)} width={200}>
         <div className="hd">View as</div>
-        <MenuItem icon={!custom ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => setCustom(cfgId, null)}>Designed view</MenuItem>
+        <MenuItem icon={!custom && viewName === designed ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => { setCustom(cfgId, null); setLens(lensId, null); }}>Designed view</MenuItem>
+        {alts.map((a) => (
+          <MenuItem key={a.view} icon={!custom && viewName === a.view ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => { setCustom(cfgId, null); setLens(lensId, a.view); }}>{a.label}</MenuItem>
+        ))}
         <div className="sep" />
         {kinds.map((k) => (
           <MenuItem key={k} icon={custom?.kind === k ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => setCustom(cfgId, defaults(rows, k))}>{VIEW_LABEL[k]}</MenuItem>

@@ -69,3 +69,10 @@ export function registerViews(views: Record<string, ComponentType<ViewProps>>, c
   Object.assign(VIEWS, views);
   charts.forEach((c) => CHART_VIEWS.add(c));
 }
+
+/** Designed alternative lenses on the same output (e.g. a ranking by sector), offered first in a card's "View as" menu. */
+export const ALT_VIEWS: Record<string, { label: string; view: string }[]> = {};
+
+export function registerAlternates(alts: Record<string, { label: string; view: string }[]>) {
+  Object.assign(ALT_VIEWS, alts);
+}

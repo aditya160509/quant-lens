@@ -4,6 +4,7 @@ import { ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { Bars } from "@/charts/Bars";
+import { Diverging } from "@/charts/Diverging";
 import { StackedArea } from "@/charts/StackedArea";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { useManifest } from "@/modules/research/api";
@@ -595,6 +596,94 @@ export function MetaProbability({ rows }: ViewProps) {
       <Stats items={[["Confident calls", pct(sure, 0), sure < 0.2 ? "var(--warn)" : "var(--up)", "Share of trades with probability below 40% or above 60%"], ["Kept at 50%", pct(kept, 0)], ["Trades", String(p.length)]]} />
       <Bars bars={bins} signed={false} height={190} yLabel="Trades" format={(v) => String(Math.round(v))} />
       <p className="ml-note">{sure < 0.2 ? "The meta-model is rarely confident: almost every trade sits near 50%, so it cannot separate good trades from bad. Filtering on it would mostly add noise; check the Improve section in Validate before using it." : "Trades away from 50% are where the meta-model has a view; sizing by this probability shrinks the uncertain ones."}</p>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- alternative lenses ("View as") */
+
+/** The ranking seen by sector: where the model leans, with the strongest name in each. */
+export function AlphaSectors({ rows }: ViewProps) {
+  const by = new Map<string, Row[]>();
+  for (const r of rows) by.set(str(r.sector) || "Unknown", [...(by.get(str(r.sector) || "Unknown") ?? []), r]);
+  if (!by.size) return <Empty />;
+  const items = [...by.entries()].map(([s, rs]) => {
+    const p = rs.map((r) => n(r.prediction) ?? 0);
+    const best = [...rs].sort((a, b) => (n(b.prediction) ?? 0) - (n(a.prediction) ?? 0))[0];
+    return { label: s, value: p.reduce((t, v) => t + v, 0) / p.length, note: `${rs.length} names · best ${str(best.ticker)} ${pct(best.prediction, 2)}` };
+  }).sort((a, b) => b.value - a.value);
+  return (
+    <div>
+      <Diverging rows={items} format={(v) => pct(v, 2)} labelWidth={150} />
+      <p className="ml-note">Average predicted 21-day return of the names in each sector. A model that only ranks sectors is a sector bet; check the within-sector spread before trusting it as stock selection.</p>
+    </div>
+  );
+}
+
+/** Weights and risk added up by sector, against an equal split across the names held. */
+export function AllocSectors({ result }: ViewProps) {
+  const w = out(result, "hrp_weight_vector");
+  const risk = new Map(out(result, "risk_contribution_decomposition").map((r) => [str(r.asset), Math.max(0, n(r.risk_contribution) ?? 0)]));
+  const rTot = [...risk.values()].reduce((t, v) => t + v, 0) || 1;
+  const by = new Map<string, { w: number; r: number; k: number }>();
+  for (const r of w) {
+    const s = str(r.sector) || "Unknown", o = by.get(s) ?? { w: 0, r: 0, k: 0 };
+    o.w += n(r.weight) ?? 0; o.r += (risk.get(str(r.asset)) ?? 0) / rTot; o.k += 1;
+    by.set(s, o);
+  }
+  if (!by.size) return <Empty />;
+  const rowsS = [...by.entries()].sort((a, b) => b[1].w - a[1].w);
+  const max = Math.max(...rowsS.map(([, o]) => Math.max(o.w, o.r)), 1e-9);
+  return (
+    <div>
+      <div className="wt">
+        <div className="wt-h" style={{ gridTemplateColumns: "150px minmax(0, 1fr) 60px 70px" }}><span>Sector</span><span>Weight (bar) and risk share (tick)</span><span>Weight</span><span>Risk</span></div>
+        {rowsS.map(([s, o]) => (
+          <div key={s} className="wt-r" style={{ gridTemplateColumns: "150px minmax(0, 1fr) 60px 70px" }}>
+            <b>{s}<em style={{ marginLeft: 6, color: "var(--text-4)", fontSize: 11 }}>{o.k}</em></b>
+            <span className="wt-track"><i className="bar" style={{ width: `${(o.w / max) * 100}%` }} /><i className="tick" style={{ left: `${(o.r / max) * 100}%` }} /></span>
+            <em className="num">{pct(o.w)}</em>
+            <em className="num" style={{ color: o.r - o.w > 0.03 ? "var(--warn)" : undefined }}>{pct(o.r)}</em>
+          </div>
+        ))}
+      </div>
+      <p className="ml-note">The number after each sector is how many names it holds. A tick far right of its bar means the sector carries more risk than capital.</p>
+    </div>
+  );
+}
+
+/** Mean absolute SHAP per feature: the plain importance ranking behind the beeswarm. */
+export function ShapImportance({ result }: ViewProps) {
+  const rows = out(result, "shap_feature_importance");
+  if (!rows.length) return <Empty />;
+  const items = [...rows].filter((r) => isNum(r.mean_abs_shap)).sort((a, b) => (b.mean_abs_shap as number) - (a.mean_abs_shap as number)).slice(0, 15)
+    .map((r) => ({ label: label(str(r.feature)), value: r.mean_abs_shap as number, note: label(str(r.family)) }));
+  return <Diverging rows={items} format={(v) => pct(v, 2)} labelWidth={150} />;
+}
+
+/** The regime history as a list of spells: when each state started, how long it lasted. */
+export function RegimeSpells({ rows, result }: ViewProps) {
+  const labels = ((result.meta as Row).state_labels ?? {}) as Record<string, string>;
+  const keys = Object.keys(rows[0] ?? {}).filter((k) => /^state_\d+$/.test(k));
+  if (!rows.length || !keys.length) return <Empty />;
+  const spells: { state: string; from: string; to: string; days: number }[] = [];
+  for (const r of rows) {
+    const s = keys.reduce((a, k) => ((n(r[k]) ?? 0) > (n(r[a]) ?? 0) ? k : a), keys[0]);
+    const last = spells[spells.length - 1];
+    if (last && last.state === s) { last.to = str(r.date); last.days += 1; } else spells.push({ state: s, from: str(r.date), to: str(r.date), days: 1 });
+  }
+  const colour = (s: string) => (labels[s] === "Stress" ? "var(--down)" : labels[s] === "Calm" ? "var(--up)" : "var(--s1)");
+  return (
+    <div className="ml-table-wrap">
+      <table className="ml-table">
+        <thead><tr><th>State</th><th>From</th><th>To</th><th>Sessions</th></tr></thead>
+        <tbody>
+          {[...spells].reverse().slice(0, 20).map((sp) => (
+            <tr key={`${sp.state}-${sp.from}`}><td><span className="dot" style={{ background: colour(sp.state) }} />{labels[sp.state] ?? label(sp.state)}</td><td className="num">{sp.from}</td><td className="num">{sp.to}</td><td className="num">{sp.days}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="ml-note">Most recent spells first; a spell is a run of sessions with the same most-likely state.</p>
     </div>
   );
 }
