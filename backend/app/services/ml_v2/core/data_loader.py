@@ -57,6 +57,7 @@ def lookback_rows(lookback_days: int | float) -> int:
 
 
 _PRICE_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
+_TICKER_LOWER = pl.col("ticker").str.strip_chars().str.to_uppercase().str.replace_all(r"[.\-]", "_")
 _TICKER = pl.col("Ticker").str.strip_chars().str.to_uppercase().str.replace_all(r"[.\-]", "_")
 
 
@@ -105,6 +106,42 @@ DEFAULT_UNIVERSE = (
     "PG", "KO", "PEP", "WMT", "COST", "HD", "MCD", "DIS", "CSCO", "ORCL", "IBM", "ADBE", "CAT", "BA", "GE", "MMM", "HON", "T", "VZ",
 )
 
+# One liquid, long-history US large-cap list per GICS sector. Names missing from the local data are dropped at resolve time.
+SECTOR_UNIVERSES: dict[str, tuple[str, ...]] = {
+    "sector_technology": ("AAPL", "MSFT", "NVDA", "AVGO", "ORCL", "CRM", "ADBE", "CSCO", "AMD", "QCOM", "TXN", "INTC", "IBM", "NOW", "AMAT"),
+    "sector_communication": ("GOOGL", "META", "NFLX", "DIS", "CMCSA", "T", "VZ", "TMUS", "CHTR", "EA"),
+    "sector_consumer_discretionary": ("AMZN", "TSLA", "HD", "MCD", "NKE", "LOW", "SBUX", "BKNG", "TJX", "F", "GM"),
+    "sector_consumer_staples": ("PG", "KO", "PEP", "WMT", "COST", "PM", "MO", "MDLZ", "CL", "KMB", "GIS"),
+    "sector_energy": ("XOM", "CVX", "COP", "EOG", "SLB", "OXY", "PSX", "MPC", "VLO", "WMB", "KMI"),
+    "sector_financials": ("JPM", "BAC", "WFC", "GS", "MS", "C", "BLK", "SCHW", "AXP", "USB", "PNC"),
+    "sector_health_care": ("JNJ", "UNH", "LLY", "PFE", "MRK", "ABBV", "TMO", "ABT", "DHR", "BMY", "AMGN"),
+    "sector_industrials": ("CAT", "BA", "GE", "HON", "UPS", "RTX", "DE", "LMT", "UNP", "FDX"),
+    "sector_materials": ("LIN", "SHW", "APD", "ECL", "FCX", "NEM", "NUE", "VMC", "PPG", "MOS", "CTVA", "IP"),
+    "sector_real_estate": ("PLD", "AMT", "CCI", "PSA", "O", "SPG", "WELL", "DLR", "WY", "VICI", "AVB", "EQR"),
+    "sector_utilities": ("NEE", "DUK", "SO", "D", "AEP", "EXC", "SRE", "XEL", "ED", "WEC", "PEG", "ETR"),
+}
+UNIVERSE_PRESETS: dict[str, tuple[str, ...]] = {
+    "default": DEFAULT_UNIVERSE,
+    **SECTOR_UNIVERSES,
+    "high_volatility": ("TSLA", "NVDA", "AMD", "MU", "NFLX", "PLTR", "COIN", "MARA", "RIOT", "UBER", "ENPH", "FSLR", "AAL", "DAL", "LUV"),
+    "etfs": ("SPY", "QQQ", "IWM", "DIA", "EFA", "EEM", "TLT", "IEF", "LQD", "HYG", "GLD", "SLV", "USO", "XLK", "XLF", "XLE", "XLV", "XLY", "XLP", "XLI", "XLU", "XLB", "VNQ"),
+}
+# Crypto trades on its own 7-day calendar and is not mixed into any equity preset.
+UNIVERSE_PRESET_IDS = list(UNIVERSE_PRESETS) + ["all"]
+_WHOLE = {"all", "full", "master", "master_universe", "market_universe", "whole"}
+
+
+def universe_label(payload: dict | None, symbols: Iterable[str]) -> str:
+    """Preset id when one was requested, else a custom label with the symbol count."""
+    payload = payload or {}
+    label = str(payload.get("universe") or "").strip().lower()
+    explicit = payload.get("tickers") or payload.get("symbols") or payload.get("assets") or payload.get("asset") or payload.get("symbol")
+    if not explicit and label in UNIVERSE_PRESETS:
+        return label
+    if not explicit and label in _WHOLE:
+        return "all"
+    return f"custom:{len(list(symbols))}"
+
 
 def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: int = 5000) -> list[str]:
     payload = payload or {}
@@ -112,12 +149,15 @@ def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: in
     universe = available_symbols(frequency=payload.get("frequency") or "daily")
     existing = set(universe)
     raw_label = str(raw or "").strip().lower()
-    if raw is None or raw_label in {"", "default", "sp500", "s&p 500"}:
-        # A fixed default of liquid US large caps on one exchange calendar, so a first run is complete;
+    preset = raw_label in UNIVERSE_PRESETS or raw is None
+    if raw is None or raw_label in UNIVERSE_PRESETS:
+        # Fixed liquid US large caps on one exchange calendar, so a first run is complete;
         # a coverage-ranked default mixes crypto, FX and foreign listings whose calendars leave gaps.
-        requested = [s for s in DEFAULT_UNIVERSE if s in existing][:default_limit] or universe[:default_limit]
-    elif raw_label in {"all", "full", "master", "master_universe", "market_universe", "whole"}:
+        requested = [s for s in UNIVERSE_PRESETS[raw_label or "default"] if s in existing][:default_limit] or universe[:default_limit]
+    elif raw_label in _WHOLE:
         requested = universe
+    elif raw_label in {"", "sp500", "s&p 500"}:
+        requested = [s for s in DEFAULT_UNIVERSE if s in existing][:default_limit] or universe[:default_limit]
     elif isinstance(raw, str):
         requested = [normalize_symbol(x) for x in raw.replace(";", ",").split(",") if x.strip()]
     elif isinstance(raw, Iterable):
@@ -133,7 +173,7 @@ def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: in
     if not 1 <= cap <= max_symbols:
         raise ValueError(f"max_symbols must be between 1 and {max_symbols}")
     requested = list(dict.fromkeys(requested))
-    if raw is not None and raw_label not in {"", "default", "all", "full", "master", "master_universe", "market_universe", "whole"} and len(requested) > cap:
+    if not preset and raw_label not in _WHOLE and len(requested) > cap:
         raise ValueError(f"Requested {len(requested)} symbols exceeds max_symbols={cap}")
     if not requested:
         raise ValueError("No market observations available for the requested universe")
@@ -202,6 +242,48 @@ def market_caps(symbols: Iterable[str]) -> dict[str, float]:
     for s in symbols:
         v = mapping.get(normalize_symbol(s), np.nan)
         out[str(s)] = float(v) if pd.notna(v) and float(v) > 0 else None
+    return out
+
+
+# Annual flows are only comparable across annual reports; balance-sheet items are stocks at any report date.
+_FLOW_FIELDS = {"Net Income", "Net Income Common Stockholders", "Gross Profit", "Operating Income", "Total Revenue"}
+
+
+def point_in_time_fundamentals(fields: Iterable[str], symbols: Iterable[str], dates: pd.DatetimeIndex,
+                               lag_days: int = 90, max_age_days: int = 550) -> dict[str, pd.DataFrame]:
+    """Daily ``dates x symbols`` frames of fundamentals as knowable on each date.
+
+    A report is usable ``lag_days`` after its report date and goes missing again after ``max_age_days``;
+    dates before a name's first report stay NaN (no backfill). Fields or tickers absent from the data come back all-NaN.
+    """
+    fields, symbols = list(fields), [normalize_symbol(s) for s in symbols]
+    out = {f: pd.DataFrame(np.nan, index=dates, columns=symbols) for f in fields}
+    if not fields or not MASTER_FUNDAMENTALS.exists():
+        return out
+    lazy = pl.scan_parquet(str(MASTER_FUNDAMENTALS))
+    have = set(lazy.collect_schema().names())
+    present = [f for f in fields if f in have]
+    if not present or not {"ticker", "reportDate"} <= have:
+        return out
+    columns = ["ticker", "reportDate", *(["periodType"] if "periodType" in have else []), *present]
+    frame = lazy.select(columns).with_columns(_TICKER_LOWER.alias("ticker")).filter(pl.col("ticker").is_in(symbols)).collect().to_pandas()
+    frame["reportDate"] = pd.to_datetime(frame["reportDate"], errors="coerce")
+    cutoff = AS_OF_DATE.get()
+    for field in present:
+        sub = frame.dropna(subset=["reportDate"]).assign(value=pd.to_numeric(frame[field], errors="coerce")).dropna(subset=["value"])
+        if field in _FLOW_FIELDS and "periodType" in sub.columns:
+            sub = sub[sub["periodType"] == "annual"]
+        sub = sub.assign(available=sub["reportDate"] + pd.Timedelta(days=lag_days))
+        if cutoff is not None:
+            sub = sub[sub["available"] <= cutoff]
+        if sub.empty:
+            continue
+        sub = sub.sort_values("available").drop_duplicates(["available", "ticker"], keep="last")
+        grid = dates.union(pd.DatetimeIndex(sub["available"].unique())).sort_values()
+        values = sub.pivot(index="available", columns="ticker", values="value").reindex(grid).ffill()
+        stamp = sub.assign(stamp=sub["available"]).pivot(index="available", columns="ticker", values="stamp").reindex(grid).ffill()
+        age = (pd.DataFrame({c: grid for c in stamp.columns}, index=grid) - stamp).apply(lambda col: col.dt.days)
+        out[field] = values.where(age <= max_age_days).reindex(index=dates, columns=symbols)
     return out
 
 

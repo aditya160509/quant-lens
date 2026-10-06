@@ -2,7 +2,11 @@
 from __future__ import annotations
 from contextvars import ContextVar
 from typing import Any, Callable, Iterable
+import hashlib
+import json
 import math
+import threading
+from collections import OrderedDict
 import numpy as np
 import pandas as pd
 
@@ -117,18 +121,67 @@ def response(
     alerts: list[dict[str, Any]] | None = None,
     meta: dict[str, Any] | None = None,
     status: str = "ok",
+    provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return clean_json(
-        {
-            "feature_id": f"feature_{str(feature_id).zfill(2)}",
-            "status": status,
-            "summary_cards": summary_cards,
-            "charts": charts,
-            "tables": tables,
-            "alerts": alerts or [],
-            "meta": meta or {},
-        }
-    )
+    out = {
+        "feature_id": f"feature_{str(feature_id).zfill(2)}",
+        "status": status,
+        "summary_cards": summary_cards,
+        "charts": charts,
+        "tables": tables,
+        "alerts": alerts or [],
+        "meta": meta or {},
+    }
+    if provenance is not None:
+        out["provenance"] = provenance
+    return clean_json(out)
+
+
+# Hand-off store: results other engines consume by id (alpha predictions, regime series). Small, in-process, LRU.
+_ARTIFACTS: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+_ARTIFACT_LOCK = threading.Lock()
+ARTIFACT_CAP = 32
+
+
+def put_artifact(kind: str, content: dict[str, Any]) -> str:
+    """Store ``content`` under a content hash (same content, same id) and return the id."""
+    body = clean_json({"kind": kind, **content})
+    artifact_id = hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]
+    with _ARTIFACT_LOCK:
+        _ARTIFACTS[artifact_id] = body
+        _ARTIFACTS.move_to_end(artifact_id)
+        while len(_ARTIFACTS) > ARTIFACT_CAP:
+            _ARTIFACTS.popitem(last=False)
+    return artifact_id
+
+
+def get_artifact(artifact_id: str) -> dict[str, Any] | None:
+    """The stored artifact, or None once evicted or unknown (callers must say so, never substitute)."""
+    with _ARTIFACT_LOCK:
+        if artifact_id not in _ARTIFACTS:
+            return None
+        _ARTIFACTS.move_to_end(artifact_id)
+        return _ARTIFACTS[artifact_id]
+
+
+def series_hash(series: pd.Series | np.ndarray) -> str:
+    """Stable id for a numeric series (index included), for hand-offs that do not need the store."""
+    values = pd.Series(series)
+    digest = hashlib.sha256(values.index.astype(str).str.cat(sep="|").encode() + np.round(values.to_numpy(float), 10).tobytes())
+    return digest.hexdigest()[:16]
+
+
+def build_provenance(closes: pd.DataFrame, *, train_window: tuple[Any, Any] | None, test_window: tuple[Any, Any] | None,
+                     purge: int, embargo: int, universe: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The provenance chip: windows, purge and embargo (sessions), universe, share of missing price cells."""
+    grid = closes.to_numpy(float)
+    missing = float(np.isnan(grid).mean()) if grid.size else None
+    span = lambda w: None if w is None or w[0] is None else {"start": date_str(w[0]), "end": date_str(w[1])}
+    return {"train_window": span(train_window), "test_window": span(test_window), "purge": int(purge), "embargo": int(embargo),
+            "universe": universe, "symbols": int(closes.shape[1]), "sessions": int(closes.shape[0]),
+            "missing_share": missing,
+            "calendar": "union of observed sessions; no price forward-fill, a missing close leaves NaN returns on that day and the next",
+            **(extra or {})}
 
 
 
