@@ -1,10 +1,14 @@
 "use client";
 
-import { Check, Copy, Minus, ShieldAlert, ShieldCheck, X } from "lucide-react";
+import { BadgeCheck, Check, Copy, History, Minus, ShieldAlert, ShieldCheck, X } from "lucide-react";
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { Bars } from "@/charts/Bars";
 import { Heatmap } from "@/charts/Heatmap";
+import { post, useRuns } from "@/modules/research/api";
 import { isNum, label } from "@/modules/research/format";
+import { lab } from "@/modules/research/lab";
+import { useStudies } from "@/modules/research/store";
 import { Empty } from "@/modules/research/outputs/tables";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import type { FeatureResult, Row } from "@/modules/research/types";
@@ -350,7 +354,32 @@ function Hash({ v }: { v: unknown }) {
 }
 
 /** What was tested, on which dates, with which settings, and the hashes that prove it. */
-export function ValReceipt({ result }: ViewProps) {
+/** Freeze this run as a public, read-only page, or put its exact settings back in the form. */
+function ReceiptActions({ scope, featureId }: { scope: string; featureId: string }) {
+  const jobId = scope.split(":")[1];
+  const payload = useRuns((s) => s.runs.find((r) => r.jobId === jobId)?.payload);
+  const setForm = useStudies((s) => s.setForm);
+  const [state, setState] = useState<{ busy?: boolean; id?: string; error?: string }>({});
+  if (!jobId || jobId === "draft") return null;
+  const publish = async () => {
+    setState({ busy: true });
+    try { setState({ id: (await post<{ id: string }>("/verified", { job_id: jobId })).id }); } catch (e) { setState({ error: e instanceof Error ? e.message : "Could not publish" }); }
+  };
+  return (
+    <div className="val-actions">
+      {state.id ? (
+        <Link className="btn" href={`${lab().root}/verified/${state.id}`}><BadgeCheck size={13} />Open verified page</Link>
+      ) : (
+        <button type="button" className="btn primary" onClick={() => void publish()} disabled={state.busy}><BadgeCheck size={13} />{state.busy ? "Publishing…" : "Publish verified page"}</button>
+      )}
+      {payload ? <button type="button" className="btn" onClick={() => setForm(featureId, () => ({ ...payload }), {})}><History size={13} />Load these exact settings</button> : null}
+      {state.error ? <span className="err" role="alert">{state.error}</span> : null}
+      <span className="val-actions-note">A verified page is frozen under the hash of the result: anyone with the link can read it, nobody can edit it.</span>
+    </div>
+  );
+}
+
+export function ValReceipt({ result, scope, feature }: ViewProps) {
   const r = section(result, "receipt"), q = section(result, "data_quality");
   const p = (r.provenance ?? section(result, "cpcv").provenance ?? {}) as Row;
   const range = p.date_range as string[] | undefined;
@@ -371,6 +400,7 @@ export function ValReceipt({ result }: ViewProps) {
   const warnings = (q.warnings as string[]) ?? [];
   return (
     <div>
+      {feature.id === "mlvalidate" && !scope.startsWith("verified:") ? <ReceiptActions scope={scope} featureId={feature.id} /> : null}
       <dl className="ml-receipt">{items.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
       <p className="ml-note"><b>Calendar.</b> {String(p.calendar ?? q.calendar_handling ?? "")} <b>Splits and adjustments.</b> {warnings.length ? warnings.join(" ") : `No anomalies (${String(q.split_adjustment_rule ?? "")}).`} <b>Reproduce.</b> {String(r.rerun ?? "")}.</p>
     </div>

@@ -88,6 +88,20 @@ except ImportError as e:
 
 # Aggregate Studio V2 request telemetry without retaining payloads or secrets.
 from app.studio_v2.shared.observability import StudioObservabilityMiddleware
+# Compress the large JSON results of the ML and Research labs (often 0.5-2 MB, ~8x smaller gzipped).
+# Scoped by path so streaming endpoints elsewhere are never buffered.
+from starlette.middleware.gzip import GZipMiddleware
+
+
+class _LabGZip(GZipMiddleware):
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].startswith(("/api/ml/v2", "/api/labs/research")):
+            await super().__call__(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
+
+
+app.add_middleware(_LabGZip, minimum_size=1024)
 app.add_middleware(StudioObservabilityMiddleware)
 
 # Include Routers

@@ -36,7 +36,7 @@ INPUT_CONTRACT = [
 
 
 OUTPUT_CONTRACT = [{"key":key,"location":location,"renderer":"table","status":"live"}
-    for location,keys in {"charts":["vol_forecast_panel","forecast_error_distribution","vol_term_structure","realized_vs_predicted",
+    for location,keys in {"charts":["forecast_error_distribution","vol_term_structure",
         "model_confidence_intervals","realized_vol_estimator_comparison","garch_model_selection","garch_leverage_news_impact_curve","ensemble_vol_forecast_weights","var_es_forecast","regime_probability"],
         "tables":["risk_today","forecast_tournament","var_es","position_sizing","forecast_rows","garch_model_selection","watchlist_skipped"]}.items() for key in keys]
 RESEARCH_ONLY = []

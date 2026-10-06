@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { ComponentType } from "react";
 import type { FeatureLayout } from "./layouts";
 import type { FeatureSpec } from "./types";
 
@@ -31,6 +32,9 @@ export type LabConfig = {
   overview?: { intro: string; stages: { id: string; label: string; intro: string; ids: string[] }[] };
   /** What an empty ticker list means for this lab, shown in the Universe chip. */
   defaultUniverse?: string;
+  /** Pages with their own component instead of a feature, keyed by Page.id (needs Page.slug). The "verified" key
+   * also serves /<root>/verified/[id], with the id passed in. */
+  specials?: Record<string, ComponentType<{ features: FeatureSpec[]; id?: string }>>;
   /** Verb on the run button for a feature, e.g. "Train and test"; defaults to "Run study". */
   runLabel?: (featureId: string) => string;
   /** Research extras: Signal and Report card pages, projects, ledger, active signal. */

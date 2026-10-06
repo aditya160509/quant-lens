@@ -1,6 +1,7 @@
 import {
-  Activity, Binary, BrainCircuit, GitBranch, ScanSearch, ShieldCheck, Waves,
+  Activity, Binary, BrainCircuit, GitBranch, ScanSearch, ShieldCheck, Waves, Workflow,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { API_BASE_URL } from "@/lib/apiBase";
 import type { LabConfig, FeatureMeta, Page } from "@/modules/research/lab";
 import type { FeatureLayout, Item, Section } from "@/modules/research/layouts";
@@ -34,6 +35,7 @@ const PAGES: Page[] = [
   { id: "alpha", label: "Alpha", icon: BrainCircuit, question: "Which names rank highest, why, and does the model beat simple alternatives?", features: ["ml02"] },
   { id: "risk", label: "Volatility & risk", icon: Activity, question: "How much risk is ahead, and which market state are we in?", features: ["ml03", "ml06"] },
   { id: "allocate", label: "Allocation", icon: GitBranch, question: "How should capital be spread when estimates are noisy?", features: ["ml05"] },
+  { id: "studio", label: "Strategy studio", slug: "studio", icon: Workflow, question: "Signal, filter, size, allocate, validate: one pipeline.", features: [] },
 ];
 
 /** Output → view. Anything not listed is drawn from the contract's type and encoding. */
@@ -41,8 +43,8 @@ const VIEW: Record<string, Record<string, string>> = {
   validate: { autopsy: "valAutopsy", controls: "valControls", cpcv: "valCpcv", monte_carlo: "valMonteCarlo", transfer: "valTransfer", plateau: "valPlateau", stability: "valStability",
     deflated_sharpe: "valOverfit", leakage: "valLeakage", improve: "valImprove", receipt: "valReceipt" },
   "01": { cpcv_sharpe_distribution: "mlSharpeSpread", backtest_paths_chart: "mlPathFan", per_fold_performance: "mlFoldMatrix", probability_of_backtest_overfitting: "mlKpi", deflated_sharpe_ratio: "mlKpi", cpcv_path_metrics: "dataTable" },
-  "02": { controls: "alphaControls", decile_spreads: "alphaDeciles", net_of_cost_curve: "alphaNetCurve", what_changed: "alphaWhatChanged", feature_families: "alphaFamilies", ensemble: "alphaEnsemble", prediction_rank_table: "mlRankTable", shap_beeswarm: "mlBeeswarm", shap_waterfall_top_signal: "mlWaterfall", model_ic_leaderboard: "mlLeaderboard", rolling_monthly_ic_series: "mlIcBars", training_audit: "mlReceipt" },
-  "03": { risk_today: "riskToday", var_es: "riskVarEs", position_sizing: "strategyCompare", regime_probability: "riskStress", vol_forecast_panel: "mlVolPanel", realized_vs_predicted: "mlVolScatter", vol_term_structure: "mlTermStructure", forecast_tournament: "mlTournament", forecast_error_distribution: "mlTournament", ensemble_vol_forecast_weights: "mlStacked" },
+  "02": { controls: "alphaControls", decile_spreads: "alphaDeciles", net_of_cost_curve: "alphaNetCurve", what_changed: "alphaWhatChanged", feature_drift: "alphaDrift", feature_families: "alphaFamilies", ensemble: "alphaEnsemble", prediction_rank_table: "mlRankTable", shap_beeswarm: "mlBeeswarm", shap_waterfall_top_signal: "mlWaterfall", model_ic_leaderboard: "mlLeaderboard", rolling_monthly_ic_series: "mlIcBars", training_audit: "mlReceipt" },
+  "03": { risk_today: "riskToday", var_es: "riskVarEs", position_sizing: "strategyCompare", regime_probability: "riskStress", vol_term_structure: "mlTermStructure", forecast_tournament: "mlTournament", forecast_error_distribution: "mlTournament", ensemble_vol_forecast_weights: "mlStacked" },
   "04": { triple_barrier_label_distribution: "mlLabelMix", barrier_hit_path_examples: "mlBarrierScatter", barrier_sensitivity_surface: "mlBarrierSurface", cqr_coverage_audit: "mlCoverage", barrier_parameters: "mlReceipt" },
   "05": { controls_summary: "strategyCompare", controls_equity: "mlStacked", weight_stability: "allocStability", trade_list: "allocTrades", rebalance_log: "allocRebalances", holding_risk: "dataTable", hrp_weight_vector: "mlWeights", cluster_dendrograms: "mlDendrogram", risk_contribution_decomposition: "mlRiskContrib", walk_forward_allocation: "mlEquity", black_litterman_posterior_return_vector: "mlBlShift", bl_vs_pure_hrp_weight_comparison: "mlBlShift" },
   "06": { regime_vs_constant_exposure: "strategyCompare", regime_probability_time_series: "mlRegimes", parallel_gmm_regime_probabilities: "mlRegimes", regime_transition_heatmap: "mlTransition", transition_matrix: "mlTransition", regime_conditional_asset_returns: "mlRegimeReturns", ensemble_vs_hmm_comparison: "mlKpi", correlation_network_density: "mlKpi", current_regime_probabilities: "mlReceipt", training_audit: "mlReceipt" },
@@ -155,7 +157,7 @@ const LAYOUTS: Record<string, FeatureLayout> = {
       sec("controls", "Against controls", [card("controls", 12, { title: "The model against simple alternatives, held-out" }), card("decile_spreads", 6, { title: "Returns by prediction decile" }), card("net_of_cost_curve", 6, { title: "Long-short after costs" })],
         "A model earns its complexity only if it beats Ridge, a 3-factor OLS and the IC-weighted composite out of sample."),
       sec("explain", "Explain", [card("shap_beeswarm", 7, { title: "What drives predictions" }), card("feature_families", 5, { title: "Contribution by feature family" })], "Exact TreeSHAP values on the latest predictions: direction, size and spread of each feature's effect."),
-      sec("quality", "Model quality", [card("rolling_monthly_ic_series", 6, { title: "IC by month, held-out period" }), card("ensemble", 6, { title: "How the blend was chosen" }), card("model_ic_leaderboard", 6, { title: "Models by test IC" }), card("training_audit", 6, { view: "mlProvenance", title: "Trained and tested on" })]),
+      sec("quality", "Model quality", [card("rolling_monthly_ic_series", 6, { title: "IC by month, held-out period" }), card("ensemble", 6, { title: "How the blend was chosen" }), card("feature_drift", 6, { title: "Feature drift and retrain check" }), card("training_audit", 6, { view: "mlProvenance", title: "Trained and tested on" }), card("model_ic_leaderboard", 12, { title: "Models by test IC" })]),
       sec("next", "Next", [card("training_audit", 12, { view: "mlNext", title: "Take this ranking further" })]),
       data(["current_predictions", "model_performance", "decile_summary", "heldout_predictions", "shap_feature_importance", "shap_waterfall_top_signal", "tuning_trials"]),
     ],
@@ -175,12 +177,12 @@ const LAYOUTS: Record<string, FeatureLayout> = {
   ml03: {
     sections: [
       sec("today", "Risk today", [card("risk_today", 12, { title: "Risk today" })]),
-      sec("forecast", "Forecast", [card("vol_forecast_panel", 12, { title: "Forecast against realised volatility" }), card("vol_term_structure", 6, { title: "Term structure today" }), card("regime_probability", 6, { title: "Stress probability (filtered, no look-ahead)" })]),
-      sec("tournament", "Model tournament", [card("forecast_tournament", 7, { title: "Loss by model and horizon" }), card("realized_vs_predicted", 5, { title: "Forecast vs realised" })],
+      sec("forecast", "Forecast", [card("forecast_rows", 12, { view: "mlVolPanel", title: "Forecast against realised volatility" }), card("vol_term_structure", 6, { title: "Term structure today" }), card("regime_probability", 6, { title: "Stress probability (filtered, no look-ahead)" })]),
+      sec("tournament", "Model tournament", [card("forecast_tournament", 7, { title: "Loss by model and horizon" }), card("forecast_rows", 5, { view: "mlVolScatter", title: "Forecast vs realised" })],
         "QLIKE loss on the held-out period; Diebold–Mariano tests say whether the regime switch is significantly better than each single model."),
       sec("tail", "Tail risk and sizing", [card("var_es", 7, { title: "VaR and expected shortfall, with calibration" }), card("position_sizing", 5, { title: "Volatility-targeted vs unmanaged" })]),
       sec("about", "Provenance", [card("forecast_tournament", 12, { view: "mlProvenance", title: "Trained and tested on" })]),
-      data(["forecast_rows", "forecast_error_distribution", "model_confidence_intervals", "realized_vol_estimator_comparison", "var_es_forecast", "watchlist_skipped"]),
+      data(["forecast_error_distribution", "model_confidence_intervals", "realized_vol_estimator_comparison", "var_es_forecast", "watchlist_skipped"]),
     ],
     verdict: (r) => {
       const t = out(r, "risk_today")[0];
@@ -253,7 +255,7 @@ const VV = group(() => import("./validateViews") as Promise<Record<string, unkno
 const PV = group(() => import("./pageViews") as Promise<Record<string, unknown>>);
 registerViews({
   mlProvenance: PV.MlProvenance, mlNext: PV.MlNext, alphaControls: PV.AlphaControls, alphaDeciles: PV.AlphaDeciles, alphaNetCurve: PV.AlphaNetCurve, alphaWhatChanged: PV.AlphaWhatChanged,
-  alphaFamilies: PV.AlphaFamilies, alphaEnsemble: PV.AlphaEnsemble, riskToday: PV.RiskToday, riskVarEs: PV.RiskVarEs, strategyCompare: PV.StrategyCompare, riskStress: PV.RiskStress,
+  alphaFamilies: PV.AlphaFamilies, alphaDrift: PV.AlphaDrift, alphaEnsemble: PV.AlphaEnsemble, riskToday: PV.RiskToday, riskVarEs: PV.RiskVarEs, strategyCompare: PV.StrategyCompare, riskStress: PV.RiskStress,
   allocStability: PV.AllocStability, allocTrades: PV.AllocTrades, allocRebalances: PV.AllocRebalances,
 }, ["alphaControls", "alphaDeciles", "alphaNetCurve", "alphaEnsemble", "strategyCompare", "riskStress"]);
 registerViews({
@@ -272,6 +274,9 @@ registerViews({
   "mlBarrierSurface", "mlLabelMix", "mlCoverage", "mlWeights", "mlRiskContrib", "mlDendrogram", "mlBlShift", "mlRegimes", "mlTransition", "mlRegimeReturns", "mlStacked",
   "mlSharpeSpread"]);
 
+const StudioPage = dynamic(() => import("./StudioPage").then((m) => m.StudioPage));
+const VerifiedPage = dynamic(() => import("./VerifiedPage").then((m) => m.VerifiedPage));
+
 export const ML_LAB: LabConfig = {
   id: "ml",
   title: "Machine learning",
@@ -283,6 +288,7 @@ export const ML_LAB: LabConfig = {
   manifest: (raw) => (raw as { features: RawFeature[] }).features.filter((f) => ID(f.id) in CATALOG).map(toSpec),
   submit: (featureId, payload) => ({ path: `/features/${RAW(featureId)}/jobs`, body: payloadFor(payload) }),
   signal: false,
+  specials: { studio: StudioPage, verified: VerifiedPage },
   runLabel: (id) => (id === "mlvalidate" ? "Validate" : id === "ml05" ? "Allocate" : id === "ml03" || id === "ml06" ? "Forecast" : "Train and test"),
   defaultUniverse: "35 US large caps",
   overview: {

@@ -75,6 +75,9 @@ const REGION_UI: { region: Region; label: string; icon: LucideIcon }[] = [
   { region: "right", label: "Inspector", icon: PanelRight },
 ];
 
+/** Region visibility rendered on the server and before hydration; a module constant so memo dependencies stay stable. */
+const SERVER_OPEN = { left: true, right: true, bottom: false } as const;
+
 export function WorkspaceShell({ module, className = "", children }: { module: string; className?: string; children: ReactNode }) {
   const router = useRouter();
   const theme = useSyncExternalStore(themeStore.subscribe, themeStore.get, () => "dark" as Theme);
@@ -84,7 +87,7 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
   // Layout state comes from this device's storage; until hydration, render the server default so markup matches.
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const stored = useLayout((s) => s.open);
-  const open = mounted ? stored : { left: true, right: true, bottom: false };
+  const open = mounted ? stored : SERVER_OPEN;
   const toggleRegion = useLayout((s) => s.toggle);
 
   const toggleTheme = useCallback(() => themeStore.set(themeStore.get() === "dark" ? "light" : "dark"), []);
@@ -115,7 +118,8 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
   ], [router, theme, toggleTheme, open, toggleRegion]);
 
   const allItems = [...Object.values(sources).flat(), ...builtIn];
-  const groups = allItems.reduce<Record<string, PaletteItem[]>>((acc, it) => ({ ...acc, [it.group]: [...(acc[it.group] ?? []), it] }), {});
+  const groups: Record<string, PaletteItem[]> = {};
+  for (const it of allItems) (groups[it.group] ??= []).push(it);
   const prefs = usePrefs();
   const themeClass = (theme === "light" ? " is-light" : "") + prefClasses(prefs);
 

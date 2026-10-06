@@ -399,3 +399,31 @@ export function AllocRebalances({ rows }: ViewProps) {
     </div>
   );
 }
+
+/** How far each feature has moved from its training distribution, and whether the model should be retrained. */
+export function AlphaDrift({ rows, result }: ViewProps) {
+  const mon = ((result.meta as Row).monitoring ?? {}) as { retrain_recommended?: boolean; reasons?: string[]; drift_threshold_sd?: number; recent_sessions?: number; recent_ic?: number | null; test_ic?: number | null };
+  if (!rows.length) return <Empty />;
+  const top = [...rows].sort((a, b) => (n(b.drift) ?? 0) - (n(a.drift) ?? 0)).slice(0, 12);
+  const thr = mon.drift_threshold_sd ?? 0.5;
+  const max = Math.max(thr * 1.6, ...top.map((r) => n(r.drift) ?? 0));
+  return (
+    <div>
+      <div className="drift-flag" data-on={mon.retrain_recommended || undefined}>
+        <b>{mon.retrain_recommended ? "Retrain recommended" : "No retrain needed"}</b>
+        <span>{mon.retrain_recommended ? (mon.reasons ?? []).join("; ") : `No top-5 feature has drifted past ${thr} training sd, and recent IC holds up.`}</span>
+      </div>
+      <Stats items={[["Recent IC (3 mo)", f3(mon.recent_ic)], ["Test IC", f3(mon.test_ic)], ["Features flagged", String(rows.filter((r) => r.flag).length), rows.some((r) => r.flag) ? "var(--warn)" : "var(--up)"]]} />
+      <div className="ml-shares drift">
+        {top.map((r) => (
+          <div key={str(r.feature)}>
+            <span>{label(str(r.feature))}<em className="num"> #{str(r.importance_rank)}</em></span>
+            <span className="ml-share-bar"><i style={{ width: `${((n(r.drift) ?? 0) / max) * 100}%`, background: r.flag ? "var(--warn)" : "var(--s1)" }} /><s style={{ left: `${(thr / max) * 100}%` }} /></span>
+            <b className="num">{f2(r.drift)}</b>
+          </div>
+        ))}
+      </div>
+      <p className="ml-note">Wasserstein distance between each feature&apos;s training distribution and its last {mon.recent_sessions ?? 63} sessions, in training standard deviations; the tick marks the {thr} sd threshold. #n is the feature&apos;s importance rank.</p>
+    </div>
+  );
+}

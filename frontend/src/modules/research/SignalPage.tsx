@@ -267,7 +267,12 @@ function Combine({ current, onResult }: { current: string; onResult: (e: string)
 function Reference() {
   const ops = useOperators();
   const fields = useFields();
-  const groups = useMemo(() => Object.entries((ops.data ?? []).reduce<Record<string, typeof ops.data>>((a, o) => ({ ...a, [o.category]: [...(a[o.category] ?? []), o] }), {})), [ops.data]);
+  const opsData = ops.data;
+  const groups = useMemo(() => {
+    const by: Record<string, NonNullable<typeof opsData>> = {};
+    for (const o of opsData ?? []) (by[o.category] ??= []).push(o);
+    return Object.entries(by);
+  }, [opsData]);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
       {groups.map(([cat, list]) => (

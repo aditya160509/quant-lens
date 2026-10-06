@@ -218,10 +218,8 @@ Output keys:
 
 Output keys:
 
-- `vol_forecast_panel`
 - `forecast_error_distribution`
 - `vol_term_structure`
-- `realized_vs_predicted`
 - `model_confidence_intervals`
 - `vix_yield_macro_overlay`
 - `jump_component_decomposition`

@@ -149,10 +149,10 @@ export type LibrarySignal = { id: string; name: string; category: string; formul
 export type Preview = { n_names: number; months: number; histogram: { x0: number; x1: number; count: number }[]; coverage: { month: string; share: number }[]; corr_known: { name: string; corr: number }[] };
 export type Validation = { ok: true; preview: Preview } | { ok: false; error: { message: string; start?: number; end?: number } };
 
-const get = <T,>(path: string) => request<T>(path);
+export const get = <T,>(path: string) => request<T>(path);
 /** Lists arrive bare or wrapped ({ projects: [...] }, { matches: [...] }); accept both. */
 const getList = <T,>(path: string) => request<unknown>(path).then((d) => (Array.isArray(d) ? d : Object.values((d ?? {}) as Record<string, unknown>).find(Array.isArray) ?? []) as T[]);
-const post = <T,>(path: string, body: unknown) => request<T>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+export const post = <T,>(path: string, body: unknown) => request<T>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 export const useOperators = () => useQuery({ queryKey: ["research", "ops"], queryFn: () => getList<Operator>("/signals/operators"), staleTime: Infinity, retry: false });
 export const useFields = () => useQuery({ queryKey: ["research", "fields"], queryFn: () => getList<Field>("/signals/fields"), staleTime: Infinity, retry: false });

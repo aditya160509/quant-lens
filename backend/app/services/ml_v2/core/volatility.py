@@ -373,7 +373,7 @@ def run_vol_forecasting(payload: dict[str, Any] | None = None) -> dict[str, Any]
         return response("03", [summary(f"Regime: {rows[0]['asset']} (+{len(rows) - 1} more)" if len(rows) > 1 else f"Regime: {rows[0]['asset']}", rows[0]["regime"], "state"),
                                     summary("Next-month vol", rows[0]["vol_21d"], "%"), summary("1-day VaR 99%", rows[0]["var_99"], "%"),
                                     summary("Suggested size", rows[0]["size_multiple"], "×")],
-            charts={"vol_forecast_panel": [], "forecast_error_distribution": [], "vol_term_structure": [], "realized_vs_predicted": [],
+            charts={"forecast_error_distribution": [], "vol_term_structure": [],
                     "model_confidence_intervals": [], "realized_vol_estimator_comparison": [], "garch_model_selection": [],
                     "garch_leverage_news_impact_curve": [], "ensemble_vol_forecast_weights": [], "var_es_forecast": [], "regime_probability": []},
             tables={"forecast_tournament": [], "forecast_rows": [], "garch_model_selection": [], "risk_today": rows, "var_es": [], "position_sizing": [],
@@ -431,8 +431,9 @@ def run_vol_forecasting(payload: dict[str, Any] | None = None) -> dict[str, Any]
         alerts.append({"level": "warning", "message": "Some ARCH candidates failed; model-selection rows include reasons"})
     return response("03", [summary("Regime", risk["regime"], "state"), summary("Next-month vol", risk["vol_21d"], "%"),
                            summary("1-day VaR 99%", risk["var_99"], "%"), summary("Suggested size", risk["size_multiple"], "×")],
-        charts={"vol_forecast_panel": forecasts, "forecast_error_distribution": errors, "vol_term_structure": terms,
-            "realized_vs_predicted": forecasts, "model_confidence_intervals": intervals, "realized_vol_estimator_comparison": estimates,
+        # Forecast rows are sent once (tables.forecast_rows); the forecast panel and forecast-vs-realised views read them there.
+        charts={"forecast_error_distribution": errors, "vol_term_structure": terms,
+            "model_confidence_intervals": intervals, "realized_vol_estimator_comparison": estimates,
             "garch_model_selection": arch_rows, "garch_leverage_news_impact_curve": news, "ensemble_vol_forecast_weights": arch_weights,
             "var_es_forecast": result["var_es"], "regime_probability": regime_rows},
         tables={"forecast_tournament": errors, "forecast_rows": forecasts, "garch_model_selection": arch_rows,

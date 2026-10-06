@@ -100,7 +100,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   const maxItem = maxKey && active ? active.items.find((i) => i.keys[0] === maxKey) : null;
 
   const runButton = (
-    <div style={{ display: "flex", gap: 6, flex: "none" }}>
+    <div className="fv-run">
       {running && run.status !== "submitting" ? <button className="btn" onClick={run.cancel}><Square size={11} />Cancel</button> : null}
       <button className="btn primary" onClick={run.run} disabled={running} title={`${runLabel(feature.id)} (⌘↵)`}>
         {running ? <Loader2 size={13} className="spin" /> : <Play size={11} fill="currentColor" />}
@@ -114,7 +114,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
     <div ref={scroller} className="island results" style={{ overflowY: "auto", overflowX: "hidden" }}>
       <div ref={hero} style={{ padding: "22px 22px 6px" }}>
         <PageSwitch featureId={feature.id} />
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+        <div className="fv-head">
           <div className="ov-icon" style={{ width: 40, height: 40, borderRadius: 11 }}><Icon size={19} strokeWidth={1.6} /></div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{meta.name}</h1>

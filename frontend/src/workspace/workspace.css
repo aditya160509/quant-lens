@@ -487,3 +487,15 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .upload-receipt dd { margin: 0; color: var(--text-2); overflow-wrap: anywhere; }
 .upload-warn { margin: 6px 0 0; padding: 0 0 0 16px; color: var(--warn); font-size: 11.5px; line-height: 1.5; }
 .upload-kinds { display: flex; flex-wrap: wrap; gap: 5px; }
+
+/* Feature header: title block and run button side by side; on phones the button drops under the text. */
+.fv-head { display: flex; align-items: flex-start; gap: 14px; }
+.fv-run { display: flex; gap: 6px; flex: none; }
+@media (max-width: 640px) {
+  .fv-head { flex-wrap: wrap; gap: 10px 12px; }
+  .fv-head > .ov-icon { display: none; }
+  .fv-run { flex-basis: 100%; }
+  .fv-run .btn.primary { flex: 1; justify-content: center; height: 36px; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+  .kpi .v { font-size: 17px; }
+}

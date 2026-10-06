@@ -544,68 +544,6 @@
    }
   ]
  },
- "03.charts.realized_vs_predicted": {
-  "shape": "records",
-  "dynamic_columns": false,
-  "columns": [
-   {
-    "name": "date",
-    "type": "date",
-    "nullable": true
-   },
-   {
-    "name": "model",
-    "type": "string",
-    "nullable": true
-   },
-   {
-    "name": "horizon",
-    "type": "number",
-    "nullable": true
-   },
-   {
-    "name": "forecast_vol",
-    "type": "number",
-    "nullable": true
-   },
-   {
-    "name": "realized_vol",
-    "type": "number",
-    "nullable": true
-   }
-  ]
- },
- "03.charts.vol_forecast_panel": {
-  "shape": "records",
-  "dynamic_columns": false,
-  "columns": [
-   {
-    "name": "date",
-    "type": "date",
-    "nullable": true
-   },
-   {
-    "name": "model",
-    "type": "string",
-    "nullable": true
-   },
-   {
-    "name": "horizon",
-    "type": "number",
-    "nullable": true
-   },
-   {
-    "name": "forecast_vol",
-    "type": "number",
-    "nullable": true
-   },
-   {
-    "name": "realized_vol",
-    "type": "number",
-    "nullable": true
-   }
-  ]
- },
  "03.charts.vol_term_structure": {
   "shape": "records",
   "dynamic_columns": false,

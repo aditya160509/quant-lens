@@ -53,6 +53,8 @@ function ResearchPanels() {
   const featureId = idFromSlug(params?.feature);
   const special = specialPage(params?.feature);
   const sharedToken = (params as { token?: string } | null)?.token ?? null;
+  const verifiedId = (params as { id?: string } | null)?.id ?? null;
+  const Special = verifiedId ? L.specials?.verified : special ? L.specials?.[special.id] : undefined;
   const embed = useSearchParams()?.get("embed") === "1";
   useEffect(() => {
     if (!embed) return;
@@ -71,7 +73,7 @@ function ResearchPanels() {
   useBackgroundRuns(manifest.data, shownJob, verdictFor);
   useDoneInTitle(runs);
 
-  useEffect(() => setCrumb(special ? special.label : sharedToken ? "Shared run" : feature ? metaFor(feature.id, feature.name).name : "Overview"), [feature, special, sharedToken, setCrumb]);
+  useEffect(() => setCrumb(verifiedId ? "Verified result" : special ? special.label : sharedToken ? "Shared run" : feature ? metaFor(feature.id, feature.name).name : "Overview"), [feature, special, sharedToken, verifiedId, setCrumb]);
 
   useEffect(() => {
     if (!animate) return;
@@ -147,6 +149,8 @@ function ResearchPanels() {
               <ErrorState message={(manifest.error as Error).message} onRetry={() => manifest.refetch()} />
             ) : sharedToken ? (
               <SharedView token={sharedToken} features={manifest.data ?? []} />
+            ) : Special ? (
+              <Special features={manifest.data ?? []} id={verifiedId ?? undefined} />
             ) : special?.id === "signal" && L.signal ? (
               <SignalPage />
             ) : special?.id === "report" && L.signal ? (

@@ -24,7 +24,7 @@
       "runtimeExecutable": "/bin/sh",
       "runtimeArgs": [
         "-c",
-        "cd '/Users/adityabalaji/Downloads/quant  2/backend' && OMP_NUM_THREADS=1 /tmp/ml-v2-check-env/bin/python -m uvicorn main:app --port 8000"
+        "cd '/Users/adityabalaji/Downloads/quant  2/backend' && OMP_NUM_THREADS=1 venv/bin/python -m uvicorn main:app --port 8000"
       ],
       "port": 8000
     }

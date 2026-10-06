@@ -40,11 +40,30 @@ export function Segmented<T extends string | number>({ value, options, onChange,
   );
 }
 
+/** Pill tabs that keep the selected tab scrolled into view and move with the arrow keys (WAI-ARIA tabs pattern). */
 export function Tabs<T extends string>({ value, tabs, onChange }: { value: T; tabs: { id: T; label: string; count?: number }[]; onChange: (id: T) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const strip = ref.current;
+    const sel = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!strip || !sel) return;
+    const left = sel.offsetLeft - strip.offsetLeft, right = left + sel.offsetWidth;
+    if (left < strip.scrollLeft) strip.scrollTo({ left: left - 16, behavior: "smooth" });
+    else if (right > strip.scrollLeft + strip.clientWidth) strip.scrollTo({ left: right - strip.clientWidth + 16, behavior: "smooth" });
+  }, [value, tabs.length]);
+  const onKey = (e: React.KeyboardEvent) => {
+    const i = tabs.findIndex((t) => t.id === value);
+    const next = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : null;
+    if (next === null || !tabs.length) return;
+    e.preventDefault();
+    const t = tabs[(next + tabs.length) % tabs.length];
+    onChange(t.id);
+    ref.current?.querySelector<HTMLElement>(`[data-tab="${CSS.escape(t.id)}"]`)?.focus();
+  };
   return (
-    <div className="tabs" role="tablist">
+    <div className="tabs" role="tablist" ref={ref} onKeyDown={onKey}>
       {tabs.map((t) => (
-        <button key={t.id} role="tab" type="button" aria-selected={t.id === value} onClick={() => onChange(t.id)}>
+        <button key={t.id} role="tab" type="button" data-tab={t.id} aria-selected={t.id === value} tabIndex={t.id === value ? 0 : -1} onClick={() => onChange(t.id)}>
           {t.label}
           {t.count !== undefined ? <span className="count">{t.count}</span> : null}
         </button>
