@@ -1,6 +1,6 @@
 """ML V2 panel implementation."""
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 import math
 import numpy as np
@@ -23,6 +23,7 @@ class MLContext:
     market_caps: dict[str, float]
     frequency: str
     annualization: float
+    calendar: dict[str, Any] = field(default_factory=dict)
 
 
 def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> MLContext:
@@ -42,6 +43,10 @@ def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> ML
     ohlcv = ohlcv_for_symbols(symbols, lookback_days=window + 120, frequency=frequency)
     if ohlcv.empty:
         raise ValueError("Insufficient price history for the requested symbols")
+    # Calendar alignment: a session where under half the names have a close (stray vendor dates) would leave a one-name cross-section.
+    traded = ohlcv.groupby("Date")["Ticker"].nunique()
+    sparse = traded.index[traded < 0.5 * ohlcv["Ticker"].nunique()]
+    ohlcv = ohlcv[~ohlcv["Date"].isin(sparse)]
     rets = returns_from_ohlcv(ohlcv, window)
     symbols = [str(c) for c in rets.columns]
     ohlcv = ohlcv[ohlcv["Ticker"].isin(symbols)]
@@ -60,6 +65,7 @@ def load_context(payload: dict[str, Any] | None, *, min_symbols: int = 12) -> ML
         market_caps=market_caps(symbols),
         frequency=frequency,
         annualization=annualization_factor(frequency),
+        calendar={"dropped_sessions": int(len(sparse)), "session_rule": "sessions where fewer than half of the names have a close are dropped"},
     )
 
 

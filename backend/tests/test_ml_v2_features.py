@@ -42,3 +42,27 @@ def test_feature_runs_on_local_observations(local_market, feature):
     from importlib import import_module
     contract = import_module(f"app.services.ml_v2.features.feature_{feature}").OUTPUTS
     assert all(row["id"] in result[row["location"]] for row in contract)
+
+
+def test_alpha_controls_exact_contributions_formulas_and_artifact(local_market):
+    from app.services.ml_v2.core.common import get_artifact
+    from app.services.ml_v2.registry import run_feature
+    result = run_feature("02", {"symbols": local_market, "max_symbols": 8, "lookback_days": 380, "model_family": "ridge",
+                                "prediction_horizon": 5, "formulas": [{"name": "rev", "expr": "-ts_return(close, 5)"}]})
+    controls = {row["model"] for row in result["tables"]["controls"]}
+    assert {"ridge", "ols3", "ic_composite"} <= controls
+    assert set(result["provenance"]) >= {"train_window", "test_window", "purge", "embargo", "universe", "missing_share"}
+    assert "f_rev" in result["tables"]["training_audit"][0]["features"]
+    for row in result["tables"]["ticker_contributions"]:
+        assert row["base_value"] + sum(row["contributions"].values()) == pytest.approx(row["prediction"], abs=1e-9)
+    stored = get_artifact(result["meta"]["artifact_id"])
+    assert set(stored["predictions"]) == set(local_market)
+    assert {row["weighting"] for row in result["tables"]["decile_summary"]} == {"equal", "value"}
+
+
+def test_alpha_formula_rejects_unsafe_and_unknown_names(local_market):
+    from app.services.ml_v2.registry import run_feature
+    base = {"symbols": local_market, "max_symbols": 8, "lookback_days": 380, "model_family": "ridge"}
+    for expr in ("__import__('os')", "close.sum()", "nonexistent_field + 1"):
+        with pytest.raises(ValueError, match="Formula bad"):
+            run_feature("02", {**base, "formulas": [{"name": "bad", "expr": expr}]})

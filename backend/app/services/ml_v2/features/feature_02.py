@@ -1,24 +1,26 @@
-"""Feature 02: Gradient-Boosted Tree Alpha Engine with attribution."""
+"""Feature 02: Alpha, cross-sectional return ranking with controls and exact attributions."""
 
 from __future__ import annotations
 
 from typing import Any
-from .inputs import inputs, outputs, validate
+from .inputs import INPUT_META, _m, inputs, outputs, validate
 
 from app.services.ml_v2.core.common import merge_feature_contract
+from app.services.ml_v2.core.data_loader import UNIVERSE_PRESET_IDS
 
 
 FEATURE_ID = "02"
-FEATURE_TITLE = "Gradient-Boosted Tree Alpha Engine with Full Attribution"
+FEATURE_TITLE = "Alpha: Gradient-Boosted and Ridge Ranking with Controls and Attribution"
 
 DEFAULTS: dict[str, Any] = {
     "embargo_period": 5,
-    "model_family": "all",
+    "model_family": "ensemble",
     "feature_set": "ohlcv_factor_library",
     "prediction_target": "next_period_return",
-    "prediction_horizon": 5,
+    "prediction_horizon": 21,
     "tuning_mode": "platform_defaults",
-    "lookback_days": 756,
+    "cost_bps": 10,
+    "lookback_days": 1008,
     "max_symbols": 120,
 }
 
@@ -26,27 +28,39 @@ ALIASES = {"model": "model_family", "target": "prediction_target", "horizon": "p
 
 INPUT_CONTRACT = [
     {"key": "symbols", "type": "ticker_list", "required": False, "source": "master_universe.parquet"},
-    {"key": "model_family", "type": "select", "options": ["all", "xgboost", "lightgbm", "catboost", "random_forest", "extra_trees", "ridge"], "default": "all"},
+    {"key": "universe", "type": "select", "options": UNIVERSE_PRESET_IDS, "default": "default"},
+    {"key": "model_family", "type": "select", "options": ["ensemble", "lightgbm", "ridge", "xgboost", "catboost"], "default": "ensemble"},
     {"key": "feature_set", "type": "select", "options": ['ohlcv_factor_library'], "default": "ohlcv_factor_library"},
+    {"key": "feature_families", "type": "multi_select", "options": ["momentum", "value", "quality", "volatility", "liquidity"],
+     "default": ["momentum", "value", "quality", "volatility", "liquidity"]},
+    {"key": "formulas", "type": "object", "required": False},
+    {"key": "upload_id", "type": "text", "required": False},
     {"key": "prediction_target", "type": "select", "options": ['next_period_return'], "default": "next_period_return"},
-    {"key": "prediction_horizon", "type": "integer", "options": [1, 5, 21, 63, 126, 252], "default": 5},
+    {"key": "prediction_horizon", "type": "integer", "options": [1, 5, 21, 63, 126, 252], "default": 21},
     {"key": "tuning_mode", "type": "select", "options": ["platform_defaults", "manual", "optuna_research"], "default": "platform_defaults"},
+    {"key": "sample_weighting", "type": "select", "options": ["equal", "time_decay"], "default": "equal"},
+    {"key": "sector_filter", "type": "text_list", "required": False},
+    {"key": "minimum_formation_notional", "type": "float", "min": 0, "default": 0},
+    {"key": "hyperparameters", "type": "object", "required": False},
+    {"key": "optuna_trials", "type": "integer", "range": [1, 50], "default": 10},
+    {"key": "exact_shap_cap", "type": "integer", "range": [1, 256], "default": 64},
 ]
 
-INPUT_CONTRACT.extend([{"key":"sample_weighting","type":"select","options":["equal","time_decay"],"default":"equal"},
-    {"key":"sector_filter","type":"text_list","required":False},
-    {"key":"minimum_formation_notional","type":"float","min":0,"default":0},{"key":"hyperparameters","type":"object","required":False},
-    {"key":"optuna_trials","type":"integer","range":[1,50],"default":10},
-    {"key":"exact_shap_cap","type":"integer","range":[1,256],"default":64}])
+INPUT_META.setdefault("feature_families", _m("standard", "Feature families the models may use; custom formula features are always included."))
+INPUT_META.setdefault("formulas", _m("standard", "Custom features as a list of {name, expr}, written in the Research formula language and evaluated on daily data (at most 8)."))
+INPUT_META.setdefault("upload_id", _m("expert", "Id of an uploaded feature panel to add as extra features."))
+INPUT_META["universe"] = _m("quick", "Ticker preset: the default 35 US large caps, one GICS sector, high volatility, ETFs, or all local symbols. Ignored when symbols is set.")
 
-OUTPUT_CONTRACT = [{"key": key, "location": location, "renderer": "table", "status": "live"}
-    for location, keys in {"charts": ["prediction_rank_table", "shap_feature_importance", "shap_beeswarm",
-        "shap_waterfall_top_signal", "model_ic_leaderboard", "rolling_monthly_ic_series"],
-        "tables": ["current_predictions", "model_performance", "heldout_predictions", "tuning_trials", "training_audit"]}.items() for key in keys]
+_OUT = {"charts": ["prediction_rank_table", "shap_feature_importance", "shap_beeswarm", "shap_waterfall_top_signal",
+                   "model_ic_leaderboard", "rolling_monthly_ic_series", "decile_spreads", "net_of_cost_curve"],
+        "tables": ["current_predictions", "controls", "ensemble", "decile_summary", "what_changed", "ticker_contributions",
+                   "feature_families", "model_performance", "heldout_predictions", "tuning_trials", "training_audit"]}
+OUTPUT_CONTRACT = [{"key": key, "location": location, "renderer": "table", "status": "live"} for location, keys in _OUT.items() for key in keys]
 RESEARCH_ONLY = []
-IMPLEMENTATION_NOTES = ["Model selection, tuning and ensemble weights use nested purged training validation only.",
-    "Attribution uses genuine SHAP values in model output units; no model-importance substitutes.",
-    "Current predictions use the latest observed feature dates and refit on matured labels only."]
+IMPLEMENTATION_NOTES = ["Default horizon is 21 sessions; LightGBM and Ridge on date-rank-scaled features, with OLS-3 and an IC-weighted composite as controls beside the model.",
+    "Ensemble weights are chosen on a purged validation window before the holdout; attributions are exact TreeSHAP (pred_contrib) and linear contributions, blended with the same weights.",
+    "Decile spreads are reported equal-weight and value-weight (dollar-volume proxy); long-short results are net of costs with turnover and capacity.",
+    "Predictions get an artifact id in meta that Meta-label, Allocation and Validate can consume."]
 
 
 INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)

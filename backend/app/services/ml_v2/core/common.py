@@ -171,7 +171,7 @@ def series_hash(series: pd.Series | np.ndarray) -> str:
     return digest.hexdigest()[:16]
 
 
-def build_provenance(closes: pd.DataFrame, *, train_window: tuple[Any, Any] | None, test_window: tuple[Any, Any] | None,
+def build_provenance(closes: pd.DataFrame, *, calendar: dict[str, Any] | None = None, train_window: tuple[Any, Any] | None, test_window: tuple[Any, Any] | None,
                      purge: int, embargo: int, universe: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
     """The provenance chip: windows, purge and embargo (sessions), universe, share of missing price cells."""
     grid = closes.to_numpy(float)
@@ -181,7 +181,7 @@ def build_provenance(closes: pd.DataFrame, *, train_window: tuple[Any, Any] | No
             "universe": universe, "symbols": int(closes.shape[1]), "sessions": int(closes.shape[0]),
             "missing_share": missing,
             "calendar": "union of observed sessions; no price forward-fill, a missing close leaves NaN returns on that day and the next",
-            **(extra or {})}
+            **(calendar or {}), **(extra or {})}
 
 
 
