@@ -78,7 +78,7 @@ def test_unknown_job_is_404(client):
 
 
 def test_job_rejects_unsupported_feature_options_before_enqueue(client, quotes):
-    response = client.post("/api/ml/v2/features/07/jobs",json={"symbols":["AAA"],"model_library":["fake_model"]})
+    response = client.post("/api/ml/v2/features/01/jobs",json={"symbols":["AAA"],"model_type":"fake_model"})
     assert response.status_code == 422
 
 
@@ -86,7 +86,7 @@ def test_job_persists_and_returns_completed_artifact(client, quotes, monkeypatch
     import time
     from app.api import ml_v2 as api
     monkeypatch.setattr(api,"run_feature",lambda *args: {"status":"ok","summary_cards":[],"charts":{},"tables":{}})
-    response = client.post("/api/ml/v2/features/07/jobs",json={"symbols":["AAA"]})
+    response = client.post("/api/ml/v2/features/01/jobs",json={"symbols":["AAA"]})
     assert response.status_code == 200
     identifier = response.json()["job_id"]
     deadline = time.monotonic()+5
