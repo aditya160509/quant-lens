@@ -7,7 +7,7 @@ import pytest
 def test_manifest_has_complete_feature_contracts():
     from app.services.ml_v2.registry import feature_manifest
     features = feature_manifest()
-    assert len(features) == 12
+    assert len(features) == 7
     for feature in features:
         assert feature['inputs'] and feature['outputs']
         assert len({row['key'] for row in feature['inputs']}) == len(feature['inputs'])
@@ -61,19 +61,7 @@ def test_rolling_ivol_matches_ols_residual_standard_error():
     assert actual == pytest.approx(expected,rel=1e-9)
 
 
-@pytest.mark.parametrize('method',['static','rolling_ols','kalman'])
-def test_pair_hedges_do_not_read_future_observations(method):
-    from app.services.ml_v2.core.pairs import hedge_path
-    rng = np.random.default_rng(25)
-    x = np.cumsum(rng.normal(size=140))
-    y = .8*x+rng.normal(scale=.2,size=140)
-    original = hedge_path(y,x,80,method)
-    perturbed = y.copy(); perturbed[110:] += 1000
-    changed = hedge_path(perturbed,x,80,method)
-    assert original[:30] == changed[:30]
-
-
 def test_unsupported_input_is_rejected_before_execution():
-    from app.services.ml_v2.features.feature_07 import run
+    from app.services.ml_v2.features.feature_01 import run
     with pytest.raises(ValueError,match="Unsupported inputs"):
         run({"made_up_option":True})

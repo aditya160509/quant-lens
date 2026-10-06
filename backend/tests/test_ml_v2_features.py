@@ -3,29 +3,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-def test_sequence_models_train_real_architectures(monkeypatch):
-    pytest.importorskip("torch")
-    from types import SimpleNamespace
-    from app.services.ml_v2.core import panel as panel_module
-    from app.services.ml_v2.features.feature_12 import run
-    rng = np.random.default_rng(18)
-    dates = pd.date_range("2022-01-01", periods=180)
-    panel = pd.DataFrame({"date": np.tile(dates, 2), "ticker": np.repeat(["AAA", "BBB"], len(dates)),
-        "mom_21": rng.normal(size=360), "ret_1d": rng.normal(scale=.01, size=360),
-        "vol_21": rng.uniform(.1, .3, 360)})
-    panel = panel.sort_values(["date", "ticker"]).reset_index(drop=True)
-    panel["target_return"] = .01 * panel["mom_21"] + rng.normal(scale=.005, size=360)
-    ctx = SimpleNamespace(returns=pd.DataFrame(index=dates), closes=pd.DataFrame(index=dates))
-    monkeypatch.setattr(panel_module, "load_context", lambda *a, **kw: ctx)
-    monkeypatch.setattr(panel_module, "make_feature_panel", lambda *a, **kw: (panel, panel.target_return))
-    result = run({"architectures": ["patchtst", "itransformer", "lstm", "mlp"],
-                  "epochs": 1, "sequence_length": 21, "transformer_depth": 1})
-    rows = result["tables"]["architecture_comparison"]
-    assert len(rows) == 4
-    assert all(row["training_time_seconds"] > 0 for row in rows)
-    assert all(np.isfinite(row["mae"]) for row in rows)
-    assert result["meta"]["training"] == "actual_pytorch_cpu"
-
 @pytest.fixture
 def local_market(monkeypatch):
     from app.services.ml_v2.core import data_loader
@@ -46,19 +23,19 @@ def local_market(monkeypatch):
     monkeypatch.setattr(data_loader, "load_fama_french", lambda: pd.DataFrame(columns=["date"]))
     metadata = pd.DataFrame({"ticker": symbols, "sector": [f"S{i//2}" for i in range(8)]})
     monkeypatch.setattr(data_loader, "load_fundamentals_metadata", lambda: metadata)
-    for name in ["panel", "alpha", "volatility", "barriers", "allocation", "regimes", "dma", "composite", "pairs", "microstructure", "dml"]:
+    for name in ["panel", "alpha", "volatility", "barriers", "allocation", "regimes", "composite", "microstructure"]:
         module = importlib.import_module("app.services.ml_v2.core." + name)
         monkeypatch.setattr(module, "load_macro", lambda: pd.DataFrame(columns=["date"]), raising=False)
         monkeypatch.setattr(module, "load_fama_french", lambda: pd.DataFrame(columns=["date"]), raising=False)
     return symbols
 
-@pytest.mark.parametrize("feature", ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"])
+@pytest.mark.parametrize("feature", ["01", "02", "03", "04", "05", "06", "08"])
 def test_feature_runs_on_local_observations(local_market, feature):
     import json
     from app.services.ml_v2.registry import run_feature
     payload = {"symbols":local_market,"max_symbols":8,"lookback_days":380}
     payload.update({"01":{"model_type":"ridge","cpcv_n_groups":4},"02":{"model_family":"ridge"},
-        "03":{"asset":"T0","forecast_horizons":[1,5]},"11":{"dml_folds":3}}.get(feature,{}))
+        "03":{"asset":"T0","forecast_horizons":[1,5]}}.get(feature,{}))
     result = run_feature(feature, payload)
     assert result["status"] != "error"
     json.dumps(result, allow_nan=False)

@@ -22,12 +22,7 @@ ML_V2_FEATURES: Dict[str, MLFeature] = {
     "04": MLFeature("04", "Meta-Labeling and Triple-Barrier Label Engine", "feature_04"),
     "05": MLFeature("05", "Hierarchical Risk Parity Optimizer", "feature_05"),
     "06": MLFeature("06", "Market Regime Detection and Strategy Routing", "feature_06"),
-    "07": MLFeature("07", "Bayesian Online Learning and DMA Engine", "feature_07"),
     "08": MLFeature("08", "IC-Weighted Composite Signal Optimizer", "feature_08"),
-    "09": MLFeature("09", "Cointegrated Pairs and Stat Arb Engine", "feature_09"),
-    "10": MLFeature("10", "Market Microstructure Signal Observatory", "feature_10"),
-    "11": MLFeature("11", "Conditional Factor Association Engine", "feature_11"),
-    "12": MLFeature("12", "Deep Sequence Alpha Engine", "feature_12"),
 }
 
 

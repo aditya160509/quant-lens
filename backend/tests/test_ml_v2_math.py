@@ -24,18 +24,6 @@ def test_spearman_ties_match_scipy():
     y = np.array([4., 2., 2., 1., 3., 3.])
     assert abs(fast_spearman_ic(x, y) - spearmanr(x, y).statistic) < 1e-12
 
-def test_dml_recovers_known_partial_effect():
-    import numpy as np
-    from app.services.ml_v2.core.dml import dml_cross_fit
-    rng = np.random.default_rng(13)
-    z = rng.normal(size=900)
-    treatment = 0.7 * z + rng.normal(size=900)
-    y = pd.Series(1.8 * treatment + 0.9 * z + rng.normal(scale=0.25, size=900))
-    x = pd.DataFrame({"treatment": treatment, "z": z})
-    ape, se, _ = dml_cross_fit(x, y, "treatment", dates=pd.date_range("2020-01-01", periods=900))
-    assert abs(ape - 1.8) < 0.08
-    assert 0 < se < 0.05
-
 def test_cqr_predictions_do_not_use_test_outcomes():
     import numpy as np
     from app.services.ml_v2.core.barriers import _lightgbm_cqr_intervals

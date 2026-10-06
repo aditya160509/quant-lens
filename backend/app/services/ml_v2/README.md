@@ -1,3 +1,7 @@
+> **Current scope (2026-10).** Registered features: 01 (CPCV), 02, 03, 04 (meta-labelling, also exposed as "Improve my strategy" in Validate), 05, 06, 08 and `validate` (one-page HELD UP / MIXED / FAILED verdict).
+> Removed per `docs/ML_V2_PRODUCT_REVIEW.md` 13.1: F07 (DMA), F09 (pairs), F10 page, F11 (DML), F12 (sequence/torch). `core/microstructure.py` stays for Alpha features.
+> Uploads: `POST /api/ml/v2/uploads?kind=returns|predictions|trial_matrix|feature_panel|universe`. Sections below describing removed features are historical.
+
 > Current rebuild status: [DONE.md](DONE.md). The historical README below is retained as evidence; its old checklists are superseded.
 
 # ML V2 Backend Implementation Report

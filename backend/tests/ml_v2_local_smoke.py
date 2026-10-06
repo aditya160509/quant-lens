@@ -4,11 +4,11 @@ from app.services.ml_v2.core.data_loader import available_symbols,data_inventory
 symbols=[s for s in ['AAPL','MSFT','SPY','AMZN','GOOGL','META','NVDA','JPM'] if s in available_symbols()]
 print('selected',symbols,flush=True)
 results=[]
-for feature in range(1,13):
+for feature in [1,2,3,4,5,6,8]:
     p={'symbols':symbols,'max_symbols':8,'lookback_days':756}
     p.update({1:{'model_type':'ridge','cpcv_n_groups':4},2:{'model_family':'ridge'},
         3:{'asset':'AAPL','forecast_horizons':[1,5]},5:{'max_sector_weight':1.},
-        11:{'dml_folds':3},12:{'epochs':1,'architectures':['mlp']}}.get(feature,{}))
+        }.get(feature,{}))
     start=time.monotonic()
     try:
         result=run_feature(feature,p)
