@@ -283,6 +283,7 @@ export const ML_LAB: LabConfig = {
   manifest: (raw) => (raw as { features: RawFeature[] }).features.filter((f) => ID(f.id) in CATALOG).map(toSpec),
   submit: (featureId, payload) => ({ path: `/features/${RAW(featureId)}/jobs`, body: payloadFor(payload) }),
   signal: false,
+  runLabel: (id) => (id === "mlvalidate" ? "Validate" : id === "ml05" ? "Allocate" : id === "ml03" || id === "ml06" ? "Forecast" : "Train and test"),
   defaultUniverse: "35 US large caps",
   overview: {
     intro: "Four pages, one rule: nothing ships unless it holds up out of sample. Every split is chronological and purged, every result is measured against simple controls, and anything the data cannot support is marked unavailable rather than approximated.",

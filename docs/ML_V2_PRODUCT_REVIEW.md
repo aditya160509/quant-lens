@@ -187,9 +187,11 @@ Higher is better, except Cost (lower is better). Priority = (Demand × Different
 
 ## 6. What to add
 
+Status 2026-10-06: `[x]` done, `[~]` partly done, `[ ]` open.
+
 ### A1. Validation as the product (the core, and the money)
 
-1. `[ ]` **[B+F] "Validate my strategy or model".** Upload a dated returns series, or predictions with dates, tickers and outcomes, or trial returns for PBO. The report gives:
+1. `[x]` **[B+F] "Validate my strategy or model".** Upload a dated returns series, or predictions with dates, tickers and outcomes, or trial returns for PBO. The report gives:
    - CPCV paths
    - PBO from the trial matrix
    - deflated Sharpe at the true trial count
@@ -199,7 +201,7 @@ Higher is better, except Cost (lower is better). Priority = (Demand × Different
    - a one-page HELD UP / MIXED / FAILED verdict in the style of the Research report card
 
    This beats AgentTrading because it handles ML models and trial searches, not just simple rules.
-2. `[ ]` **[B] Controls on every backtest:**
+2. `[x]` **[B] Controls on every backtest:**
    - buy-and-hold
    - equal-weight universe
    - constant exposure (same average exposure, no signal)
@@ -207,23 +209,23 @@ Higher is better, except Cost (lower is better). Priority = (Demand × Different
    - a model control: OLS on 3 features for alpha models; 1/N and inverse-variance for allocators
 
    The verdict is measured against the best control, not against zero.
-3. `[ ]` **[B+F] Multi-seed stability.** Rerun stochastic fits over N seeds and show the distribution. Flag when the best seed is more than 25% above the median.
-4. `[ ]` **[B+F] Parameter plateau map.** Sweep the one or two key settings and show a heatmap; label results as plateau (robust) or cliff (fragile).
-5. `[ ]` **[B] Leakage audit badge.** Perturb data after *t* and confirm results at *t* are unchanged. Show the badge on every result.
-6. `[ ]` **[B+F] Shared trial ledger with Research,** so the deflated Sharpe and PBO count trials across both modules.
-7. `[ ]` **[B+F] Reproducibility receipt:** data, code, settings and seed hash, with a "rerun exactly" button.
-8. `[ ]` **[B+F] Transfer test.** Apply the frozen model or rule to other assets, sectors or later periods it wasn't tuned on. (Requested directly on Reddit.)
-9. `[ ]` **[B] Monte Carlo:** block-bootstrap the path or trade sequence for a drawdown and Sharpe distribution (`arch.bootstrap.MovingBlockBootstrap`).
+3. `[x]` **[B+F] Multi-seed stability.** Rerun stochastic fits over N seeds and show the distribution. Flag when the best seed is more than 25% above the median.
+4. `[x]` **[B+F] Parameter plateau map.** Sweep the one or two key settings and show a heatmap; label results as plateau (robust) or cliff (fragile).
+5. `[x]` **[B] Leakage audit badge.** Perturb data after *t* and confirm results at *t* are unchanged. Show the badge on every result.
+6. `[ ]` **[B+F] Shared trial ledger with Research,** so the deflated Sharpe and PBO count trials across both modules. *(not started)*
+7. `[~]` **[B+F] Reproducibility receipt:** data, code, settings and seed hash, with a "rerun exactly" button. *(receipt and hashes done; "rerun exactly" button not yet)*
+8. `[x]` **[B+F] Transfer test.** Apply the frozen model or rule to other assets, sectors or later periods it wasn't tuned on. (Requested directly on Reddit.)
+9. `[x]` **[B] Monte Carlo:** block-bootstrap the path or trade sequence for a drawdown and Sharpe distribution (`arch.bootstrap.MovingBlockBootstrap`).
 
 ### A2. One workflow instead of twelve tools
 
-10. `[ ]` **[B+F] Hand-offs via artifact ids:**
+10. `[x]` **[B+F] Hand-offs via artifact ids:**
     - Alpha predictions → Meta-label filter, Allocation (views) and Composite (as a factor)
     - Regimes → Volatility and risk
-11. `[ ]` **[B] Regime-switching volatility model choice:** HAR-RV in calm regimes, GJR-GARCH in stress, scored against the single-model baseline.
-12. `[ ]` **[B+F] Sizing options (with controls):** volatility targeting, meta-label probability and Kelly fraction. Always shown against unmanaged sizing, because of the evidence in §4.
-13. `[ ]` **[F] Strategy studio:** signal → filter → sizing → portfolio → costs, then validated with A1.
-14. `[ ]` **[B] Pairs upgrades:**
+11. `[x]` **[B] Regime-switching volatility model choice:** HAR-RV in calm regimes, GJR-GARCH in stress, scored against the single-model baseline.
+12. `[~]` **[B+F] Sizing options (with controls):** volatility targeting, meta-label probability and Kelly fraction. Always shown against unmanaged sizing, because of the evidence in §4. *(vol targeting and meta-label sizing done; Kelly not added)*
+13. `[ ]` **[F] Strategy studio:** signal → filter → sizing → portfolio → costs, then validated with A1. *(not started)*
+14. `[ ]` **[B] Pairs upgrades:** *(removed: pairs cut in §13)*
     - top-N pairs, not one
     - industry-homogeneous matching
     - a zero-crossing (reversal frequency) filter
@@ -232,27 +234,27 @@ Higher is better, except Cost (lower is better). Priority = (Demand × Different
 
 ### A3. Live and monitored (what subscriptions pay for)
 
-15. `[ ]` **[B] Daily refresh** of the ranking, regime, vol forecasts, pair z-scores and composite scores.
-16. `[ ]` **[B+F] Alerts:** regime change, a z-score crossing, vol above forecast, top-N ranking changes. Email, webhook and in-app.
-17. `[ ]` **[B+F] Model monitoring:**
+15. `[ ]` **[B] Daily refresh** of the ranking, regime, vol forecasts, pair z-scores and composite scores. *(later: live)*
+16. `[ ]` **[B+F] Alerts:** regime change, a z-score crossing, vol above forecast, top-N ranking changes. Email, webhook and in-app. *(later: live)* *(later: live)*
+17. `[ ]` **[B+F] Model monitoring:** *(later: live)*
     - per-feature drift (Wasserstein distance against the training window)
     - live IC against backtest IC
     - a "retrain recommended" flag
-18. `[ ]` **[F] Live overview board.**
+18. `[ ]` **[F] Live overview board.** *(later: live)*
 
 ### A4. Bring your own inputs
 
-19. `[ ]` **[B+F] Custom features in the Research formula language** (reuse `signal_lang`).
-20. `[ ]` **[B] Upload feature panels and predictions,** with date and point-in-time validation.
-21. `[ ]` **[B] Universe presets:** sectors, regions, ETFs, crypto (on its own calendar), high volatility, and "same as last run".
-22. `[ ]` **[B] Macro features with ALFRED vintages.**
+19. `[x]` **[B+F] Custom features in the Research formula language** (reuse `signal_lang`).
+20. `[x]` **[B] Upload feature panels and predictions,** with date and point-in-time validation.
+21. `[~]` **[B] Universe presets:** sectors, regions, ETFs, crypto (on its own calendar), high volatility, and "same as last run". *(sectors, high-vol, ETFs, default done; regions and crypto not available in the data)*
+22. `[ ]` **[B] Macro features with ALFRED vintages.** *(later: needs data provider)*
 
 ### A5. Data integrity shown, not just done
 
-23. `[ ]` **[B+F] Provenance chip on every result:** train and test windows, purge and embargo, universe, missing-data share.
-24. `[ ]` **[B] Calendar-aligned panels,** with gap handling stated.
-25. `[ ]` **[B] Value-weight and NYSE-breakpoint reporting** for any anomaly or feature sort. Hou, Xue and Zhang show equal-weight results mislead.
-26. `[ ]` **[B] Split and adjustment anomaly check.**
+23. `[x]` **[B+F] Provenance chip on every result:** train and test windows, purge and embargo, universe, missing-data share.
+24. `[x]` **[B] Calendar-aligned panels,** with gap handling stated.
+25. `[~]` **[B] Value-weight and NYSE-breakpoint reporting** for any anomaly or feature sort. Hou, Xue and Zhang show equal-weight results mislead. *(Alpha deciles equal- and value-weighted; NYSE breakpoints not yet)*
+26. `[x]` **[B] Split and adjustment anomaly check.**
 
 ---
 
@@ -529,9 +531,9 @@ Includes:
 
 ### 13.5 Final build order
 
-1. **Cut:** delete F12 and torch, F09, F07 and the F10 page; move F11 to Research; switch Alpha to LightGBM `pred_contrib`; make XGBoost and CatBoost optional.
-2. **Correct defaults:** shrinkage allocation, Alpha at 21 days with Ridge and composite controls, vol sizing beside unmanaged, value-weight reporting.
-3. **Validate core:** uploads, controls, leakage badge, multi-seed, transfer, plateau, Monte Carlo and the **overfitting autopsy**.
-4. **Four-page restructure** of the frontend: Validate, Alpha, Volatility and risk, Allocation.
+1. ✅ **Cut:** delete F12 and torch, F09, F07 and the F10 page; F11 deleted (not moved), F08 folded into Alpha as a control; switch Alpha to LightGBM `pred_contrib`; make XGBoost and CatBoost optional.
+2. ✅ **Correct defaults:** shrinkage allocation, Alpha at 21 days with Ridge and composite controls, vol sizing beside unmanaged, value-weight reporting.
+3. ✅ **Validate core:** uploads, controls, leakage badge, multi-seed, transfer, plateau, Monte Carlo and the **overfitting autopsy**.
+4. ✅ **Four-page restructure** of the frontend: Validate, Alpha, Volatility and risk, Allocation.
 5. **Forward tracking, drift monitor and daily refresh with alerts**, then the **"what changed" digest**.
 6. **Verified result pages**, the **thin Strategy studio**, pricing tiers and billing.

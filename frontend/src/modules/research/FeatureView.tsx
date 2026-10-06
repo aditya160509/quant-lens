@@ -7,7 +7,7 @@ import { AlertTriangle, ChevronDown, FileText, Loader2, Play, Square } from "luc
 import { DUR } from "@/workspace/prefs";
 import { PopMenu, Tabs, type MenuAt } from "@/workspace/ui";
 import { featureHref, metaFor, pageOf } from "./catalog";
-import { lab } from "./lab";
+import { lab, runLabel } from "./lab";
 import { LedgerChip } from "./Projects";
 import { useActiveSignal } from "./api";
 import { isNum, label, num, out } from "./format";
@@ -102,9 +102,9 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   const runButton = (
     <div style={{ display: "flex", gap: 6, flex: "none" }}>
       {running && run.status !== "submitting" ? <button className="btn" onClick={run.cancel}><Square size={11} />Cancel</button> : null}
-      <button className="btn primary" onClick={run.run} disabled={running} title="Run study (⌘↵)">
+      <button className="btn primary" onClick={run.run} disabled={running} title={`${runLabel(feature.id)} (⌘↵)`}>
         {running ? <Loader2 size={13} className="spin" /> : <Play size={11} fill="currentColor" />}
-        {running ? "Running" : result ? "Run again" : "Run study"}
+        {running ? "Running" : result ? "Run again" : runLabel(feature.id)}
         <span className="kbd" style={{ background: "transparent", color: "inherit", boxShadow: "none", opacity: 0.55 }}>⌘↵</span>
       </button>
     </div>

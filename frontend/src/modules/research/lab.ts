@@ -31,6 +31,8 @@ export type LabConfig = {
   overview?: { intro: string; stages: { id: string; label: string; intro: string; ids: string[] }[] };
   /** What an empty ticker list means for this lab, shown in the Universe chip. */
   defaultUniverse?: string;
+  /** Verb on the run button for a feature, e.g. "Train and test"; defaults to "Run study". */
+  runLabel?: (featureId: string) => string;
   /** Research extras: Signal and Report card pages, projects, ledger, active signal. */
   signal: boolean;
 };
@@ -48,3 +50,6 @@ export function lab(): LabConfig {
 
 /** True when the id belongs to the mounted lab, so background polling never asks the wrong API. */
 export const owns = (featureId: string) => Boolean(current && featureId in current.catalog);
+
+/** The run button's verb for a feature in the mounted lab. */
+export const runLabel = (featureId: string) => current?.runLabel?.(featureId) ?? "Run study";

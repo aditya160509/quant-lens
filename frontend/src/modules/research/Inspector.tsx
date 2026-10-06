@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { History, Keyboard, Play, RotateCcw } from "lucide-react";
 import { Dot, Segmented } from "@/workspace/ui";
 import { featureHref, metaFor } from "./catalog";
+import { runLabel } from "./lab";
 import { studyPart } from "./api";
 import { out } from "./format";
 import { layoutFor } from "./layouts";
@@ -58,7 +59,7 @@ export function Inspector({ feature, run }: { feature: FeatureSpec; run: Feature
           <footer style={{ display: "flex", gap: 6, padding: 10, borderTop: "1px solid var(--line)" }}>
             <button className="btn icon" onClick={run.reset} aria-label="Reset every setting to its default" title="Reset every setting"><RotateCcw size={13} /></button>
             <button className="btn primary" style={{ flex: 1, justifyContent: "center", height: 34 }} onClick={run.run} disabled={running}>
-              <Play size={11} fill="currentColor" />{running ? "Running" : "Run study"}
+              <Play size={11} fill="currentColor" />{running ? "Running" : runLabel(feature.id)}
               <span className="kbd" style={{ background: "transparent", color: "inherit", boxShadow: "none", opacity: 0.55 }}>⌘↵</span>
             </button>
           </footer>
