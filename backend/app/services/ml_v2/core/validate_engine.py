@@ -259,10 +259,11 @@ def block_dsr(run: Run) -> dict:
 
 
 def block_minbtl(run: Run, dsr: dict) -> dict:
-    trials = max(_trial_count(run), 2)
+    trials = _trial_count(run)
     sr = run.sr
     years = len(run.series) * run.h / 252.0
-    emax = (1 - np.euler_gamma) * _z(1 - 1 / trials) + np.euler_gamma * _z(1 - 1 / (trials * math.e))
+    t2 = max(trials, 2)
+    emax = (1 - np.euler_gamma) * _z(1 - 1 / t2) + np.euler_gamma * _z(1 - 1 / (t2 * math.e))
     # years needed so that a zero-skill search over `trials` configurations cannot reach the observed annual Sharpe
     need = float((emax / sr) ** 2) if sr and sr > 0 else None
     return {"trials": trials, "observed_years": years, "annual_sharpe": sr, "min_years_required": need,
@@ -478,7 +479,7 @@ def block_transfer(run: Run) -> dict:
     ok_all = all(v is not None and v > 0 for v in vals)
     ratio = (min(v for v in vals if v is not None) / ref) if ref and ref > 0 and all(v is not None for v in vals) else None
     status = "pass" if ok_all and ratio is not None and ratio >= 0.5 else ("warn" if ok_all else "fail")
-    return {"status": "computed", "scope": scope, "reference_sharpe": _f(ref), "tests": tests, "min_ratio_to_reference": _f(ratio),
+    return {"status": "computed", "scope": scope, "reference_sharpe": _f(ref), "tests": tests, "min_ratio_to_reference": _f(ratio), "min_transfer_sharpe": _f(min(v for v in vals if v is not None)) if any(v is not None for v in vals) else None,
             "outcome": status, "rule": "pass when every transfer Sharpe is positive and at least 50% of the reference", "provenance": prov}
 
 
@@ -502,7 +503,7 @@ def block_monte_carlo(run: Run) -> dict:
 
 # ---------------------------------------------------------------- verdict and autopsy
 
-def _autopsy(run: Run, b: dict) -> dict:
+def _autopsy(run: Run, b: dict, label: str = "") -> dict:
     causes = []
     dsr, trials = b["deflated_sharpe"], _trial_count(run)
     if dsr.get("status") == "computed":
@@ -519,14 +520,23 @@ def _autopsy(run: Run, b: dict) -> dict:
     best_i = int(np.argmax(totals))
     share = totals[best_i] / total if total > 0 else 1.0
     span = f"{s.index[seg[best_i][0]].year}-{s.index[seg[best_i][-1]].year}"
-    causes.append({"cause": "regime_dependence", "severity": float(np.clip((share - 0.5) / 0.4, 0, 1)),
-                   "evidence": f"quarter-of-sample {span} supplies {share:.0%} of total profit; segment Sharpes " + ", ".join(f"{vs.sharpe_of(s.iloc[i], run.h):.2f}" for i in seg),
-                   "phrase": f"one period ({span}) supplying {share:.0%} of profit"})
+    seg_sr = ", ".join(f"{vs.sharpe_of(s.iloc[i], run.h):.2f}" for i in seg)
+    if total > 0:
+        causes.append({"cause": "regime_dependence", "severity": float(np.clip((share - 0.5) / 0.4, 0, 1)),
+                       "evidence": f"quarter-of-sample {span} supplies {share:.0%} of total profit; segment Sharpes " + seg_sr,
+                       "phrase": f"one period ({span}) supplying {share:.0%} of profit"})
+    else:
+        causes.append({"cause": "regime_dependence", "severity": 0.0, "evidence": f"total P&L is not positive; losses spread across periods (segment Sharpes {seg_sr})", "phrase": ""})
     if run.turnover is not None and float(np.mean(run.turnover)) > 0:
         gross, _ = vs.strategy_series(run.pred, run.p.out, run.h, 0.0, run.q)
         be = float(gross.mean() / (np.mean(run.turnover) / 1e4))
-        causes.append({"cause": "cost_sensitivity", "severity": float(np.clip(1 - be / 20, 0, 1)) if be > 0 else 1.0,
-                       "evidence": f"breakeven cost {be:.1f} bps per unit turnover", "phrase": f"trading costs (breakeven {be:.0f} bps)", "breakeven_bps": be,
+        gsr, turn = vs.sharpe_of(gross, run.h), float(np.mean(run.turnover))
+        flips = bool(np.isfinite(gsr) and gsr > 0 and run.sr < 0)
+        sev = 1.0 if flips else (float(np.clip(1 - be / 20, 0, 1)) if be > 0 else 1.0)
+        phrase = (f"Gross Sharpe {gsr:.2f} turns to {run.sr:.2f} after {run.cost:g} bps costs: breakeven is {be:.1f} bps on {turn:.0%} turnover per period"
+                  if flips else f"trading costs (breakeven {be:.0f} bps)")
+        causes.append({"cause": "cost_sensitivity", "severity": sev, "gross_sharpe": _f(gsr), "avg_turnover": turn,
+                       "evidence": f"breakeven cost {be:.1f} bps per unit turnover; gross Sharpe {gsr:.2f}, net {run.sr:.2f}", "phrase": phrase, "breakeven_bps": be,
                        "sharpe_by_cost_bps": {str(c): _f(vs.sharpe_of(vs.strategy_series(run.pred, run.p.out, run.h, c, run.q)[0], run.h)) for c in COST_GRID}})
     pl = b["plateau"]
     if pl.get("status") == "computed":
@@ -535,8 +545,12 @@ def _autopsy(run: Run, b: dict) -> dict:
     tr = b["transfer"]
     if tr.get("status") == "computed":
         ratio = tr["min_ratio_to_reference"]
+        vals = [t["sharpe"] for t in tr["tests"] if t["sharpe"] is not None]
+        weakest = min(vals) if vals else None
         sev = 1.0 if ratio is None else float(np.clip(1 - ratio, 0, 1))
-        causes.append({"cause": "single_asset_luck", "severity": sev, "evidence": "weakest transfer Sharpe = " + ("n/a" if ratio is None else f"{ratio:.0%} of reference"),
+        ev = ("no finite transfer Sharpe" if weakest is None else f"weakest transfer Sharpe {weakest:.2f} vs reference {tr['reference_sharpe'] if tr['reference_sharpe'] is None else round(tr['reference_sharpe'], 2)}"
+              + (f" ({ratio:.0%} of reference)" if ratio is not None else ""))
+        causes.append({"cause": "single_asset_luck", "severity": sev, "evidence": ev,
                        "phrase": "an edge that does not transfer to other tickers or later dates"})
     st = b["stability"]
     if st.get("status") == "computed":
@@ -545,7 +559,10 @@ def _autopsy(run: Run, b: dict) -> dict:
     causes = sorted((c for c in causes), key=lambda c: -c["severity"])
     main = [c for c in causes if c["severity"] > 0.5][:2]
     sr = run.sr
-    if main:
+    if main and label == "FAILED":
+        sentence = "Fails because " + (main[0]["phrase"] if main[0]["cause"] == "cost_sensitivity" else f"Sharpe {sr:.1f} is driven by " + main[0]["phrase"]) + (
+            "; also " + main[1]["phrase"] if len(main) > 1 else "") + "."
+    elif main:
         sentence = f"Sharpe {sr:.1f} is mostly explained by " + " and ".join(c["phrase"] for c in main) + "."
     else:
         sentence = f"No dominant overfitting cause found: Sharpe {sr:.1f} holds up against trials, regimes, costs and transfer."
@@ -669,7 +686,7 @@ def run_validate(request: dict) -> dict:
     b["transfer"] = block_transfer(run)
     b["monte_carlo"] = block_monte_carlo(run)
     verdict = _verdict(run, b)
-    b["autopsy"] = _autopsy(run, b)
+    b["autopsy"] = _autopsy(run, b, verdict["label"])
     b["improve"] = _improve(run)
     b["data_quality"] = _data_quality(run)
     b["receipt"] = _receipt(run, request)

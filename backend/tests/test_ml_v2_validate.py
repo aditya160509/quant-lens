@@ -82,3 +82,19 @@ def test_meta_label_feature_accepts_upload_id():
     stored = uploads.store_csv(_csv(_predictions(0.002, n_dates=300)), "predictions")
     result = run_feature("04", {"upload_id": stored["upload_id"]})
     assert [row["variant"] for row in result["tables"]["label_method_comparison"]][0] == "unfiltered"
+
+
+def test_cost_ranks_first_when_gross_positive_net_negative():
+    rng = np.random.default_rng(9)
+    dates = pd.bdate_range("2021-01-04", periods=600)
+    n = 12
+    pred = rng.normal(size=(600, n))
+    out = 0.004 * pred + rng.normal(scale=0.01, size=pred.shape)
+    frame = pd.DataFrame({"date": np.repeat(dates, n), "ticker": [f"T{i}" for i in range(n)] * 600,
+                          "prediction": pred.ravel(), "outcome": out.ravel()})
+    result = _validate(frame, cost_bps=60.0)
+    autopsy = result["sections"]["autopsy"]
+    assert autopsy["ranked_causes"][0]["cause"] == "cost_sensitivity"
+    assert result["verdict"]["label"] == "FAILED"
+    assert autopsy["sentence"].startswith("Fails because Gross Sharpe")
+    assert result["sections"]["min_backtest_length"]["trials"] == result["sections"]["deflated_sharpe"]["trials"]
