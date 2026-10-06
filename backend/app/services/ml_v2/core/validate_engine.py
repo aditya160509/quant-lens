@@ -302,7 +302,10 @@ def block_controls(run: Run) -> dict:
         add("buy_and_hold", vs.buy_and_hold(out, h).to_numpy(), "equal weights set once, never rebalanced")
         add("equal_weight", vs.equal_weight(out, h).to_numpy(), "equal-weight universe, rebalanced every period")
         w = vs.weights_from_scores(run.pred.to_numpy(), run.q)
-        add("constant_exposure", vs.constant_exposure(w, out, h).to_numpy(), "strategy's average net exposure, no signal")
+        if abs(float(w.sum(1).mean())) < 1e-9:
+            rows.append({"name": "constant_exposure", "sharpe": 0.0, "total_return": 0.0, "status": "same_as_cash", "note": "market-neutral: equals cash"})
+        else:
+            add("constant_exposure", vs.constant_exposure(w, out, h).to_numpy(), "strategy's average net exposure, no signal")
         sh = vs.shuffled_controls(run.pred, out, h, run.cost, run.q, int(run.r["n_permutations"]), run.seed)
         p95 = float(np.nanpercentile(sh, 95))
         pval = float((1 + np.nansum(sh >= run.sr)) / (1 + len(sh)))
@@ -478,9 +481,15 @@ def block_transfer(run: Run) -> dict:
     vals = [t["sharpe"] for t in tests]
     ok_all = all(v is not None and v > 0 for v in vals)
     ratio = (min(v for v in vals if v is not None) / ref) if ref and ref > 0 and all(v is not None for v in vals) else None
+    nonpos_ref = not (ref and ref > 0)
     status = "pass" if ok_all and ratio is not None and ratio >= 0.5 else ("warn" if ok_all else "fail")
+    detail = None
+    if ok_all and nonpos_ref:
+        detail = "in-sample half was negative; the later period was positive"
+    elif not ok_all:
+        detail = "a transfer Sharpe was not positive"
     return {"status": "computed", "scope": scope, "reference_sharpe": _f(ref), "tests": tests, "min_ratio_to_reference": _f(ratio), "min_transfer_sharpe": _f(min(v for v in vals if v is not None)) if any(v is not None for v in vals) else None,
-            "outcome": status, "rule": "pass when every transfer Sharpe is positive and at least 50% of the reference", "provenance": prov}
+            "outcome": status, "detail": detail, "has_tickers": p.mode != "returns", "rule": "pass when every transfer Sharpe is positive and at least 50% of the reference", "provenance": prov}
 
 
 def block_monte_carlo(run: Run) -> dict:
@@ -551,7 +560,7 @@ def _autopsy(run: Run, b: dict, label: str = "") -> dict:
         ev = ("no finite transfer Sharpe" if weakest is None else f"weakest transfer Sharpe {weakest:.2f} vs reference {tr['reference_sharpe'] if tr['reference_sharpe'] is None else round(tr['reference_sharpe'], 2)}"
               + (f" ({ratio:.0%} of reference)" if ratio is not None else ""))
         causes.append({"cause": "single_asset_luck", "severity": sev, "evidence": ev,
-                       "phrase": "an edge that does not transfer to other tickers or later dates"})
+                       "phrase": "an edge that does not transfer to " + ("other tickers or later dates" if tr.get("has_tickers", True) else "later dates")})
     st = b["stability"]
     if st.get("status") == "computed":
         causes.append({"cause": "seed_luck", "severity": 0.7 if st["flag"] else 0.05, "evidence": f"best/median seed Sharpe = {st['best_over_median']}",
@@ -567,6 +576,10 @@ def _autopsy(run: Run, b: dict, label: str = "") -> dict:
     else:
         sentence = f"No dominant overfitting cause found: Sharpe {sr:.1f} holds up against trials, regimes, costs and transfer."
     return {"sentence": sentence, "ranked_causes": causes, "provenance": run.provenance("autopsy")}
+
+
+def _yrs(x: float) -> str:
+    return "<0.1" if x < 0.1 else f"{x:.2g}"
 
 
 def _verdict(run: Run, b: dict) -> dict:
@@ -588,7 +601,7 @@ def _verdict(run: Run, b: dict) -> dict:
         add("pbo", "pass" if pb["pbo"] <= 0.3 else ("warn" if pb["pbo"] <= 0.5 else "fail"), f"PBO {pb['pbo']:.2f}")
     m = b["min_backtest_length"]
     add("min_backtest_length", "pass" if m["sufficient"] else "warn",
-        f"{m['observed_years']:.1f} years observed vs {m['min_years_required']:.1f} required" if m["min_years_required"] else "no positive Sharpe to size a minimum length")
+        f"{m['observed_years']:.1f} years observed vs {_yrs(m['min_years_required'])} required" if m["min_years_required"] else "no positive Sharpe to size a minimum length")
     cp = b["cpcv"]["distribution"]
     if cp.get("n"):
         add("cpcv", "pass" if cp["share_positive"] >= 0.8 and cp["p5"] > 0 else ("warn" if cp["share_positive"] >= 0.5 else "fail"),
@@ -602,7 +615,7 @@ def _verdict(run: Run, b: dict) -> dict:
     add("leakage", "pass" if b["leakage"]["badge"] == "pass" else "fail", "badge " + b["leakage"]["badge"])
     tr = b["transfer"]
     if tr.get("status") == "computed":
-        add("transfer", tr["outcome"], f"weakest transfer = {tr['min_ratio_to_reference']:.0%} of reference" if tr["min_ratio_to_reference"] is not None else "a transfer Sharpe was not positive")
+        add("transfer", tr["outcome"], f"weakest transfer = {tr['min_ratio_to_reference']:.0%} of reference" if tr["min_ratio_to_reference"] is not None else (tr.get("detail") or "transfer Sharpe unavailable"))
     mc = b["monte_carlo"]["sharpe"]
     add("monte_carlo", "pass" if mc.get("p5", -1) > 0 else ("warn" if mc.get("p50", -1) > 0 else "fail"), f"bootstrap Sharpe 5th/50th percentile {mc.get('p5', float('nan')):.2f}/{mc.get('p50', float('nan')):.2f}")
     fails = [x for x in checks if x["status"] == "fail"]
