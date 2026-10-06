@@ -233,3 +233,10 @@ def store_csv(raw: bytes, kind: str) -> dict[str, Any]:
     item = put_upload(kind, frame, summary)
     return {"upload_id": item.upload_id, "kind": kind, "rows": summary["rows"], "columns": summary["columns"],
             "date_range": summary["date_range"], "nan_share": summary["nan_share"], "warnings": summary["warnings"]}
+
+
+def feature_panel_frame(upload_id: str) -> pd.DataFrame:
+    """Numeric feature columns of a feature_panel upload, indexed by (date, ticker); the optional outcome column is dropped."""
+    frame = get_upload(upload_id, ("feature_panel",)).frame
+    keep = [c for c in frame.columns if c not in {"date", "ticker", "outcome"}]
+    return frame.set_index(["date", "ticker"])[keep]

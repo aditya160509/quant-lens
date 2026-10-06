@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from .inputs import INPUT_META, _m, inputs, outputs, validate
+from .inputs import inputs, outputs, validate
 
 from app.services.ml_v2.core.common import merge_feature_contract
 from app.services.ml_v2.core.data_loader import UNIVERSE_PRESET_IDS
@@ -46,10 +46,6 @@ INPUT_CONTRACT = [
     {"key": "exact_shap_cap", "type": "integer", "range": [1, 256], "default": 64},
 ]
 
-INPUT_META.setdefault("feature_families", _m("standard", "Feature families the models may use; custom formula features are always included."))
-INPUT_META.setdefault("formulas", _m("standard", "Custom features as a list of {name, expr}, written in the Research formula language and evaluated on daily data (at most 8)."))
-INPUT_META.setdefault("upload_id", _m("expert", "Id of an uploaded feature panel to add as extra features."))
-INPUT_META["universe"] = _m("quick", "Ticker preset: the default 35 US large caps, one GICS sector, high volatility, ETFs, or all local symbols. Ignored when symbols is set.")
 
 _OUT = {"charts": ["prediction_rank_table", "shap_feature_importance", "shap_beeswarm", "shap_waterfall_top_signal",
                    "model_ic_leaderboard", "rolling_monthly_ic_series", "decile_spreads", "net_of_cost_curve"],

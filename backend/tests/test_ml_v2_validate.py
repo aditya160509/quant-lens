@@ -106,3 +106,16 @@ def test_manifest_has_no_market_inputs_and_requires_input():
     assert not keys & {"symbols", "universe", "frequency", "lookback_days", "max_symbols", "as_of_date"}
     with pytest.raises(ValueError, match="Upload your returns"):
         run_feature("validate", {})
+
+
+def test_validate_and_meta_label_accept_alpha_artifact():
+    from app.services.ml_v2.core.common import put_artifact
+    frame = _predictions(0.002, n_dates=300)
+    art = put_artifact("alpha_predictions", {"horizon": 1, "heldout": {
+        "date": frame["date"].dt.strftime("%Y-%m-%d").tolist(), "ticker": frame["ticker"].tolist(),
+        "score": frame["prediction"].tolist(), "forward_return": frame["outcome"].tolist()}})
+    result = run_feature("validate", {"artifact_id": art})
+    assert result["verdict"]["label"] in {"HELD UP", "MIXED", "FAILED"} and result["meta"]["input"].startswith("artifact:")
+    assert run_feature("04", {"artifact_id": art})["tables"]["label_method_comparison"][0]["variant"] == "unfiltered"
+    with pytest.raises(ValueError, match="Unknown or expired"):
+        run_feature("validate", {"artifact_id": "0" * 16})

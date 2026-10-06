@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from .inputs import INPUT_META, _m, inputs, outputs, validate
+from .inputs import inputs, outputs, validate
 
 from app.services.ml_v2.core.common import merge_feature_contract
 from app.services.ml_v2.core.data_loader import UNIVERSE_PRESET_IDS
@@ -44,12 +44,6 @@ INPUT_CONTRACT = [
     {"key": "risk_aversion", "type": "number", "min": .01, "max": 100, "default": 2.5},
 ]
 
-INPUT_META.setdefault("holdings", _m("quick", "Current holdings as {ticker: weight} or {ticker: shares}; produces a rebalance trade list with costs and the expected risk change. Becomes the universe when no symbols are given."))
-INPUT_META.setdefault("holdings_unit", _m("standard", "Whether holdings values are weights or share counts.", "", {"field": "holdings", "present": True}))
-INPUT_META.setdefault("portfolio_value", _m("standard", "Portfolio value in dollars when holdings are weights.", "USD", {"field": "holdings", "present": True}))
-INPUT_META.setdefault("alpha_artifact_id", _m("standard", "Id of an Alpha run (meta.artifact_id); its scores become Black-Litterman views by the Grinold rule when its held-out IC is positive."))
-INPUT_META.setdefault("bootstrap_samples", _m("expert", "Block-bootstrap resamples behind the weight-stability bands (0 turns them off).", "resamples"))
-INPUT_META["universe"] = _m("quick", "Ticker preset: the default 35 US large caps, one GICS sector, high volatility, ETFs, or all local symbols. Ignored when symbols or holdings are set.")
 
 OUTPUT_CONTRACT = [{'key': 'hrp_weight_vector', 'location': 'charts', 'renderer': 'bar', 'status': 'live'}, {'key': 'cluster_dendrograms', 'location': 'charts', 'renderer': 'dendrogram', 'status': 'live'}, {'key': 'quasi_diagonalized_covariance_heatmap', 'location': 'charts', 'renderer': 'heatmap', 'status': 'live'}, {'key': 'risk_contribution_decomposition', 'location': 'charts', 'renderer': 'bar', 'status': 'live'}, {'key': 'walk_forward_allocation', 'location': 'charts', 'renderer': 'line', 'status': 'live'}, {'key': 'controls_equity', 'location': 'charts', 'renderer': 'line', 'status': 'live'}, {'key': 'weight_stability', 'location': 'charts', 'renderer': 'table', 'status': 'live'}, {'key': 'black_litterman_posterior_return_vector', 'location': 'charts', 'renderer': 'table', 'status': 'live'}, {'key': 'bl_vs_pure_hrp_weight_comparison', 'location': 'charts', 'renderer': 'grouped_bar', 'status': 'live'}, {'key': 'controls_summary', 'location': 'tables', 'renderer': 'table', 'status': 'live'}, {'key': 'weight_stability', 'location': 'tables', 'renderer': 'table', 'status': 'live'}, {'key': 'rebalance_log', 'location': 'tables', 'renderer': 'table', 'status': 'live'}, {'key': 'trade_list', 'location': 'tables', 'renderer': 'table', 'status': 'live'}, {'key': 'rebalance_summary', 'location': 'tables', 'renderer': 'table', 'status': 'live'}, {'key': 'holding_risk', 'location': 'tables', 'renderer': 'table', 'status': 'live'}, {'key': 'alpha_views', 'location': 'tables', 'renderer': 'table', 'status': 'live'}, {'key': 'hrp_weights', 'location': 'tables', 'renderer': 'table', 'status': 'live'}, {'key': 'allocation_training_audit', 'location': 'tables', 'renderer': 'table', 'status': 'live'}, {'key': 'black_litterman', 'location': 'tables', 'renderer': 'table', 'status': 'live'}]
 

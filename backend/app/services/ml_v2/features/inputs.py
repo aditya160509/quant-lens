@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
+
+from app.services.ml_v2.core.data_loader import UNIVERSE_PRESET_IDS
 from typing import Any
 
 # Keys older clients still send; they changed nothing, so they are dropped rather than rejected.
@@ -21,7 +23,7 @@ _TYPE = {"integer": "number", "float": "number", "number": "number", "multi_sele
 
 SHARED: dict[str, dict[str, Any]] = {
     "symbols": {"type": "ticker_list"},
-    "universe": {"type": "select", "options": ["default", "all"], "default": "default"},
+    "universe": {"type": "select", "options": UNIVERSE_PRESET_IDS, "default": "default"},
     "frequency": {"type": "select", "options": ["daily"], "default": "daily"},
     "lookback_days": {"type": "integer", "min": 90, "max": 10000, "default": 756},
     "max_symbols": {"type": "integer", "min": 1, "max": 5000, "default": 120},
@@ -43,7 +45,7 @@ def _has(field: str) -> dict[str, Any]:
 # level: quick (always shown), standard (shown by default in the form), expert (behind "advanced").
 INPUT_META: dict[str, dict[str, Any]] = {
     "symbols": _m("quick", "Tickers to study. Leave empty for the most-covered local symbols. Unknown tickers are rejected, never substituted."),
-    "universe": _m("expert", "'default' uses the most-covered symbols up to max_symbols; 'all' uses every local symbol. Ignored when symbols is set."),
+    "universe": _m("quick", "Ticker preset: the default 35 US large caps, one GICS sector, high volatility, ETFs, or all local symbols. Ignored when symbols (or holdings) is set."),
     "frequency": _m("expert", "Daily bars only."),
     "lookback_days": _m("quick", "Trading sessions of history loaded per symbol, counted back from the as-of date.", "sessions"),
     "max_symbols": _m("standard", "Upper bound on the number of symbols; an explicit list longer than this is rejected.", "symbols"),
@@ -103,20 +105,22 @@ INPUT_META: dict[str, dict[str, Any]] = {
     "pc1_window": _m("standard", "Rolling window for first-principal-component variance.", "sessions"),
     "random_graph_threshold": _m("expert", "Absolute correlation threshold defining an edge in the correlation network.", "|rho|", min=0.0, max=1.0),
     "regime_alert_threshold": _m("standard", "Probability above which a regime is flagged.", "probability", min=0.0, max=1.0),
-    # F08
-    "factor_library": _m("expert", "Local OHLCV factor library."),
-    "weighting_scheme": _m("quick", "Weights from historical rolling IC, IC-IR, or shrunk IC."),
-    "orthogonalization": _m("standard", "Sequential residualisation fit on the training window only."),
-    "walk_forward_window": _m("standard", "Trailing window of matured labels used to fit weights at each refit.", "sessions"),
-    "output_signal_construction": _m("standard", "How the composite score becomes portfolio weights."),
-    # F10
-    "signal_families": _m("quick", "Microstructure signals evaluated."),
-    "ic_protocol": _m("expert", "Daily cross-sectional Spearman IC against forward returns."),
-    "ivol_model": _m("expert", "Idiosyncratic volatility from a rolling market-residual OLS."),
-    "amihud_window": _m("standard", "Window for Amihud illiquidity.", "sessions"),
+    # Alpha, risk and allocation hand-offs
+    "feature_families": _m("standard", "Feature families the models may use; custom formula features are always included."),
+    "formulas": _m("standard", "Custom features as a list of {name, expr}, written in the Research formula language and evaluated on daily data (at most 8)."),
+    "watchlist": _m("quick", "Up to 50 tickers scored at once for the risk-today card; when set, the single asset is ignored.", "tickers"),
+    "target_volatility": _m("standard", "Annualised volatility the position-size helper targets.", "annualised"),
+    "max_size": _m("expert", "Cap on the volatility-targeted size multiple.", "x"),
+    "regime_artifact_id": _m("expert", "Stress-probability series from a Regimes run (meta.artifact_id); replaces the asset's own regime filter."),
+    "holdings": _m("quick", "Current holdings as {ticker: weight} or {ticker: shares}; produces a rebalance trade list with costs and the expected risk change. Becomes the universe when no symbols are given."),
+    "holdings_unit": _m("standard", "Whether holdings values are weights or share counts.", "", {"field": "holdings", "present": True}),
+    "portfolio_value": _m("standard", "Portfolio value in dollars when holdings are weights.", "USD", {"field": "holdings", "present": True}),
+    "alpha_artifact_id": _m("standard", "Id of an Alpha run (meta.artifact_id); its scores become Black-Litterman views by the Grinold rule when its held-out IC is positive."),
+    "bootstrap_samples": _m("expert", "Block-bootstrap resamples behind the weight-stability bands (0 turns them off).", "resamples"),
     # Validate
     "random_seed": _m("expert", "Seed for permutations, bootstrap and model refits; recorded in the reproducibility receipt.", "", min=0, max=2**31 - 1),
-    "upload_id": _m("quick", "Id returned by POST /api/ml/v2/uploads (returns, predictions with outcomes, feature panel with outcome, or trial matrix)."),
+    "upload_id": _m("quick", "Id returned by POST /api/ml/v2/uploads: returns, predictions with outcomes, feature panel or trial matrix for Validate; a feature panel adds extra features in Alpha; predictions give the primary side in Meta-labelling."),
+    "artifact_id": _m("quick", "Hand-off id from an Alpha run (meta.artifact_id: held-out predictions) or an Allocation run (meta.artifact_id: walk-forward net returns); Meta-labelling accepts Alpha ids only and uses the scores as the primary side."),
     "trials_upload_id": _m("standard", "Trial matrix upload holding every configuration you tried; sets the true trial count for PBO and deflated Sharpe."),
     "benchmark_upload_id": _m("expert", "Returns upload used as the buy-and-hold control for a returns-only validation."),
     "source_result": _m("expert", "Result of a feature 01 or feature 02 run to validate instead of an upload."),
@@ -178,12 +182,16 @@ _O = {
            "backtest_paths_chart": ("timeseries", {"x": "date", "y": "equity", "series": "path"}),
            "probability_of_backtest_overfitting": ("kpi", {"value": ["pbo", "dsr"], "status": "status"}),
            "deflated_sharpe_ratio": ("kpi", {"value": ["pbo", "dsr"], "status": "status"})},
-    "02": {"shap_feature_importance": ("bar", {"x": "feature", "y": "mean_abs_shap"}),
+    "02": {"decile_spreads": ("bar", {"x": "bin", "y": "mean_return", "series": "model", "facet": "weighting"}),
+           "net_of_cost_curve": ("timeseries", {"x": "date", "y": "equity", "series": "model"}),
+           "shap_feature_importance": ("bar", {"x": "feature", "y": "mean_abs_shap"}),
            "shap_beeswarm": ("scatter", {"x": "shap_value", "y": "feature", "color": "feature_value"}),
            "shap_waterfall_top_signal": ("bar", {"x": "feature", "y": "shap_value"}),
            "model_ic_leaderboard": ("bar", {"x": "model", "y": ["validation_ic", "test_ic"]}),
            "rolling_monthly_ic_series": ("timeseries", {"x": "month", "y": "rolling_ic"})},
-    "03": {"vol_forecast_panel": ("timeseries", {"x": "date", "y": ["forecast_vol", "realized_vol"], "series": "model", "facet": "horizon"}),
+    "03": {"var_es_forecast": ("table", {}),
+           "regime_probability": ("timeseries", {"x": "date", "y": "stress_probability"}),
+           "vol_forecast_panel": ("timeseries", {"x": "date", "y": ["forecast_vol", "realized_vol"], "series": "model", "facet": "horizon"}),
            "forecast_error_distribution": ("bar", {"x": "model", "y": "mae", "facet": "horizon"}),
            "vol_term_structure": ("timeseries", {"x": "horizon", "y": "forecast_vol", "series": "model"}),
            "realized_vs_predicted": ("scatter", {"x": "forecast_vol", "y": "realized_vol", "series": "model", "facet": "horizon"}),
@@ -198,7 +206,9 @@ _O = {
            "cqr_coverage_audit": ("timeseries", {"x": "date", "y": ["empirical_coverage", "target_coverage"]}),
            "label_method_comparison": ("bar", {"x": "method", "y": ["positive_rate", "negative_rate", "neutral_rate"]}),
            "barrier_sensitivity_surface": ("heatmap", {"x": "profit_taking", "y": "stop_loss", "value": "positive_rate"})},
-    "05": {"hrp_weight_vector": ("bar", {"x": "asset", "y": "weight"}),
+    "05": {"controls_equity": ("timeseries", {"x": "date", "y": "equity", "series": "strategy"}),
+           "weight_stability": ("bar", {"x": "asset", "y": "weight", "lower": "p05", "upper": "p95"}),
+           "hrp_weight_vector": ("bar", {"x": "asset", "y": "weight"}),
            "cluster_dendrograms": ("dendrogram", {"left": "left", "right": "right", "height": "distance", "size": "count"}),
            "quasi_diagonalized_covariance_heatmap": ("heatmap", {"x": "col", "y": "row", "value": "value"}),
            "risk_contribution_decomposition": ("bar", {"x": "asset", "y": "risk_contribution"}),
@@ -211,11 +221,6 @@ _O = {
            "regime_conditional_asset_returns": ("bar", {"x": "asset", "y": "mean_log_return", "series": "regime"}),
            "correlation_network_density": ("kpi", {"value": ["density"]}),
            "parallel_gmm_regime_probabilities": ("timeseries", {"x": "date", "y": ["component_1", "component_2", "component_3", "component_4"]})},
-    "08": {"ic_weighted_composite_weights": ("bar", {"x": "factor", "y": "weight"}),
-           "walk_forward_weight_stability": ("timeseries", {"x": "date", "y": "weight", "series": "factor"}),
-           "composite_signal_distribution": ("bar", {"x": "ticker", "y": "score"}),
-           "long_short_backtest": ("timeseries", {"x": "date", "y": "equity"}),
-           "factor_correlation_heatmap": ("heatmap", {"x": "col", "y": "row", "value": "value"})},
 }
 
 # Outputs that stay empty unless an input is set.

@@ -19,6 +19,7 @@ ALIASES = {"horizon": "prediction_horizon", "embargo": "embargo_period", "seed":
 
 INPUT_CONTRACT = [
     {"key": "upload_id", "type": "text", "required": False},
+    {"key": "artifact_id", "type": "text", "required": False},
     {"key": "trials_upload_id", "type": "text", "required": False},
     {"key": "benchmark_upload_id", "type": "text", "required": False},
     {"key": "source_result", "type": "object", "required": False},

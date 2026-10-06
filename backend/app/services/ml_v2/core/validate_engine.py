@@ -76,11 +76,37 @@ def _from_source_result(result: dict) -> pd.DataFrame | pd.Series:
     raise ValueError("source_result must be a feature 02 run (heldout_predictions) or a feature 01 run (backtest_paths_chart)")
 
 
+def frame_from_artifact(art: dict) -> tuple[pd.DataFrame, str, int]:
+    """Alpha predictions (held-out rows) or allocation walk-forward net returns, as an upload-shaped frame."""
+    if art.get("kind") == "alpha_predictions":
+        held = art.get("heldout") or {}
+        if not held.get("score"):
+            raise ValueError("The alpha artifact has no held-out rows to validate")
+        frame = pd.DataFrame({"date": pd.to_datetime(held["date"]), "ticker": held["ticker"], "prediction": held["score"], "outcome": held["forward_return"]})
+        return frame.sort_values(["date", "ticker"]).reset_index(drop=True), "predictions", int(art.get("horizon", 1))
+    if art.get("kind") == "allocation_returns":
+        series = art.get("net_returns") or {}
+        name = art.get("variant") if art.get("variant") in series else next(iter(series), None)
+        if name is None:
+            raise ValueError("The allocation artifact has no net returns")
+        frame = pd.DataFrame({"date": pd.to_datetime(art["dates"]), "return": series[name]})
+        return frame, "returns", 1
+    raise ValueError(f"artifact_id of kind {art.get('kind')!r} cannot be validated; use an Alpha or Allocation run")
+
+
 def prepare(request: dict) -> Prepared:
     p = Prepared()
     horizon = int(request["prediction_horizon"])
     source_result = request.get("source_result")
-    if request.get("upload_id"):
+    if request.get("artifact_id") and not request.get("upload_id"):
+        from .common import get_artifact
+        art = get_artifact(str(request["artifact_id"]))
+        if art is None:
+            raise ValueError("Unknown or expired artifact_id; rerun the feature that produced it")
+        frame, kind, art_h = frame_from_artifact(art)
+        request["prediction_horizon"] = horizon = art_h
+        p.source = f"artifact:{art['kind']}"
+    elif request.get("upload_id"):
         item = uploads.get_upload(request["upload_id"], ("returns", "predictions", "feature_panel", "trial_matrix"))
         frame, kind = item.frame.copy(), item.kind
         p.source = f"upload:{kind}"
@@ -719,11 +745,19 @@ def run_validate(request: dict) -> dict:
 
 def run_meta_label_upload(request: dict) -> dict:
     """Feature 04 on an uploaded predictions set: meta-label filter and sizing beside the unfiltered strategy."""
-    item = uploads.get_upload(request["upload_id"], ("predictions",))
-    frame = item.frame
-    if "outcome" not in frame.columns:
-        raise ValueError("predictions upload needs an outcome column for meta-labelling")
     h = int(request.get("max_holding_period") or 1)
+    if request.get("artifact_id") and not request.get("upload_id"):
+        from .common import get_artifact
+        art = get_artifact(str(request["artifact_id"]))
+        if art is None or art.get("kind") != "alpha_predictions":
+            raise ValueError("artifact_id must be a live Alpha run (meta.artifact_id)")
+        frame, _, h = frame_from_artifact(art)
+        item = type("Src", (), {"upload_id": str(request["artifact_id"])})()
+    else:
+        item = uploads.get_upload(request["upload_id"], ("predictions",))
+        frame = item.frame
+        if "outcome" not in frame.columns:
+            raise ValueError("predictions upload needs an outcome column for meta-labelling")
     pred, out = vs.wide(frame, "prediction"), vs.wide(frame, "outcome")
     pred = pred.reindex(index=out.index, columns=out.columns)
     res = vs.meta_label_overlay(pred, out, h, int(request.get("embargo_period", 5)), float(request.get("cost_bps", 5.0)), vs.DEFAULT_Q)

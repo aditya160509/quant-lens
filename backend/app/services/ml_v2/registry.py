@@ -22,7 +22,6 @@ ML_V2_FEATURES: Dict[str, MLFeature] = {
     "04": MLFeature("04", "Meta-Labeling and Triple-Barrier Label Engine", "feature_04"),
     "05": MLFeature("05", "Hierarchical Risk Parity Optimizer", "feature_05"),
     "06": MLFeature("06", "Market Regime Detection and Strategy Routing", "feature_06"),
-    "08": MLFeature("08", "IC-Weighted Composite Signal Optimizer", "feature_08"),
     "validate": MLFeature("validate", "Validate my strategy or model", "validate"),
 }
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from .inputs import INPUT_META, _m, inputs, outputs, validate
+from .inputs import inputs, outputs, validate
 
 from app.services.ml_v2.core.common import merge_feature_contract
 from app.services.ml_v2.core.data_loader import UNIVERSE_PRESET_IDS
@@ -34,11 +34,6 @@ INPUT_CONTRACT = [
     {"key": "regime_artifact_id", "type": "text", "required": False},
 ]
 
-INPUT_META.setdefault("watchlist", _m("quick", "Up to 50 tickers scored at once for the risk-today card; when set, the single asset is ignored.", "tickers"))
-INPUT_META.setdefault("target_volatility", _m("standard", "Annualised volatility the position-size helper targets.", "annualised"))
-INPUT_META.setdefault("max_size", _m("expert", "Cap on the volatility-targeted size multiple.", "x"))
-INPUT_META.setdefault("regime_artifact_id", _m("expert", "Stress-probability series from a Regimes run (meta.artifact_id); replaces the asset's own regime filter."))
-INPUT_META["universe"] = _m("quick", "Ticker preset: the default 35 US large caps, one GICS sector, high volatility, ETFs, or all local symbols. Ignored when symbols is set.")
 
 OUTPUT_CONTRACT = [{"key":key,"location":location,"renderer":"table","status":"live"}
     for location,keys in {"charts":["vol_forecast_panel","forecast_error_distribution","vol_term_structure","realized_vs_predicted",

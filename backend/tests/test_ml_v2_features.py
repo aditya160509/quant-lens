@@ -29,7 +29,7 @@ def local_market(monkeypatch):
         monkeypatch.setattr(module, "load_fama_french", lambda: pd.DataFrame(columns=["date"]), raising=False)
     return symbols
 
-@pytest.mark.parametrize("feature", ["01", "02", "03", "04", "05", "06", "08"])
+@pytest.mark.parametrize("feature", ["01", "02", "03", "04", "05", "06"])
 def test_feature_runs_on_local_observations(local_market, feature):
     import json
     from app.services.ml_v2.registry import run_feature

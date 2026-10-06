@@ -104,12 +104,17 @@ def _formula_features(ctx, formulas) -> dict[str, pd.DataFrame]:
 
 
 def _uploaded_features(upload_id: str, panel: pd.DataFrame) -> dict[str, np.ndarray]:
-    """Feature columns from a user upload, aligned to the panel's (date, ticker) rows.
+    """Feature columns of an uploaded feature panel, aligned to the panel's (date, ticker) rows.
 
-    TODO(upload store): wire to Validate's upload store once ``core/uploads.py`` exposes a feature-panel reader;
-    it must return a frame with date, ticker and numeric columns that pass its point-in-time checks.
+    Uploads are point-in-time checked on ingest (no future dates, unique keys); rows with no upload value stay missing.
     """
-    raise ValueError("Feature-panel uploads are not available yet; use formulas for custom features")
+    from .uploads import feature_panel_frame
+    extra = feature_panel_frame(str(upload_id))
+    index = pd.MultiIndex.from_frame(panel[["date", "ticker"]])
+    matched = extra.reindex(index)
+    if matched.notna().to_numpy().sum() == 0:
+        raise ValueError("The uploaded feature panel shares no (date, ticker) rows with this universe and window")
+    return {f"u_{name}": matched[name].to_numpy(dtype=float) for name in matched.columns}
 
 
 def build_alpha_panel(ctx, horizon: int, formulas, upload_id) -> tuple[pd.DataFrame, list[str]]:

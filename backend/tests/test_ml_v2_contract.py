@@ -7,7 +7,7 @@ import pytest
 def test_manifest_has_complete_feature_contracts():
     from app.services.ml_v2.registry import feature_manifest
     features = feature_manifest()
-    assert len(features) == 8
+    assert len(features) == 7
     for feature in features:
         assert feature['inputs'] and feature['outputs']
         assert len({row['key'] for row in feature['inputs']}) == len(feature['inputs'])
