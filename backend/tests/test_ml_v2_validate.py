@@ -119,3 +119,26 @@ def test_validate_and_meta_label_accept_alpha_artifact():
     assert run_feature("04", {"artifact_id": art})["tables"]["label_method_comparison"][0]["variant"] == "unfiltered"
     with pytest.raises(ValueError, match="Unknown or expired"):
         run_feature("validate", {"artifact_id": "0" * 16})
+
+
+def test_autopsy_wording_short_sample_over_100_percent():
+    from app.services.ml_v2.core.validate_engine import _span
+    assert _span(pd.Timestamp("2025-04-01"), pd.Timestamp("2025-06-30"), pd.Timestamp("2025-01-01"), pd.Timestamp("2025-12-31")) == "Apr–Jun 2025"
+    rng = np.random.default_rng(4)
+    dates = pd.bdate_range("2025-01-06", periods=240)
+    n = 8
+    pred = rng.normal(size=(240, n))
+    out = rng.normal(scale=0.01, size=pred.shape)
+    out[60:120] += 0.012 * pred[60:120]       # profit only in one stretch
+    out[:60] -= 0.004 * pred[:60]
+    out[120:] -= 0.004 * pred[120:]
+    frame = pd.DataFrame({"date": np.repeat(dates, n), "ticker": [f"T{i}" for i in range(n)] * 240,
+                          "prediction": pred.ravel(), "outcome": out.ravel()})
+    autopsy = _validate(frame, cost_bps=0.0)["sections"]["autopsy"]
+    text = " ".join(c["phrase"] for c in autopsy["ranked_causes"])
+    assert "2025-2025" not in text and "%  of profit" not in text
+    assert "short_history" in {c["cause"] for c in autopsy["ranked_causes"]}
+    assert "too little out-of-sample history" in text
+    regime = next(c for c in autopsy["ranked_causes"] if c["cause"] == "regime_dependence")
+    if "supplies 1" in regime["evidence"] and "% of total" in regime["evidence"] and int(regime["evidence"].split("supplies ")[1].split("%")[0]) > 100:
+        assert "earned more than the whole period's profit" in regime["phrase"]

@@ -538,6 +538,19 @@ def block_monte_carlo(run: Run) -> dict:
 
 # ---------------------------------------------------------------- verdict and autopsy
 
+_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _span(a: pd.Timestamp, b: pd.Timestamp, first: pd.Timestamp, last: pd.Timestamp) -> str:
+    if (last - first).days >= 4 * 365:
+        return f"{a.year}-{b.year}" if a.year != b.year else str(a.year)
+    if (a.year, a.month) == (b.year, b.month):
+        return f"{_MONTHS[a.month - 1]} {a.year}"
+    if a.year == b.year:
+        return f"{_MONTHS[a.month - 1]}\u2013{_MONTHS[b.month - 1]} {a.year}"
+    return f"{_MONTHS[a.month - 1]} {a.year}\u2013{_MONTHS[b.month - 1]} {b.year}"
+
+
 def _autopsy(run: Run, b: dict, label: str = "") -> dict:
     causes = []
     dsr, trials = b["deflated_sharpe"], _trial_count(run)
@@ -554,12 +567,13 @@ def _autopsy(run: Run, b: dict, label: str = "") -> dict:
     total = sum(totals)
     best_i = int(np.argmax(totals))
     share = totals[best_i] / total if total > 0 else 1.0
-    span = f"{s.index[seg[best_i][0]].year}-{s.index[seg[best_i][-1]].year}"
+    span = _span(s.index[seg[best_i][0]], s.index[seg[best_i][-1]], s.index[0], s.index[-1])
     seg_sr = ", ".join(f"{vs.sharpe_of(s.iloc[i], run.h):.2f}" for i in seg)
     if total > 0:
         causes.append({"cause": "regime_dependence", "severity": float(np.clip((share - 0.5) / 0.4, 0, 1)),
                        "evidence": f"quarter-of-sample {span} supplies {share:.0%} of total profit; segment Sharpes " + seg_sr,
-                       "phrase": f"one period ({span}) supplying {share:.0%} of profit"})
+                       "phrase": (f"one stretch ({span}) earned more than the whole period's profit; the rest lost money" if share > 1.0
+                                  else f"one period ({span}) supplying {share:.0%} of profit")})
     else:
         causes.append({"cause": "regime_dependence", "severity": 0.0, "evidence": f"total P&L is not positive; losses spread across periods (segment Sharpes {seg_sr})", "phrase": ""})
     if run.turnover is not None and float(np.mean(run.turnover)) > 0:
@@ -573,6 +587,11 @@ def _autopsy(run: Run, b: dict, label: str = "") -> dict:
         causes.append({"cause": "cost_sensitivity", "severity": sev, "gross_sharpe": _f(gsr), "avg_turnover": turn,
                        "evidence": f"breakeven cost {be:.1f} bps per unit turnover; gross Sharpe {gsr:.2f}, net {run.sr:.2f}", "phrase": phrase, "breakeven_bps": be,
                        "sharpe_by_cost_bps": {str(c): _f(vs.sharpe_of(vs.strategy_series(run.pred, run.p.out, run.h, c, run.q)[0], run.h)) for c in COST_GRID}})
+    mb = b["min_backtest_length"]
+    yrs = mb["observed_years"]
+    if not mb["sufficient"] or yrs < 2:
+        causes.append({"cause": "short_history", "severity": 0.9 if yrs < 2 else 0.6, "evidence": f"{yrs:.1f} years observed, {_yrs(mb['min_years_required']) if mb['min_years_required'] else 'n/a'} required",
+                       "phrase": f"too little out-of-sample history ({yrs:.1f} yr)"})
     pl = b["plateau"]
     if pl.get("status") == "computed":
         causes.append({"cause": "parameter_cliff", "severity": 0.45 if pl["label"] == "cliff" else 0.05, "evidence": f"neighbourhood label: {pl['label']}",
