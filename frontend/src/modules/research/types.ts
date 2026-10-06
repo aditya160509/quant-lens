@@ -26,7 +26,7 @@ export type InputSpec = {
 export type OutputSpec = {
   key: string;
   title: string;
-  source: "tables" | "charts";
+  source: "tables" | "charts" | "sections";
   render: string;
   description?: string;
   primary?: boolean;
@@ -52,6 +52,8 @@ export type FeatureResult = {
   summary_cards?: SummaryCard[];
   charts: Record<string, unknown>;
   tables: Record<string, unknown>;
+  /** Report blocks keyed by output (ML Validate). */
+  sections?: Record<string, unknown>;
   meta: {
     research_caveats?: string[];
     config?: Record<string, unknown>;

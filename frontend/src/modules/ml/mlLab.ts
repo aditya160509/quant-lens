@@ -1,5 +1,5 @@
 import {
-  Activity, Binary, BrainCircuit, CandlestickChart, Combine, GitBranch, Layers, Network, Orbit, ScanSearch, Scale, ShieldCheck, Waves,
+  Activity, Binary, BrainCircuit, GitBranch, Layers, ScanSearch, ShieldCheck, Waves,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/apiBase";
 import type { LabConfig, FeatureMeta, Page } from "@/modules/research/lab";
@@ -13,60 +13,52 @@ const ID = (raw: string) => `ml${raw}`;
 const RAW = (id: string) => id.replace(/^ml/, "");
 
 const CATALOG: Record<string, FeatureMeta & { about: string }> = {
-  ml01: { name: "CPCV validation", slug: "cpcv", icon: ShieldCheck, question: "Is the backtest Sharpe real, or an artefact of leaky validation?",
+  mlvalidate: { name: "Validate my strategy", slug: "validate", icon: ShieldCheck, question: "Does my backtest hold up, and if not, exactly why?",
+    about: "Upload your returns, predictions, feature panel or every trial you ran. The strategy is tested against simple controls, shuffled signals, purged cross-validation, a block bootstrap, a parameter sweep, a look-ahead audit and out-of-sample transfer, then given one verdict with the reasons ranked." },
+  ml01: { name: "Purged CV for a model", slug: "cpcv", icon: ScanSearch, question: "Is the backtest Sharpe real, or an artefact of leaky validation?",
     about: "Combinatorial purged cross-validation: date groups are tested in every combination, with training rows that overlap a test label purged and an embargo after each test block. The spread of path Sharpes is the honest answer." },
   ml02: { name: "Alpha model", slug: "alpha", icon: BrainCircuit, question: "Which names does the model rank highest, and why?",
     about: "Gradient-boosted and linear models chosen by nested chronological validation, scored by information coefficient on a held-out period, and explained with exact SHAP values." },
   ml03: { name: "Volatility forecasts", slug: "volatility", icon: Activity, question: "How volatile will this asset be, and which model forecasts it best?",
     about: "HAR family models and ARCH-type models forecast realised volatility at several horizons, with intervals calibrated before the hold-out and scored by QLIKE and MAE." },
-  ml04: { name: "Triple barrier", slug: "barriers", icon: Binary, question: "Which trades hit their profit target before their stop, and how often?",
+  ml04: { name: "Improve my strategy", slug: "barriers", icon: Binary, question: "Which trades hit their target before their stop, and does filtering them help?",
     about: "Events are labelled by which barrier the high/low path touches first. Same-bar touches stay ambiguous rather than guessed. Meta-labels and conformal intervals are fitted out of fold." },
-  ml05: { name: "HRP allocation", slug: "allocation", icon: GitBranch, question: "How should capital be spread when estimates are noisy?",
+  ml05: { name: "Allocation", slug: "allocation", icon: GitBranch, question: "How should capital be spread when estimates are noisy?",
     about: "Hierarchical risk parity, nested clustered optimisation and minimum variance, refit monthly on past data only, traded at the next close with turnover costs." },
-  ml06: { name: "Market regimes", slug: "regimes", icon: Waves, question: "Which market state are we in, and how long do states last?",
+  ml06: { name: "Market state", slug: "regimes", icon: Waves, question: "Which market state are we in, and how long do states last?",
     about: "A hidden Markov model fitted on the training window and filtered forward without smoothing, so every date's state uses only data up to that date." },
-  ml07: { name: "Model averaging", slug: "averaging", icon: Combine, question: "Which models deserve weight right now, as performance shifts?",
-    about: "Dynamic model averaging and online simplex weights, updated only after each label matures, compared against static averaging and the best single model in hindsight." },
-  ml08: { name: "Composite signal", slug: "composite", icon: Layers, question: "How should factors be combined into one score, and does it hold up?",
+  ml08: { name: "Composite baseline", slug: "composite", icon: Layers, question: "How should factors be combined into one score, and does it hold up?",
     about: "Factors weighted by their historical IC and IC-IR, re-selected on past data only, and traded long-short with lagged execution and costs." },
-  ml09: { name: "Pairs trading", slug: "pairs", icon: Scale, question: "Which pairs are cointegrated, and does trading the spread pay out of sample?",
-    about: "Engle–Granger tests on a formation window choose one pair, which is then traded out of sample with a static, rolling or Kalman hedge ratio." },
-  ml10: { name: "Microstructure", slug: "microstructure", icon: CandlestickChart, question: "Which liquidity and price-path signals predict returns?",
-    about: "Daily estimators of illiquidity, spreads, idiosyncratic volatility and attention, ranked by daily forward IC and traded as long-short portfolios." },
-  ml11: { name: "Factor associations", slug: "dml", icon: Network, question: "Which factors still matter once the others are controlled for?",
-    about: "Double machine learning with date-purged cross-fitting estimates each factor's conditional association with returns, with HC3 standard errors. These are associations, not causal effects." },
-  ml12: { name: "Sequence models", slug: "sequence", icon: Orbit, question: "Do deep sequence models beat simpler ones out of sample?",
-    about: "PatchTST, iTransformer, LSTM and MLP trained on CPU with training-only preprocessing and purged test dates, compared by out-of-sample IC and measured runtime." },
 };
 
 const PAGES: Page[] = [
-  { id: "validate", label: "Validate", icon: ShieldCheck, question: "Is the backtest real?", features: ["ml01"] },
-  { id: "predict", label: "Predict", icon: BrainCircuit, question: "What does the model expect, and why?", features: ["ml02", "ml12"] },
-  { id: "risk", label: "Risk & volatility", icon: Activity, question: "How volatile, and which trades hit their barriers?", features: ["ml03", "ml04"] },
-  { id: "allocate", label: "Allocate", icon: GitBranch, question: "How to weight assets and factors?", features: ["ml05", "ml08"] },
-  { id: "regimes", label: "Regimes & adapt", icon: Waves, question: "Which state is the market in, and which models to trust?", features: ["ml06", "ml07"] },
-  { id: "relative", label: "Relative value", icon: ScanSearch, question: "Pairs, microstructure and factor associations.", features: ["ml09", "ml10", "ml11"] },
+  { id: "validate", label: "Validate", icon: ShieldCheck, question: "Does the backtest hold up once leakage, luck and trial count are removed?", features: ["mlvalidate", "ml01", "ml04"] },
+  { id: "alpha", label: "Alpha", icon: BrainCircuit, question: "Which names rank highest, why, and does the ranking beat a simple composite?", features: ["ml02", "ml08"] },
+  { id: "risk", label: "Volatility & risk", icon: Activity, question: "How much risk is ahead, and which market state are we in?", features: ["ml03", "ml06"] },
+  { id: "allocate", label: "Allocation", icon: GitBranch, question: "How should capital be spread when estimates are noisy?", features: ["ml05"] },
 ];
 
 /** Output → view. Anything not listed is drawn from the contract's type and encoding. */
 const VIEW: Record<string, Record<string, string>> = {
+  validate: { autopsy: "valAutopsy", controls: "valControls", cpcv: "valCpcv", monte_carlo: "valMonteCarlo", transfer: "valTransfer", plateau: "valPlateau", stability: "valStability",
+    deflated_sharpe: "valOverfit", leakage: "valLeakage", improve: "valImprove", receipt: "valReceipt" },
   "01": { cpcv_sharpe_distribution: "mlSharpeSpread", backtest_paths_chart: "mlPathFan", per_fold_performance: "mlFoldMatrix", probability_of_backtest_overfitting: "mlKpi", deflated_sharpe_ratio: "mlKpi", cpcv_path_metrics: "dataTable" },
   "02": { prediction_rank_table: "mlRankTable", shap_beeswarm: "mlBeeswarm", shap_waterfall_top_signal: "mlWaterfall", model_ic_leaderboard: "mlLeaderboard", rolling_monthly_ic_series: "mlIcBars", training_audit: "mlReceipt" },
   "03": { vol_forecast_panel: "mlVolPanel", realized_vs_predicted: "mlVolScatter", vol_term_structure: "mlTermStructure", forecast_tournament: "mlTournament", forecast_error_distribution: "mlTournament", ensemble_vol_forecast_weights: "mlStacked" },
   "04": { triple_barrier_label_distribution: "mlLabelMix", barrier_hit_path_examples: "mlBarrierScatter", barrier_sensitivity_surface: "mlBarrierSurface", cqr_coverage_audit: "mlCoverage", barrier_parameters: "mlReceipt" },
   "05": { hrp_weight_vector: "mlWeights", cluster_dendrograms: "mlDendrogram", risk_contribution_decomposition: "mlRiskContrib", walk_forward_allocation: "mlEquity", black_litterman_posterior_return_vector: "mlBlShift", bl_vs_pure_hrp_weight_comparison: "mlBlShift" },
   "06": { regime_probability_time_series: "mlRegimes", parallel_gmm_regime_probabilities: "mlRegimes", regime_transition_heatmap: "mlTransition", transition_matrix: "mlTransition", regime_conditional_asset_returns: "mlRegimeReturns", ensemble_vs_hmm_comparison: "mlKpi", correlation_network_density: "mlKpi", current_regime_probabilities: "mlReceipt", training_audit: "mlReceipt" },
-  "07": { live_model_weight_dashboard: "mlLeaderboard", model_weight_evolution: "mlStacked", obs_weight_evolution: "mlStacked", obs_regret_curve: "mlRegret", prediction_calibration_curve: "mlCalibration", training_audit: "mlReceipt" },
   "08": { long_short_backtest: "mlEquity", ic_weighted_composite_weights: "mlWeights", walk_forward_weight_stability: "mlStacked" },
-  "09": { spread_zscore_timeseries: "mlZBand", cointegration_network: "mlNetwork", pair_backtest_equity: "mlEquity", training_audit: "mlReceipt" },
-  "10": { microstructure_ic_leaderboard: "mlLeaderboard", amihud_illiquidity_surface: "mlCrossSection", signal_backtest: "mlSignalEquity", amihud_time_surface: "mlTimeSurface" },
-  "11": { conditional_ape_leaderboard: "mlCoefCI", adjustment_vs_univariate_slope: "mlAdjustment", ape_time_series: "mlApePaths" },
-  "12": { architecture_comparison: "mlLeaderboard", monthly_oos_ic: "mlMonthlyIc", training_loss: "mlLoss" },
 };
 
 type RawInput = InputSpec & { integer?: boolean };
 type RawOutput = { id?: string; key?: string; title?: string; label?: string; path?: string; location?: string; type?: string; encoding?: Record<string, unknown>; status?: string; primary?: boolean; depends_on?: unknown };
 type RawFeature = { id: string; title: string; status?: string; inputs: RawInput[]; outputs: RawOutput[]; known_limitations?: string[] };
+
+/** Upload ids are chosen with the file picker, which uploads the CSV and fills in the id. */
+const UPLOADS: Record<string, string> = { upload_id: "Your data", trials_upload_id: "Every trial you ran", benchmark_upload_id: "Benchmark returns" };
+/** Raw JSON hand-offs are filled by "Validate this run" buttons, not typed. */
+const HIDDEN_INPUTS = new Set(["source_result"]);
 
 /** Inputs whose text value is sent as a list. */
 const LIST_KEYS = new Set<string>();
@@ -85,7 +77,10 @@ function toSpec(f: RawFeature): FeatureSpec {
   for (const i of f.inputs) if (i.type === "ticker_list" || i.type === "text_list") LIST_KEYS.add(i.key);
   return {
     id, name: f.title, description: CATALOG[id]?.about ?? "",
-    inputs: f.inputs.map((i) => ({ ...i, group: i.group || "Settings", default: Array.isArray(i.default) && i.type !== "multiselect" ? i.default.join(", ") : i.default })),
+    inputs: f.inputs.filter((i) => !HIDDEN_INPUTS.has(i.key)).map((i) => ({
+      ...i, group: i.group || "Settings", default: Array.isArray(i.default) && i.type !== "multiselect" ? i.default.join(", ") : i.default,
+      ...(UPLOADS[i.key] ? { type: "file" as const, label: UPLOADS[i.key] } : {}),
+    })),
     outputs,
   };
 }
@@ -110,7 +105,28 @@ const data = (keys: string[]): Section => sec("data", "Data", keys.map((k) => ca
 
 const fmt = (v: unknown, d = 2) => (isNum(v) ? v.toFixed(d) : "–");
 
+/** Validate returns its verdict at the top level of the result. */
+const verdictOf = (r: unknown) => (r as { verdict?: { label?: string; headline?: string } }).verdict;
+const VTONE: Record<string, "up" | "warn" | "down"> = { "HELD UP": "up", MIXED: "warn", FAILED: "down" };
+
 const LAYOUTS: Record<string, FeatureLayout> = {
+  mlvalidate: {
+    sections: [
+      sec("verdict", "Verdict", [card("autopsy", 12, { view: "valVerdict", title: "The verdict and every check behind it", flush: false })]),
+      sec("why", "Why", [card("autopsy", 7, { title: "Overfitting autopsy: causes ranked" }), card("autopsy", 5, { view: "valCostCurve", title: "Sharpe as costs rise" })],
+        "Each way a backtest can lie, scored by how much of the result it explains."),
+      sec("controls", "Against controls", [card("controls", 7, { title: "Your strategy against simple alternatives" }), card("controls", 5, { view: "valShuffle", title: "Against shuffled signals" })],
+        "The verdict is measured against the best of these, never against zero."),
+      sec("robust", "Robustness", [card("cpcv", 4, { title: "Purged cross-validation" }), card("monte_carlo", 4, { title: "Block bootstrap" }), card("transfer", 4, { title: "Out-of-sample transfer" }),
+        card("plateau", 7, { title: "Parameter sweep" }), card(["deflated_sharpe", "pbo", "min_backtest_length"], 5, { title: "Trial count and history" }), card("stability", 6, { title: "Seed stability" }), card("leakage", 6, { title: "Look-ahead audit" })]),
+      sec("improve", "Improve", [card("improve", 12, { title: "Improve my strategy: meta-label filter and sizing" })], "A second model learns which of your trades to skip or shrink, fitted out of fold. Always shown beside the strategy as uploaded."),
+      sec("receipt", "Receipt", [card(["receipt", "data_quality"], 12, { title: "Reproducibility receipt" })]),
+    ],
+    verdict: (r) => {
+      const v = verdictOf(r);
+      return v?.label ? { headline: `${v.label}. ${v.headline ?? ""}`, tone: VTONE[v.label] ?? null } : { headline: null, tone: null };
+    },
+  },
   ml01: {
     sections: [
       sec("result", "Result", [card("cpcv_sharpe_distribution", 12, { title: "Sharpe across every CPCV path" }), card("backtest_paths_chart", 8, { title: "Backtest paths" }), card("purged_vs_naive_cv_comparison", 4, { title: "Purged vs naive CV", hint: "The gap is the leakage a naive split hides." })]),
@@ -176,13 +192,6 @@ const LAYOUTS: Record<string, FeatureLayout> = {
       return { headline: c ? `Current state ${String(c.dominant_state)} as of ${String(c.date)}.` : null, tone: null };
     },
   },
-  ml07: {
-    sections: [
-      sec("weights", "Weights", [card("model_weight_evolution", 12, { title: "Dynamic model averaging weights" }), card("live_model_weight_dashboard", 5, { title: "Weights now" }), card("obs_weight_evolution", 7, { title: "Online simplex weights" })]),
-      sec("scoring", "Scoring", [card("obs_regret_curve", 7, { title: "Regret against the best single model" }), card("prediction_calibration_curve", 5, { title: "Calibration" }), card("model_performance_tracker", 12)]),
-      data(["current_model_weights", "dma_vs_obs_vs_static_bma", "score_log", "obs_regret_log", "training_audit"]),
-    ],
-  },
   ml08: {
     sections: [
       sec("performance", "Performance", [card("long_short_backtest", 12, { title: "Composite long-short, net of costs" })]),
@@ -190,47 +199,25 @@ const LAYOUTS: Record<string, FeatureLayout> = {
       data(["latest_composite_scores", "factor_weights", "training_audit"]),
     ],
   },
-  ml09: {
-    sections: [
-      sec("trade", "Trade", [card("spread_zscore_timeseries", 12, { title: "Spread z-score and trades" }), card("pair_backtest_equity", 12, { title: "Out-of-sample equity, net of costs" })]),
-      sec("selection", "Selection", [card("pair_candidate_leaderboard", 7, { title: "Formation-window screen" }), card("cointegration_network", 5, { title: "Cointegrated pairs" }), card("hedge_ratio_path", 12, { title: "Hedge ratio" })]),
-      data(["pair_candidates", "spread_timeseries", "hedge_ratio", "entry_exit_signal_timeline", "training_audit"]),
-    ],
-  },
-  ml10: {
-    sections: [
-      sec("signals", "Signals", [card("microstructure_ic_leaderboard", 6, { title: "Signals by daily IC" }), card("signal_backtest", 6, { title: "Long-short by signal" }), card("amihud_illiquidity_surface", 12, { title: "Latest cross-section" })]),
-      sec("liquidity", "Liquidity", [card("amihud_time_surface", 8, { title: "Amihud illiquidity over time" }), card("liquidity_regime_monitor", 4), card("hl_amihud_vs_standard_amihud", 6), card("microstructure_signal_correlation_matrix", 6, { title: "Signal correlations" })]),
-      sec("cross", "Cross-sections", ["roll_spread_cross_section", "corwin_schultz_spread_cross_section", "max_factor_distribution", "52_week_high_proximity_heatmap", "ivol_cross_sectional_sort", "volume_surprise_signal"].map((k) => card(k, 6))),
-      data(["microstructure_table", "ic_leaderboard"]),
-    ],
-  },
-  ml11: {
-    sections: [
-      sec("effects", "Effects", [card("conditional_ape_leaderboard", 7, { title: "Adjusted effect per factor (95% CI)" }), card("adjustment_vs_univariate_slope", 5, { title: "Adjusted vs one-factor slope" }), card("ape_time_series", 12, { title: "Effect through time" })]),
-      sec("inference", "Inference", [card("robust_inference_table", 12), card("unidentified_factors", 12)]),
-      data(["conditional_ape_table"]),
-    ],
-  },
-  ml12: {
-    sections: [
-      sec("compare", "Compare", [card("architecture_comparison", 6, { title: "Architectures by out-of-sample IC" }), card("training_loss", 6, { title: "Training loss" }), card("monthly_oos_ic", 12, { title: "Monthly out-of-sample IC" })]),
-    ],
-  },
 };
 
 const V = group(() => import("./views") as Promise<Record<string, unknown>>);
+const VV = group(() => import("./validateViews") as Promise<Record<string, unknown>>);
+registerViews({
+  valVerdict: VV.ValVerdict, valAutopsy: VV.ValAutopsy, valCostCurve: VV.ValCostCurve, valControls: VV.ValControls, valShuffle: VV.ValShuffle, valCpcv: VV.ValCpcv, valMonteCarlo: VV.ValMonteCarlo,
+  valTransfer: VV.ValTransfer, valPlateau: VV.ValPlateau, valStability: VV.ValStability, valOverfit: VV.ValOverfit, valLeakage: VV.ValLeakage, valImprove: VV.ValImprove, valReceipt: VV.ValReceipt,
+}, ["valCostCurve", "valControls", "valTransfer", "valPlateau", "valStability"]);
 registerViews({
   mlAuto: V.MlAuto, mlKpi: V.MlKpi, mlReceipt: V.MlReceipt, mlEquity: V.MlEquity, mlSharpeSpread: V.MlSharpeSpread, mlPathFan: V.MlPathFan, mlFoldMatrix: V.MlFoldMatrix,
   mlRankTable: V.MlRankTable, mlBeeswarm: V.MlBeeswarm, mlWaterfall: V.MlWaterfall, mlIcBars: V.MlIcBars, mlLeaderboard: V.MlLeaderboard, mlVolPanel: V.MlVolPanel,
   mlVolScatter: V.MlVolScatter, mlTermStructure: V.MlTermStructure, mlTournament: V.MlTournament, mlBarrierScatter: V.MlBarrierScatter, mlBarrierSurface: V.MlBarrierSurface, mlLabelMix: V.MlLabelMix,
   mlCoverage: V.MlCoverage, mlWeights: V.MlWeights, mlRiskContrib: V.MlRiskContrib, mlDendrogram: V.MlDendrogram, mlBlShift: V.MlBlShift, mlRegimes: V.MlRegimes,
-  mlTransition: V.MlTransition, mlRegimeReturns: V.MlRegimeReturns, mlStacked: V.MlStacked, mlRegret: V.MlRegret, mlCalibration: V.MlCalibration, mlCrossSection: V.MlCrossSection,
-  mlSignalEquity: V.MlSignalEquity, mlTimeSurface: V.MlTimeSurface, mlZBand: V.MlZBand, mlNetwork: V.MlNetwork, mlCoefCI: V.MlCoefCI, mlAdjustment: V.MlAdjustment,
-  mlApePaths: V.MlApePaths, mlLoss: V.MlLoss, mlMonthlyIc: V.MlMonthlyIc,
+  mlTransition: V.MlTransition, mlRegimeReturns: V.MlRegimeReturns, mlStacked: V.MlStacked,
+ 
+ 
 }, ["mlAuto", "mlEquity", "mlPathFan", "mlBeeswarm", "mlWaterfall", "mlIcBars", "mlLeaderboard", "mlVolPanel", "mlVolScatter", "mlTermStructure", "mlTournament", "mlBarrierScatter",
-  "mlBarrierSurface", "mlLabelMix", "mlCoverage", "mlWeights", "mlRiskContrib", "mlDendrogram", "mlBlShift", "mlRegimes", "mlTransition", "mlRegimeReturns", "mlStacked", "mlRegret", "mlCalibration",
-  "mlCrossSection", "mlSignalEquity", "mlTimeSurface", "mlZBand", "mlNetwork", "mlCoefCI", "mlAdjustment", "mlApePaths", "mlLoss", "mlMonthlyIc", "mlSharpeSpread"]);
+  "mlBarrierSurface", "mlLabelMix", "mlCoverage", "mlWeights", "mlRiskContrib", "mlDendrogram", "mlBlShift", "mlRegimes", "mlTransition", "mlRegimeReturns", "mlStacked",
+  "mlSharpeSpread"]);
 
 export const ML_LAB: LabConfig = {
   id: "ml",
@@ -240,19 +227,17 @@ export const ML_LAB: LabConfig = {
   catalog: CATALOG,
   pages: PAGES,
   layouts: LAYOUTS,
-  manifest: (raw) => (raw as { features: RawFeature[] }).features.map(toSpec),
+  manifest: (raw) => (raw as { features: RawFeature[] }).features.filter((f) => ID(f.id) in CATALOG).map(toSpec),
   submit: (featureId, payload) => ({ path: `/features/${RAW(featureId)}/jobs`, body: payloadFor(payload) }),
   signal: false,
   defaultUniverse: "35 US large caps",
   overview: {
-    intro: "Twelve machine-learning engines for return prediction, risk and allocation. Every split is chronological and purged, every output says what it was trained on, and anything the data cannot support is marked unavailable rather than approximated.",
+    intro: "Four pages, one rule: nothing ships unless it holds up out of sample. Every split is chronological and purged, every result is measured against simple controls, and anything the data cannot support is marked unavailable rather than approximated.",
     stages: [
-      { id: "validate", label: "Validate", intro: "Is a backtest real once leakage between train and test is removed?", ids: ["ml01"] },
-      { id: "predict", label: "Predict", intro: "Cross-sectional return models, explained feature by feature.", ids: ["ml02", "ml12"] },
-      { id: "risk", label: "Risk", intro: "Volatility forecasts and barrier-based trade labels.", ids: ["ml03", "ml04"] },
-      { id: "allocate", label: "Allocate", intro: "Weights for assets and for factors, tested walk-forward.", ids: ["ml05", "ml08"] },
-      { id: "adapt", label: "Adapt", intro: "Market states and models whose weights move with performance.", ids: ["ml06", "ml07"] },
-      { id: "relative", label: "Relative value", intro: "Pairs, microstructure signals and adjusted factor effects.", ids: ["ml09", "ml10", "ml11"] },
+      { id: "validate", label: "Validate", intro: "Kill bad ideas cheaply: purged cross-validation, overfitting tests and a barrier-based trade filter.", ids: ["mlvalidate", "ml01", "ml04"] },
+      { id: "alpha", label: "Alpha", intro: "A cross-sectional ranking explained name by name, beside the IC-weighted composite it has to beat.", ids: ["ml02", "ml08"] },
+      { id: "risk", label: "Volatility & risk", intro: "Forecast volatility with a scored model tournament, and read the market state without look-ahead.", ids: ["ml03", "ml06"] },
+      { id: "allocate", label: "Allocation", intro: "Shrinkage-based weights with risk-parity and equal-weight controls, tested walk-forward net of costs.", ids: ["ml05"] },
     ],
   },
 };

@@ -48,10 +48,12 @@ export function useUniverse(enabled = true) {
   });
 }
 
+export type UploadInfo = { upload_id: string; rows: number; columns: string[]; date_range?: [string, string]; warnings?: string[]; nan_share?: Record<string, number> };
+
 export function uploadFile(kind: string, file: File) {
   const form = new FormData();
   form.append("file", file);
-  return request<{ upload_id: string; rows: number; columns: string[] }>(`/uploads?kind=${kind}`, { method: "POST", body: form });
+  return request<UploadInfo>(`/uploads?kind=${kind}`, { method: "POST", body: form });
 }
 
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);

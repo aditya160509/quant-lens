@@ -63,9 +63,9 @@ export function columns(rows: Row[]): string[] {
   return [...new Set(rows.flatMap((r) => Object.keys(r)))];
 }
 
-/** Value of an output from either the tables or the charts block of a result. */
+/** Value of an output from the tables, charts or sections block of a result. */
 export function out(result: FeatureResult, key: string): Row[] {
-  return rowsOf(result.tables?.[key] ?? result.charts?.[key]);
+  return rowsOf(result.tables?.[key] ?? result.charts?.[key] ?? result.sections?.[key]);
 }
 
 export const first = (result: FeatureResult, key: string): Row | undefined => out(result, key)[0];

@@ -465,3 +465,25 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .rc-grade .g.na { font-size: 15px; letter-spacing: 0; }
 .verdict-explain { font-size: 12.5px; color: var(--text-3); line-height: 1.55; margin: 2px 2px 0; max-width: 900px; }
 [data-embed] .ws-top, [data-embed] .ws-rail { display: none !important; }
+
+/* Bring-your-own-data upload */
+.upload { display: grid; gap: 8px; }
+.upload-about { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+.link { color: var(--accent); font-size: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: color-mix(in oklch, var(--accent) 40%, transparent); }
+.link:hover { text-decoration-color: var(--accent); }
+.upload-drop { display: grid; place-items: center; gap: 4px; padding: 16px 12px; border-radius: 10px; cursor: pointer; text-align: center; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text-2); font-size: 12.5px; transition: background 0.15s, box-shadow 0.15s; outline: 1px dashed var(--line-3); outline-offset: -5px; }
+.upload-drop:hover, .upload-drop[data-over] { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); outline-color: var(--accent-line); }
+.upload-drop:focus-within { box-shadow: 0 0 0 2px var(--accent-line); }
+.upload-drop[data-busy] { cursor: progress; opacity: 0.85; }
+.upload-hint { color: var(--text-4); font-size: 11px; max-width: 34ch; }
+.upload-receipt { border-radius: 10px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); padding: 8px 10px; font-size: 12px; }
+.upload-receipt-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.upload-receipt-h b { font-weight: 550; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-receipt-h button { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; color: var(--text-3); }
+.upload-receipt-h button:hover { background: var(--hover); color: var(--text); }
+.upload-receipt dl { display: grid; gap: 3px; margin: 6px 0 0; }
+.upload-receipt dl > div { display: grid; grid-template-columns: 62px 1fr; gap: 8px; }
+.upload-receipt dt { color: var(--text-4); }
+.upload-receipt dd { margin: 0; color: var(--text-2); overflow-wrap: anywhere; }
+.upload-warn { margin: 6px 0 0; padding: 0 0 0 16px; color: var(--warn); font-size: 11.5px; line-height: 1.5; }
+.upload-kinds { display: flex; flex-wrap: wrap; gap: 5px; }

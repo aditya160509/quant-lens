@@ -6,16 +6,13 @@ import { Beeswarm } from "@/charts/Beeswarm";
 import { Dendrogram, leafOrder, type Merge } from "@/charts/Dendrogram";
 import { Distribution } from "@/charts/Distribution";
 import { Diverging } from "@/charts/Diverging";
-import { Forest } from "@/charts/Forest";
 import { Heatmap } from "@/charts/Heatmap";
-import { Network } from "@/charts/Network";
 import { StackedArea } from "@/charts/StackedArea";
 import { TimeSeries, type Series } from "@/charts/TimeSeries";
 import { Waterfall } from "@/charts/Waterfall";
 import { XYPlot } from "@/charts/XYPlot";
 import { SERIES, parseDate } from "@/charts/core";
 import { Segmented } from "@/workspace/ui";
-import { useRuns } from "@/modules/research/api";
 import { isNum, label, out, pct } from "@/modules/research/format";
 import { DataTable, Empty } from "@/modules/research/outputs/tables";
 import type { ViewProps } from "@/modules/research/outputs/types";
@@ -45,12 +42,6 @@ export function pivot(rows: Row[], x: string, s: string, y: string): { data: Row
   }
   const data = [...by.values()].sort((a, b) => ((parseDate(a[x]) ?? Number(a[x])) - (parseDate(b[x]) ?? Number(b[x]))));
   return { data, keys };
-}
-
-/** The settings this run was submitted with, from the local run history. */
-function usePayload(scope: string): Record<string, unknown> {
-  const jobId = scope.split(":")[1];
-  return useRuns((s) => s.runs.find((r) => r.jobId === jobId)?.payload) ?? {};
 }
 
 function Stats({ items }: { items: [string, ReactNode, string?][] }) {
@@ -521,150 +512,3 @@ export function MlStacked({ rows, spec }: ViewProps) {
   if (signed) return <TimeSeries data={data} x={x} height={260} series={keys.map((k) => ({ key: k, label: label(k) }))} refLines={[{ y: 0, color: "var(--line-3)" }]} />;
   return <StackedArea data={data} x={x} keys={keys} labels={Object.fromEntries(keys.map((k) => [k, label(k)]))} />;
 }
-
-export function MlRegret({ rows }: ViewProps) {
-  if (!rows.length) return <Empty />;
-  const last = rows[rows.length - 1];
-  return (
-    <div>
-      <Stats items={[["Final regret", sig(n(last.obs_regret) ?? NaN)], ["Online loss", sig(n(last.obs_cumulative_loss) ?? NaN)], ["Best fixed model loss", sig(n(last.best_fixed_model_loss) ?? NaN)]]} />
-      <TimeSeries data={rows} x="date" height={240} series={[{ key: "obs_cumulative_loss", label: "Online ensemble" }, { key: "best_fixed_model_loss", label: "Best single model in hindsight", dash: true }, { key: "obs_regret", label: "Regret", kind: "area", color: "var(--warn)" }]} />
-    </div>
-  );
-}
-
-/** Reliability: predicted against realised by bucket; points on the diagonal are calibrated. */
-export function MlCalibration({ rows }: ViewProps) {
-  if (!rows.length) return <Empty />;
-  const pts = rows.filter((r) => isNum(r.mean_prediction) && isNum(r.mean_realized)).map((r) => ({ x: r.mean_prediction as number, y: r.mean_realized as number, label: `Bucket ${str(r.bucket)}`, size: n(r.observations) ?? undefined }));
-  return <XYPlot points={pts} lines={[{ label: "Buckets", points: [...pts].sort((a, b) => a.x - b.x) }]} xLabel="Mean prediction" yLabel="Mean realised" diagonal labelPoints formatX={pctFmt} formatY={pctFmt} />;
-}
-
-/* ---------------------------------------------------------------- F08 composite, F10 microstructure */
-
-/** A matrix of latest values per name, each column scored against its own cross-section. */
-export function MlCrossSection({ rows }: ViewProps) {
-  if (!rows.length) return <Empty />;
-  const name = "ticker" in rows[0] ? "ticker" : Object.keys(rows[0])[0];
-  const cols = Object.keys(rows[0]).filter((k) => k !== name && isNum(rows.find((r) => isNum(r[k]))?.[k]));
-  const z = cols.map((c) => { const v = vals(rows, c); const m = mean(v); const sd = Math.sqrt(mean(v.map((a) => (a - m) ** 2))) || 1; return (x: unknown) => (isNum(x) ? Math.max(-3, Math.min(3, (x - m) / sd)) : null); });
-  return (
-    <div>
-      <Heatmap rows={rows.map((r) => str(r[name]))} cols={cols.map(label)} values={rows.map((r) => cols.map((c, j) => z[j](r[c])))} format={(v) => v.toFixed(1)} />
-      <p className="ml-note">Cells are z-scores within each column, so colour compares names on the same signal. Hover shows the score; the table view has raw values.</p>
-    </div>
-  );
-}
-
-/** One equity curve per signal (long-short, net), so families compare on one axis. */
-export function MlSignalEquity({ rows }: ViewProps) {
-  const { data, keys } = useMemo(() => pivot(rows, "date", "signal", "equity"), [rows]);
-  if (!rows.length) return <Empty />;
-  return <TimeSeries data={data} x="date" height={300} series={keys.map((k) => ({ key: k, label: label(k) }))} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />;
-}
-
-/** Wide date × ticker surface as faint lines with the cross-sectional median in bold. */
-export function MlTimeSurface({ rows }: ViewProps) {
-  const keys = Object.keys(rows[0] ?? {}).filter((k) => k !== "date");
-  const data = useMemo(() => rows.map((r) => { const v = keys.map((k) => r[k]).filter(isNum).sort((a, b) => a - b); return { ...r, median: v.length ? quantile(v, 0.5) : null }; }), [rows, keys]);
-  if (!rows.length) return <Empty />;
-  return <TimeSeries data={data} x="date" height={280} series={[...keys.map((k) => ({ key: k, label: k, muted: true })), { key: "median", label: "Median", width: 2.2 }]} />;
-}
-
-/* ---------------------------------------------------------------- F09 pairs */
-
-/** The spread z-score with entry and exit bands and the trades it triggered. */
-export function MlZBand({ rows, result, scope }: ViewProps) {
-  const payload = usePayload(scope);
-  const entry = Number(payload.entry_z ?? 2), exit = Number(payload.exit_z ?? 0.5);
-  const sig2 = out(result, "entry_exit_signal_timeline");
-  const pair = out(result, "training_audit")[0]?.selected_pair as Row | undefined;
-  const { markers, regions } = useMemo(() => {
-    const markers: { date: string; label: string; color?: string }[] = [];
-    const regions: { from: string; to?: string; color?: string }[] = [];
-    let open: { from: string; d: number } | null = null;
-    sig2.forEach((r, i) => {
-      const d = Number(r.direction ?? 0), prev = i ? Number(sig2[i - 1].direction ?? 0) : 0;
-      if (d !== prev) {
-        if (open) { regions.push({ from: open.from, to: str(r.date), color: open.d > 0 ? "var(--up)" : "var(--down)" }); open = null; }
-        if (d !== 0) { open = { from: str(r.date), d }; markers.push({ date: str(r.date), label: d > 0 ? "Long spread" : "Short spread", color: d > 0 ? "var(--up)" : "var(--down)" }); }
-      }
-    });
-    if (open) regions.push({ from: (open as { from: string }).from, color: (open as { d: number }).d > 0 ? "var(--up)" : "var(--down)" });
-    return { markers, regions };
-  }, [sig2]);
-  if (!rows.length) return <Empty text="No pair passed the formation test, so the strategy held cash." />;
-  return (
-    <div>
-      <Stats items={[["Pair", pair ? `${str(pair.asset_a)} / ${str(pair.asset_b)}` : "–"], ["Trades", markers.length], ["Engle–Granger p", pair && isNum(pair.engle_granger_pvalue) ? pair.engle_granger_pvalue.toFixed(4) : "–"], ["Entry / exit", `±${entry} / ±${exit}`]]} />
-      <TimeSeries data={rows} x="date" height={280} series={[{ key: "zscore", label: "Spread z-score" }]} markers={markers.slice(-40)} regions={regions.map((r) => ({ ...r, label: undefined }))}
-        refLines={[{ y: entry, label: `+${entry}`, color: "var(--down)", dash: true }, { y: -entry, label: `−${entry}`, color: "var(--up)", dash: true }, { y: exit, color: "var(--line-3)", dash: true }, { y: -exit, color: "var(--line-3)", dash: true }, { y: 0, color: "var(--line-3)" }]} />
-    </div>
-  );
-}
-
-export function MlNetwork({ rows, result }: ViewProps) {
-  const cand = out(result, "pair_candidate_leaderboard");
-  if (!rows.length && !cand.length) return <Empty />;
-  const nodes = [...new Set(cand.flatMap((r) => [str(r.asset_a), str(r.asset_b)]))];
-  const edges = rows.map((r) => ({ source: str(r.source), target: str(r.target), weight: 1 - Math.min(1, (n(r.pvalue) ?? 1) * 10), note: `p = ${sig(n(r.pvalue) ?? NaN)}` }));
-  return (
-    <div>
-      <Network edges={edges} nodes={nodes.length ? nodes : undefined} />
-      <p className="ml-note">Links are pairs that passed the Engle–Granger test in the formation window; thicker means a smaller p-value. Unlinked names were screened and failed.</p>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------- F11 DML, F12 sequence */
-
-/** Each factor's conditional effect with its 95% interval, beside the naive one-factor slope. */
-export function MlCoefCI({ rows }: ViewProps) {
-  if (!rows.length) return <Empty />;
-  const sorted = [...rows].filter((r) => isNum(r.dml_ape)).sort((a, b) => (b.dml_ape as number) - (a.dml_ape as number));
-  return (
-    <div>
-      <Forest format={sig} refLabel="no effect"
-        rows={sorted.map((r) => ({ label: label(str(r.factor)), estimate: r.dml_ape as number, lo: n(r.lower), hi: n(r.upper), tone: (n(r.lower) ?? 0) > 0 ? "up" : (n(r.upper) ?? 0) < 0 ? "down" : "muted", note: isNum(r.univariate_slope) ? `one-factor slope ${sig(r.univariate_slope)}` : undefined }))} />
-      <p className="ml-note">Effects are conditional associations after cross-fitted adjustment for the other factors, not causal effects.</p>
-    </div>
-  );
-}
-
-/** Adjusted effect against the naive slope: points off the diagonal are where controls changed the answer. */
-export function MlAdjustment({ rows }: ViewProps) {
-  if (!rows.length) return <Empty />;
-  const pts = rows.filter((r) => isNum(r.univariate_slope) && isNum(r.dml_ape)).map((r) => ({ x: r.univariate_slope as number, y: r.dml_ape as number, label: label(str(r.factor)) }));
-  return <XYPlot points={pts} xLabel="One-factor slope" yLabel="Adjusted effect (DML)" diagonal labelPoints formatX={sig} formatY={sig} refX={[{ x: 0, color: "var(--line-3)" }]} refY={[{ y: 0, color: "var(--line-3)" }]} />;
-}
-
-/** Effect over time per factor, one small chart each, with its ±1.96 SE band. */
-export function MlApePaths({ rows }: ViewProps) {
-  const factors = useMemo(() => [...new Set(rows.map((r) => str(r.factor)))], [rows]);
-  if (!rows.length) return <Empty />;
-  return (
-    <div className="x-facets">
-      {factors.slice(0, 12).map((f) => {
-        const data = rows.filter((r) => str(r.factor) === f).map((r) => ({ ...r, lo: isNum(r.ape) && isNum(r.se) ? r.ape - 1.96 * r.se : null, hi: isNum(r.ape) && isNum(r.se) ? r.ape + 1.96 * r.se : null }));
-        return <div key={f} className="x-facet"><div className="x-facet-h">{label(f)}</div><TimeSeries data={data} x="date" height={150} legend={false} series={[{ key: "ape", label: "Effect" }]} band={{ lo: "lo", hi: "hi" }} refLines={[{ y: 0, color: "var(--line-3)" }]} /></div>;
-      })}
-    </div>
-  );
-}
-
-export function MlLoss({ rows }: ViewProps) {
-  if (!rows.length) return <Empty />;
-  const archs = [...new Set(rows.map((r) => str(r.architecture)))];
-  const ys = ["training_mse", "validation_mse"].filter((k) => rows.some((r) => isNum(r[k])));
-  return <XYPlot points={[]} xLabel="Epoch" yLabel="MSE"
-    lines={archs.flatMap((a, i) => ys.map((y) => ({ label: `${a} ${y.startsWith("val") ? "validation" : "train"}`, color: SERIES[i % SERIES.length], dash: y.startsWith("val"), points: rows.filter((r) => str(r.architecture) === a && isNum(r[y])).map((r) => ({ x: Number(r.epoch), y: r[y] as number })) })))} />;
-}
-
-/** Monthly out-of-sample IC per architecture. */
-export function MlMonthlyIc({ rows }: ViewProps) {
-  const { data, keys } = useMemo(() => pivot(rows, "month", "architecture", "ic"), [rows]);
-  if (!rows.length) return <Empty />;
-  if (keys.length === 1) return <MlIcBars rows={rows.map((r) => ({ month: r.month, ic: r.ic }))} result={{} as never} feature={{} as never} keys={[]} scope="" spec={{ key: "", title: "", source: "charts", render: "", encoding: { x: "month", y: "ic" } }} />;
-  return <Heatmap rows={keys} cols={data.map((r) => str(r.month))} values={keys.map((k) => data.map((r) => n(r[k])))} format={(v) => v.toFixed(2)} />;
-}
-

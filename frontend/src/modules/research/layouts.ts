@@ -388,7 +388,7 @@ export function verdictFor(feature: FeatureSpec, result: FeatureResult): Verdict
   if (custom) return custom(result);
   if (typeof result.meta.headline === "string") return { headline: result.meta.headline, tone: null };
   const prose = feature.outputs.find((o) => o.render === "summaryLine" || o.render === "verdict");
-  const row = prose ? rowsOf(result[prose.source][prose.key])[0] : undefined;
+  const row = prose ? rowsOf(result[prose.source]?.[prose.key])[0] : undefined;
   const text = row ? [row.summary, row.message, row.verdict].find((v): v is string => typeof v === "string") : undefined;
   return { headline: text ?? null, tone: null };
 }

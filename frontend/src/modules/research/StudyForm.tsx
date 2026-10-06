@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Children, useMemo, useRef, useState } from "react";
 import { BookOpen, ChevronDown, Link2, Info, Loader2, Repeat, RotateCcw, Save, Trash2, Upload, X } from "lucide-react";
 import { MenuItem, PopMenu, Segmented, Tooltip, type MenuAt } from "@/workspace/ui";
-import { uploadFile, useUniverse } from "./api";
+import { uploadFile, useUniverse, type UploadInfo } from "./api";
 import { label } from "./format";
 import { usePresets, useSweeps } from "./store";
 import { useUniverses } from "./api";
@@ -15,7 +15,18 @@ import { UniverseBuilder } from "./UniverseBuilder";
 
 export type FormState = Record<string, unknown>;
 
-const UPLOAD_KIND: Record<string, string> = { signal_csv_path: "signal", event_csv_path: "event", instrument_csv_path: "instrument", factor_csv_path: "factors" };
+const UPLOAD_KIND: Record<string, string | string[]> = {
+  signal_csv_path: "signal", event_csv_path: "event", instrument_csv_path: "instrument", factor_csv_path: "factors",
+  upload_id: ["predictions", "returns", "feature_panel", "trial_matrix"], trials_upload_id: "trial_matrix", benchmark_upload_id: "returns",
+};
+
+/** What each bring-your-own-data upload holds, with a template a user can download and fill. */
+const UPLOAD_FORMAT: Record<string, { label: string; about: string; template: string }> = {
+  predictions: { label: "Predictions", about: "One row per date and ticker: your model's score and, ideally, the realised outcome.", template: "date,ticker,prediction,outcome\n2024-01-02,AAPL,0.42,0.0031\n2024-01-02,MSFT,-0.10,-0.0012\n" },
+  returns: { label: "Returns", about: "One row per date: your strategy's period return as a decimal (0.01 = 1%).", template: "date,return\n2024-01-02,0.0042\n2024-01-03,-0.0017\n" },
+  feature_panel: { label: "Feature panel", about: "One row per date and ticker: your own features and the forward outcome to predict.", template: "date,ticker,f1,f2,outcome\n2024-01-02,AAPL,0.8,-1.2,0.0031\n2024-01-02,MSFT,0.1,0.4,-0.0012\n" },
+  trial_matrix: { label: "Trial matrix", about: "One column per configuration you tried, so overfitting tests use the true trial count.", template: "date,trial_1,trial_2,trial_3\n2024-01-02,0.004,0.001,-0.002\n2024-01-03,-0.001,0.003,0.000\n" },
+};
 
 export function defaultsFor(feature: FeatureSpec): FormState {
   return Object.fromEntries(feature.inputs.map((f) => [f.key, f.default ?? ""]));
@@ -292,36 +303,66 @@ export function Control({ field: f, value, onChange }: { field: InputSpec; value
   }
 }
 
-function FileField({ kind, value, onChange, help }: { kind: string; value: string; onChange: (v: unknown) => void; help?: string }) {
-  const [state, setState] = useState({ busy: false, error: "", info: "" });
+function FileField({ kind, value, onChange, help }: { kind: string | string[]; value: string; onChange: (v: unknown) => void; help?: string }) {
+  const kinds = Array.isArray(kind) ? kind : [kind];
+  const [chosen, setChosen] = useState(kinds[0]);
+  const [state, setState] = useState<{ busy: boolean; error: string; name: string; info: UploadInfo | null }>({ busy: false, error: "", name: "", info: null });
   const [over, setOver] = useState(false);
+  const fmt = UPLOAD_FORMAT[chosen];
   const pick = async (file?: File) => {
     if (!file) return;
-    setState({ busy: true, error: "", info: "" });
+    setState({ busy: true, error: "", name: file.name, info: null });
     try {
-      const res = await uploadFile(kind, file);
+      const res = await uploadFile(chosen, file);
       onChange(res.upload_id);
-      setState({ busy: false, error: "", info: `${file.name} · ${res.rows.toLocaleString()} rows` });
+      setState({ busy: false, error: "", name: file.name, info: res });
     } catch (err) {
-      setState({ busy: false, error: err instanceof Error ? err.message : "Upload failed", info: "" });
+      setState({ busy: false, error: err instanceof Error ? err.message : "Upload failed", name: file.name, info: null });
     }
   };
+  const template = () => {
+    if (!fmt) return;
+    const url = URL.createObjectURL(new Blob([fmt.template], { type: "text/csv" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: `${chosen}_template.csv` });
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const info = state.info;
   return (
-    <div style={{ display: "grid", gap: 6 }}>
-      <label onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); void pick(e.dataTransfer.files?.[0]); }}
-        style={{ display: "grid", placeItems: "center", gap: 4, padding: "14px 10px", borderRadius: 10, cursor: "pointer", textAlign: "center", background: over ? "var(--accent-soft)" : "var(--bg)", boxShadow: `inset 0 0 0 1px ${over ? "var(--accent-line)" : "var(--line-2)"}`, borderStyle: "dashed", color: "var(--text-2)", fontSize: 12.5 }}>
-        {state.busy ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
-        <span>{value ? "Replace file" : "Drop a CSV or Parquet, or click to choose"}</span>
-        {help ? <span style={{ color: "var(--text-4)", fontSize: 11 }}>{help}</span> : null}
-        <input type="file" accept=".csv,.parquet" hidden onChange={(e) => void pick(e.target.files?.[0])} />
+    <div className="upload">
+      {kinds.length > 1 ? (
+        <div className="upload-kinds" role="group" aria-label="What you are uploading">
+          {kinds.map((k) => (
+            <button key={k} type="button" className="pill" aria-pressed={k === chosen}
+              onClick={() => { setChosen(k); if (value) onChange(""); setState({ busy: false, error: "", name: "", info: null }); }}>{UPLOAD_FORMAT[k]?.label ?? label(k)}</button>
+          ))}
+        </div>
+      ) : null}
+      {fmt ? <p className="upload-about">{fmt.about} <button type="button" className="link" onClick={template}>Download a template</button></p> : null}
+      <label className="upload-drop" data-over={over || undefined} data-busy={state.busy || undefined} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); void pick(e.dataTransfer.files?.[0]); }}>
+        {state.busy ? <Loader2 size={16} className="spin" /> : <Upload size={16} />}
+        <span>{state.busy ? `Checking ${state.name}…` : value ? "Replace file" : "Drop a CSV here, or click to choose"}</span>
+        <span className="upload-hint">{help && !fmt ? help : "CSV only, up to 10 MB. Checked for future dates, duplicates and formula cells; kept privately for 24 hours."}</span>
+        <input type="file" accept=".csv,text/csv" hidden onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} />
       </label>
       {value ? (
-        <span className="token" style={{ justifySelf: "start" }}>
-          {state.info || value}
-          <button type="button" aria-label="Remove file" onClick={() => { onChange(""); setState({ busy: false, error: "", info: "" }); }}><X size={10} /></button>
-        </span>
+        <div className="upload-receipt">
+          <div className="upload-receipt-h">
+            <b>{state.name || "Uploaded file"}</b>
+            <button type="button" aria-label="Remove file" onClick={() => { onChange(""); setState({ busy: false, error: "", name: "", info: null }); }}><X size={11} /></button>
+          </div>
+          {info ? (
+            <dl>
+              <div><dt>Rows</dt><dd className="num">{info.rows.toLocaleString()}</dd></div>
+              {info.date_range ? <div><dt>Dates</dt><dd className="num">{info.date_range[0]} → {info.date_range[1]}</dd></div> : null}
+              <div><dt>Columns</dt><dd>{info.columns.join(", ")}</dd></div>
+              {info.nan_share && Object.values(info.nan_share).some((x) => x > 0) ? <div><dt>Missing</dt><dd className="num">{Object.entries(info.nan_share).filter(([, x]) => x > 0).map(([k, x]) => `${k} ${(x * 100).toFixed(1)}%`).join(" · ")}</dd></div> : null}
+            </dl>
+          ) : null}
+          {info?.warnings?.length ? <ul className="upload-warn">{info.warnings.map((w) => <li key={w}>{w}</li>)}</ul> : null}
+        </div>
       ) : null}
-      {state.error ? <span className="err">{state.error}</span> : null}
+      {state.error ? <span className="err" role="alert">{state.error}</span> : null}
     </div>
   );
 }
