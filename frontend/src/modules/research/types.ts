@@ -44,7 +44,7 @@ export type FeatureSpec = {
   outputs: OutputSpec[];
 };
 
-export type SummaryCard = { label: string; value: unknown };
+export type SummaryCard = { label: string; value: unknown; unit?: string };
 
 export type FeatureResult = {
   feature_id: string;

@@ -32,6 +32,8 @@ TREE_MODELS = ("lightgbm", "xgboost", "catboost")
 # ---------------------------------------------------------------------------
 # features
 
+_CONTROL_LABELS = {"ic_composite": "IC composite", "ols3": "3-factor OLS", "ridge": "Ridge"}
+
 def _apply_universe_filters(ctx):
     sectors = ctx.payload.get("sector_filter")
     minimum = float(ctx.payload.get("minimum_formation_notional") or 0)
@@ -502,7 +504,7 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     control_ics = {n: e["test_ic"] for n, e in evaluations.items() if n in ("ols3", "ic_composite") and e["test_ic"] is not None}
     best_control = max(control_ics, key=control_ics.get) if control_ics else None
     return response("02", [summary("Held-out IC", best_ic, "IC"),
-                           summary(f"{best_control.replace('_', ' ').capitalize()} IC" if best_control else "Best control IC", control_ics.get(best_control), "IC"),
+                           summary(f"{_CONTROL_LABELS.get(best_control, best_control)} IC" if best_control else "Best control IC", control_ics.get(best_control), "IC"),
                            summary("Net Sharpe", evaluations[primary]["net_sharpe"], "Sharpe"),
                            summary("Top name", str(current.sort_values("rank").ticker.iloc[0]), "ticker")],
         charts={"prediction_rank_table": compact_records(current.sort_values("rank")), "shap_feature_importance": shap_importance,

@@ -4,7 +4,7 @@ import { expect, test } from "playwright/test";
  * Visual smoke tests for the lab workspace (Research and Machine learning) in dark and light.
  * Update baselines with: npx playwright test e2e/research.spec.ts --update-snapshots
  */
-const PAGES = ["/research", "/research/signal", "/research/report", "/research/canonical", "/ml", "/ml/cpcv"];
+const PAGES = ["/research", "/research/signal", "/research/report", "/research/canonical", "/ml", "/ml/cpcv", "/ml/validate"];
 
 for (const scheme of ["dark", "light"] as const) {
   test.describe(`research ${scheme}`, () => {

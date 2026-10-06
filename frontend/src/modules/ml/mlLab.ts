@@ -1,5 +1,5 @@
 import {
-  Activity, Binary, BrainCircuit, GitBranch, Layers, ScanSearch, ShieldCheck, Waves,
+  Activity, Binary, BrainCircuit, GitBranch, ScanSearch, ShieldCheck, Waves,
 } from "lucide-react";
 import { API_BASE_URL } from "@/lib/apiBase";
 import type { LabConfig, FeatureMeta, Page } from "@/modules/research/lab";
@@ -18,22 +18,20 @@ const CATALOG: Record<string, FeatureMeta & { about: string }> = {
   ml01: { name: "Purged CV for a model", slug: "cpcv", icon: ScanSearch, question: "Is the backtest Sharpe real, or an artefact of leaky validation?",
     about: "Combinatorial purged cross-validation: date groups are tested in every combination, with training rows that overlap a test label purged and an embargo after each test block. The spread of path Sharpes is the honest answer." },
   ml02: { name: "Alpha model", slug: "alpha", icon: BrainCircuit, question: "Which names does the model rank highest, and why?",
-    about: "Gradient-boosted and linear models chosen by nested chronological validation, scored by information coefficient on a held-out period, and explained with exact SHAP values." },
-  ml03: { name: "Volatility forecasts", slug: "volatility", icon: Activity, question: "How volatile will this asset be, and which model forecasts it best?",
-    about: "HAR family models and ARCH-type models forecast realised volatility at several horizons, with intervals calibrated before the hold-out and scored by QLIKE and MAE." },
+    about: "LightGBM and Ridge blended by validation, predicting 21-day returns, scored on a held-out period against simple controls and explained with exact TreeSHAP values. Add your own features as formulas or a CSV." },
+  ml03: { name: "Volatility & risk today", slug: "volatility", icon: Activity, question: "How much risk is ahead, and how large should the position be?",
+    about: "HAR-RV, EWMA, GJR-GARCH and a regime-switching choice between them forecast volatility at 1, 5 and 21 days, scored by QLIKE with Diebold–Mariano tests, plus VaR, expected shortfall and a target-risk position size." },
   ml04: { name: "Improve my strategy", slug: "barriers", icon: Binary, question: "Which trades hit their target before their stop, and does filtering them help?",
     about: "Events are labelled by which barrier the high/low path touches first. Same-bar touches stay ambiguous rather than guessed. Meta-labels and conformal intervals are fitted out of fold." },
-  ml05: { name: "Allocation", slug: "allocation", icon: GitBranch, question: "How should capital be spread when estimates are noisy?",
-    about: "Hierarchical risk parity, nested clustered optimisation and minimum variance, refit monthly on past data only, traded at the next close with turnover costs." },
+  ml05: { name: "Allocation", slug: "allocation", icon: GitBranch, question: "How should capital be spread, and what should I trade today?",
+    about: "Ledoit–Wolf minimum variance by default, with risk parity, inverse variance and equal weight as controls, refit monthly on past data, net of costs. Paste your holdings for a trade list." },
   ml06: { name: "Market state", slug: "regimes", icon: Waves, question: "Which market state are we in, and how long do states last?",
     about: "A hidden Markov model fitted on the training window and filtered forward without smoothing, so every date's state uses only data up to that date." },
-  ml08: { name: "Composite baseline", slug: "composite", icon: Layers, question: "How should factors be combined into one score, and does it hold up?",
-    about: "Factors weighted by their historical IC and IC-IR, re-selected on past data only, and traded long-short with lagged execution and costs." },
 };
 
 const PAGES: Page[] = [
   { id: "validate", label: "Validate", icon: ShieldCheck, question: "Does the backtest hold up once leakage, luck and trial count are removed?", features: ["mlvalidate", "ml01", "ml04"] },
-  { id: "alpha", label: "Alpha", icon: BrainCircuit, question: "Which names rank highest, why, and does the ranking beat a simple composite?", features: ["ml02", "ml08"] },
+  { id: "alpha", label: "Alpha", icon: BrainCircuit, question: "Which names rank highest, why, and does the model beat simple alternatives?", features: ["ml02"] },
   { id: "risk", label: "Volatility & risk", icon: Activity, question: "How much risk is ahead, and which market state are we in?", features: ["ml03", "ml06"] },
   { id: "allocate", label: "Allocation", icon: GitBranch, question: "How should capital be spread when estimates are noisy?", features: ["ml05"] },
 ];
@@ -43,12 +41,11 @@ const VIEW: Record<string, Record<string, string>> = {
   validate: { autopsy: "valAutopsy", controls: "valControls", cpcv: "valCpcv", monte_carlo: "valMonteCarlo", transfer: "valTransfer", plateau: "valPlateau", stability: "valStability",
     deflated_sharpe: "valOverfit", leakage: "valLeakage", improve: "valImprove", receipt: "valReceipt" },
   "01": { cpcv_sharpe_distribution: "mlSharpeSpread", backtest_paths_chart: "mlPathFan", per_fold_performance: "mlFoldMatrix", probability_of_backtest_overfitting: "mlKpi", deflated_sharpe_ratio: "mlKpi", cpcv_path_metrics: "dataTable" },
-  "02": { prediction_rank_table: "mlRankTable", shap_beeswarm: "mlBeeswarm", shap_waterfall_top_signal: "mlWaterfall", model_ic_leaderboard: "mlLeaderboard", rolling_monthly_ic_series: "mlIcBars", training_audit: "mlReceipt" },
-  "03": { vol_forecast_panel: "mlVolPanel", realized_vs_predicted: "mlVolScatter", vol_term_structure: "mlTermStructure", forecast_tournament: "mlTournament", forecast_error_distribution: "mlTournament", ensemble_vol_forecast_weights: "mlStacked" },
+  "02": { controls: "alphaControls", decile_spreads: "alphaDeciles", net_of_cost_curve: "alphaNetCurve", what_changed: "alphaWhatChanged", feature_families: "alphaFamilies", ensemble: "alphaEnsemble", prediction_rank_table: "mlRankTable", shap_beeswarm: "mlBeeswarm", shap_waterfall_top_signal: "mlWaterfall", model_ic_leaderboard: "mlLeaderboard", rolling_monthly_ic_series: "mlIcBars", training_audit: "mlReceipt" },
+  "03": { risk_today: "riskToday", var_es: "riskVarEs", position_sizing: "strategyCompare", regime_probability: "riskStress", vol_forecast_panel: "mlVolPanel", realized_vs_predicted: "mlVolScatter", vol_term_structure: "mlTermStructure", forecast_tournament: "mlTournament", forecast_error_distribution: "mlTournament", ensemble_vol_forecast_weights: "mlStacked" },
   "04": { triple_barrier_label_distribution: "mlLabelMix", barrier_hit_path_examples: "mlBarrierScatter", barrier_sensitivity_surface: "mlBarrierSurface", cqr_coverage_audit: "mlCoverage", barrier_parameters: "mlReceipt" },
-  "05": { hrp_weight_vector: "mlWeights", cluster_dendrograms: "mlDendrogram", risk_contribution_decomposition: "mlRiskContrib", walk_forward_allocation: "mlEquity", black_litterman_posterior_return_vector: "mlBlShift", bl_vs_pure_hrp_weight_comparison: "mlBlShift" },
-  "06": { regime_probability_time_series: "mlRegimes", parallel_gmm_regime_probabilities: "mlRegimes", regime_transition_heatmap: "mlTransition", transition_matrix: "mlTransition", regime_conditional_asset_returns: "mlRegimeReturns", ensemble_vs_hmm_comparison: "mlKpi", correlation_network_density: "mlKpi", current_regime_probabilities: "mlReceipt", training_audit: "mlReceipt" },
-  "08": { long_short_backtest: "mlEquity", ic_weighted_composite_weights: "mlWeights", walk_forward_weight_stability: "mlStacked" },
+  "05": { controls_summary: "strategyCompare", controls_equity: "mlStacked", weight_stability: "allocStability", trade_list: "allocTrades", rebalance_log: "allocRebalances", holding_risk: "dataTable", hrp_weight_vector: "mlWeights", cluster_dendrograms: "mlDendrogram", risk_contribution_decomposition: "mlRiskContrib", walk_forward_allocation: "mlEquity", black_litterman_posterior_return_vector: "mlBlShift", bl_vs_pure_hrp_weight_comparison: "mlBlShift" },
+  "06": { regime_vs_constant_exposure: "strategyCompare", regime_probability_time_series: "mlRegimes", parallel_gmm_regime_probabilities: "mlRegimes", regime_transition_heatmap: "mlTransition", transition_matrix: "mlTransition", regime_conditional_asset_returns: "mlRegimeReturns", ensemble_vs_hmm_comparison: "mlKpi", correlation_network_density: "mlKpi", current_regime_probabilities: "mlReceipt", training_audit: "mlReceipt" },
 };
 
 type RawInput = InputSpec & { integer?: boolean };
@@ -59,6 +56,10 @@ type RawFeature = { id: string; title: string; status?: string; inputs: RawInput
 const UPLOADS: Record<string, string> = { upload_id: "Your data", trials_upload_id: "Every trial you ran", benchmark_upload_id: "Benchmark returns" };
 /** Raw JSON hand-offs are filled by "Validate this run" buttons, not typed. */
 const HIDDEN_INPUTS = new Set(["source_result"]);
+/** Hand-off ids arrive from another page's "Next" buttons; shown read-only-ish with a plain label. */
+const HANDOFF_LABELS: Record<string, string> = { artifact_id: "From another page", alpha_artifact_id: "Alpha views from the Alpha page", regime_artifact_id: "Regimes from the Market state page" };
+/** Holdings are typed as "AAPL 25%, MSFT 0.2" or one per line, and sent as {ticker: value}. */
+const HOLDINGS = "holdings";
 
 /** Inputs whose text value is sent as a list. */
 const LIST_KEYS = new Set<string>();
@@ -80,6 +81,8 @@ function toSpec(f: RawFeature): FeatureSpec {
     inputs: f.inputs.filter((i) => !HIDDEN_INPUTS.has(i.key)).map((i) => ({
       ...i, group: i.group || "Settings", default: Array.isArray(i.default) && i.type !== "multiselect" ? i.default.join(", ") : i.default,
       ...(UPLOADS[i.key] ? { type: "file" as const, label: UPLOADS[i.key] } : {}),
+      ...(HANDOFF_LABELS[i.key] ? { label: HANDOFF_LABELS[i.key], help: `${i.help ?? ""} Filled in by the hand-off buttons; leave empty otherwise.`.trim() } : {}),
+      ...(i.key === HOLDINGS ? { type: "text" as const, label: "Your holdings", default: "", help: "One per line or comma-separated: ticker and weight (AAPL 25%) or shares (AAPL 120) per the unit below. Leave empty for target weights only." } : {}),
     })),
     outputs,
   };
@@ -89,7 +92,10 @@ function toSpec(f: RawFeature): FeatureSpec {
 function payloadFor(payload: Record<string, unknown>) {
   const outp: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(payload)) {
-    if (LIST_KEYS.has(k) && typeof v === "string") {
+    if (k === HOLDINGS && typeof v === "string") {
+      const pairs = v.split(/[\n,;]+/).map((x) => x.trim().split(/[\s:=]+/)).filter((x) => x.length >= 2 && x[0]);
+      if (pairs.length) outp[k] = Object.fromEntries(pairs.map(([t, q]) => [t.toUpperCase(), q.endsWith("%") ? Number(q.slice(0, -1)) / 100 : Number(q)]));
+    } else if (LIST_KEYS.has(k) && typeof v === "string") {
       const parts = v.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
       outp[k] = parts.every((p) => /^-?\d+(\.\d+)?$/.test(p)) ? parts.map(Number) : parts.map((p) => p.toUpperCase());
     } else outp[k] = v;
@@ -107,6 +113,7 @@ const fmt = (v: unknown, d = 2) => (isNum(v) ? v.toFixed(d) : "–");
 
 /** Validate returns its verdict at the top level of the result. */
 const verdictOf = (r: unknown) => (r as { verdict?: { label?: string; headline?: string } }).verdict;
+const ALLOC_NAMES: Record<string, string> = { equal_weight: "equal weight", inverse_variance: "inverse variance", standard_hrp: "risk parity (HRP)", nco: "nested clustered optimisation" };
 const VTONE: Record<string, "up" | "warn" | "down"> = { "HELD UP": "up", MIXED: "warn", FAILED: "down" };
 
 const LAYOUTS: Record<string, FeatureLayout> = {
@@ -143,26 +150,48 @@ const LAYOUTS: Record<string, FeatureLayout> = {
   },
   ml02: {
     sections: [
-      sec("ranking", "Ranking", [card("prediction_rank_table", 7, { title: "Today's ranking" }), card("shap_waterfall_top_signal", 5, { title: "Why the top name ranks first" })]),
-      sec("explain", "Explain", [card("shap_beeswarm", 7, { title: "What drives predictions" }), card("shap_feature_importance", 5, { title: "Mean |SHAP| by feature" })], "Exact SHAP values on the latest predictions: direction, size and spread of each feature's effect."),
-      sec("quality", "Model quality", [card("model_ic_leaderboard", 6, { title: "Models by test IC" }), card("rolling_monthly_ic_series", 6, { title: "IC by month, held-out period" }), card("tuning_trials", 6), card("training_audit", 6, { title: "Training receipt" })]),
-      data(["current_predictions", "model_performance", "heldout_predictions"]),
+      sec("ranking", "Ranking", [card("prediction_rank_table", 7, { title: "Today's ranking · click a name" }), card("ticker_contributions", 5, { view: "mlWaterfall", title: "Why this name ranks here" })]),
+      sec("changed", "What changed", [card("what_changed", 12, { title: "Moves since the last rebalance" })], "Names that entered or left the top of the ranking, with the features that moved them."),
+      sec("controls", "Against controls", [card("controls", 12, { title: "The model against simple alternatives, held-out" }), card("decile_spreads", 6, { title: "Returns by prediction decile" }), card("net_of_cost_curve", 6, { title: "Long-short after costs" })],
+        "A model earns its complexity only if it beats Ridge, a 3-factor OLS and the IC-weighted composite out of sample."),
+      sec("explain", "Explain", [card("shap_beeswarm", 7, { title: "What drives predictions" }), card("feature_families", 5, { title: "Contribution by feature family" })], "Exact TreeSHAP values on the latest predictions: direction, size and spread of each feature's effect."),
+      sec("quality", "Model quality", [card("rolling_monthly_ic_series", 6, { title: "IC by month, held-out period" }), card("ensemble", 6, { title: "How the blend was chosen" }), card("model_ic_leaderboard", 6, { title: "Models by test IC" }), card("training_audit", 6, { view: "mlProvenance", title: "Trained and tested on" })]),
+      sec("next", "Next", [card("training_audit", 12, { view: "mlNext", title: "Take this ranking further" })]),
+      data(["current_predictions", "model_performance", "decile_summary", "heldout_predictions", "shap_feature_importance", "shap_waterfall_top_signal", "tuning_trials"]),
     ],
     verdict: (r) => {
-      const lb = out(r, "model_ic_leaderboard");
-      const chosen = String(r.summary_cards?.find((c) => /selected model/i.test(c.label))?.value ?? "");
-      const m = lb.find((x) => String(x.model) === chosen) ?? [...lb].filter((x) => isNum(x.test_ic)).sort((a, b) => (b.test_ic as number) - (a.test_ic as number))[0];
-      const top = out(r, "prediction_rank_table").find((x) => x.rank === 1);
-      const ic = m?.test_ic;
-      return { headline: m && isNum(ic) ? `Selected model ${String(m.model)}: held-out IC ${fmt(ic, 3)}.${top ? ` Top-ranked name today: ${String(top.ticker)}.` : ""}` : null, tone: isNum(ic) ? (ic > 0.03 ? "up" : ic > 0 ? "warn" : "down") : null };
+      const c = out(r, "controls");
+      const m = c.find((x) => x.primary), alts = c.filter((x) => !x.primary && isNum(x.test_ic)).sort((a, b) => (b.test_ic as number) - (a.test_ic as number));
+      const best = alts[0], ic = m?.test_ic;
+      if (!m || !isNum(ic)) return { headline: null, tone: null };
+      const beats = best ? ic > (best.test_ic as number) : true;
+      const name = (k: unknown) => ({ ensemble: "The ensemble", lightgbm: "LightGBM", ridge: "Ridge", ols3: "3-factor OLS", ic_composite: "the IC-weighted composite" } as Record<string, string>)[String(k)] ?? String(k);
+      return {
+        headline: `${name(m.model)} scores a held-out IC of ${fmt(ic, 3)}${best ? `, ${beats ? "beating" : "behind"} ${name(best.model)} (${fmt(best.test_ic, 3)})` : ""}; net Sharpe ${fmt(m.net_sharpe)}.${beats ? "" : " A simpler signal does as well: prefer it, or validate before trusting the model."}`,
+        tone: ic <= 0 ? "down" : beats && ic > 0.03 ? "up" : "warn",
+      };
     },
   },
   ml03: {
     sections: [
-      sec("forecast", "Forecast", [card("vol_forecast_panel", 12, { title: "Forecast against realised volatility" }), card("vol_term_structure", 6, { title: "Term structure today" }), card("realized_vol_estimator_comparison", 6, { title: "Volatility estimators now" })]),
-      sec("tournament", "Model tournament", [card("forecast_tournament", 6, { title: "Loss by model and horizon" }), card("realized_vs_predicted", 6, { title: "Forecast vs realised" }), card("garch_model_selection", 6), card("garch_leverage_news_impact_curve", 6, { title: "News impact curves" }), card("ensemble_vol_forecast_weights", 12)]),
-      data(["forecast_rows", "forecast_error_distribution", "model_confidence_intervals"]),
+      sec("today", "Risk today", [card("risk_today", 12, { title: "Risk today" })]),
+      sec("forecast", "Forecast", [card("vol_forecast_panel", 12, { title: "Forecast against realised volatility" }), card("vol_term_structure", 6, { title: "Term structure today" }), card("regime_probability", 6, { title: "Stress probability (filtered, no look-ahead)" })]),
+      sec("tournament", "Model tournament", [card("forecast_tournament", 7, { title: "Loss by model and horizon" }), card("realized_vs_predicted", 5, { title: "Forecast vs realised" })],
+        "QLIKE loss on the held-out period; Diebold–Mariano tests say whether the regime switch is significantly better than each single model."),
+      sec("tail", "Tail risk and sizing", [card("var_es", 7, { title: "VaR and expected shortfall, with calibration" }), card("position_sizing", 5, { title: "Volatility-targeted vs unmanaged" })]),
+      sec("about", "Provenance", [card("forecast_tournament", 12, { view: "mlProvenance", title: "Trained and tested on" })]),
+      data(["forecast_rows", "forecast_error_distribution", "model_confidence_intervals", "realized_vol_estimator_comparison", "var_es_forecast", "watchlist_skipped"]),
     ],
+    verdict: (r) => {
+      const t = out(r, "risk_today")[0];
+      if (!t) return { headline: null, tone: null };
+      const sized = out(r, "position_sizing"), u = sized.find((x) => x.strategy === "unmanaged"), v = sized.find((x) => x.strategy === "vol_targeted");
+      const helps = u && v && isNum(u.sharpe) && isNum(v.sharpe) ? v.sharpe > u.sharpe : null;
+      return {
+        headline: `${String(t.asset)} is in a ${String(t.regime)} regime: next-month volatility ${fmt((t.vol_21d as number) * 100, 0)}%, one-day 99% VaR ${fmt((t.var_99 as number) * 100, 1)}%. Target-risk size ${fmt(t.size_multiple)}×${helps === null ? "." : helps ? ", and vol-targeting improved Sharpe here." : ", but vol-targeting did not beat unmanaged here."}`,
+        tone: String(t.regime) === "stress" ? "down" : "up",
+      };
+    },
   },
   ml04: {
     sections: [
@@ -174,35 +203,59 @@ const LAYOUTS: Record<string, FeatureLayout> = {
   },
   ml05: {
     sections: [
-      sec("weights", "Weights", [card("hrp_weight_vector", 6, { title: "Allocation" }), card("risk_contribution_decomposition", 6, { title: "Risk contribution" })]),
+      sec("trade", "Your trades", [card("trade_list", 12, { title: "Rebalance your holdings" }), card("holding_risk", 12, { title: "Risk contribution per holding" })], "Shown when you paste holdings in the Study panel."),
+      sec("weights", "Weights", [card("weight_stability", 6, { title: "Target weights with bootstrap bands" }), card("risk_contribution_decomposition", 6, { title: "Risk contribution" })]),
+      sec("controls", "Against controls", [card("controls_summary", 12, { title: "Walk-forward, net of costs, against the controls" }), card("controls_equity", 8, { title: "Growth of $1 by allocation" }), card("rebalance_log", 4, { title: "Trade only when it pays" })],
+        "Shrinkage minimum variance has to beat equal weight, inverse variance and risk parity after costs to earn its place."),
       sec("structure", "Cluster structure", [card("cluster_dendrograms", 12, { title: "Clustering tree and reordered correlations" })]),
-      sec("backtest", "Walk-forward", [card("walk_forward_allocation", 12, { title: "Monthly refits, next-close execution, net of costs" })]),
-      sec("bl", "Black–Litterman", [card("black_litterman_posterior_return_vector", 6, { title: "Prior → posterior returns" }), card("bl_vs_pure_hrp_weight_comparison", 6, { title: "Posterior weight vs allocation" })]),
-      data(["hrp_weights", "black_litterman", "quasi_diagonalized_covariance_heatmap", "allocation_training_audit"]),
+      sec("bl", "With alpha views", [card("black_litterman_posterior_return_vector", 6, { title: "Prior → posterior returns" }), card("bl_vs_pure_hrp_weight_comparison", 6, { title: "Posterior weight vs allocation" })]),
+      sec("about", "Provenance", [card("allocation_training_audit", 6, { view: "mlProvenance", title: "Trained and tested on" }), card("allocation_training_audit", 6, { view: "mlNext", title: "Next" })]),
+      data(["hrp_weights", "hrp_weight_vector", "black_litterman", "alpha_views", "rebalance_summary", "walk_forward_allocation", "quasi_diagonalized_covariance_heatmap", "allocation_training_audit"]),
     ],
+    verdict: (r) => {
+      const c = out(r, "controls_summary");
+      const m = c.find((x) => x.kind === "chosen") ?? c[0];
+      const best = c.filter((x) => x !== m && !/chosen/.test(String(x.kind)) && isNum(x.sharpe)).sort((a, b) => (b.sharpe as number) - (a.sharpe as number))[0];
+      if (!m || !isNum(m.sharpe)) return { headline: null, tone: null };
+      const beats = best ? m.sharpe > (best.sharpe as number) : true;
+      const trades = out(r, "rebalance_summary")[0];
+      return {
+        headline: `${String(m.strategy) === "min_variance" ? "Shrinkage minimum variance" : String(m.strategy)} earns a net Sharpe of ${fmt(m.sharpe)} at ${fmt((m.annual_volatility as number) * 100, 1)}% volatility${best ? `, ${beats ? "ahead of" : "behind"} ${ALLOC_NAMES[String(best.strategy)] ?? String(best.strategy)} (${fmt(best.sharpe)})` : ""}.${trades ? ` Rebalancing your holdings ${trades.trade_recommended ? "is worth its cost" : "is not worth its cost today"}.` : ""}`,
+        tone: beats ? "up" : "warn",
+      };
+    },
   },
   ml06: {
     sections: [
       sec("state", "State", [card("regime_probability_time_series", 12, { title: "Regime probabilities (filtered, no look-ahead)" }), card("regime_transition_heatmap", 6, { title: "Transitions and expected duration" }), card("regime_conditional_asset_returns", 6, { title: "Mean daily return by regime" })]),
+      sec("use", "Does it help?", [card("regime_vs_constant_exposure", 12, { title: "Regime-filtered exposure against the same average exposure held constant" })],
+        "A regime model earns its place only if cutting exposure in stress beats holding the same average exposure all the time."),
       sec("checks", "Checks", [card("pc1_variance_monitor", 8, { title: "First principal component share" }), card("ensemble_vs_hmm_comparison", 4, { title: "Classifier agreement (out of sample)" }), card("parallel_gmm_regime_probabilities", 8, { title: "Gaussian mixture, for comparison" }), card("correlation_network_density", 4)]),
+      sec("about", "Provenance", [card("training_audit", 6, { view: "mlProvenance", title: "Trained and tested on" }), card("training_audit", 6, { view: "mlNext", title: "Next" })]),
       data(["current_regime_probabilities", "transition_matrix", "training_audit"]),
     ],
     verdict: (r) => {
       const c = out(r, "current_regime_probabilities")[0];
-      return { headline: c ? `Current state ${String(c.dominant_state)} as of ${String(c.date)}.` : null, tone: null };
+      const cmp = out(r, "regime_vs_constant_exposure"), f = cmp.find((x) => x.strategy === "regime_filtered"), k = cmp.find((x) => x.strategy === "constant_exposure");
+      if (!c) return { headline: null, tone: null };
+      const sp = c.stress_probability;
+      const helps = f && k && isNum(f.sharpe) && isNum(k.sharpe) ? f.sharpe > k.sharpe : null;
+      return {
+        headline: `Stress probability ${isNum(sp) ? `${fmt(sp * 100, 0)}%` : "–"} as of ${String(c.date)}.${helps === null ? "" : helps ? ` Cutting exposure in stress beat constant exposure (Sharpe ${fmt(f!.sharpe)} vs ${fmt(k!.sharpe)}).` : ` Cutting exposure in stress did not beat constant exposure (Sharpe ${fmt(f!.sharpe)} vs ${fmt(k!.sharpe)}).`}`,
+        tone: isNum(sp) && sp > 0.5 ? "down" : helps === false ? "warn" : "up",
+      };
     },
-  },
-  ml08: {
-    sections: [
-      sec("performance", "Performance", [card("long_short_backtest", 12, { title: "Composite long-short, net of costs" })]),
-      sec("weights", "Weights", [card("ic_weighted_composite_weights", 5, { title: "Latest factor weights" }), card("walk_forward_weight_stability", 7, { title: "Weights through time" }), card("factor_correlation_heatmap", 7, { title: "Factor correlations" }), card("composite_signal_distribution", 5, { title: "Latest composite scores" })]),
-      data(["latest_composite_scores", "factor_weights", "training_audit"]),
-    ],
   },
 };
 
 const V = group(() => import("./views") as Promise<Record<string, unknown>>);
 const VV = group(() => import("./validateViews") as Promise<Record<string, unknown>>);
+const PV = group(() => import("./pageViews") as Promise<Record<string, unknown>>);
+registerViews({
+  mlProvenance: PV.MlProvenance, mlNext: PV.MlNext, alphaControls: PV.AlphaControls, alphaDeciles: PV.AlphaDeciles, alphaNetCurve: PV.AlphaNetCurve, alphaWhatChanged: PV.AlphaWhatChanged,
+  alphaFamilies: PV.AlphaFamilies, alphaEnsemble: PV.AlphaEnsemble, riskToday: PV.RiskToday, riskVarEs: PV.RiskVarEs, strategyCompare: PV.StrategyCompare, riskStress: PV.RiskStress,
+  allocStability: PV.AllocStability, allocTrades: PV.AllocTrades, allocRebalances: PV.AllocRebalances,
+}, ["alphaControls", "alphaDeciles", "alphaNetCurve", "alphaEnsemble", "strategyCompare", "riskStress"]);
 registerViews({
   valVerdict: VV.ValVerdict, valAutopsy: VV.ValAutopsy, valCostCurve: VV.ValCostCurve, valControls: VV.ValControls, valShuffle: VV.ValShuffle, valCpcv: VV.ValCpcv, valMonteCarlo: VV.ValMonteCarlo,
   valTransfer: VV.ValTransfer, valPlateau: VV.ValPlateau, valStability: VV.ValStability, valOverfit: VV.ValOverfit, valLeakage: VV.ValLeakage, valImprove: VV.ValImprove, valReceipt: VV.ValReceipt,
@@ -235,7 +288,7 @@ export const ML_LAB: LabConfig = {
     intro: "Four pages, one rule: nothing ships unless it holds up out of sample. Every split is chronological and purged, every result is measured against simple controls, and anything the data cannot support is marked unavailable rather than approximated.",
     stages: [
       { id: "validate", label: "Validate", intro: "Kill bad ideas cheaply: purged cross-validation, overfitting tests and a barrier-based trade filter.", ids: ["mlvalidate", "ml01", "ml04"] },
-      { id: "alpha", label: "Alpha", intro: "A cross-sectional ranking explained name by name, beside the IC-weighted composite it has to beat.", ids: ["ml02", "ml08"] },
+      { id: "alpha", label: "Alpha", intro: "A cross-sectional ranking explained name by name, measured against Ridge, a 3-factor OLS and the IC-weighted composite.", ids: ["ml02"] },
       { id: "risk", label: "Volatility & risk", intro: "Forecast volatility with a scored model tournament, and read the market state without look-ahead.", ids: ["ml03", "ml06"] },
       { id: "allocate", label: "Allocation", intro: "Shrinkage-based weights with risk-parity and equal-weight controls, tested walk-forward net of costs.", ids: ["ml05"] },
     ],

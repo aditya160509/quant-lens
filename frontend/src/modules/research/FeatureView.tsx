@@ -261,7 +261,7 @@ function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: Featu
           {cards.map((c) => (
             <div key={c.label} className="kpi">
               <div className="l">{c.label}</div>
-              <div className={`v${isNum(c.value) && /return|alpha|sharpe|t-stat|spread|premium/i.test(c.label) && c.value !== 0 ? (c.value > 0 ? " up" : " down") : ""}`}>{isNum(c.value) ? kpi(c.value) : typeof c.value === "string" && /^[a-z0-9]+(_[a-z0-9]+)+$/.test(c.value) ? label(c.value) : String(c.value)}</div>
+              <div className={`v${isNum(c.value) && /return|alpha|sharpe|t-stat|spread|premium/i.test(c.label) && c.value !== 0 ? (c.value > 0 ? " up" : " down") : ""}`}>{isNum(c.value) && UNIT_FMT[c.unit ?? ""] ? UNIT_FMT[c.unit ?? ""](c.value) : isNum(c.value) ? kpi(c.value) : typeof c.value === "string" && /^[a-z][a-z0-9_]*$/.test(c.value) ? label(c.value) : String(c.value)}</div>
             </div>
           ))}
         </div>
@@ -269,6 +269,14 @@ function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: Featu
     </div>
   );
 }
+
+/** Units the API states explicitly are formatted as such; anything else falls back to kpi(). */
+const UNIT_FMT: Record<string, (v: number) => string> = {
+  "%": (v) => (v === 0 ? "0%" : `${(v * 100).toFixed(Math.abs(v) < 0.1 ? 2 : 1)}%`),
+  "×": (v) => `${v.toFixed(2)}×`,
+  "Δ Sharpe": (v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`,
+  days: (v) => `${Math.round(v)} days`,
+};
 
 /** Headline numbers: enough precision to see small slopes, never more than four decimals. */
 const kpi = (v: number) => (Number.isInteger(v) ? num(v) : Math.abs(v) < 0.1 ? num(v, 4) : Math.abs(v) < 10 ? num(v, 3) : num(v, 1));

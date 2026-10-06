@@ -27,7 +27,9 @@ function BarsImpl({ bars, height = 240, format = fmtTick, refLines = [], signed 
   const [hover, setHover] = useState<number | null>(null);
   const showValues = valueLabels ?? bars.length <= 12;
   const values = bars.flatMap((b) => [b.value, b.lo ?? b.value, b.hi ?? b.value]).concat(refLines.map((r) => r.y), [0]).filter(Number.isFinite);
-  const ys = scaleLinear().domain([Math.min(...values), Math.max(...values)]).range([height - M.bottom, M.top]).nice();
+  // A y-axis title sits above the plot, so leave room for it and for the tallest bar's value label.
+  const top = M.top + (yLabel ? 12 : 0);
+  const ys = scaleLinear().domain([Math.min(...values), Math.max(...values)]).range([height - M.bottom, top]).nice();
   const xs = scaleBand().domain(bars.map((_, i) => `${i}`)).range([M.left, Math.max(M.left + 10, width - M.right)]).paddingInner(bars.length > 30 ? 0.15 : 0.32).paddingOuter(0.2);
   const zero = ys(0);
   const color = (b: BarDatum) => b.color ?? (signed ? (b.value >= 0 ? "var(--up)" : "var(--down)") : "var(--s1)");
@@ -48,7 +50,7 @@ function BarsImpl({ bars, height = 240, format = fmtTick, refLines = [], signed 
             const active = hover === i;
             return (
               <g key={i} onPointerEnter={() => setHover(i)}>
-                <rect x={x - xs.step() * 0.15} y={M.top} width={xs.step()} height={height - M.top - M.bottom} fill="transparent" />
+                <rect x={x - xs.step() * 0.15} y={top} width={xs.step()} height={height - top - M.bottom} fill="transparent" />
                 <rect x={x} y={Math.min(y, zero)} width={w} height={Math.max(1, Math.abs(zero - y))} rx={Math.min(3, w / 3)} fill={color(b)} fillOpacity={hover === null || active ? 0.88 : 0.45} />
                 {b.lo !== null && b.lo !== undefined && b.hi !== null && b.hi !== undefined ? (
                   <g stroke="var(--text-2)" strokeWidth={1.2}>

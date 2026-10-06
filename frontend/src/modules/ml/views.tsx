@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import { create } from "zustand";
 import { Bars } from "@/charts/Bars";
 import { Beeswarm } from "@/charts/Beeswarm";
 import { Dendrogram, leafOrder, type Merge } from "@/charts/Dendrogram";
@@ -19,6 +20,12 @@ import type { ViewProps } from "@/modules/research/outputs/types";
 import type { Row } from "@/modules/research/types";
 
 /* ---------------------------------------------------------------- helpers */
+
+/** The name picked in the ranking; the waterfall explains it. Keyed by run so a new run starts at rank 1. */
+export const usePick = create<{ picks: Record<string, string>; pick: (scope: string, t: string) => void }>()((set) => ({
+  picks: {}, pick: (scope, t) => set((st) => ({ picks: { ...st.picks, [scope]: t } })),
+}));
+const runOf = (scope: string) => scope.split(":").slice(0, 2).join(":");
 
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 const n = (v: unknown) => (isNum(v) ? v : null);
@@ -217,7 +224,9 @@ export function MlFoldMatrix({ rows }: ViewProps) {
 /* ---------------------------------------------------------------- F02 alpha */
 
 /** Today's ranking with each name's score, decile and the features that pushed it there. */
-export function MlRankTable({ rows, result }: ViewProps) {
+export function MlRankTable({ rows, result, scope }: ViewProps) {
+  const picked = usePick((st) => st.picks[runOf(scope)]);
+  const pick = usePick((st) => st.pick);
   const swarm = out(result, "shap_beeswarm");
   const drivers = useMemo(() => {
     const by = new Map<string, Row[]>();
@@ -235,7 +244,8 @@ export function MlRankTable({ rows, result }: ViewProps) {
         const p = n(r.prediction) ?? 0;
         const d = (drivers.get(str(r.ticker)) ?? []).filter((x) => isNum(x.shap_value)).sort((a, b) => Math.abs(b.shap_value as number) - Math.abs(a.shap_value as number)).slice(0, 3);
         return (
-          <div key={str(r.ticker)} className="ml-rank-r">
+          <div key={str(r.ticker)} className="ml-rank-r" role="button" tabIndex={0} aria-pressed={(picked ?? str(sorted[0]?.ticker)) === str(r.ticker)}
+            title={`Explain ${str(r.ticker)}`} onClick={() => pick(runOf(scope), str(r.ticker))} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(runOf(scope), str(r.ticker)); } }}>
             <span className="num">{i + 1}</span>
             <b>{str(r.ticker)}</b>
             <span className="muted">{str(r.sector)}</span>
@@ -253,7 +263,25 @@ export function MlBeeswarm({ rows }: ViewProps) {
   return <Beeswarm points={rows.filter((r) => isNum(r.shap_value)).map((r) => ({ row: label(str(r.feature)), value: r.shap_value as number, color: n(r.feature_value), label: str(r.ticker) }))} />;
 }
 
-export function MlWaterfall({ rows, result }: ViewProps) {
+export function MlWaterfall({ rows, result, scope }: ViewProps) {
+  const contrib = out(result, "ticker_contributions");
+  const ranked = useMemo(() => [...contrib].sort((a, b) => (n(a.rank) ?? 0) - (n(b.rank) ?? 0)), [contrib]);
+  const picked = usePick((st) => st.picks[runOf(scope)]);
+  const pick = usePick((st) => st.pick);
+  if (ranked.length) {
+    const t = picked && ranked.some((r) => str(r.ticker) === picked) ? picked : str(ranked[0].ticker);
+    const row = ranked.find((r) => str(r.ticker) === t)!;
+    const c = (row.contributions ?? {}) as Record<string, number>;
+    return (
+      <div>
+        <Bar>
+          <Picker<string> label="Name" value={t} options={ranked.map((r) => str(r.ticker))} onChange={(v) => pick(runOf(scope), v)} />
+          <span className="ml-sub" style={{ margin: 0 }}>Rank {str(row.rank)} of {ranked.length} · predicted {pctFmt(n(row.prediction) ?? 0)} · click any name in the ranking</span>
+        </Bar>
+        <Waterfall base={n(row.base_value) ?? 0} items={Object.entries(c).filter(([, v]) => isNum(v)).map(([k, v]) => ({ label: label(k), value: v }))} format={(v) => pctFmt(v)} />
+      </div>
+    );
+  }
   const base = n(result.meta.shap_base_value) ?? 0;
   if (!rows.length) return <Empty />;
   return <Waterfall base={base} items={rows.filter((r) => isNum(r.shap_value)).map((r) => ({ label: label(str(r.feature)), value: r.shap_value as number }))} format={(v) => pctFmt(v)} />;
