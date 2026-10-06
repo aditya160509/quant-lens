@@ -91,7 +91,7 @@ def prepare(request: dict) -> Prepared:
             frame = got.rename("return").reset_index().rename(columns={"index": "date"})
         p.source = "feature_run"
     else:
-        raise ValueError("Provide upload_id (returns, predictions, feature_panel or trial_matrix) or source_result from another ML feature run")
+        raise ValueError("Upload your returns, predictions, feature panel or trial matrix first")
 
     if request.get("trials_upload_id"):
         p.trials = uploads.get_upload(request["trials_upload_id"], ("trial_matrix",)).frame.set_index("date")

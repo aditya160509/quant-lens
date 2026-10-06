@@ -50,7 +50,7 @@ IMPLEMENTATION_NOTES = [
     "Result carries top-level 'verdict' and 'sections'; every section has a provenance block.",
 ]
 
-INPUTS = inputs(INPUT_CONTRACT, DEFAULTS)
+INPUTS = inputs(INPUT_CONTRACT, DEFAULTS, shared=False)
 OUTPUTS = outputs(OUTPUT_CONTRACT, FEATURE_ID)
 
 

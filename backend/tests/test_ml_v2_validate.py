@@ -98,3 +98,11 @@ def test_cost_ranks_first_when_gross_positive_net_negative():
     assert result["verdict"]["label"] == "FAILED"
     assert autopsy["sentence"].startswith("Fails because Gross Sharpe")
     assert result["sections"]["min_backtest_length"]["trials"] == result["sections"]["deflated_sharpe"]["trials"]
+
+
+def test_manifest_has_no_market_inputs_and_requires_input():
+    from app.services.ml_v2.registry import feature_manifest
+    keys = {row["key"] for f in feature_manifest() if f["id"] == "validate" for row in f["inputs"]}
+    assert not keys & {"symbols", "universe", "frequency", "lookback_days", "max_symbols", "as_of_date"}
+    with pytest.raises(ValueError, match="Upload your returns"):
+        run_feature("validate", {})

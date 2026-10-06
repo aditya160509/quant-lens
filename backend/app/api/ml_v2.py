@@ -25,8 +25,12 @@ def _feature_module(feature_id: str):
 def _validated(feature_id: str, payload: dict) -> dict:
     module = _feature_module(feature_id)
     checked = validate(module.normalize_feature_payload(payload), module.INPUTS)
-    if not (checked.get("upload_id") or checked.get("source_result")):
-        parse_symbols(checked)
+    if feature_id in ("validate", "04") and not checked.get("upload_id") and not checked.get("source_result"):
+        if feature_id == "validate":
+            raise ValueError("Upload your returns, predictions, feature panel or trial matrix first")
+    if feature_id == "validate" or checked.get("upload_id"):
+        return checked
+    parse_symbols(checked)
     return checked
 
 

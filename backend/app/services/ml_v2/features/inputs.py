@@ -132,9 +132,9 @@ INPUT_META: dict[str, dict[str, Any]] = {
 GROUPS = {"quick": "Essentials", "standard": "Model settings", "expert": "Advanced"}
 
 
-def inputs(contract: list[dict[str, Any]], defaults: dict[str, Any]) -> list[dict[str, Any]]:
+def inputs(contract: list[dict[str, Any]], defaults: dict[str, Any], shared: bool = True) -> list[dict[str, Any]]:
     declared = {item["key"]: dict(item) for item in contract}
-    for key, row in SHARED.items():
+    for key, row in (SHARED.items() if shared else ()):
         declared.setdefault(key, {"key": key, **row})
         if key in defaults:
             declared[key]["default"] = defaults[key]
