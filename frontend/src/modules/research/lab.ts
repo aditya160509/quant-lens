@@ -29,7 +29,14 @@ export type LabConfig = {
   /** Request that starts a job for a feature. */
   submit: (featureId: string, payload: Record<string, unknown>) => { path: string; body: unknown };
   /** Overview intro and the ordered stages its feature cards are grouped into. */
-  overview?: { intro: string; stages: { id: string; label: string; intro: string; ids: string[] }[] };
+  overview?: {
+    intro: string;
+    stages: { id: string; label: string; intro: string; ids: string[] }[];
+    /** Large "start here" tiles above the stages; each shows its feature's latest verdict once it has run. */
+    actions?: { id: string; title: string; body: string; cta: string }[];
+    /** Words for the headline counts, e.g. "Held up" instead of "Pass". */
+    words?: { tests: string; pass: string; mixed: string; fail: string };
+  };
   /** What an empty ticker list means for this lab, shown in the Universe chip. */
   defaultUniverse?: string;
   /** Pages with their own component instead of a feature, keyed by Page.id (needs Page.slug). The "verified" key

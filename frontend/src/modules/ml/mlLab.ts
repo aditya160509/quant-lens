@@ -325,6 +325,12 @@ export const ML_LAB: LabConfig = {
   runLabel: (id) => (id === "mlvalidate" ? "Validate" : id === "ml05" ? "Allocate" : id === "ml03" || id === "ml06" ? "Forecast" : "Train and test"),
   defaultUniverse: "35 US large caps",
   overview: {
+    actions: [
+      { id: "mlvalidate", title: "Validate my strategy", body: "Upload returns, predictions or every trial you ran. Get HELD UP, MIXED or FAILED, and the exact reason.", cta: "Upload and validate" },
+      { id: "ml02", title: "Today's ranking", body: "35 large caps ranked by expected 21-day return, each explained feature by feature, beside the simple signal it has to beat.", cta: "Rank the universe" },
+      { id: "ml03", title: "Risk today", body: "Next-day to next-month volatility with calibrated ranges, VaR, the market state and a target-risk position size.", cta: "Read today's risk" },
+    ],
+    words: { tests: "Pages", pass: "Held up", mixed: "Mixed", fail: "Failed" },
     intro: "Four pages, one rule: nothing ships unless it holds up out of sample. Every split is chronological and purged, every result is measured against simple controls, and anything the data cannot support is marked unavailable rather than approximated.",
     stages: [
       { id: "validate", label: "Validate", intro: "Kill bad ideas cheaply: purged cross-validation, overfitting tests and a barrier-based trade filter.", ids: ["mlvalidate", "ml01", "ml04"] },

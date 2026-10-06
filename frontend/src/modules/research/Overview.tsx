@@ -38,12 +38,13 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
   const byId = new Map(features.map((f) => [f.id, f]));
   const L = lab();
   const stages = (L.overview?.stages ?? STAGES).filter((s) => s.ids.some((id) => byId.has(id)));
+  const W = L.overview?.words ?? { tests: "Tests", pass: "Pass", mixed: "Mixed", fail: "Fail" };
   const stats: [string, string | number, string?][] = [
-    ["Tests", features.length || "–"],
-    ["Tested", `${last.length}/${features.length || 0}`],
-    ["Pass", count("up"), "var(--up)"],
-    ["Mixed", count("warn"), "var(--warn)"],
-    ["Fail", count("down"), "var(--down)"],
+    [W.tests, features.length || "–"],
+    ["Run", `${last.length}/${features.length || 0}`],
+    [W.pass, count("up"), "var(--up)"],
+    [W.mixed, count("warn"), "var(--warn)"],
+    [W.fail, count("down"), "var(--down)"],
     ["Last run", runs[0] ? ago(runs[0].startedAt) : "–"],
   ];
 
@@ -60,6 +61,24 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
           ))}
         </div>
 
+        {L.overview?.actions?.length ? (
+          <div className="ov-actions">
+            {L.overview.actions.filter((a) => byId.has(a.id)).map((a) => {
+              const m = metaFor(a.id);
+              const Icon = m.icon;
+              const run = latestRun(runs, a.id);
+              const tone = run?.tone === "up" ? "var(--up)" : run?.tone === "down" ? "var(--down)" : run?.tone === "warn" ? "var(--warn)" : "var(--accent)";
+              return (
+                <Link key={a.id} href={featureHref(a.id)} className="ov-action" style={{ ["--tone" as string]: tone }}>
+                  <span className="ov-action-icon"><Icon size={18} strokeWidth={1.7} /></span>
+                  <b>{a.title}</b>
+                  {run?.headline ? <span className="ov-action-last">{run.headline}</span> : <span>{a.body}</span>}
+                  <em>{run ? `Last run ${ago(run.startedAt)} · open` : a.cta} →</em>
+                </Link>
+              );
+            })}
+          </div>
+        ) : null}
         {L.signal ? <Onboarding /> : null}
         <Board features={features} />
 

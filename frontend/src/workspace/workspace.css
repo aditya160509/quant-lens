@@ -503,3 +503,14 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
   .kpi .v { font-size: 17px; }
 }
+
+/* Overview "start here" tiles */
+.ov-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 18px; }
+.ov-action { position: relative; display: grid; align-content: start; gap: 8px; padding: 18px 18px 16px; border-radius: 14px; text-decoration: none; color: var(--text-3); font-size: 12.5px; line-height: 1.5;
+  background: linear-gradient(160deg, color-mix(in oklch, var(--tone) 9%, var(--panel)), var(--panel) 60%); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--tone) 22%, var(--line)); transition: box-shadow .18s, transform .18s; }
+.ov-action:hover { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--tone) 50%, var(--line)), 0 10px 30px -18px color-mix(in oklch, var(--tone) 60%, transparent); transform: translateY(-1px); }
+.ov-action b { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+.ov-action em { font-style: normal; font-size: 12px; color: var(--tone); margin-top: 2px; }
+.ov-action-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--tone); background: color-mix(in oklch, var(--tone) 13%, transparent); }
+.ov-action-last { color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .ov-action { transition: none; } .ov-action:hover { transform: none; } }
