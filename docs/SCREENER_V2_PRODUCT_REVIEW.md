@@ -453,6 +453,8 @@ Pro undercuts Koyfin Plus and Finviz Elite while offering ranking and proof they
 
 New code is only screener-specific.
 
+**Built now vs later:** everything below is built with the current data, except items tagged `[needs data]`. Those wait for the swap: earnings calendar, segment data, global listings for the country map, plus anything needing point-in-time history, delisted names or estimates (already cut in §6 and §10).
+
 **Data-swap rule:** all data access goes through one provider interface (§14.10), so real licensed, point-in-time and delisted data drops in later with no feature code changes. Until then the current local files are used. Their caveats show as banners, but nothing is held back.
 
 ### 14.1 Universe and data controls (parity)
@@ -506,19 +508,19 @@ New code is only screener-specific.
 29. `[F]` Scatter: any two metrics, sector colours, size by cap, quadrant lines at medians, lasso to filter.
 30. `[F]` Sector bars: count, median metric and percentile of the result vs the universe.
 31. `[F]` Funnel: per-filter elimination, the bottleneck highlighted, click a step to see who it removed.
-32. `[F]` Map by country (when global data arrives).
+32. `[F]` `[needs data]` Map by country (global listings).
 33. `[F]` Correlation of the result's returns (cluster view, reusing the ML CorrMap).
 
 ### 14.5 Quick-look and company pages (parity with Finviz/Koyfin/Stock Rover)
 34. `[B+F]` Quick-look drawer:
-    - price chart (1M → max) with event annotations (earnings, entering/exiting your screens, alerts fired)
+    - price chart (1M → max) with event annotations (entering/exiting your screens, alerts fired; earnings dates `[needs data]`)
     - key stats strip
     - ratios as percentile bars vs sector and own history
     - Piotroski 9-check grid, Altman zone
     - peers table, valuation lens (S7), and every screen and alert this name is in
 35. `[B+F]` Full company page (shared with ML/Research):
     - financial statements (annual/quarterly), ratio history charts
-    - segment data when available
+    - segment data `[needs data]`
     - factor exposures (FF5 betas), ML Alpha rank and drivers, volatility and risk-today card
 36. `[F]` Compare up to 6 names side by side: metrics table, normalised price chart, percentile radar.
 37. `[B]` Peer finder: same industry plus nearest on size, margin and growth; editable peer set.
@@ -550,7 +552,7 @@ New code is only screener-specific.
     - rank crosses top N
     - metric crosses a value or percentile
     - % move, 52-week high or low, volume surge
-    - earnings date approaching
+    - earnings date approaching `[needs data]`
     - composite grade change
 54. `[B]` Delivery: in-app inbox, email (Resend/SES), webhook, browser push, Telegram/Discord/Slack. Digest mode with per-rule frequency and quiet hours.
 55. `[B+F]` Alert precision scoreboard: matured hit rate and average forward return per rule vs its universe.
