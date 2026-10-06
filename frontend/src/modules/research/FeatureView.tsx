@@ -260,7 +260,7 @@ function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: Featu
         <div className="kpis">
           {cards.map((c) => (
             <div key={c.label} className="kpi">
-              <div className="l">{c.label}</div>
+              <div className="l" title={c.label}>{c.label}</div>
               <div className={`v${isNum(c.value) && /return|alpha|sharpe|t-stat|spread|premium/i.test(c.label) && c.value !== 0 ? (c.value > 0 ? " up" : " down") : ""}`}>{isNum(c.value) && UNIT_FMT[c.unit ?? ""] ? UNIT_FMT[c.unit ?? ""](c.value) : isNum(c.value) ? kpi(c.value) : typeof c.value === "string" && /^[a-z][a-z0-9_]*$/.test(c.value) ? label(c.value) : String(c.value)}</div>
             </div>
           ))}

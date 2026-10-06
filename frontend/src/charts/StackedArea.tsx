@@ -12,8 +12,8 @@ const M = { top: 10, right: 52, bottom: 24, left: 8 };
  * Layers are ordered inside-out so the largest share sits in the middle and edges stay calm;
  * the readout lists exact values, which stacked areas cannot show by height alone.
  */
-function StackedAreaImpl({ data, x = "date", keys, labels, height = 260, normalize = true, format }: {
-  data: Row[]; x?: string; keys: string[]; labels?: Record<string, string>; height?: number; normalize?: boolean; format?: (v: number) => string;
+function StackedAreaImpl({ data, x = "date", keys, labels, height = 260, normalize = true, format, colors }: {
+  data: Row[]; x?: string; keys: string[]; labels?: Record<string, string>; height?: number; normalize?: boolean; format?: (v: number) => string; colors?: Record<string, string>;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
@@ -21,7 +21,7 @@ function StackedAreaImpl({ data, x = "date", keys, labels, height = 260, normali
   const rows = useMemo(() => data.map((r) => ({ t: parseDate(r[x]) ?? 0, ...Object.fromEntries(keys.map((k) => [k, typeof r[k] === "number" && Number.isFinite(r[k]) ? (r[k] as number) : 0])) }))
     .filter((r) => r.t).sort((a, b) => a.t - b.t), [data, x, keys]);
   const layers = useMemo(() => stack<Record<string, number>>().keys(keys).order(stackOrderInsideOut).offset(normalize ? stackOffsetExpand : stackOffsetNone)(rows as unknown as Record<string, number>[]), [rows, keys, normalize]);
-  const color = (k: string) => SERIES[keys.indexOf(k) % SERIES.length];
+  const color = (k: string) => colors?.[k] ?? SERIES[keys.indexOf(k) % SERIES.length];
   if (!rows.length) return null;
   const t0 = rows[0].t, t1 = rows[rows.length - 1].t;
   const xs = scaleLinear().domain([t0, t1]).range([M.left, Math.max(M.left + 10, width - M.right)]);

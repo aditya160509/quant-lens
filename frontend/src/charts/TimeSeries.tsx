@@ -278,7 +278,7 @@ function TimeSeriesImpl({
           {ticks.map((t) => (
             <text key={t.getTime()} x={xs(t)} y={M.top + plotH + 17} textAnchor="middle" fontSize={10.5} fill="var(--text-3)">{tickFmt(t)}</text>
           ))}
-          {yLabel ? <text x={x1 + 8} y={M.top - 2} fontSize={10.5} fill="var(--text-4)" style={{ fontFamily: "var(--font)" }}>{yLabel}</text> : null}
+          {yLabel ? <text x={x1 + M.right - 4} y={M.top - 2} textAnchor="end" fontSize={10.5} fill="var(--text-4)" style={{ fontFamily: "var(--font)" }}>{yLabel}</text> : null}
 
           <g clipPath={`url(#${uid}-clip)`}>
             {bandPath ? <path d={bandPath} fill={band?.color ?? "var(--band)"} /> : null}

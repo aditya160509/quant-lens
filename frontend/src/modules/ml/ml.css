@@ -236,3 +236,71 @@
 .ml-shares.drift span em { font-style: normal; font-size: 10.5px; color: var(--text-4); grid-column: auto; }
 .ml-shares.drift .ml-share-bar { position: relative; overflow: visible; }
 .ml-shares.drift .ml-share-bar s { position: absolute; top: -3px; bottom: -3px; width: 1.5px; background: var(--text-3); }
+
+/* Tournament and term structure */
+.ml-table.tourney td, .ml-table.term td { position: relative; }
+.ml-table.tourney td:not(:first-child):not(:last-child) { background: color-mix(in oklch, var(--up) calc(var(--rank, 0) * 16%), transparent); }
+.ml-table.tourney td b, .ml-table.term td b { font-weight: 500; position: relative; }
+.ml-table.tourney td em { display: block; font-style: normal; font-size: 10.5px; color: var(--text-4); }
+.ml-table.tourney td[data-best] { box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--up) 60%, transparent); color: var(--text); }
+.ml-table.tourney td[data-best] em { color: var(--up); }
+.ml-table.tourney td i { position: absolute; top: 6px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--down); }
+.ml-table.tourney td i[data-s="better"] { background: var(--up); }
+.ml-table.term td { padding-top: 5px; padding-bottom: 5px; }
+.ml-table.term .term-bar { position: absolute; right: 6px; top: 5px; bottom: 5px; border-radius: 4px; background: color-mix(in oklch, var(--s1) 16%, transparent); }
+.ml-table.term td b { padding-right: 4px; }
+.ml-table.term td[data-best] { box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--accent) 55%, transparent); }
+.ml-table.term td[data-best] b { color: var(--text); font-weight: 600; }
+
+/* VaR matrix */
+.var-calib { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.var-calib > div { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); }
+.var-calib > div[data-ok="1"] { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--up) 35%, transparent); }
+.var-calib > div[data-ok="0"] { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--down) 40%, transparent); }
+.var-calib span { font-size: 11px; color: var(--text-3); }
+.var-calib b { font: 500 16px/1.2 var(--mono); color: var(--text); }
+.var-calib em { font-style: normal; font-size: 11.5px; color: var(--text-3); }
+.var-calib > div[data-ok="1"] em { color: var(--up); }
+.var-calib > div[data-ok="0"] em { color: var(--down); }
+.ml-table.varm th.grp { text-align: center; border-bottom: 0; color: var(--text-3); }
+.ml-table.varm td { color: var(--down); }
+.ml-table.varm td:first-child { color: var(--text-2); }
+.ml-table.varm td.es { position: relative; }
+.ml-table.varm td.es span { position: absolute; right: 6px; top: 6px; bottom: 6px; border-radius: 3px; background: color-mix(in oklch, var(--down) 14%, transparent); }
+.ml-table.varm td.es b { position: relative; font-weight: 500; }
+
+/* Allocation weights: bar, bootstrap whisker, weight and risk share */
+.wt { display: grid; font-size: 12.5px; }
+.wt-h, .wt-r { display: grid; grid-template-columns: 60px minmax(0, 1fr) 60px 70px; gap: 12px; align-items: center; padding: 4px 2px; }
+.wt-h { font-size: 11px; color: var(--text-4); border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.wt-h > :nth-child(n+3) { text-align: right; }
+.wt-r { border-bottom: 1px solid color-mix(in oklch, var(--line) 60%, transparent); }
+.wt-r:hover { background: var(--hover); }
+.wt-r b { font-weight: 550; color: var(--text); }
+.wt-r em { font-style: normal; text-align: right; color: var(--text-2); }
+.wt-track { position: relative; height: 16px; }
+.wt-track .bar { position: absolute; left: 0; top: 4px; height: 8px; border-radius: 0 3px 3px 0; background: var(--s1); opacity: .85; }
+.wt-track .rng { position: absolute; top: 7.5px; height: 1.5px; background: var(--text-2); }
+.wt-track .rng::before, .wt-track .rng::after { content: ""; position: absolute; top: -3.5px; width: 1.5px; height: 8px; background: var(--text-2); }
+.wt-track .rng::before { left: 0; } .wt-track .rng::after { right: 0; }
+
+/* Compact correlation map */
+.corr { display: grid; gap: 8px; margin-top: 10px; }
+.corr-read { font-size: 12px; color: var(--text-3); min-height: 18px; }
+.corr-read b { color: var(--text); font-weight: 550; }
+.corr-read .num { margin-left: 6px; font-weight: 600; }
+.corr-grid { display: grid; gap: 1px; align-items: stretch; }
+.corr-grid i { aspect-ratio: 1; border-radius: 2px; font-style: normal; font: 500 10px var(--mono); display: grid; place-items: center; color: var(--text); cursor: crosshair; }
+.corr-grid i[data-x] { outline: 1px solid color-mix(in oklch, var(--text) 30%, transparent); outline-offset: -1px; }
+.corr-l { font-size: 10px; color: var(--text-4); display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; white-space: nowrap; overflow: hidden; }
+.corr-l[data-on] { color: var(--text); }
+.corr-key { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-4); }
+.corr-key i { width: 60px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--down), var(--panel-2)); }
+.corr-key i + span + i { background: linear-gradient(90deg, var(--panel-2), var(--up)); }
+
+/* Regime tables */
+.ml-table .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: 0; }
+.ml-table.trans td:not(:first-child):not(:last-child) { background: color-mix(in oklch, var(--s1) calc(var(--p, 0) * 40%), transparent); }
+.ml-table.trans td[data-self] { color: var(--text); font-weight: 550; }
+.ml-table.regret tr.avg td { color: var(--text); font-weight: 550; border-bottom: 1px solid var(--line-3); }
+.ml-table.regret tr[data-split] td { border-top: 1px dashed var(--line-3); }

@@ -84,6 +84,10 @@ def run_regime_engine(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     market_vol = market.rolling(21).std().reindex(features.index[:cut])
     state_vol = [market_vol[training_labels==state].mean() for state in range(states_count)]
     stress_state = int(np.argmax([v if pd.notna(v) else -np.inf for v in state_vol]))
+    # Plain names by training-window volatility rank: lowest is Calm, highest is Stress, anything between is Normal.
+    vol_rank = np.argsort(np.argsort([v if pd.notna(v) else np.inf for v in state_vol]))
+    def _name(state: int) -> str:
+        return "Stress" if state == stress_state else "Calm" if vol_rank[state] == 0 else "Normal" if states_count == 3 else f"Normal {vol_rank[state]}"
     probabilities = probabilities[:,order]
     stress_series = pd.Series(probabilities[:,int(np.flatnonzero(order==stress_state)[0])],index=features.index)
     labels = probabilities.argmax(axis=1)
@@ -145,7 +149,9 @@ def run_regime_engine(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         tables={"transition_matrix":transition_rows,"current_regime_probabilities":[{**rows[-1],"stress_probability":float(stress_series.iloc[-1])}],
             "regime_vs_constant_exposure":exposure_rows,
             "training_audit":[{"train_dates":cut,"test_dates":len(oos_dates),"training_end":date_str(features.index[cut-1]),"hmm_converged":bool(model.monitor_.converged)}]},
-        alerts=alerts,provenance=provenance,meta={"artifact_id":artifact_id,"stress_state":int(np.flatnonzero(order==stress_state)[0]+1),"stress_definition":"state with the highest training-window market volatility",
+        alerts=alerts,provenance=provenance,meta={"artifact_id":artifact_id,"stress_state":int(np.flatnonzero(order==stress_state)[0]+1),
+                                     "state_labels":{f"state_{i+1}":_name(int(order[i])) for i in range(states_count)},
+                                     "state_volatility":{f"state_{i+1}":(float(state_vol[int(order[i])]*np.sqrt(252)) if pd.notna(state_vol[int(order[i])]) else None) for i in range(states_count)},"stress_definition":"state with the highest training-window market volatility",
             "exposure_rule":"exposure = 1 - stress probability, applied to the next session; constant control uses the same average exposure",
             "probability_protocol":"forward_filter_no_backward_smoothing","fit_protocol":"fixed_train_only_60_percent",
             "state_ordering":"training_mean_returns_only","macro":"excluded_without_release_vintages",

@@ -27,10 +27,11 @@ const signed = (v: unknown, fmt: (x: number) => string) => (isNum(v) ? `${v > 0 
 const tone = (v: unknown) => (isNum(v) ? (v > 0 ? "var(--up)" : v < 0 ? "var(--down)" : undefined) : undefined);
 const usd = (v: unknown) => (!isNum(v) ? "–" : v >= 1e9 ? `$${(v / 1e9).toFixed(1)}bn` : v >= 1e6 ? `$${(v / 1e6).toFixed(0)}m` : `$${Math.round(v).toLocaleString()}`);
 
+const MODEL_KIND: Record<string, "model" | "control"> = { ensemble: "model", lightgbm: "model", xgboost: "model", catboost: "model", ridge: "control", ols3: "control", ic_composite: "control" };
 const MODEL: Record<string, string> = { ensemble: "Ensemble", lightgbm: "LightGBM", ridge: "Ridge", ols3: "3-factor OLS", ic_composite: "IC composite", xgboost: "XGBoost", catboost: "CatBoost" };
 const STRATEGY: Record<string, string> = {
   min_variance: "Min variance (shrinkage)", turnover_aware: "Min variance, trade only when worth it", standard_hrp: "Hierarchical risk parity", inverse_variance: "Inverse variance", equal_weight: "Equal weight",
-  unmanaged: "Unmanaged", vol_targeted: "Volatility-targeted", regime_filtered: "Regime-filtered", constant_exposure: "Constant exposure",
+  unmanaged: "Unmanaged", vol_targeted: "Volatility-targeted", half_kelly: "Half-Kelly", regime_filtered: "Regime-filtered", constant_exposure: "Constant exposure",
 };
 const nm = (k: unknown) => MODEL[str(k)] ?? STRATEGY[str(k)] ?? label(str(k));
 
@@ -139,25 +140,33 @@ export function AlphaControls({ rows }: ViewProps) {
   );
 }
 
-/** Ten portfolios sorted by prediction: a real signal climbs from the bottom bin to the top, under both weightings. */
+/** Names sorted into bins by prediction: a real signal climbs from the bottom bin to the top under both weightings.
+ * "Excess" subtracts the average bin so a rising market does not make every bar green. */
 export function AlphaDeciles({ rows }: ViewProps) {
   const models = useMemo(() => [...new Set(rows.map((r) => str(r.model)))], [rows]);
   const [model, setModel] = useState<string | null>(null);
   const [w, setW] = useState("equal");
+  const [mode, setMode] = useState<"excess" | "raw">("excess");
   if (!rows.length) return <Empty />;
   const m = model ?? (models.includes("ensemble") ? "ensemble" : models[0]);
   const weights = [...new Set(rows.map((r) => str(r.weighting)))];
   const ww = weights.includes(w) ? w : weights[0];
   const sel = rows.filter((r) => str(r.model) === m && str(r.weighting) === ww).sort((a, b) => (n(a.bin) ?? 0) - (n(b.bin) ?? 0));
+  const avg = sel.reduce((t, r) => t + (n(r.mean_return) ?? 0), 0) / (sel.length || 1);
   const spread = sel.length > 1 ? (n(sel[sel.length - 1].mean_return) ?? 0) - (n(sel[0].mean_return) ?? 0) : null;
+  const prefix = sel.length === 10 ? "D" : sel.length === 5 ? "Q" : "B";
+  const rising = sel.every((r, i) => i === 0 || (n(r.mean_return) ?? 0) >= (n(sel[i - 1].mean_return) ?? 0));
   return (
     <div>
       <div className="ml-bar">
         {models.length > 1 ? <select className="input" style={{ height: 28, width: "auto" }} aria-label="Model" value={m} onChange={(e) => setModel(e.target.value)}>{models.map((x) => <option key={x} value={x}>{nm(x)}</option>)}</select> : null}
         {weights.length > 1 ? <Segmented<string> label="Weighting" value={ww} onChange={setW} options={weights.map((x) => ({ value: x, label: label(x) }))} /> : null}
-        <span className="ml-sub" style={{ margin: 0 }}>Top minus bottom: <b className="num" style={{ color: tone(spread) }}>{signed(spread, (x) => pct(x, 2))}</b> per rebalance</span>
+        <Segmented<"excess" | "raw"> label="Scale" value={mode} onChange={setMode} options={[{ value: "excess", label: "Excess" }, { value: "raw", label: "Raw" }]} />
       </div>
-      <Bars bars={sel.map((r) => ({ label: `D${str(r.bin)}`, value: n(r.mean_return) ?? 0 }))} height={210} yLabel="Mean forward return per rebalance" format={(v) => pct(v, 2)} />
+      <Stats items={[["Top minus bottom", signed(spread, (x) => pct(x, 2)), tone(spread), "Mean forward return of the top bin minus the bottom bin, per rebalance"], ["Monotonic", rising ? "Yes" : "No", rising ? "var(--up)" : "var(--warn)", "Every bin at least as good as the one below"], ["Bins", String(sel.length)]]} />
+      <Bars bars={sel.map((r) => ({ label: `${prefix}${str(r.bin)}`, value: (n(r.mean_return) ?? 0) - (mode === "excess" ? avg : 0) }))} height={210}
+        yLabel={mode === "excess" ? "Return vs average bin, per rebalance" : "Mean forward return per rebalance"} format={(v) => pct(v, 2)} />
+      <p className="ml-note">{prefix}1 holds the names with the lowest predictions, {prefix}{sel.length} the highest. {ww === "value" ? "Value-weighted by 63-day dollar volume, so large names dominate as they would in a real portfolio." : "Equal-weighted; switch to value weighting to see whether the edge survives in large names."}</p>
     </div>
   );
 }
@@ -166,7 +175,9 @@ export function AlphaDeciles({ rows }: ViewProps) {
 export function AlphaNetCurve({ rows }: ViewProps) {
   const { data, keys } = useMemo(() => pivot(rows, "date", "model", "equity"), [rows]);
   if (!rows.length) return <Empty />;
-  return <TimeSeries data={data} x="date" height={240} yLabel="Growth of $1, net of costs" series={keys.map((k) => ({ key: k, label: nm(k), width: k === "ensemble" ? 2.2 : 1.4, muted: k !== "ensemble" && k !== "ic_composite" }))} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />;
+  // The model is the accent; controls are neutral (dashed for the one it must beat), never red, which would read as "bad".
+  const style = (k: string) => (MODEL_KIND[k] === "model" ? { color: "var(--accent)", width: 2.2 } : k === "ic_composite" ? { color: "var(--text-2)", width: 1.5, dash: true } : { color: "var(--text-4)", width: 1.2 });
+  return <TimeSeries data={data} x="date" height={240} yLabel="Growth of $1, net of costs" series={keys.map((k) => ({ key: k, label: nm(k), ...style(k) }))} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />;
 }
 
 type Driver = { feature: string; delta: number };
@@ -268,29 +279,54 @@ export function RiskToday({ rows }: ViewProps) {
   );
 }
 
-/** VaR and expected shortfall by horizon, with how often the one-day VaR was actually breached out of sample. */
+/** Tail loss by horizon at 95% and 99%, in one matrix; the one-day VaR carries its out-of-sample breach test. */
 export function RiskVarEs({ rows }: ViewProps) {
   if (!rows.length) return <Empty />;
-  const sorted = [...rows].sort((a, b) => (n(a.horizon) ?? 0) - (n(b.horizon) ?? 0) || (n(a.level) ?? 0) - (n(b.level) ?? 0));
+  const hs = [...new Set(rows.map((r) => Number(r.horizon)))].sort((a, b) => a - b);
+  const levels = [...new Set(rows.map((r) => Number(r.level)))].sort((a, b) => a - b);
+  const at = (h: number, l: number) => rows.find((r) => Number(r.horizon) === h && Number(r.level) === l);
+  const maxEs = Math.max(...rows.map((r) => n(r.es) ?? 0), 1e-9);
+  const horizon = (h: number) => (h === 1 ? "1 day" : h === 5 ? "1 week" : h === 21 ? "1 month" : h === 63 ? "3 months" : `${h} days`);
+  const one = levels.map((l) => at(1, l)).filter(Boolean) as Row[];
   return (
-    <div className="ml-table-wrap">
-      <table className="ml-table">
-        <thead><tr><th>Horizon</th><th>Confidence</th><th>VaR</th><th>ES</th><th>Breaches (expected)</th><th>Kupiec p</th></tr></thead>
-        <tbody>
-          {sorted.map((r) => {
-            const p = n(r.kupiec_p_value);
+    <div>
+      {one.length ? (
+        <div className="var-calib">
+          {one.map((r) => {
+            const p = n(r.kupiec_p_value), ok = p === null ? null : p >= 0.05;
             return (
-              <tr key={`${str(r.horizon)}-${str(r.level)}`}>
-                <td className="num">{str(r.horizon)}d</td><td className="num">{pct(r.level, 0)}</td>
-                <td className="num" style={{ color: "var(--down)" }}>{pct(r.var, 2)}</td><td className="num" style={{ color: "var(--down)" }}>{pct(r.es, 2)}</td>
-                <td className="num">{isNum(r.oos_breach_rate) ? `${pct(r.oos_breach_rate, 1)} (${pct(r.expected_breach_rate, 0)})` : "–"}</td>
-                <td className="num" style={{ color: p === null ? undefined : p < 0.05 ? "var(--down)" : "var(--up)" }}>{p === null ? "–" : p.toFixed(3)}</td>
-              </tr>
+              <div key={str(r.level)} data-ok={ok === null ? undefined : ok ? "1" : "0"}>
+                <span>1-day VaR {pct(r.level, 0)} backtest</span>
+                <b className="num">{pct(r.oos_breach_rate, 1)} breached</b>
+                <em>expected {pct(r.expected_breach_rate, 0)} · Kupiec p {p === null ? "–" : p.toFixed(2)} · {ok === null ? "untested" : ok ? "calibrated" : "miscalibrated"}</em>
+              </div>
             );
           })}
-        </tbody>
-      </table>
-      <p className="ml-note">Kupiec p below 0.05 means the breach rate is inconsistent with the stated confidence: the VaR is miscalibrated.</p>
+        </div>
+      ) : null}
+      <div className="ml-table-wrap">
+        <table className="ml-table varm">
+          <thead>
+            <tr><th rowSpan={2}>Horizon</th>{levels.map((l) => <th key={l} colSpan={2} className="grp">{pct(l, 0)} confidence</th>)}</tr>
+            <tr>{levels.map((l) => [<th key={`v${l}`}>VaR</th>, <th key={`e${l}`}>ES</th>])}</tr>
+          </thead>
+          <tbody>
+            {hs.map((h) => (
+              <tr key={h}>
+                <td>{horizon(h)}</td>
+                {levels.map((l) => {
+                  const r = at(h, l);
+                  return [
+                    <td key={`v${l}`} className="num">{pct(r?.var, 2)}</td>,
+                    <td key={`e${l}`} className="num es"><span style={{ width: `${((n(r?.es) ?? 0) / maxEs) * 100}%` }} /><b>{pct(r?.es, 2)}</b></td>,
+                  ];
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="ml-note">Losses as a share of position value. VaR is the loss exceeded on the worst {pct(1 - (levels[0] ?? 0.95), 0)} (or {pct(1 - (levels[levels.length - 1] ?? 0.99), 0)}) of periods; expected shortfall is the average loss on those periods. Filtered historical simulation.</p>
     </div>
   );
 }
@@ -299,7 +335,8 @@ export function RiskVarEs({ rows }: ViewProps) {
 export function StrategyCompare({ rows, feature }: ViewProps) {
   if (!rows.length) return <Empty />;
   const key = rows[0] && "strategy" in rows[0] ? "strategy" : "model";
-  const primary = rows[0];
+  // The strategy under test is the accent; unmanaged and the controls are the yardsticks.
+  const primary = rows.find((r) => r.kind === "chosen") ?? rows.find((r) => ["vol_targeted", "regime_filtered", "min_variance"].includes(str(r[key]))) ?? rows[0];
   const sorted = [...rows].sort((a, b) => (n(b.sharpe) ?? -9) - (n(a.sharpe) ?? -9));
   return (
     <div>
@@ -332,29 +369,44 @@ export function RiskStress({ rows }: ViewProps) {
 
 /* ---------------------------------------------------------------- Allocation */
 
-/** Each weight with the range it takes across bootstrap resamples: a wide band means the estimate is noise. */
-export function AllocStability({ rows }: ViewProps) {
+/** Each holding's target weight with its bootstrap range, beside its share of portfolio risk. A name whose risk share
+ * far exceeds its weight is where the risk really sits; a wide range means the weight is mostly estimation noise. */
+export function AllocStability({ rows, result }: ViewProps) {
+  const [all, setAll] = useState(false);
   if (!rows.length) return <Empty />;
+  const risk = new Map(out(result, "risk_contribution_decomposition").map((r) => [str(r.asset), n(r.risk_contribution)]));
+  const riskTotal = [...risk.values()].reduce<number>((t, v) => t + Math.max(0, v ?? 0), 0) || 1;
   const sorted = [...rows].filter((r) => isNum(r.weight)).sort((a, b) => (b.weight as number) - (a.weight as number));
+  const held = sorted.filter((r) => (r.weight as number) > 1e-4);
+  const shown = all ? sorted : held.slice(0, 15);
   const max = Math.max(...sorted.map((r) => n(r.p95) ?? (r.weight as number)), 1e-9);
-  const draws = n(sorted[0]?.draws);
-  const unstable = sorted.filter((r) => (n(r.p95) ?? 0) - (n(r.p05) ?? 0) > Math.max(0.05, (r.weight as number))).length;
+  const unstable = sorted.filter((r) => (n(r.p95) ?? 0) - (n(r.p05) ?? 0) > Math.max(0.05, r.weight as number)).length;
+  const top5 = held.slice(0, 5).reduce((t, r) => t + (r.weight as number), 0);
+  const x = (v: number) => `${(v / max) * 100}%`;
   return (
     <div>
-      <Stats items={[["Names held", String(sorted.filter((r) => (r.weight as number) > 1e-4).length)], ["Largest weight", pct(sorted[0]?.weight)], ["Unstable weights", String(unstable), unstable ? "var(--warn)" : "var(--up)", "Bands wider than the weight itself (or 5 points)"], ["Resamples", String(draws ?? "–")]]} />
-      <div className="ml-bands">
-        {sorted.map((r) => (
-          <div key={str(r.asset)}>
-            <b>{str(r.asset)}</b>
-            <span className="ml-band-track" title={`5–95%: ${pct(r.p05)} – ${pct(r.p95)}`}>
-              <i className="band" style={{ left: `${((n(r.p05) ?? 0) / max) * 100}%`, width: `${(((n(r.p95) ?? 0) - (n(r.p05) ?? 0)) / max) * 100}%` }} />
-              <i className="w" style={{ width: `${((r.weight as number) / max) * 100}%` }} />
-            </span>
-            <em className="num">{pct(r.weight)}</em>
-          </div>
-        ))}
+      <Stats items={[["Names held", `${held.length} of ${sorted.length}`], ["Top 5 weight", pct(top5, 0)], ["Unstable weights", String(unstable), unstable ? "var(--warn)" : "var(--up)", "Bootstrap range wider than the weight itself (or 5 points)"], ["Resamples", str(sorted[0]?.draws) || "–"]]} />
+      <div className="wt">
+        <div className="wt-h"><span>Asset</span><span>Weight and 5–95% bootstrap range</span><span>Weight</span><span>Risk share</span></div>
+        {shown.map((r) => {
+          const w = r.weight as number, lo = n(r.p05) ?? w, hi = n(r.p95) ?? w;
+          const rs = Math.max(0, risk.get(str(r.asset)) ?? 0) / riskTotal;
+          const tilt = rs - w;
+          return (
+            <div key={str(r.asset)} className="wt-r">
+              <b>{str(r.asset)}</b>
+              <span className="wt-track" title={`5–95%: ${pct(lo)} to ${pct(hi)}`}>
+                <i className="bar" style={{ width: x(w) }} />
+                <i className="rng" style={{ left: x(lo), width: `calc(${x(hi)} - ${x(lo)})` }} />
+              </span>
+              <em className="num">{pct(w)}</em>
+              <em className="num" style={{ color: Math.abs(tilt) < 0.02 ? "var(--text-2)" : tilt > 0 ? "var(--warn)" : "var(--text-3)" }}>{risk.size ? pct(rs) : "–"}</em>
+            </div>
+          );
+        })}
       </div>
-      <p className="ml-note">Bar: weight today. Band: 5th–95th percentile of the weight when the estimation window is resampled.</p>
+      {sorted.length > 15 ? <button type="button" className="link" style={{ marginTop: 8, fontSize: 12 }} onClick={() => setAll((v) => !v)}>{all ? "Show the 15 largest" : `Show all ${sorted.length} names`}</button> : null}
+      <p className="ml-note">Bar: today&apos;s target weight. Whisker: where that weight lands across {str(sorted[0]?.draws) || "the"} bootstrap resamples of the estimation window. Risk share in amber when a name carries notably more risk than capital.</p>
     </div>
   );
 }
@@ -424,6 +476,35 @@ export function AlphaDrift({ rows, result }: ViewProps) {
         ))}
       </div>
       <p className="ml-note">Wasserstein distance between each feature&apos;s training distribution and its last {mon.recent_sessions ?? 63} sessions, in training standard deviations; the tick marks the {thr} sd threshold. #n is the feature&apos;s importance rank.</p>
+    </div>
+  );
+}
+
+/** Growth of $1 for every strategy, the one under test in the accent colour, with each one's drawdown underneath. */
+export function EquityCompare({ rows, result }: ViewProps) {
+  const key = rows[0] && "strategy" in rows[0] ? "strategy" : "model";
+  const { data, keys, dd } = useMemo(() => {
+    const p = pivot(rows, "date", key, "equity");
+    const peak: Record<string, number> = {};
+    const dd = p.data.map((r) => {
+      const o: Row = { date: r.date };
+      for (const k of p.keys) {
+        const v = n(r[k]);
+        if (v === null) continue;
+        peak[k] = Math.max(peak[k] ?? v, v);
+        o[k] = v / peak[k] - 1;
+      }
+      return o;
+    });
+    return { data: p.data, keys: p.keys, dd };
+  }, [rows, key]);
+  if (!rows.length) return <Empty />;
+  const chosen = str(out(result, "controls_summary").find((r) => r.kind === "chosen")?.strategy) || keys[0];
+  const style = (k: string) => (k === chosen ? { color: "var(--accent)", width: 2.2 } : k === "turnover_aware" ? { color: "var(--accent)", width: 1.4, dash: true } : { color: "var(--text-4)", width: 1.2 });
+  return (
+    <div>
+      <TimeSeries data={data} x="date" height={250} yLabel="Growth of $1, net of costs" series={keys.map((k) => ({ key: k, label: nm(k), ...style(k) }))} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />
+      <TimeSeries data={dd} x="date" height={110} legend={false} format={(v) => pct(v, 0)} yLabel="Drawdown" series={keys.map((k) => ({ key: k, label: nm(k), ...style(k), width: k === chosen ? 1.6 : 1 }))} />
     </div>
   );
 }

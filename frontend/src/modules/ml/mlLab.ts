@@ -46,7 +46,7 @@ const VIEW: Record<string, Record<string, string>> = {
   "02": { controls: "alphaControls", decile_spreads: "alphaDeciles", net_of_cost_curve: "alphaNetCurve", what_changed: "alphaWhatChanged", feature_drift: "alphaDrift", feature_families: "alphaFamilies", ensemble: "alphaEnsemble", prediction_rank_table: "mlRankTable", shap_beeswarm: "mlBeeswarm", shap_waterfall_top_signal: "mlWaterfall", model_ic_leaderboard: "mlLeaderboard", rolling_monthly_ic_series: "mlIcBars", training_audit: "mlReceipt" },
   "03": { risk_today: "riskToday", var_es: "riskVarEs", position_sizing: "strategyCompare", regime_probability: "riskStress", vol_term_structure: "mlTermStructure", forecast_tournament: "mlTournament", forecast_error_distribution: "mlTournament", ensemble_vol_forecast_weights: "mlStacked" },
   "04": { triple_barrier_label_distribution: "mlLabelMix", barrier_hit_path_examples: "mlBarrierScatter", barrier_sensitivity_surface: "mlBarrierSurface", cqr_coverage_audit: "mlCoverage", barrier_parameters: "mlReceipt" },
-  "05": { controls_summary: "strategyCompare", controls_equity: "mlStacked", weight_stability: "allocStability", trade_list: "allocTrades", rebalance_log: "allocRebalances", holding_risk: "dataTable", hrp_weight_vector: "mlWeights", cluster_dendrograms: "mlDendrogram", risk_contribution_decomposition: "mlRiskContrib", walk_forward_allocation: "mlEquity", black_litterman_posterior_return_vector: "mlBlShift", bl_vs_pure_hrp_weight_comparison: "mlBlShift" },
+  "05": { controls_summary: "strategyCompare", controls_equity: "equityCompare", weight_stability: "allocStability", trade_list: "allocTrades", rebalance_log: "allocRebalances", holding_risk: "dataTable", hrp_weight_vector: "mlWeights", cluster_dendrograms: "mlDendrogram", risk_contribution_decomposition: "mlRiskContrib", walk_forward_allocation: "mlEquity", black_litterman_posterior_return_vector: "mlBlShift", bl_vs_pure_hrp_weight_comparison: "mlBlShift" },
   "06": { regime_vs_constant_exposure: "strategyCompare", regime_probability_time_series: "mlRegimes", parallel_gmm_regime_probabilities: "mlRegimes", regime_transition_heatmap: "mlTransition", transition_matrix: "mlTransition", regime_conditional_asset_returns: "mlRegimeReturns", ensemble_vs_hmm_comparison: "mlKpi", correlation_network_density: "mlKpi", current_regime_probabilities: "mlReceipt", training_audit: "mlReceipt" },
 };
 
@@ -76,6 +76,10 @@ function toSpec(f: RawFeature): FeatureSpec {
     seen.add(key);
     const source = (o.path?.split(".")[0] ?? o.location ?? "charts") as OutputSpec["source"];
     outputs.push({ key, title: o.title ?? o.label ?? key, source, render: VIEW[f.id]?.[key] ?? (o.type === "table" ? "dataTable" : "mlAuto"), primary: o.primary, encoding: o.encoding, type: o.type, status: o.status });
+  }
+  // Designed views whose output the manifest does not list (newer tables) still get their view.
+  for (const [key, render] of Object.entries(VIEW[f.id] ?? {})) {
+    if (!seen.has(key)) outputs.push({ key, title: key, source: "tables", render });
   }
   for (const i of f.inputs) if (i.type === "ticker_list" || i.type === "text_list") LIST_KEYS.add(i.key);
   return {
@@ -206,13 +210,13 @@ const LAYOUTS: Record<string, FeatureLayout> = {
   ml05: {
     sections: [
       sec("trade", "Your trades", [card("trade_list", 12, { title: "Rebalance your holdings" }), card("holding_risk", 12, { title: "Risk contribution per holding" })], "Shown when you paste holdings in the Study panel."),
-      sec("weights", "Weights", [card("weight_stability", 6, { title: "Target weights with bootstrap bands" }), card("risk_contribution_decomposition", 6, { title: "Risk contribution" })]),
+      sec("weights", "Weights", [card(["weight_stability", "risk_contribution_decomposition"], 12, { title: "Target weights, their stability and where the risk sits" })]),
       sec("controls", "Against controls", [card("controls_summary", 12, { title: "Walk-forward, net of costs, against the controls" }), card("controls_equity", 8, { title: "Growth of $1 by allocation" }), card("rebalance_log", 4, { title: "Trade only when it pays" })],
         "Shrinkage minimum variance has to beat equal weight, inverse variance and risk parity after costs to earn its place."),
       sec("structure", "Cluster structure", [card("cluster_dendrograms", 12, { title: "Clustering tree and reordered correlations" })]),
-      sec("bl", "With alpha views", [card("black_litterman_posterior_return_vector", 6, { title: "Prior → posterior returns" }), card("bl_vs_pure_hrp_weight_comparison", 6, { title: "Posterior weight vs allocation" })]),
+      sec("bl", "With alpha views", [card("black_litterman_posterior_return_vector", 6, { title: "Prior → posterior returns" }), card("alpha_views", 6, { view: "mlBlWeights", title: "How the views tilt the weights" })]),
       sec("about", "Provenance", [card("allocation_training_audit", 6, { view: "mlProvenance", title: "Trained and tested on" }), card("allocation_training_audit", 6, { view: "mlNext", title: "Next" })]),
-      data(["hrp_weights", "hrp_weight_vector", "black_litterman", "alpha_views", "rebalance_summary", "walk_forward_allocation", "quasi_diagonalized_covariance_heatmap", "allocation_training_audit"]),
+      data(["hrp_weights", "hrp_weight_vector", "black_litterman", "bl_vs_pure_hrp_weight_comparison", "alpha_views", "rebalance_summary", "walk_forward_allocation", "quasi_diagonalized_covariance_heatmap", "allocation_training_audit"]),
     ],
     verdict: (r) => {
       const c = out(r, "controls_summary");
@@ -221,9 +225,12 @@ const LAYOUTS: Record<string, FeatureLayout> = {
       if (!m || !isNum(m.sharpe)) return { headline: null, tone: null };
       const beats = best ? m.sharpe > (best.sharpe as number) : true;
       const trades = out(r, "rebalance_summary")[0];
+      const lazy = c.find((x) => x.strategy === "turnover_aware");
+      const lazyNote = lazy && isNum(lazy.sharpe) && lazy.sharpe > Math.max(m.sharpe as number, isNum(best?.sharpe) ? (best.sharpe as number) : -Infinity)
+        ? ` Trading only when the gain beats the cost lifts it to ${fmt(lazy.sharpe)}, ahead of every control.` : "";
       return {
-        headline: `${String(m.strategy) === "min_variance" ? "Shrinkage minimum variance" : String(m.strategy)} earns a net Sharpe of ${fmt(m.sharpe)} at ${fmt((m.annual_volatility as number) * 100, 1)}% volatility${best ? `, ${beats ? "ahead of" : "behind"} ${ALLOC_NAMES[String(best.strategy)] ?? String(best.strategy)} (${fmt(best.sharpe)})` : ""}.${trades ? ` Rebalancing your holdings ${trades.trade_recommended ? "is worth its cost" : "is not worth its cost today"}.` : ""}`,
-        tone: beats ? "up" : "warn",
+        headline: `${String(m.strategy) === "min_variance" ? "Shrinkage minimum variance" : String(m.strategy)} earns a net Sharpe of ${fmt(m.sharpe)} at ${fmt((m.annual_volatility as number) * 100, 1)}% volatility${best ? `, ${beats ? "ahead of" : "behind"} ${ALLOC_NAMES[String(best.strategy)] ?? String(best.strategy)} (${fmt(best.sharpe)})` : ""}.${lazyNote}${trades ? ` Rebalancing your holdings ${trades.trade_recommended ? "is worth its cost" : "is not worth its cost today"}.` : ""}`,
+        tone: beats || lazyNote ? "up" : "warn",
       };
     },
   },
@@ -256,8 +263,8 @@ const PV = group(() => import("./pageViews") as Promise<Record<string, unknown>>
 registerViews({
   mlProvenance: PV.MlProvenance, mlNext: PV.MlNext, alphaControls: PV.AlphaControls, alphaDeciles: PV.AlphaDeciles, alphaNetCurve: PV.AlphaNetCurve, alphaWhatChanged: PV.AlphaWhatChanged,
   alphaFamilies: PV.AlphaFamilies, alphaDrift: PV.AlphaDrift, alphaEnsemble: PV.AlphaEnsemble, riskToday: PV.RiskToday, riskVarEs: PV.RiskVarEs, strategyCompare: PV.StrategyCompare, riskStress: PV.RiskStress,
-  allocStability: PV.AllocStability, allocTrades: PV.AllocTrades, allocRebalances: PV.AllocRebalances,
-}, ["alphaControls", "alphaDeciles", "alphaNetCurve", "alphaEnsemble", "strategyCompare", "riskStress"]);
+  allocStability: PV.AllocStability, allocTrades: PV.AllocTrades, allocRebalances: PV.AllocRebalances, equityCompare: PV.EquityCompare,
+}, ["equityCompare", "alphaControls", "alphaDeciles", "alphaNetCurve", "alphaEnsemble", "strategyCompare", "riskStress"]);
 registerViews({
   valVerdict: VV.ValVerdict, valAutopsy: VV.ValAutopsy, valCostCurve: VV.ValCostCurve, valControls: VV.ValControls, valShuffle: VV.ValShuffle, valCpcv: VV.ValCpcv, valMonteCarlo: VV.ValMonteCarlo,
   valTransfer: VV.ValTransfer, valPlateau: VV.ValPlateau, valStability: VV.ValStability, valOverfit: VV.ValOverfit, valLeakage: VV.ValLeakage, valImprove: VV.ValImprove, valReceipt: VV.ValReceipt,
@@ -266,7 +273,7 @@ registerViews({
   mlAuto: V.MlAuto, mlKpi: V.MlKpi, mlReceipt: V.MlReceipt, mlEquity: V.MlEquity, mlSharpeSpread: V.MlSharpeSpread, mlPathFan: V.MlPathFan, mlFoldMatrix: V.MlFoldMatrix,
   mlRankTable: V.MlRankTable, mlBeeswarm: V.MlBeeswarm, mlWaterfall: V.MlWaterfall, mlIcBars: V.MlIcBars, mlLeaderboard: V.MlLeaderboard, mlVolPanel: V.MlVolPanel,
   mlVolScatter: V.MlVolScatter, mlTermStructure: V.MlTermStructure, mlTournament: V.MlTournament, mlBarrierScatter: V.MlBarrierScatter, mlBarrierSurface: V.MlBarrierSurface, mlLabelMix: V.MlLabelMix,
-  mlCoverage: V.MlCoverage, mlWeights: V.MlWeights, mlRiskContrib: V.MlRiskContrib, mlDendrogram: V.MlDendrogram, mlBlShift: V.MlBlShift, mlRegimes: V.MlRegimes,
+  mlCoverage: V.MlCoverage, mlWeights: V.MlWeights, mlRiskContrib: V.MlRiskContrib, mlDendrogram: V.MlDendrogram, mlBlShift: V.MlBlShift, mlBlWeights: V.MlBlWeights, mlRegimes: V.MlRegimes,
   mlTransition: V.MlTransition, mlRegimeReturns: V.MlRegimeReturns, mlStacked: V.MlStacked,
  
  
