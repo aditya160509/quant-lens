@@ -142,3 +142,21 @@ def test_autopsy_wording_short_sample_over_100_percent():
     regime = next(c for c in autopsy["ranked_causes"] if c["cause"] == "regime_dependence")
     if "supplies 1" in regime["evidence"] and "% of total" in regime["evidence"] and int(regime["evidence"].split("supplies ")[1].split("%")[0]) > 100:
         assert "earned more than the whole period's profit" in regime["phrase"]
+
+
+def test_verified_page_freezes_job_result(monkeypatch, tmp_path):
+    from fastapi import HTTPException
+    from app.api import ml_v2 as api
+    result = _validate(_predictions(0.002))
+    monkeypatch.setattr(api, "VERIFIED", tmp_path)
+    monkeypatch.setattr(api.JOBS, "get", lambda jid: {"status": "completed"} if jid == "j1" else None)
+    monkeypatch.setattr(api, "_read_result", lambda job: result)
+    stamped = api.verify_job({"job_id": "j1"})
+    assert len(stamped["id"]) == 20 and stamped["sha256"].startswith(stamped["id"])
+    assert api.verify_job({"job_id": "j1"})["id"] == stamped["id"]
+    page = api.get_verified(stamped["id"])
+    assert page["result"]["verdict"]["label"] == result["verdict"]["label"]
+    with pytest.raises(HTTPException):
+        api.get_verified("../../etc/passwd")
+    with pytest.raises(HTTPException):
+        api.verify_job({"job_id": "nope"})

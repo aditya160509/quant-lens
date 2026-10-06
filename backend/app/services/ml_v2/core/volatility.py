@@ -294,7 +294,11 @@ def _forecast_asset(returns: pd.Series, ann: float, horizons: list[int], ml_mode
                 if horizon == 1:
                     size = np.minimum(max_size, target_vol / np.sqrt(np.maximum(p["test"], floor)))
                     realised = returns.shift(-1).reindex(dates.iloc[test]).to_numpy(float)
+                    # Half-Kelly from the trailing year's mean and variance, known at t and applied to t+1; long-only, capped like vol targeting.
+                    trail = returns.rolling(252, min_periods=126)
+                    kelly = np.nan_to_num(np.clip(0.5 * trail.mean() / trail.var(), 0.0, max_size).reindex(dates.iloc[test]).to_numpy(float), nan=0.0)
                     sizing = {"managed": _perf(size * realised, ann), "unmanaged": _perf(realised, ann), "mean_size": float(np.nanmean(size)),
+                              "kelly": _perf(kelly * realised, ann), "kelly_mean_size": float(np.mean(kelly)),
                               "now": float(min(max_size, target_vol / np.sqrt(max(p["now"][0], floor)))) if np.isfinite(p["now"][0]) else None}
     return {"forecasts": forecasts, "errors": errors, "terms": terms, "intervals": intervals, "var_es": var_es, "calibration": calibration,
             "sizing": sizing, "stress": stress, "notes": notes, "gjr": gjr, "train_n": train_n, "clean": clean}
@@ -415,7 +419,8 @@ def run_vol_forecasting(payload: dict[str, Any] | None = None) -> dict[str, Any]
     regime_rows = [{"date": date_str(d), "stress_probability": float(v), "regime": "stress" if v >= 0.5 else "calm"} for d, v in stress.items()]
     regime_artifact = put_artifact("regime", {"stress_probability": {date_str(d): float(v) for d, v in stress.items()}, "asset": asset})
     sizing = result["sizing"]
-    sizing_rows = ([{"strategy": "unmanaged", **sizing["unmanaged"], "mean_size": 1.0}, {"strategy": "vol_targeted", **sizing["managed"], "mean_size": sizing["mean_size"]}]
+    sizing_rows = ([{"strategy": "unmanaged", **sizing["unmanaged"], "mean_size": 1.0}, {"strategy": "vol_targeted", **sizing["managed"], "mean_size": sizing["mean_size"]},
+                    {"strategy": "half_kelly", **sizing["kelly"], "mean_size": sizing["kelly_mean_size"]}]
                    if sizing else [])
     test_dates = [pd.Timestamp(r["date"]) for r in forecasts]
     provenance = build_provenance(ctx.closes, calendar=ctx.calendar, train_window=(result["clean"].index[0], result["clean"].index[result["train_n"] - 1]),

@@ -179,3 +179,45 @@ async def upload(kind: str = Query("universe"), file: UploadFile = File(...)):
     identifier = uuid.uuid4().hex
     (directory / f"{identifier}.json").write_text(json.dumps({"symbols": resolved}), encoding="utf-8")
     return {"upload_id": identifier, "kind": kind, "symbols": resolved}
+
+
+# Verified result pages: a completed Validate job is frozen server-side under the hash of its content.
+# The page is read-only; the result comes from the job store, never from the client, so it cannot be edited.
+VERIFIED = ROOT / "verified"
+
+
+@router.post("/verified")
+def verify_job(payload: dict = Body(...)):
+    import hashlib
+    import re
+    from datetime import datetime, timezone
+    job_id = str(payload.get("job_id", ""))
+    job = JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(404, "Unknown ML V2 job")
+    if job["status"] != "completed":
+        raise HTTPException(409, f"Job is {job['status']}; only finished runs can be verified")
+    result = _read_result(job)
+    if not isinstance(result, dict) or "verdict" not in result:
+        raise HTTPException(422, "Only Validate results can be published as verified pages")
+    body = json.dumps(result, sort_keys=True, separators=(",", ":"), default=str)
+    digest = hashlib.sha256(body.encode()).hexdigest()
+    vid = digest[:20]
+    assert re.fullmatch(r"[0-9a-f]{20}", vid)
+    VERIFIED.mkdir(parents=True, exist_ok=True)
+    path = VERIFIED / f"{vid}.json"
+    if not path.exists():
+        record = {"id": vid, "sha256": digest, "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "job_id": job_id, "result": result}
+        path.write_text(json.dumps(record, default=str))
+    return {"id": vid, "sha256": digest}
+
+
+@router.get("/verified/{vid}")
+def get_verified(vid: str):
+    import re
+    if not re.fullmatch(r"[0-9a-f]{20}", vid):
+        raise HTTPException(404, "Unknown verified result")
+    path = VERIFIED / f"{vid}.json"
+    if not path.exists():
+        raise HTTPException(404, "Unknown verified result")
+    return json.loads(path.read_text())

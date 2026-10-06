@@ -5,6 +5,7 @@ import re
 from typing import Any
 import numpy as np
 import pandas as pd
+from scipy.stats import wasserstein_distance
 from sklearn.linear_model import LinearRegression, Ridge
 from .common import build_provenance, compact_records, put_artifact, report_progress, response, summary
 from .composite import daily_ic_table
@@ -302,6 +303,34 @@ def evaluate_scores(rows: pd.DataFrame, horizon: int, cost_bps: float) -> dict[s
 
 # ---------------------------------------------------------------------------
 
+def _feature_drift(live_all, columns, train_dates, importance, monthly, perf, primary, recent=63, threshold=0.5):
+    """Wasserstein distance between each raw feature's training distribution and its last `recent` sessions, in training
+    standard deviations, plus a retrain flag when an important feature drifts or recent IC falls below half the test IC."""
+    dates = pd.to_datetime(live_all["date"])
+    in_train = ((dates >= pd.Timestamp(train_dates.min())) & (dates <= pd.Timestamp(train_dates.max()))).to_numpy()
+    sessions = np.sort(dates.unique())
+    in_recent = (dates >= sessions[max(0, len(sessions) - recent)]).to_numpy()
+    rank = {r["feature"]: i for i, r in enumerate(importance)}
+    rows = []
+    for c in columns:
+        a = live_all.loc[in_train, c].to_numpy(float); b = live_all.loc[in_recent, c].to_numpy(float)
+        a, b = a[np.isfinite(a)], b[np.isfinite(b)]
+        sd = float(a.std()) if len(a) else 0.0
+        if len(a) < 50 or len(b) < 20 or not sd > 0:
+            continue
+        d = float(wasserstein_distance(a, b) / sd)
+        rows.append({"feature": c, "family": FEATURE_FAMILY.get(c, "custom"), "drift": d, "importance_rank": rank.get(c, len(columns)) + 1, "flag": d > threshold})
+    rows.sort(key=lambda r: -r["drift"])
+    reasons = [f"{r['feature']} drifted {r['drift']:.2f} sd" for r in rows if r["flag"] and r["importance_rank"] <= 5]
+    test_ic = next((r.get("test_ic") for r in perf if r.get("model") == primary), None)
+    recent_ic = [m["rolling_ic"] for m in monthly[-3:] if m.get("rolling_ic") is not None and np.isfinite(m["rolling_ic"])]
+    recent_mean = float(np.mean(recent_ic)) if recent_ic else None
+    if test_ic is not None and recent_mean is not None and test_ic > 0 and recent_mean < 0.5 * test_ic:
+        reasons.append(f"last 3 months IC {recent_mean:.3f} is under half the test IC {test_ic:.3f}")
+    return rows, {"retrain_recommended": bool(reasons), "reasons": reasons, "drift_threshold_sd": threshold, "recent_sessions": recent,
+                  "recent_ic": recent_mean, "test_ic": test_ic}
+
+
 def _what_changed(live, columns, normalised, contribution_fn, horizon, top_n):
     """Rank moves between the latest rebalance and the one `horizon` sessions earlier, with the largest SHAP deltas."""
     dates = np.sort(live["date"].unique())
@@ -492,6 +521,7 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         "heldout": {"date": [pd.Timestamp(d).strftime("%Y-%m-%d") for d in test_frame["date"]], "ticker": test_frame["ticker"].tolist(),
                     "score": [float(v) for v in test_scores[primary]], "forward_return": [float(v) for v in test_frame["fwd"]]}})
     train_dates, test_dates = labelled["date"].iloc[train], labelled["date"].iloc[test]
+    drift, monitoring = _feature_drift(live_all, columns, train_dates, shap_importance, monthly, perf, primary)
     provenance = build_provenance(ctx.closes, calendar=ctx.calendar, train_window=(train_dates.min(), train_dates.max()), test_window=(test_dates.min(), test_dates.max()),
                                   purge=horizon, embargo=embargo, universe=universe_label(request, ctx.symbols),
                                   extra={"features": len(columns), "features_dropped_low_coverage": [c for c in all_columns if c not in columns]})
@@ -512,7 +542,7 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
                 "rolling_monthly_ic_series": monthly, "decile_spreads": decile_bars, "net_of_cost_curve": net_curve},
         tables={"current_predictions": compact_records(current.sort_values("rank")), "model_performance": perf,
                 "controls": [r for r in perf if r["kind"] in ("model", "control", "baseline")],
-                "ensemble": [{**row["weights"], "validation_ic": row["validation_ic"], "chosen": row is best} for row in grid], "decile_summary": decile_summary, "what_changed": changed, "ticker_contributions": ticker_contributions,
+                "ensemble": [{**row["weights"], "validation_ic": row["validation_ic"], "chosen": row is best} for row in grid], "decile_summary": decile_summary, "what_changed": changed, "ticker_contributions": ticker_contributions, "feature_drift": drift,
                 "feature_families": family_rows,
                 "heldout_predictions": compact_records(test_frame.assign(prediction=test_scores[primary], actual_forward_return=test_frame["fwd"])[["date", "ticker", "prediction", "actual_forward_return"]], limit=10000),
                 "tuning_trials": trials,
@@ -526,5 +556,5 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
               "net_of_cost": f"long-short top and bottom bin, equal weight, rebalanced every {horizon} sessions at {cost_bps} bps per unit traded; turnover = traded notional / (2 x gross)",
               "capacity": f"smallest AUM at which any trade exceeds {int(PARTICIPATION * 100)}% of 63-day average dollar volume, median over rebalances, native currency",
               "optional_libraries_unavailable": unavailable, "live_refit": "all_available_matured_labels",
-              "what_changed": changed_meta, "feature_value_scale": "rank-scaled within date, [-1, 1]",
+              "what_changed": changed_meta, "monitoring": monitoring, "feature_value_scale": "rank-scaled within date, [-1, 1]",
               "sector_metadata": "current_snapshot; not a historical classifier"})

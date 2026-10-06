@@ -58,6 +58,9 @@ def test_alpha_controls_exact_contributions_formulas_and_artifact(local_market):
     stored = get_artifact(result["meta"]["artifact_id"])
     assert set(stored["predictions"]) == set(local_market)
     assert {row["weighting"] for row in result["tables"]["decile_summary"]} == {"equal", "value"}
+    monitoring = result["meta"]["monitoring"]
+    assert isinstance(monitoring["retrain_recommended"], bool)
+    assert all(r["drift"] >= 0 and r["flag"] == (r["drift"] > monitoring["drift_threshold_sd"]) for r in result["tables"]["feature_drift"])
 
 
 def test_alpha_formula_rejects_unsafe_and_unknown_names(local_market):
@@ -80,7 +83,7 @@ def test_volatility_regime_switch_scored_with_dm_var_es_and_unmanaged_size(local
     assert all(today[f"range_{h}d_low"] < 0 < today[f"range_{h}d_high"] for h in (1, 5, 21))
     levels = {(r["horizon"], r["level"]): r for r in result["tables"]["var_es"]}
     assert levels[(1, 0.99)]["var"] > levels[(1, 0.95)]["var"] > 0 and levels[(1, 0.95)]["es"] >= levels[(1, 0.95)]["var"]
-    assert {r["strategy"] for r in result["tables"]["position_sizing"]} == {"unmanaged", "vol_targeted"}
+    assert {r["strategy"] for r in result["tables"]["position_sizing"]} == {"unmanaged", "vol_targeted", "half_kelly"}
     assert result["provenance"]["purge"] == 21
 
 
