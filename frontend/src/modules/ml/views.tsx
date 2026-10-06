@@ -258,9 +258,24 @@ export function MlRankTable({ rows, result, scope }: ViewProps) {
   );
 }
 
+/** SHAP values per name for the 12 most important features; the rest are summarised in a note so the chart stays readable. */
 export function MlBeeswarm({ rows }: ViewProps) {
+  const { points, hidden } = useMemo(() => {
+    const imp = new Map<string, number>();
+    for (const r of rows) if (isNum(r.shap_value)) imp.set(str(r.feature), (imp.get(str(r.feature)) ?? 0) + Math.abs(r.shap_value));
+    const keep = new Set([...imp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([f]) => f));
+    return {
+      points: rows.filter((r) => isNum(r.shap_value) && keep.has(str(r.feature))).map((r) => ({ row: label(str(r.feature)), value: r.shap_value as number, color: n(r.feature_value), label: str(r.ticker) })),
+      hidden: Math.max(0, imp.size - keep.size),
+    };
+  }, [rows]);
   if (!rows.length) return <Empty />;
-  return <Beeswarm points={rows.filter((r) => isNum(r.shap_value)).map((r) => ({ row: label(str(r.feature)), value: r.shap_value as number, color: n(r.feature_value), label: str(r.ticker) }))} />;
+  return (
+    <div>
+      <Beeswarm points={points} />
+      <p className="ml-note">Each dot is one name; colour is the feature&apos;s value (high or low within the date), position its push on the prediction.{hidden ? ` ${hidden} weaker features are left out; see the family breakdown.` : ""}</p>
+    </div>
+  );
 }
 
 export function MlWaterfall({ rows, result, scope }: ViewProps) {

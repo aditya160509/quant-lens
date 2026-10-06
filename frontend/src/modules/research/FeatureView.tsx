@@ -142,7 +142,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         <Tabs value={active?.id ?? ""} onChange={(id) => { setTab(id); setMaxKey(null); scroller.current?.scrollTo({ top: Math.min(scroller.current.scrollTop, hero.current?.offsetHeight ?? 0), behavior: "smooth" }); }}
           tabs={sections.map((s) => ({ id: s.id, label: s.label, count: result ? visible(s).length : undefined }))} />
         {result ? <button className="btn sm ghost" style={{ marginLeft: "auto" }} onClick={() => setPrinting(true)} title="Every section on one page, ready to save as PDF"><FileText size={13} />Report</button> : null}
-        <span style={{ marginLeft: result ? 0 : "auto", opacity: stuck ? 1 : 0, transition: "opacity .2s", pointerEvents: stuck ? "auto" : "none" }}>{runButton}</span>
+        <span className="sticky-run" style={{ marginLeft: result ? 0 : "auto" }} aria-hidden={!stuck} inert={!stuck}>{runButton}</span>
       </div>
 
       <div style={{ padding: "6px 18px 22px" }}>
@@ -186,7 +186,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
             </motion.div>
           )
         ) : (
-          <Placeholder items={active?.items ?? []} running={running} onRun={run.run} />
+          <Placeholder items={active?.items ?? []} running={running} onRun={run.run} featureId={feature.id} />
         )}
       </div>
     </div>
@@ -299,7 +299,7 @@ function Progress({ startedAt, status, progress }: { startedAt: number | null; s
   );
 }
 
-function Placeholder({ items, running, onRun }: { items: Item[]; running: boolean; onRun: () => void }) {
+function Placeholder({ items, running, onRun, featureId }: { items: Item[]; running: boolean; onRun: () => void; featureId: string }) {
   return (
     <div style={{ position: "relative" }}>
       <div className="out-grid" aria-hidden style={{ opacity: running ? 1 : 0.4 }}>
@@ -315,8 +315,8 @@ function Placeholder({ items, running, onRun }: { items: Item[]; running: boolea
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: DUR.base }}
             style={{ textAlign: "center", background: "var(--panel)", padding: "22px 28px", borderRadius: 14, boxShadow: "var(--shadow)", maxWidth: 400 }}>
             <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Ready when you are</div>
-            <div style={{ color: "var(--text-3)", fontSize: 12.5, lineHeight: 1.55, marginBottom: 14 }}>Set the universe, signal and options in the Study panel on the right, then run it. Results appear here section by section.</div>
-            <button className="btn primary" onClick={onRun}><Play size={11} fill="currentColor" />Run with these settings<span className="kbd" style={{ background: "transparent", color: "inherit", boxShadow: "none", opacity: 0.55 }}>⌘↵</span></button>
+            <div style={{ color: "var(--text-3)", fontSize: 12.5, lineHeight: 1.55, marginBottom: 14 }}>{lab().emptyHint?.(featureId) ?? "Set the universe, signal and options in the Study panel on the right, then run it. Results appear here section by section."}</div>
+            <button className="btn primary" onClick={onRun}><Play size={11} fill="currentColor" />{lab().runLabel ? runLabel(featureId) : "Run with these settings"}<span className="kbd" style={{ background: "transparent", color: "inherit", boxShadow: "none", opacity: 0.55 }}>⌘↵</span></button>
           </motion.div>
         </div>
       ) : null}

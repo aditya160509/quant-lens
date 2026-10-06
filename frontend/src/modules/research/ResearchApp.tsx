@@ -10,7 +10,7 @@ import { useLayout } from "@/workspace/layout";
 import { useRegionPanel } from "@/workspace/panels";
 import { useWorkspace } from "@/workspace/WorkspaceShell";
 import { Dot } from "@/workspace/ui";
-import { cancelJob, latestRun, metricsOf, studyPart, useActiveSignal, useLibrary, useBackgroundRuns, useJob, useManifest, useRuns, useSubmitJob } from "./api";
+import { ApiError, cancelJob, latestRun, metricsOf, studyPart, useActiveSignal, useLibrary, useBackgroundRuns, useJob, useManifest, useRuns, useSubmitJob } from "./api";
 import { featureHref, idFromSlug, metaFor, pageHref, pageOf, specialPage } from "./catalog";
 import { lab, owns, setLab, type LabConfig } from "./lab";
 import { RESEARCH_LAB } from "./researchLab";
@@ -146,7 +146,7 @@ function ResearchPanels() {
 
   const center = (
             <>{manifest.isError ? (
-              <ErrorState message={(manifest.error as Error).message} onRetry={() => manifest.refetch()} />
+              <ErrorState message={(manifest.error as Error).message} busy={manifest.error instanceof ApiError && manifest.error.status === 429} onRetry={() => manifest.refetch()} />
             ) : sharedToken ? (
               <SharedView token={sharedToken} features={manifest.data ?? []} />
             ) : Special ? (
@@ -363,11 +363,11 @@ function InspectorHost({ feature }: { feature: FeatureSpec }) {
   return <Inspector feature={feature} run={run} />;
 }
 
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+function ErrorState({ message, onRetry, busy = false }: { message: string; onRetry: () => void; busy?: boolean }) {
   return (
     <div className="island" style={{ alignItems: "center", justifyContent: "center", gap: 10, padding: 24, textAlign: "center" }}>
-      <div style={{ fontWeight: 550, fontSize: 14 }}>{lab().title} service is unreachable</div>
-      <div style={{ color: "var(--text-3)", maxWidth: 420 }}>{message}. Start the backend and retry.</div>
+      <div style={{ fontWeight: 550, fontSize: 14 }}>{busy ? `${lab().title} service is busy` : `${lab().title} service is unreachable`}</div>
+      <div style={{ color: "var(--text-3)", maxWidth: 420 }}>{busy ? "Too many requests in a short time. Wait a moment and retry." : `${message}. Start the backend and retry.`}</div>
       <button className="btn" onClick={onRetry}>Retry</button>
     </div>
   );

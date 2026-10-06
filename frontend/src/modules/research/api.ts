@@ -12,23 +12,32 @@ const DATA_BASE = `${API_BASE_URL}/labs/research/v2`;
 import type { FeatureResult, FeatureSpec, Job, RunLogEntry, RunRecord } from "./types";
 
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  constructor(message: string, readonly status = 0) { super(message); }
+}
 
 async function request<T>(path: string, init?: RequestInit, base = lab().base): Promise<T> {
   const res = await fetch(`${base}${path}`, init);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const detail = (body as { detail?: unknown }).detail;
-    throw new ApiError(typeof detail === "string" ? detail : `Request failed (${res.status})`);
+    if (res.status === 429) throw new ApiError("Too many requests right now; retrying shortly.", 429);
+    throw new ApiError(typeof detail === "string" ? detail : `Request failed (${res.status})`, res.status);
   }
   return body as T;
 }
+
+/** Rate limits (429) and network blips are retried with backoff; real 4xx answers are not. */
+const retryTransient = (count: number, err: unknown) => count < 4 && (!(err instanceof ApiError) || err.status === 429 || err.status >= 500);
+const backoff = (attempt: number) => Math.min(8000, 500 * 2 ** attempt);
 
 export function useManifest() {
   return useQuery({
     queryKey: [lab().id, "manifest"],
     queryFn: () => request<unknown>("/features").then((d) => lab().manifest(d)),
     staleTime: Infinity,
+    retry: retryTransient,
+    retryDelay: backoff,
   });
 }
 
@@ -67,7 +76,7 @@ export function useBackgroundRuns(features: FeatureSpec[] | undefined, activeJob
   const pending = useRuns((s) => s.runs.filter((r) => (r.status === "queued" || r.status === "running") && r.jobId !== activeJob && owns(r.featureId)).map((r) => r.jobId).join(","));
   const ids = pending ? pending.split(",") : [];
   const queries = useQueries({
-    queries: ids.map((id) => ({ queryKey: [lab().id, "job", id], queryFn: () => request<Job>(`/jobs/${id}`), refetchInterval: 1500, refetchIntervalInBackground: true, retry: 1 })),
+    queries: ids.map((id) => ({ queryKey: [lab().id, "job", id], queryFn: () => request<Job>(`/jobs/${id}`), refetchInterval: (q: { state: { dataUpdateCount: number } }) => pollEvery(q.state.dataUpdateCount, 2000), refetchIntervalInBackground: true, retry: 1 })),
   });
   const key = queries.map((q) => q.data?.status ?? "").join(",");
   useEffect(() => {
@@ -89,13 +98,16 @@ export function useBackgroundRuns(features: FeatureSpec[] | undefined, activeJob
   }, [key]);
 }
 
+/** Poll fast while a job is young, then back off (1 s for the first 10 polls, up to 5 s), so long runs stay well under the API rate limit. */
+const pollEvery = (polls: number, base = 1000) => Math.min(5000, base * (polls < 10 ? 1 : 1 + (polls - 10) / 5));
+
 export function useJob(jobId: string | null) {
   return useQuery({
     queryKey: [lab().id, "job", jobId],
     queryFn: () => request<Job>(`/jobs/${jobId}`),
     enabled: Boolean(jobId),
     staleTime: (q) => (TERMINAL.has(q.state.data?.status ?? "") ? Infinity : 0),
-    refetchInterval: (q) => (TERMINAL.has(q.state.data?.status ?? "") ? false : 1000),
+    refetchInterval: (q) => (TERMINAL.has(q.state.data?.status ?? "") ? false : pollEvery(q.state.dataUpdateCount)),
     // Keep polling in a background tab so a long study finishes while the reader is elsewhere.
     refetchIntervalInBackground: true,
     retry: (count, err) => !(err instanceof ApiError) && count < 2,

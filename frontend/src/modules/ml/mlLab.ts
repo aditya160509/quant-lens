@@ -289,6 +289,9 @@ export const ML_LAB: LabConfig = {
   submit: (featureId, payload) => ({ path: `/features/${RAW(featureId)}/jobs`, body: payloadFor(payload) }),
   signal: false,
   specials: { studio: StudioPage, verified: VerifiedPage },
+  emptyHint: (id) => (id === "mlvalidate"
+    ? "Upload your returns, predictions, feature panel or every trial you ran in the Study panel, or send a run here from Alpha or Allocation. Then press Validate."
+    : "Defaults run on 35 US large caps in a few seconds. Change the universe or settings in the Study panel, or just run it."),
   runLabel: (id) => (id === "mlvalidate" ? "Validate" : id === "ml05" ? "Allocate" : id === "ml03" || id === "ml06" ? "Forecast" : "Train and test"),
   defaultUniverse: "35 US large caps",
   overview: {

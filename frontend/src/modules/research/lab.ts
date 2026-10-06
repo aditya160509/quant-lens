@@ -35,6 +35,8 @@ export type LabConfig = {
   /** Pages with their own component instead of a feature, keyed by Page.id (needs Page.slug). The "verified" key
    * also serves /<root>/verified/[id], with the id passed in. */
   specials?: Record<string, ComponentType<{ features: FeatureSpec[]; id?: string }>>;
+  /** What to do before the first run, shown over the empty page. */
+  emptyHint?: (featureId: string) => string;
   /** Verb on the run button for a feature, e.g. "Train and test"; defaults to "Run study". */
   runLabel?: (featureId: string) => string;
   /** Research extras: Signal and Report card pages, projects, ledger, active signal. */

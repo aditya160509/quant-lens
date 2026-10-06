@@ -281,6 +281,10 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .sticky-bar.stuck { border-bottom-color: var(--line); }
 .sticky-title { display: flex; align-items: center; gap: 8px; font-weight: 550; font-size: 13px; max-width: 0; opacity: 0; overflow: hidden; transition: opacity 0.2s var(--ease), max-width 0.3s var(--ease); white-space: nowrap; }
 .sticky-bar.stuck .sticky-title { opacity: 1; max-width: 320px; }
+/* The run button joins the bar only once it sticks; until then it takes no room from the section tabs. */
+.sticky-run { flex: none; max-width: 0; opacity: 0; overflow: hidden; transition: opacity 0.2s var(--ease), max-width 0.3s var(--ease); }
+.sticky-bar.stuck .sticky-run { max-width: 320px; opacity: 1; }
+.sticky-bar .tabs { min-width: 0; flex: 0 1 auto; }
 .section-h { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; padding: 16px 2px 2px; }
 .section-h h2 { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
 .section-h p { color: var(--text-3); font-size: 12.5px; }
