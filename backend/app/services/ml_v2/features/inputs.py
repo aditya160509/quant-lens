@@ -114,6 +114,18 @@ INPUT_META: dict[str, dict[str, Any]] = {
     "ic_protocol": _m("expert", "Daily cross-sectional Spearman IC against forward returns."),
     "ivol_model": _m("expert", "Idiosyncratic volatility from a rolling market-residual OLS."),
     "amihud_window": _m("standard", "Window for Amihud illiquidity.", "sessions"),
+    # Validate
+    "random_seed": _m("expert", "Seed for permutations, bootstrap and model refits; recorded in the reproducibility receipt.", "", min=0, max=2**31 - 1),
+    "upload_id": _m("quick", "Id returned by POST /api/ml/v2/uploads (returns, predictions with outcomes, feature panel with outcome, or trial matrix)."),
+    "trials_upload_id": _m("standard", "Trial matrix upload holding every configuration you tried; sets the true trial count for PBO and deflated Sharpe."),
+    "benchmark_upload_id": _m("expert", "Returns upload used as the buy-and-hold control for a returns-only validation."),
+    "source_result": _m("expert", "Result of a feature 01 or feature 02 run to validate instead of an upload."),
+    "trial_count": _m("standard", "True number of strategies or settings tried, if larger than the trial matrix columns.", "trials"),
+    "trials_are": _m("expert", "Whether trial matrix columns are different configurations or the same model re-run with different seeds."),
+    "n_seeds": _m("standard", "Seeds re-run for stability, capped at 10.", "seeds"),
+    "grid_size": _m("standard", "Side of the parameter plateau grid, at most 5 (5 x 5).", "cells"),
+    "n_permutations": _m("expert", "Shuffled-signal control permutations (seeded).", "permutations"),
+    "improve_strategy": _m("standard", "Also report the meta-label filter and sizing beside the unfiltered strategy."),
 }
 
 # Extra bounds for float inputs the feature files leave unbounded.

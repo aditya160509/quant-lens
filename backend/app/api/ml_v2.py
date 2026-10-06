@@ -7,6 +7,7 @@ import json
 import importlib
 import uuid
 from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile
+from app.services.ml_v2.core import uploads
 from app.services.ml_v2.core.common import PROGRESS, JobCancelled
 from app.services.ml_v2.features.inputs import DEPRECATED_INPUTS, validate
 from app.services.ml_v2.registry import CONTRACT_VERSION, feature_manifest, get_ml_v2_feature, run_feature
@@ -24,7 +25,8 @@ def _feature_module(feature_id: str):
 def _validated(feature_id: str, payload: dict) -> dict:
     module = _feature_module(feature_id)
     checked = validate(module.normalize_feature_payload(payload), module.INPUTS)
-    parse_symbols(checked)
+    if not (checked.get("upload_id") or checked.get("source_result")):
+        parse_symbols(checked)
     return checked
 
 
@@ -143,11 +145,23 @@ def cancel_job(job_id: str):
 
 @router.post("/uploads")
 async def upload(kind: str = Query("universe"), file: UploadFile = File(...)):
+    """kind=universe stores a ticker list; returns, predictions, trial_matrix and feature_panel are parsed
+    into a validated in-memory frame (10 MB cap enforced while streaming, 24 h TTL)."""
+    if kind != "universe" and kind not in uploads.KINDS:
+        raise HTTPException(422, f"kind must be universe or one of {list(uploads.KINDS)}")
+    limit = 2_000_000 if kind == "universe" else uploads.MAX_BYTES
+    chunks, size = [], 0
+    while chunk := await file.read(65536):
+        size += len(chunk)
+        if size > limit:
+            raise HTTPException(413, f"Upload exceeds {limit // 1_000_000} MB")
+        chunks.append(chunk)
+    raw = b"".join(chunks)
     if kind != "universe":
-        raise HTTPException(422, "Only ticker universe CSV uploads are supported")
-    raw = await file.read(2_000_001)
-    if len(raw) > 2_000_000:
-        raise HTTPException(413, "Upload exceeds 2 MB")
+        try:
+            return await asyncio.to_thread(uploads.store_csv, raw, kind)
+        except uploads.UploadError as exc:
+            raise HTTPException(exc.status, str(exc)) from exc
     try:
         rows = csv.reader(io.StringIO(raw.decode("utf-8-sig")), strict=True)
         tickers = [row[0].strip() for row in rows if row and row[0].strip().lower() not in {"ticker", "symbol"}]

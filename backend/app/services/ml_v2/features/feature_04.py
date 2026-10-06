@@ -27,7 +27,7 @@ DEFAULTS: dict[str, Any] = {
 
 ALIASES = {"pt": "profit_taking_barrier", "sl": "stop_loss_barrier", "holding_period": "max_holding_period", "horizon": "max_holding_period"}
 
-INPUT_CONTRACT = [{'key': 'symbols', 'type': 'ticker_list', 'required': False}, {'key': 'profit_taking_barrier', 'type': 'float', 'default': 0.05}, {'key': 'stop_loss_barrier', 'type': 'float', 'default': 0.03}, {'key': 'max_holding_period', 'type': 'integer', 'options': [5, 10, 21, 63], 'default': 21}, {'key': 'barrier_mode', 'type': 'select', 'options': ['fixed', 'vol_scaled'], 'default': 'fixed'}, {'key': 'barrier_side', 'type': 'select', 'options': ['bilateral'], 'default': 'bilateral'}, {'key': 'position_sizing', 'type': 'select', 'options': ['probability', 'binary'], 'default': 'probability'}, {'key': 'primary_side_model', 'type': 'select', 'options': ['momentum_sign'], 'default': 'momentum_sign'}, {'key': 'confidence_level', 'type': 'select', 'options': [0.8, 0.9, 0.95], 'default': 0.9}]
+INPUT_CONTRACT = [{'key': 'upload_id', 'type': 'text', 'required': False}, {'key': 'cost_bps', 'type': 'float', 'min': 0, 'max': 1000, 'default': 5.0}, {'key': 'symbols', 'type': 'ticker_list', 'required': False}, {'key': 'profit_taking_barrier', 'type': 'float', 'default': 0.05}, {'key': 'stop_loss_barrier', 'type': 'float', 'default': 0.03}, {'key': 'max_holding_period', 'type': 'integer', 'options': [5, 10, 21, 63], 'default': 21}, {'key': 'barrier_mode', 'type': 'select', 'options': ['fixed', 'vol_scaled'], 'default': 'fixed'}, {'key': 'barrier_side', 'type': 'select', 'options': ['bilateral'], 'default': 'bilateral'}, {'key': 'position_sizing', 'type': 'select', 'options': ['probability', 'binary'], 'default': 'probability'}, {'key': 'primary_side_model', 'type': 'select', 'options': ['momentum_sign'], 'default': 'momentum_sign'}, {'key': 'confidence_level', 'type': 'select', 'options': [0.8, 0.9, 0.95], 'default': 0.9}]
 
 OUTPUT_CONTRACT = [
     {"key": "triple_barrier_label_distribution", "location": "charts", "renderer": "bar", "status": "live"},
@@ -59,5 +59,9 @@ def normalize_feature_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
 def run(payload=None):
     from app.services.ml_v2.core.barriers import run_triple_barrier
     normalized = validate(normalize_feature_payload(payload), INPUTS)
-    result = run_triple_barrier(normalized)
+    if normalized.get("upload_id"):
+        from app.services.ml_v2.core.validate_engine import run_meta_label_upload
+        result = run_meta_label_upload(normalized)
+    else:
+        result = run_triple_barrier(normalized)
     return merge_feature_contract(result, feature_title=FEATURE_TITLE, input_contract=INPUT_CONTRACT, output_contract=OUTPUT_CONTRACT, research_only=RESEARCH_ONLY, implementation_notes=IMPLEMENTATION_NOTES, payload=normalized)
