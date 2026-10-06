@@ -71,7 +71,7 @@ def run_triple_barrier(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     barrier_sensitivity = barrier_sensitivity_rows(ctx, horizon)
     return response(
         "04",
-        [summary("Events", len(labels), "labels"), summary("CQR Coverage", coverage, "ratio"), summary("PT/SL", f"{pt:.2%}/{sl:.2%}", "barrier")],
+        [summary("Events", len(labels), "labels"), summary(f"Interval coverage (target {confidence:.0%})", coverage, "%"), summary("PT/SL", f"{pt:.2%}/{sl:.2%}", "barrier")],
         charts={
             "triple_barrier_label_distribution": compact_records(dist),
             "event_outcome_timeline": compact_records(labels, limit=500),

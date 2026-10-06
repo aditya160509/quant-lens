@@ -101,7 +101,7 @@
 .ws ::-webkit-scrollbar-thumb { background: var(--line-2); border: 3px solid transparent; background-clip: padding-box; border-radius: 10px; }
 .ws ::-webkit-scrollbar-thumb:hover { background: var(--line-3); background-clip: padding-box; }
 .ws ::-webkit-scrollbar-track, .ws ::-webkit-scrollbar-corner { background: transparent; }
-.ws .num, .ws-tokens .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px; letter-spacing: -0.015em; }
+:where(.ws, .ws-tokens) .num { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12px; letter-spacing: -0.015em; }
 .ws h1, .ws h2, .ws h3, .ws h4, .ws p { margin: 0; }
 
 /* top bar */

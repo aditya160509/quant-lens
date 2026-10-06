@@ -76,7 +76,12 @@ function BarsImpl({ bars, height = 240, format = fmtTick, refLines = [], signed 
                     <line x1={x + w / 2 - 4} x2={x + w / 2 + 4} y1={ys(b.hi)} y2={ys(b.hi)} />
                   </g>
                 ) : null}
-                {valuesFit || (showValues && active) ? <text x={x + w / 2} y={b.value >= 0 ? Math.min(y, ys(b.hi ?? b.value)) - 5 : Math.max(y, ys(b.lo ?? b.value)) + 13} textAnchor="middle" fontSize={10.5} fill="var(--text-2)">{format(b.value)}</text> : null}
+                {valuesFit || (showValues && active) ? (() => {
+                  // Negative values label below the bar unless that would run into the category labels; then inside it.
+                  const below = Math.max(y, ys(b.lo ?? b.value)) + 13;
+                  const inside = b.value < 0 && below > height - M.bottom - 2;
+                  return <text x={x + w / 2} y={b.value >= 0 ? Math.min(y, ys(b.hi ?? b.value)) - 5 : inside ? y - 5 : below} textAnchor="middle" fontSize={10.5} fill={inside ? "var(--panel)" : "var(--text-2)"} fontWeight={inside ? 600 : undefined}>{format(b.value)}</text>;
+                })() : null}
                 {labels ? <text x={x + w / 2} y={height - M.bottom + 16} textAnchor="middle" fontSize={10.5} fill={active ? "var(--text)" : "var(--text-3)"} style={{ fontFamily: "var(--font)" }}>{b.label.length > maxChars ? `${b.label.slice(0, maxChars - 1)}…` : b.label}</text> : null}
               </g>
             );

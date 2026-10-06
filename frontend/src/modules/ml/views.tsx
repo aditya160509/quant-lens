@@ -196,7 +196,24 @@ export function MlPathFan({ rows }: ViewProps) {
   }, [rows]);
   if (!rows.length) return <Empty />;
   const series: Series[] = [...keys.map((k) => ({ key: k, label: `Path ${k}`, muted: true })), { key: "median", label: "Median path", width: 2.2 }];
-  return <TimeSeries data={data} x="date" height={300} series={series} band={{ lo: "lo", hi: "hi", label: "10–90% of paths" }} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />;
+  return <TimeSeries data={data} x="date" height={300} yLabel="Growth of $1, out of sample" series={series} band={{ lo: "lo", hi: "hi", label: "10–90% of paths", color: "color-mix(in oklch, var(--accent) 14%, transparent)" }} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />;
+}
+
+/** How much a naive split flatters the model: the Sharpe it reports minus the purged Sharpe. A large gap is leakage. */
+export function MlLeakGap({ rows }: ViewProps) {
+  const naive = n(rows.find((r) => /naive/i.test(str(r.method)))?.sharpe), purged = n(rows.find((r) => /purged/i.test(str(r.method)))?.sharpe);
+  if (naive === null || purged === null) return <Empty />;
+  const gap = naive - purged, rel = purged !== 0 ? gap / Math.abs(purged) : null;
+  const tone = Math.abs(gap) < 0.1 ? "var(--up)" : Math.abs(gap) < 0.3 ? "var(--warn)" : "var(--down)";
+  return (
+    <div className="leak">
+      <div><span>Naive split</span><b className="num">{naive.toFixed(2)}</b></div>
+      <div className="arrow" aria-hidden>→</div>
+      <div><span>Purged and embargoed</span><b className="num">{purged.toFixed(2)}</b></div>
+      <div className="gap" style={{ ["--tone" as string]: tone }}><span>Leakage gap</span><b className="num">{gap >= 0 ? "+" : ""}{gap.toFixed(2)}</b><em>{rel === null ? "" : `${(rel * 100).toFixed(1)}% of the purged Sharpe`}</em></div>
+      <p className="ml-note" style={{ gridColumn: "1 / -1" }}>{Math.abs(gap) < 0.1 ? "Purging barely moves the Sharpe: overlapping labels were not inflating this result." : gap > 0 ? "The naive split overstates the Sharpe: overlapping labels leak future information into training. Trust the purged number." : "The purged Sharpe is higher than the naive one; the difference is noise, not leakage."}</p>
+    </div>
+  );
 }
 
 /** Which date groups trained and tested in each split, and how much was purged around the test blocks. */
@@ -526,7 +543,7 @@ export function MlBarrierScatter({ rows, result }: ViewProps) {
   const groups = [...new Set(pts.map((p) => p.group))];
   return (
     <div>
-      <Stats items={groups.map((g) => [g, `${by(g)} (${pct(by(g) / pts.length, 0)})`] as [string, string])} />
+      <Stats items={[...groups.map((g) => [g, `${by(g)} (${pct(by(g) / pts.length, 0)})`] as [string, string]), ["Shown", `${pts.length} sample events`]]} />
       <XYPlot points={pts} xLabel="Calendar days to first touch" yLabel="Return at touch" formatY={pctFmt}
         refY={[...(pt !== null ? [{ y: pt, label: "profit-taking", color: "var(--up)" }] : []), ...(sl !== null ? [{ y: -sl, label: "stop-loss", color: "var(--down)" }] : [])]}
         groupColors={{ [label("profit_taking")]: "var(--up)", [label("stop_loss")]: "var(--down)", [label("vertical")]: "var(--text-3)" }} />
@@ -564,7 +581,18 @@ export function MlBarrierSurface({ rows, result }: ViewProps) {
 export function MlCoverage({ rows }: ViewProps) {
   if (!rows.length) return <Empty />;
   const target = n(rows[0].target_coverage);
-  return <TimeSeries data={rows} x="date" height={220} format={pctFmt} series={[{ key: "empirical_coverage", label: "Empirical coverage" }]} refLines={target !== null ? [{ y: target, label: "target", color: "var(--warn)", dash: true }] : []} />;
+  const avg = mean(vals(rows, "empirical_coverage"));
+  const diff = target !== null ? avg - target : null;
+  const read = diff === null ? "" : Math.abs(diff) <= 0.03 ? "Calibrated: realised outcomes fall inside the interval about as often as promised."
+    : diff > 0 ? `Over-covering by ${pct(diff, 0)}: the intervals are wider than they need to be, so they understate how precise the forecast is.`
+    : `Under-covering by ${pct(-diff, 0)}: outcomes escape the interval more often than promised, so risk is understated.`;
+  return (
+    <div>
+      <Stats items={[["Average coverage", pct(avg, 0), diff !== null && Math.abs(diff) <= 0.03 ? "var(--up)" : "var(--warn)"], ["Target", target === null ? "–" : pct(target, 0)], ["Dates", rows.length]]} />
+      <TimeSeries data={rows} x="date" height={200} format={pctFmt} yLabel="Share of outcomes inside the interval" series={[{ key: "empirical_coverage", label: "Empirical coverage", color: "var(--accent)" }]} refLines={target !== null ? [{ y: target, label: "target", color: "var(--warn)", dash: true }] : []} />
+      {read ? <p className="ml-note">{read}</p> : null}
+    </div>
+  );
 }
 
 /* ---------------------------------------------------------------- F05 allocation */

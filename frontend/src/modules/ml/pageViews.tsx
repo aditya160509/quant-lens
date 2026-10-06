@@ -4,6 +4,7 @@ import { ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { Bars } from "@/charts/Bars";
+import { StackedArea } from "@/charts/StackedArea";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { useManifest } from "@/modules/research/api";
 import { featureHref } from "@/modules/research/catalog";
@@ -172,11 +173,12 @@ export function AlphaDeciles({ rows }: ViewProps) {
 }
 
 /** Growth of $1 for each model after trading costs, held-out period only. */
-export function AlphaNetCurve({ rows }: ViewProps) {
+export function AlphaNetCurve({ rows, result }: ViewProps) {
   const { data, keys } = useMemo(() => pivot(rows, "date", "model", "equity"), [rows]);
   if (!rows.length) return <Empty />;
   // The model is the accent; controls are neutral (dashed for the one it must beat), never red, which would read as "bad".
-  const style = (k: string) => (MODEL_KIND[k] === "model" ? { color: "var(--accent)", width: 2.2 } : k === "ic_composite" ? { color: "var(--text-2)", width: 1.5, dash: true } : { color: "var(--text-4)", width: 1.2 });
+  const primary = str(out(result, "controls").find((r) => r.primary)?.model) || "ensemble";
+  const style = (k: string) => (k === primary ? { color: "var(--accent)", width: 2.2 } : k === "ic_composite" ? { color: "var(--text-2)", width: 1.5, dash: true } : MODEL_KIND[k] === "model" ? { color: "color-mix(in oklch, var(--accent) 45%, var(--text-4))", width: 1.2 } : { color: "var(--text-4)", width: 1.2 });
   return <TimeSeries data={data} x="date" height={240} yLabel="Growth of $1, net of costs" series={keys.map((k) => ({ key: k, label: nm(k), ...style(k) }))} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />;
 }
 
@@ -247,6 +249,19 @@ export function AlphaEnsemble({ rows }: ViewProps) {
 
 /* ---------------------------------------------------------------- Volatility and risk */
 
+/** Where the likely return range sits around zero, on a scale shared by every horizon so they compare at a glance. */
+function RangeGauge({ lo, hi, span }: { lo: number | null; hi: number | null; span: number }) {
+  if (lo === null || hi === null) return null;
+  const x = (v: number) => `${50 + (v / span) * 50}%`;
+  return (
+    <span className="gauge" aria-hidden>
+      <i className="zero" />
+      <i className="dn" style={{ left: x(lo), width: `calc(50% - ${x(lo)})` }} />
+      <i className="up" style={{ left: "50%", width: `calc(${x(hi)} - 50%)` }} />
+    </span>
+  );
+}
+
 /** Today's risk in one card: forecast ranges, regime, suggested size and tail loss. */
 export function RiskToday({ rows }: ViewProps) {
   const [i, setI] = useState(0);
@@ -268,6 +283,7 @@ export function RiskToday({ rows }: ViewProps) {
             <span>{h === 1 ? "Next day" : h === 5 ? "Next week" : "Next month"}</span>
             <b className="num">{pct(r[`vol_${h}d`])}<small> vol</small></b>
             <em className="num">{pct(r[`range_${h}d_low`])} to {signed(r[`range_${h}d_high`], (x) => pct(x))}</em>
+            <RangeGauge lo={n(r[`range_${h}d_low`])} hi={n(r[`range_${h}d_high`])} span={Math.max(...[1, 5, 21].map((k) => Math.max(Math.abs(n(r[`range_${k}d_low`]) ?? 0), Math.abs(n(r[`range_${k}d_high`]) ?? 0))), 1e-6)} />
           </div>
         ))}
       </div>
@@ -505,6 +521,80 @@ export function EquityCompare({ rows, result }: ViewProps) {
     <div>
       <TimeSeries data={data} x="date" height={250} yLabel="Growth of $1, net of costs" series={keys.map((k) => ({ key: k, label: nm(k), ...style(k) }))} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />
       <TimeSeries data={dd} x="date" height={110} legend={false} format={(v) => pct(v, 0)} yLabel="Drawdown" series={keys.map((k) => ({ key: k, label: nm(k), ...style(k), width: k === chosen ? 1.6 : 1 }))} />
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- Improve my strategy (barriers) */
+
+const TOUCH: Record<string, { label: string; color: string }> = {
+  profit_taking: { label: "Profit-taking first", color: "var(--up)" },
+  stop_loss: { label: "Stop-loss first", color: "var(--down)" },
+  vertical: { label: "Time barrier", color: "var(--text-4)" },
+};
+const touchOf = (r: Row) => str(r.touch_type) || (n(r.label) === 1 ? "profit_taking" : n(r.label) === -1 ? "stop_loss" : "vertical");
+
+/** How the label mix moves through time: month by month, which barrier events hit first. Drift here means the
+ * barriers that suit one period do not suit another. */
+export function BarrierTimeline({ rows }: ViewProps) {
+  const { data, keys } = useMemo(() => {
+    const by = new Map<string, Record<string, number>>();
+    for (const r of rows) {
+      const m = str(r.date).slice(0, 7);
+      if (!m) continue;
+      const o = by.get(m) ?? {};
+      const t = touchOf(r);
+      o[t] = (o[t] ?? 0) + 1;
+      by.set(m, o);
+    }
+    const keys = ["stop_loss", "vertical", "profit_taking"].filter((k) => [...by.values()].some((o) => o[k]));
+    const data = [...by.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([m, o]) => ({ date: `${m}-15`, ...Object.fromEntries(keys.map((k) => [k, o[k] ?? 0])) }));
+    return { data, keys };
+  }, [rows]);
+  if (data.length < 2) return <Empty />;
+  return (
+    <div>
+      <StackedArea data={data} keys={keys} height={220} labels={Object.fromEntries(keys.map((k) => [k, TOUCH[k].label]))} colors={Object.fromEntries(keys.map((k) => [k, TOUCH[k].color]))} />
+      <p className="ml-note">Share of events each month by the barrier touched first, from the {rows.length.toLocaleString()} most recent events. A rising red band means the stop is being hit more often: the market has become noisier relative to your barriers.</p>
+    </div>
+  );
+}
+
+/** Fixed against volatility-scaled barriers, side by side, on the same events. */
+export function BarrierMethods({ rows }: ViewProps) {
+  if (!rows.length) return <Empty />;
+  return (
+    <div>
+      <div className="mix">
+        {rows.map((r) => (
+          <div key={str(r.method)} className="mix-row">
+            <b>{str(r.method) === "vol_scaled" ? "Volatility-scaled" : "Fixed"}</b>
+            <span className="mix-bar">
+              <i style={{ width: pct(r.negative_rate), background: "var(--down)" }} />
+              <i style={{ width: pct(r.neutral_rate), background: "var(--text-4)" }} />
+              <i style={{ width: pct(r.positive_rate), background: "var(--up)" }} />
+            </span>
+            <em className="num">{pct(r.positive_rate, 0)} PT · {pct(r.negative_rate, 0)} SL · {pct(r.neutral_rate, 0)} time</em>
+          </div>
+        ))}
+      </div>
+      <p className="ml-note">Volatility-scaled barriers widen in turbulent markets, so fewer events are stopped out by noise. Ambiguous same-bar touches: {rows.map((r) => `${str(r.method) === "vol_scaled" ? "scaled" : "fixed"} ${str(r.ambiguous)}`).join(", ")}.</p>
+    </div>
+  );
+}
+
+/** The meta-model's confidence in each trade; empty until a primary side is supplied. */
+export function MetaProbability({ rows }: ViewProps) {
+  const p = rows.map((r) => n(r.meta_probability)).filter((v): v is number => v !== null);
+  if (!p.length) return <div className="val-unavail"><b>No meta-labels for this run</b><span>Meta-labels need a primary side for each trade: upload predictions in Validate, or send an Alpha ranking here with &ldquo;Filter with meta-labels&rdquo;.</span></div>;
+  const bins = Array.from({ length: 10 }, (_, i) => ({ label: `${i * 10}%`, value: p.filter((v) => v >= i / 10 && (v < (i + 1) / 10 || (i === 9 && v === 1))).length }));
+  const sure = p.filter((v) => v < 0.4 || v > 0.6).length / p.length;
+  const kept = p.filter((v) => v >= 0.5).length / p.length;
+  return (
+    <div>
+      <Stats items={[["Confident calls", pct(sure, 0), sure < 0.2 ? "var(--warn)" : "var(--up)", "Share of trades with probability below 40% or above 60%"], ["Kept at 50%", pct(kept, 0)], ["Trades", String(p.length)]]} />
+      <Bars bars={bins} signed={false} height={190} yLabel="Trades" format={(v) => String(Math.round(v))} />
+      <p className="ml-note">{sure < 0.2 ? "The meta-model is rarely confident: almost every trade sits near 50%, so it cannot separate good trades from bad. Filtering on it would mostly add noise; check the Improve section in Validate before using it." : "Trades away from 50% are where the meta-model has a view; sizing by this probability shrinks the uncertain ones."}</p>
     </div>
   );
 }

@@ -42,10 +42,10 @@ const PAGES: Page[] = [
 const VIEW: Record<string, Record<string, string>> = {
   validate: { autopsy: "valAutopsy", controls: "valControls", cpcv: "valCpcv", monte_carlo: "valMonteCarlo", transfer: "valTransfer", plateau: "valPlateau", stability: "valStability",
     deflated_sharpe: "valOverfit", leakage: "valLeakage", improve: "valImprove", receipt: "valReceipt" },
-  "01": { cpcv_sharpe_distribution: "mlSharpeSpread", backtest_paths_chart: "mlPathFan", per_fold_performance: "mlFoldMatrix", probability_of_backtest_overfitting: "mlKpi", deflated_sharpe_ratio: "mlKpi", cpcv_path_metrics: "dataTable" },
+  "01": { purged_vs_naive_cv_comparison: "mlLeakGap", cpcv_sharpe_distribution: "mlSharpeSpread", backtest_paths_chart: "mlPathFan", per_fold_performance: "mlFoldMatrix", probability_of_backtest_overfitting: "mlKpi", deflated_sharpe_ratio: "mlKpi", cpcv_path_metrics: "dataTable" },
   "02": { controls: "alphaControls", decile_spreads: "alphaDeciles", net_of_cost_curve: "alphaNetCurve", what_changed: "alphaWhatChanged", feature_drift: "alphaDrift", feature_families: "alphaFamilies", ensemble: "alphaEnsemble", prediction_rank_table: "mlRankTable", shap_beeswarm: "mlBeeswarm", shap_waterfall_top_signal: "mlWaterfall", model_ic_leaderboard: "mlLeaderboard", rolling_monthly_ic_series: "mlIcBars", training_audit: "mlReceipt" },
   "03": { risk_today: "riskToday", var_es: "riskVarEs", position_sizing: "strategyCompare", regime_probability: "riskStress", vol_term_structure: "mlTermStructure", forecast_tournament: "mlTournament", forecast_error_distribution: "mlTournament", ensemble_vol_forecast_weights: "mlStacked" },
-  "04": { triple_barrier_label_distribution: "mlLabelMix", barrier_hit_path_examples: "mlBarrierScatter", barrier_sensitivity_surface: "mlBarrierSurface", cqr_coverage_audit: "mlCoverage", barrier_parameters: "mlReceipt" },
+  "04": { event_outcome_timeline: "barrierTimeline", label_method_comparison: "barrierMethods", meta_label_probability_distribution: "metaProbability", triple_barrier_label_distribution: "mlLabelMix", barrier_hit_path_examples: "mlBarrierScatter", barrier_sensitivity_surface: "mlBarrierSurface", cqr_coverage_audit: "mlCoverage", barrier_parameters: "mlReceipt" },
   "05": { controls_summary: "strategyCompare", controls_equity: "equityCompare", weight_stability: "allocStability", trade_list: "allocTrades", rebalance_log: "allocRebalances", holding_risk: "dataTable", hrp_weight_vector: "mlWeights", cluster_dendrograms: "mlDendrogram", risk_contribution_decomposition: "mlRiskContrib", walk_forward_allocation: "mlEquity", black_litterman_posterior_return_vector: "mlBlShift", bl_vs_pure_hrp_weight_comparison: "mlBlShift" },
   "06": { regime_vs_constant_exposure: "strategyCompare", regime_probability_time_series: "mlRegimes", parallel_gmm_regime_probabilities: "mlRegimes", regime_transition_heatmap: "mlTransition", transition_matrix: "mlTransition", regime_conditional_asset_returns: "mlRegimeReturns", ensemble_vs_hmm_comparison: "mlKpi", correlation_network_density: "mlKpi", current_regime_probabilities: "mlReceipt", training_audit: "mlReceipt" },
 };
@@ -142,7 +142,7 @@ const LAYOUTS: Record<string, FeatureLayout> = {
   },
   ml01: {
     sections: [
-      sec("result", "Result", [card("cpcv_sharpe_distribution", 12, { title: "Sharpe across every CPCV path" }), card("backtest_paths_chart", 8, { title: "Backtest paths" }), card("purged_vs_naive_cv_comparison", 4, { title: "Purged vs naive CV", hint: "The gap is the leakage a naive split hides." })]),
+      sec("result", "Result", [card("cpcv_sharpe_distribution", 12, { title: "Sharpe across every CPCV path" }), card("purged_vs_naive_cv_comparison", 12, { title: "What a naive split would have told you" }), card("backtest_paths_chart", 12, { title: "Every out-of-sample path" })]),
       sec("protocol", "Protocol", [card("per_fold_performance", 12, { view: "mlFoldMatrix", title: "Train, purge and test by split", flush: false }), card("embargo_sensitivity", 6), card(["probability_of_backtest_overfitting", "deflated_sharpe_ratio"], 6, { title: "Overfitting tests" })],
         "Which data trained and tested each split, and whether the result survives a longer embargo."),
       data(["per_fold_performance", "cpcv_path_metrics"]),
@@ -158,7 +158,7 @@ const LAYOUTS: Record<string, FeatureLayout> = {
     sections: [
       sec("ranking", "Ranking", [card("prediction_rank_table", 7, { title: "Today's ranking · click a name" }), card("ticker_contributions", 5, { view: "mlWaterfall", title: "Why this name ranks here" })]),
       sec("changed", "What changed", [card("what_changed", 12, { title: "Moves since the last rebalance" })], "Names that entered or left the top of the ranking, with the features that moved them."),
-      sec("controls", "Against controls", [card("controls", 12, { title: "The model against simple alternatives, held-out" }), card("decile_spreads", 6, { title: "Returns by prediction decile" }), card("net_of_cost_curve", 6, { title: "Long-short after costs" })],
+      sec("controls", "Against controls", [card("controls", 12, { title: "The model against simple alternatives, held-out" }), card("decile_spreads", 6, { title: "Returns by prediction bucket" }), card("net_of_cost_curve", 6, { title: "Long-short after costs" })],
         "A model earns its complexity only if it beats Ridge, a 3-factor OLS and the IC-weighted composite out of sample."),
       sec("explain", "Explain", [card("shap_beeswarm", 7, { title: "What drives predictions" }), card("feature_families", 5, { title: "Contribution by feature family" })], "Exact TreeSHAP values on the latest predictions: direction, size and spread of each feature's effect."),
       sec("quality", "Model quality", [card("rolling_monthly_ic_series", 6, { title: "IC by month, held-out period" }), card("ensemble", 6, { title: "How the blend was chosen" }), card("feature_drift", 6, { title: "Feature drift and retrain check" }), card("training_audit", 6, { view: "mlProvenance", title: "Trained and tested on" }), card("model_ic_leaderboard", 12, { title: "Models by test IC" })]),
@@ -203,9 +203,23 @@ const LAYOUTS: Record<string, FeatureLayout> = {
     sections: [
       sec("labels", "Labels", [card("barrier_hit_path_examples", 8, { title: "Which barrier was hit, and when" }), card("triple_barrier_label_distribution", 4, { title: "Label mix" }), card("event_outcome_timeline", 12, { title: "Events over time" })]),
       sec("sensitivity", "Sensitivity", [card("barrier_sensitivity_surface", 7, { title: "Label mix by barrier width" }), card("label_method_comparison", 5, { title: "Fixed vs volatility-scaled barriers" })]),
-      sec("meta", "Meta-labels", [card("meta_label_probability_distribution", 6), card("cqr_coverage_audit", 6, { title: "Conformal interval coverage" }), card("cqr_interval_width_distribution", 6)]),
-      data(["barrier_parameters", "label_audit", "barrier_sensitivity"]),
+      sec("meta", "Meta-labels", [card("meta_label_probability_distribution", 6), card("cqr_coverage_audit", 6, { title: "Conformal interval coverage" })]),
+      data(["barrier_parameters", "label_audit", "barrier_sensitivity", "cqr_interval_width_distribution"]),
     ],
+    verdict: (r) => {
+      const mix = out(r, "triple_barrier_label_distribution");
+      const tot = mix.reduce((t, x) => t + (isNum(x.count) ? x.count : 0), 0);
+      const share = (l: number) => (tot ? (mix.find((x) => Number(x.label) === l)?.count as number ?? 0) / tot : 0);
+      const p = out(r, "barrier_parameters")[0];
+      const pt = isNum(p?.profit_taking) ? p.profit_taking : null, sl = isNum(p?.stop_loss) ? p.stop_loss : null;
+      if (!tot || pt === null || sl === null) return { headline: null, tone: null };
+      const edge = share(1) * pt - share(-1) * sl;
+      const breakeven = sl / (pt + sl);
+      return {
+        headline: `Profit-taking hits first in ${fmt(share(1) * 100, 0)}% of events, the stop in ${fmt(share(-1) * 100, 0)}%. At ${fmt(pt * 100, 1)}% / ${fmt(sl * 100, 1)}% barriers that is about ${edge >= 0 ? "+" : ""}${fmt(edge * 100, 2)}% per event before costs; break-even needs a ${fmt(breakeven * 100, 0)}% hit rate.`,
+        tone: edge > 0.002 ? "up" : edge > 0 ? "warn" : "down",
+      };
+    },
   },
   ml05: {
     sections: [
@@ -263,8 +277,8 @@ const PV = group(() => import("./pageViews") as Promise<Record<string, unknown>>
 registerViews({
   mlProvenance: PV.MlProvenance, mlNext: PV.MlNext, alphaControls: PV.AlphaControls, alphaDeciles: PV.AlphaDeciles, alphaNetCurve: PV.AlphaNetCurve, alphaWhatChanged: PV.AlphaWhatChanged,
   alphaFamilies: PV.AlphaFamilies, alphaDrift: PV.AlphaDrift, alphaEnsemble: PV.AlphaEnsemble, riskToday: PV.RiskToday, riskVarEs: PV.RiskVarEs, strategyCompare: PV.StrategyCompare, riskStress: PV.RiskStress,
-  allocStability: PV.AllocStability, allocTrades: PV.AllocTrades, allocRebalances: PV.AllocRebalances, equityCompare: PV.EquityCompare,
-}, ["equityCompare", "alphaControls", "alphaDeciles", "alphaNetCurve", "alphaEnsemble", "strategyCompare", "riskStress"]);
+  allocStability: PV.AllocStability, allocTrades: PV.AllocTrades, allocRebalances: PV.AllocRebalances, barrierTimeline: PV.BarrierTimeline, barrierMethods: PV.BarrierMethods, metaProbability: PV.MetaProbability, equityCompare: PV.EquityCompare,
+}, ["barrierTimeline", "metaProbability", "equityCompare", "alphaControls", "alphaDeciles", "alphaNetCurve", "alphaEnsemble", "strategyCompare", "riskStress"]);
 registerViews({
   valVerdict: VV.ValVerdict, valAutopsy: VV.ValAutopsy, valCostCurve: VV.ValCostCurve, valControls: VV.ValControls, valShuffle: VV.ValShuffle, valCpcv: VV.ValCpcv, valMonteCarlo: VV.ValMonteCarlo,
   valTransfer: VV.ValTransfer, valPlateau: VV.ValPlateau, valStability: VV.ValStability, valOverfit: VV.ValOverfit, valLeakage: VV.ValLeakage, valImprove: VV.ValImprove, valReceipt: VV.ValReceipt,
@@ -273,7 +287,7 @@ registerViews({
   mlAuto: V.MlAuto, mlKpi: V.MlKpi, mlReceipt: V.MlReceipt, mlEquity: V.MlEquity, mlSharpeSpread: V.MlSharpeSpread, mlPathFan: V.MlPathFan, mlFoldMatrix: V.MlFoldMatrix,
   mlRankTable: V.MlRankTable, mlBeeswarm: V.MlBeeswarm, mlWaterfall: V.MlWaterfall, mlIcBars: V.MlIcBars, mlLeaderboard: V.MlLeaderboard, mlVolPanel: V.MlVolPanel,
   mlVolScatter: V.MlVolScatter, mlTermStructure: V.MlTermStructure, mlTournament: V.MlTournament, mlBarrierScatter: V.MlBarrierScatter, mlBarrierSurface: V.MlBarrierSurface, mlLabelMix: V.MlLabelMix,
-  mlCoverage: V.MlCoverage, mlWeights: V.MlWeights, mlRiskContrib: V.MlRiskContrib, mlDendrogram: V.MlDendrogram, mlBlShift: V.MlBlShift, mlBlWeights: V.MlBlWeights, mlRegimes: V.MlRegimes,
+  mlCoverage: V.MlCoverage, mlWeights: V.MlWeights, mlRiskContrib: V.MlRiskContrib, mlDendrogram: V.MlDendrogram, mlBlShift: V.MlBlShift, mlLeakGap: V.MlLeakGap, mlBlWeights: V.MlBlWeights, mlRegimes: V.MlRegimes,
   mlTransition: V.MlTransition, mlRegimeReturns: V.MlRegimeReturns, mlStacked: V.MlStacked,
  
  
