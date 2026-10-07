@@ -2608,7 +2608,7 @@ export function CustomFeaturePage({ featureId, sections }) {
     return ordered.map((section, index) => decorateSection(section, index, ordered));
   }, [enrichedSections, selectedOutputIds]);
   const annotations = useMemo(() => Object.values(annotationsByChart || {}).flat(), [annotationsByChart]);
-  const payload = useMemo(() => ({ ...payloadFromForm(feature, debouncedForm), compute_mode: researchMode ? "research" : "realtime", selected_outputs: selectedOutputIds }), [feature, debouncedForm, researchMode, selectedOutputIds]);
+  const payload = useMemo(() => ({ ...payloadFromForm(feature, debouncedForm), compute_mode: researchMode ? "research" : "realtime" }), [feature, debouncedForm, researchMode]);
   const runMutation = useMutation({
     mutationFn: (nextPayload) => runFactorsV2Feature(feature.id, nextPayload),
   });
@@ -2621,7 +2621,7 @@ export function CustomFeaturePage({ featureId, sections }) {
     onError: (err) => toast.error(err?.message || "Comparison run failed"),
   });
   const loading = runMutation.isPending;
-  const secondaryPayload = useMemo(() => ({ ...payloadFromForm(feature, secondaryForm), compute_mode: researchMode ? "research" : "realtime", selected_outputs: selectedOutputIds }), [feature, researchMode, secondaryForm, selectedOutputIds]);
+  const secondaryPayload = useMemo(() => ({ ...payloadFromForm(feature, secondaryForm), compute_mode: researchMode ? "research" : "realtime" }), [feature, researchMode, secondaryForm]);
   const quickFields = useMemo(() => {
     const priority = ["compute_mode", "factor", "benchmark", "window_days", "factor_model", "method", "report_type"];
     return (feature.fields || []).filter((field) => priority.includes(field.key)).slice(0, 4);
@@ -2788,7 +2788,7 @@ export function CustomFeaturePage({ featureId, sections }) {
       window.localStorage.setItem(`quant360:factors-v2:${feature.id}:latest-summary`, JSON.stringify(result?.summary_cards || []));
       toast.success(`F${feature.id} analysis complete`);
     } catch (err) {
-      setError(err?.message || "Factors V2 API is dormant until the backend router is wired.");
+      setError(err?.message || "Factors V2 request failed.");
       toast.error(err?.message || "Factors V2 API error");
     } finally {
       if (startRef.current != null) setElapsed(((performance.now() - startRef.current) / 1000).toFixed(1));

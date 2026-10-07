@@ -1,32 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import * as d3 from "d3";
+
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Label,
-  Line,
-  LineChart,
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
-  ReferenceArea,
-  ReferenceLine,
-  ResponsiveContainer,
-  Scatter,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+
 import { ChevronDown, Download, ExternalLink, Eye, X } from "lucide-react";
 
 const TOKENS = {
@@ -59,62 +36,15 @@ const tooltip = {
   fontSize: 12,
 };
 
-function pctWave(length, start, drift, amp, phase = 0) {
-  return Array.from({ length }, (_, index) => ({
-    label: String(2015 + Math.floor((index / length) * 10)),
-    value: Math.max(4, Math.min(96, start + drift * index + Math.sin(index / 2.4 + phase) * amp + Math.cos(index / 5) * amp * 0.4)),
-  }));
-}
+function pctWave(length, start, drift, amp, phase = 0) { return null; }
 
-const f01History = pctWave(50, 54, -0.42, 10).map((row, index) => ({ ...row, year: index === 49 ? "TODAY" : row.label }));
-const f04Regimes = Array.from({ length: 60 }, (_, index) => {
-  const transition = 0.22 + Math.sin(index / 7) * 0.04 + Math.max(0, index - 49) * 0.007;
-  const stress = 0.08 + Math.cos(index / 8) * 0.03 + Math.max(0, index - 49) * 0.018;
-  const crisis = Math.max(0, Math.sin((index - 8) / 9) * 0.018);
-  const expansion = Math.max(0.42, 1 - transition - stress - crisis);
-  const total = expansion + transition + stress + crisis;
-  return { month: `M${index + 1}`, expansion: expansion / total, transition: transition / total, stress: stress / total, crisis: crisis / total };
-});
-const decayData = [1, 5, 21, 63, 126, 252].map((h) => ({
-  horizon: h,
-  value: 0.062 * Math.exp(-h / 182) + 0.006,
-  momentum: 0.071 * Math.exp(-h / 31) + 0.002,
-  quality: 0.048 * Math.exp(-h / 235) + 0.008,
-}));
-const equityData = Array.from({ length: 120 }, (_, index) => {
-  const t = index / 119;
-  const drawdown = index > 77 && index < 91 ? -0.184 * Math.sin(((index - 77) / 14) * Math.PI) : -0.02 * Math.max(0, Math.sin(index / 8));
-  return {
-    month: `${2015 + Math.floor(index / 12)}.${String((index % 12) + 1).padStart(2, "0")}`,
-    gross: 100 * (1 + 3.4 * t + Math.sin(index / 8) * 0.18),
-    net: 100 * (1 + 2.87 * t + Math.sin(index / 8 + 0.4) * 0.14),
-    benchmark: 100 * (1 + 1.8 * t + Math.sin(index / 10) * 0.09),
-    drawdown,
-  };
-});
-const capacityData = [
-  { aum: "10M", alpha: 142 },
-  { aum: "100M", alpha: 118 },
-  { aum: "500M", alpha: 76 },
-  { aum: "1B", alpha: 42 },
-  { aum: "2B", alpha: 8 },
-  { aum: "3B", alpha: -24 },
-  { aum: "10B", alpha: -98 },
-];
-const frontierData = Array.from({ length: 50 }, (_, index) => {
-  const vol = 6 + (index / 49) * 12;
-  return { vol, ret: 4 + Math.pow((vol - 6) / 12, 1.45) * 10 };
-});
-const dnaData = [
-  ["IC", 78, 82],
-  ["ICIR", 71, 76],
-  ["Half-Life", 85, 28],
-  ["Crowding", 34, 22],
-  ["Sector Purity", 62, 71],
-  ["Regime Stability", 58, 44],
-  ["Independence", 81, 68],
-  ["Purity", 74, 61],
-].map(([axisName, value, momentum]) => ({ axis: axisName, value, momentum }));
+
+
+
+
+
+
+
 
 const clusters = [
   {
@@ -748,99 +678,11 @@ function GaugeDial({ value, label, sublabel }) {
   );
 }
 
-function F01Visual() {
-  return (
-    <div className="visual-stack">
-      <div className="gauge-grid">
-        <GaugeDial value={23} label="Value" sublabel="+4.8% implied" />
-        <GaugeDial value={81} label="Momentum" sublabel="-1.9% implied" />
-        <GaugeDial value={67} label="Quality" sublabel="+0.7% implied" />
-        <GaugeDial value={44} label="Low-Vol" sublabel="+1.8% implied" />
-      </div>
-      <ChartPanel title="Value percentile history">
-        <ResponsiveContainer height={220} width="100%">
-          <AreaChart data={f01History} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
-            <defs>
-              <linearGradient id="valueBand" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor={TOKENS.accent} stopOpacity={0.3} />
-                <stop offset="100%" stopColor={TOKENS.accent} stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke="#373E47" strokeOpacity={0.5} vertical={false} />
-            <XAxis dataKey="year" {...axis} interval={9} />
-            <YAxis {...axis} domain={[0, 100]} />
-            <Tooltip contentStyle={tooltip} />
-            <ReferenceLine y={30} stroke={TOKENS.green} strokeDasharray="4 4" />
-            <ReferenceLine y={70} stroke={TOKENS.red} strokeDasharray="4 4" />
-            <ReferenceLine x="TODAY" stroke={TOKENS.amber} strokeDasharray="4 4" />
-            <Area dataKey="value" fill="url(#valueBand)" stroke={TOKENS.accent} strokeWidth={2} type="monotone" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </ChartPanel>
-    </div>
-  );
-}
+function F01Visual() { return null; }
 
-function ExposureBars() {
-  const data = [
-    ["Market Beta", 0.12],
-    ["Value", 0.87],
-    ["Momentum", 0.34],
-    ["Quality", -0.21],
-    ["Low-Vol", -0.52],
-    ["Size", 0.08],
-    ["Investment", 0.19],
-  ].map(([factor, exposure]) => ({ factor, exposure }));
-  return (
-    <ChartPanel title="Active factor exposure">
-      <ResponsiveContainer height={430} width="100%">
-        <BarChart data={data} layout="vertical" margin={{ top: 18, right: 28, left: 16, bottom: 12 }}>
-          <CartesianGrid horizontal={false} stroke="#373E47" strokeOpacity={0.5} />
-          <XAxis type="number" {...axis} domain={[-1, 1]} />
-          <YAxis dataKey="factor" type="category" width={115} {...axis} />
-          <Tooltip contentStyle={tooltip} />
-          <ReferenceLine x={0} stroke="#F4F1EA" strokeOpacity={0.35} />
-          <ReferenceLine x={0.4} stroke={TOKENS.amber} strokeDasharray="4 4" />
-          <ReferenceLine x={-0.4} stroke={TOKENS.amber} strokeDasharray="4 4" />
-          <Bar dataKey="exposure" radius={[0, 5, 5, 0]}>
-            {data.map((row) => <Cell fill={row.exposure >= 0 ? TOKENS.green : TOKENS.red} key={row.factor} />)}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </ChartPanel>
-  );
-}
+function ExposureBars() { return null; }
 
-function RegimeVisual() {
-  return (
-    <div className="visual-stack">
-      <ChartPanel title="Composite regime probability">
-        <ResponsiveContainer height={330} width="100%">
-          <AreaChart data={f04Regimes} margin={{ top: 10, right: 20, left: -18, bottom: 0 }}>
-            <CartesianGrid stroke="#373E47" strokeOpacity={0.5} vertical={false} />
-            <XAxis dataKey="month" {...axis} interval={9} />
-            <YAxis {...axis} domain={[0, 1]} />
-            <Tooltip contentStyle={tooltip} />
-            <Area dataKey="expansion" fill={TOKENS.green} fillOpacity={0.75} stackId="regime" stroke={TOKENS.green} type="monotone" />
-            <Area dataKey="transition" fill={TOKENS.amber} fillOpacity={0.75} stackId="regime" stroke={TOKENS.amber} type="monotone" />
-            <Area dataKey="stress" fill={TOKENS.red} fillOpacity={0.75} stackId="regime" stroke={TOKENS.red} type="monotone" />
-            <Area dataKey="crisis" fill={TOKENS.purple} fillOpacity={0.75} stackId="regime" stroke={TOKENS.purple} type="monotone" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </ChartPanel>
-      <div className="regime-bars">
-        {[["Expansion", 62, TOKENS.green], ["Transition", 28, TOKENS.amber], ["Stress", 10, TOKENS.red], ["Crisis", 0, TOKENS.purple]].map(([label, value, color]) => (
-          <div className="regime-row" key={label}>
-            <span>{label}</span>
-            <i><b style={{ width: `${value}%`, background: color }} /></i>
-            <strong>{value}%</strong>
-          </div>
-        ))}
-      </div>
-      <RegimeCalendar data={f04Regimes} />
-    </div>
-  );
-}
+function RegimeVisual() { return null; }
 
 function RegimeCalendar({ data }) {
   const months = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
@@ -871,272 +713,25 @@ function RegimeCalendar({ data }) {
   );
 }
 
-function DecayVisual() {
-  return (
-    <ChartPanel title="Rank IC decay by horizon">
-      <ResponsiveContainer height={430} width="100%">
-        <LineChart data={decayData} margin={{ top: 20, right: 24, left: -12, bottom: 12 }}>
-          <CartesianGrid stroke="#373E47" strokeOpacity={0.5} vertical={false} />
-          <XAxis dataKey="horizon" {...axis} />
-          <YAxis {...axis} domain={[0, 0.08]} />
-          <Tooltip contentStyle={tooltip} />
-          <ReferenceLine y={0} stroke={TOKENS.secondary} strokeDasharray="4 4" />
-          <Line dataKey="value" dot={false} name="Value" stroke={TOKENS.accent} strokeWidth={2.5} type="monotone" />
-          <Line dataKey="momentum" dot={false} name="Momentum" stroke={TOKENS.green} strokeWidth={2.5} type="monotone" />
-          <Line dataKey="quality" dot={false} name="Quality" stroke={TOKENS.amber} strokeWidth={2.5} type="monotone" />
-        </LineChart>
-      </ResponsiveContainer>
-    </ChartPanel>
-  );
-}
+function DecayVisual() { return null; }
 
-function CrowdingVisual() {
-  return (
-    <div className="visual-stack">
-      <ChartPanel title="Crowding percentile">
-        <div className="crowding-gauge">
-          <GaugeDial value={73} label="Crowding Percentile" sublabel="above 10Y risk threshold" />
-          <div className="density">
-            {Array.from({ length: 38 }, (_, index) => <i key={index} style={{ height: `${10 + Math.sin(index / 4) * 9 + index * 0.8}px` }} />)}
-            <b />
-          </div>
-        </div>
-      </ChartPanel>
-      <ChartPanel title="Crowding driver radar">
-        <ResponsiveContainer height={240} width="100%">
-          <RadarChart data={[["Valuation Stretch", 0.82], ["Autocorrelation", 0.61], ["HHI", 0.74], ["Liquidity", 0.55]].map(([axisName, value]) => ({ axis: axisName, value }))}>
-            <PolarGrid stroke="#373E47" />
-            <PolarAngleAxis dataKey="axis" tick={{ fill: TOKENS.secondary, fontSize: 11 }} />
-            <PolarRadiusAxis axisLine={false} tick={false} domain={[0, 1]} />
-            <Radar dataKey="value" fill={TOKENS.purple} fillOpacity={0.2} stroke={TOKENS.purple} strokeWidth={2} />
-          </RadarChart>
-        </ResponsiveContainer>
-      </ChartPanel>
-    </div>
-  );
-}
+function CrowdingVisual() { return null; }
 
-function BacktestVisual() {
-  const quintiles = [
-    ["Q1", 18.4, "#2ECC71"],
-    ["Q2", 12.1, "#5CD68E"],
-    ["Q3", 7.8, "#9BE7BA"],
-    ["Q4", 3.2, TOKENS.amber],
-    ["Q5", -2.1, TOKENS.red],
-  ].map(([q, ret, color]) => ({ q, ret, color }));
-  return (
-    <div className="visual-stack">
-      <ChartPanel title="Gross / net equity curve">
-        <ResponsiveContainer height={310} width="100%">
-          <ComposedChart data={equityData} margin={{ top: 12, right: 18, left: -16, bottom: 0 }}>
-            <CartesianGrid stroke="#373E47" strokeOpacity={0.5} vertical={false} />
-            <XAxis dataKey="month" {...axis} interval={23} />
-            <YAxis {...axis} />
-            <Tooltip contentStyle={tooltip} />
-            <Area dataKey="gross" fill={TOKENS.green} fillOpacity={0.15} stroke={TOKENS.green} strokeWidth={2} type="monotone" />
-            <Area dataKey="net" fill={TOKENS.accent} fillOpacity={0.2} stroke={TOKENS.accent} strokeWidth={2} type="monotone" />
-            <Line dataKey="benchmark" dot={false} stroke={TOKENS.secondary} strokeDasharray="5 5" strokeWidth={2} type="monotone" />
-          </ComposedChart>
-        </ResponsiveContainer>
-        <ResponsiveContainer height={120} width="100%">
-          <AreaChart data={equityData} margin={{ top: 4, right: 18, left: -16, bottom: 0 }}>
-            <CartesianGrid stroke="#373E47" strokeOpacity={0.5} vertical={false} />
-            <XAxis dataKey="month" {...axis} hide />
-            <YAxis {...axis} domain={[-0.22, 0]} />
-            <Tooltip contentStyle={tooltip} />
-            <ReferenceLine y={-0.184} stroke={TOKENS.amber} strokeDasharray="4 4">
-              <Label value="MAX DD -18.4%" position="insideTopRight" fill={TOKENS.amber} fontSize={11} />
-            </ReferenceLine>
-            <Area dataKey="drawdown" fill={TOKENS.red} fillOpacity={0.6} stroke={TOKENS.red} type="monotone" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </ChartPanel>
-      <ChartPanel title="Quintile monotonicity">
-        <ResponsiveContainer height={210} width="100%">
-          <BarChart data={quintiles} margin={{ top: 12, right: 18, left: -16, bottom: 0 }}>
-            <CartesianGrid stroke="#373E47" strokeOpacity={0.5} vertical={false} />
-            <XAxis dataKey="q" {...axis} />
-            <YAxis {...axis} />
-            <Tooltip contentStyle={tooltip} />
-            <ReferenceLine y={0} stroke={TOKENS.secondary} />
-            <Bar dataKey="ret" radius={[6, 6, 0, 0]}>
-              {quintiles.map((row) => <Cell fill={row.color} key={row.q} />)}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartPanel>
-    </div>
-  );
-}
+function BacktestVisual() { return null; }
 
-function CovarianceVisual() {
-  const factors = ["MKT", "VAL", "MOM", "QLT", "LOW", "SIZE", "INV"];
-  const normal = factors.map((row, i) => factors.map((col, j) => (i === j ? 1 : 0.1 + ((i + j) % 4) * 0.06)));
-  const crisis = normal.map((row, i) => row.map((v, j) => (i === j ? 1 : Math.min(0.85, v + 0.32 + ((i * j) % 3) * 0.05))));
-  const delta = normal.map((row, i) => row.map((v, j) => crisis[i][j] - v));
-  return (
-    <div className="triple-heat">
-      <Heatmap title="Normal" labels={factors} matrix={normal} />
-      <Heatmap title="Crisis" labels={factors} matrix={crisis} />
-      <Heatmap title="Delta" labels={factors} matrix={delta} />
-    </div>
-  );
-}
+function CovarianceVisual() { return null; }
 
-function CapacityVisual() {
-  return (
-    <ChartPanel title="Net alpha capacity curve">
-      <ResponsiveContainer height={430} width="100%">
-        <ComposedChart data={capacityData} margin={{ top: 18, right: 22, left: -10, bottom: 12 }}>
-          <CartesianGrid stroke="#373E47" strokeOpacity={0.5} vertical={false} />
-          <XAxis dataKey="aum" {...axis} />
-          <YAxis {...axis} />
-          <Tooltip contentStyle={tooltip} />
-          <ReferenceLine y={0} stroke={TOKENS.secondary} />
-          <ReferenceLine x="1B" stroke={TOKENS.accent} strokeDasharray="4 4">
-            <Label value="OPTIMAL AUM" position="top" fill={TOKENS.accent} fontSize={11} />
-          </ReferenceLine>
-          <ReferenceArea x1="2B" x2="10B" fill={TOKENS.red} fillOpacity={0.08} />
-          <Area dataKey="alpha" fill={TOKENS.green} fillOpacity={0.2} stroke={TOKENS.green} strokeWidth={2} type="monotone" />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </ChartPanel>
-  );
-}
+function CapacityVisual() { return null; }
 
-function FrontierVisual() {
-  return (
-    <ChartPanel title="Efficient frontier">
-      <ResponsiveContainer height={430} width="100%">
-        <ComposedChart data={frontierData} margin={{ top: 18, right: 24, left: -8, bottom: 12 }}>
-          <CartesianGrid stroke="#373E47" strokeOpacity={0.5} vertical={false} />
-          <XAxis dataKey="vol" domain={[5, 19]} name="Volatility" type="number" {...axis} unit="%" />
-          <YAxis dataKey="ret" name="Return" type="number" {...axis} unit="%" />
-          <Tooltip contentStyle={tooltip} cursor={{ stroke: TOKENS.border }} />
-          <Line dataKey="ret" dot={false} stroke={TOKENS.muted} strokeWidth={1} type="monotone" />
-          <Scatter data={[{ vol: 11, ret: 10.2 }]} fill={TOKENS.accent} shape="circle" />
-          <Scatter data={[{ vol: 6, ret: 4 }]} fill={TOKENS.green} shape="square" />
-          <Scatter data={[{ vol: 9, ret: 9.8 }]} fill={TOKENS.amber} shape="diamond" />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </ChartPanel>
-  );
-}
+function FrontierVisual() { return null; }
 
-function DnaVisual() {
-  return (
-    <div className="visual-stack">
-      <ChartPanel title="Factor DNA radar">
-        <ResponsiveContainer height={310} width="100%">
-          <RadarChart data={dnaData}>
-            <PolarGrid stroke="#373E47" />
-            <PolarAngleAxis dataKey="axis" tick={{ fill: TOKENS.secondary, fontSize: 11 }} />
-            <PolarRadiusAxis axisLine={false} tick={{ fill: TOKENS.secondary, fontSize: 10 }} domain={[0, 100]} />
-            <Radar dataKey="value" fill={TOKENS.accent} fillOpacity={0.18} stroke={TOKENS.accent} strokeWidth={2} />
-            <Radar dataKey="momentum" fill={TOKENS.amber} fillOpacity={0.06} stroke={TOKENS.amber} strokeWidth={2} />
-          </RadarChart>
-        </ResponsiveContainer>
-      </ChartPanel>
-      <ChartPanel title="Classifier output">
-        <div className="classifier-home">
-          <strong>RISK FACTOR</strong>
-          <span>58% confidence</span>
-          <div>
-            <i style={{ width: "58%", background: TOKENS.green }} />
-            <i style={{ width: "31%", background: TOKENS.accent }} />
-            <i style={{ width: "9%", background: TOKENS.amber }} />
-            <i style={{ width: "2%", background: TOKENS.red }} />
-          </div>
-        </div>
-      </ChartPanel>
-    </div>
-  );
-}
+function DnaVisual() { return null; }
 
-function SignalHealthVisual() {
-  const rows = [
-    ["Value", 0.042, 1.8, "ALIGNED", 100],
-    ["Momentum", -0.018, -2.4, "DIVERGING", 34],
-    ["Quality", 0.036, 1.4, "ALIGNED", 88],
-    ["Low-Vol", 0.012, 0.4, "ALIGNED", 71],
-    ["Size", 0.028, 1.1, "ALIGNED", 92],
-    ["Investment", 0.009, -0.2, "ALIGNED", 61],
-  ];
-  return (
-    <ChartPanel title="Signal health table">
-      <div className="signal-table">
-        <div className="signal-head">
-          <span>Factor</span><span>IC 21D</span><span>Z</span><span>Alignment</span><span>Health</span>
-        </div>
-        {rows.map(([factor, ic, z, align, health]) => (
-          <div className={`signal-row ${health < 40 ? "degraded" : ""}`} key={factor}>
-            <b>{factor}</b>
-            <span className={ic >= 0 ? "pos" : "neg"}>{ic.toFixed(3)}</span>
-            <span className={z >= 0 ? "pos" : "neg"}>{z.toFixed(1)}</span>
-            <em className={align === "ALIGNED" ? "ok" : "bad"}>{align}</em>
-            <i><strong style={{ width: `${health}%`, background: health < 50 ? TOKENS.red : health < 75 ? TOKENS.amber : TOKENS.green }} /></i>
-          </div>
-        ))}
-      </div>
-    </ChartPanel>
-  );
-}
+function SignalHealthVisual() { return null; }
 
-function ReportVisual() {
-  return (
-    <div className="report-preview">
-      <div className="report-paper">
-        <h3>QUANT360 CAPITAL</h3>
-        <p>Factor Attribution & Risk Report — Q1 2026</p>
-        <section>
-          <strong>FACTOR ATTRIBUTION</strong>
-          <div className="paper-rule" />
-          <div className="paper-bars">
-            {["MKT", "VAL", "MOM", "QLT", "SEL", "INT"].map((label, index) => {
-              const value = [42, 18, 9, -4, 11, -3][index];
-              return <i key={label} style={{ height: `${Math.abs(value) * 2.5}px`, background: value >= 0 ? "#2B8A3E" : "#C0392B" }}><span>{label}</span></i>;
-            })}
-          </div>
-        </section>
-      </div>
-      <Link href="/labs/factors-v2/feature-14"><Download size={16} /> Download PDF</Link>
-    </div>
-  );
-}
+function ReportVisual() { return null; }
 
-function WaterfallVisual({ data }) {
-  const rows = data.map(([name, value], index) => {
-    const previous = index ? data.slice(0, index).reduce((sum, item) => sum + item[1], 0) : 0;
-    return { name, value, start: previous, end: previous + value };
-  });
-  const min = Math.min(-15, ...rows.map((row) => Math.min(row.start, row.end)));
-  const max = Math.max(10, ...rows.map((row) => Math.max(row.start, row.end)));
-  const y = (value) => 330 - ((value - min) / (max - min)) * 250;
-  const step = 820 / rows.length;
-  return (
-    <ChartPanel title="Attribution waterfall">
-      <svg className="home-waterfall" viewBox="0 0 900 390" role="img" aria-label="Waterfall attribution">
-        {[0, 0.25, 0.5, 0.75, 1].map((tick) => <line className="wf-grid" key={tick} x1="42" x2="875" y1={70 + tick * 250} y2={70 + tick * 250} />)}
-        <line className="wf-zero" x1="42" x2="875" y1={y(0)} y2={y(0)} />
-        {rows.map((row, index) => {
-          const x = 56 + index * step;
-          const y1 = y(row.start);
-          const y2 = y(row.end);
-          const top = Math.min(y1, y2);
-          const height = Math.max(3, Math.abs(y2 - y1));
-          return (
-            <g key={row.name}>
-              <rect className={row.value >= 0 ? "wf-pos" : "wf-neg"} height={height} rx="5" width="54" x={x} y={top} />
-              {index < rows.length - 1 ? <line className="wf-link" x1={x + 54} x2={56 + (index + 1) * step} y1={y2} y2={y2} /> : null}
-              <text className="wf-text" textAnchor="middle" x={x + 27} y={top - 8}>{row.value > 0 ? "+" : ""}{row.value.toFixed(1)}%</text>
-              <text className="wf-label" textAnchor="middle" x={x + 27} y="360">{row.name}</text>
-            </g>
-          );
-        })}
-      </svg>
-    </ChartPanel>
-  );
-}
+function WaterfallVisual({ data }) { return null; }
 
 function Heatmap({ labels, matrix, title }) {
   return (
@@ -1166,128 +761,7 @@ function ChartPanel({ children, title }) {
   );
 }
 
-function FactorConstellation() {
-  const svgRef = useRef(null);
-  const graph = useMemo(() => {
-    const nodes = features.map((feature, index) => {
-      const summary = typeof window !== "undefined" ? readFeatureSummary(feature.id) : null;
-      const score = Number(summary?.value ?? summary?.score ?? summary?.percentile);
-      const ic = Number.isFinite(score) ? Math.max(0.02, Math.min(0.12, score / 900)) : 0.035 + (index % 5) * 0.008;
-      const crowding = Number.isFinite(score) ? score : [23, 46, 58, 62, 41, 73, 38, 69, 54, 32, 67, 58, 34, 25][index] || 45;
-      return {
-        id: feature.id,
-        label: `F${feature.id}`,
-        name: feature.shortName || feature.tag || feature.headline.split("\n")[0],
-        r: 7 + ic * 115,
-        crowding,
-      };
-    });
-    const links = [];
-    nodes.forEach((source, i) => {
-      nodes.slice(i + 1).forEach((target, j) => {
-        const distance = Math.abs(Number(source.id) - Number(target.id));
-        const sameCluster = Math.floor((Number(source.id) - 1) / 3) === Math.floor((Number(target.id) - 1) / 3);
-        const corr = sameCluster ? 0.35 + ((i + j) % 3) * 0.08 : distance <= 2 ? 0.18 : distance === 6 ? -0.22 : 0;
-        if (Math.abs(corr) > 0.15) links.push({ source: source.id, target: target.id, value: corr });
-      });
-    });
-    return { nodes, links };
-  }, []);
-
-  useEffect(() => {
-    const svgEl = svgRef.current;
-    if (!svgEl) return undefined;
-    const width = 420;
-    const height = 380;
-    const svg = d3.select(svgEl);
-    svg.selectAll("*").remove();
-
-    const defs = svg.append("defs");
-    const glow = defs.append("radialGradient").attr("id", "constellationGlow");
-    glow.append("stop").attr("offset", "0%").attr("stop-color", TOKENS.accent).attr("stop-opacity", 0.42);
-    glow.append("stop").attr("offset", "100%").attr("stop-color", TOKENS.accent).attr("stop-opacity", 0);
-    svg.append("circle").attr("cx", width / 2).attr("cy", height / 2).attr("r", 170).attr("fill", "url(#constellationGlow)");
-
-    const color = (score) => score >= 70 ? TOKENS.red : score >= 45 ? TOKENS.amber : TOKENS.green;
-    const links = graph.links.map((link) => ({ ...link }));
-    const nodes = graph.nodes.map((node) => ({ ...node }));
-    const simulation = d3.forceSimulation(nodes)
-      .force("link", d3.forceLink(links).id((d) => d.id).distance((d) => 72 + (1 - Math.abs(d.value)) * 84).strength(0.58))
-      .force("charge", d3.forceManyBody().strength(-185))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide((d) => d.r + 18));
-
-    const link = svg.append("g")
-      .attr("class", "constellation-links")
-      .selectAll("line")
-      .data(links)
-      .join("line")
-      .attr("stroke", (d) => d.value >= 0 ? "rgba(245,164,0,.34)" : "rgba(248,81,73,.34)")
-      .attr("stroke-width", (d) => Math.max(0.8, Math.abs(d.value) * 4.2))
-      .attr("stroke-dasharray", (d) => d.value < 0 ? "4 4" : null);
-
-    const node = svg.append("g")
-      .attr("class", "constellation-nodes")
-      .selectAll("circle")
-      .data(nodes)
-      .join("circle")
-      .attr("r", (d) => d.r)
-      .attr("fill", (d) => color(d.crowding))
-      .attr("fill-opacity", 0.18)
-      .attr("stroke", (d) => color(d.crowding))
-      .attr("stroke-width", 2)
-      .attr("data-feature", (d) => d.id)
-      .on("click", (_, d) => {
-        document.getElementById(`feature-${d.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      })
-      .call(d3.drag()
-        .on("start", (event, d) => {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
-          d.fx = d.x;
-          d.fy = d.y;
-        })
-        .on("drag", (event, d) => {
-          d.fx = event.x;
-          d.fy = event.y;
-        })
-        .on("end", (event, d) => {
-          if (!event.active) simulation.alphaTarget(0);
-          d.fx = null;
-          d.fy = null;
-        }));
-
-    const label = svg.append("g")
-      .attr("class", "constellation-labels")
-      .selectAll("text")
-      .data(nodes)
-      .join("text")
-      .text((d) => d.label)
-      .attr("text-anchor", "middle")
-      .attr("fill", TOKENS.secondary)
-      .attr("font-size", 10)
-      .attr("font-weight", 800)
-      .attr("font-family", "Quant360 Mono, JetBrains Mono, monospace");
-
-    simulation.on("tick", () => {
-      nodes.forEach((d) => {
-        d.x = Math.max(36, Math.min(width - 36, d.x));
-        d.y = Math.max(32, Math.min(height - 32, d.y));
-      });
-      link
-        .attr("x1", (d) => d.source.x)
-        .attr("y1", (d) => d.source.y)
-        .attr("x2", (d) => d.target.x)
-        .attr("y2", (d) => d.target.y);
-      node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
-      label.attr("x", (d) => d.x).attr("y", (d) => d.y + d.r + 14);
-    });
-
-    return () => simulation.stop();
-  }, [graph]);
-  return (
-    <svg ref={svgRef} className="factor-constellation" viewBox="0 0 420 380" aria-label="Interactive factor correlation constellation" role="img" />
-  );
-}
+function FactorConstellation() { return null; }
 
 function FooterCta() {
   return (

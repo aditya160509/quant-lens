@@ -983,7 +983,7 @@ export async function runFactorOptimizer(factorSetId = "ff5_mom", targetVol = 0.
 }
 
 // =============================================================================
-// FACTORS V2 - Dormant until backend/app/api/factors_v2.py is wired in main.py
+// FACTORS V2 - /api/labs/factors/v2
 // =============================================================================
 
 export async function fetchFactorsV2Features() {
@@ -1001,23 +1001,29 @@ export async function searchFactorsV2Symbols(query = "", options = {}) {
     return handleResponse(res, "Failed to search Factors V2 symbols");
 }
 
+async function waitFactorsV2Job(job) {
+    while (true) {
+        const state = await handleResponse(await fetch(`${API_BASE_URL}/labs/factors/v2/jobs/${job.job_id}`), "Failed to read Factors V2 job");
+        if (state.status === "completed") return state.result;
+        if (["failed", "cancelled", "interrupted"].includes(state.status)) throw new Error(state.error || `Factors V2 job ${state.status}`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+}
+
 export async function runFactorsV2Feature(featureId, payload = {}) {
     const normalized = String(featureId).replace("feature_", "").replace("feature-", "").padStart(2, "0");
-    const res = await fetch(`${API_BASE_URL}/labs/factors/v2/feature/${normalized}/run`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
-    return handleResponse(res, `Failed to run Factors V2 feature ${normalized}`);
+    const job = await handleResponse(await fetch(`${API_BASE_URL}/labs/factors/v2/feature/${normalized}/jobs`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ payload })
+    }), `Failed to run Factors V2 feature ${normalized}`);
+    return waitFactorsV2Job(job);
 }
 
 export async function runFactorsV2All(payload = {}, featurePayloads = {}) {
-    const res = await fetch(`${API_BASE_URL}/labs/factors/v2/run-all`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payload, feature_payloads: featurePayloads })
-    });
-    return handleResponse(res, "Failed to run all Factors V2 features");
+    const merged = Object.fromEntries(Object.entries(featurePayloads).map(([fid, params]) => [fid, { ...payload, ...params }]));
+    const job = await handleResponse(await fetch(`${API_BASE_URL}/labs/factors/v2/run-all`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feature_payloads: merged })
+    }), "Failed to run all Factors V2 features");
+    return waitFactorsV2Job(job);
 }
 
 export async function runScreenerV2Feature(featureId, payload = {}) {
