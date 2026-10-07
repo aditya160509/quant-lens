@@ -6,7 +6,10 @@ path handling and metadata-row CSV parsing in one place.
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import lru_cache, wraps
+from contextvars import ContextVar
+from contextlib import contextmanager
+import re
 from pathlib import Path
 from typing import Iterable, Optional
 import warnings
@@ -16,13 +19,14 @@ import pandas as pd
 
 try:
     import pyarrow.parquet as pq
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     pq = None
 
 try:  # optional until environment is synced with backend/requirements.txt
     import polars as pl
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     pl = None
+
 
 def _read_parquet_mmap(path: Path, columns: Optional[list[str]] = None) -> pd.DataFrame:
     """Read parquet through Arrow memory mapping when available.
@@ -31,13 +35,11 @@ def _read_parquet_mmap(path: Path, columns: Optional[list[str]] = None) -> pd.Da
     deserialization path and releases the Arrow buffer immediately after
     conversion to keep request memory stable.
     """
+    if not path.exists():
+        raise ValueError(f"Required data file is missing: {path}")
     if pq is not None:
-        try:
-            table = pq.read_table(path, columns=columns, memory_map=True)
-            return table.to_pandas(self_destruct=True)
-        except Exception:
-            pass
-    return pd.read_parquet(path, columns=columns) if columns else pd.read_parquet(path)
+        return pq.read_table(path, columns=columns, memory_map=True).to_pandas()
+    return pd.read_parquet(path, columns=columns)
 
 
 def _attach_ticker_ids(df: pd.DataFrame) -> pd.DataFrame:
@@ -53,6 +55,105 @@ def _attach_ticker_ids(df: pd.DataFrame) -> pd.DataFrame:
 ROOT = Path(__file__).resolve().parents[5]
 BACKEND_DATA = ROOT / "backend" / "data"
 FACTORS_DATA = ROOT / "factors" / "data"
+
+
+_REQUEST = ContextVar("factors_v2_request", default={})
+
+
+@contextmanager
+def request_scope(payload):
+    token = _REQUEST.set(payload)
+    try:
+        yield
+    finally:
+        _REQUEST.reset(token)
+
+
+def request_payload():
+    return _REQUEST.get()
+
+
+def source_version():
+    paths = [
+        BACKEND_DATA / "market_universe.parquet",
+        BACKEND_DATA / "fundamentals/master_fundamentals.parquet",
+        FACTORS_DATA / "processed/category7_macro_regime.parquet",
+        BACKEND_DATA / "canonical/fx_daily.parquet",
+    ]
+    paths += sorted((BACKEND_DATA / "factors_us").glob("*.csv"))
+    paths += sorted((FACTORS_DATA / "processed/aqr_csv").glob("*.csv"))
+    return tuple(
+        (str(p), p.stat().st_mtime_ns, p.stat().st_size) for p in paths if p.exists()
+    )
+
+
+def versioned_cache(maxsize=4):
+    def decorate(fn):
+        @lru_cache(maxsize=maxsize)
+        def base(version, args, kwargs):
+            with request_scope({}):
+                return fn(*args, **dict(kwargs))
+
+        @lru_cache(maxsize=maxsize)
+        def cached(version, cutoff, args, kwargs):
+            out = base(version, args, kwargs)
+            if isinstance(out, pd.DataFrame) and cutoff:
+                date = pd.Timestamp(cutoff)
+                if isinstance(out.index, pd.DatetimeIndex):
+                    out = out.loc[:date]
+                elif "Date" in out:
+                    out = out.loc[out.Date <= date]
+                elif "date" in out:
+                    out = out.loc[out.date <= date]
+                elif "reportDate" in out:
+                    out = out.loc[out.reportDate + pd.Timedelta(days=90) <= date]
+            return out
+
+        @wraps(fn)
+        def wrapped(*args, **kwargs):
+            return cached(
+                source_version(),
+                request_payload().get("as_of_date")
+                or request_payload().get("end_date"),
+                args,
+                tuple(sorted(kwargs.items())),
+            )
+
+        def clear():
+            cached.cache_clear()
+            base.cache_clear()
+
+        wrapped.cache_clear = clear
+        return wrapped
+
+    return decorate
+
+
+class UnknownSymbolsError(ValueError):
+    pass
+
+
+def parse_symbols(raw=None):
+    raw = (
+        raw
+        if raw is not None
+        else request_payload().get("tickers", request_payload().get("symbols"))
+    )
+    if raw is None or raw == [] or raw == "":
+        return None
+    values = re.split(r"[,;\s]+", raw) if isinstance(raw, str) else list(raw)
+    values = list(
+        dict.fromkeys(str(v).strip().upper() for v in values if str(v).strip())
+    )
+    available = set(load_market_universe().Ticker.unique())
+    unknown = sorted(set(values) - available)
+    if unknown:
+        raise UnknownSymbolsError(
+            "Unknown or unavailable symbols: " + ", ".join(unknown)
+        )
+    if not values:
+        raise ValueError("Explicit ticker list must not be empty")
+    return values
 
 
 def _safe_date_index(df: pd.DataFrame, column: str = "Date") -> pd.DataFrame:
@@ -93,22 +194,18 @@ def read_metadata_csv_polars(path: Path, header_tokens: Iterable[str]):
     return pl.read_csv(path, skip_rows=header_row, infer_schema_length=5000)
 
 
-@lru_cache(maxsize=1)
+@versioned_cache(maxsize=1)
 def load_market_universe() -> pd.DataFrame:
     path = BACKEND_DATA / "market_universe.parquet"
     columns = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
-    if pl is not None:
-        try:
-            df = pl.scan_parquet(str(path)).select(columns).collect().to_pandas()
-        except Exception:
-            df = _read_parquet_mmap(path, columns=columns)
-    else:
-        df = _read_parquet_mmap(path, columns=columns)
+    df = _read_parquet_mmap(path, columns=columns)
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    return _attach_ticker_ids(df.dropna(subset=["Ticker", "Date", "Close"]).sort_values(["Ticker", "Date"]))
+    return _attach_ticker_ids(
+        df.dropna(subset=["Ticker", "Date", "Close"]).sort_values(["Ticker", "Date"])
+    )
 
 
-@lru_cache(maxsize=1)
+@versioned_cache(maxsize=1)
 def load_symbol_directory() -> pd.DataFrame:
     """Compact symbol directory for terminal-style autocomplete.
 
@@ -119,22 +216,31 @@ def load_symbol_directory() -> pd.DataFrame:
     market = load_market_universe()
     latest_idx = market.groupby("Ticker", sort=False)["Date"].idxmax()
     latest = market.loc[latest_idx, ["Ticker", "Date", "Close", "Volume"]].copy()
-    latest = latest.rename(columns={"Ticker": "symbol", "Date": "last_date", "Close": "last_price", "Volume": "volume"})
+    latest = latest.rename(
+        columns={
+            "Ticker": "symbol",
+            "Date": "last_date",
+            "Close": "last_price",
+            "Volume": "volume",
+        }
+    )
     latest["symbol"] = latest["symbol"].astype(str).str.upper()
-    latest["asset_type"] = latest["symbol"].str.startswith("_IDX_").map(lambda flag: "index" if flag else "equity")
+    latest["asset_type"] = (
+        latest["symbol"]
+        .str.startswith("_IDX_")
+        .map(lambda flag: "index" if flag else "equity")
+    )
     latest["display_name"] = latest["symbol"].str.replace("_IDX_", "", regex=False)
 
-    try:
-        fundamentals = load_fundamentals()
-        cols = [col for col in ["ticker", "sector", "industry"] if col in fundamentals.columns]
-        if "ticker" in cols:
-            meta = fundamentals[cols].dropna(subset=["ticker"]).copy()
-            meta["symbol"] = meta["ticker"].astype(str).str.upper()
-            meta = meta.drop(columns=["ticker"]).drop_duplicates("symbol", keep="last")
-            latest = latest.merge(meta, on="symbol", how="left")
-    except Exception:
-        latest["sector"] = None
-        latest["industry"] = None
+    fundamentals = load_fundamentals()
+    cols = [
+        col for col in ["ticker", "sector", "industry"] if col in fundamentals.columns
+    ]
+    if "ticker" in cols:
+        meta = fundamentals[cols].dropna(subset=["ticker"]).copy()
+        meta["symbol"] = meta["ticker"].astype(str).str.upper()
+        meta = meta.drop(columns=["ticker"]).drop_duplicates("symbol", keep="last")
+        latest = latest.merge(meta, on="symbol", how="left")
 
     for col in ["sector", "industry"]:
         if col not in latest.columns:
@@ -151,7 +257,9 @@ def load_symbol_directory() -> pd.DataFrame:
     return latest.sort_values(["asset_type", "symbol"]).reset_index(drop=True)
 
 
-def search_symbol_directory(query: str, limit: int = 25, asset_type: Optional[str] = None) -> list[dict]:
+def search_symbol_directory(
+    query: str, limit: int = 25, asset_type: Optional[str] = None
+) -> list[dict]:
     directory = load_symbol_directory()
     q = str(query or "").strip().upper()
     if not q:
@@ -161,8 +269,13 @@ def search_symbol_directory(query: str, limit: int = 25, asset_type: Optional[st
         if asset_type:
             scope = scope[scope["asset_type"].eq(asset_type)]
         starts = scope[scope["symbol"].str.startswith(q, na=False)]
-        contains = scope[~scope.index.isin(starts.index) & scope["search_text"].str.contains(q, na=False, regex=False)]
-        hits = pd.concat([starts, contains], ignore_index=False).head(max(1, min(int(limit or 25), 75)))
+        contains = scope[
+            ~scope.index.isin(starts.index)
+            & scope["search_text"].str.contains(q, na=False, regex=False)
+        ]
+        hits = pd.concat([starts, contains], ignore_index=False).head(
+            max(1, min(int(limit or 25), 75))
+        )
     records = []
     for row in hits.itertuples(index=False):
         records.append(
@@ -170,45 +283,41 @@ def search_symbol_directory(query: str, limit: int = 25, asset_type: Optional[st
                 "symbol": str(row.symbol),
                 "name": str(getattr(row, "display_name", row.symbol) or row.symbol),
                 "asset_type": str(getattr(row, "asset_type", "equity") or "equity"),
-                "sector": None if pd.isna(getattr(row, "sector", None)) else str(getattr(row, "sector")),
-                "industry": None if pd.isna(getattr(row, "industry", None)) else str(getattr(row, "industry")),
-                "last_price": None if pd.isna(getattr(row, "last_price", None)) else float(getattr(row, "last_price")),
-                "volume": None if pd.isna(getattr(row, "volume", None)) else float(getattr(row, "volume")),
+                "sector": None
+                if pd.isna(getattr(row, "sector", None))
+                else str(getattr(row, "sector")),
+                "industry": None
+                if pd.isna(getattr(row, "industry", None))
+                else str(getattr(row, "industry")),
+                "last_price": None
+                if pd.isna(getattr(row, "last_price", None))
+                else float(getattr(row, "last_price")),
+                "volume": None
+                if pd.isna(getattr(row, "volume", None))
+                else float(getattr(row, "volume")),
             }
         )
     return records
 
 
-@lru_cache(maxsize=1)
+@versioned_cache(maxsize=1)
 def load_fundamentals() -> pd.DataFrame:
     path = BACKEND_DATA / "fundamentals" / "master_fundamentals.parquet"
-    if pl is not None:
-        try:
-            df = pl.scan_parquet(str(path)).collect().to_pandas()
-        except Exception:
-            df = _read_parquet_mmap(path)
-    else:
-        df = _read_parquet_mmap(path)
+    df = _read_parquet_mmap(path)
     if "reportDate" in df.columns:
         df["reportDate"] = pd.to_datetime(df["reportDate"], errors="coerce")
     return df
 
 
-@lru_cache(maxsize=1)
+@versioned_cache(maxsize=1)
 def load_category7_macro() -> pd.DataFrame:
     path = FACTORS_DATA / "processed" / "category7_macro_regime.parquet"
-    if pl is not None:
-        try:
-            df = pl.scan_parquet(str(path)).collect().to_pandas()
-        except Exception:
-            df = _read_parquet_mmap(path)
-    else:
-        df = _read_parquet_mmap(path)
+    df = _read_parquet_mmap(path)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     return df.dropna(subset=["date"]).sort_values("date")
 
 
-@lru_cache(maxsize=8)
+@versioned_cache(maxsize=8)
 def load_ff_file(name: str) -> pd.DataFrame:
     file_map = {
         "ff3": BACKEND_DATA / "factors_us" / "ff3_daily.csv",
@@ -220,7 +329,7 @@ def load_ff_file(name: str) -> pd.DataFrame:
     return _safe_date_index(read_metadata_csv(path, tokens))
 
 
-@lru_cache(maxsize=2)
+@versioned_cache(maxsize=2)
 def load_factor_returns(model: str = "ff5_mom") -> pd.DataFrame:
     if model in {"ff3", "capm"}:
         df = load_ff_file("ff3")
@@ -236,7 +345,7 @@ def load_factor_returns(model: str = "ff5_mom") -> pd.DataFrame:
     return df.dropna(how="all")
 
 
-@lru_cache(maxsize=4)
+@versioned_cache(maxsize=4)
 def load_aqr_factor_returns(region: str = "USA") -> pd.DataFrame:
     """Load AQR processed factor files and return a daily/monthly factor panel.
 
@@ -251,7 +360,10 @@ def load_aqr_factor_returns(region: str = "USA") -> pd.DataFrame:
     pieces: list[pd.DataFrame] = []
     for path in sorted(folder.glob("*.csv")):
         upper_name = path.name.upper()
-        if not any(token in upper_name for token in ("BAB", "BETTING", "QMJ", "QUALITY", "DEVIL", "HML", "GLOBAL")):
+        if not any(
+            token in upper_name
+            for token in ("BAB", "BETTING", "QMJ", "QUALITY", "DEVIL", "HML", "GLOBAL")
+        ):
             continue
         parsed = _parse_aqr_csv(path, region)
         if parsed is not None and not parsed.empty:
@@ -287,23 +399,28 @@ _AQR_COLUMN_ALIASES = {
 def _parse_aqr_csv(path: Path, region: str) -> Optional[pd.DataFrame]:
     try:
         raw = pd.read_csv(path, header=None, nrows=20, dtype=str)
-    except Exception:
-        return None
+    except (pd.errors.ParserError, UnicodeDecodeError) as exc:
+        raise ValueError(f"Cannot parse AQR file {path.name}: {exc}") from exc
     header_row = None
     for i, row in raw.iterrows():
         first = str(row.iloc[0]).strip().lower()
-        if first in {"date", "dates"} or (len(first) in {4, 6, 8} and first[:4].isdigit()):
+        if first in {"date", "dates"} or (
+            len(first) in {4, 6, 8} and first[:4].isdigit()
+        ):
             header_row = int(i)
             break
     if header_row is None:
         header_row = 0
     try:
         df = pd.read_csv(path, skiprows=header_row)
-    except Exception:
-        return None
+    except (pd.errors.ParserError, UnicodeDecodeError) as exc:
+        raise ValueError(f"Cannot parse AQR file {path.name}: {exc}") from exc
     if df.empty:
         return None
-    date_col = next((c for c in df.columns if str(c).strip().lower() in {"date", "dates"}), df.columns[0])
+    date_col = next(
+        (c for c in df.columns if str(c).strip().lower() in {"date", "dates"}),
+        df.columns[0],
+    )
     df = df.rename(columns={date_col: "DATE"})
     try:
         parsed_dates = pd.to_datetime(df["DATE"], format="mixed", errors="coerce")
@@ -327,10 +444,12 @@ def _parse_aqr_csv(path: Path, region: str) -> Optional[pd.DataFrame]:
     selected_cols = []
     if region in df.columns:
         selected_cols.append(region)
-    elif "USA" in df.columns:
-        selected_cols.append("USA")
+    elif region != "USA":
+        return None
     else:
-        selected_cols.extend([c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])])
+        selected_cols.extend(
+            [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+        )
     if not selected_cols:
         return None
     out = df[selected_cols].copy()
@@ -347,8 +466,8 @@ def _parse_aqr_csv(path: Path, region: str) -> Optional[pd.DataFrame]:
     out = out.rename(columns=rename)
     for col in out.columns:
         values = out[col].dropna()
-        if len(values) and values.abs().median() > 0.5:
-            out[col] = out[col] / 100.0
+        # AQR processed files contain decimal returns; never infer units from realized magnitudes.
+        out[col] = out[col]
     return out
 
 
@@ -367,7 +486,11 @@ def load_price_file(ticker: str) -> pd.DataFrame:
                 df = pd.read_csv(path)
             date_col = "Date" if "Date" in df.columns else df.columns[0]
             df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-            return df.rename(columns={date_col: "Date"}).dropna(subset=["Date"]).sort_values("Date")
+            return (
+                df.rename(columns={date_col: "Date"})
+                .dropna(subset=["Date"])
+                .sort_values("Date")
+            )
     return pd.DataFrame()
 
 
@@ -391,7 +514,7 @@ def load_fundamentals_lazy():
     return pl.scan_parquet(str(path))
 
 
-@lru_cache(maxsize=1)
+@versioned_cache(maxsize=1)
 def load_sector_maps() -> dict:
     """Latest ticker-sector/industry maps for attribution and exposure paths."""
     f = load_fundamentals()
@@ -399,28 +522,48 @@ def load_sector_maps() -> dict:
         return {"sector": {}, "industry": {}, "tickers": []}
     sort_cols = ["ticker"] + (["reportDate"] if "reportDate" in f.columns else [])
     latest = f.sort_values(sort_cols).drop_duplicates("ticker", keep="last")
-    sector_col = "sector" if "sector" in latest.columns else "Sector" if "Sector" in latest.columns else None
-    industry_col = "industry" if "industry" in latest.columns else "Industry" if "Industry" in latest.columns else None
+    sector_col = (
+        "sector"
+        if "sector" in latest.columns
+        else "Sector"
+        if "Sector" in latest.columns
+        else None
+    )
+    industry_col = (
+        "industry"
+        if "industry" in latest.columns
+        else "Industry"
+        if "Industry" in latest.columns
+        else None
+    )
     return {
-        "sector": latest.set_index("ticker")[sector_col].dropna().astype(str).to_dict() if sector_col else {},
-        "industry": latest.set_index("ticker")[industry_col].dropna().astype(str).to_dict() if industry_col else {},
+        "sector": latest.set_index("ticker")[sector_col].dropna().astype(str).to_dict()
+        if sector_col
+        else {},
+        "industry": latest.set_index("ticker")[industry_col]
+        .dropna()
+        .astype(str)
+        .to_dict()
+        if industry_col
+        else {},
         "tickers": latest["ticker"].astype(str).tolist(),
     }
 
 
-@lru_cache(maxsize=4)
 def load_market_return_matrix(max_tickers: int = 500) -> dict:
     """Cached contiguous price/return panel for repeated backtest/capacity jobs."""
     prices = load_market_universe()
-    latest = prices.sort_values("Date").groupby("Ticker", as_index=False).tail(1)
-    latest["dollar_volume"] = latest["Close"].abs() * latest["Volume"].fillna(0)
-    tickers = latest.sort_values("dollar_volume", ascending=False).head(int(max_tickers))["Ticker"].astype(str).tolist()
+    from .panel import select_universe
+
+    tickers = select_universe(prices, request_payload(), max_tickers)
     sub = prices[prices["Ticker"].isin(tickers)]
-    close = sub.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index()
+    close = sub.pivot_table(
+        index="Date", columns="Ticker", values="Close", aggfunc="last"
+    ).sort_index()
     returns = close.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan)
     return {
         "dates": returns.index.to_numpy(),
         "tickers": list(returns.columns),
-        "returns": np.ascontiguousarray(returns.fillna(0.0).to_numpy(dtype=np.float32)),
+        "returns": np.ascontiguousarray(returns.to_numpy(dtype=np.float64)),
         "close": close,
     }

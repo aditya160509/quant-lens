@@ -1,168 +1,219 @@
-"""Factors V2 API router.
-
-Mounted from backend/main.py with prefix="/api", so routes resolve under
-/api/labs/factors/v2 while legacy /api/labs/factors remains untouched.
-"""
+"""Strict Factors V2 runs, validated uploads and durable local jobs."""
 
 from __future__ import annotations
-
-import importlib
-import logging
-from typing import Any, Dict, Optional
-
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
-
-from app.services.factors_v2.core.analytics import clean_json, governance_metadata
-from app.services.factors_v2.core.contracts import FEATURE_CONTRACTS, FEATURE_MODULES, FEATURE_OUTPUT_KEYS, STANDARD_OUTPUT_SCHEMA
-from app.services.factors_v2.core.data_loader import search_symbol_directory
+import asyncio
+import json
+import pandas as pd
+from fastapi import APIRouter, HTTPException, Query, File, UploadFile
+from app.services.factors_v2.registry import (
+    feature_manifest,
+    run_feature,
+    prepare_payload,
+    normalize_feature_id,
+)
+from app.services.factors_v2.core.data_loader import (
+    search_symbol_directory,
+    BACKEND_DATA,
+    source_version,
+)
+from app.services.factors_v2.core.uploads import save_upload
+from app.services.studio.jobs import JobStore
 
 router = APIRouter(prefix="/labs/factors/v2", tags=["factors-v2"])
-logger = logging.getLogger(__name__)
+JOBS = JobStore(path=BACKEND_DATA / "factors_v2/jobs.json")
+RESULTS = BACKEND_DATA / "factors_v2/results"
 
 
-class FactorsV2RunRequest(BaseModel):
-    payload: Dict[str, Any] = Field(default_factory=dict, description="Feature-specific input payload from computation document")
+def envelope(request):
+    if set(request) != {"payload"} or not isinstance(request["payload"], dict):
+        raise ValueError(
+            "Expected exactly {payload: {...}}; flat inputs are not accepted"
+        )
+    return request["payload"]
 
 
-class FactorsV2DirectPayload(BaseModel):
-    class Config:
-        extra = "allow"
-
-
-def _normalize_feature_id(feature_id: str) -> str:
-    raw = str(feature_id).lower().replace("feature_", "").replace("feature-", "").strip()
-    if raw.isdigit():
-        raw = raw.zfill(2)
-    if raw not in FEATURE_CONTRACTS:
-        raise HTTPException(status_code=404, detail=f"Unknown Factors V2 feature: {feature_id}")
-    return raw
-
-
-def _feature_module(feature_id: str):
-    normalized = _normalize_feature_id(feature_id)
-    module_name = FEATURE_MODULES.get(normalized, f"feature_{normalized}")
-    return importlib.import_module(f"app.services.factors_v2.features.{module_name}")
-
-
-def _clean_payload_value(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: cleaned for key, item in value.items() if (cleaned := _clean_payload_value(item)) is not None}
-    if isinstance(value, list):
-        return [cleaned for item in value if (cleaned := _clean_payload_value(item)) is not None]
-    if value == "":
-        return None
-    return value
-
-
-def _sanitize_payload(payload: Any) -> Dict[str, Any]:
-    cleaned = _clean_payload_value(payload or {})
-    return cleaned if isinstance(cleaned, dict) else {}
+def mapped(exc):
+    return HTTPException(404 if isinstance(exc, KeyError) else 422, str(exc))
 
 
 @router.get("/features")
-def list_features() -> Dict[str, Any]:
-    return clean_json(
-        {
-            "status": "ok",
-            "schema": STANDARD_OUTPUT_SCHEMA,
-            "required_output_keys": FEATURE_OUTPUT_KEYS,
-            "features": [
-                {
-                    "feature_id": f"feature_{feature_id}",
-                    "route_id": feature_id,
-                    "module": FEATURE_MODULES.get(feature_id),
-                    **contract,
-                }
-                for feature_id, contract in FEATURE_CONTRACTS.items()
-            ],
-            "activation_note": "Router is mounted from backend/main.py under /api/labs/factors/v2.",
-        }
-    )
-
-
-@router.get("/governance")
-def governance() -> Dict[str, Any]:
-    return clean_json({"status": "ok", **governance_metadata({"api_scope": "Dormant Factors V2 governance, lineage, and model-risk metadata"})})
+def features():
+    return {"status": "ok", "features": feature_manifest()}
 
 
 @router.get("/symbols")
-def search_symbols(
-    q: str = Query(default="", description="Ticker, index, sector, or industry prefix/substring"),
-    limit: int = Query(default=25, ge=1, le=75),
-    asset_type: Optional[str] = Query(default=None, description="Optional filter: equity or index"),
-) -> Dict[str, Any]:
-    return clean_json(
-        {
-            "status": "ok",
-            "query": q,
-            "symbols": search_symbol_directory(q, limit=limit, asset_type=asset_type),
-            "source": "backend/data/market_universe.parquet + backend/data/fundamentals/master_fundamentals.parquet",
-        }
-    )
+def symbols(
+    q: str = Query("", max_length=80),
+    limit: int = Query(25, ge=1, le=100),
+    asset_type: str | None = None,
+):
+    return {"status": "ok", "symbols": search_symbol_directory(q, limit, asset_type)}
 
 
 @router.post("/feature/{feature_id}/run")
-def run_feature(feature_id: str, request: FactorsV2RunRequest) -> Dict[str, Any]:
-    normalized = _normalize_feature_id(feature_id)
-    payload = _sanitize_payload(request.payload)
+async def execute(feature_id: str, request: dict):
     try:
-        result = _feature_module(normalized).run(payload)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Factors V2 feature_%s failed", normalized)
-        raise HTTPException(status_code=500, detail=f"Factors V2 feature_{normalized} failed") from exc
-    return clean_json(result)
-
-
-@router.post("/run-all")
-def run_all(request: Dict[str, Any]) -> Dict[str, Any]:
-    base_payload = _sanitize_payload(request.get("payload", request))
-    feature_payloads = request.get("feature_payloads", {}) or {}
-    results = {}
-    for feature_id in FEATURE_CONTRACTS:
-        payload = _sanitize_payload({**base_payload, **feature_payloads.get(feature_id, {}), **feature_payloads.get(f"feature_{feature_id}", {})})
-        try:
-            results[f"feature_{feature_id}"] = _feature_module(feature_id).run(payload)
-        except Exception as exc:
-            results[f"feature_{feature_id}"] = {
-                "feature_id": f"feature_{feature_id}",
-                "status": "error",
-                "summary_cards": [],
-                "charts": {},
-                "tables": {},
-                "alerts": [{"level": "error", "message": str(exc)}],
-                "meta": {"error": str(exc)},
-            }
-    return clean_json({"status": "ok", "results": results, "contracts": FEATURE_CONTRACTS})
+        fid = normalize_feature_id(feature_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    try:
+        return await asyncio.to_thread(run_feature, fid, envelope(request))
+    except (KeyError, ValueError, TypeError) as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.post("/export/{feature_id}")
-def export_feature(feature_id: str, request: Dict[str, Any]) -> Dict[str, Any]:
-    """Dormant export endpoint returning JSON plus CSV-ready table payloads."""
-    normalized = _normalize_feature_id(feature_id)
-    result = clean_json(_feature_module(normalized).run(_sanitize_payload(request.get("payload", request))))
-    return clean_json(
-        {
-            "status": "ok",
-            "feature_id": result.get("feature_id"),
-            "formats": ["json", "csv_tables", "parquet_future"],
-            "json": result,
-            "csv_tables": result.get("tables", {}),
-            "lineage": result.get("meta", {}).get("governance"),
-        }
+async def export(feature_id: str, request: dict):
+    result = await execute(feature_id, request)
+    return {
+        "status": result["status"],
+        "formats": ["json", "csv_tables"],
+        "json": result,
+        "csv_tables": {
+            key: pd.DataFrame(rows).to_csv(index=False)
+            for key, rows in result["tables"].items()
+            if isinstance(rows, list)
+        },
+    }
+
+
+def verify_sources(job_id):
+    expected = JOBS.get(job_id)["params"]["source_versions"]
+    if json.dumps(expected) != json.dumps(source_version()):
+        raise ValueError(
+            "Data files changed after this job was queued; rerun against a consistent source version"
+        )
+
+
+def _execute(job_id, feature_id, payload):
+    verify_sources(job_id)
+    result = run_feature(feature_id, payload)
+    if result["status"] == "error":
+        raise ValueError(result.get("meta", {}).get("error", "Feature failed"))
+    verify_sources(job_id)
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    path = RESULTS / f"{job_id}.json"
+    temp = path.with_suffix(".tmp")
+    temp.write_text(json.dumps(result, allow_nan=False))
+    temp.replace(path)
+    return {"result_file": path.name}
+
+
+@router.post("/feature/{feature_id}/jobs")
+def create_job(feature_id: str, request: dict):
+    try:
+        fid = normalize_feature_id(feature_id)
+        payload = prepare_payload(fid, envelope(request))
+    except (KeyError, ValueError, TypeError) as exc:
+        raise mapped(exc) from exc
+    job = JOBS.create(
+        job_type=f"factors_v2_{fid}",
+        params={
+            "feature_id": fid,
+            "payload": payload,
+            "source_versions": source_version(),
+        },
     )
+    JOBS.submit(job["job_id"], _execute, job["job_id"], fid, payload)
+    return {"job_id": job["job_id"], "status": job["status"], "feature_id": fid}
+
+
+@router.get("/jobs/{job_id}")
+def status(job_id: str):
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(404, "Unknown job")
+    out = {
+        k: job[k]
+        for k in ["job_id", "status", "progress", "error", "created_at", "updated_at"]
+    }
+    if job["status"] == "completed":
+        out["result"] = json.loads((RESULTS / job["result"]["result_file"]).read_text())
+    return out
+
+
+@router.post("/jobs/{job_id}/cancel")
+def cancel(job_id: str):
+    job = JOBS.cancel(job_id)
+    if not job:
+        raise HTTPException(404, "Unknown job")
+    return {
+        "job_id": job_id,
+        "status": job["status"],
+        "note": "Cancellation suppresses publication; active computation finishes in background",
+    }
+
+
+@router.post("/uploads")
+async def upload(kind: str = Query(...), file: UploadFile = File(...)):
+    raw = await file.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024:
+        raise HTTPException(413, "Uploads are limited to 2 MB")
+    try:
+        return save_upload(raw, kind)
+    except (ValueError, TypeError, OSError) as exc:
+        raise mapped(exc) from exc
+
+
+def _run_all(job_id, payloads):
+    verify_sources(job_id)
+    results = {}
+    for i, (fid, payload) in enumerate(payloads.items()):
+        job = JOBS.get(job_id)
+        if job and job["status"] == "cancelled":
+            return {}
+        JOBS.update(
+            job_id,
+            progress={
+                "percent": round(i / len(payloads) * 100),
+                "message": f"Running feature {fid}",
+            },
+        )
+        results[f"feature_{fid}"] = run_feature(fid, payload)
+    result = {
+        "status": "partial"
+        if any(r["status"] != "ok" for r in results.values())
+        else "ok",
+        "results": results,
+    }
+    verify_sources(job_id)
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    path = RESULTS / f"{job_id}.json"
+    temp = path.with_suffix(".tmp")
+    temp.write_text(json.dumps(result, allow_nan=False))
+    temp.replace(path)
+    return {"result_file": path.name}
+
+
+@router.post("/run-all")
+def run_all(request: dict):
+    # An async batch requires explicit payloads, never fourteen implicit default portfolios.
+    if set(request) != {"feature_payloads"}:
+        raise HTTPException(
+            422,
+            "Expected exactly feature_payloads; common inputs must be merged into explicit feature payloads",
+        )
+    payloads = request.get("feature_payloads")
+    if not isinstance(payloads, dict) or not payloads:
+        raise HTTPException(422, "Supply feature_payloads keyed by feature id")
+    try:
+        prepared = {
+            normalize_feature_id(fid): prepare_payload(fid, p)
+            for fid, p in payloads.items()
+        }
+    except (KeyError, ValueError, TypeError) as exc:
+        raise mapped(exc) from exc
+    job = JOBS.create(
+        job_type="factors_v2_batch",
+        params={"feature_payloads": prepared, "source_versions": source_version()},
+    )
+    JOBS.submit(job["job_id"], _run_all, job["job_id"], prepared)
+    return {"job_id": job["job_id"], "status": job["status"]}
 
 
 @router.post("/alert-subscription")
-def alert_subscription(request: Dict[str, Any]) -> Dict[str, Any]:
-    return clean_json(
-        {
-            "status": "registered_dormant",
-            "channels": request.get("channels", ["in_app"]),
-            "webhook_url_present": bool(request.get("webhook_url")),
-            "cooldown_hours": request.get("cooldown_hours", 24),
-            "activation_note": "Subscription schema is ready; delivery worker remains disabled until router is wired.",
-        }
+def alert_subscription(request: dict):
+    raise HTTPException(
+        422,
+        "Email, Slack and webhook delivery are unavailable; no subscription has been registered",
     )
