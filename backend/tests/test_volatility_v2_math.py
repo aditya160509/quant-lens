@@ -1,4 +1,5 @@
 import math
+import pytest
 import numpy as np
 import pandas as pd
 from app.services.volatility_v2.core.analytics import (
@@ -123,3 +124,121 @@ def test_var_backtests_do_not_invent_independence_pvalue():
     assert result["exceptions"] == 0
     assert np.isfinite(result["kupiec_lr"])
     assert result["christoffersen_independence_p_value"] is None
+
+
+def test_hmm_filtering_is_causal_and_cache_does_not_hide_mutation():
+    from app.services.volatility_v2.core.regimes import filtered_regimes
+
+    dates = pd.date_range("2020-01-01", periods=260)
+    rng = np.random.default_rng(5)
+    features = pd.DataFrame(
+        {
+            "log_vol": rng.normal(0, 1, len(dates)),
+            "return_21d": rng.normal(0, 1, len(dates)),
+        },
+        index=dates,
+    )
+    first = filtered_regimes(
+        features, states=2, min_train=120, refit_interval=63, restarts=1
+    )
+    changed = features.copy()
+    changed.iloc[200:] += 8
+    second = filtered_regimes(
+        changed, states=2, min_train=120, refit_interval=63, restarts=1
+    )
+    pd.testing.assert_frame_equal(
+        first["probabilities"].loc[: dates[199]],
+        second["probabilities"].loc[: dates[199]],
+    )
+    probs = first["probabilities"][["low_vol", "high_vol"]]
+    np.testing.assert_allclose(probs.sum(axis=1), 1, atol=1e-12)
+    assert (
+        first["probabilities"].training_observed_through < first["probabilities"].index
+    ).all()
+    assert first["source_fingerprint"] != second["source_fingerprint"]
+
+
+def test_regime_duration_right_censor_and_transitions():
+    from app.services.volatility_v2.core.regimes import (
+        duration_survival,
+        transition_matrices,
+        transition_alerts,
+    )
+
+    seq = np.array(
+        [0] * 4
+        + [1] * 3
+        + [0] * 2
+        + [1] * 4
+        + [0] * 5
+        + [1] * 2
+        + [0] * 3
+        + [1] * 6
+        + [0] * 10
+    )
+    rows = duration_survival(seq, ["low_vol", "high_vol"])
+    assert rows[0]["completed_spells"] == 3
+    assert rows[0]["current_duration_days"] == 10
+    assert rows[0]["right_censored_spells"] == 1
+    assert rows[0]["left_censored_first_spell_excluded"]
+    assert rows[0]["survival_curve"][0]["survival_prob"] <= 1
+    probs = pd.DataFrame(
+        {
+            "low_vol": np.r_[np.ones(10) * 0.9, np.ones(10) * 0.1],
+            "high_vol": np.r_[np.ones(10) * 0.1, np.ones(10) * 0.9],
+        },
+        index=pd.date_range("2020-01-01", periods=20),
+    )
+    matrix = pd.DataFrame(transition_matrices(probs))
+    np.testing.assert_allclose(
+        matrix[matrix.horizon.eq("1w")].groupby("row").value.sum(), 1
+    )
+    alerts = transition_alerts(probs, "SPY", 0.3, 5)
+    assert len(alerts) == 1
+    assert alerts[0]["date"] == probs.index[10]
+    assert alerts == transition_alerts(probs, "SPY", 0.3, 5)
+
+
+def test_integrated_garch_variance_is_causal_and_matches_library_forecast():
+    from app.services.volatility_v2.core.vrp import integrated_garch_variance
+    from app.services.volatility_v2.core.garch import fit_model
+
+    dates = pd.date_range("2020-01-01", periods=210)
+    returns = pd.Series(
+        np.random.default_rng(81).normal(0, 0.01, len(dates)), index=dates
+    )
+    original = integrated_garch_variance(
+        returns, (3,), min_train=120, refit_interval=21
+    )
+    changed = returns.copy()
+    changed.iloc[180:] *= 2
+    second = integrated_garch_variance(changed, (3,), min_train=120, refit_interval=21)
+    pd.testing.assert_frame_equal(original.loc[: dates[179]], second.loc[: dates[179]])
+    fit = fit_model(returns.iloc[:120])
+    expected = float(
+        fit.forecast(horizon=3).residual_variance.iloc[-1].mean() / 10000 * 252
+    )
+    assert original.loc[dates[119], 3] == pytest.approx(expected, rel=1e-9)
+
+
+def test_hodrick_null_covariance_matches_lagged_predictor_reference():
+    from app.services.volatility_v2.core.vrp import hodrick_null_standard_errors
+    import statsmodels.api as sm
+
+    dates = pd.date_range("2020-01-01", periods=130)
+    rng = np.random.default_rng(42)
+    predictor = pd.DataFrame({"x": rng.uniform(0.01, 0.1, len(dates))}, index=dates)
+    returns = pd.Series(rng.normal(0, 0.01, len(dates)), index=dates)
+    horizon = 5
+    design = sm.add_constant(predictor.iloc[:-horizon])
+    scores = np.array(
+        [
+            (returns.iloc[t] - returns.mean())
+            * np.r_[horizon, predictor.x.iloc[t - horizon : t].sum()]
+            for t in range(horizon, len(dates))
+        ]
+    )
+    bread = np.linalg.inv(design.to_numpy().T @ design.to_numpy())
+    expected = np.sqrt(np.diag(bread @ scores.T @ scores @ bread))
+    actual = hodrick_null_standard_errors(predictor, returns, horizon, design)
+    np.testing.assert_allclose(actual, expected, rtol=1e-10)

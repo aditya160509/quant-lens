@@ -15,11 +15,17 @@ Frontend design remains reserved for Claude. Other V2 modules and V1 are outside
 8. GARCH lives in `core/garch.py`. All five arch families and four innovation distributions can be evaluated with expanding past-only fits and one-step held-out forecasts. PIT and VaR use the fitted distribution at each refit. QLIKE and RMSE use observed squared daily returns, explicitly identified as noisy variance observations. Failed fits are reported and make the result a warning. Pairwise DM uses actual held-out loss differences. Kupiec, independence, and conditional coverage likelihood-ratio diagnostics are distinct; unidentifiable independence tests are unavailable.
 9. GARCH term structure uses the fitted arch model recursion and innovation simulator. It describes terminal-day conditional variance, not an observed options surface. Synthetic option surfaces, fake FIGARCH d paths, chunk-dispersion “Nyblom”, unscored Realized-GARCH, and rolling breach-count “duration tests” were removed from Feature 02.
 
+10. Feature 04 now uses causal HMM filtering: every refit standardizes and learns only through the preceding observation. K selection uses the initial training sample and remains fixed so historical labels do not change when future data arrive. The SJM alternates Viterbi paths and centroid updates, then emits causal hard states rather than uncalibrated probabilities. Brier-weighted self-scoring ensembles, fake macro probabilities and future smoothing were removed.
+11. Regime duration Weibull MLE includes an ongoing spell as right-censored and excludes the first left-censored spell. Insufficient completed spells produce an explicit unavailable reason. Probability-weighted transition matrices and stable timestamped probability-change alerts replace the old latest-max alert.
+12. Feature 05 requires observed matching IV. Local VIX is usable for its S&P 500 index benchmark (`^GSPC`), not arbitrary stocks, ETFs or non-US indices. Validated user IV CSVs enable other assets. Exact dates are joined without stale fill. VIX3M/VIX6M are observed or explicitly unavailable, never multiplied versions of VIX.
+13. Physical GARCH forecasts average all next-h daily conditional variances, rather than multiplying a terminal variance. Direct log-HAR forecasts integrated future variance using only matured labels. Three separate physical methods, daily component identities, display modes, multi-asset comparisons, and all selected return horizons are implemented.
+14. BTZ inference uses actual monthly variance VRP, causal Feature 04 probability weights, statsmodels Newey–West regression and expanding OOS forecasts. Hodrick (1992) 1B uses daily demeaned returns times lagged predictor sums, with correct sandwich scaling and an explicit restriction to testing no predictability. Exact discrete AR(1) half-life replaces the invalid continuous-time units in the spec.
+
 ## Architecture before and current state
 
 Before: a 1,495-line analytics file, nine feature wrappers, aspirational output contracts, a synchronous router, and disconnected frontend workbench.
 
-Current: strict request-scoped `core/data_loader.py`, dedicated `core/har.py` and `core/garch.py`, rewritten Features 02/03, and golden/data regression tests. Splitting remaining estimators, regimes, covariance, connectedness, stress and budget code, plus updating the manifest/router, remains required.
+Current: strict request-scoped `core/data_loader.py`, dedicated `core/har.py`, `core/garch.py`, `core/regimes.py`, `core/vrp.py` and `core/uploads.py`, rewritten Features 02–05, and golden/data regression tests. Splitting remaining estimators, covariance, connectedness, stress and budget code, plus updating the manifest/router, remains required.
 
 ## Old-file fate table
 
@@ -29,14 +35,16 @@ Current: strict request-scoped `core/data_loader.py`, dedicated `core/har.py` an
 | `core/analytics.py` | Still used; HAR/GARCH functions are being moved to focused modules; obsolete functions remain pending verified removal |
 | `features/feature_02.py` | Replaced with true held-out GARCH suite |
 | `features/feature_03.py` | Replaced with true expanding HAR forecasts |
+| `features/feature_04.py` | Replaced with causal HMM filtering, genuine hard SJM states and censored durations |
+| `features/feature_05.py` | Replaced with observed matching IV and actual integrated physical forecasts |
 | `core/performance.py` | Retained; unsafe fastmath disabled |
 | Old audit/spec documents | Pending explicit supersession review; no deletion yet |
 
 ## Known limitations and remaining work
 
-- Rebuild is incomplete. Features 04–09, remaining Feature 01 proxy outputs, full contracts, uploads/jobs/export, frontend wiring/fake removal, and final verification are pending.
+- Rebuild is incomplete. Features 06–09, remaining Feature 01 proxy outputs, full contracts, uploads/jobs/export, frontend wiring/fake removal, and final verification are pending.
 - Macro history contains observations but no release-vintage guarantee. HAR-X is unavailable rather than silently imputing macro predictors.
-- Daily OHLC does not support intraday bipower jump identification, genuine Bandi–Russell noise correction, or a Realized-GARCH measurement equation.
+- Daily OHLC alone does not support intraday bipower jump identification or genuine Bandi–Russell noise correction. The repo has hourly panels for indices and selected assets, verified directly during this pass; their available coverage still needs to be connected before marking sampled-realized-measure outputs supported. SPY has no hourly series in the canonical hourly panel. No blanket claim that the repo lacks intraday data is made.
 - The current GARCH winner is retrospective selection over a held-out evaluation window. Its historical diagnostics are post-selection and do not represent a tradable winner-switching strategy.
 - PIT KS diagnostics do not correct for serial dependence or model selection.
 - HAR confidence intervals are conditional OLS prediction intervals, transformed for LHAR; they do not incorporate model selection uncertainty.
@@ -45,7 +53,7 @@ Current: strict request-scoped `core/data_loader.py`, dedicated `core/har.py` an
 
 ## Checks run so far
 
-- `cd backend && PYTHONPATH=. /tmp/pca-v2-check-env/bin/python -m pytest tests/test_volatility_v2_*.py -q`: **12 passed**.
+- `cd backend && PYTHONPATH=. /tmp/pca-v2-check-env/bin/python -m pytest tests/test_volatility_v2_*.py -q`: **18 passed**.
 - `ruff check backend/app/services/volatility_v2/core/garch.py backend/app/services/volatility_v2/core/har.py backend/app/services/volatility_v2/features/feature_02.py backend/app/services/volatility_v2/features/feature_03.py backend/tests/test_volatility_v2_*.py`: passed.
 - `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python - <<'PY' ... PY`: real Feature 01 run with SPY, 400 sessions, `as_of_date=2025-01-31`, returned `ok` and last chart date exactly 2025-01-31.
 - Same Python entry point: real Feature 03 run with SPY/QQQ, 450 sessions, horizons 1/5, 120 training observations, 100 MCS repetitions: `ok`, eight model/horizon accuracy rows.
@@ -53,3 +61,12 @@ Current: strict request-scoped `core/data_loader.py`, dedicated `core/har.py` an
 - No Jest, full frontend lint/build, or browser completion is claimed yet.
 
 Yang–Zhang formula reference: [TTR volatility documentation](https://mirror.las.iastate.edu/CRAN/web/packages/TTR/TTR.pdf). The review’s swapped k/(1-k) formula was corrected against the estimator definition.
+
+Additional checks in the regime/VRP step:
+
+- `cd backend && PYTHONPATH=. /tmp/pca-v2-check-env/bin/python -m pytest tests/test_volatility_v2_*.py -q`: **18 passed**. New tests cover causal filtering, cache mutation, right censoring, transition crossings, integrated variance versus arch, Hodrick covariance versus independent lagged-score construction, uploaded IV validation and sandbox traversal, and incompatible IV benchmarks.
+- `ruff check backend/app/services/volatility_v2/core/regimes.py backend/app/services/volatility_v2/core/vrp.py backend/app/services/volatility_v2/core/uploads.py backend/app/services/volatility_v2/features/feature_04.py backend/app/services/volatility_v2/features/feature_05.py backend/tests/test_volatility_v2_*.py`: passed.
+- Real Feature 04 SPY, 700 sessions, 252 training observations, one HMM restart, three states: `ok`, 365 causal timeline rows and 14 transition alerts.
+- Real Feature 05 `^GSPC`, 1,000 sessions, 120 training observations, refits every 42 observations, horizons 21/63, one HMM restart: `warning` because a selected HMM fit did not meet convergence. All three maturity IVs were observed at 2026-02-20; no synthetic values were used.
+
+Hodrick 1B reference: [Federal Reserve FEDS 2009-27, Section 2](https://www.federalreserve.gov/pubs/feds/2009/200927/index.html), which distinguishes this null-only covariance from Hansen–Hodrick HAC and general coefficient confidence intervals.

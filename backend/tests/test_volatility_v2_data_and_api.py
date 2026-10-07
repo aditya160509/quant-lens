@@ -68,3 +68,38 @@ def test_duplicates_and_bad_ohlc_are_rejected(prices):
     frame.to_parquet(path)
     with pytest.raises(ValueError, match="inconsistent"):
         dl.ohlcv_for_symbols(["SPY"])
+
+
+def test_iv_upload_validation_and_sandbox(prices, tmp_path, monkeypatch):
+    from app.services.volatility_v2.core import uploads
+
+    dl, _, _ = prices
+    monkeypatch.setattr(dl, "BACKEND_DATA", tmp_path)
+    raw = b"date,asset,implied_vol,maturity_days,source\n2024-01-01,SPY,0.2,30,observed vendor\n2024-01-02,SPY,0.21,30,observed vendor\n"
+    saved = uploads.save_upload(raw, "implied_volatility")
+    assert saved["rows"] == 2
+    assert saved["assets"] == ["SPY"]
+    assert (
+        uploads.upload_path(saved["upload_id"]).parent
+        == tmp_path / "volatility_v2/uploads"
+    )
+    for identifier in ("../../outside", "/etc/passwd", "../" + "a" * 64, "A" * 64):
+        with pytest.raises(ValueError, match="identifier"):
+            uploads.upload_path(identifier)
+    with dl.request_scope({"as_of_date": "2024-01-01"}):
+        assert len(uploads.load_implied_volatility(saved["upload_id"], "SPY")) == 1
+    for data in (
+        raw.replace(b"0.2,30", b"20,30"),
+        raw.replace(b"SPY", b"UNKNOWN"),
+        raw.replace(b"30,observed", b"31,observed"),
+        raw + raw.split(b"\n")[1] + b"\n",
+    ):
+        with pytest.raises(ValueError):
+            uploads.save_upload(data, "implied_volatility")
+
+
+def test_vix_cannot_be_substituted_for_an_individual_asset(prices):
+    from app.services.volatility_v2.core.vrp import observed_iv
+
+    with pytest.raises(ValueError, match="matching observed"):
+        observed_iv("SPY", pd.date_range("2024-01-01", periods=200))
