@@ -43,7 +43,13 @@ def file_version(path):
 
 def source_version():
     return tuple(
-        file_version(p) for p in (MARKET_UNIVERSE, CATEGORY7_MACRO) if p.is_file()
+        file_version(p)
+        for p in (
+            MARKET_UNIVERSE,
+            CATEGORY7_MACRO,
+            BACKEND_DATA / "canonical/fx_daily.parquet",
+        )
+        if p.is_file()
     )
 
 

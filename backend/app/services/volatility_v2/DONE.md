@@ -21,11 +21,17 @@ Frontend design remains reserved for Claude. Other V2 modules and V1 are outside
 13. Physical GARCH forecasts average all next-h daily conditional variances, rather than multiplying a terminal variance. Direct log-HAR forecasts integrated future variance using only matured labels. Three separate physical methods, daily component identities, display modes, multi-asset comparisons, and all selected return horizons are implemented.
 14. BTZ inference uses actual monthly variance VRP, causal Feature 04 probability weights, statsmodels Newey–West regression and expanding OOS forecasts. Hodrick (1992) 1B uses daily demeaned returns times lagged predictor sums, with correct sandwich scaling and an explicit restriction to testing no predictability. Exact discrete AR(1) half-life replaces the invalid continuous-time units in the spec.
 
+15. Feature 06 now computes a rolling fit for every complete aligned observation by default, including the final observation. OLS VAR uses statsmodels common-range BIC over positive lag orders. EW VAR uses decay-weighted statsmodels WLS at an explicitly declared fixed lag with effective residual degrees of freedom; it does not mislabel an ad hoc weighted score as BIC. Every rolling model uses the chosen weighting and inputs.
+16. Generalized FEVD uses the Pesaran–Shin formula and statsmodels MA coefficients. Spillover attribution excludes own variance. Historical percentiles compare only earlier observed readings. Timestamped threshold crossings, full daily attribution histories and optional full network matrices support Claude's time-lapse frontend without inventing visuals.
+17. Barunik–Krehlik uses direct VAR transfer-function inversion and full-spectrum normalization. Frequency contributions from disjoint bands add to the total; within-band connectedness is reported separately. Unstable VARs explicitly disable the infinite-horizon spectrum. Macro-conditioned CoR is unavailable without release vintages; the returned alternative is explicitly named autoregressive quantile CoR.
+18. IRF bands use `arch.bootstrap.StationaryBootstrap` residual vectors and refit the declared VAR estimator per replication. Failures are counted and insufficient successful replications produce an unavailable reason.
+19. `core/currency.py` computes USD portfolio returns with explicitly known or user-declared quote currencies and observed canonical FX on exact dates. It rejects unknown denomination, missing rates and currency suffix guesses. Price-adjustment provenance is disclosed; no total-return claim is made. The FX file is included in source versions.
+
 ## Architecture before and current state
 
 Before: a 1,495-line analytics file, nine feature wrappers, aspirational output contracts, a synchronous router, and disconnected frontend workbench.
 
-Current: strict request-scoped `core/data_loader.py`, dedicated `core/har.py`, `core/garch.py`, `core/regimes.py`, `core/vrp.py` and `core/uploads.py`, rewritten Features 02–05, and golden/data regression tests. Splitting remaining estimators, covariance, connectedness, stress and budget code, plus updating the manifest/router, remains required.
+Current: strict request-scoped `core/data_loader.py`, dedicated `core/har.py`, `core/garch.py`, `core/regimes.py`, `core/vrp.py`, `core/connectedness.py`, `core/currency.py` and `core/uploads.py`, rewritten Features 02–06, and golden/data regression tests. Splitting remaining estimators, covariance, connectedness, stress and budget code, plus updating the manifest/router, remains required.
 
 ## Old-file fate table
 
@@ -37,12 +43,13 @@ Current: strict request-scoped `core/data_loader.py`, dedicated `core/har.py`, `
 | `features/feature_03.py` | Replaced with true expanding HAR forecasts |
 | `features/feature_04.py` | Replaced with causal HMM filtering, genuine hard SJM states and censored durations |
 | `features/feature_05.py` | Replaced with observed matching IV and actual integrated physical forecasts |
+| `features/feature_06.py` | Replaced with daily, consistently weighted library VAR estimates and correctly normalized frequency shares |
 | `core/performance.py` | Retained; unsafe fastmath disabled |
 | Old audit/spec documents | Pending explicit supersession review; no deletion yet |
 
 ## Known limitations and remaining work
 
-- Rebuild is incomplete. Features 06–09, remaining Feature 01 proxy outputs, full contracts, uploads/jobs/export, frontend wiring/fake removal, and final verification are pending.
+- Rebuild is incomplete. Features 07–09, remaining Feature 01 proxy outputs, full contracts, uploads/jobs/export, frontend wiring/fake removal, and final verification are pending.
 - Macro history contains observations but no release-vintage guarantee. HAR-X is unavailable rather than silently imputing macro predictors.
 - Daily OHLC alone does not support intraday bipower jump identification or genuine Bandi–Russell noise correction. The repo has hourly panels for indices and selected assets, verified directly during this pass; their available coverage still needs to be connected before marking sampled-realized-measure outputs supported. SPY has no hourly series in the canonical hourly panel. No blanket claim that the repo lacks intraday data is made.
 - The current GARCH winner is retrospective selection over a held-out evaluation window. Its historical diagnostics are post-selection and do not represent a tradable winner-switching strategy.
@@ -70,3 +77,11 @@ Additional checks in the regime/VRP step:
 - Real Feature 05 `^GSPC`, 1,000 sessions, 120 training observations, refits every 42 observations, horizons 21/63, one HMM restart: `warning` because a selected HMM fit did not meet convergence. All three maturity IVs were observed at 2026-02-20; no synthetic values were used.
 
 Hodrick 1B reference: [Federal Reserve FEDS 2009-27, Section 2](https://www.federalreserve.gov/pubs/feds/2009/200927/index.html), which distinguishes this null-only covariance from Hansen–Hodrick HAC and general coefficient confidence intervals.
+
+Connectedness/currency step checks:
+
+- `cd backend && PYTHONPATH=. /tmp/pca-v2-check-env/bin/python -m pytest tests/test_volatility_v2_*.py -q`: **23 passed**. Tests add generalized FEVD golden values, permutation invariance, full-spectrum additivity, statsmodels VAR agreement, causal daily updates, EW method preservation, seeded bootstrap refits, and exact-date FX conversion.
+- `ruff check backend/app/services/volatility_v2/core/connectedness.py backend/app/services/volatility_v2/core/currency.py backend/app/services/volatility_v2/features/feature_06.py backend/tests/test_volatility_v2_*.py`: passed.
+- Real Feature 06 SPY/QQQ/TLT, 500 price observations, 126-observation rolling windows: OLS and EW returned `ok`, each with 338 daily connectedness readings and 338 requested network snapshots. OLS with 20 bootstrap replications returned 36 source/target/horizon bands.
+
+Frequency decomposition reference: [Barunik and Krehlik, spectral connectedness definitions](https://arxiv.org/html/1507.01729). statsmodels supplies estimation and MA primitives; the short generalized/spectral aggregation is implemented directly because its built-in FEVD is Cholesky-orthogonalized and is not the required ordering-invariant estimator.

@@ -1,3 +1,4 @@
+import math
 import pandas as pd
 import pytest
 
@@ -103,3 +104,39 @@ def test_vix_cannot_be_substituted_for_an_individual_asset(prices):
 
     with pytest.raises(ValueError, match="matching observed"):
         observed_iv("SPY", pd.date_range("2024-01-01", periods=200))
+
+
+def test_portfolio_currency_uses_observed_fx_and_rejects_stale_rates(
+    prices, tmp_path, monkeypatch
+):
+    from app.services.volatility_v2.core import currency
+
+    dl, frame, path = prices
+    foreign = frame.copy()
+    foreign["Ticker"] = "^N225"
+    foreign["Close"] = foreign.Close * 100
+    foreign["Open"] = foreign.Open * 100
+    foreign["High"] = foreign.High * 100
+    foreign["Low"] = foreign.Low * 100
+    pd.concat([frame, foreign]).to_parquet(path)
+    data = dl.ohlcv_for_symbols(["SPY", "^N225"])
+    fx_path = tmp_path / "fx.parquet"
+    fx = pd.DataFrame(
+        {
+            "Ticker": "USDJPY=X",
+            "Date": frame.Date,
+            "Close": 150 + pd.Series(range(len(frame))),
+        }
+    )
+    fx.to_parquet(fx_path)
+    monkeypatch.setattr(currency, "FX_DAILY", fx_path)
+    with pytest.raises(ValueError, match="quote_currencies"):
+        currency.portfolio_returns(data, {})
+    returns, metadata = currency.portfolio_returns(
+        data, {"quote_currencies": {"^N225": "JPY"}}
+    )
+    assert metadata["base_currency"] == "USD"
+    assert returns["^N225"].iloc[0] == pytest.approx(math.log(150 / 151))
+    fx.iloc[1:].to_parquet(fx_path)
+    with pytest.raises(ValueError, match="exact-date"):
+        currency.portfolio_returns(data, {"quote_currencies": {"^N225": "JPY"}})

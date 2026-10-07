@@ -242,3 +242,129 @@ def test_hodrick_null_covariance_matches_lagged_predictor_reference():
     expected = np.sqrt(np.diag(bread @ scores.T @ scores @ bread))
     actual = hodrick_null_standard_errors(predictor, returns, horizon, design)
     np.testing.assert_allclose(actual, expected, rtol=1e-10)
+
+
+def test_generalized_fevd_golden_ordering_and_frequency_additivity():
+    from app.services.volatility_v2.core.connectedness import (
+        VolatilityVAR,
+        generalized_decomposition,
+        frequency_connectedness,
+        spillovers,
+    )
+
+    model = VolatilityVAR(
+        np.zeros((1, 2, 2)),
+        np.array([[1.0, 0.5], [0.5, 1.0]]),
+        np.zeros(2),
+        1,
+        None,
+        True,
+        "ols",
+    )
+    theta = generalized_decomposition(model, 10)
+    np.testing.assert_allclose(theta, [[0.8, 0.2], [0.2, 0.8]], atol=1e-12)
+    frequency = frequency_connectedness(model)
+    assert sum(row["frequency_connectedness"] for row in frequency) == pytest.approx(
+        20.0, abs=1e-10
+    )
+    assert sum(row["variance_mass_share"] for row in frequency) == pytest.approx(
+        1.0, abs=1e-12
+    )
+    assert all(
+        row["within_band_connectedness"] == pytest.approx(20.0) for row in frequency
+    )
+    nonuniform = VolatilityVAR(
+        np.array([[[0.4, 0.1], [0.05, 0.2]]]),
+        np.array([[2.0, 0.3], [0.3, 1.0]]),
+        np.zeros(2),
+        1,
+        None,
+        True,
+        "ols",
+    )
+    order = [1, 0]
+    reordered = VolatilityVAR(
+        nonuniform.coefs[:, order][:, :, order],
+        nonuniform.covariance[np.ix_(order, order)],
+        np.zeros(2),
+        1,
+        None,
+        True,
+        "ols",
+    )
+    np.testing.assert_allclose(
+        generalized_decomposition(nonuniform, 10)[np.ix_(order, order)],
+        generalized_decomposition(reordered, 10),
+        atol=1e-12,
+    )
+    ranking = spillovers(np.array([[0.8, 0.2], [0.3, 0.7]]), ["A", "B"])
+    np.testing.assert_allclose(ranking.net_spillover, [10.0, -10.0])
+    np.testing.assert_allclose(ranking.from_spillover, [20.0, 30.0])
+
+
+def test_connectedness_var_matches_statsmodels_and_daily_updates_are_causal():
+    from app.services.volatility_v2.core.connectedness import (
+        fit_volatility_var,
+        rolling_connectedness,
+    )
+    from statsmodels.tsa.api import VAR
+
+    dates = pd.date_range("2020-01-01", periods=150)
+    rng = np.random.default_rng(53)
+    panel = pd.DataFrame(
+        rng.normal(size=(len(dates), 2)), index=dates, columns=["A", "B"]
+    )
+    fit = fit_volatility_var(panel, max_lag=1)
+    reference = VAR(panel).fit(1)
+    np.testing.assert_allclose(fit.coefs, reference.coefs)
+    np.testing.assert_allclose(fit.covariance, reference.sigma_u)
+    first = rolling_connectedness(
+        panel, window=60, max_lag=2, include_network_history=True
+    )
+    assert len(first["timeline"]) == len(panel) - 60 + 1
+    assert len(first["network_history"]) == len(first["timeline"])
+    assert len(first["attribution"]) == 2 * len(first["timeline"])
+    changed = panel.copy()
+    changed.iloc[120:] *= 3
+    second = rolling_connectedness(changed, window=60, max_lag=2)
+    pd.testing.assert_frame_equal(
+        first["timeline"].loc[: dates[119]], second["timeline"].loc[: dates[119]]
+    )
+
+
+def test_ew_var_keeps_selected_weighting_without_fake_bic():
+    from app.services.volatility_v2.core.connectedness import (
+        fit_volatility_var,
+        rolling_connectedness,
+    )
+
+    dates = pd.date_range("2020-01-01", periods=90)
+    panel = pd.DataFrame(
+        np.random.default_rng(18).normal(size=(90, 2)), index=dates, columns=["A", "B"]
+    )
+    model = fit_volatility_var(panel, weighting="ew", lag_order=2, delta=0.99)
+    assert model.weighting == "ew" and model.lag == 2 and model.bic is None
+    result = rolling_connectedness(
+        panel, window=60, weighting="ew", lag_order=2, delta=0.99
+    )
+    assert result["latest"][1].weighting == "ew"
+    assert result["timeline"].var_lag_order.eq(2).all()
+
+
+def test_irf_bootstrap_uses_seeded_library_blocks_and_actual_var_refits():
+    from app.services.volatility_v2.core.connectedness import (
+        fit_volatility_var,
+        bootstrap_irf,
+    )
+
+    dates = pd.date_range("2020-01-01", periods=100)
+    panel = pd.DataFrame(
+        np.random.default_rng(29).normal(size=(100, 2)), index=dates, columns=["A", "B"]
+    )
+    model = fit_volatility_var(panel, max_lag=1)
+    rows, info = bootstrap_irf(panel, model, horizons=(1, 5), reps=20, max_lag=1)
+    again, second = bootstrap_irf(panel, model, horizons=(1, 5), reps=20, max_lag=1)
+    assert rows == again and info == second
+    assert len(rows) == 8 and info["successful_replications"] == 20
+    assert all(row["lower"] <= row["upper"] for row in rows)
+    assert rows[0]["response"] == pytest.approx(model.ma(5)[1, 0, 0])

@@ -1,78 +1,185 @@
-"""Feature 06: Cross-asset volatility connectedness."""
+"""Feature 06: daily generalized volatility connectedness and frequency shares."""
 
 from __future__ import annotations
-
 import numpy as np
 import pandas as pd
-
-from app.services.volatility_v2.core.analytics import DEFAULT_ASSETS, barunik_krehlik_connectedness, compact_records, connectedness_at_risk, fit_var, fit_var_ew, generalized_fevd, load_assets, macro_frame, matrix_records, response, summary_card, volatility_estimators, var_ma_matrices
+from app.services.volatility_v2.core.analytics import (
+    load_assets,
+    volatility_estimators,
+    response,
+    summary_card,
+    matrix_records,
+    clean_json,
+)
+from app.services.volatility_v2.core.connectedness import (
+    rolling_connectedness,
+    frequency_connectedness,
+    spillovers,
+    connectedness_alerts,
+    autoregressive_cor,
+    bootstrap_irf,
+)
 
 
 def run(payload=None):
     payload = payload or {}
-    assets, ohlcv = load_assets(payload, default=payload.get("assets") or DEFAULT_ASSETS)
-    vol = volatility_estimators(ohlcv, window=21)
-    try:
-        panel = vol.pivot(index="date", columns="asset", values="yang_zhang").dropna(axis=1, thresh=120).ffill().dropna()
-    except ValueError:
-        panel = vol.pivot_table(index="date", columns="asset", values="yang_zhang", aggfunc="last").dropna(axis=1, thresh=120).ffill().dropna()
-    if panel.shape[1] < 2:
-        try:
-            panel = vol.pivot(index="date", columns="asset", values="cc").ffill().dropna()
-        except ValueError:
-            panel = vol.pivot_table(index="date", columns="asset", values="cc", aggfunc="last").ffill().dropna()
-    logv = np.log(panel.replace(0, np.nan)).dropna()
-    if payload.get("ew_var") or payload.get("var_weighting") == "ew":
-        coefs, sigma, lag_order, bic = fit_var_ew(logv, max_lag=int(payload.get("max_lag") or 5), delta=float(payload.get("ew_delta") or 0.99))
-        var_method = "ew_var"
-    else:
-        coefs, sigma, lag_order, bic = fit_var(logv, max_lag=int(payload.get("max_lag") or 5))
-        var_method = "ols_var"
-    theta = generalized_fevd(coefs, sigma, horizon=int(payload.get("fevd_horizon") or 10))
-    theta.index = logv.columns
-    theta.columns = logv.columns
-    rolling_conn = []
-    window = min(252, max(60, len(logv) // 3))
-    for i in range(window, len(logv), max(1, len(logv) // 300)):
-        try:
-            cfs, sig, _, _ = fit_var(logv.iloc[i - window : i], max_lag=min(3, int(payload.get("max_lag") or 5)))
-            th = generalized_fevd(cfs, sig, horizon=int(payload.get("fevd_horizon") or 10))
-            val = float((th.to_numpy().sum() - np.trace(th.to_numpy())) / len(th) * 100)
-        except Exception:
-            val = np.nan
-        rolling_conn.append({"date": logv.index[i], "connectedness": val, "percentile": None})
-    conn_df = pd.DataFrame(rolling_conn)
-    if not conn_df.empty:
-        conn_df["percentile"] = conn_df["connectedness"].rank(pct=True) * 100
-    to = theta.sum(axis=0)
-    frm = theta.sum(axis=1)
-    spill = pd.DataFrame({"asset": theta.index, "from_spillover": frm.values, "to_spillover": to.reindex(theta.index).values})
-    spill["net_spillover"] = spill["to_spillover"] - spill["from_spillover"]
-    edges = []
-    for r in theta.index:
-        for c in theta.columns:
-            v = float(theta.loc[r, c])
-            if r != c and v >= float(theta.to_numpy().mean()):
-                edges.append({"source": c, "target": r, "weight": v})
-    nodes = [{"id": a, "net_spillover": float(spill.set_index("asset").loc[a, "net_spillover"]), "size": float(spill.set_index("asset").loc[a, "from_spillover"])} for a in spill["asset"]]
-    current = float(conn_df["connectedness"].iloc[-1]) if not conn_df.empty else 0.0
-    try:
-        bk = barunik_krehlik_connectedness(coefs, sigma)
-        freq = [{"band": k, "connectedness": v["connectedness"]} for k, v in bk.items()]
-    except Exception:
-        freq = []
-    cor = connectedness_at_risk(conn_df, macro_frame(), current) or {}
-    drivers = sorted(edges, key=lambda e: e["weight"], reverse=True)[:5]
-    conn_vals = conn_df["connectedness"].dropna().to_numpy(dtype=float) if not conn_df.empty else np.array([])
-    conn_q75 = float(np.percentile(conn_vals, 75)) if len(conn_vals) else np.inf
-    alerts = [{"level": "warning", "message": "Connectedness above historical top quartile.", "drivers": drivers}] if not conn_df.empty and current >= conn_q75 else []
-    phis = var_ma_matrices(coefs, 22)
-    irf = [{"horizon": h, "source": str(logv.columns[j]), "target": str(logv.columns[i]), "response": float(phis[h][i, j])} for h in [1, 5, 10, 21] for i in range(len(logv.columns)) for j in range(len(logv.columns))]
-    return response(
-        "06",
-        [summary_card("Connectedness", current, "pct"), summary_card("Top Transmitter", spill.sort_values("net_spillover", ascending=False)["asset"].iloc[0], ""), summary_card("Asset Count", panel.shape[1], "")],
-        charts={"connectedness_index": compact_records(conn_df), "frequency_decomposed_connectedness": freq, "connectedness_at_risk": cor, "spillover_network_graph": {"nodes": nodes, "edges": edges}, "pairwise_fevd_heatmap": matrix_records(theta), "rolling_to_from_decomposition": compact_records(spill), "var_impulse_response": irf},
-        tables={"net_spillover_ranking": compact_records(spill.sort_values("net_spillover", ascending=False), limit=200), "connectedness_at_risk": [cor] if cor else [], "connectedness_regime_alert": alerts},
-        alerts=alerts,
-        meta={"assets": list(panel.columns), "implemented_outputs": 9, "var_lag_order": lag_order, "var_bic": bic, "var_method": var_method, "estimation": "VAR(p)/EW-VAR with BIC lag selection, Pesaran-Shin generalized FEVD, Barunik-Krehlik frequency connectedness, and macro Connectedness-at-Risk."},
+    assets, ohlcv = load_assets(payload, default=["SPY", "QQQ", "IWM", "TLT", "GLD"])
+    if len(assets) < 2:
+        raise ValueError("Connectedness requires at least two explicit assets")
+    vol = volatility_estimators(
+        ohlcv,
+        window=int(payload.get("estimator_window", 21)),
+        annualization=int(payload.get("annualization", 252)),
     )
+    estimator = str(payload.get("estimator", "yang_zhang"))
+    if estimator not in (
+        "cc",
+        "parkinson",
+        "garman_klass",
+        "rogers_satchell",
+        "yang_zhang",
+    ):
+        raise ValueError("Unknown volatility estimator")
+    panel = vol.pivot(index="date", columns="asset", values=estimator).reindex(
+        columns=assets
+    )
+    complete = panel.notna().all(axis=1) & panel.gt(0).all(axis=1)
+    logvol = np.log(panel.loc[complete])
+    weighting = str(payload.get("var_weighting", "ols"))
+    result = rolling_connectedness(
+        logvol,
+        window=int(payload.get("rolling_window", 252)),
+        interval=int(payload.get("rolling_interval", 1)),
+        fevd_horizon=int(payload.get("fevd_horizon", 10)),
+        include_network_history=bool(payload.get("include_network_history", False)),
+        max_lag=int(payload.get("max_lag", 5)),
+        weighting=weighting,
+        lag_order=int(payload.get("lag_order", 1)),
+        delta=float(payload.get("ew_delta", 0.99)),
+    )
+    date, model, theta = result["latest"]
+    timeline = result["timeline"]
+    ranking = spillovers(theta, assets).sort_values("net_spillover", ascending=False)
+    history = result["attribution"]
+    # Change is measured in observed rolling updates; there is no fabricated month value during warmup.
+    for asset in assets:
+        previous = [row["net_spillover"] for row in history if row["asset"] == asset]
+        ranking.loc[ranking.asset.eq(asset), "net_change_21_updates"] = (
+            previous[-1] - previous[-22] if len(previous) > 21 else np.nan
+        )
+    edges = [
+        {
+            "source": assets[j],
+            "target": assets[i],
+            "weight": float(theta[i, j]),
+            "net_directional_weight": float(theta[i, j] - theta[j, i]),
+        }
+        for i in range(len(assets))
+        for j in range(len(assets))
+        if i != j and theta[i, j] >= float(payload.get("edge_threshold", 0.05))
+    ]
+    nodes = [
+        {
+            "id": row["asset"],
+            "net_spillover": row["net_spillover"],
+            "received_spillover": row["from_spillover"],
+        }
+        for row in ranking.to_dict("records")
+    ]
+    gaps = list(result["failures"])
+    try:
+        frequency = frequency_connectedness(model)
+    except (ValueError, np.linalg.LinAlgError) as exc:
+        frequency = []
+        gaps.append(
+            {"output": "frequency_decomposed_connectedness", "reason": str(exc)}
+        )
+    cor = autoregressive_cor(
+        timeline,
+        int(payload.get("cor_horizon", 21)),
+        float(payload.get("cor_quantile", 0.95)),
+    )
+    alerts = connectedness_alerts(
+        timeline, theta, assets, float(payload.get("alert_threshold", 75))
+    )
+    ma = model.ma(21)
+    irf = [
+        {
+            "horizon": h,
+            "source": assets[j],
+            "target": assets[i],
+            "response": float(ma[h, i, j]),
+        }
+        for h in (1, 5, 10, 21)
+        for i in range(len(assets))
+        for j in range(len(assets))
+    ]
+    bootstrap_reps = int(payload.get("irf_bootstrap_reps", 100))
+    bands, bootstrap_info = bootstrap_irf(
+        logvol.iloc[-int(payload.get("rolling_window", 252)) :],
+        model,
+        reps=bootstrap_reps,
+        confidence=float(payload.get("confidence_level", 0.90)),
+        max_lag=int(payload.get("max_lag", 5)),
+        weighting=weighting,
+        lag_order=int(payload.get("lag_order", 1)),
+        delta=float(payload.get("ew_delta", 0.99)),
+    )
+    if "unavailable_reason" in bootstrap_info:
+        gaps.append({"output": "var_impulse_response_bands", **bootstrap_info})
+    snapshot = clean_json(timeline.reset_index().to_dict("records"))
+    out = response(
+        "06",
+        [
+            summary_card(
+                "Connectedness", float(timeline.connectedness.iloc[-1]), "pct"
+            ),
+            summary_card("Top Transmitter", ranking.asset.iloc[0]),
+            summary_card("Asset Count", len(assets)),
+        ],
+        charts={
+            "connectedness_index": snapshot,
+            "frequency_decomposed_connectedness": frequency,
+            "connectedness_at_risk": cor,
+            "spillover_network_graph": {"date": date, "nodes": nodes, "edges": edges},
+            "network_history": result["network_history"],
+            "pairwise_fevd_heatmap": matrix_records(
+                pd.DataFrame(theta, index=assets, columns=assets)
+            ),
+            "rolling_to_from_decomposition": history,
+            "var_impulse_response": irf,
+            "var_impulse_response_bands": bands,
+        },
+        tables={
+            "net_spillover_ranking": ranking.to_dict("records"),
+            "connectedness_at_risk": [cor],
+            "connectedness_regime_alert": alerts,
+            "estimation_failures": gaps,
+        },
+        alerts=alerts,
+        meta={
+            "assets": assets,
+            "estimator": estimator,
+            "rolling_interval": int(payload.get("rolling_interval", 1)),
+            "complete_aligned_observations": len(logvol),
+            "excluded_incomplete_or_nonpositive_dates": int((~complete).sum()),
+            "var_lag_order": model.lag,
+            "var_bic": model.bic,
+            "var_method": weighting,
+            "var_stable": model.stable,
+            "native_quote_returns": True,
+            "estimation": "statsmodels OLS VAR with common-range BIC or fixed-lag decay-weighted WLS; Pesaran-Shin generalized FEVD; full-spectrum Barunik-Krehlik shares",
+            "ew_lag_selection": "Fixed declared lag_order; no claim that weighted pseudo-likelihood is ordinary BIC",
+            "network_history_enabled": bool(
+                payload.get("include_network_history", False)
+            ),
+            "cor_model": "Explicit autoregressive quantile alternative; macro-conditioned predictions require release vintages",
+            "frequency_scope": "Infinite-horizon stable VAR spectrum; band contributions sum to full-spectrum connectedness, which need not equal a short finite FEVD horizon",
+            "irf_units": "Unorthogonalized response to a unit residual innovation in log volatility",
+            "data_gaps": gaps,
+            "irf_bootstrap": bootstrap_info,
+        },
+    )
+    if gaps or not model.stable or cor.get("converged") is False:
+        out["status"] = "warning"
+    return out
