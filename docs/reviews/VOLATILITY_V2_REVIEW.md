@@ -1,4 +1,4 @@
-> **Rebuild status (2026-10-07): IN PROGRESS.** Strict dated data and rewritten Features 02–07 are implemented, including causal DCC/DCC-MIDAS, observed USD covariance, true minimum torsion, and explicit crisis conditioning. **32 targeted tests pass.** Features 08–09, remaining Feature 01 proxy corrections, contracts/jobs, frontend wiring/fake removal and final checks remain tracked in `backend/app/services/volatility_v2/DONE.md`. This note does not mark the review complete.
+> **Rebuild status (2026-10-07): IN PROGRESS.** Strict dated data and rewritten Features 02–08 are implemented, including causal DCC-MIDAS, exact minimum torsion, observed historical stress replay, BIC macro analogs, a continuous ellipsoidal adversary and correctly rotated conditional Clayton stress. **37 targeted tests pass.** Feature 09, remaining Feature 01 proxy corrections, contracts/jobs, frontend wiring/fake removal and final checks remain tracked in `backend/app/services/volatility_v2/DONE.md`. This note does not mark the review complete.
 
 # Volatility V2 Review: Spec vs Implementation vs Frontend
 

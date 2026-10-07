@@ -579,3 +579,151 @@ def test_midas_likelihood_matches_independent_matrix_recursion():
     assert _likelihood(z, targets, a, b) != pytest.approx(
         _likelihood(z, np.repeat(targets[:1], len(z), axis=0), a, b)
     )
+
+
+def test_historical_stress_compounds_and_attribution_matches_nav():
+    from app.services.volatility_v2.core.stress import replay
+
+    index = pd.bdate_range("2020-01-01", periods=80)
+    values = np.random.default_rng(9).normal(0.001, 0.01, size=(80, 2))
+    frame = pd.DataFrame(values, index=index, columns=["A", "B"])
+    weights = pd.Series({"A": 0.8, "B": -0.2})
+    selected = frame.iloc[25:45]
+    actual = replay(frame, weights, index[25], index[44])
+    expected = float(np.prod(1 + selected.to_numpy() @ weights.to_numpy()) - 1)
+    assert actual["portfolio_return"] == pytest.approx(expected)
+    assert sum(
+        row["cumulative_return_contribution"] for row in actual["attribution"]
+    ) == pytest.approx(expected)
+    assert len(actual["path"]) == 20
+    assert actual["path"][-1]["nav"] == pytest.approx(1 + expected)
+    assert actual["portfolio_return"] != pytest.approx(float(selected.mean() @ weights))
+    with pytest.raises(ValueError, match="not covered"):
+        replay(frame, weights, "2008-09-01", "2008-12-31")
+
+
+def test_stress_gaussian_units_match_daily_analytic_quantile_and_seed():
+    from scipy.stats import norm
+    from app.services.volatility_v2.core.stress import gaussian_stress
+
+    cov = pd.DataFrame(
+        [[0.04, 0.01], [0.01, 0.09]], index=["A", "B"], columns=["A", "B"]
+    )
+    weights = pd.Series({"A": 0.6, "B": 0.4})
+    risk, distribution = gaussian_stress(cov, weights, paths=100000, aum=1e6)
+    sigma = np.sqrt(weights @ cov @ weights / 252)
+    assert risk["var_99"] == pytest.approx(norm.ppf(0.01) * sigma, abs=0.0004)
+    assert risk["var_99_usd"] == pytest.approx(risk["var_99"] * 1e6)
+    repeated, second = gaussian_stress(cov, weights, paths=100000, aum=1e6)
+    assert repeated == risk and second == distribution
+
+
+def test_rotated_clayton_recovers_tail_dependence_and_conditions_on_vol_spikes():
+    from scipy.stats import norm
+    from statsmodels.distributions.copula.api import ClaytonCopula
+    from app.services.volatility_v2.core.tails import rotated_clayton
+
+    import inspect
+
+    rng_name = (
+        "rng"
+        if "rng" in inspect.signature(ClaytonCopula.rvs).parameters
+        else "random_state"
+    )
+    uniforms = ClaytonCopula(theta=3).rvs(
+        2000, **{rng_name: np.random.default_rng(341)}
+    )
+    index = pd.date_range("2015-01-01", periods=len(uniforms))
+    returns = pd.Series(norm.ppf(uniforms[:, 0]) * 0.02, index=index)
+    vol_change = pd.Series(-norm.ppf(uniforms[:, 1]) * 0.03, index=index)
+    result = rotated_clayton(returns, vol_change, loss_threshold=0.03)
+    assert result["theta"] == pytest.approx(3, rel=0.2)
+    median = next(
+        row["return"]
+        for row in result["conditional_return_quantiles"]
+        if row["quantile"] == 0.5
+    )
+    assert median < returns.median() - 0.015
+    assert result["reverse_stress_status"] == "ok"
+    for row in result["conditional_return_quantiles"]:
+        actual_cdf = (
+            ClaytonCopula(theta=result["theta"]).cdf(
+                np.array([[row["unconditional_return_cdf"], 0.2]])
+            )[0]
+            / 0.2
+        )
+        assert actual_cdf == pytest.approx(row["quantile"], abs=1e-10)
+    unsupported = rotated_clayton(returns, vol_change, loss_threshold=0.5)
+    assert unsupported["reverse_stress_status"] == "unavailable"
+    assert "outside observed" in unsupported["reverse_stress_reason"]
+
+
+def test_macro_analogs_use_every_window_and_continuous_adversary_is_feasible():
+    from app.services.volatility_v2.core.analogs import analyze, COLUMNS
+
+    rng = np.random.default_rng(467)
+    index = pd.bdate_range("2020-01-01", periods=300)
+    returns = pd.DataFrame(
+        rng.normal(0, 0.01, (300, 2)), index=index, columns=["A", "B"]
+    )
+    changes = pd.DataFrame(rng.normal(size=(300, 5)), index=index, columns=COLUMNS)
+    changes.iloc[:10] = np.nan
+    weights = pd.Series({"A": 0.5, "B": 0.5})
+    result = analyze(
+        returns,
+        weights,
+        {
+            "analog_horizon": 10,
+            "macro_scenario": dict.fromkeys(COLUMNS, 0),
+            "adversarial_c": 2,
+        },
+        changes=changes,
+    )
+    assert result["meta"]["candidate_windows"] == 290
+    assert len(result["analogs"]) == 10
+    successful = [row for row in result["meta"]["precision_candidates"] if "bic" in row]
+    selected = min(successful, key=lambda row: row["bic"])
+    assert result["meta"]["selected_alpha"] == selected["alpha"]
+    assert result["adversarial"]["distance_squared_from_query"] == pytest.approx(4)
+    first = result["analogs"][0]
+    episode = returns.loc[first["window_start"] : first["window_end"]]
+    assert first["portfolio_return"] == pytest.approx(
+        float((1 + episode @ weights).prod() - 1)
+    )
+    assert len(result["volatility_paths"]) == 10 * 10 * 2
+    # Compare the claimed worst scenario with 1,000 independent feasible points.
+    precision = result["precision_matrix"].to_numpy()
+    covariance = np.linalg.inv(precision)
+    beta = np.array(
+        [result["meta"]["conditional_mean_coefficients"][column] for column in COLUMNS]
+    )
+    intercept = result["meta"]["conditional_mean_coefficients"]["intercept"]
+    query_z = -np.array(
+        [result["meta"]["center"][column] for column in COLUMNS]
+    ) / np.array([result["meta"]["scale"][column] for column in COLUMNS])
+    vectors = rng.normal(size=(1000, 5))
+    vectors /= np.linalg.norm(vectors, axis=1)[:, None]
+    feasible = query_z + (vectors @ np.linalg.cholesky(covariance).T) * 2
+    alternative = intercept + feasible @ beta
+    assert (
+        result["adversarial"]["predicted_portfolio_return"] <= alternative.min() + 1e-10
+    )
+
+
+def test_stress_irfs_use_a_source_residual_standard_deviation():
+    from app.services.volatility_v2.core.connectedness import (
+        fit_volatility_var,
+        bootstrap_irf,
+    )
+
+    rng = np.random.default_rng(88)
+    panel = pd.DataFrame(rng.normal(size=(80, 2)) * [0.2, 0.7], columns=["A", "B"])
+    model = fit_volatility_var(panel, max_lag=1)
+    rows, _ = bootstrap_irf(
+        panel, model, horizons=(1,), reps=20, max_lag=1, shock_scale="one_residual_sd"
+    )
+    row = next(row for row in rows if row["source"] == "B" and row["target"] == "A")
+    assert row["response"] == pytest.approx(
+        model.ma(1)[1, 0, 1] * np.sqrt(model.covariance[1, 1])
+    )
+    assert row["shock_scale"] == "one_residual_sd"

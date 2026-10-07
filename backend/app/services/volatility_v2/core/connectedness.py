@@ -354,13 +354,16 @@ def bootstrap_irf(
     reps=100,
     confidence=0.90,
     seed=41,
+    shock_scale="unit_innovation",
     **controls,
 ):
     """Stationary-block residual-vector bootstrap; each draw refits the declared VAR."""
     from arch.bootstrap import StationaryBootstrap
 
-    if not 20 <= reps <= 500 or not 0.5 < confidence < 1:
+    if not 20 <= reps <= 2000 or not 0.5 < confidence < 1:
         raise ValueError("Invalid IRF bootstrap repetitions or confidence")
+    if shock_scale not in ("unit_innovation", "one_residual_sd"):
+        raise ValueError("Invalid IRF shock scale")
     values = panel.to_numpy(dtype=float)
     lag = model.lag
     predictions = []
@@ -389,7 +392,10 @@ def bootstrap_irf(
                 pd.DataFrame(synthetic, index=panel.index, columns=panel.columns),
                 **controls,
             )
-            draws.append(refit.ma(max(horizons)))
+            draw = refit.ma(max(horizons))
+            if shock_scale == "one_residual_sd":
+                draw = draw * np.sqrt(np.diag(refit.covariance))[None, None, :]
+            draws.append(draw)
         except (ValueError, np.linalg.LinAlgError) as exc:
             failures.append({"replication": replication, "reason": str(exc)})
     if len(draws) < max(20, int(0.8 * reps)):
@@ -400,6 +406,8 @@ def bootstrap_irf(
         }
     arr = np.asarray(draws)
     point = model.ma(max(horizons))
+    if shock_scale == "one_residual_sd":
+        point = point * np.sqrt(np.diag(model.covariance))[None, None, :]
     alpha = (1 - confidence) / 2
     lower, upper = np.quantile(arr, [alpha, 1 - alpha], axis=0)
     rows = [
@@ -411,6 +419,7 @@ def bootstrap_irf(
             "lower": float(lower[h, i, j]),
             "upper": float(upper[h, i, j]),
             "confidence": confidence,
+            "shock_scale": shock_scale,
             "successful_replications": len(draws),
         }
         for h in horizons

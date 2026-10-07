@@ -1081,76 +1081,10 @@ def connectedness_at_risk(conn_df: pd.DataFrame, macro: pd.DataFrame, current: f
 
 
 
-def clayton_copula_tail_dependence(ret: pd.Series, vol_changes: pd.Series, tail_pct: float = 0.20) -> dict[str, Any]:
-    r = pd.to_numeric(ret, errors="coerce").dropna()
-    dv = pd.to_numeric(vol_changes, errors="coerce").dropna()
-    idx = r.index.intersection(dv.index)
-    r, dv = r.loc[idx], dv.loc[idx]
-    if len(r) < 40:
-        return {"error": "insufficient observations"}
-    u = pd.Series(stats.rankdata(r.to_numpy()) / (len(r) + 1), index=r.index)
-    v = pd.Series(stats.rankdata(dv.to_numpy()) / (len(dv) + 1), index=dv.index)
-    mask = (u < tail_pct) & (v > 1 - tail_pct)
-    if mask.sum() < 10:
-        mask = u < tail_pct
-    u_t, v_t = u[mask].clip(1e-6, 1 - 1e-6).to_numpy(), v[mask].clip(1e-6, 1 - 1e-6).to_numpy()
-    def nll(theta: float) -> float:
-        inner = np.maximum(u_t ** (-theta) + v_t ** (-theta) - 1, 1e-12)
-        return -float((math.log(theta + 1) - (theta + 1) * (np.log(u_t) + np.log(v_t)) - (2 + 1 / theta) * np.log(inner)).sum())
-    opt = minimize(lambda x: nll(float(x[0])), np.array([1.0]), method="L-BFGS-B", bounds=[(0.01, 20)])
-    theta = float(opt.x[0])
-    return {"theta": theta, "lower_tail_dependence": float(2 ** (-1 / theta)), "n_tail_obs": int(mask.sum()), "converged": bool(opt.success)}
 
 
-def graphical_lasso_analogs(signal: pd.DataFrame, analog_cols: list[str], k: int = 10) -> list[dict[str, Any]]:
-    try:
-        from sklearn.covariance import GraphicalLasso, ledoit_wolf
-    except Exception:
-        return []
-    base = signal[analog_cols].replace([np.inf, -np.inf], np.nan).ffill().bfill().fillna(0)
-    base = base.loc[:, base.std(ddof=0) > 1e-12]
-    analog_cols = list(base.columns)
-    if len(base) < 60 or len(analog_cols) < 2:
-        return []
-    try:
-        arr = ((base - base.mean()) / base.std(ddof=0).replace(0, 1)).to_numpy(dtype=float)
-        gl = GraphicalLasso(alpha=0.1, max_iter=200).fit(arr)
-        precision = np.nan_to_num(gl.precision_, nan=0.0, posinf=0.0, neginf=0.0)
-    except Exception:
-        arr = ((base - base.mean()) / base.std(ddof=0).replace(0, 1)).to_numpy(dtype=float)
-        lw_cov, _ = ledoit_wolf(arr)
-        try:
-            precision = np.linalg.inv(lw_cov + np.eye(len(analog_cols)) * 1e-8)
-        except Exception:
-            precision = np.linalg.pinv(np.nan_to_num(base.cov().to_numpy(dtype=float), nan=0.0) + np.eye(len(analog_cols)) * 1e-6)
-    recent = base.tail(30).mean().to_numpy(dtype=float)
-    rows = []
-    for i in range(30, len(base) - 30, 21):
-        vec = base.iloc[i : i + 30].mean().to_numpy(dtype=float)
-        diff = vec - recent
-        rows.append({"window_start": base.index[i].strftime("%Y-%m-%d"), "distance_glasso": float(math.sqrt(max(diff @ precision @ diff, 0.0))), "avg_return": float(signal["ret"].iloc[i : i + 30].sum()), "avg_vol": float(signal["vol"].iloc[i : i + 30].mean())})
-    return clean_json(sorted(rows, key=lambda x: x["distance_glasso"])[:k])
 
 
-def adversarial_scenario(weights: pd.Series, ret: pd.DataFrame, signal: pd.DataFrame, analog_cols: list[str], c: float = 2.0) -> dict[str, Any]:
-    data = signal[analog_cols].replace([np.inf, -np.inf], np.nan).ffill().bfill().fillna(0)
-    cov = data.cov().to_numpy(dtype=float) + np.eye(len(analog_cols)) * 1e-8
-    try:
-        c_fac = cho_factor(cov, check_finite=False)
-        precision = cho_solve(c_fac, np.eye(len(cov)), check_finite=False)
-    except Exception:
-        precision = np.linalg.pinv(cov)
-    current = data.tail(1).to_numpy(dtype=float).flatten()
-    best = None
-    for i in range(30, len(data) - 30, 5):
-        x = data.iloc[i : i + 30].mean().to_numpy(dtype=float)
-        diff = x - current
-        dist = float(math.sqrt(max(diff @ precision @ diff, 0.0)))
-        if dist <= c:
-            pnl = float((ret.reindex(columns=weights.index).iloc[i : i + 30].sum().fillna(0) @ weights))
-            if best is None or pnl < best["expected_portfolio_loss"]:
-                best = {"window_start": data.index[i].strftime("%Y-%m-%d"), "expected_portfolio_loss": pnl, "mahalanobis_distance": dist, "macro_shocks": {col: float(diff[j]) for j, col in enumerate(analog_cols)}}
-    return best or {"error": "no historically plausible window inside constraint", "plausibility_constraint_c": c}
 
 
 def two_step_rebalance(weights: np.ndarray, cov: np.ndarray, target_vol: float, gross_cap: float = 3.0) -> tuple[np.ndarray, np.ndarray]:
@@ -1284,59 +1218,6 @@ def har_bootstrap_forecast_bands(
     return compact_records(out)
 
 
-def bootstrap_var_irf_bands(logv: pd.DataFrame, horizons: Iterable[int] = (1, 5, 10, 21), reps: int = 250, seed: int = 41) -> list[dict[str, Any]]:
-    clean = logv.replace([np.inf, -np.inf], np.nan).dropna()
-    if clean.shape[1] < 2 or len(clean) < 160:
-        return []
-    coefs, _, lag, _ = fit_var(clean, max_lag=5)
-    if len(coefs) < 2:
-        return []
-    lag = min(max(1, int(lag)), len(coefs) - 1)
-    point = var_ma_matrices(coefs, max(horizons))
-    y = clean.to_numpy(dtype=float)
-    fitted = []
-    for t in range(lag, len(y)):
-        pred = coefs[0].copy()
-        for l in range(lag):
-            pred += coefs[l + 1] @ y[t - l - 1]
-        fitted.append(pred)
-    resid = y[lag:] - np.asarray(fitted)
-    if len(resid) < 80:
-        return []
-    rng = np.random.default_rng(seed)
-    draws: dict[tuple[int, int], list[float]] = {(h, i): [] for h in horizons for i in range(clean.shape[1])}
-    for _ in range(int(reps)):
-        sampled = resid[rng.integers(0, len(resid), size=len(resid))]
-        synth = np.vstack([y[:lag], np.zeros_like(y[lag:])])
-        for t in range(lag, len(y)):
-            pred = coefs[0].copy()
-            for l in range(lag):
-                pred += coefs[l + 1] @ synth[t - l - 1]
-            synth[t] = pred + sampled[t - lag]
-        try:
-            bcoef, _, _, _ = fit_var(pd.DataFrame(synth, index=clean.index, columns=clean.columns), max_lag=lag)
-            if len(bcoef) < 2:
-                continue
-            bphis = var_ma_matrices(bcoef, max(horizons))
-            for h in horizons:
-                for i in range(clean.shape[1]):
-                    draws[(h, i)].append(float(bphis[h][i].sum()))
-        except Exception:
-            continue
-    rows = []
-    for h in horizons:
-        for i, asset in enumerate(clean.columns):
-            vals = np.asarray(draws[(h, i)], dtype=float)
-            rows.append({
-                "horizon": int(h),
-                "asset": str(asset),
-                "response": float(point[h][i].sum()),
-                "p05": float(np.quantile(vals, 0.05)) if len(vals) else None,
-                "p50": float(np.quantile(vals, 0.50)) if len(vals) else None,
-                "p95": float(np.quantile(vals, 0.95)) if len(vals) else None,
-                "reps": int(len(vals)),
-            })
-    return clean_json(rows)
 
 
 def matrix_records(mat: pd.DataFrame, value_name: str = "value") -> list[dict[str, Any]]:
