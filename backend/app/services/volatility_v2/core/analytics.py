@@ -493,25 +493,17 @@ def stationary_bootstrap_indices(n: int, reps: int = 250, block_p: float | None 
 
 
 def model_confidence_set(losses: dict[str, pd.Series], alpha: float = 0.10, reps: int = 200) -> list[str]:
-    aligned = pd.concat(losses, axis=1).dropna()
-    models = list(aligned.columns)
-    if len(models) <= 1 or len(aligned) < 30:
-        return models
-    active = models[:]
-    while len(active) > 1:
-        L = aligned[active].to_numpy(dtype=float)
-        avg = L.mean(axis=0)
-        worst_idx = int(np.argmax(avg))
-        centered = L - L.mean(axis=0, keepdims=True)
-        obs = float(avg[worst_idx] - avg.min())
-        idx = stationary_bootstrap_indices(len(L), reps=reps)
-        boot_means = centered[idx].mean(axis=1)
-        boot = boot_means.max(axis=1) - boot_means.min(axis=1)
-        crit = float(np.quantile(boot, 1 - alpha))
-        if obs <= crit:
-            break
-        active.pop(worst_idx)
-    return active
+    from arch.bootstrap import MCS
+    aligned = pd.concat(losses, axis=1).replace([np.inf, -np.inf], np.nan).dropna()
+    if aligned.empty:
+        return []
+    if len(aligned.columns) == 1:
+        return list(aligned.columns)
+    if len(aligned) < 30:
+        raise ValueError("MCS requires at least 30 aligned held-out losses")
+    mcs = MCS(aligned, size=alpha, reps=reps, block_size=max(2, int(len(aligned) ** (1 / 3))), method="R", bootstrap="stationary", seed=17)
+    mcs.compute()
+    return list(mcs.included)
 
 
 def macro_frame() -> pd.DataFrame:
