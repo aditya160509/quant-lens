@@ -255,3 +255,11 @@ These came from a second read of the code and were not in the first pass. Read [
 | A5 | Caches | `_PRICE_SAMPLE_CACHE` is unbounded and never invalidated, so a data refresh is invisible until restart. `_CHAR_PANEL_CACHE` evicts FIFO, not LRU. Key both on the parquet `mtime` (Screener V2 pattern). | `analytics.py:213-232,310` |
 | A6 | API | All runs are synchronous; `/run-all` runs 14 features (HMM, VAR, PDF) in one request with no job, progress or cancel. Use the Studio `JobStore` pattern. | `api/factors_v2.py:118-125` |
 | A7 | Structure | 14 feature files around 3,000 lines with shared logic duplicated across them, plus stale `review.md` and completion reports. Consolidate shared estimators in `core/` per the playbook and record file fates in `DONE.md`. | `factors_v2/` |
+
+## Backend rebuild status, 2026-10-07
+
+The Factors backend was rebuilt against this review and the current playbook. B1 now has exact envelope validation and UI job wiring; B2 uses dated formation selection and lagged observed statements with explicit vintage limitations; B3's fabricated hub results were removed. A1–A7 have strict symbols, missing-return preservation, explicit input/status errors, versioned bounded caches, local durable jobs, lazy dispatch, focused estimator modules, and a file-fate record.
+
+Per-feature corrections and removals are recorded in [Factors V2 DONE.md](../../backend/app/services/factors_v2/DONE.md). All 14 supported backend feature paths are tested. Unsupported spec claims are not treated as implemented: statistical regimes are not named macro regimes, EWMA/DCC is not MLE GARCH, fixed composite weights are not adaptive walk-forward optimization, observed volatility is not institutional crowding, and absent academic labels do not produce classifier probabilities. True cross-sectional IC, actual stock execution/bins, constrained robust optimization, refitted VAR bootstrap, in-app recovery events, and source-backed PDF sections replace the earlier proxies.
+
+Frontend forms/renderers/layout and full browser completion remain Claude-owned. Unsupported old frontend parameters now fail with 422 instead of silently running defaults. `DONE.md` lists all limitations and exact checks; this note does not certify the original full frontend/spec as 100% delivered.

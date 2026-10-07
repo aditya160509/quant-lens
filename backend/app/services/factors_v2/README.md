@@ -1,3 +1,5 @@
+> Historical document. Superseded on 2026-10-07 by [DONE.md](DONE.md) and the backend `/features` manifest. Earlier completion/default/estimator claims below are not the current runtime contract.
+
 # Factors V2 Runtime README
 
 This README explains exactly how to build, test, and migrate Factors V2.
