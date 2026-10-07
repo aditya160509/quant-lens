@@ -368,3 +368,62 @@ def test_irf_bootstrap_uses_seeded_library_blocks_and_actual_var_refits():
     assert len(rows) == 8 and info["successful_replications"] == 20
     assert all(row["lower"] <= row["upper"] for row in rows)
     assert rows[0]["response"] == pytest.approx(model.ma(5)[1, 0, 0])
+
+
+def test_covariance_estimators_match_libraries_and_reject_missing_returns():
+    from sklearn.covariance import LedoitWolf, OAS
+    from app.services.volatility_v2.core.covariance import covariance_estimates
+
+    values = np.random.default_rng(71).normal(size=(100, 3)) / 100
+    frame = pd.DataFrame(values, columns=["A", "B", "C"])
+    result = covariance_estimates(frame)
+    np.testing.assert_allclose(
+        result["ledoit_wolf"], LedoitWolf().fit(values).covariance_ * 252
+    )
+    np.testing.assert_allclose(result["oas"], OAS().fit(values).covariance_ * 252)
+    np.testing.assert_allclose(result["sample"], np.cov(values, rowvar=False) * 252)
+    frame.iloc[0, 0] = np.nan
+    with pytest.raises(ValueError, match="finite observed"):
+        covariance_estimates(frame)
+
+
+def test_euler_and_pairwise_attribution_conserve_actual_portfolio_risk():
+    from app.services.volatility_v2.core.covariance import portfolio_attribution
+
+    cov = pd.DataFrame(
+        [[0.04, 0.01], [0.01, 0.09]], index=["A", "B"], columns=["A", "B"]
+    )
+    weights = pd.Series({"A": 0.7, "B": -0.2})
+    result = portfolio_attribution(cov, weights)
+    expected = float(weights.to_numpy() @ cov.to_numpy() @ weights.to_numpy())
+    assert result["variance"] == pytest.approx(expected)
+    assert sum(
+        row["component_volatility"] for row in result["assets"]
+    ) == pytest.approx(np.sqrt(expected))
+    assert result["pairwise_variance"].to_numpy().sum() == pytest.approx(expected)
+    assert result["minimum_variance_weights"].sum() == pytest.approx(1)
+
+
+def test_dcc_forecasts_are_positive_definite_and_ignore_future_returns():
+    from app.services.volatility_v2.core.dcc import expanding_dcc
+
+    rng = np.random.default_rng(817)
+    values = rng.standard_t(7, size=(155, 2)) * 0.01
+    values[:, 1] += values[:, 0] * 0.4
+    frame = pd.DataFrame(
+        values, index=pd.date_range("2020-01-01", periods=155), columns=["A", "B"]
+    )
+    first = expanding_dcc(frame, min_train=120, refit_interval=20)
+    changed = frame.copy()
+    changed.iloc[145:] *= 2
+    second = expanding_dcc(changed, min_train=120, refit_interval=20)
+    assert first["timeline"][:25] == second["timeline"][:25]
+    for row, cov in zip(first["timeline"], first["covariances"]):
+        np.testing.assert_allclose(np.diag(row["correlation"]), 1)
+        assert np.linalg.eigvalsh(cov).min() > 0
+        assert (
+            row["training_observed_through"]
+            <= row["forecast_observed_through"]
+            < row["date"]
+        )
+    assert np.linalg.eigvalsh(first["forecast_covariance"]).min() > 0

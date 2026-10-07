@@ -85,3 +85,11 @@ Connectedness/currency step checks:
 - Real Feature 06 SPY/QQQ/TLT, 500 price observations, 126-observation rolling windows: OLS and EW returned `ok`, each with 338 daily connectedness readings and 338 requested network snapshots. OLS with 20 bootstrap replications returned 36 source/target/horizon bands.
 
 Frequency decomposition reference: [Barunik and Krehlik, spectral connectedness definitions](https://arxiv.org/html/1507.01729). statsmodels supplies estimation and MA primitives; the short generalized/spectral aggregation is implemented directly because its built-in FEVD is Cholesky-orthogonalized and is not the required ordering-invariant estimator.
+
+Covariance/DCC core step, feature wiring still pending:
+
+- Added `core/covariance.py`: sklearn Ledoit–Wolf and OAS estimates, explicit complete-observation checks, weighted-mean EW covariance, Euler marginal/component volatility and ordered pairwise variance attribution. No missing return is replaced by zero.
+- Added `core/dcc.py`: past-only arch GARCH/Student-t marginal forecasts and constrained two-stage DCC maximum likelihood, with multiple optimization starts and explicit failure. Historical covariance uses information through the previous observation; next-day covariance uses the final observed return. Correlation diagonals are exactly one, without the old 0.999 diagonal clipping.
+- These cores are not yet exposed by Feature 07. DCC-MIDAS, crisis conditioning, minimum torsion, and complete feature wiring remain pending; the existing feature is not declared repaired.
+- `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_math.py -q`: **18 passed**. New tests compare shrinkage estimates directly to sklearn, check signed-weight risk conservation, and mutate future returns to verify DCC causality and positive definiteness.
+- `ruff check backend/app/services/volatility_v2/core/dcc.py backend/app/services/volatility_v2/core/covariance.py`: passed.
