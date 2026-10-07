@@ -49,7 +49,14 @@ def fit_dcc(z):
     return float(a), float(b), qbar, q
 
 
-def expanding_dcc(returns, min_train=252, refit_interval=63, annualization=252):
+def expanding_dcc(
+    returns,
+    min_train=252,
+    refit_interval=63,
+    annualization=252,
+    dynamics="dcc",
+    midas_k=36,
+):
     """Covariance for date t uses data through t-1; latest forecast uses all observed data."""
     data = returns.to_numpy(dtype=float)
     if not np.isfinite(data).all() or returns.index.has_duplicates:
@@ -61,9 +68,31 @@ def expanding_dcc(returns, min_train=252, refit_interval=63, annualization=252):
         or annualization <= 0
     ):
         raise ValueError("Invalid DCC training controls or insufficient observations")
+    if dynamics not in ("dcc", "dcc_midas"):
+        raise ValueError("dynamics must be dcc or dcc_midas")
+    first_forecast = min_train
+    if dynamics == "dcc_midas":
+        from .midas import fit_midas, monthly_correlations, lag_matrices, beta_weights
+
+        if midas_k < 2:
+            raise ValueError("MIDAS requires at least two completed-month lags")
+        periods = returns.index.to_period("M")
+        month_counts = returns.groupby(periods).size()
+        sufficient_months = month_counts[month_counts >= max(10, returns.shape[1] + 1)]
+        if sufficient_months.empty:
+            raise ValueError("No adequately observed months for DCC-MIDAS")
+        first_complete_month = sufficient_months.index[0]
+        ready = np.flatnonzero(periods >= first_complete_month + midas_k)
+        if not len(ready):
+            raise ValueError("Insufficient completed months for DCC-MIDAS")
+        first_forecast = max(min_train, int(ready[0]) + 120)
+        if first_forecast >= len(data):
+            raise ValueError(
+                "Insufficient training observations after MIDAS month warmup"
+            )
     rows, parameters, covariances = [], [], []
     latest = None
-    for start in range(min_train, len(data), refit_interval):
+    for start in range(first_forecast, len(data), refit_interval):
         stop = min(start + refit_interval, len(data))
         residuals, variances, means = [], [], []
         for asset in returns.columns:
@@ -90,7 +119,16 @@ def expanding_dcc(returns, min_train=252, refit_interval=63, annualization=252):
             forecast = fitted.forecast(start=start - 1, horizon=1, reindex=False)
             variances.append(forecast.residual_variance.iloc[:, 0].to_numpy() / 10000)
         training_z = np.column_stack(residuals)
-        a, b, qbar, q = fit_dcc(training_z)
+        theta, monthly, target = None, None, None
+        if dynamics == "dcc_midas":
+            a, b, theta, q, monthly = fit_midas(
+                training_z, returns.index[:start], midas_k
+            )
+            z_history = list(training_z)
+            previous_month = returns.index[start - 1].to_period("M")
+            qbar = None
+        else:
+            a, b, qbar, q = fit_dcc(training_z)
         previous = training_z[-1]
         variance_path = np.column_stack(variances)
         parameters.append(
@@ -99,10 +137,25 @@ def expanding_dcc(returns, min_train=252, refit_interval=63, annualization=252):
                 "a": a,
                 "b": b,
                 "training_size": start,
+                "dynamics": dynamics,
+                "midas_beta_theta": theta,
             }
         )
         for offset, position in enumerate(range(start, stop)):
-            q = (1 - a - b) * qbar + a * np.outer(previous, previous) + b * q
+            target = qbar
+            if dynamics == "dcc_midas":
+                month = returns.index[position].to_period("M")
+                if month != previous_month:
+                    monthly = monthly_correlations(
+                        np.asarray(z_history), returns.index[:position]
+                    )
+                    previous_month = month
+                target = np.einsum(
+                    "kij,k->ij",
+                    lag_matrices(monthly, returns.index[position], midas_k),
+                    beta_weights(midas_k, theta),
+                )
+            q = (1 - a - b) * target + a * np.outer(previous, previous) + b * q
             corr = correlation(q)
             variance = variance_path[offset]
             if not np.isfinite(variance).all() or (variance <= 0).any():
@@ -116,10 +169,24 @@ def expanding_dcc(returns, min_train=252, refit_interval=63, annualization=252):
                     "forecast_observed_through": returns.index[position - 1],
                     "condition_number": float(np.linalg.cond(covariance)),
                     "correlation": corr.tolist(),
+                    "long_run_correlation": target.tolist()
+                    if dynamics == "dcc_midas"
+                    else None,
                 }
             )
             previous = (data[position] - means) / np.sqrt(variance)
-        q_next = (1 - a - b) * qbar + a * np.outer(previous, previous) + b * q
+            if dynamics == "dcc_midas":
+                z_history.append(previous)
+        # Forecast date is the next business day for this aligned portfolio panel.
+        next_date = returns.index[stop - 1] + pd.offsets.BDay(1)
+        if dynamics == "dcc_midas":
+            monthly = monthly_correlations(np.asarray(z_history), returns.index[:stop])
+            target = np.einsum(
+                "kij,k->ij",
+                lag_matrices(monthly, next_date, midas_k),
+                beta_weights(midas_k, theta),
+            )
+        q_next = (1 - a - b) * target + a * np.outer(previous, previous) + b * q
         next_variance = variance_path[stop - start]
         latest = (
             correlation(q_next)
@@ -134,4 +201,11 @@ def expanding_dcc(returns, min_train=252, refit_interval=63, annualization=252):
             latest, index=returns.columns, columns=returns.columns
         ),
         "forecast_observed_through": returns.index[-1],
+        "forecast_date": next_date,
+        "forecast_calendar": "next business day; holidays are not inferred",
+        "forecast_long_run_correlation": pd.DataFrame(
+            target, index=returns.columns, columns=returns.columns
+        )
+        if dynamics == "dcc_midas"
+        else None,
     }

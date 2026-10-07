@@ -31,7 +31,7 @@ Frontend design remains reserved for Claude. Other V2 modules and V1 are outside
 
 Before: a 1,495-line analytics file, nine feature wrappers, aspirational output contracts, a synchronous router, and disconnected frontend workbench.
 
-Current: strict request-scoped `core/data_loader.py`, dedicated `core/har.py`, `core/garch.py`, `core/regimes.py`, `core/vrp.py`, `core/connectedness.py`, `core/currency.py` and `core/uploads.py`, rewritten Features 02–06, and golden/data regression tests. Splitting remaining estimators, covariance, connectedness, stress and budget code, plus updating the manifest/router, remains required.
+Current: strict request-scoped `core/data_loader.py`, dedicated `core/har.py`, `core/garch.py`, `core/regimes.py`, `core/vrp.py`, `core/connectedness.py`, `core/currency.py` and `core/uploads.py`, rewritten Features 02–07, and golden/data regression tests. Splitting remaining estimators, covariance, connectedness, stress and budget code, plus updating the manifest/router, remains required.
 
 ## Old-file fate table
 
@@ -44,12 +44,13 @@ Current: strict request-scoped `core/data_loader.py`, dedicated `core/har.py`, `
 | `features/feature_04.py` | Replaced with causal HMM filtering, genuine hard SJM states and censored durations |
 | `features/feature_05.py` | Replaced with observed matching IV and actual integrated physical forecasts |
 | `features/feature_06.py` | Replaced with daily, consistently weighted library VAR estimates and correctly normalized frequency shares |
+| `features/feature_07.py` | Replaced with causal DCC/DCC-MIDAS, observed USD returns, explicit crisis conditioning and exact minimum torsion |
 | `core/performance.py` | Retained; unsafe fastmath disabled |
 | Old audit/spec documents | Pending explicit supersession review; no deletion yet |
 
 ## Known limitations and remaining work
 
-- Rebuild is incomplete. Features 07–09, remaining Feature 01 proxy outputs, full contracts, uploads/jobs/export, frontend wiring/fake removal, and final verification are pending.
+- Rebuild is incomplete. Features 08–09, remaining Feature 01 proxy outputs, full contracts, uploads/jobs/export, frontend wiring/fake removal, and final verification are pending.
 - Macro history contains observations but no release-vintage guarantee. HAR-X is unavailable rather than silently imputing macro predictors.
 - Daily OHLC alone does not support intraday bipower jump identification or genuine Bandi–Russell noise correction. The repo has hourly panels for indices and selected assets, verified directly during this pass; their available coverage still needs to be connected before marking sampled-realized-measure outputs supported. SPY has no hourly series in the canonical hourly panel. No blanket claim that the repo lacks intraday data is made.
 - The current GARCH winner is retrospective selection over a held-out evaluation window. Its historical diagnostics are post-selection and do not represent a tradable winner-switching strategy.
@@ -93,3 +94,17 @@ Covariance/DCC core step, feature wiring still pending:
 - These cores are not yet exposed by Feature 07. DCC-MIDAS, crisis conditioning, minimum torsion, and complete feature wiring remain pending; the existing feature is not declared repaired.
 - `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_math.py -q`: **18 passed**. New tests compare shrinkage estimates directly to sklearn, check signed-weight risk conservation, and mutate future returns to verify DCC causality and positive definiteness.
 - `ruff check backend/app/services/volatility_v2/core/dcc.py backend/app/services/volatility_v2/core/covariance.py`: passed.
+
+Feature 07 integration checks:
+
+- Replaced the rolling-Pearson series advertised as DCC with the actual conditional correlation path. No asset dropping, missing-return zero filling, default DCC parameter substitution, or EWMA copy under a DCC label remains in this feature.
+- DCC-MIDAS jointly estimates a, b and Beta(1, theta) decay. Its completed prior monthly standardized-residual correlations enter the daily DCC recursion. Convex matrix weighting preserves positive definiteness; the spec's unconstrained per-pair intercept/slope regressions do not guarantee a valid multivariate covariance. The next-observation label explicitly discloses its next-business-day calendar assumption, without inferring exchange holidays.
+- Exact minimum torsion uses scipy polar/eigen decompositions in an alternating Procrustes/diagonal-scale solution. A separate two-asset angular minimization verifies the objective. Factor exposures conserve actual signed-weight portfolio variance. The review's proposed factor-square-root constraint is not the return transformation defining minimum torsion.
+- Observed VIX and trailing USD-return volatility ranks define the hard crisis comparison. Missing VIX/insufficient history are excluded with counts. Separate Feature 04 causal HMM weights use a weighted mean and exclude nonconverged fits. Fisher tests use actual group sizes and Bonferroni correction; IID/serial-dependence limitations are explicit.
+- Removed four replaced unused analytics functions after graph/rg consumer checks and all-feature/router import checks. The old DCC helper remains temporarily because Features 08/09 still call it; it must be removed when those consumers are rewritten.
+- `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_*.py -q`: **32 passed**. Covers actual MIDAS likelihood recursion, completed-month targets, partial first-month warmup, causal forecasts, weighted centering, true torsion objective, and explicit optimizer failure.
+- `ruff check backend/app/services/volatility_v2/core/{dcc,midas,torsion,crisis,covariance}.py backend/app/services/volatility_v2/features/feature_07.py backend/tests/test_volatility_v2_*.py`: passed.
+- `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -c 'from app.services.volatility_v2.registry import VOLATILITY_V2_FEATURES,get_runner; from app.api.volatility_v2 import router; print({"imported_features":[key for key in VOLATILITY_V2_FEATURES if callable(get_runner(key))],"routes":[r.path for r in router.routes]})'`: all nine feature imports and both registered routes passed.
+- `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -c 'from app.services.volatility_v2.registry import run_feature; r=run_feature("07", {"assets":["SPY","QQQ","TLT"],"lookback_days":1000,"min_train":252,"refit_interval":126,"midas_k":12,"hmm_restarts":1}); print({"status":r["status"],"dcc_days":len(r["charts"]["dcc_time_series"]),"midas_days":len(r["charts"]["dcc_midas_time_series"]),"methods":[x["method"] for x in r["tables"]["sample_ewma_lw_dcc_comparison"]],"warnings":r["meta"]["warnings"],"risk_fraction_sum":sum(x["fraction_total_risk"] for x in r["tables"]["portfolio_risk_attribution"]),"torsion_fraction_sum":sum(x["fraction_total_variance"] for x in r["tables"]["minimum_torsion_risk_attribution"])})'`: **ok**, 731 DCC and 611 MIDAS dates, six estimators, no warnings, both contribution sums equal one to floating-point tolerance.
+
+References: [DCC-MIDAS component model](https://www.sciencedirect.com/science/article/pii/S0304407611000406), [minimum torsion reference implementation/documentation](https://reckziegel.github.io/uncorbets/). The monthly convex-target variant is deliberate and its parameters are estimated, not configured proxies.

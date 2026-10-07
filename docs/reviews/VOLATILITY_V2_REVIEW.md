@@ -1,4 +1,4 @@
-> **Rebuild status (2026-10-07): IN PROGRESS.** Strict dated data, corrected Yang–Zhang, true expanding HAR and held-out GARCH are committed. Causal HMM/SJM states, censored duration survival, observed matching IV, integrated physical variance forecasts, and honest BTZ inference are implemented; Daily OLS/EW generalized connectedness, frequency shares, IRF bootstrap bands and exact-date FX handling are implemented; 23 targeted tests pass. Remaining Features 07–09, contracts, jobs, wiring and final checks are tracked in `backend/app/services/volatility_v2/DONE.md`. This note does not mark the review complete.
+> **Rebuild status (2026-10-07): IN PROGRESS.** Strict dated data and rewritten Features 02–07 are implemented, including causal DCC/DCC-MIDAS, observed USD covariance, true minimum torsion, and explicit crisis conditioning. **32 targeted tests pass.** Features 08–09, remaining Feature 01 proxy corrections, contracts/jobs, frontend wiring/fake removal and final checks remain tracked in `backend/app/services/volatility_v2/DONE.md`. This note does not mark the review complete.
 
 # Volatility V2 Review: Spec vs Implementation vs Frontend
 

@@ -738,25 +738,6 @@ def ols_table(x: pd.DataFrame, y: pd.Series, bandwidth: int | None = None) -> tu
     return ols_hac_fast(X, yy, bw)
 
 
-def covariance_methods(ret: pd.DataFrame, half_life: int = 63) -> dict[str, pd.DataFrame]:
-    clean = ret.dropna(axis=1, thresh=max(30, int(len(ret) * 0.5))).fillna(0.0)
-    sample = clean.cov() * 252
-    lam = math.exp(math.log(0.5) / max(half_life, 1))
-    weights = np.array([(1 - lam) * lam ** i for i in range(len(clean) - 1, -1, -1)], dtype=float)
-    weights /= weights.sum()
-    x = clean.to_numpy(dtype=float)
-    x = x - np.average(x, axis=0, weights=weights)
-    ewma = pd.DataFrame((x * weights[:, None]).T @ x * 252, index=clean.columns, columns=clean.columns)
-    target = np.diag(np.diag(sample))
-    n = clean.shape[1]
-    w = len(clean)
-    tr_s2 = float(np.trace(sample.to_numpy() @ sample.to_numpy()))
-    tr_s = float(np.trace(sample.to_numpy()))
-    denom = max((w + 1 - 2 / max(n, 1)) * (tr_s2 - tr_s**2 / max(n, 1)), 1e-12)
-    shrink = float(np.clip(((1 - 2 / max(n, 1)) * tr_s2 + tr_s**2) / denom, 0.0, 1.0))
-    lw = pd.DataFrame((1 - shrink) * sample.to_numpy() + shrink * target, index=clean.columns, columns=clean.columns)
-    dcc = ewma.copy()
-    return {"sample": sample, "ewma": ewma, "ledoit_wolf": lw, "dcc_proxy": dcc}
 
 
 def fit_var(logv: pd.DataFrame, max_lag: int = 5) -> tuple[list[np.ndarray], np.ndarray, int, float]:
@@ -1094,66 +1075,10 @@ def connectedness_at_risk(conn_df: pd.DataFrame, macro: pd.DataFrame, current: f
     return {"CoR_95": cor, "current_connectedness": float(current), "headroom": cor - float(current), "alert": bool(cor - float(current) < 5)}
 
 
-def dcc_midas_long_run_corr(ret: pd.DataFrame, k_lags: int = 36) -> pd.DataFrame:
-    r = ret.dropna(axis=1, thresh=60).dropna()
-    if r.shape[1] < 2:
-        return pd.DataFrame()
-    weights_x = np.arange(1, k_lags + 1, dtype=float)
-    weights = weights_x ** 0.5 * (1 - weights_x / (k_lags + 1)) ** 4
-    weights /= max(weights.sum(), 1e-12)
-    out = pd.DataFrame(np.eye(r.shape[1]), index=r.columns, columns=r.columns)
-    month_ends = pd.date_range(r.index.min(), r.index.max(), freq="ME")
-    for i, a in enumerate(r.columns):
-        for b in r.columns[i + 1 :]:
-            vals = []
-            for end in month_ends:
-                sub = r.loc[end - pd.offsets.MonthBegin(1) : end, [a, b]].dropna()
-                if len(sub) >= 5:
-                    vals.append(float(sub.corr().iloc[0, 1]))
-            if len(vals) >= k_lags:
-                val = float(np.asarray(vals[-k_lags:]) @ weights)
-            else:
-                val = float(r[[a, b]].corr().iloc[0, 1])
-            out.loc[a, b] = out.loc[b, a] = float(np.clip(val, -0.999, 0.999))
-    return out
 
 
-def minimum_torsion(cov: pd.DataFrame, weights: pd.Series | None = None) -> dict[str, Any]:
-    s = cov.to_numpy(dtype=float)
-    vals, vecs = scipy_eigh(s + np.eye(len(s)) * 1e-10, check_finite=False, driver="evd")
-    vals = np.maximum(vals, 1e-12)
-    torsion = vecs @ np.diag(np.sqrt(vals)) @ vecs.T
-    if weights is None:
-        weights_arr = np.ones(len(s)) / max(len(s), 1)
-    else:
-        weights_arr = weights.reindex(cov.columns).fillna(0).to_numpy(dtype=float)
-    exposures = torsion.T @ weights_arr
-    contrib = exposures**2
-    contrib = contrib / max(contrib.sum(), 1e-12)
-    return {
-        "torsion_matrix": torsion.tolist(),
-        "factor_risk_contributions": [{"factor": i + 1, "primary_asset": str(cov.columns[i]), "pct_total": float(contrib[i] * 100)} for i in range(len(contrib))],
-    }
 
 
-def fisher_z_test_correlation_amplification(ret: pd.DataFrame, normal_mask: pd.Series, crisis_mask: pd.Series) -> list[dict[str, Any]]:
-    normal = ret.loc[normal_mask.reindex(ret.index).fillna(False)].dropna()
-    crisis = ret.loc[crisis_mask.reindex(ret.index).fillna(False)].dropna()
-    if len(normal) < 10 or len(crisis) < 10:
-        return [{"error": "insufficient observations for Fisher Z-test"}]
-    cn, cc = normal.corr(), crisis.corr()
-    rows = []
-    for i, a in enumerate(ret.columns):
-        for b in ret.columns[i + 1 :]:
-            rn = float(np.clip(cn.loc[a, b], -0.9999, 0.9999))
-            rc = float(np.clip(cc.loc[a, b], -0.9999, 0.9999))
-            zn = 0.5 * math.log((1 + rn) / (1 - rn))
-            zc = 0.5 * math.log((1 + rc) / (1 - rc))
-            se = math.sqrt(1 / max(len(crisis) - 3, 1) + 1 / max(len(normal) - 3, 1))
-            stat = (zc - zn) / max(se, 1e-12)
-            p = float(2 * (1 - stats.norm.cdf(abs(stat))))
-            rows.append({"asset_a": a, "asset_b": b, "corr_normal": rn, "corr_crisis": rc, "delta_corr": rc - rn, "fisher_z_stat": float(stat), "p_value": p, "significant_amplification": bool(p < 0.05 and rc > rn)})
-    return clean_json(sorted(rows, key=lambda x: abs(x["delta_corr"]), reverse=True))
 
 
 def clayton_copula_tail_dependence(ret: pd.Series, vol_changes: pd.Series, tail_pct: float = 0.20) -> dict[str, Any]:

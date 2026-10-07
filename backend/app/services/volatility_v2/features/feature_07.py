@@ -1,72 +1,220 @@
-"""Feature 07: Multivariate volatility and DCC proxy engine."""
+"""Feature 07: causal multivariate risk with observed USD returns."""
 
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
-from scipy.linalg import eigh as scipy_eigh
-
-from app.services.volatility_v2.core.analytics import DEFAULT_ASSETS, compact_records, corr_from_cov, covariance_methods, dcc_garch_mle, dcc_midas_long_run_corr, fisher_z_test_correlation_amplification, load_assets, matrix_records, minimum_torsion, parse_weights, response, returns_panel, summary_card
+from app.services.volatility_v2.core.analytics import (
+    DEFAULT_ASSETS,
+    load_assets,
+    parse_weights,
+    response,
+    summary_card,
+    matrix_records,
+)
+from app.services.volatility_v2.core.data_loader import resolve_symbols
+from app.services.volatility_v2.core.currency import portfolio_returns
+from app.services.volatility_v2.core.covariance import (
+    covariance_estimates,
+    portfolio_attribution,
+)
+from app.services.volatility_v2.core.dcc import expanding_dcc, correlation
+from app.services.volatility_v2.core.crisis import crisis_correlations
+from app.services.volatility_v2.core.torsion import minimum_torsion
 
 
 def run(payload=None):
     payload = payload or {}
-    assets, ohlcv = load_assets(payload, default=payload.get("assets") or DEFAULT_ASSETS[:8])
-    ret = returns_panel(ohlcv)
-    ret = ret[[c for c in ret.columns if c in assets]].dropna(axis=1, thresh=120).fillna(0)
-    methods = covariance_methods(ret, half_life=int(payload.get("half_life") or 63))
-    dcc_cov, dcc_corr, dcc_params = dcc_garch_mle(ret)
-    methods["dcc_mle"] = dcc_cov
-    corr = {name: corr_from_cov(cov) for name, cov in methods.items()}
-    corr["dcc_mle"] = dcc_corr
-    current = corr["dcc_mle"]
-    assets_live = list(current.columns)
-    weights = parse_weights(payload, assets_live)
-    cov = methods["dcc_mle"].reindex(index=assets_live, columns=assets_live)
-    port_var = float(weights.to_numpy() @ cov.to_numpy() @ weights.to_numpy())
-    sigma = float(np.sqrt(max(port_var, 0)))
-    contrib = weights * (cov @ weights) / max(sigma, 1e-12)
-    normal = ret.iloc[: max(1, int(len(ret) * 0.75))].corr().fillna(0)
-    avg_abs = ret.abs().mean(axis=1)
-    crisis_mask = avg_abs >= np.percentile(avg_abs.to_numpy(dtype=float), 90)
-    normal_mask = ~crisis_mask
-    crisis = ret[crisis_mask].corr().fillna(0)
-    delta = crisis - normal
-    try:
-        prob_weights = ret.abs().mean(axis=1).rank(pct=True).clip(0, 1)
-        eps = ret[assets_live].sub(ret[assets_live].mean()).to_numpy(dtype=float)
-        w = prob_weights.reindex(ret.index).fillna(0).to_numpy(dtype=float)
-        wcov = (eps * w[:, None]).T @ eps / max(w.sum(), 1e-12) * 252
-        prob_crisis_corr = corr_from_cov(pd.DataFrame(wcov, index=assets_live, columns=assets_live))
-    except Exception:
-        prob_crisis_corr = crisis
-    eig = scipy_eigh(cov.to_numpy(dtype=float), check_finite=False, eigvals_only=True)
-    eig_sorted = np.array(sorted(eig, reverse=True), dtype=float)
-    cum = np.cumsum(eig_sorted) / max(eig_sorted.sum(), 1e-12)
-    try:
-        minv = np.linalg.solve(cov.to_numpy(dtype=float) + np.eye(len(cov)) * 1e-10, np.ones(len(cov)))
-    except Exception:
-        minv = np.linalg.pinv(cov.to_numpy(dtype=float)) @ np.ones(len(cov))
-    minv = minv / max(minv.sum(), 1e-12)
-    pair = payload.get("factor_pair") or payload.get("asset_pair") or (assets_live[:2] if len(assets_live) >= 2 else assets_live)
-    if isinstance(pair, str):
-        pair = pair.replace(";", ",").split(",")
-    pair = [p for p in pair if p in ret.columns][:2]
-    dcc_ts = pd.DataFrame({"date": ret.index, "dcc_correlation": ret[pair[0]].rolling(126).corr(ret[pair[1]])}) if len(pair) == 2 else pd.DataFrame()
-    midas_corr = dcc_midas_long_run_corr(ret[assets_live], k_lags=int(payload.get("midas_k") or 36))
-    if len(pair) == 2 and not midas_corr.empty:
-        dcc_ts["dcc_midas_long_run"] = float(midas_corr.loc[pair[0], pair[1]])
-    condition_rows = []
-    roll = min(252, max(80, len(ret) // 3))
-    for i in range(roll, len(ret), max(1, len(ret) // 220)):
-        sub_cov = ret.iloc[i - roll : i][assets_live].cov() * 252
-        condition_rows.append({"date": ret.index[i], "condition_number": float(np.linalg.cond(sub_cov.to_numpy() + np.eye(len(sub_cov)) * 1e-10))})
-    torsion = minimum_torsion(cov, weights)
-    fisher = fisher_z_test_correlation_amplification(ret[assets_live], normal_mask, crisis_mask)
-    return response(
-        "07",
-        [summary_card("Portfolio Vol", sigma, "ann"), summary_card("Avg Corr", float(current.to_numpy()[np.triu_indices(len(current), 1)].mean()) if len(current) > 1 else 1, "corr"), summary_card("Condition No", float(np.linalg.cond(cov.to_numpy())), "")],
-        charts={"correlation_heatmap": matrix_records(current), "dcc_midas_long_run_correlation": matrix_records(midas_corr) if not midas_corr.empty else [], "normal_vs_crisis_correlation": {"normal": matrix_records(normal), "crisis": matrix_records(crisis), "delta": matrix_records(delta)}, "probability_weighted_crisis_correlation": matrix_records(prob_crisis_corr), "dcc_time_series": compact_records(dcc_ts), "condition_number_history": compact_records(pd.DataFrame(condition_rows)), "eigenvalue_decomposition": [{"rank": i + 1, "eigenvalue": float(v), "cumulative_variance": float(cum[i])} for i, v in enumerate(eig_sorted)], "pairwise_covariance_contribution": matrix_records(cov.mul(np.outer(weights, weights), axis=0))},
-        tables={"sample_ewma_lw_dcc_comparison": [{"method": name, "avg_correlation": float(corr[name].to_numpy()[np.triu_indices(len(corr[name]), 1)].mean()) if len(corr[name]) > 1 else 1, "condition_number": float(np.linalg.cond(methods[name].to_numpy()))} for name in methods], "portfolio_risk_attribution": [{"asset": a, "weight": float(weights[a]), "mrc": float(contrib[a]), "pct_total_risk": float(contrib[a] / max(contrib.sum(), 1e-12))} for a in assets_live], "minimum_torsion_risk_attribution": torsion, "fisher_z_crisis_amplification": fisher[:50], "minimum_variance_portfolio": [{"asset": a, "weight": float(w)} for a, w in zip(assets_live, minv)], "portfolio_comparison": [{"portfolio": "current", "projected_vol": sigma}, {"portfolio": "equal_weight", "projected_vol": float(np.sqrt((np.ones(len(cov))/len(cov)) @ cov.to_numpy() @ (np.ones(len(cov))/len(cov))))}, {"portfolio": "minimum_variance", "projected_vol": float(np.sqrt(minv @ cov.to_numpy() @ minv))}], "diversification_ratio": [{"value": float((weights.abs() @ np.sqrt(np.diag(cov))) / max(sigma, 1e-12))}]},
-        meta={"assets": assets_live, "implemented_outputs": 11, "estimation": "Two-stage DCC-GARCH MLE with DCC-MIDAS long-run component, probability-weighted crisis correlation, Fisher amplification tests, and minimum torsion attribution.", **dcc_params},
+    assets, ohlcv = load_assets(payload, default=DEFAULT_ASSETS[:8])
+    ret, currency_meta = portfolio_returns(ohlcv, payload)
+    ret = ret.reindex(columns=assets)
+    if len(assets) < 2:
+        raise ValueError("Multivariate volatility requires at least two assets")
+    annualization = int(payload.get("annualization", 252))
+    methods = covariance_estimates(
+        ret, half_life=float(payload.get("half_life", 63)), annualization=annualization
     )
+    controls = {
+        "min_train": int(payload.get("min_train", 252)),
+        "refit_interval": int(payload.get("refit_interval", 63)),
+        "annualization": annualization,
+        "midas_k": int(payload.get("midas_k", 36)),
+    }
+    dynamics = payload.get("dynamics", "dcc")
+    dcc = expanding_dcc(ret, dynamics=dynamics, **controls)
+    methods[dynamics] = dcc["forecast_covariance"]
+    warnings, midas = [], dcc if dynamics == "dcc_midas" else None
+    if dynamics == "dcc" and payload.get("include_midas", True):
+        try:
+            midas = expanding_dcc(ret, dynamics="dcc_midas", **controls)
+            methods["dcc_midas"] = midas["forecast_covariance"]
+        except (ValueError, np.linalg.LinAlgError) as exc:
+            warnings.append(f"DCC-MIDAS comparison unavailable: {exc}")
+    cov = dcc["forecast_covariance"]
+    correlations = {name: covariance.copy() for name, covariance in methods.items()}
+    for name, covariance in methods.items():
+        correlations[name].iloc[:, :] = correlation(covariance.to_numpy())
+    current = correlations[dynamics]
+    weights = parse_weights(payload, assets)
+    attribution = portfolio_attribution(cov, weights)
+    torsion = minimum_torsion(cov, weights)
+    crisis = crisis_correlations(ret, ohlcv, payload)
+    warnings.extend(crisis["warnings"])
+    pair = payload.get("factor_pair", payload.get("asset_pair", assets[:2]))
+    if isinstance(pair, str):
+        pair = [
+            part.strip() for part in pair.replace(";", ",").split(",") if part.strip()
+        ]
+    if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+        raise ValueError(
+            "asset_pair must contain exactly two distinct requested assets"
+        )
+    pair = resolve_symbols(pair)
+    if len(set(pair)) != 2 or not set(pair).issubset(assets):
+        raise ValueError(
+            "asset_pair must contain exactly two distinct requested assets"
+        )
+    left, right = [assets.index(asset) for asset in pair]
+    path = [
+        {
+            "date": row["date"],
+            "dcc_correlation": row["correlation"][left][right],
+            "training_observed_through": row["training_observed_through"],
+            "forecast_observed_through": row["forecast_observed_through"],
+        }
+        for row in dcc["timeline"]
+    ]
+    midas_path = (
+        [
+            {
+                "date": row["date"],
+                "dcc_midas_correlation": row["correlation"][left][right],
+                "long_run_correlation": row["long_run_correlation"][left][right],
+                "training_observed_through": row["training_observed_through"],
+            }
+            for row in midas["timeline"]
+        ]
+        if midas
+        else []
+    )
+    eigenvalues = np.linalg.eigvalsh(cov.to_numpy())[::-1]
+    cumulative = np.cumsum(eigenvalues) / eigenvalues.sum()
+    minimum = attribution["minimum_variance_weights"]
+    equal = np.ones(len(assets)) / len(assets)
+    off_diagonal = np.triu_indices(len(assets), 1)
+
+    def matrix(value):
+        return matrix_records(value) if value is not None else []
+
+    result = response(
+        "07",
+        [
+            summary_card("Portfolio Vol", attribution["volatility"], "annual decimal"),
+            summary_card(
+                "Avg Corr", float(current.to_numpy()[off_diagonal].mean()), "corr"
+            ),
+            summary_card("Condition No", float(np.linalg.cond(cov.to_numpy()))),
+        ],
+        charts={
+            "correlation_heatmap": matrix(current),
+            "correlation_matrices": {
+                name: matrix(value) for name, value in correlations.items()
+            },
+            "dcc_midas_long_run_correlation": matrix(
+                midas["forecast_long_run_correlation"]
+            )
+            if midas
+            else [],
+            "normal_vs_crisis_correlation": {
+                name: matrix(crisis[name]) for name in ("normal", "crisis", "delta")
+            },
+            "probability_weighted_crisis_correlation": matrix(
+                crisis["probability_weighted"]
+            ),
+            "dcc_time_series": path,
+            "dcc_midas_time_series": midas_path,
+            "condition_number_history": [
+                {"date": row["date"], "condition_number": row["condition_number"]}
+                for row in dcc["timeline"]
+            ],
+            "eigenvalue_decomposition": [
+                {
+                    "rank": i + 1,
+                    "eigenvalue": float(value),
+                    "cumulative_variance": float(cumulative[i]),
+                }
+                for i, value in enumerate(eigenvalues)
+            ],
+            "pairwise_covariance_contribution": matrix(
+                attribution["pairwise_variance"]
+            ),
+            "minimum_torsion_loadings": matrix(torsion["transformation"]),
+            "minimum_torsion_factor_covariance": matrix(torsion["factor_covariance"]),
+        },
+        tables={
+            "sample_ewma_lw_dcc_comparison": [
+                {
+                    "method": name,
+                    "avg_correlation": float(
+                        correlations[name].to_numpy()[off_diagonal].mean()
+                    ),
+                    "condition_number": float(np.linalg.cond(value.to_numpy())),
+                    "estimation": "next observation conditional forecast"
+                    if name in ("dcc", "dcc_midas")
+                    else "observed sample estimate",
+                }
+                for name, value in methods.items()
+            ],
+            "portfolio_risk_attribution": attribution["assets"],
+            "minimum_torsion_risk_attribution": torsion["attribution"],
+            "fisher_z_crisis_amplification": crisis["fisher_tests"],
+            "dcc_parameters": dcc["parameters"],
+            "dcc_midas_parameters": midas["parameters"] if midas else [],
+            "minimum_variance_portfolio": [
+                {"asset": asset, "weight": float(weight)}
+                for asset, weight in zip(assets, minimum)
+            ],
+            "portfolio_comparison": [
+                {
+                    "portfolio": name,
+                    "projected_vol": float(np.sqrt(vector @ cov.to_numpy() @ vector)),
+                }
+                for name, vector in (
+                    ("current", weights.to_numpy()),
+                    ("equal_weight", equal),
+                    ("minimum_variance", minimum),
+                )
+            ],
+            "diversification_ratio": [
+                {
+                    "value": float(
+                        weights.abs()
+                        @ np.sqrt(np.diag(cov))
+                        / attribution["volatility"]
+                    )
+                }
+            ],
+        },
+        meta={
+            "assets": assets,
+            **currency_meta,
+            "selected_dynamics": dynamics,
+            "asset_pair": pair,
+            "annualization": annualization,
+            "forecast_observed_through": dcc["forecast_observed_through"],
+            "forecast_date": dcc["forecast_date"],
+            "forecast_calendar": dcc["forecast_calendar"],
+            "minimum_variance_constraint": "fully invested, unconstrained signed weights",
+            "torsion": {
+                "iterations": torsion["iterations"],
+                "objective": torsion["objective"],
+                "effective_number_of_bets": torsion["effective_number_of_bets"],
+            },
+            "crisis_definition": crisis["hard_rule"],
+            "probability_weighting": crisis.get("probability_weighting"),
+            "midas_target": "estimated Beta(1,theta) convex weights on completed prior monthly standardized-residual correlations",
+            "warnings": warnings,
+        },
+    )
+    if warnings:
+        result["status"] = "warning"
+    return result

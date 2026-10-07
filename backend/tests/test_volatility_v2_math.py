@@ -427,3 +427,155 @@ def test_dcc_forecasts_are_positive_definite_and_ignore_future_returns():
             < row["date"]
         )
     assert np.linalg.eigvalsh(first["forecast_covariance"]).min() > 0
+
+
+def test_exact_minimum_torsion_decorrelates_and_conserves_signed_portfolio_variance():
+    from app.services.volatility_v2.core.torsion import minimum_torsion
+
+    cov = pd.DataFrame(
+        [[0.04, 0.025, -0.008], [0.025, 0.09, 0.015], [-0.008, 0.015, 0.025]],
+        index=["A", "B", "C"],
+        columns=["A", "B", "C"],
+    )
+    weights = pd.Series({"A": 0.8, "B": -0.3, "C": 0.5})
+    result = minimum_torsion(cov, weights)
+    transform = result["transformation"].to_numpy()
+    transformed = transform @ cov.to_numpy() @ transform.T
+    np.testing.assert_allclose(transformed, np.diag(np.diag(transformed)), atol=1e-10)
+    assert sum(
+        row["variance_contribution"] for row in result["attribution"]
+    ) == pytest.approx(float(weights @ cov @ weights))
+    assert 1 <= result["effective_number_of_bets"] <= 3
+    diagonal = pd.DataFrame(
+        np.diag([0.04, 0.09, 0.025]), index=cov.index, columns=cov.columns
+    )
+    np.testing.assert_allclose(
+        minimum_torsion(diagonal, weights)["transformation"], np.eye(3), atol=1e-12
+    )
+    permutation = ["C", "A", "B"]
+    permuted = minimum_torsion(cov.loc[permutation, permutation], weights)
+    np.testing.assert_allclose(
+        permuted["transformation"].loc[cov.index, cov.columns], transform, atol=1e-10
+    )
+
+
+def test_torsion_matches_independent_two_asset_rotation_minimum():
+    from scipy.optimize import minimize_scalar
+    from scipy.linalg import sqrtm
+    from app.services.volatility_v2.core.torsion import minimum_torsion
+
+    cov = pd.DataFrame(
+        [[0.04, 0.035], [0.035, 0.09]], index=["A", "B"], columns=["A", "B"]
+    )
+    weights = pd.Series({"A": 0.6, "B": 0.4})
+    root = sqrtm(
+        cov.to_numpy() / np.outer(np.sqrt(np.diag(cov)), np.sqrt(np.diag(cov)))
+    )
+
+    def objective(angle):
+        rotation = np.array(
+            [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+        )
+        diagonal = np.diag(rotation @ root)
+        return float(np.linalg.norm(root - diagonal[:, None] * rotation, "fro"))
+
+    optimum = minimize_scalar(
+        objective, bounds=(-np.pi / 2, np.pi / 2), method="bounded"
+    )
+    actual = minimum_torsion(cov, weights)
+    assert actual["objective"] == pytest.approx(optimum.fun, abs=1e-8)
+
+
+def test_weighted_crisis_correlation_centers_on_weighted_mean():
+    from app.services.volatility_v2.core.crisis import weighted_correlation
+
+    rng = np.random.default_rng(345)
+    index = pd.date_range("2020-01-01", periods=50)
+    frame = pd.DataFrame(rng.normal(size=(50, 2)), index=index, columns=["A", "B"])
+    weights = pd.Series(np.linspace(0.01, 0.9, 50), index=index)
+    actual, metadata = weighted_correlation(frame, weights)
+    expected_cov = np.cov(frame.to_numpy(), rowvar=False, aweights=weights, ddof=0)
+    expected = expected_cov / np.sqrt(
+        np.outer(np.diag(expected_cov), np.diag(expected_cov))
+    )
+    np.testing.assert_allclose(actual, expected)
+    assert metadata["effective_sample_size"] < 50
+    with pytest.raises(ValueError, match="30 aligned"):
+        weighted_correlation(frame.iloc[:20], weights)
+
+
+def test_midas_uses_completed_months_and_enters_actual_dcc_recursion():
+    from app.services.volatility_v2.core.dcc import expanding_dcc
+    from app.services.volatility_v2.core.midas import (
+        beta_weights,
+        monthly_correlations,
+        lag_matrices,
+    )
+
+    rng = np.random.default_rng(312)
+    index = pd.bdate_range("2020-01-31", periods=285)
+    values = rng.standard_t(9, size=(285, 2)) * 0.01
+    values[:, 1] += np.sin(np.arange(285) / 30) * values[:, 0] * 0.7
+    frame = pd.DataFrame(values, index=index, columns=["A", "B"])
+    monthly = monthly_correlations(values, index)
+    query = pd.Timestamp("2020-08-03")
+    lagged = lag_matrices(monthly, query, 3)
+    np.testing.assert_allclose(lagged[0], monthly[pd.Period("2020-07", freq="M")])
+    np.testing.assert_allclose(beta_weights(3, 1), np.ones(3) / 3)
+    actual = expanding_dcc(
+        frame, min_train=120, refit_interval=100, dynamics="dcc_midas", midas_k=3
+    )
+    changed = frame.copy()
+    changed.iloc[240:] *= 2
+    second = expanding_dcc(
+        changed, min_train=120, refit_interval=100, dynamics="dcc_midas", midas_k=3
+    )
+    before = [row for row in actual["timeline"] if row["date"] < index[240]]
+    assert before == [row for row in second["timeline"] if row["date"] < index[240]]
+    long_run = np.array(
+        [row["long_run_correlation"][0][1] for row in actual["timeline"]]
+    )
+    assert np.ptp(long_run) > 0.01
+    for row in actual["timeline"]:
+        np.testing.assert_allclose(np.diag(row["long_run_correlation"]), 1)
+    assert actual["parameters"][0]["midas_beta_theta"] >= 1
+    assert np.linalg.eigvalsh(actual["forecast_covariance"]).min() > 0
+
+
+def test_dcc_optimizer_failure_is_explicit(monkeypatch):
+    from types import SimpleNamespace
+    from app.services.volatility_v2.core import dcc
+
+    monkeypatch.setattr(
+        dcc, "minimize", lambda *args, **kwargs: SimpleNamespace(success=False)
+    )
+    with pytest.raises(ValueError, match="all starting points"):
+        dcc.fit_dcc(np.random.default_rng(67).normal(size=(150, 2)))
+
+
+def test_midas_likelihood_matches_independent_matrix_recursion():
+    from app.services.volatility_v2.core.midas import _likelihood
+
+    z = np.array([[0.3, -0.6], [1.1, 0.4], [-0.9, 0.8], [0.2, -0.1]])
+    targets = np.array(
+        [
+            [[1, 0.1], [0.1, 1]],
+            [[1, 0.4], [0.4, 1]],
+            [[1, -0.2], [-0.2, 1]],
+            [[1, 0.6], [0.6, 1]],
+        ],
+        dtype=float,
+    )
+    a, b = 0.1, 0.7
+    q = targets[0].copy()
+    expected = 0.0
+    for pos in range(1, len(z)):
+        q = (1 - a - b) * targets[pos] + a * np.outer(z[pos - 1], z[pos - 1]) + b * q
+        r = q / np.sqrt(np.outer(np.diag(q), np.diag(q)))
+        expected += 0.5 * (
+            np.linalg.slogdet(r)[1] + z[pos] @ np.linalg.solve(r, z[pos])
+        )
+    assert _likelihood(z, targets, a, b) == pytest.approx(expected)
+    assert _likelihood(z, targets, a, b) != pytest.approx(
+        _likelihood(z, np.repeat(targets[:1], len(z), axis=0), a, b)
+    )
