@@ -23,7 +23,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from arch import arch_model
 from hmmlearn.hmm import GaussianHMM
 
-from .data_loader import load_category7_macro, ohlcv_for_symbols
+from .data_loader import load_category7_macro, ohlcv_for_symbols, resolve_symbols
 from .performance import (
     autocorr_raw_jit,
     build_var_design_matrix,
@@ -108,26 +108,18 @@ def clean_json(value: Any) -> Any:
 def number_like(value: Any) -> float | None:
     try:
         out = float(value)
-    except Exception:
+    except (ValueError, TypeError):
         return None
     return out if math.isfinite(out) else None
 
 
 def normalize_symbol(symbol: Any) -> str:
-    return str(symbol).strip().upper().replace(".", "_").replace("-", "_")
+    return str(symbol).strip().upper()
 
 
 def parse_assets(payload: dict[str, Any] | None, default: Iterable[str] = DEFAULT_ASSETS[:1]) -> list[str]:
     payload = payload or {}
-    raw = (
-        payload.get("assets")
-        or payload.get("symbols")
-        or payload.get("universe")
-        or payload.get("asset")
-        or payload.get("symbol")
-        or payload.get("ticker")
-        or list(default)
-    )
+    raw = next((payload[key] for key in ("assets", "symbols", "universe", "asset", "symbol", "ticker") if key in payload), list(default))
     if isinstance(raw, str):
         parts = raw.replace(";", ",").split(",")
     elif isinstance(raw, (list, tuple, set)):
@@ -135,7 +127,9 @@ def parse_assets(payload: dict[str, Any] | None, default: Iterable[str] = DEFAUL
     else:
         parts = [raw]
     assets = [normalize_symbol(x) for x in parts if str(x).strip()]
-    return assets or [normalize_symbol(x) for x in default]
+    if not assets:
+        raise ValueError("Explicit asset list must not be empty")
+    return assets
 
 
 def compute_mode(payload: dict[str, Any] | None) -> str:
@@ -173,7 +167,7 @@ def compact_records(df: pd.DataFrame, limit: int = 420) -> list[dict[str, Any]]:
         idx = np.unique(np.round(np.linspace(0, len(out) - 1, limit)).astype(int))
         out = out.iloc[idx]
     for col in out.columns:
-        if np.issubdtype(out[col].dtype, np.datetime64):
+        if pd.api.types.is_datetime64_any_dtype(out[col]):
             out[col] = out[col].to_numpy(dtype="datetime64[D]").astype(str)
     return clean_json(out.to_dict("records"))
 
@@ -187,48 +181,16 @@ def _latest_percentile(series: pd.Series, value: float | None = None) -> float:
 
 
 def _rolling_mean_np(arr: np.ndarray, window: int) -> np.ndarray:
-    x = np.asarray(arr, dtype=float)
-    out = np.full(len(x), np.nan, dtype=float)
-    window = int(max(window, 1))
-    if len(x) < window:
-        return out
-    view = sliding_window_view(x, window)
-    valid = np.isfinite(view)
-    counts = valid.sum(axis=1)
-    sums = np.where(valid, view, 0.0).sum(axis=1)
-    vals = np.full(len(view), np.nan, dtype=float)
-    np.divide(sums, counts, out=vals, where=counts > 0)
-    out[window - 1 :] = vals
-    return out
+    return pd.Series(arr).rolling(window, min_periods=window).mean().to_numpy()
 
 
 def _rolling_var_np(arr: np.ndarray, window: int, ddof: int = 1) -> np.ndarray:
-    x = np.asarray(arr, dtype=float)
-    out = np.full(len(x), np.nan, dtype=float)
-    window = int(max(window, 1))
-    if len(x) < window:
-        return out
-    view = sliding_window_view(x, window)
-    valid = np.isfinite(view)
-    counts = valid.sum(axis=1)
-    sums = np.where(valid, view, 0.0).sum(axis=1)
-    means = np.zeros(len(view), dtype=float)
-    np.divide(sums, counts, out=means, where=counts > 0)
-    diff = np.where(valid, view - means[:, None], 0.0)
-    denom = counts - int(ddof)
-    vals = np.full(len(view), np.nan, dtype=float)
-    np.divide((diff * diff).sum(axis=1), denom, out=vals, where=denom > 0)
-    out[window - 1 :] = vals
-    return out
+    return pd.Series(arr).rolling(window, min_periods=window).var(ddof=ddof).to_numpy()
 
 
 def _frame_cache_key(ohlcv: pd.DataFrame, label: str) -> str:
-    if ohlcv.empty:
-        return f"{label}:empty"
-    tickers = ",".join(map(str, sorted(pd.unique(ohlcv["Ticker"]))))
-    start = str(pd.to_datetime(ohlcv["Date"]).min().date())
-    end = str(pd.to_datetime(ohlcv["Date"]).max().date())
-    return f"{label}:{tickers}:{start}:{end}:{len(ohlcv)}"
+    digest = hashlib.sha256(pd.util.hash_pandas_object(ohlcv, index=True).values.tobytes()).hexdigest()
+    return f"{label}:{digest}"
 
 
 def _get_or_build_primitives(ohlcv: pd.DataFrame) -> dict[str, Any]:
@@ -288,23 +250,21 @@ def load_assets(payload: dict[str, Any] | None, default: Iterable[str] = DEFAULT
     assets = parse_assets(payload, default=default)
     lookback_days = int(number_like((payload or {}).get("lookback_days")) or number_like((payload or {}).get("window_days")) or 2520)
     df = ohlcv_for_symbols(assets, lookback_days=lookback_days)
-    if df.empty:
-        df = ohlcv_for_symbols([DEFAULT_ASSETS[0]], lookback_days=lookback_days)
-        assets = [DEFAULT_ASSETS[0]]
+    assets = resolve_symbols(assets)
     return assets, _clean_ohlcv(df)
 
 
 def _clean_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     cols = ["Open", "High", "Low", "Close", "Volume"]
     out = df.copy()
-    out["Ticker"] = out["Ticker"].map(normalize_symbol)
-    if not np.issubdtype(out["Date"].dtype, np.datetime64):
+    out["Ticker"] = out["Ticker"].astype(str)
+    if not pd.api.types.is_datetime64_any_dtype(out["Date"]):
         out["Date"] = pd.to_datetime(out["Date"], errors="coerce")
     for col in cols:
-        if not np.issubdtype(out[col].dtype, np.number):
+        if not pd.api.types.is_numeric_dtype(out[col]):
             out[col] = pd.to_numeric(out[col], errors="coerce")
-    out = out.dropna(subset=["Ticker", "Date", "Open", "High", "Low", "Close"])
-    out = out[(out[["Open", "High", "Low", "Close"]] > 0).all(axis=1)]
+    if out[["Ticker", "Date", "Open", "High", "Low", "Close"]].isna().any().any():
+        raise ValueError("Missing OHLC observations")
     return out.sort_values(["Ticker", "Date"])
 
 
@@ -334,10 +294,7 @@ def volatility_estimators(ohlcv: pd.DataFrame, window: int = 21, annualization: 
         gk_var = _rolling_mean_np(0.5 * log_hl_sq - (2.0 * math.log(2.0) - 1.0) * log_oc_sq, window)
         rs_var = _rolling_mean_np(rs_daily, window)
         k = 0.34 / (1.34 + ((window + 1) / max(window - 1, 1)))
-        if str(ticker).endswith("_USD") or str(ticker).endswith("=X"):
-            yz_var = rs_var
-        else:
-            yz_var = _rolling_var_np(log_overnight, window) + k * rs_var + (1 - k) * _rolling_var_np(log_oc, window)
+        yz_var = _rolling_var_np(log_overnight, window) + k * _rolling_var_np(log_oc, window) + (1 - k) * rs_var
         tmp = pd.DataFrame(
             {
                 "date": g["Date"],
@@ -380,14 +337,13 @@ def volatility_estimators_multi(ohlcv: pd.DataFrame, windows: Iterable[int], ann
         log_hl_sq = log_hl * log_hl
         log_oc_sq = log_oc * log_oc
         rs_daily = np.log(high / close) * np.log(high / open_) + np.log(low / close) * np.log(low / open_)
-        is_crypto = str(ticker).endswith("_USD") or str(ticker).endswith("=X")
         for window in frames_by_window:
             k = 0.34 / (1.34 + ((window + 1) / max(window - 1, 1)))
             cc_var = _rolling_mean_np(log_cc * log_cc, window)
             park_var = _rolling_mean_np(log_hl_sq, window) / (4.0 * math.log(2.0))
             gk_var = _rolling_mean_np(0.5 * log_hl_sq - (2.0 * math.log(2.0) - 1.0) * log_oc_sq, window)
             rs_var = _rolling_mean_np(rs_daily, window)
-            yz_var = rs_var if is_crypto else _rolling_var_np(log_overnight, window) + k * rs_var + (1 - k) * _rolling_var_np(log_oc, window)
+            yz_var = _rolling_var_np(log_overnight, window) + k * _rolling_var_np(log_oc, window) + (1 - k) * rs_var
             frames_by_window[window].append(
                 pd.DataFrame(
                     {
@@ -558,7 +514,6 @@ def model_confidence_set(losses: dict[str, pd.Series], alpha: float = 0.10, reps
     return active
 
 
-@lru_cache(maxsize=2)
 def macro_frame() -> pd.DataFrame:
     macro = load_category7_macro().copy()
     if macro.empty:
@@ -584,8 +539,10 @@ def macro_frame() -> pd.DataFrame:
     for col in ["vix", "vix3m", "vix6m", "vix9d", "vix1y", "dgs2", "dgs10", "curve_10y_2y", "credit"]:
         if col not in macro.columns:
             macro[col] = np.nan
-    if not np.issubdtype(macro["date"].dtype, np.datetime64):
+    if not pd.api.types.is_datetime64_any_dtype(macro["date"]):
         macro["date"] = pd.to_datetime(macro["date"], errors="coerce")
+    if macro["curve_10y_2y"].isna().all():
+        macro["curve_10y_2y"] = macro["dgs10"] - macro["dgs2"]
     return macro[["date", "vix", "vix3m", "vix6m", "vix9d", "vix1y", "dgs2", "dgs10", "curve_10y_2y", "credit"]].dropna(subset=["date"]).sort_values("date")
 
 
@@ -1480,15 +1437,32 @@ def corr_from_cov(cov: pd.DataFrame) -> pd.DataFrame:
 
 
 def parse_weights(payload: dict[str, Any] | None, assets: list[str]) -> pd.Series:
+    import json
     payload = payload or {}
-    raw = payload.get("weights") or payload.get("portfolio_weights")
-    if isinstance(raw, dict):
-        vals = {normalize_symbol(k): number_like(v) or 0.0 for k, v in raw.items()}
-        w = pd.Series({a: vals.get(a, 0.0) for a in assets}, dtype=float)
-    else:
-        w = pd.Series(1.0 / max(len(assets), 1), index=assets, dtype=float)
-    gross = float(w.abs().sum())
-    return w / gross if gross else pd.Series(1.0 / max(len(assets), 1), index=assets, dtype=float)
+    raw = payload.get("weights", payload.get("portfolio_weights"))
+    if raw is None:
+        return pd.Series(1 / len(assets), index=assets, dtype=float)
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            try:
+                raw = dict(part.strip().split(":", 1) for part in raw.split(","))
+            except ValueError as exc:
+                raise ValueError("weights must be a JSON object or SYMBOL:value pairs") from exc
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError("weights must be a nonempty mapping")
+    vals = {}
+    for key, value in raw.items():
+        name = resolve_symbols([key])[0]
+        val = number_like(value)
+        if name not in assets or val is None:
+            raise ValueError(f"Invalid weight for {key}")
+        vals[name] = val
+    weights = pd.Series({a: vals.get(a, 0.0) for a in assets}, dtype=float)
+    if weights.abs().sum() == 0:
+        raise ValueError("Portfolio weights must have positive gross exposure")
+    return weights
 
 
 def summary_card(label: str, value: Any, unit: str = "", **extra: Any) -> dict[str, Any]:

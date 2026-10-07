@@ -33,8 +33,8 @@ def _identity_decorator(*_args, **_kwargs):
     return wrap
 
 
-_jit = njit(cache=True, fastmath=True) if njit else _identity_decorator()
-_jit_parallel = njit(cache=True, parallel=True, fastmath=True) if njit else _identity_decorator()
+_jit = njit(cache=True, fastmath=False) if njit else _identity_decorator()
+_jit_parallel = njit(cache=True, parallel=True, fastmath=False) if njit else _identity_decorator()
 
 
 @_jit

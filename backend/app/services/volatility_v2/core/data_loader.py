@@ -1,93 +1,125 @@
-"""Volatility V2 local data access.
-
-All loaders are read-only. Data acquisition lives in data_pooling.py so runtime
-feature calls never mutate parquet files.
-"""
-
+"""Strict, versioned, request-scoped access to observed local prices and macro data."""
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
-
-import numpy as np
 import pandas as pd
 
-try:
-    from joblib import Memory
-except Exception:  # pragma: no cover
-    Memory = None
-
-try:
-    import polars as pl
-except Exception:  # pragma: no cover
-    pl = None
-
-
 ROOT = Path(__file__).resolve().parents[5]
-BACKEND_DATA = ROOT / "backend" / "data"
-FACTORS_DATA = ROOT / "factors" / "data"
-MARKET_UNIVERSE = BACKEND_DATA / "market_universe.parquet"
-CATEGORY7_MACRO = FACTORS_DATA / "processed" / "category7_macro_regime.parquet"
-_MEM = Memory(location="/tmp/vol_v2_cache", verbose=0) if Memory else None
+BACKEND_DATA = ROOT / 'backend/data'
+FACTORS_DATA = ROOT / 'factors/data'
+MARKET_UNIVERSE = BACKEND_DATA / 'market_universe.parquet'
+CATEGORY7_MACRO = FACTORS_DATA / 'processed/category7_macro_regime.parquet'
+_REQUEST = ContextVar('volatility_v2_request', default={})
+COLUMNS = ['Ticker', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume']
 
+class UnknownSymbolsError(ValueError):
+    """Requested identifiers do not exist in the observed price universe."""
 
-@lru_cache(maxsize=1)
-def load_market_ohlcv() -> pd.DataFrame:
-    columns = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
-    if pl is not None:
-        try:
-            df = pl.scan_parquet(str(MARKET_UNIVERSE)).select(columns).collect().to_pandas()
-        except Exception:
-            df = pd.read_parquet(MARKET_UNIVERSE, columns=columns)
-    else:
-        df = pd.read_parquet(MARKET_UNIVERSE, columns=columns)
-    if not np.issubdtype(df["Date"].dtype, np.datetime64):
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    return df.dropna(subset=["Ticker", "Date", "Close"]).sort_values(["Ticker", "Date"])
+@contextmanager
+def request_scope(payload):
+    token = _REQUEST.set(payload)
+    try:
+        yield
+    finally:
+        _REQUEST.reset(token)
 
+def request_payload():
+    return _REQUEST.get()
 
-@lru_cache(maxsize=1)
-def load_category7_macro() -> pd.DataFrame:
-    if not CATEGORY7_MACRO.exists():
-        return pd.DataFrame()
-    df = pd.read_parquet(CATEGORY7_MACRO)
-    date_col = "date" if "date" in df.columns else df.columns[0]
-    if not np.issubdtype(df[date_col].dtype, np.datetime64):
-        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-    return df.rename(columns={date_col: "date"}).dropna(subset=["date"]).sort_values("date")
+def file_version(path):
+    if not path.is_file():
+        raise ValueError(f'Required data file is missing: {path}')
+    stat = path.stat()
+    return str(path), stat.st_mtime_ns, stat.st_size
 
+def source_version():
+    return tuple(file_version(p) for p in (MARKET_UNIVERSE, CATEGORY7_MACRO) if p.is_file())
 
-def _ohlcv_for_symbols_impl(symbols: tuple[str, ...], lookback_days: int | None = None) -> pd.DataFrame:
-    symbols = [str(s).upper().replace(".", "_").replace("-", "_") for s in symbols if str(s).strip()]
-    columns = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
-    data: pd.DataFrame
-    if pl is not None and MARKET_UNIVERSE.exists() and symbols:
-        try:
-            scan = pl.scan_parquet(str(MARKET_UNIVERSE)).select(columns)
-            scan = scan.filter(pl.col("Ticker").cast(pl.Utf8).is_in(symbols))
-            data = scan.collect().to_pandas()
-            if not np.issubdtype(data["Date"].dtype, np.datetime64):
-                data["Date"] = pd.to_datetime(data["Date"], errors="coerce")
-            data = data.dropna(subset=["Ticker", "Date", "Close"]).sort_values(["Ticker", "Date"])
-        except Exception:
-            data = load_market_ohlcv()
-            data = data[data["Ticker"].astype(str).str.upper().isin(symbols)]
-    else:
-        data = load_market_ohlcv()
-        if symbols:
-            data = data[data["Ticker"].astype(str).str.upper().isin(symbols)]
-    if lookback_days:
-        cutoff = data["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)
-        data = data[data["Date"] >= cutoff]
-    return data.copy()
+def cutoff():
+    raw = request_payload().get('as_of_date') or request_payload().get('end_date')
+    if raw is None:
+        return None
+    try:
+        date = pd.Timestamp(raw)
+    except (ValueError, TypeError) as exc:
+        raise ValueError('as_of_date must be a valid date') from exc
+    if pd.isna(date):
+        raise ValueError('as_of_date must be a valid date')
+    return date.tz_localize(None) if date.tzinfo is not None else date
 
+@lru_cache(maxsize=2)
+def _symbols(version):
+    return tuple(sorted(pd.read_parquet(version[0], columns=['Ticker']).Ticker.dropna().astype(str).unique()))
 
-if _MEM is not None:
-    _cached_ohlcv_for_symbols = _MEM.cache(_ohlcv_for_symbols_impl)
-else:
-    _cached_ohlcv_for_symbols = _ohlcv_for_symbols_impl
+def symbol_directory():
+    return _symbols(file_version(MARKET_UNIVERSE))
 
+def resolve_symbols(symbols):
+    available = set(symbol_directory())
+    resolved, unknown = [], []
+    for raw in symbols:
+        value = str(raw).strip().upper()
+        # Storage aliases are accepted only when the exact requested identifier is absent.
+        candidate = value if value in available else value.replace('-', '_').replace('.', '_')
+        if candidate not in available:
+            unknown.append(value)
+        elif candidate not in resolved:
+            resolved.append(candidate)
+    if unknown:
+        raise UnknownSymbolsError('Unknown or unavailable symbols: ' + ', '.join(unknown))
+    if not resolved:
+        raise ValueError('Explicit asset list must not be empty')
+    return resolved
 
-def ohlcv_for_symbols(symbols: list[str] | tuple[str, ...], lookback_days: int | None = None) -> pd.DataFrame:
-    key = tuple(sorted(str(s).upper().replace(".", "_").replace("-", "_") for s in symbols if str(s).strip()))
-    return _cached_ohlcv_for_symbols(key, lookback_days)
+@lru_cache(maxsize=8)
+def _prices(version, symbols, end):
+    filters = [('Ticker', 'in', list(symbols))] if symbols else []
+    if end is not None:
+        filters.append(('Date', '<=', pd.Timestamp(end)))
+    data = pd.read_parquet(version[0], columns=COLUMNS, filters=filters or None)
+    data['Date'] = pd.to_datetime(data['Date'], errors='raise')
+    if data.duplicated(['Ticker', 'Date']).any():
+        raise ValueError('Duplicate price observations for ticker/date')
+    for col in COLUMNS[2:]:
+        data[col] = pd.to_numeric(data[col], errors='raise')
+    prices = data[['Open', 'High', 'Low', 'Close']]
+    if data[['Ticker', 'Date']].isna().any().any() or not (prices.gt(0).all().all()):
+        raise ValueError('Prices require non-null identifiers, dates, and positive OHLC')
+    if (data.High < prices.max(axis=1)).any() or (data.Low > prices.min(axis=1)).any():
+        raise ValueError('OHLC range is inconsistent')
+    return data.sort_values(['Ticker', 'Date'])
+
+def load_market_ohlcv():
+    end = cutoff()
+    return _prices(file_version(MARKET_UNIVERSE), (), end.isoformat() if end is not None else None).copy()
+
+def ohlcv_for_symbols(symbols, lookback_days=None):
+    symbols = resolve_symbols(symbols)
+    end = cutoff()
+    data = _prices(file_version(MARKET_UNIVERSE), tuple(sorted(symbols)), end.isoformat() if end is not None else None).copy()
+    missing = sorted(set(symbols) - set(data.Ticker))
+    if missing:
+        raise ValueError('No price observations at requested date for: ' + ', '.join(missing))
+    if lookback_days is not None:
+        if int(lookback_days) < 2:
+            raise ValueError('lookback_days must be at least 2 trading observations')
+        data = data.groupby('Ticker', sort=False).tail(int(lookback_days))
+    return data
+
+@lru_cache(maxsize=2)
+def _macro(version):
+    frame = pd.read_parquet(version[0])
+    if 'date' not in frame:
+        raise ValueError('Macro data requires an explicit date column')
+    frame['date'] = pd.to_datetime(frame['date'], errors='raise')
+    if frame.date.isna().any() or frame.date.duplicated().any():
+        raise ValueError('Macro dates must be unique and non-null')
+    return frame.sort_values('date')
+
+def load_category7_macro():
+    frame = _macro(file_version(CATEGORY7_MACRO)).copy()
+    end = cutoff()
+    return frame.loc[frame.date <= end].copy() if end is not None else frame

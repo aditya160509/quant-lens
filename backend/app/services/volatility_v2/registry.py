@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 from dataclasses import dataclass
 from typing import Any, Callable, Dict
+from .core.data_loader import request_scope
 
 
 @dataclass(frozen=True)
@@ -46,4 +47,5 @@ def get_runner(feature_id: str) -> Callable[[dict[str, Any] | None], dict[str, A
 
 
 def run_feature(feature_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    return get_runner(feature_id)(payload or {})
+    with request_scope(payload or {}):
+        return get_runner(feature_id)(payload or {})
