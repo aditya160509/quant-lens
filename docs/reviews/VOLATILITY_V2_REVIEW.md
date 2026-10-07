@@ -1,3 +1,5 @@
+> **Rebuild status (2026-10-07): IN PROGRESS.** Strict dated data and Yang–Zhang fixes are committed (`f6fea1a2`); true expanding HAR is committed (`e7d4c9ad`). Held-out GARCH is implemented with 12 targeted tests passing. Remaining feature, contract, job, wiring and final checks are tracked in `backend/app/services/volatility_v2/DONE.md`. This note does not mark the review complete.
+
 # Volatility V2 Review: Spec vs Implementation vs Frontend
 
 Date: 2026-09-29

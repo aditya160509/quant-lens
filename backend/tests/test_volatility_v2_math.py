@@ -93,3 +93,33 @@ def test_har_uses_matured_targets_and_is_future_invariant():
     valid = original.dropna(subset=["forecast"])
     assert (valid.training_observed_through <= valid.date).all()
     assert valid.actual.tail(5).isna().all()
+
+
+def test_garch_forecasts_are_formed_before_observed_return():
+    from app.services.volatility_v2.core.garch import expanding_model
+
+    dates = pd.date_range("2020-01-01", periods=210)
+    returns = pd.Series(
+        np.random.default_rng(71).normal(0, 0.01, len(dates)), index=dates
+    )
+    first, _ = expanding_model(
+        returns, min_train=120, refit_interval=21, evaluation_days=90
+    )
+    changed = returns.copy()
+    changed.iloc[170:] *= 3
+    second, _ = expanding_model(
+        changed, min_train=120, refit_interval=21, evaluation_days=90
+    )
+    pd.testing.assert_frame_equal(first.loc[: dates[169]], second.loc[: dates[169]])
+    assert (first.training_observed_through < first.index).all()
+    assert (first.forecast_observed_through < first.index).all()
+
+
+def test_var_backtests_do_not_invent_independence_pvalue():
+    from app.services.volatility_v2.core.garch import var_backtests
+
+    path = pd.DataFrame({"return": [0.0, 0.01, 0.0, -0.01], "var_cutoff": [-0.02] * 4})
+    result = var_backtests(path, 0.99)
+    assert result["exceptions"] == 0
+    assert np.isfinite(result["kupiec_lr"])
+    assert result["christoffersen_independence_p_value"] is None
