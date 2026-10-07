@@ -512,16 +512,7 @@ function CountUp({ mode = "number", prefix = "", suffix = "", target }) {
   return <span ref={ref}>{prefix}{value.toLocaleString()}{suffix}</span>;
 }
 
-function StatsBar() {
-  const stats = [
-    [<CountUp key="modules" target={14} />, "Factor Modules"],
-    [<CountUp key="universe" suffix="+" target={5000} />, "Universe Coverage"],
-    ["10Y", "Historical Depth"],
-    [<CountUp key="latency" mode="countdown" prefix="< " suffix="ms" target={150} />, "Compute Latency"],
-    ["ILPA 2.0", "DDQ Standard"],
-  ];
-  return <section className="stats-bar" aria-label="Factor Intelligence stats" id="stats-bar">{stats.map(([value, label]) => <div className="stat" key={label}><strong>{value}</strong><span>{label}</span></div>)}</section>;
-}
+function StatsBar() { return null; }
 
 function FeatureTabStrip({ activeCluster }) {
   const labels = {
