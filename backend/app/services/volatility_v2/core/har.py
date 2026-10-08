@@ -159,7 +159,10 @@ def expanding_forecasts(
     return rows, accuracy, losses, coefficients
 
 
-def causal_combination(model_rows, horizon, loss_function="qlike", min_history=30):
+def causal_combination(
+    model_rows, horizon, loss_function="qlike", min_history=30,
+    mcs_confidence=0.9, bootstrap_reps=200, selection_interval=21,
+):
     """Combine forecasts with weights learned only from already matured outcomes.
 
     Equal weights are a separately declared policy; inverse-loss weights are not
@@ -180,7 +183,15 @@ def causal_combination(model_rows, horizon, loss_function="qlike", min_history=3
     else:
         losses = forecasts.sub(actual, axis=0).pow(2)
     losses = losses.replace([np.inf, -np.inf], np.nan)
+    from .stats import model_confidence_set
+
+    if selection_interval < 1 or not 0 < mcs_confidence < 1:
+        raise ValueError("Invalid causal MCS controls")
     records = []
+    selected = None
+    selection_position = None
+    selection_origin = None
+    selection_count = None
     for position, (date, row) in enumerate(forecasts.iterrows()):
         if row.isna().any():
             continue
@@ -217,6 +228,34 @@ def causal_combination(model_rows, horizon, loss_function="qlike", min_history=3
                 "latest_training_origin": matured.index[-1],
             }
         )
+        if len(matured) < max(30, min_history):
+            continue
+        if selection_position is None or position - selection_position >= selection_interval:
+            selected = model_confidence_set(
+                {name: matured[name] for name in matured},
+                alpha=1 - mcs_confidence,
+                reps=bootstrap_reps,
+            )
+            if not selected:
+                raise ValueError("Causal MCS returned no eligible models")
+            selection_position = position
+            selection_origin = matured.index[-1]
+            selection_count = len(matured)
+        selected_weights = {name: 1 / len(selected) for name in selected}
+        records.append({
+            "date": date,
+            "model": "MCS-selected combination",
+            "horizon": horizon,
+            "forecast": float(row[selected].mean()),
+            "actual": actual.loc[date],
+            "weights": selected_weights,
+            "selected_models": selected,
+            "selection_date": forecasts.index[selection_position],
+            "latest_training_origin": selection_origin,
+            "matured_evaluations": selection_count,
+            "mcs_confidence": mcs_confidence,
+            "weight_policy": "equal within past-only stationary-bootstrap MCS",
+        })
     return records
 
 

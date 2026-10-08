@@ -1134,6 +1134,18 @@ def test_combination_weights_use_only_matured_outcomes():
         r["weights"] for r in changed if "weights" in r and r["date"] < dates[65]
     ]
     assert first_weights == changed_weights
+    selected = [r for r in first if r["model"] == "MCS-selected combination"]
+    assert selected
+    for record in selected:
+        origin = dates.get_loc(record["latest_training_origin"])
+        formation = dates.get_loc(record["selection_date"])
+        assert origin + 5 <= formation
+        assert record["matured_evaluations"] >= 30
+        assert sum(record["weights"].values()) == pytest.approx(1)
+        assert record["forecast"] == pytest.approx(
+            np.mean([models[name].set_index("date").loc[record["date"], "forecast"]
+                     for name in record["selected_models"]])
+        )
 
 
 def test_har_rejects_unidentifiable_predictors():

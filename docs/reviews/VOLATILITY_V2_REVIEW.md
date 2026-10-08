@@ -1,3 +1,5 @@
+Backend follow-up: causal MCS-selected HAR combinations implemented using matured losses only; targeted Volatility suite: 88 passed (one existing Starlette deprecation warning). Other original-spec limitations remain tracked in DONE.md.
+
 > **Backend follow-up verified (2026-10-08).** The retained nine-feature backend has strict contracts, durable jobs, real held-out estimation, corrected diagnostics and explicit unsupported-method dispositions. **88 targeted backend tests pass; all nine real-data feature runs return their declared outputs.** Common/statistics/estimators are split into focused modules. See `backend/app/services/volatility_v2/DONE.md` for the current feature-by-feature closure, file fates, commands and limitations. This historical review is preserved below. It does not imply all original aspirational estimators were implemented. Frontend changes and browser checks are excluded by the latest user instruction; the remaining landing hero literals and renderer migration remain frontend work.
 
 # Volatility V2 Review: Spec vs Implementation vs Frontend

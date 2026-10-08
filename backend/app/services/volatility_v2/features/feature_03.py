@@ -151,7 +151,12 @@ def run(payload=None):
                 losses[name] = loss
         directional.extend(directional_dm_table(model_rows, daily, horizon))
         combinations.extend(
-            causal_combination(model_rows, horizon, payload.get("mcs_loss", "qlike"))
+            causal_combination(
+                model_rows, horizon, payload.get("mcs_loss", "qlike"),
+                mcs_confidence=float(payload.get("mcs_confidence", 0.9)),
+                bootstrap_reps=int(payload.get("bootstrap_reps", 200)),
+                selection_interval=int(payload.get("refit_interval", 21)),
+            )
         )
         members = (
             set(
@@ -201,7 +206,6 @@ def run(payload=None):
             "removed_outputs": {
                 "macro HAR-X": "Macroeconomic release vintages are unavailable; supported HAR-X uses the same observed IV and integrated physical-variance engine as Feature 05",
                 "HAR-J/HAR-J-Signed": "Daily OHLC cannot identify intraday bipower jump variation",
-                "MCS-selected combinations": "Held-out whole-sample MCS membership is retrospective; combinations instead use all requested models and past matured losses",
             },
             "har_x": {
                 "source": iv_source,
