@@ -1,59 +1,141 @@
-"""F12 Systemic Risk and Fire-Sale Contagion Engine."""
-
-from __future__ import annotations
+"""Real peer books and optional measured counterparty exposure stress."""
 
 import pandas as pd
+from ..core.context import load_context, feature_meta, parse_weights
+from ..core.common import response, matrix_records
+from ..core.systemic import (
+    portfolio_overlap_index,
+    overlap_centrality,
+    debtrank_propagate,
+    fire_sale_impact,
+    overlap_reducing_trades,
+)
+from ..core.liquidity import liquidity_table
 
-from ..core.analytics import cascade_probability, debtrank_propagate, feature_meta, fire_sale_impact, liquidation_spiral_prob, liquidity_table, load_context, matrix_records, network_edges, overlap_centrality, overlap_reducing_trades, portfolio_overlap_index, response, systemic_risk_contribution
+from .inputs import inputs_for, output
 
 FEATURE_ID = "12"
 FEATURE_NAME = "Systemic Risk and Fire-Sale Contagion Engine"
-INPUTS = ["tickers", "weights", "peer_count", "liquidation_fraction", "portfolio_nav"]
-OUTPUTS = ["overlap_heatmap", "fire_sale_impact", "contagion_network", "debtrank", "spiral_probability"]
 
 
-def run(payload: dict | None = None) -> dict:
+def run(payload=None):
     payload = payload or {}
-    ctx = load_context(payload, min_symbols=8, default_limit=80)
-    w = ctx["weights"].sort_values(ascending=False)
-    peer_count = int(payload.get("peer_count") or 10)
-    peers = {}
-    supplied = payload.get("peer_portfolios") or {}
-    if isinstance(supplied, dict):
-        for name, weights in supplied.items():
-            if isinstance(weights, dict):
-                candidate = pd.Series(weights, dtype=float).reindex(w.index).fillna(0.0).clip(lower=0)
-                if candidate.sum() > 0:
-                    peers[str(name)] = candidate / candidate.sum()
-    if not peers:
+    ctx = load_context(payload)
+    supplied = payload.get("peer_portfolios")
+    if not supplied:
         return response(
             FEATURE_ID,
             [{"label": "Peer Books", "value": 0}],
             {},
-            {"peer_data_requirement": [{"status": "required", "field": "peer_portfolios", "detail": "Provide named peer weight maps to compute overlap, fire-sale contagion, and DebtRank."}]},
-            meta=feature_meta(ctx, ["Peer portfolios are required. Synthetic shuffled holdings are intentionally not used."]),
+            {
+                "peer_data_requirement": [
+                    {
+                        "field": "peer_portfolios",
+                        "status": "required",
+                        "reason": "Named real peer books are required; shuffled holdings are not used",
+                    }
+                ]
+            },
+            meta=feature_meta(ctx, ["Actual peer portfolios are required"]),
         )
-    names = ["portfolio", *peers.keys()]
-    portfolios = {"portfolio": w, **peers}
-    overlap = portfolio_overlap_index(portfolios)
-    liq = pd.DataFrame(liquidity_table(ctx["symbols"], ctx["lookback_days"], float(payload.get("portfolio_nav") or 1_000_000), w))
-    theta = float(payload.get("liquidation_fraction") or 0.20)
+    if "portfolio" in supplied:
+        raise ValueError("Peer name portfolio is reserved")
+    peers = {
+        name: parse_weights({"weights": weights}, ctx["symbols"])
+        for name, weights in supplied.items()
+    }
+    books = {"portfolio": ctx["weights"], **peers}
+    overlap = portfolio_overlap_index(books)
+    issues = []
     impacts = []
-    for peer, pw in peers.items():
-        loss = 0.0
-        adv = liq.set_index("ticker")["adv_dollars"] if not liq.empty else pd.Series(1.0, index=w.index)
-        impact_series = fire_sale_impact(pw, w, adv, theta, float(payload.get("portfolio_nav") or 1_000_000))
-        loss = float(impact_series.sum())
-        impacts.append({"peer": peer, "liquidation_fraction": theta, "portfolio_loss": loss, "loss_bps": loss * 10000})
-    exposure_proxy = overlap.div(overlap.sum(axis=1).replace(0, 1), axis=0)
-    debt_series = debtrank_propagate(exposure_proxy, pd.Series({"portfolio": theta}))
-    debt = [{"node": n, "debtrank": float(v)} for n, v in debt_series.items()]
-    losses = pd.Series({r["peer"]: abs(r["portfolio_loss"]) for r in impacts})
-    peer_avg = pd.DataFrame(peers).mean(axis=1)
-    leverage = float(payload.get("leverage") or 1.0)
-    connectivity = float((overlap.drop(index="portfolio", columns="portfolio", errors="ignore") > 0.05).sum().mean())
-    mean_overlap = float(overlap.loc["portfolio"].drop("portfolio").mean())
-    tables = {"fire_sale_impact": impacts, "debtrank": debt, "systemic_risk_contribution": systemic_risk_contribution(overlap, losses), "overlap_centrality": overlap_centrality(overlap), "spiral_probability": [{"probability": liquidation_spiral_prob(mean_overlap, leverage, theta), "cascade_probability": cascade_probability(connectivity / max(peer_count, 1), leverage, theta), "connectivity": connectivity, "leverage": leverage}], "overlap_reducing_reallocation": overlap_reducing_trades(w, peer_avg)}
-    charts = {"overlap_heatmap": matrix_records(overlap), "contagion_network": network_edges(ctx["returns"], 0.35)}
-    notes = ["DebtRank exposure matrix uses normalized overlap as a proxy until directional counterparty exposures are supplied."]
-    return response(FEATURE_ID, [{"label": "Max Fire-Sale Loss", "value": min([i["loss_bps"] for i in impacts] or [0.0])}, {"label": "Avg Overlap", "value": mean_overlap}], charts, tables, meta=feature_meta(ctx, notes))
+    debt = []
+    navs = payload.get("peer_navs", {})
+    gamma = payload.get("market_depth_coefficient")
+    if gamma is not None and set(navs) == set(peers):
+        rows = liquidity_table(
+            ctx["symbols"],
+            ctx["lookback_days"],
+            float(payload.get("portfolio_nav", 1000000)),
+            ctx["weights"],
+        )
+        adv = pd.Series({r["ticker"]: r["adv_dollars"] for r in rows})
+        for name, w in peers.items():
+            contributions = fire_sale_impact(
+                w,
+                ctx["weights"],
+                adv,
+                float(payload.get("liquidation_fraction", 0.2)),
+                float(navs[name]),
+                float(gamma),
+            )
+            impacts.append(
+                {
+                    "peer": name,
+                    "portfolio_loss": float(contributions.sum()),
+                    "portfolio_loss_dollars": float(
+                        contributions.sum() * payload.get("portfolio_nav", 1000000)
+                    ),
+                    "loss_bps": float(contributions.sum() * 10000),
+                    "peer_nav": float(navs[name]),
+                    "market_depth_coefficient_assumption": float(gamma),
+                }
+            )
+    else:
+        issues.append(
+            "Fire-sale stress requires real peer_navs and an explicit market_depth_coefficient; own NAV is not substituted for peers"
+        )
+    if payload.get("counterparty_exposures") is not None:
+        exposure = pd.DataFrame(payload["counterparty_exposures"]).reindex(
+            index=list(books), columns=list(books)
+        )
+        if exposure.isna().any().any():
+            raise ValueError(
+                "Complete directional exposure matrix required, including explicit zero entries"
+            )
+        initial = payload.get("initial_distress")
+        if initial is None or set(initial) - set(books):
+            raise ValueError("Actual named initial_distress required")
+        result = debtrank_propagate(exposure, pd.Series(initial, dtype=float))
+        debt = [{"node": c, "distress": float(v)} for c, v in result.items()]
+    else:
+        issues.append(
+            "DebtRank requires directional counterparty exposures as fractions of equity; overlap is not an exposure substitute"
+        )
+    edges = [
+        {"source": a, "target": b, "weight": float(overlap.loc[a, b])}
+        for i, a in enumerate(overlap)
+        for b in list(overlap)[i + 1 :]
+        if overlap.loc[a, b] > 0
+    ]
+    return response(
+        FEATURE_ID,
+        [{"label": "Peer Books", "value": len(peers)}],
+        {"overlap_heatmap": matrix_records(overlap), "contagion_network": edges},
+        {
+            "fire_sale_impact": impacts,
+            "debtrank": debt,
+            "overlap_centrality": overlap_centrality(overlap),
+            "shared_holding_ranking": overlap_reducing_trades(
+                ctx["weights"], pd.DataFrame(peers).mean(axis=1)
+            ),
+        },
+        meta=feature_meta(
+            ctx,
+            issues
+            + [
+                "Cascade and liquidation-spiral probabilities require capital buffers, leverage, liquidation rules and calibrated shock distributions; no uniform-random or exponential probability proxy is published"
+            ],
+        ),
+    )
+
+
+INPUTS = inputs_for(FEATURE_ID)
+OUTPUTS = [
+    output("overlap_heatmap", "charts", "heatmap", True),
+    output("contagion_network", "charts", "network", False),
+    output("fire_sale_impact"),
+    output("debtrank"),
+    output("overlap_centrality"),
+    output("shared_holding_ranking"),
+    output("peer_data_requirement"),
+]

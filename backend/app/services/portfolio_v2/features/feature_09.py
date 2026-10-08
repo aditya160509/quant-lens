@@ -1,77 +1,124 @@
-"""F09 Alpha Decay and Factor Half-Life Engine."""
-
-from __future__ import annotations
+"""Actual signal IC decay with bootstrap bands and taxonomy-aware model fitting."""
 
 import numpy as np
+import pandas as pd
+from ..core.context import load_context, feature_meta
+from ..core.common import response, compact_records
+from ..core.decay import empirical_ic, decay_model_selection, publication_mean_shift
 
-from ..core.analytics import (
-    alpha_capacity,
-    alpha_decay,
-    decay_adjusted_weights,
-    decay_model_selection,
-    feature_meta,
-    hyperbolic_decay_fit,
-    load_context,
-    optimal_rebalance_frequency,
-    response,
-)
+from .inputs import inputs_for, output
 
 FEATURE_ID = "09"
 FEATURE_NAME = "Alpha Decay and Factor Half-Life Engine"
-INPUTS = ["tickers", "lookback_days", "factor_taxonomy", "max_horizon"]
-OUTPUTS = ["ic_decay_curve", "half_life_table", "crowding_proxy", "decay_adjusted_weights", "publication_decay"]
 
 
-def run(payload: dict | None = None) -> dict:
+def run(payload=None):
     payload = payload or {}
-    ctx = load_context(payload, min_symbols=8, default_limit=80)
-
-    # Compute decay once, reuse ic_curve everywhere
-    decay = alpha_decay(ctx["returns"], max_horizon=int(payload.get("max_horizon") or 63))
-    ic_curve = decay["ic_curve"]
-    half = decay["half_life"] or 63
-
-    fit = hyperbolic_decay_fit(ic_curve)
-    decay_models = decay_model_selection(ic_curve)
-    opt_freq = optimal_rebalance_frequency(ic_curve, float(payload.get("transaction_cost_bps") or 10))
-
-    # Vectorized age grid — np.exp on array instead of Python loop
-    age_arr = np.arange(0, 126, 5, dtype=np.float64)
-    scale_arr = np.exp(-age_arr / max(half, 1))
-    age_grid = [{"age_days": int(a), "weight_scale": float(s)} for a, s in zip(age_arr, scale_arr)]
-
-    # Batch dispersion — single rolling std pass over all columns at once
-    rets_arr = ctx["returns"]
-    rolling_std = rets_arr.rolling(63).std()
-    last_std = rolling_std.iloc[-1].to_numpy(dtype=np.float64)
-    global_std = rets_arr.std().to_numpy(dtype=np.float64)
-    global_std[global_std < 1e-12] = 1.0
-    dispersion_arr = last_std / global_std
-    cols_arr = list(rets_arr.columns[:80])
-    crowd = [
-        {"ticker": str(c), "dispersion_proxy": float(d), "crowding_percentile": float(min(100, max(0, 50 + 20 * (d - 1))))}
-        for c, d in zip(cols_arr, dispersion_arr[:80])
-    ]
-
-    ic0 = ic_curve[0]["ic"] if ic_curve else 0.0
-    cap = alpha_capacity(ic0, float(ctx["returns"].std().mean()), 0.10)
-    adjusted = decay_adjusted_weights(ctx["weights"], ic_curve, half)
-
-    tables = {
-        "half_life_table": [{"signal": "cross_sectional_momentum_proxy", "half_life_days": half, "taxonomy": payload.get("factor_taxonomy", "mechanical"), **fit, "selected_model": decay_models[0]["model"] if decay_models else "hyperbolic"}],
-        "decay_model_selection": decay_models,
-        "crowding_proxy": crowd,
-        "optimal_rebalance_frequency": [opt_freq],
-        "alpha_capacity": [{"capacity_proxy": cap}],
-        "factor_zoo_comparison": [{"factor": "momentum_proxy", "taxonomy": "mechanical", "half_life": half}],
-        "publication_decay": [{"status": "not_available", "reason": "Factor publication dates not available in local data."}],
-    }
-    charts = {
-        "ic_decay_curve": ic_curve,
-        "decay_adjusted_weights": adjusted if adjusted else age_grid,
-    }
+    ctx = load_context(payload)
+    r = ctx["raw_returns"]
+    taxonomy = payload.get("factor_taxonomy", "mechanical")
+    if payload.get("signal_scores"):
+        scores = pd.DataFrame(payload["signal_scores"])
+        scores.date = pd.to_datetime(scores.date)
+        scores = scores.set_index("date")
+        if scores.index.duplicated().any() or set(scores.columns) != set(r.columns):
+            raise ValueError(
+                "Signal dates must be unique and columns must match selected assets"
+            )
+        signals = scores.reindex(index=r.index, columns=r.columns).astype(float)
+        signal_name = "supplied observed scores"
+    else:
+        if taxonomy == "judgment":
+            raise ValueError(
+                "Judgment signals require actual signal_scores; momentum is not a value/quality proxy"
+            )
+        signals = np.expm1(
+            np.log1p(r).rolling(int(payload.get("signal_window", 21))).sum()
+        )
+        signal_name = "Observed trailing cumulative-return momentum at formation close"
+    rows = empirical_ic(
+        r,
+        signals,
+        int(payload.get("max_horizon", 63)),
+        int(payload.get("bootstrap_draws", 200)),
+    )
+    valid = [row for row in rows if row["ic"] is not None]
+    models = decay_model_selection(valid) if taxonomy == "mechanical" else []
+    half = None
+    if valid:
+        threshold = abs(valid[0]["ic"]) / 2
+        half = next(
+            (row["horizon"] for row in valid if abs(row["ic"]) <= threshold), None
+        )
+    fitted_half = None
+    if models:
+        best = models[0]
+        params = best["parameters"]
+        fitted_half = (
+            params[0] / (2 * params[1])
+            if best["model"] == "linear"
+            else params[1]
+            if best["model"] == "hyperbolic"
+            else params[1] * np.log(2)
+            if best["model"] == "exponential"
+            else params[1] * np.log(2) ** (1 / params[2])
+        )
+    dispersion = signals.std(axis=1).dropna()
+    history = dispersion.tail(1260)
+    measured = (
+        []
+        if history.empty
+        else [
+            {
+                "signal_dispersion": float(history.iloc[-1]),
+                "historical_dispersion_percentile": float(
+                    history.rank(pct=True).iloc[-1] * 100
+                ),
+                "observations": len(history),
+                "interpretation": "Measured raw-score dispersion; not ETF AUM crowding or a calibrated crash probability",
+            }
+        ]
+    )
     return response(
         FEATURE_ID,
-        [{"label": "Half-Life", "value": half}, {"label": "IC(1D)", "value": ic0}],
-        charts, tables, meta=feature_meta(ctx, ["ETF AUM growth data unavailable; crowding uses cross-sectional dispersion proxy"]),
+        [{"label": "Empirical Half-Life", "value": half}],
+        {
+            "ic_decay_curve": rows,
+            "signal_history": compact_records(signals.reset_index()),
+        },
+        {
+            "half_life_table": [
+                {
+                    "signal": signal_name,
+                    "taxonomy": taxonomy,
+                    "empirical_half_life_observations": half,
+                    "fitted_half_life_observations": fitted_half,
+                    "selected_model": models[0]["model"] if models else None,
+                }
+            ],
+            "decay_model_selection": models,
+            "signal_dispersion": measured,
+            "publication_decay": publication_mean_shift(
+                r, signals, payload["publication_date"]
+            )
+            if payload.get("publication_date")
+            else [],
+        },
+        meta=feature_meta(
+            ctx,
+            [
+                "ETF AUM histories and signed-flow Kyle calibration are absent; crowding crash probabilities and dollar alpha capacity are not produced. IC is dimensionless and is not mislabeled as return alpha net of bps costs."
+            ],
+        ),
     )
+
+
+INPUTS = inputs_for(FEATURE_ID)
+OUTPUTS = [
+    output("ic_decay_curve", "charts", "band", True),
+    output("signal_history", "charts", "line", False),
+    output("half_life_table"),
+    output("decay_model_selection"),
+    output("signal_dispersion"),
+    output("publication_decay"),
+]

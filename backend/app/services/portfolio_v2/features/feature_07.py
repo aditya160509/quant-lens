@@ -1,47 +1,95 @@
-"""F07 Liquidity Analytics Engine."""
+"""Observed liquidity and participation-constrained exit schedules."""
 
-from __future__ import annotations
+from ..core.context import load_context, feature_meta
+from ..core.common import response
+from ..core.data_loader import ohlcv_for_symbols
+from ..core.liquidity import (
+    liquidity_table,
+    liquidity_halflife,
+    regulatory_classification,
+    crisis_liquidation_cost,
+    liquidity_frontier,
+    liquidation_schedule,
+)
 
-import pandas as pd
-
-from ..core.analytics import crisis_liquidation_cost, feature_meta, liquidity_frontier, liquidity_halflife, liquidity_table, load_context, ohlcv_for_symbols, recency_weighted_amihud, regulatory_classification, response
+from .inputs import inputs_for, output
 
 FEATURE_ID = "07"
 FEATURE_NAME = "Liquidity Analytics Engine"
-INPUTS = ["tickers", "weights", "lookback_days", "portfolio_nav", "participation_rate"]
-OUTPUTS = ["liquidity_table", "days_to_liquidate", "liquidity_var", "liquidation_schedule", "half_life"]
 
 
-def run(payload: dict | None = None) -> dict:
+def run(payload=None):
     payload = payload or {}
-    ctx = load_context(payload, min_symbols=8, default_limit=80)
-    nav = float(payload.get("portfolio_nav") or 1_000_000)
-    table = pd.DataFrame(liquidity_table(ctx["symbols"], ctx["lookback_days"], nav, ctx["weights"]))
-    if table.empty:
-        return response(FEATURE_ID, [], {}, {}, meta=feature_meta(ctx, ["volume data unavailable for selected symbols"]))
-    schedule = []
-    dtl_col = "days_to_liquidate_20pct_adv"
-    for ticker, dtl in zip(table["ticker"].astype(str).to_numpy(), table[dtl_col].to_numpy(dtype=float, copy=False)):
-        days = max(1, int(round(dtl)))
-        for day in range(1, min(days, 20) + 1):
-            schedule.append({"ticker": ticker, "day": day, "remaining_pct": float(max(0.0, 1 - day / days))})
+    ctx = load_context(payload)
+    participation = float(payload.get("participation_rate", 0.2))
+    rows = liquidity_table(
+        ctx["symbols"],
+        ctx["lookback_days"],
+        float(payload.get("portfolio_nav", 1000000)),
+        ctx["weights"],
+        int(payload.get("adv_window", 60)),
+        participation,
+    )
     raw = ohlcv_for_symbols(ctx["symbols"], ctx["lookback_days"])
-    rw = recency_weighted_amihud(raw)
-    halflife_rows = []
-    for ticker, group in raw.groupby("Ticker"):
-        group = group.sort_values("Date")
-        oc_ret = (group["Close"] / group["Open"].replace(0, pd.NA) - 1).abs()
-        dv = (group["Close"] * group["Volume"].fillna(0)).replace(0, pd.NA)
-        amihud_series = (oc_ret / dv).replace([float("inf"), float("-inf")], pd.NA).dropna()
-        halflife_rows.append({"ticker": ticker, "liquidity_halflife_days": liquidity_halflife(amihud_series)})
-    liq_rows = table.to_dict("records")
-    tables = {
-        "liquidity_table": [{**r, "recency_weighted_amihud": float(rw.get(r["ticker"], r.get("amihud", 0.0))), "regulatory_bucket": regulatory_classification(float(r[dtl_col]))} for r in liq_rows],
-        "days_to_liquidate": table[["ticker", dtl_col]].to_dict("records"),
-        "liquidity_var": table[["ticker", "liquidity_var_bps"]].to_dict("records"),
-        "half_life": halflife_rows,
-        "crisis_liquidation_cost": crisis_liquidation_cost(liq_rows),
-        "regulatory_compliance": [{"ticker": r["ticker"], "bucket": regulatory_classification(float(r[dtl_col]))} for r in liq_rows],
-    }
-    charts = {"liquidation_schedule": schedule, "liquidity_rank": table.sort_values(dtl_col, ascending=False).head(50).to_dict("records"), "liquidity_frontier": liquidity_frontier(liq_rows)}
-    return response(FEATURE_ID, [{"label": "Max DTL", "value": float(table[dtl_col].max())}, {"label": "Median ADV $", "value": float(table["adv_dollars"].median()), "format": "currency"}], charts, tables, meta=feature_meta(ctx))
+    half = []
+    for ticker, g in raw.groupby("Ticker"):
+        x = ((g.Close / g.Open - 1).abs() / (g.Close * g.Volume)).replace(
+            [float("inf"), float("-inf")], float("nan")
+        )
+        half.append(
+            {
+                "ticker": ticker,
+                "liquidity_halflife_days": liquidity_halflife(x),
+                "method": "Log open-to-close Amihud trend over up to 60 observed sessions; improving trends only",
+            }
+        )
+    return response(
+        FEATURE_ID,
+        [{"label": "Max DTL", "value": max(r["days_to_liquidate"] for r in rows)}],
+        {
+            "liquidation_schedule": liquidation_schedule(
+                rows, participation, payload.get("liquidation_urgency", "orderly")
+            ),
+            "liquidity_rank": sorted(
+                rows, key=lambda r: r["days_to_liquidate"], reverse=True
+            ),
+            "dtl_eligibility": liquidity_frontier(rows),
+        },
+        {
+            "liquidity_table": rows,
+            "days_to_liquidate": [
+                {"ticker": r["ticker"], "days": r["days_to_liquidate"]} for r in rows
+            ],
+            "half_life": half,
+            "stress_liquidation_cost": crisis_liquidation_cost(
+                rows, float(payload.get("stress_volume_multiplier", 0.3))
+            ),
+            "dtl_classification": [
+                {
+                    "ticker": r["ticker"],
+                    "bucket": regulatory_classification(r["days_to_liquidate"]),
+                    "interpretation": "DTL threshold classification only, not a SEC/UCITS compliance certification",
+                }
+                for r in rows
+            ],
+        },
+        meta=feature_meta(
+            ctx,
+            [
+                "Measured bid-ask spreads and signed order flow are absent: calibrated LVaR, permanent impact and regulatory compliance certification are not produced"
+            ],
+        ),
+    )
+
+
+INPUTS = inputs_for(FEATURE_ID)
+OUTPUTS = [
+    output("liquidation_schedule", "charts", "line", True),
+    output("liquidity_rank", "charts", "bar", False),
+    output("dtl_eligibility", "charts", "bar", False),
+    output("liquidity_table"),
+    output("days_to_liquidate"),
+    output("half_life"),
+    output("stress_liquidation_cost"),
+    output("dtl_classification"),
+]

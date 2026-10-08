@@ -5,23 +5,21 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..core.analytics import (
+from ..core.stress import (
     correlation_breakdown_stress,
-    feature_meta,
     historical_crisis_replay,
-    load_context,
-    response,
-    reverse_stress_test,
     minimum_mahalanobis_reverse_stress,
     stationary_block_bootstrap_paths,
     stress_scenarios,
 )
+from ..core.context import feature_meta, load_context
+from ..core.common import response
 from ..core.performance import cached_correlation_frame
+
+from .inputs import inputs_for, output
 
 FEATURE_ID = "04"
 FEATURE_NAME = "Portfolio Stress Testing and Scenario Engine"
-INPUTS = ["tickers", "weights", "lookback_days", "scenario", "shock_size", "monte_carlo_paths"]
-OUTPUTS = ["scenario_waterfall", "scenario_table", "correlation_stress", "monte_carlo", "reverse_stress"]
 
 
 def run(payload: dict | None = None) -> dict:
@@ -32,19 +30,20 @@ def run(payload: dict | None = None) -> dict:
     # Single numpy port computation reused everywhere
     w_arr = w.reindex(rets.columns).fillna(0.0).to_numpy(dtype=np.float64)
     ret_arr = rets.to_numpy(dtype=np.float64)
-    np.nan_to_num(ret_arr, copy=False)
+    if not np.isfinite(ret_arr).all():
+        raise ValueError("Stress analysis requires complete finite observed returns")
     port_arr = ret_arr @ w_arr
-    mu = float(port_arr.mean())
-    sigma = float(port_arr.std())
 
     stress = stress_scenarios(rets, w)
 
     # Stationary block bootstrap retains observed volatility clustering instead
     # of assuming independent Gaussian daily returns.
-    paths = int(min(float(payload.get("monte_carlo_paths") or 1000), 5000))
+    paths = int(payload.get("monte_carlo_paths", 1000))
     horizon = int(payload.get("horizon_days") or 21)
-    blocks = stationary_block_bootstrap_paths(pd.Series(port_arr), paths, horizon, payload.get("bootstrap_block_length"))
-    sims = blocks.sum(axis=1)
+    blocks = stationary_block_bootstrap_paths(
+        pd.Series(port_arr), paths, horizon, payload.get("bootstrap_block_length")
+    )
+    sims = (1 + blocks).prod(axis=1) - 1
 
     # Cache corr, compute avg_corr vectorized
     corr = cached_correlation_frame(rets)
@@ -54,9 +53,18 @@ def run(payload: dict | None = None) -> dict:
 
     threshold = abs(float(payload.get("loss_threshold") or 0.15))
     reverse = minimum_mahalanobis_reverse_stress(rets, w, threshold)
-    corr_stress = correlation_breakdown_stress(rets, w)
+    corr_stress = correlation_breakdown_stress(
+        rets, w, float(payload.get("crisis_correlation", 0.75))
+    )
     historical = historical_crisis_replay(rets, w)
-    historical_normalized = [{"scenario": r["scenario"], "portfolio_return": r["return"], "pl_bps": r["return"] * 10000, "worst_day": r.get("worst_day")} for r in historical]
+    historical_normalized = [
+        {
+            **r,
+            "portfolio_return": r.get("return"),
+            "pl_bps": r["return"] * 10000 if "return" in r else None,
+        }
+        for r in historical
+    ]
 
     # Precompute quantiles in one call
     q05, q50, q95 = np.quantile(sims, [0.05, 0.50, 0.95])
@@ -69,20 +77,60 @@ def run(payload: dict | None = None) -> dict:
     hypothetical = payload.get("hypothetical_shocks") or {}
     if isinstance(hypothetical, dict) and hypothetical:
         shock = np.asarray([float(hypothetical.get(c, 0.0)) for c in rets.columns])
-        stress["scenario_table"].append({"scenario": "user_defined", "portfolio_return": float(w_arr @ shock), "pl_bps": float(w_arr @ shock * 10000)})
+        stress["scenario_table"].append(
+            {
+                "scenario": "user_defined",
+                "portfolio_return": float(w_arr @ shock),
+                "pl_bps": float(w_arr @ shock * 10000),
+            }
+        )
     tables = {
         "scenario_table": stress["scenario_table"] + historical_normalized,
-        "correlation_stress": [{"stress_level": "current", "avg_corr": avg_corr}, {"stress_level": "crisis_plus_25pct", "avg_corr": min(1.0, avg_corr * 1.25 + 0.10)}],
-        "reverse_stress": [reverse, {"legacy_proportional": reverse_stress_test(rets, w, threshold)}],
+        "correlation_stress": [corr_stress],
+        "reverse_stress": [reverse],
         "stress_verdict": [{"verdict": verdict, **corr_stress}],
-        "monte_carlo_summary": [{"p05": float(q05), "p50": float(q50), "p95": float(q95), "method": "stationary_block_bootstrap", "block_length": int(payload.get("bootstrap_block_length") or 0) or None}],
+        "monte_carlo_summary": [
+            {
+                "p05": float(q05),
+                "p50": float(q50),
+                "p95": float(q95),
+                "method": "stationary_block_bootstrap",
+                "block_length": int(payload.get("bootstrap_block_length") or 0) or None,
+            }
+        ],
     }
     charts = {
+        "historical_crisis_paths": [
+            {"scenario": row["scenario"], **point}
+            for row in historical
+            for point in row.get("daily_path", [])
+        ],
         "scenario_waterfall": stress["waterfall"],
-        "monte_carlo": [{"quantile": float(q), "return": float(v)} for q, v in zip(quantile_points, mc_quantiles)],
+        "monte_carlo": [
+            {"quantile": float(q), "return": float(v)}
+            for q, v in zip(quantile_points, mc_quantiles)
+        ],
     }
     return response(
         FEATURE_ID,
-        [{"label": "5% MC Loss", "value": float(q05), "format": "percent"}, {"label": "Avg Corr", "value": avg_corr}],
-        charts, tables, meta=feature_meta(ctx),
+        [
+            {"label": "5% MC Loss", "value": float(q05), "format": "percent"},
+            {"label": "Avg Corr", "value": avg_corr},
+        ],
+        charts,
+        tables,
+        meta=feature_meta(ctx),
     )
+
+
+INPUTS = inputs_for(FEATURE_ID)
+OUTPUTS = [
+    output("historical_crisis_paths", "charts", "line", True),
+    output("scenario_waterfall", "charts", "waterfall", False),
+    output("monte_carlo", "charts", "histogram", False),
+    output("scenario_table"),
+    output("correlation_stress"),
+    output("reverse_stress"),
+    output("stress_verdict"),
+    output("monte_carlo_summary"),
+]

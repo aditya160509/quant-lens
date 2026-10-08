@@ -1,93 +1,184 @@
-"""F03 Performance Attribution Engine."""
-
-from __future__ import annotations
+"""Observed benchmark, exact attribution linking and genuine FF factor contributions."""
 
 import numpy as np
 import pandas as pd
-
-from ..core.analytics import (
-    brinson_attribution,
+from ..core.context import load_context, feature_meta, parse_weights
+from ..core.common import response, compact_records
+from ..core.data_loader import returns_matrix, load_factor_returns
+from ..core.stats import portfolio_return_series
+from ..core.attribution import (
     brinson_fachler,
-    carino_link,
-    drawdown_attribution,
-    feature_meta,
-    grap_link,
-    load_context,
-    menchero_link,
-    performance_metrics,
-    response,
     risk_attribution_xsr,
-    skill_luck_bootstrap,
+    linked_effects,
+    factor_attribution,
+    sector_selection_null,
 )
+
+from .inputs import inputs_for, output
 
 FEATURE_ID = "03"
 FEATURE_NAME = "Performance Attribution Engine"
-INPUTS = ["tickers", "weights", "lookback_days", "benchmark"]
-OUTPUTS = ["brinson_table", "factor_attribution", "drawdown_attribution", "risk_attribution", "skill_luck"]
 
 
-def run(payload: dict | None = None) -> dict:
-    ctx = load_context(payload, min_symbols=8, default_limit=80)
-    rets, w = ctx["returns"], ctx["weights"]
-
-    # Single numpy pass for port + bench + active
-    w_arr = w.reindex(rets.columns).fillna(0.0).to_numpy(dtype=np.float64)
-    bench_arr = np.full(rets.shape[1], 1.0 / max(rets.shape[1], 1))
-    ret_arr = rets.to_numpy(dtype=np.float64)
-    np.nan_to_num(ret_arr, copy=False)
-    port_arr = ret_arr @ w_arr
-    bench_arr_ret = ret_arr @ bench_arr
-    active_arr = port_arr - bench_arr_ret
-    port = pd.Series(port_arr, index=rets.index)
-    bench = pd.Series(bench_arr_ret, index=rets.index)
-    active = pd.Series(active_arr, index=rets.index)
-
-    brinson = brinson_attribution(rets, w, ctx["sectors"])
-    bench_w = pd.Series(1 / len(rets.columns), index=rets.columns)
-    bf = brinson_fachler(rets, w, bench_w, ctx["sectors"])
-
-    # Vectorized contribution — single einsum
-    mean_ret = rets.mean().to_numpy(dtype=np.float64)
-    contrib_arr = mean_ret * w_arr
-    order = np.argsort(contrib_arr)
-    waterfall = [{"component": str(rets.columns[i]), "value": float(contrib_arr[i])} for i in order]
-
-    # Single cumprod for equity + drawdown, no intermediate Series
-    equity_arr = np.cumprod(1.0 + port_arr)
-    peak_arr = np.maximum.accumulate(equity_arr)
-    dd_arr = equity_arr / np.maximum(peak_arr, 1e-18) - 1.0
-    trough_idx = int(np.argmin(dd_arr))
-    peak_idx = int(np.argmax(equity_arr[: trough_idx + 1]))
-
-    window = rets.iloc[peak_idx: trough_idx + 1].to_numpy(dtype=np.float64)
-    contrib_dd = (window * w_arr).sum(axis=0)
-    drawdown_attr = [{"ticker": c, "contribution": float(v)} for c, v in zip(rets.columns, contrib_dd)]
-
-    metrics = performance_metrics(active, ctx["annualization_factor"])
-    effects = active.resample("ME").sum()
-    port_monthly = port.resample("ME").sum()
-    da = drawdown_attribution(rets, w)
-    sl = skill_luck_bootstrap(active)
-    carino = carino_link(effects, port_monthly)
-    menchero = menchero_link(effects, port_monthly)
-    grap = grap_link(effects, port_monthly)
-
+def run(payload=None):
+    payload = payload or {}
+    ctx = load_context(payload)
+    r = ctx["returns"]
+    w = ctx["weights"]
+    port = portfolio_return_series(r, w)
+    benchmark = payload.get("benchmark", "equal_weight")
+    bench_w = None
+    issues = []
+    if payload.get("benchmark_weights") is not None:
+        bench_w = parse_weights(
+            {"weights": payload["benchmark_weights"]}, ctx["symbols"]
+        )
+        bench = portfolio_return_series(r, bench_w)
+    elif benchmark == "equal_weight":
+        bench_w = pd.Series(1 / len(r.columns), index=r.columns)
+        bench = r @ bench_w
+    else:
+        bench = (
+            returns_matrix([benchmark], ctx["lookback_days"], ctx["frequency"])
+            .iloc[:, 0]
+            .reindex(r.index)
+        )
+        if bench.isna().any():
+            raise ValueError("Benchmark has missing observed returns")
+        issues.append(
+            "Brinson grouping requires actual benchmark constituent weights; an index return series cannot supply them"
+        )
+    active = port - bench
+    bf = []
+    brinson = []
+    linked = []
+    if (
+        bench_w is not None
+        and (w >= 0).all()
+        and (bench_w >= 0).all()
+        and np.isclose(w.sum(), 1)
+        and np.isclose(bench_w.sum(), 1)
+    ):
+        bf = brinson_fachler(r, w, bench_w, ctx["sectors"])
+        brinson = brinson_fachler(r, w, bench_w, ctx["sectors"], method="bhb")
+        effects = pd.DataFrame(index=r.index)
+        for date in r.index:
+            per = brinson_fachler(r.loc[[date]], w, bench_w, ctx["sectors"])
+            effects.loc[date, "allocation"] = sum(x["allocation"] for x in per)
+            effects.loc[date, "selection"] = sum(x["selection"] for x in per)
+            effects.loc[date, "interaction"] = sum(x["interaction"] for x in per)
+        for method in ["carino", "menchero", "grap"]:
+            values = linked_effects(effects, port, bench, method).sum()
+            linked.extend(
+                {
+                    "method": method,
+                    "effect": c,
+                    "linked_contribution": float(values[c]),
+                    "arithmetic_naive": float(effects[c].sum()),
+                    "total_active_geometric": float(
+                        (1 + port).prod() - (1 + bench).prod()
+                    ),
+                }
+                for c in values.index
+            )
+    elif bench_w is not None:
+        issues.append(
+            "Brinson sector attribution requires long-only books with net weights summing to one"
+        )
+    model = payload.get("factor_model", "FF5+MOM")
+    cols = (
+        ["mkt_rf", "smb", "hml"]
+        + (["rmw", "cma"] if model in {"FF5", "FF5+MOM"} else [])
+        + (["mom"] if model == "FF5+MOM" else [])
+    )
+    factors = (
+        pd.DataFrame(payload["factor_returns"])
+        .assign(date=lambda df: pd.to_datetime(df.date))
+        .set_index("date")
+        if payload.get("factor_returns")
+        else load_factor_returns().set_index("date")
+    )
+    if ctx["frequency"] != "daily":
+        factors = (1 + factors).resample(
+            "W-FRI" if ctx["frequency"] == "weekly" else "ME"
+        ).prod(min_count=1) - 1
+    if set(cols) - set(factors):
+        raise ValueError("Matching observed factors unavailable")
+    waterfall, fit = factor_attribution(active, factors[cols])
+    skill = sector_selection_null(
+        r, w, bench, ctx["sectors"], int(payload.get("bootstrap_draws", 1000))
+    )
+    eq = (1 + port).cumprod()
+    dd = eq / eq.cummax().clip(lower=1) - 1
+    trough = dd.idxmin()
+    prefix = eq.loc[:trough]
+    peak = prefix.idxmax() if prefix.max() >= 1 else None
+    interval = (
+        r.loc[(r.index > peak) & (r.index <= trough)]
+        if peak is not None
+        else r.loc[:trough]
+    )
+    pr = port.reindex(interval.index)
+    preceding = (1 + pr).cumprod().shift(1, fill_value=1)
+    contributions = interval.mul(w, axis=1).mul(preceding, axis=0).sum()
+    active_weights = w - bench_w if bench_w is not None else w
     tables = {
         "brinson_table": brinson,
         "brinson_fachler": bf,
         "factor_attribution": waterfall,
-        "drawdown_attribution": da if da else drawdown_attr,
-        "risk_attribution": risk_attribution_xsr(rets, w),
-        "linking_methods": [{"date": str(k.date()), "carino": float(v), "menchero": float(menchero.loc[k]), "grap": float(grap.loc[k])} for k, v in carino.items()],
-        "skill_luck": [{"observed_t": sl.get("observed_t"), "p_value": sl.get("p_value"), "active_sharpe": metrics.get("sharpe", 0.0), "interpretation": "statistically_interesting" if abs(metrics.get("sharpe", 0.0)) > 1 else "needs_more_evidence"}],
-        "skill_luck_null_distribution": sl.get("null_distribution", []),
-    }
-    charts = {
-        "attribution_waterfall": waterfall,
-        "active_return_series": [{"date": str(k.date()), "active_return": float(v)} for k, v in zip(active.index, active_arr)],
+        "factor_regression": fit["coefficients"],
+        "linking_methods": linked,
+        "drawdown_attribution": [
+            {
+                "ticker": c,
+                "contribution": float(v),
+                "episode_start": peak,
+                "episode_trough": trough,
+            }
+            for c, v in contributions.items()
+        ],
+        "risk_attribution": risk_attribution_xsr(r, active_weights)
+        if bench_w is not None
+        else [],
+        "skill_luck": [{k: v for k, v in skill.items() if k != "null_distribution"}],
+        "skill_luck_null_distribution": skill["null_distribution"],
     }
     return response(
         FEATURE_ID,
-        [{"label": "Active Sharpe", "value": metrics.get("sharpe", 0.0)}, {"label": "Active Return", "value": metrics.get("annual_return", 0.0), "format": "percent"}],
-        charts, tables, meta=feature_meta(ctx),
+        [
+            {
+                "label": "Active Annual Return",
+                "value": float(active.mean() * ctx["annualization_factor"]),
+            }
+        ],
+        {
+            "attribution_waterfall": waterfall,
+            "active_return_series": compact_records(
+                active.rename("active_return").reset_index()
+            ),
+        },
+        tables,
+        meta={
+            **feature_meta(ctx, issues),
+            "benchmark": benchmark,
+            "factor_model": model,
+            "factor_attribution_units": "Mean return contribution per observed period; active factor loadings estimated by OLS/HAC",
+            "skill_null": skill["null"],
+        },
     )
+
+
+INPUTS = inputs_for(FEATURE_ID)
+OUTPUTS = [
+    output("attribution_waterfall", "charts", "waterfall", True),
+    output("active_return_series", "charts", "line", False),
+    output("brinson_table"),
+    output("brinson_fachler"),
+    output("factor_attribution"),
+    output("factor_regression"),
+    output("linking_methods"),
+    output("drawdown_attribution"),
+    output("risk_attribution"),
+    output("skill_luck"),
+    output("skill_luck_null_distribution"),
+]

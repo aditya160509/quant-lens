@@ -1,104 +1,187 @@
-"""F01 Portfolio Construction Engine."""
-
-from __future__ import annotations
-
-import math
+"""Portfolio construction with solver, covariance and constraint diagnostics."""
 
 import numpy as np
 import pandas as pd
+from ..core.context import load_context, feature_meta
+from ..core.common import response
+from ..core.construction import optimize_portfolios, solve_portfolio, OptimizationError
+from ..core.covariance import covariance_matrix
 
-from ..core.analytics import (
-    black_litterman_weights,
-    cvar_minimize,
-    dcc_garch_cov,
-    factor_structured_cov,
-    feature_meta,
-    gerber_statistic_cov,
-    load_context,
-    optimize_portfolios,
-    performance_metrics,
-    portfolio_return_series,
-    response,
-    weight_stability_index,
-)
+from .inputs import inputs_for, output
 
 FEATURE_ID = "01"
 FEATURE_NAME = "Portfolio Construction Engine"
-INPUTS = ["tickers", "weights", "lookback_days", "frequency", "covariance_estimator", "expected_return_estimator", "max_symbols"]
-OUTPUTS = ["optimized_weights", "efficient_frontier", "risk_contribution", "constraint_report", "turnover_costs", "stability_table"]
 
 
-def run(payload: dict | None = None) -> dict:
-    ctx = load_context(payload, min_symbols=8, default_limit=60)
+def run(payload=None):
+    ctx = load_context(payload)
+    payload = ctx["payload"]
     rets = ctx["returns"]
-    opt = optimize_portfolios(rets, ctx["payload"])
-    selected = opt["weights"].get(
-        str((payload or {}).get("objective") or "max_sharpe"),
-        opt["weights"].get("max_sharpe", ctx["weights"]),
-    )
-    port = portfolio_return_series(rets, selected)
-    metrics = performance_metrics(port, ctx["annualization_factor"])
-
-    # Reuse already-computed covariance — avoid recompute
-    cov_ann = opt["covariance"] * ctx["annualization_factor"]
-    cov_arr = cov_ann.to_numpy(dtype=np.float64)
-    rc_arr = selected.reindex(cov_ann.columns).fillna(0.0).to_numpy(dtype=np.float64)
-    port_var = float(rc_arr @ cov_arr @ rc_arr)
-    cov_w = cov_arr @ rc_arr
-    denom = max(math.sqrt(max(port_var, 1e-12)), 1e-12)
-    rc = pd.Series(rc_arr * cov_w / denom, index=cov_ann.columns)
-
-    # Batch all cov estimators, cache dcc result
-    dcc_result = dcc_garch_cov(rets)
-    fs_cov = factor_structured_cov(rets)
-    gb_cov = gerber_statistic_cov(rets)
-    lw_cov = opt["covariance"]
-
-    # eigh-based condition numbers — cheaper than SVD for symmetric matrices
-    eye_n = np.eye(len(lw_cov))
-    cond_rows = []
-    for name, cov_m in [
-        ("ledoit_wolf", lw_cov),
-        ("dcc_garch", dcc_result["covariance"]),
-        ("factor_structured", fs_cov),
-        ("gerber", gb_cov),
-    ]:
-        arr = cov_m.fillna(0.0).to_numpy(dtype=np.float64) + eye_n * 1e-9
-        vals = np.linalg.eigvalsh(arr)
-        vmax = float(vals[-1])
-        vmin = float(np.abs(vals[0]))
-        cond_rows.append({"estimator": name, "condition_number": vmax / max(vmin, 1e-18)})
-
-    bl_w = opt["weights"].get("black_litterman")
-    if bl_w is None:
-        bl_w = black_litterman_weights(rets, ctx["weights"])
-    cvar_w = opt["weights"].get("cvar_min")
-    if cvar_w is None:
-        cvar_w = cvar_minimize(rets)
-
-    stability = pd.DataFrame(list(opt["weights"].values())).fillna(0.0)
-    summary = [
-        {"label": "Optimized Sharpe", "value": metrics.get("sharpe", 0.0), "format": "number"},
-        {"label": "Annual Vol", "value": metrics.get("annual_vol", 0.0), "format": "percent"},
-        {"label": "Max Drawdown", "value": metrics.get("max_drawdown", 0.0), "format": "percent"},
+    opt = optimize_portfolios(rets, payload)
+    objective = payload.get("objective", "global_min_variance")
+    selected = opt["weights"][objective]
+    ann = ctx["annualization_factor"]
+    cov = opt["covariance"] * ann
+    variance = float(selected @ cov @ selected)
+    sigma = np.sqrt(variance)
+    rc = selected * (cov @ selected) / sigma if sigma > 0 else selected * 0
+    sample = rets.cov().to_numpy()
+    diagnostics = []
+    split = max(30, int(len(rets) * 0.8))
+    train = rets.iloc[:split]
+    test = rets.iloc[split:]
+    methods = [
+        "sample",
+        "ledoit_wolf",
+        "oas",
+        "ewma",
+        "constant_correlation",
+        "eigenvalue_shrinkage",
+        "dcc_garch",
+        "factor_structured",
+        "gerber",
     ]
+    for method in methods:
+        try:
+            estimate, meta = covariance_matrix(rets, method)
+            values = np.linalg.eigvalsh(estimate)
+            row = {
+                "estimator": method,
+                "status": "ok",
+                "condition_number": float(values.max() / values.min()),
+                "frobenius_distance": float(
+                    np.linalg.norm(estimate.to_numpy() - sample)
+                ),
+                "eigenvalue_participation_ratio": float(
+                    values.sum() ** 2 / (values**2).sum()
+                ),
+                **meta,
+            }
+            if len(test) > 1:
+                w, _ = solve_portfolio(
+                    train,
+                    {**payload, "covariance_estimator": method},
+                    "global_min_variance",
+                )
+                row["oos_realized_variance"] = float((test @ w).var() * ann)
+                row["oos_training_end"] = train.index[-1]
+            diagnostics.append(row)
+        except (ValueError, np.linalg.LinAlgError) as exc:
+            diagnostics.append(
+                {"estimator": method, "status": "unavailable", "reason": str(exc)}
+            )
+    trade = selected - ctx["weights"]
+    tc = float(payload.get("transaction_cost_bps", 5)) / 10000
+    history = []
+    history_ends = (
+        []
+        if payload.get("sector_max_weights")
+        else list(range(max(60, len(rets) - 12 * 21), len(rets), 21))[-12:]
+    )
+    for end in history_ends:
+        for name in opt["weights"]:
+            try:
+                w, _ = solve_portfolio(rets.iloc[:end], payload, name)
+                history.extend(
+                    {
+                        "date": rets.index[end - 1],
+                        "objective": name,
+                        "ticker": c,
+                        "weight": float(v),
+                    }
+                    for c, v in w.items()
+                )
+            except OptimizationError as exc:
+                history.append(
+                    {
+                        "date": rets.index[end - 1],
+                        "objective": name,
+                        "success": False,
+                        "reason": str(exc),
+                    }
+                )
+    valid = pd.DataFrame([r for r in history if "weight" in r])
+    stability = []
+    if not valid.empty:
+        stability = (
+            valid.groupby(["objective", "ticker"])
+            .weight.agg(["std", "count"])
+            .reset_index()
+            .to_dict("records")
+        )
+    detail = next(d for d in opt["diagnostics"] if d["objective"] == objective)
     tables = {
         "optimized_weights": opt["weight_table"],
-        "black_litterman_weights": [{"ticker": k, "weight": float(v)} for k, v in bl_w.items()],
-        "cvar_min_weights": [{"ticker": k, "weight": float(v)} for k, v in cvar_w.items()],
-        "risk_contribution": [{"ticker": k, "risk_contribution": float(rc.get(k, 0.0)), "weight": float(selected.get(k, 0.0))} for k in rc.index],
-        "constraint_report": [
-            {"constraint": "long_only_budget", "status": "satisfied", "value": float(selected.sum())},
-            {"constraint": "weight_bounds", "status": "satisfied", "value": float(selected.max())},
-            {"constraint": "configured_constraints", "status": "applied", "value": opt["meta"].get("constraints", {})},
+        "risk_contribution": [
+            {
+                "ticker": c,
+                "weight": float(selected[c]),
+                "risk_contribution": float(rc[c]),
+            }
+            for c in selected.index
         ],
-        "stability_table": [{"estimator": opt["meta"].get("estimator"), "shrinkage": opt["meta"].get("shrinkage"), "asset_count": len(ctx["symbols"]), "cross_objective_weight_dispersion": weight_stability_index(stability), "note": "Dispersion across optimized objectives."}],
-        "covariance_condition_numbers": cond_rows,
+        "constraint_report": detail["constraints"],
+        "solver_diagnostics": opt["diagnostics"],
+        "covariance_diagnostics": diagnostics,
+        "turnover_costs": [
+            {
+                "ticker": c,
+                "trade_weight": float(trade[c]),
+                "estimated_cost_nav_fraction": float(abs(trade[c]) * tc),
+                "trade_dollars": float(
+                    trade[c] * payload.get("portfolio_nav", 1000000)
+                ),
+            }
+            for c in trade.index
+        ],
+        "stability_table": stability,
     }
     charts = {
         "efficient_frontier": opt["frontier"],
+        "markowitz_trace": opt["markowitz_trace"],
         "weights": opt["weight_table"],
         "risk_contribution": tables["risk_contribution"],
-        "dcc_average_correlation": dcc_result["average_correlation_series"],
+        "weight_history": history,
     }
-    return response(FEATURE_ID, summary, charts, tables, meta=feature_meta(ctx))
+    issues = [
+        f"{d['objective']}: {d['message']}"
+        for d in opt["diagnostics"]
+        if not d["success"]
+    ]
+    if payload.get("sector_max_weights"):
+        issues.append(
+            "Historical weight stability is not produced under current sector caps: point-in-time classifications are unavailable"
+        )
+    return response(
+        FEATURE_ID,
+        [
+            {"label": "Selected Objective", "value": objective},
+            {"label": "Annual Vol", "value": sigma},
+        ],
+        charts,
+        tables,
+        meta={
+            **feature_meta(ctx, issues),
+            "covariance": opt["meta"],
+            "black_litterman_prior": "User-provided market_weights or explicitly equal prior, never fabricated market caps",
+            "stability": "Expanding observed-prefix allocations at the last twelve 21-observation evaluation dates; retrospective static sector labels excluded from historical backtests",
+        },
+        alerts=[{"severity": "warning", "message": i} for i in issues],
+    )
+
+
+INPUTS = inputs_for(FEATURE_ID)
+OUTPUTS = [
+    output("efficient_frontier", "charts", "line", True),
+    output("markowitz_trace", "charts", "line", False),
+    output("weights", "charts", "bar", False),
+    output("risk_contribution", "charts", "bar", False),
+    output("weight_history", "charts", "line", False),
+    output("optimized_weights"),
+    output("risk_contribution"),
+    output("constraint_report"),
+    output("solver_diagnostics"),
+    output("covariance_diagnostics"),
+    output("turnover_costs"),
+    output("stability_table"),
+]

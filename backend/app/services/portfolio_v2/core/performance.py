@@ -13,6 +13,8 @@ No function here mutates parquet files or changes financial methodology.
 from __future__ import annotations
 
 from collections import OrderedDict
+from threading import RLock
+from copy import deepcopy
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from time import perf_counter
@@ -100,30 +102,34 @@ def instrument(name: str) -> Callable:
 
 
 class BoundedLRU:
-    __slots__ = ("name", "max_items", "_store")
+    __slots__ = ("name", "max_items", "_store", "_lock")
 
     def __init__(self, name: str, max_items: int = MAX_CACHE_ITEMS):
+        self._lock = RLock()
         self.name = name
         self.max_items = max_items
         self._store: OrderedDict[str, Any] = OrderedDict()
 
     def get(self, key: str) -> Any | None:
-        if key not in self._store:
-            PERF.miss(self.name)
-            return None
-        self._store.move_to_end(key)
-        PERF.hit(self.name)
-        return self._store[key]
+        with self._lock:
+            if key not in self._store:
+                PERF.miss(self.name)
+                return None
+            self._store.move_to_end(key)
+            PERF.hit(self.name)
+            return deepcopy(self._store[key])
 
     def set(self, key: str, value: Any) -> Any:
-        self._store[key] = value
-        self._store.move_to_end(key)
-        while len(self._store) > self.max_items:
-            self._store.popitem(last=False)
+        with self._lock:
+            self._store[key] = deepcopy(value)
+            self._store.move_to_end(key)
+            while len(self._store) > self.max_items:
+                self._store.popitem(last=False)
         return value
 
     def clear(self) -> None:
-        self._store.clear()
+        with self._lock:
+            self._store.clear()
 
 
 COV_CACHE = BoundedLRU("covariance")
@@ -146,11 +152,17 @@ def cached_result(name: str, key: str, builder: Callable[[], Any]) -> Any:
     return value
 
 
-def normalize_numeric_frame(df: pd.DataFrame | None, *, fill: float = 0.0) -> pd.DataFrame:
+def normalize_numeric_frame(
+    df: pd.DataFrame | None, *, fill: float = 0.0
+) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame()
     arr = df.to_numpy(dtype=np.float64, copy=False)
-    arr = arr.copy() if arr.flags["C_CONTIGUOUS"] else np.ascontiguousarray(arr, dtype=np.float64)
+    arr = (
+        arr.copy()
+        if arr.flags["C_CONTIGUOUS"]
+        else np.ascontiguousarray(arr, dtype=np.float64)
+    )
     if isinstance(fill, float) and math.isnan(fill):
         arr[~np.isfinite(arr)] = np.nan
     else:
@@ -161,43 +173,32 @@ def normalize_numeric_frame(df: pd.DataFrame | None, *, fill: float = 0.0) -> pd
 def float_array(df: pd.DataFrame | np.ndarray | Iterable[Any]) -> np.ndarray:
     if isinstance(df, pd.DataFrame):
         arr = df.to_numpy(dtype=np.float64, copy=False)
-        arr = arr.copy() if arr.flags["C_CONTIGUOUS"] else np.ascontiguousarray(arr, dtype=np.float64)
+        arr = (
+            arr.copy()
+            if arr.flags["C_CONTIGUOUS"]
+            else np.ascontiguousarray(arr, dtype=np.float64)
+        )
     else:
         arr = np.ascontiguousarray(df, dtype=np.float64)
-    np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+    if not np.isfinite(arr).all():
+        raise ValueError("Numeric matrix contains missing or nonfinite observations")
     return arr
 
 
-def dataframe_fingerprint(df: pd.DataFrame, *, precision: int = 8) -> str:
-    """Stable enough fingerprint for repeated feature calls in one process.
-
-    The hash samples head/tail rows for large frames and includes index/column
-    boundaries, shape, and rounded numeric values. It intentionally avoids full
-    serialization for huge master-universe matrices.
-    """
-
-    if df is None or df.empty:
-        return "empty"
-    sample = df
-    if len(df) > 180:
-        # Head/tail-only samples can collide when the middle of a return panel
-        # changes.  Spread a bounded sample across the entire time axis.
-        positions = np.unique(np.linspace(0, len(df) - 1, 180, dtype=np.int64))
-        sample = df.iloc[positions]
-    if sample.shape[1] > 300:
-        sample = sample.iloc[:, :300]
-    arr = float_array(sample)
-    np.round(arr, precision, out=arr)
+def dataframe_fingerprint(df, *, precision=8):
+    if df is None:
+        return "none"
     h = hashlib.blake2b(digest_size=16)
-    h.update(str(df.shape).encode())
-    h.update("|".join(map(str, df.columns[:300])).encode())
-    h.update(str(df.index[0]).encode())
-    h.update(str(df.index[-1]).encode())
-    h.update(arr.tobytes())
+    h.update(pd.util.hash_pandas_object(df, index=True).to_numpy().tobytes())
+    h.update(repr(list(df.columns)).encode())
     return h.hexdigest()
 
 
-def cached_covariance_frame(returns: pd.DataFrame, method: str, builder: Callable[[], tuple[pd.DataFrame, dict[str, Any]]]) -> tuple[pd.DataFrame, dict[str, Any]]:
+def cached_covariance_frame(
+    returns: pd.DataFrame,
+    method: str,
+    builder: Callable[[], tuple[pd.DataFrame, dict[str, Any]]],
+) -> tuple[pd.DataFrame, dict[str, Any]]:
     key = f"{method}:{dataframe_fingerprint(returns)}"
     cached = COV_CACHE.get(key)
     if cached is not None:
@@ -213,7 +214,9 @@ def cached_covariance_frame(returns: pd.DataFrame, method: str, builder: Callabl
     return cov, meta
 
 
-def cached_correlation_frame(returns: pd.DataFrame, method: str = "pearson") -> pd.DataFrame:
+def cached_correlation_frame(
+    returns: pd.DataFrame, method: str = "pearson"
+) -> pd.DataFrame:
     method = str(method or "pearson").lower()
     key = f"{method}:{dataframe_fingerprint(returns)}"
     cached = CORR_CACHE.get(key)
@@ -222,7 +225,15 @@ def cached_correlation_frame(returns: pd.DataFrame, method: str = "pearson") -> 
     with timed("correlation.frame"):
         # Preserve missing observations for pairwise correlation. Filling them
         # with zero biases sparse assets toward artificial co-movement.
-        corr = normalize_numeric_frame(returns, fill=float("nan")).corr(method=method).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        corr = (
+            normalize_numeric_frame(returns, fill=float("nan"))
+            .corr(method=method)
+            .replace([np.inf, -np.inf], np.nan)
+        )
+    if not np.isfinite(corr.to_numpy()).all():
+        raise ValueError(
+            "Correlation is undefined for constant or insufficient observations"
+        )
     CORR_CACHE.set(key, corr.copy())
     return corr
 
@@ -232,16 +243,14 @@ def nearest_psd(matrix: np.ndarray, eps: float = 1e-10) -> np.ndarray:
     arr = np.empty_like(a)
     np.add(a, a.T, out=arr)
     arr *= 0.5
-    np.nan_to_num(arr, copy=False, nan=0.0, posinf=0.0, neginf=0.0)
+    if not np.isfinite(arr).all():
+        raise ValueError("PSD projection requires finite covariance")
     try:
         vals, vecs = np.linalg.eigh(arr)
         np.maximum(vals, eps, out=vals)
-        np.multiply(vecs, vals, out=vecs)  # in-place: vecs[:,i] *= vals[i]
-        return vecs @ vecs.T
-    except Exception:
-        diag = np.maximum(np.diag(arr), eps)
-        np.fill_diagonal(arr, diag)
-        return arr
+        return (vecs * vals) @ vecs.T
+    except np.linalg.LinAlgError as exc:
+        raise ValueError("Covariance eigendecomposition failed") from exc
 
 
 def safe_inverse(matrix: np.ndarray, ridge: float = 1e-6) -> np.ndarray:
@@ -251,31 +260,47 @@ def safe_inverse(matrix: np.ndarray, ridge: float = 1e-6) -> np.ndarray:
     reg = max(ridge, abs(scale) * ridge)
     try:
         return np.linalg.inv(arr + np.eye(arr.shape[0]) * reg)
-    except Exception:
+    except np.linalg.LinAlgError:
         return np.linalg.pinv(arr + np.eye(arr.shape[0]) * reg)
 
 
-def covariance_to_correlation(cov: pd.DataFrame | np.ndarray, labels: Iterable[str] | None = None) -> pd.DataFrame:
+def covariance_to_correlation(
+    cov: pd.DataFrame | np.ndarray, labels: Iterable[str] | None = None
+) -> pd.DataFrame:
     if isinstance(cov, pd.DataFrame):
         arr = float_array(cov)
         cols = list(cov.columns)
     else:
         arr = float_array(cov)
-        cols = list(labels or [f"A{i+1}" for i in range(arr.shape[0])])
+        cols = list(labels or [f"A{i + 1}" for i in range(arr.shape[0])])
     diag = np.sqrt(np.maximum(np.diag(arr), 1e-18))
     corr = arr / np.outer(diag, diag)
     corr = np.clip(np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0), -1.0, 1.0)
     return pd.DataFrame(corr, index=cols, columns=cols)
 
 
-def fast_matrix_records(matrix: pd.DataFrame | np.ndarray, labels: Iterable[str] | None = None, limit: int = 120) -> list[dict[str, Any]]:
+def fast_matrix_records(
+    matrix: pd.DataFrame | np.ndarray,
+    labels: Iterable[str] | None = None,
+    limit: int = 120,
+) -> list[dict[str, Any]]:
     if isinstance(matrix, pd.DataFrame):
         rows_l = np.asarray(matrix.index, dtype=object)
         cols_l = np.asarray(matrix.columns, dtype=object)
-        arr = float_array(matrix)
+        arr = (
+            matrix.to_numpy(dtype=float)
+            if isinstance(matrix, pd.DataFrame)
+            else np.asarray(matrix, dtype=float)
+        )
     else:
-        arr = float_array(matrix)
-        base = np.asarray(list(labels or [f"A{i+1}" for i in range(arr.shape[0])]), dtype=object)
+        arr = (
+            matrix.to_numpy(dtype=float)
+            if isinstance(matrix, pd.DataFrame)
+            else np.asarray(matrix, dtype=float)
+        )
+        base = np.asarray(
+            list(labels or [f"A{i + 1}" for i in range(arr.shape[0])]), dtype=object
+        )
         rows_l = base[: arr.shape[0]]
         cols_l = base[: arr.shape[1]]
     n, m = arr.shape[:2]
@@ -296,7 +321,9 @@ def fast_matrix_records(matrix: pd.DataFrame | np.ndarray, labels: Iterable[str]
     ]
 
 
-def fast_network_edges_from_corr(corr: pd.DataFrame, threshold: float = 0.45, max_edges: int = MAX_NETWORK_EDGES) -> list[dict[str, Any]]:
+def fast_network_edges_from_corr(
+    corr: pd.DataFrame, threshold: float = 0.45, max_edges: int = MAX_NETWORK_EDGES
+) -> list[dict[str, Any]]:
     if corr is None or corr.empty or len(corr.columns) < 2:
         return []
     labels = np.asarray([str(c) for c in corr.columns])
@@ -312,11 +339,7 @@ def fast_network_edges_from_corr(corr: pd.DataFrame, threshold: float = 0.45, ma
             selected = selected[top_idx]
         top = selected[np.argsort(abs_vals[selected])[::-1]]
     else:
-        if vals.size == 0:
-            return []
-        take = min(max_edges, vals.size)
-        top = np.argpartition(abs_vals, max(0, vals.size - take))[-take:]
-        top = top[np.argsort(abs_vals[top])[::-1]]
+        return []
     src = labels[iu[0][top]]
     tgt = labels[iu[1][top]]
     v = vals[top]
@@ -327,7 +350,9 @@ def fast_network_edges_from_corr(corr: pd.DataFrame, threshold: float = 0.45, ma
     ]
 
 
-def rolling_leading_eigenvalue(returns: pd.DataFrame, window: int = 126, step: int = 5) -> list[dict[str, Any]]:
+def rolling_leading_eigenvalue(
+    returns: pd.DataFrame, window: int = 126, step: int = 5
+) -> list[dict[str, Any]]:
     x = normalize_numeric_frame(returns)
     n_rows, n_cols = x.shape
     if n_rows < max(20, window // 2) or n_cols < 2:
@@ -349,14 +374,26 @@ def rolling_leading_eigenvalue(returns: pd.DataFrame, window: int = 126, step: i
         return float(vals[-1] / max(n_cols, 1))
 
     for end in range(start, n_rows + 1, max(1, step)):
-        sub = arr[max(0, end - window):end]
-        rows.append({"date": x.index[end - 1], "leading_eigenvalue_share": _eigen_share(sub.copy())})
+        sub = arr[max(0, end - window) : end]
+        rows.append(
+            {
+                "date": x.index[end - 1],
+                "leading_eigenvalue_share": _eigen_share(sub.copy()),
+            }
+        )
     if rows and rows[-1]["date"] != x.index[-1]:
-        rows.append({"date": x.index[-1], "leading_eigenvalue_share": _eigen_share(arr[-window:].copy())})
+        rows.append(
+            {
+                "date": x.index[-1],
+                "leading_eigenvalue_share": _eigen_share(arr[-window:].copy()),
+            }
+        )
     return rows
 
 
-def rolling_diversification_ratio(returns: pd.DataFrame, weights: pd.Series, window: int = 126, step: int = 5) -> list[dict[str, Any]]:
+def rolling_diversification_ratio(
+    returns: pd.DataFrame, weights: pd.Series, window: int = 126, step: int = 5
+) -> list[dict[str, Any]]:
     x = normalize_numeric_frame(returns)
     n_rows, n_cols = x.shape
     if n_rows < max(20, window // 2) or n_cols < 2:
@@ -378,7 +415,12 @@ def rolling_diversification_ratio(returns: pd.DataFrame, weights: pd.Series, win
         return float((wabs @ vols) / port)
 
     for end in range(start, n_rows + 1, max(1, step)):
-        rows.append({"date": x.index[end - 1], "diversification_ratio": _dr(arr[max(0, end - window):end])})
+        rows.append(
+            {
+                "date": x.index[end - 1],
+                "diversification_ratio": _dr(arr[max(0, end - window) : end]),
+            }
+        )
     if rows and rows[-1]["date"] != x.index[-1]:
         rows.append({"date": x.index[-1], "diversification_ratio": _dr(arr[-window:])})
     return rows
@@ -414,7 +456,7 @@ def dates_to_str(index: pd.Index) -> list[str]:
     return pd.Series(index).dt.strftime("%Y-%m-%d").tolist()
 
 
-@nb.njit(cache=True, fastmath=True)
+@nb.njit(cache=True, fastmath=False)
 def _jit_rank_ic(s_arr: np.ndarray, y_arr: np.ndarray, finite: np.ndarray) -> float:
     """Per-horizon cross-sectional Spearman IC in a single compiled pass."""
     T = s_arr.shape[0]
@@ -453,7 +495,9 @@ def _jit_rank_ic(s_arr: np.ndarray, y_arr: np.ndarray, finite: np.ndarray) -> fl
     return total_ic / max(valid_rows, 1) if valid_rows > 0 else 0.0
 
 
-def rank_ic_curve(returns: pd.DataFrame, max_horizon: int = 63, signal_window: int = 21) -> list[dict[str, float | int]]:
+def rank_ic_curve(
+    returns: pd.DataFrame, max_horizon: int = 63, signal_window: int = 21
+) -> list[dict[str, float | int]]:
     """Vectorized cross-sectional Spearman IC by horizon."""
     x = normalize_numeric_frame(returns, fill=np.nan)
     if x.empty:
@@ -462,7 +506,9 @@ def rank_ic_curve(returns: pd.DataFrame, max_horizon: int = 63, signal_window: i
     s_arr = np.ascontiguousarray(signal.to_numpy(dtype=np.float64))
     rows: list[dict[str, float | int]] = []
     for h in range(1, int(max_horizon) + 1):
-        fwd = x.rolling(h).sum().shift(-h).rank(axis=1, pct=True)
+        fwd = ((1 + x).rolling(h).apply(np.prod, raw=True).shift(-h) - 1).rank(
+            axis=1, pct=True
+        )
         y_arr = np.ascontiguousarray(fwd.to_numpy(dtype=np.float64))
         finite = np.ascontiguousarray(np.isfinite(s_arr) & np.isfinite(y_arr))
         ic = _jit_rank_ic(s_arr, y_arr, finite)
