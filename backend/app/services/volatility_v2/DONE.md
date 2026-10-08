@@ -1,3 +1,123 @@
+# Volatility V2 backend rebuild
+
+**Current status (2026-10-08): backend follow-up implemented and verified for the retained manifest.** This is not a claim that every original aspirational estimator is implemented. Unsupported original capabilities are explicitly classified below. Frontend work and browser checks are excluded by the latest user instruction. The archived progress log below contains historical pending lists; they are superseded by this snapshot.
+
+## Architecture before and after
+
+Before: one 1,495-line analytics module, nine thin wrappers, speculative output declarations, synchronous execution, silent input/data substitutions and disconnected frontend transport.
+
+After: strict request-scoped `core/data_loader.py`; `common.py` for finite JSON envelopes and records; `stats.py` for library-backed comparisons; `estimators.py` for complete-window daily OHLC estimators; focused `garch.py`, `har.py`, `regimes.py`, `vrp.py`, `connectedness.py`, `currency.py`, `dcc.py`, `midas.py`, `covariance.py`, `torsion.py`, `crisis.py`, `stress.py`, `analogs.py`, `tails.py`, `allocation.py`, `budget_forecasts.py`, `liquidity.py`, `execution.py`, `intraday.py` and `uploads.py`.
+
+Each feature owns `INPUTS`, `OUTPUTS`, and `run`. The lazy registry exposes those declarations and rejects undeclared controls. Eight registered API routes provide discovery, module-owned symbols, direct runs, sandboxed uploads, exports, jobs, status and cancellation. Studio JobStore persists this module's own jobs/results. No new dependency or shared platform service was added in this follow-up.
+
+`analytics.py` retains active asset/weight parsing, shared return primitives and small diagnostics. Imports of moved common/statistical/estimator helpers are explicit re-exports, preserving existing callers without duplicate implementations. Full-content DCC fingerprints include values, dates, assets and estimator controls; a lock-protected four-entry cache returns isolated copies. Price/IV source versions are checked before and after background estimation.
+
+## Review closure and feature capabilities
+
+| Review / feature | Retained implementation and final disposition |
+|---|---|
+| B1 | Backend routes/jobs and transport wiring were committed previously. No frontend edits in this follow-up. |
+| B2 | Unknown symbols, invalid OHLC, duplicate dates, missing matching IV and invalid exposure strings fail explicitly. Shared return primitives also reject duplicates instead of silently taking the last row. |
+| B3 | Backend synthetic surfaces, fake DCC, synthetic IV, daily noise-correction and other mislabeled proxies were removed. Landing-page hero literals remain frontend work, explicitly excluded from this follow-up. |
+| F01 | Five real OHLC estimators, 252/365 annualization, complete windows, independent golden formula tests, DM comparisons and observed hourly variation. New optional overnight exclusion is explicitly a Yang-Zhang intraday-only variant; CC retains actual close-close returns. Opening-gap routing names the selected actual estimator and is disclosed as a user-selected policy, not estimated optimality. Native-unit observed-volume thresholds reject inadequate assets; they are not called USD liquidity. |
+| F02 / A1 | Five arch MLE families and four innovation distributions; expanding held-out scoring, distribution-specific PIT/VaR, full symmetric DM matrix and multiple-comparison flags, configurable stationary-bootstrap MCS. Weekly aggregation excludes unfinished calendar weeks; a structural-break date restricts estimation. Daily annualization is declared; weekly convention is 52. |
+| F02 parameters | FIGARCH d is estimated or fixed by constrained MLE re-estimating every nuisance parameter. arch supplies likelihood, bounds, constraints and variance recursion; scipy supplies optimization. History contains actual dated past-only refit estimates. APARCH power can be fixed through arch's APARCH process or estimated. Optional cross-asset percentiles use successful same-distribution fits within the explicitly requested universe; failures and insufficient comparison counts are disclosed. |
+| F02 diagnostics | News impact uses each fitted family's arch recursion, including FIGARCH innovation history. Joint Nyblom score-process statistics use actual individual likelihood derivatives, score information and seeded Brownian-bridge null simulation; boundary/ill-conditioned cases are unavailable. Duration LR uses censored Weibull versus exponential likelihood and explicitly discloses the continuous-duration approximation to discrete sessions. No chunk-dispersion stability or breach-count duration proxy remains. |
+| F03 / A2-A3 | Matured-label OLS/HAC HAR, LHAR, leverage, ACSV and asymmetric ACSV. Asymmetric dispersion requires at least three constituents, avoiding the two-asset identity. Rank-deficient designs fail instead of publishing unidentified coefficients. Per-asset returns use the actual prior observation without filling weekends; ACSV requires common observed interval endpoints across constituents. HAR-X uses observed matching IV minus Feature 05's actual integrated physical-variance engine; it does not fabricate macro regressors. |
+| F03 forecasts | All requested horizons; declared estimator/annualization/confidence/bandwidth; real directional accuracy and HAC directional-DM comparisons against current observed volatility; QLIKE or squared-error MCS; configurable confidence/repetitions. Equal and inverse-loss combinations use only already matured outcomes at formation. Whole-evaluation MCS remains a retrospective comparison, not historical portfolio selection. |
+| F04 | Causal filtered HMM, training-sample state selection, true hard SJM, censored state durations, timestamped alerts and independent per-asset HMM synchronization. Nonconverged synchronization dates now produce explicit failure metadata/warnings instead of unexplained missing breadth. |
+| F05 | Observed matching IV, three genuine physical methods, integrated horizon forecasts, exact-date multi-asset joins, model-based BTZ/Hodrick inference, causal regimes and component histories. API now accepts 252/504/1260/2520/full z-score history. The current physical-IV engine rejects unsupported continuous-session calendar mapping rather than mixing 365-day IV with 252-session physical forecasts. |
+| F06 | Daily OLS or fixed-lag EW VAR, genuine generalized/frequency connectedness, networks/history, alerts, actual IRFs/bootstrap and explicitly autoregressive quantile CoR. Ten-year percentile history now measures 2,520 underlying observed sessions, even at a sparse calculation cadence. |
+| F07 | Actual DCC/DCC-MIDAS paths and forecasts, covariance/shrinkage comparisons, observed FX conversion, explicit crisis definitions, minimum torsion and risk attribution. Missing conditional comparisons remain warnings, not substitutes. |
+| F08 | All seven named episodes are attempted against observed coverage; missing episodes have explicit reasons. Actual replay, recovery/right-censoring, BIC macro analogs, continuous ellipsoidal adversary, rotated Clayton conditional stress and real bootstrapped contagion. Gaussian Monte Carlo remains an explicitly declared scenario model. |
+| F09 | Causal forecast formation, fixed/regime/actual BTZ Kelly targets, self-financing drift and actual turnover costs, exposure constraints, observed ADV and genuine risk-budget alignment. Reference and equal-weight baselines now use the same selected temporary-impact assumptions as the overlay. Separate flat/impact comparisons remain clearly labeled. |
+| A4-A6 | Bounded caches, explicit fit failures/warning status, durable jobs, strict coercion and source-version checks. No fake progress percentages. Cancellation suppresses result publication; active native estimators finish in the background. |
+| A7-A8 / framework | Old audits previously removed; unused scaffold and empty packages now removed after graph/rg/import/route checks. Common/statistics/estimators split completed. Backend tests now execute every feature on an explicit test fixture and check every declared output. |
+| Backend manifest | Actual render hints distinguish cards, gauge, bands, bars, networks, heatmaps, histograms, waterfall and stacked-area output. Responses provide per-output produced/not-produced status and reasons. New controls have strict declared options/bounds. Claude owns implementing corresponding frontend renderers. |
+
+## Current old-file fate table
+
+| Original file or symbols | Fate |
+|---|---|
+| `core/analytics.py` | Active shared helpers retained; feature implementations replaced; common/statistics/estimators extracted with compatibility re-exports. Obsolete canned parameters, unused caches, percentile fallback and duplicate-price aggregation removed. |
+| `core/common.py`, `core/stats.py`, `core/estimators.py` | New homes for existing primitives; one implementation each. |
+| `features/feature_01.py` through `feature_09.py` | Retained and corrected in place; authoritative declarations and supported estimator runners. |
+| `core/data_loader.py`, `core/performance.py` | Retained strict loader and numerical primitives; no replacement loader or unrelated module changes. |
+| `features/_stub.py` | Deleted, no callers in graph or repository; all nine actual runners import successfully. |
+| `schemas/__init__.py`, `utils/__init__.py` | Deleted empty placeholders, no imports/routes; validation lives in actual feature contracts. |
+| `AUDIT.MD`, `AUDIT 2.MD`, `review.md`, `speed upgrades.md`, `speed upgrade 2 .md`, `vol frontend upgrades.md` | Already deleted in commit `608a7def`; not mistakenly reported as still pending. This document supersedes them. |
+| Module spec documents under `docs/` | Retained as original specifications; unsupported departures are recorded here. |
+| Legacy `volatility_intelligence.py`, other V2 modules, V1 | Untouched; shared-platform/legacy retirement recommendations are outside this task. |
+
+Previously removed obsolete analytics functions (commit `eea4af28`), with dedicated feature cores or explicit unsupported disposition: `_mle_key`, `_remember_mle`, `barunik_krehlik_connectedness`, `bipower_variation`, `clear_request_caches`, `compute_mode`, `connectedness_at_risk`, `corr_from_cov`, `ewma_variance`, `fit_hmm_regimes`, `fit_hmm_regimes_adaptive`, `fit_var`, `fit_var_ew`, `garch_fit_for_series`, `garch_scoreboard`, `garch_term_structure_with_bands`, `generalized_fevd`, `har_bootstrap_forecast_bands`, `hmm_filtered_posterior`, `hodrick_se`, `is_research`, `model_variance`, `ols_table`, `realized_garch_fit`, `runtime_meta`, `stationary_bootstrap_indices`, `statistical_jump_model`, `synthetic_vol_surface`, `var_ma_matrices`, `weibull_duration_model`.
+
+## Data rules and known limitations
+
+- Main market-universe metadata spans 1996-03-18 through 2026-07-06. Actual checked SPY, QQQ, GLD, USO and S&P 500 series begin in 2015. Canonical equity/futures/crypto/FX panels also begin in 2015. Older stress coverage is asset-specific, not a blanket assertion that this repository lacks older data.
+- Macro observations exist, but historical release vintages are not guaranteed. Macro-conditioned HAR-X/SJM/CoR inputs are absent; actual observed-IV HAR-X is supported separately. No zero-filled predictor stand-ins.
+- Daily bars cannot reconstruct another exchange/session calendar. Annualization and available hourly source/session timezones must be declared. Native volume thresholds are not cross-asset USD liquidity measures. Duplicate mapping keys or canonical exposure aliases fail instead of overwriting previous values.
+- Hourly data exists for selected assets; SPY has no canonical hourly series. Coarse hourly variation is supported where observations exist. Tick-noise-optimal Bandi-Russell and statistically identified high-frequency jumps are absent. HAR-J/HAR-J-Signed and Realized-GARCH are not advertised by the retained manifest. A dedicated realized-GARCH measurement-equation estimator has not been implemented; hourly variation alone is not presented as that estimator.
+- Genuine weighted Baum-Welch adaptive HMM is not implemented. The incorrect predecessor was removed. The retained causal HMM supports explicit rolling training windows; it is not labeled EW Baum-Welch. External economic regime truth is unavailable, so calibrated precision-weighted ensembles are absent. Future-conditioned smoothed probabilities are not exposed as historical decisions.
+- HAR bands are conditional statsmodels OLS prediction intervals, not stationary-bootstrap bands. No whole-sample MCS-selected historical combination is advertised. Current combinations, directional accuracy and HAC directional-DM comparisons have explicit causal definitions.
+- VRP physical-IV calendar mapping currently supports Monday-Friday observations with the 252-session/21-session-month convention. Continuous-session crypto and other calendars are rejected. Non-US matching IV can be uploaded; native VSTOXX/VFTSE/JNIV discovery is not implemented. Observed IV is never reused for a different underlying.
+- Stability/KS/MCS/duration diagnostics are retrospective and post-selection. Nyblom uses asymptotic regular-interior inference, not finite-sample calibration. The duration model explicitly approximates discrete session durations continuously. Unsupported or unidentifiable cases report reasons. Normalized HAR QLIKE and inverse-QLIKE weights require strictly positive forecast/target pairs; nonfinite comparisons are excluded, never converted into fabricated weights.
+- Chart serializers may select up to 420 actual records for display. This changes display density, not estimation samples. No invented interpolation fills chart records.
+- Temporary-impact coefficients, cash rates, scenario Gaussian distributions and regime volatility preferences are declared assumptions, not measured market calibrations. Permanent impact, short-borrow costs and globally optimal high-dimensional trade alignment are not claimed.
+- Source consistency guards use path/mtime/size versions; calculation caches use full-content fingerprints. Historical membership, delisted returns, adjusted-price provenance and macro vintages are not manufactured.
+- Frontend form/rendering migration, the remaining landing-page hero numbers and browser testing are explicitly outside this follow-up. No frontend file was changed.
+
+## Verification for this follow-up
+
+Final checks used Python **3.11.15**. Commands were executed from the repository root.
+
+| Exact command | Result |
+|---|---|
+| `/tmp/pca-v2-check-env/bin/python --version` | Python 3.11.15 |
+| `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_*.py -q` | **88 passed**, 11.64 seconds on the final committed backend. One existing Starlette/httpx TestClient deprecation warning. |
+| `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_features.py -q` | **12 passed**, including actual execution of all nine feature runners on deterministic test fixtures. |
+| `ruff check backend/app/services/volatility_v2 backend/tests/test_volatility_v2_*.py` | All checks passed. |
+| `git diff --check` | Exit 0, no whitespace errors. |
+| `git diff --name-only -- frontend` | Empty: no frontend changes in this follow-up. |
+| `rg -n 'include_router\(volatility_v2.router' backend/main.py` | Mounted with `/api` at line 183. |
+| `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python /tmp/vol_all_backend_smoke.py` | Nine real-data runs returned all declared outputs: 01/02/03/04/05/06/08/09 `ok`; 07 `warning`, retaining explicit conditional availability warnings. |
+
+The real-data runner used `assets=[SPY,QQQ]`, 650 observations and `as_of_date=2025-12-31`, with these overrides:
+
+| Feature | Overrides |
+|---|---|
+| 01 | Default estimator controls. |
+| 02 | GARCH/Gaussian, min_train=120, evaluation_days=60, horizons=[1,5], simulations=100. |
+| 03 | SPY/QQQ/IWM, HAR/LHAR/A-ACSV-HAR, min_train=120, horizons=[1,5], bootstrap_reps=30. |
+| 04 | states=2, min_train=120, hmm_restarts=1, refit_interval=252. |
+| 05 | ^GSPC, min_train=120, return_horizons=[21], refit_interval=126. |
+| 06 | rolling_window=126, rolling_interval=63, irf_bootstrap_reps=20, max_lag=1. |
+| 07 | min_train=120, refit_interval=252. |
+| 08 | mc_paths=1000, irf_bootstrap_reps=20. |
+| 09 | EWMA, min_train=120, optional regime/Kelly comparisons disabled. |
+
+Import/registration command, run both before and after scaffold/package deletion:
+
+```sh
+PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python - <<'PY'
+from app.services.volatility_v2.registry import get_runner, feature_manifest
+from app.api.volatility_v2 import router
+for i in range(1, 10):
+    assert callable(get_runner(str(i)))
+print(len(feature_manifest()), len(router.routes))
+PY
+```
+
+Result: **9 feature imports/contracts and 8 routes**. Graph inbound tracing for `scaffold_response` returned no callers; repository `rg` found no imports of the scaffold or empty packages. No user data or unrelated untracked files were deleted.
+
+No frontend Jest/lint/build or browser command was run in this follow-up, as explicitly requested. Prior frontend checks in the archived log are historical, not new acceptance claims.
+
+Commits for this follow-up: `9d963345` (shared primitives/cache/cleanup), `ae4da27e` (estimator controls/contracts/tests), followed by this documentation commit. Earlier failing test iterations were fixed, not hidden: EGARCH forecast-bound clipping, asymmetric two-asset dispersion identification and overnight-exclusion common-window alignment were caught during development.
+
+
+## Archived implementation log
+
+Historical pending statements below describe earlier commits, not the current snapshot above.
+
 # Volatility V2 rebuild
 
 **Status: in progress. This is a progress record, not a completion claim.**
