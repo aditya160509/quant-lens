@@ -1,7 +1,6 @@
 """Registry for Volatility V2 feature modules.
 
-The implementation mirrors the Factors V2 package shape but remains dormant
-until the API/router and frontend are explicitly wired.
+Feature declarations are imported lazily and exposed by the mounted API.
 """
 
 from __future__ import annotations

@@ -45,8 +45,8 @@ def run(payload=None):
     lookback = payload.get("zscore_lookback", 1260)
     if isinstance(lookback, str) and lookback.endswith("d"):
         lookback = int(lookback[:-1])
-    if lookback != "full" and int(lookback) not in (252, 504, 1260):
-        raise ValueError("zscore_lookback must be 252, 504, 1260, or full")
+    if lookback != "full" and int(lookback) not in (252, 504, 1260, 2520):
+        raise ValueError("zscore_lookback must be 252, 504, 1260, 2520, or full")
     ret = returns_panel(ohlcv)
     vol = volatility_estimators(ohlcv, 21)
     (
@@ -354,7 +354,8 @@ OUTPUTS = [
         "label": "Vrp time series",
         "render": "line",
         "primary": True,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted vrp time series. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "vrp_zscore_panel",
@@ -362,7 +363,8 @@ OUTPUTS = [
         "label": "Vrp zscore panel",
         "render": "line",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted vrp zscore panel. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "vrp_term_structure",
@@ -370,15 +372,17 @@ OUTPUTS = [
         "label": "Vrp term structure",
         "render": "line",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted vrp term structure. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "vrp_component_attribution",
         "source": "charts",
         "label": "Vrp component attribution",
-        "render": "line",
+        "render": "stacked_area",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted vrp component attribution. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "btz_expanding_forecasts",
@@ -386,7 +390,8 @@ OUTPUTS = [
         "label": "Btz expanding forecasts",
         "render": "line",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted btz expanding forecasts. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "cross_asset_vrp_comparison",
@@ -394,7 +399,8 @@ OUTPUTS = [
         "label": "Cross asset vrp comparison",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted cross asset vrp comparison. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "return_predictability_regression",
@@ -402,7 +408,8 @@ OUTPUTS = [
         "label": "Return predictability regression",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted return predictability regression. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "regime_conditional_btz",
@@ -410,7 +417,8 @@ OUTPUTS = [
         "label": "Regime conditional btz",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted regime conditional btz. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "vrp_zscore_lookback_comparison",
@@ -418,7 +426,8 @@ OUTPUTS = [
         "label": "Vrp zscore lookback comparison",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted vrp zscore lookback comparison. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "vrp_mean_reversion_speed",
@@ -426,7 +435,8 @@ OUTPUTS = [
         "label": "Vrp mean reversion speed",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted vrp mean reversion speed. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "data_gaps",
@@ -434,6 +444,7 @@ OUTPUTS = [
         "label": "Data gaps",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted data gaps. No conditional data gaps were detected.",
+        "empty_reason": "No conditional data gaps were detected.",
     },
 ]

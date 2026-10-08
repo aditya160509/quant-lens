@@ -106,6 +106,14 @@ def run(payload=None):
                 states = state_names(model["selected_states"])
                 high = [state for state in states if state in {"high_vol", "crisis"}]
                 observations = model["probabilities"]
+                nonconverged = int((~observations.hmm_converged).sum())
+                if nonconverged:
+                    sync_failures.append(
+                        {
+                            "asset": symbol,
+                            "reason": f"{nonconverged} causal HMM dates did not converge; synchronization is unavailable on those dates",
+                        }
+                    )
                 high_probabilities[symbol] = (
                     observations[high].sum(axis=1).where(observations.hmm_converged)
                 )
@@ -218,15 +226,17 @@ OUTPUTS = [
         "label": "Probabilistic regime timeline",
         "render": "line",
         "primary": True,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted probabilistic regime timeline. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "current_regime_dashboard",
         "source": "charts",
         "label": "Current regime dashboard",
-        "render": "line",
+        "render": "cards",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted current regime dashboard. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "statistical_jump_state_timeline",
@@ -234,7 +244,8 @@ OUTPUTS = [
         "label": "Statistical jump state timeline",
         "render": "line",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted statistical jump state timeline. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "transition_heatmap",
@@ -242,7 +253,8 @@ OUTPUTS = [
         "label": "Transition heatmap",
         "render": "heatmap",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted transition heatmap. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "global_vol_regime_sync_index",
@@ -250,7 +262,8 @@ OUTPUTS = [
         "label": "Global vol regime sync index",
         "render": "line",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted global vol regime sync index. Independent causal HMM histories are unavailable or global synchronization was not requested.",
+        "empty_reason": "Independent causal HMM histories are unavailable or global synchronization was not requested.",
     },
     {
         "key": "regime_conditional_stats",
@@ -258,7 +271,8 @@ OUTPUTS = [
         "label": "Regime conditional stats",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted regime conditional stats. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "regime_transition_heatmap",
@@ -266,7 +280,8 @@ OUTPUTS = [
         "label": "Regime transition heatmap",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted regime transition heatmap. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "regime_duration_survival",
@@ -274,7 +289,8 @@ OUTPUTS = [
         "label": "Regime duration survival",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted regime duration survival. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "hmm_bic_k_selection",
@@ -282,7 +298,8 @@ OUTPUTS = [
         "label": "Hmm bic k selection",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted hmm bic k selection. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "transition_alert_log",
@@ -290,6 +307,7 @@ OUTPUTS = [
         "label": "Transition alert log",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted transition alert log. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
 ]

@@ -954,48 +954,402 @@ def test_btz_return_training_waits_for_forward_labels_to_mature(monkeypatch):
 
 def test_estimator_dm_horizon_units_and_asset_isolation():
     from app.services.volatility_v2.core.estimator_diagnostics import dm_tournament
+
     rng = np.random.default_rng(190)
-    dates = pd.date_range('2020-01-01', periods=120)
-    group = pd.DataFrame({'date': dates, 'asset': 'A', 'return': rng.normal(0, .02, 120)})
-    for i, key in enumerate(['cc', 'parkinson', 'garman_klass', 'rogers_satchell', 'yang_zhang']):
-        group[key] = .2 + .01 * i + rng.uniform(0, .01, 120)
+    dates = pd.date_range("2020-01-01", periods=120)
+    group = pd.DataFrame(
+        {"date": dates, "asset": "A", "return": rng.normal(0, 0.02, 120)}
+    )
+    for i, key in enumerate(
+        ["cc", "parkinson", "garman_klass", "rogers_satchell", "yang_zhang"]
+    ):
+        group[key] = 0.2 + 0.01 * i + rng.uniform(0, 0.01, 120)
     first = dm_tournament(group, 252, 5)
     rescaled = group.copy()
-    rescaled[['cc', 'parkinson', 'garman_klass', 'rogers_satchell', 'yang_zhang']] *= np.sqrt(365 / 252)
+    rescaled[["cc", "parkinson", "garman_klass", "rogers_satchell", "yang_zhang"]] *= (
+        np.sqrt(365 / 252)
+    )
     second = dm_tournament(rescaled, 365, 5)
     for a, b in zip(first, second):
-        assert a['observations'] == 115
-        assert a['value'] == pytest.approx(b['value'], abs=1e-9)
-    other = group.assign(asset='B', **{'return': group['return'] * 10})
+        assert a["observations"] == 115
+        assert a["value"] == pytest.approx(b["value"], abs=1e-9)
+    other = group.assign(asset="B", **{"return": group["return"] * 10})
     combined = dm_tournament(pd.concat([other, group]), 252, 5)
-    assert [row for row in combined if row['asset'] == 'A'] == first
+    assert [row for row in combined if row["asset"] == "A"] == first
 
 
 def test_range_correlations_use_observed_pairs_and_declared_method():
-    from app.services.volatility_v2.core.estimator_diagnostics import range_correlation_matrix
-    dates = pd.date_range('2020-01-01', periods=45)
-    a = pd.DataFrame({'Date': dates, 'Ticker': 'A', 'High': np.exp(np.linspace(.01, .2, 45)), 'Low': 1.})
-    b = a.assign(Ticker='B', High=np.exp(np.linspace(.2, .01, 45))).drop(index=[2, 4, 6])
+    from app.services.volatility_v2.core.estimator_diagnostics import (
+        range_correlation_matrix,
+    )
+
+    dates = pd.date_range("2020-01-01", periods=45)
+    a = pd.DataFrame(
+        {
+            "Date": dates,
+            "Ticker": "A",
+            "High": np.exp(np.linspace(0.01, 0.2, 45)),
+            "Low": 1.0,
+        }
+    )
+    b = a.assign(Ticker="B", High=np.exp(np.linspace(0.2, 0.01, 45))).drop(
+        index=[2, 4, 6]
+    )
     frame = pd.concat([a, b])
     actual = range_correlation_matrix(frame)
-    assert actual.loc['A', 'B'] == pytest.approx(-1.)
-    cosine = range_correlation_matrix(frame, method='uncentered_cosine')
-    assert 0 < cosine.loc['A', 'B'] < 1
-    assert pd.isna(range_correlation_matrix(frame.tail(20)).loc['B', 'B'])
+    assert actual.loc["A", "B"] == pytest.approx(-1.0)
+    cosine = range_correlation_matrix(frame, method="uncentered_cosine")
+    assert 0 < cosine.loc["A", "B"] < 1
+    assert pd.isna(range_correlation_matrix(frame.tail(20)).loc["B", "B"])
 
 
 def test_sampled_hourly_variation_has_no_overnight_or_gap_imputation():
     from app.services.volatility_v2.core.intraday import variation_from_bars
-    dates = pd.date_range('2024-01-01 10:00', periods=7, freq='h')
-    returns = np.array([.01, -.02, .03, -.01, .02, -.01])
+
+    dates = pd.date_range("2024-01-01 10:00", periods=7, freq="h")
+    returns = np.array([0.01, -0.02, 0.03, -0.01, 0.02, -0.01])
     prices = 100 * np.exp(np.r_[0, np.cumsum(returns)])
-    frame = pd.DataFrame({'date': dates.normalize(), 'timestamp': dates, 'Close': prices})
+    frame = pd.DataFrame(
+        {"date": dates.normalize(), "timestamp": dates, "Close": prices}
+    )
     actual = variation_from_bars(frame).iloc[0]
     assert actual.sampled_hourly_variance == pytest.approx(returns @ returns)
     expected = np.pi / 2 * 6 / 5 * (np.abs(returns[1:]) @ np.abs(returns[:-1]))
     assert actual.sampled_hourly_bipower == pytest.approx(expected)
     shifted = frame.copy()
     shifted.Close *= 100
-    pd.testing.assert_frame_equal(variation_from_bars(frame), variation_from_bars(shifted), check_exact=False)
-    with pytest.raises(ValueError, match='consecutive'):
+    pd.testing.assert_frame_equal(
+        variation_from_bars(frame), variation_from_bars(shifted), check_exact=False
+    )
+    with pytest.raises(ValueError, match="consecutive"):
         variation_from_bars(frame.drop(index=3))
+
+
+@pytest.mark.parametrize("name", ["cc", "parkinson", "garman_klass", "rogers_satchell"])
+def test_each_daily_estimator_matches_independent_formula(name):
+    frame = fixture()
+    window = 21
+    oc = np.log(frame.Close / frame.Open)
+    hl = np.log(frame.High / frame.Low)
+    values = {
+        "cc": np.log(frame.Close / frame.Close.shift()).pow(2),
+        "parkinson": hl.pow(2) / (4 * np.log(2)),
+        "garman_klass": 0.5 * hl.pow(2) - (2 * np.log(2) - 1) * oc.pow(2),
+        "rogers_satchell": np.log(frame.High / frame.Close)
+        * np.log(frame.High / frame.Open)
+        + np.log(frame.Low / frame.Close) * np.log(frame.Low / frame.Open),
+    }
+    expected = np.sqrt(values[name].tail(window).mean() * 252)
+    assert volatility_estimators(frame, window)[name].iloc[-1] == pytest.approx(
+        expected, rel=1e-6
+    )
+
+
+@pytest.mark.parametrize("model", ["GARCH", "EGARCH", "GJR-GARCH", "APARCH", "FIGARCH"])
+def test_news_impact_curve_matches_arch_one_step_forecast(model):
+    from app.services.volatility_v2.core.garch import fit_model, news_impact_curve
+
+    returns = pd.Series(
+        np.random.default_rng(73).normal(0, 0.01, 650),
+        index=pd.date_range("2020-01-01", periods=650),
+    )
+    fit = fit_model(returns, model, "Gaussian")
+    curve = news_impact_curve(fit)
+    process = fit.model.volatility
+    residuals = fit.resid.to_numpy()
+    params = fit.params.reindex(process.parameter_names()).to_numpy()
+    variance = np.empty(len(residuals) + 1)
+    process.compute_variance(
+        params,
+        np.r_[residuals, 0],
+        variance,
+        process.backcast(residuals),
+        np.vstack([process.variance_bounds(residuals), [0, np.inf]]),
+    )
+    # Reconstruct exactly the observed final innovation, independently of grid.
+    from scipy.interpolate import interp1d
+
+    actual_shock = residuals[-1] / fit.conditional_volatility.iloc[-1]
+    interpolated = interp1d(
+        [r["standardized_shock"] for r in curve],
+        [r["next_period_variance"] for r in curve],
+    )(actual_shock)
+    expected = float(fit.forecast(horizon=1).residual_variance.iloc[-1, 0]) / 10000
+    assert variance[-1] / 10000 == pytest.approx(expected, rel=1e-5)
+    assert interpolated == pytest.approx(expected, rel=0.02)
+
+
+def test_har_qlike_loss_and_direction_are_actual_held_out_values():
+    from app.services.volatility_v2.core.har import expanding_forecasts
+
+    dates = pd.date_range("2020-01-01", periods=180)
+    x = pd.DataFrame(
+        {"daily": np.random.default_rng(31).uniform(0.1, 0.3, 180)}, index=dates
+    )
+    y = 0.08 + 0.6 * x.daily
+    rows, metrics, loss, _ = expanding_forecasts(
+        x, y, min_train=40, loss_function="qlike", directional_baseline=x.daily
+    )
+    valid = rows.set_index("date").dropna(subset=["forecast", "actual"])
+    ratio = (valid.actual / valid.forecast).pow(2)
+    pd.testing.assert_series_equal(
+        loss, ratio - np.log(ratio) - 1, check_names=False, check_freq=False
+    )
+    assert 0 <= metrics["directional_hit_rate"] <= 1
+
+
+def test_fixed_aparch_power_uses_arch_process():
+    from app.services.volatility_v2.core.garch import fit_model
+
+    returns = pd.Series(np.random.default_rng(39).normal(0, 0.01, 500))
+    fit = fit_model(returns, "APARCH", "Gaussian", aparch_delta=1.5)
+    assert fit.model.volatility.delta == 1.5
+    assert "delta" not in fit.params
+
+
+def test_combination_weights_use_only_matured_outcomes():
+    from app.services.volatility_v2.core.har import causal_combination
+
+    dates = pd.date_range("2020-01-01", periods=100)
+    actual = pd.Series(np.linspace(0.1, 0.3, 100), index=dates)
+    models = {
+        name: pd.DataFrame(
+            {
+                "date": dates,
+                "actual": actual.to_numpy(),
+                "forecast": (actual + offset).to_numpy(),
+            }
+        )
+        for name, offset in [("a", 0.02), ("b", -0.01)]
+    }
+    first = causal_combination(models, 5, min_history=10)
+    for rows in models.values():
+        rows.loc[rows.date >= dates[60], "actual"] *= 4
+    changed = causal_combination(models, 5, min_history=10)
+    # Targets can change at origin 60 but cannot affect formation weights before 65.
+    first_weights = [
+        r["weights"] for r in first if "weights" in r and r["date"] < dates[65]
+    ]
+    changed_weights = [
+        r["weights"] for r in changed if "weights" in r and r["date"] < dates[65]
+    ]
+    assert first_weights == changed_weights
+
+
+def test_har_rejects_unidentifiable_predictors():
+    from app.services.volatility_v2.core.har import expanding_forecasts
+
+    dates = pd.date_range("2020-01-01", periods=100)
+    values = np.linspace(0.1, 0.3, 100)
+    x = pd.DataFrame({"a": values, "b": values}, index=dates)
+    with pytest.raises(ValueError, match="rank-deficient"):
+        expanding_forecasts(x, x.a.shift(-1), min_train=40)
+
+
+def test_fixed_figarch_d_is_constrained_mle_with_causal_forecasts():
+    from app.services.volatility_v2.core.garch import fit_model, expanding_model
+
+    returns = pd.Series(
+        np.random.default_rng(48).normal(0, 0.01, 350),
+        index=pd.bdate_range("2020-01-01", periods=350),
+    )
+    fitted = fit_model(returns, "FIGARCH", "Gaussian", figarch_d=0.4)
+    assert fitted.params["d"] == 0.4
+    assert np.isfinite(fitted.loglikelihood)
+    path, _ = expanding_model(
+        returns,
+        "FIGARCH",
+        "Gaussian",
+        min_train=120,
+        evaluation_days=30,
+        refit_interval=15,
+        figarch_d=0.4,
+    )
+    assert all(record["d"] == 0.4 for record in path.attrs["parameter_history"])
+    changed = returns.copy()
+    changed.iloc[-10:] *= 2
+    other, _ = expanding_model(
+        changed,
+        "FIGARCH",
+        "Gaussian",
+        min_train=120,
+        evaluation_days=30,
+        refit_interval=15,
+        figarch_d=0.4,
+    )
+    np.testing.assert_allclose(path.variance.iloc[:-10], other.variance.iloc[:-10])
+
+
+def test_duration_backtest_reports_insufficient_exceptions_and_actual_gaps():
+    from app.services.volatility_v2.core.garch import duration_backtest
+
+    frame = pd.DataFrame({"return": np.zeros(150), "var_cutoff": -0.02})
+    assert "duration_unavailable_reason" in duration_backtest(frame)
+    frame.loc[[4, 17, 33, 52, 71, 90, 110], "return"] = -0.03
+    result = duration_backtest(frame)
+    assert result["completed_durations"] == 6
+    assert result["right_censored_sessions"] == 39
+    assert np.isfinite(result["duration_lr"])
+    assert 0 <= result["duration_p_value"] <= 1
+
+
+def test_nyblom_uses_actual_individual_likelihood_or_reports_boundary():
+    from app.services.volatility_v2.core.garch import fit_model, nyblom_stability
+
+    rng = np.random.default_rng(891)
+    variance, previous = 0.0001, 0.0
+    values = []
+    for _ in range(1200):
+        variance = 0.00001 + 0.15 * previous**2 + 0.75 * variance
+        previous = np.sqrt(variance) * rng.normal()
+        values.append(previous)
+    fit = fit_model(pd.Series(values), "GARCH", "Gaussian")
+    result = nyblom_stability(fit, simulations=100)
+    assert "unavailable_reason" not in result
+    assert result["observations"] == 1200
+    assert result["parameters"] == list(fit.params.index)
+    assert result["nyblom_joint_statistic"] >= 0
+    assert 0 <= result["p_value"] <= 1
+
+
+def test_connectedness_percentile_window_counts_sessions_not_sampled_rows(monkeypatch):
+    from types import SimpleNamespace
+    from app.services.volatility_v2.core import connectedness
+
+    dates = pd.bdate_range("2000-01-01", periods=3000)
+    panel = pd.DataFrame({"A": np.arange(3000), "B": np.arange(3000)}, index=dates)
+    monkeypatch.setattr(
+        connectedness,
+        "fit_volatility_var",
+        lambda *args, **kwargs: SimpleNamespace(lag=1, stable=True),
+    )
+    monkeypatch.setattr(
+        connectedness,
+        "generalized_decomposition",
+        lambda *args: np.array([[0.8, 0.2], [0.3, 0.7]]),
+    )
+    result = connectedness.rolling_connectedness(panel, window=60, interval=63)
+    timeline = result["timeline"]
+    lower = panel.index[-1 - 2520]
+    expected = ((timeline.index >= lower) & (timeline.index < panel.index[-1])).sum()
+    assert timeline.percentile_history_observations.iloc[-1] == expected
+    assert expected < len(timeline) - 1
+
+
+def test_dcc_cache_is_bounded_content_sensitive_and_isolated(monkeypatch):
+    from app.services.volatility_v2.core import dcc
+
+    calls = []
+
+    def compute(frame, *controls):
+        calls.append(frame.to_numpy().copy())
+        return {"values": frame.to_numpy().copy()}
+
+    monkeypatch.setattr(dcc, "_expanding_dcc", compute)
+    dcc._CACHE.clear()
+    frame = pd.DataFrame({"A": [0.01, 0.02], "B": [0.02, -0.01]})
+    first = dcc.expanding_dcc(frame)
+    first["values"][0, 0] = 99
+    assert dcc.expanding_dcc(frame)["values"][0, 0] == 0.01
+    assert len(calls) == 1
+    for number in range(6):
+        changed = frame.copy()
+        changed.iloc[0, 0] += number + 1
+        dcc.expanding_dcc(changed)
+    assert len(dcc._CACHE) == 4
+    dcc._CACHE.clear()
+
+
+def test_intraday_only_yang_zhang_does_not_rename_close_close_returns():
+    frame = fixture()
+    original = volatility_estimators(frame)
+    excluded = volatility_estimators(frame, include_overnight=False)
+    pd.testing.assert_series_equal(original.cc, excluded.cc)
+    pd.testing.assert_series_equal(original["return"], excluded["return"])
+    assert (excluded.yang_zhang <= original.yang_zhang).all()
+
+
+def test_shared_return_primitives_do_not_silently_collapse_duplicate_prices():
+    from app.services.volatility_v2.core.analytics import returns_panel
+
+    frame = fixture()
+    with pytest.raises(ValueError):
+        returns_panel(pd.concat([frame, frame.iloc[:1]], ignore_index=True))
+
+
+def test_observed_iv_rejects_unsupported_continuous_session_mapping():
+    from app.services.volatility_v2.core.vrp import observed_iv
+
+    with pytest.raises(ValueError, match="continuous-session"):
+        observed_iv("^GSPC", pd.date_range("2020-01-01", periods=200))
+
+
+def test_global_hmm_sync_is_future_invariant_for_each_asset(monkeypatch):
+    from app.services.volatility_v2.features import feature_04
+
+    rng = np.random.default_rng(230)
+    dates = pd.bdate_range("2020-01-01", periods=600)
+    assets, frames = ["SPY", "QQQ"], []
+    for asset in assets:
+        close = 100 * np.exp(np.cumsum(rng.normal(0, 0.01, len(dates))))
+        opening = close * np.exp(rng.normal(0, 0.003, len(dates)))
+        frames.append(
+            pd.DataFrame(
+                {
+                    "Ticker": asset,
+                    "Date": dates,
+                    "Open": opening,
+                    "High": np.maximum(opening, close) * 1.015,
+                    "Low": np.minimum(opening, close) * 0.985,
+                    "Close": close,
+                    "Volume": 1e6,
+                }
+            )
+        )
+    observed = pd.concat(frames, ignore_index=True)
+    monkeypatch.setattr(
+        feature_04, "load_assets", lambda *args, **kwargs: (assets, observed)
+    )
+    controls = {"states": 2, "min_train": 120, "refit_interval": 120, "hmm_restarts": 1}
+    original = feature_04.run(controls)
+    mask = observed.Ticker.eq("QQQ") & observed.Date.ge(dates[480])
+    observed.loc[mask, ["Open", "High", "Low", "Close"]] *= 1.5
+    changed = feature_04.run(controls)
+    for key in ["probabilistic_regime_timeline", "global_vol_regime_sync_index"]:
+        cutoff = dates[480].strftime("%Y-%m-%d")
+        before = [r for r in original["charts"][key] if r["date"] < cutoff]
+        after = [r for r in changed["charts"][key] if r["date"] < cutoff]
+        assert before == after
+
+
+def test_causal_combination_does_not_create_weights_from_nonfinite_qlike():
+    from app.services.volatility_v2.core.har import causal_combination
+
+    dates = pd.date_range("2020-01-01", periods=80)
+    actual = np.r_[np.zeros(40), np.repeat(0.15, 40)]
+    rows = {
+        name: pd.DataFrame({"date": dates, "actual": actual, "forecast": prediction})
+        for name, prediction in [("a", 0.1), ("b", 0.2)]
+    }
+    records = causal_combination(rows, 5, min_history=10)
+    weighted = [r for r in records if "weights" in r]
+    assert weighted
+    assert all(r["latest_training_origin"] >= dates[40] for r in weighted)
+    assert all(np.isfinite(list(r["weights"].values())).all() for r in weighted)
+
+
+def test_each_asset_return_uses_its_actual_prior_observation_without_fill():
+    from app.services.volatility_v2.core.analytics import returns_panel
+
+    dates = pd.date_range("2024-01-05", periods=4)
+    frame = pd.DataFrame(
+        {
+            "Ticker": ["SPY", "SPY", "BTC_USD", "BTC_USD", "BTC_USD", "BTC_USD"],
+            "Date": [dates[0], dates[3], *dates],
+            "Close": [100.0, 102.0, 100.0, 101.0, 102.0, 103.0],
+        }
+    )
+    returns = returns_panel(frame)
+    assert returns.loc[dates[3], "SPY"] == pytest.approx(np.log(102 / 100))
+    assert returns.loc[dates[3], "BTC_USD"] == pytest.approx(np.log(103 / 102))
+    assert returns.loc[dates[1:3], "SPY"].isna().all()

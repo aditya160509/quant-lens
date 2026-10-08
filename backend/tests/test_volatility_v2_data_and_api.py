@@ -198,3 +198,50 @@ def test_nonfinite_prices_and_null_explicit_universe_fail(prices):
         dl.ohlcv_for_symbols(["SPY"])
     with pytest.raises(ValueError, match="cannot be null"):
         prepare_payload("01", {"assets": None})
+
+
+def test_exports_cancel_and_source_changes_during_estimation(prices, tmp_path, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api import volatility_v2 as api
+    from app.services.studio.jobs import JobStore
+    dl, frame, path = prices
+    store = JobStore(path=tmp_path / 'jobs.json')
+    monkeypatch.setattr(api, 'JOBS', store)
+    monkeypatch.setattr(api, 'RESULTS', tmp_path / 'results')
+    app = FastAPI()
+    app.include_router(api.router)
+    with TestClient(app) as client:
+        exported = client.post('/labs/volatility/v2/export/01', json={'assets': ['SPY']})
+        assert exported.status_code == 200
+        body = exported.json()
+        assert body['json']['feature_id'] == 'feature_01'
+        assert 'estimator' in body['csv_tables']['estimator_efficiency']
+        assert client.post('/labs/volatility/v2/export/99', json={}).status_code == 404
+        assert client.post('/labs/volatility/v2/export/01', json={'assets': ['UNKNOWN']}).status_code == 422
+        job = store.create(job_type='test', params={'source_versions': api.sources({})})
+        cancelled = client.post(f"/labs/volatility/v2/jobs/{job['job_id']}/cancel")
+        assert cancelled.status_code == 200
+        assert cancelled.json()['status'] == 'cancelled'
+        assert 'result' not in client.get(f"/labs/volatility/v2/jobs/{job['job_id']}").json()
+    original = api.run_feature
+    def changing_source(fid, payload):
+        result = original(fid, payload)
+        frame.loc[0, 'Close'] = 101.5
+        frame.to_parquet(path)
+        return result
+    monkeypatch.setattr(api, 'run_feature', changing_source)
+    job = store.create(job_type='test', params={'source_versions': api.sources({})})
+    with pytest.raises(ValueError, match='changed during'):
+        api._execute(job['job_id'], '01', {'assets': ['SPY']})
+    assert not (api.RESULTS / f"{job['job_id']}.json").exists()
+
+
+def test_duplicate_exposure_and_object_keys_fail(prices):
+    from app.services.volatility_v2.core.analytics import parse_weights
+    from app.services.volatility_v2.registry import prepare_payload
+    for raw in [{'SPY': 1, 'spy': 2}, 'SPY:1,SPY:2', '{"SPY":1,"SPY":2}']:
+        with pytest.raises(ValueError):
+            parse_weights({'weights': raw}, ['SPY'])
+    with pytest.raises(ValueError, match='Duplicate'):
+        prepare_payload('09', {'weights': '{"SPY":1,"SPY":2}'})

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from .inputs import field
+import numpy as np
 
 from app.services.volatility_v2.core.analytics import (
     ESTIMATORS,
@@ -36,10 +37,36 @@ def run(payload=None):
         or 21
     )
     annualization = int(number_like(payload.get("annualization")) or 252)
-    vol = volatility_estimators(ohlcv, window=window, annualization=annualization)
+    minimum_volume = float(payload.get("minimum_observed_volume", 0))
+    if minimum_volume > 0:
+        latest_volume = (
+            ohlcv.sort_values("Date")
+            .groupby("Ticker")
+            .tail(window)
+            .groupby("Ticker")
+            .Volume.mean()
+        )
+        unavailable = latest_volume.index[
+            latest_volume.isna() | latest_volume.lt(minimum_volume)
+        ].tolist()
+        if unavailable:
+            raise ValueError(
+                "Assets below the declared native-unit volume threshold: "
+                + ", ".join(unavailable)
+            )
+    include_overnight = payload.get("include_overnight", True)
+    vol = volatility_estimators(
+        ohlcv,
+        window=window,
+        annualization=annualization,
+        include_overnight=include_overnight,
+    )
     multi_window = []
     multi_vol = volatility_estimators_multi(
-        ohlcv, [10, 21, 42, 63, 126, 252], annualization=annualization
+        ohlcv,
+        [10, 21, 42, 63, 126, 252],
+        annualization=annualization,
+        include_overnight=include_overnight,
     )
     for w, vw in multi_vol.items():
         last = vw.sort_values("date").groupby("asset").tail(1)
@@ -88,6 +115,32 @@ def run(payload=None):
     comparison["min_estimator"] = comparison[ESTIMATORS].min(axis=1)
     comparison["max_estimator"] = comparison[ESTIMATORS].max(axis=1)
     ogf = opening_gap_fragility(ohlcv)
+    routing = []
+    if payload.get("auto_route_opening_gap", False):
+        joined = primary.merge(
+            ogf[["date", "asset", "ogf_percentile"]], on=["date", "asset"], how="left"
+        )
+        joined = joined.dropna(subset=["ogf_percentile"])
+        fragile = joined.ogf_percentile >= float(
+            payload.get("opening_gap_percentile_threshold", 90)
+        )
+        joined["selected_estimator"] = np.where(
+            fragile, "rogers_satchell", "yang_zhang"
+        )
+        joined["routed_annualized_vol"] = np.where(
+            fragile, joined.rogers_satchell, joined.yang_zhang
+        )
+        routing = compact_records(
+            joined[
+                [
+                    "date",
+                    "asset",
+                    "ogf_percentile",
+                    "selected_estimator",
+                    "routed_annualized_vol",
+                ]
+            ]
+        )
     range_method = str(payload.get("range_correlation_method", "pearson"))
     range_corr = range_correlation_matrix(ohlcv, method=range_method)
     mom_adj = vol_adjusted_momentum(ohlcv, vol)
@@ -128,6 +181,7 @@ def run(payload=None):
         summary,
         charts={
             "observed_hourly_variation": hourly,
+            "opening_gap_estimator_routing": routing,
             "five_estimator_comparison": compact_records(comparison),
             "estimator_disagreement_band": compact_records(
                 comparison[
@@ -168,6 +222,15 @@ def run(payload=None):
             "window": window,
             "annualization": annualization,
             "range_correlation_method": range_method,
+            "overnight_policy": "Yang-Zhang overnight component included"
+            if include_overnight
+            else "Explicit Yang-Zhang intraday-only variant; overnight term excluded. Close-close returns remain unchanged",
+            "volume_threshold": {
+                "value": minimum_volume,
+                "units": "Observed native Volume units, not USD liquidity or comparable units across assets",
+            },
+            "routing_policy": "User-selected OGF percentile policy routes high-gap dates to observed Rogers-Satchell intraday variance; other dates to Yang-Zhang. This is not an empirically optimal full-session estimator",
+            "session_policy": "Daily source OHLC boundaries define sessions. Daily bars cannot reconstruct another exchange calendar or timezone",
             "unsupported_outputs": {
                 "bandi_russell_estimator": "Daily OHLC and hourly bars cannot identify optimal microstructure-noise sampling; the dimensionally invalid daily proxy was removed",
                 "sampling_efficiency": "Requires repeated sampling under an explicit data-generating model",
@@ -181,6 +244,22 @@ def run(payload=None):
 # Authoritative contract consumed by the lazy backend manifest.
 
 INPUTS = [
+    field(
+        "include_overnight",
+        True,
+        help="Include the overnight variance term in Yang-Zhang. Exclusion produces an explicitly disclosed intraday-only variant; other estimators remain unchanged.",
+    ),
+    field(
+        "minimum_observed_volume",
+        0.0,
+        help="Minimum trailing mean observed Volume in its native units. Selected assets below the threshold fail explicitly.",
+    ),
+    field(
+        "auto_route_opening_gap",
+        False,
+        help="Declared routing policy, not estimated optimality: choose RS intraday variance above the selected opening-gap percentile.",
+    ),
+    field("opening_gap_percentile_threshold", 90.0),
     field("assets", ["SPY"], kind="symbols", group="Data"),
     field("asset", None, kind="text", group="Data"),
     field("lookback_days", 2520, kind="integer", group="Data"),
@@ -197,12 +276,22 @@ INPUTS = [
 
 OUTPUTS = [
     {
+        "key": "opening_gap_estimator_routing",
+        "source": "charts",
+        "label": "Declared opening-gap routing policy",
+        "render": "line",
+        "primary": False,
+        "help": "Actual observed or fitted declared opening-gap routing policy. Routing was not requested, or the trailing opening-gap percentile has not matured.",
+        "empty_reason": "Routing was not requested, or the trailing opening-gap percentile has not matured.",
+    },
+    {
         "key": "observed_hourly_variation",
         "source": "charts",
         "label": "Observed hourly variation",
         "render": "line",
         "primary": True,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted observed hourly variation. Hourly variation was not requested, or complete consecutive hourly bars with declared timezones are unavailable.",
+        "empty_reason": "Hourly variation was not requested, or complete consecutive hourly bars with declared timezones are unavailable.",
     },
     {
         "key": "five_estimator_comparison",
@@ -210,7 +299,8 @@ OUTPUTS = [
         "label": "Five estimator comparison",
         "render": "line",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted five estimator comparison. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "estimator_disagreement_band",
@@ -218,7 +308,8 @@ OUTPUTS = [
         "label": "Estimator disagreement band",
         "render": "line",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted estimator disagreement band. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "estimator_agreement_index",
@@ -226,23 +317,26 @@ OUTPUTS = [
         "label": "Estimator agreement index",
         "render": "line",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted estimator agreement index. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "annualized_vol_panel",
         "source": "charts",
         "label": "Annualized vol panel",
-        "render": "line",
+        "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted annualized vol panel. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "multi_window_estimator_panel",
         "source": "charts",
         "label": "Multi window estimator panel",
-        "render": "line",
+        "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted multi window estimator panel. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "opening_gap_fragility",
@@ -250,7 +344,8 @@ OUTPUTS = [
         "label": "Opening gap fragility",
         "render": "line",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted opening gap fragility. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "range_correlation_matrix",
@@ -258,7 +353,8 @@ OUTPUTS = [
         "label": "Range correlation matrix",
         "render": "heatmap",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted range correlation matrix. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "vol_adjusted_momentum_panel",
@@ -266,15 +362,17 @@ OUTPUTS = [
         "label": "Vol adjusted momentum panel",
         "render": "line",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted vol adjusted momentum panel. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "estimator_efficiency",
         "source": "tables",
-        "label": "Estimator efficiency",
+        "label": "Observed estimator diagnostics",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted estimator efficiency. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "diebold_mariano_tournament",
@@ -282,7 +380,8 @@ OUTPUTS = [
         "label": "Diebold mariano tournament",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted diebold mariano tournament. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "cross_asset_ranked_panel",
@@ -290,7 +389,8 @@ OUTPUTS = [
         "label": "Cross asset ranked panel",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted cross asset ranked panel. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "multi_window_estimator_table",
@@ -298,7 +398,8 @@ OUTPUTS = [
         "label": "Multi window estimator table",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted multi window estimator table. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "opening_gap_fragility_detector",
@@ -306,7 +407,8 @@ OUTPUTS = [
         "label": "Opening gap fragility detector",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted opening gap fragility detector. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
     {
         "key": "vol_adjusted_momentum",
@@ -314,6 +416,7 @@ OUTPUTS = [
         "label": "Vol adjusted momentum",
         "render": "table",
         "primary": False,
-        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+        "help": "Actual observed or fitted vol adjusted momentum. No complete observations for this conditional output; consult data gaps and estimator metadata.",
+        "empty_reason": "No complete observations for this conditional output; consult data gaps and estimator metadata.",
     },
 ]

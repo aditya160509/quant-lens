@@ -3,6 +3,7 @@
 from __future__ import annotations
 import json
 import math
+from ..core.common import mapping_from_pairs
 
 BOUNDS = {
     "annualization": (1, 366),
@@ -17,7 +18,7 @@ BOUNDS = {
     "bootstrap_reps": (20, 2000),
     "irf_bootstrap_reps": (20, 2000),
     "midas_k": (2, 120),
-    "mc_paths": (100, 100000),
+    "mc_paths": (1000, 100000),
     "aum": (1, 1e13),
     "var_coverage": (0.5, 0.9999),
     "confidence_level": (0.5, 0.999),
@@ -27,11 +28,23 @@ BOUNDS = {
     "explicit_bps": (0, 10000),
     "market_impact_gamma": (0, 100),
     "nw_bandwidth": (0, 252),
+    "opening_gap_percentile_threshold": (0, 100),
+    "minimum_observed_volume": (0, 1e20),
     "seed": (0, 2147483647),
+    "figarch_d": (1e-6, 0.999999),
+    "aparch_delta": (0.050001, 3.999999),
+    "ew_delta": (1e-6, 0.999999),
+    "mcs_confidence": (0.5, 0.999),
+    "alert_threshold": (0, 100),
+    "fevd_horizon": (1, 252),
+    "dm_horizon": (1, 252),
 }
 OPTIONS = {
     "annualization": [252, 365],
     "states": [2, 3, 4],
+    "zscore_lookback": [252, 504, 1260, 2520, "full"],
+    "mcs_loss": ["qlike", "squared_error"],
+    "return_frequency": ["daily", "weekly"],
     "estimator": ["cc", "parkinson", "garman_klass", "rogers_satchell", "yang_zhang"],
     "range_correlation_method": ["pearson", "uncentered_cosine"],
     "var_weighting": ["ols", "ew"],
@@ -98,6 +111,8 @@ def field(key, default=None, kind=None, group="Model", options=None, help=None):
         "sjm_jump_penalty",
     }:
         kind = "number"
+    if key == "zscore_lookback":
+        kind = "choice"
     kind = kind or (
         "boolean"
         if isinstance(default, bool)
@@ -146,7 +161,12 @@ def coerce(value, definition):
         if key == "assets" or definition["default"] is not None:
             raise ValueError(f"{key} cannot be null")
         return None
-    if kind in {"integer", "number"}:
+    if kind == "choice":
+        if isinstance(value, str) and value.isdigit():
+            value = int(value)
+        if isinstance(value, bool):
+            raise ValueError(f"{key} must use a declared choice")
+    elif kind in {"integer", "number"}:
         if isinstance(value, bool):
             raise ValueError(f"{key} must be numeric, not boolean")
         number = float(value)
@@ -183,9 +203,11 @@ def coerce(value, definition):
     elif kind == "object":
         if isinstance(value, str):
             try:
-                value = json.loads(value)
+                value = json.loads(value, object_pairs_hook=mapping_from_pairs)
             except json.JSONDecodeError:
-                value = dict(part.strip().split(":", 1) for part in value.split(","))
+                value = mapping_from_pairs(
+                    part.strip().split(":", 1) for part in value.split(",")
+                )
         if not isinstance(value, dict):
             raise ValueError(f"{key} must be a mapping")
     elif kind in {"text", "date"} and not isinstance(value, str):

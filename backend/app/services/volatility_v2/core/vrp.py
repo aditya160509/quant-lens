@@ -13,6 +13,12 @@ BENCHMARKS = {"^GSPC": "vix"}
 
 
 def observed_iv(asset, index, upload_id=None):
+    if (asset in BENCHMARKS or upload_id) and (
+        pd.DatetimeIndex(index).dayofweek >= 5
+    ).any():
+        raise ValueError(
+            "Observed IV physical comparison currently supports Monday-Friday sessions and 252-session annualization only; continuous-session calendar mapping is unsupported"
+        )
     if upload_id:
         uploaded = load_implied_volatility(upload_id, asset)
         panel = uploaded.pivot(

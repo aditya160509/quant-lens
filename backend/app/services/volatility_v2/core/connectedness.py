@@ -249,20 +249,22 @@ def rolling_connectedness(
             + (failures[-1]["reason"] if failures else "No models")
         )
     timeline = pd.DataFrame(rows).set_index("date")
-    # Compare each reading only with its earlier observed history, up to 2520 rows.
+    # Window length is measured in underlying observed sessions, not sampled
+    # calculation rows. A weekly calculation must not accidentally span 50 years.
     values = timeline.connectedness.astype(float)
-    percentile = []
-    for i, value in enumerate(values):
-        past = values.iloc[max(0, i - 2520) : i].dropna()
-        percentile.append(
+    percentiles, counts = [], []
+    for date, value in values.items():
+        position = panel.index.get_loc(date)
+        lower = panel.index[max(0, position - 2520)]
+        past = values.loc[(values.index >= lower) & (values.index < date)].dropna()
+        percentiles.append(
             float(past.lt(value).mean() * 100)
             if len(past) and np.isfinite(value)
             else np.nan
         )
-    timeline["percentile"] = percentile
-    timeline["percentile_history_observations"] = [
-        int(values.iloc[max(0, i - 2520) : i].notna().sum()) for i in range(len(values))
-    ]
+        counts.append(len(past))
+    timeline["percentile"] = percentiles
+    timeline["percentile_history_observations"] = counts
     return {
         "timeline": timeline,
         "attribution": attribution,
