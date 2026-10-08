@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from collections import OrderedDict
+from copy import deepcopy
+from hashlib import sha256
+from threading import RLock
+
 import numpy as np
 import pandas as pd
 from arch import arch_model
@@ -49,7 +54,7 @@ def fit_dcc(z):
     return float(a), float(b), qbar, q
 
 
-def expanding_dcc(
+def _expanding_dcc(
     returns,
     min_train=252,
     refit_interval=63,
@@ -209,3 +214,43 @@ def expanding_dcc(
         if dynamics == "dcc_midas"
         else None,
     }
+
+
+_CACHE = OrderedDict()
+_CACHE_LOCK = RLock()
+
+
+def expanding_dcc(
+    returns,
+    min_train=252,
+    refit_interval=63,
+    annualization=252,
+    dynamics="dcc",
+    midas_k=36,
+):
+    """Bounded, content-addressed reuse across DCC, stress and allocation features."""
+    digest = sha256(
+        pd.util.hash_pandas_object(returns, index=True).values.tobytes()
+    ).hexdigest()
+    key = (
+        digest,
+        tuple(returns.columns),
+        min_train,
+        refit_interval,
+        annualization,
+        dynamics,
+        midas_k,
+    )
+    with _CACHE_LOCK:
+        if key in _CACHE:
+            _CACHE.move_to_end(key)
+            return deepcopy(_CACHE[key])
+    result = _expanding_dcc(
+        returns, min_train, refit_interval, annualization, dynamics, midas_k
+    )
+    with _CACHE_LOCK:
+        _CACHE[key] = deepcopy(result)
+        _CACHE.move_to_end(key)
+        while len(_CACHE) > 4:
+            _CACHE.popitem(last=False)
+    return result

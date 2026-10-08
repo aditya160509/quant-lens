@@ -16,12 +16,12 @@ import numpy as np
 
 try:
     from scipy.linalg import solve_triangular
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     solve_triangular = None
 
 try:  # pragma: no cover - exercised only when numba is installed.
     from numba import njit, prange
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     njit = None
     prange = range
 
@@ -301,7 +301,7 @@ def ols_hac_fast(x: np.ndarray, y: np.ndarray, bandwidth: int) -> tuple[np.ndarr
     try:
         q, r = np.linalg.qr(x)
         beta = solve_triangular(r, q.T @ y, check_finite=False) if solve_triangular else np.linalg.solve(r, q.T @ y)
-    except Exception:
+    except np.linalg.LinAlgError:
         beta = np.linalg.lstsq(x, y, rcond=None)[0]
     resid = y - x @ beta
     xtx = x.T @ x

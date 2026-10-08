@@ -15,7 +15,7 @@ import requests
 
 try:
     import yfinance as yf
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     yf = None
 
 
