@@ -7,6 +7,7 @@ from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
 ROOT = Path(__file__).resolve().parents[5]
 BACKEND_DATA = ROOT / "backend/data"
@@ -116,9 +117,13 @@ def _prices(version, symbols, end):
     for col in COLUMNS[2:]:
         data[col] = pd.to_numeric(data[col], errors="raise")
     prices = data[["Open", "High", "Low", "Close"]]
-    if data[["Ticker", "Date"]].isna().any().any() or not (prices.gt(0).all().all()):
+    if (
+        data[["Ticker", "Date"]].isna().any().any()
+        or not (prices.gt(0).all().all())
+        or not np.isfinite(prices).all().all()
+    ):
         raise ValueError(
-            "Prices require non-null identifiers, dates, and positive OHLC"
+            "Prices require non-null identifiers, dates, and finite positive OHLC"
         )
     if (data.High < prices.max(axis=1)).any() or (data.Low > prices.min(axis=1)).any():
         raise ValueError("OHLC range is inconsistent")

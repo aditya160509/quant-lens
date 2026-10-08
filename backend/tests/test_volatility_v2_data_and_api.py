@@ -187,3 +187,14 @@ def test_api_jobs_persist_real_results_and_detect_changed_upload(prices, tmp_pat
     path.write_bytes(path.read_bytes() + b'\n')
     with pytest.raises(ValueError, match='changed after'):
         api._execute(job['job_id'], '01', payload)
+
+
+def test_nonfinite_prices_and_null_explicit_universe_fail(prices):
+    from app.services.volatility_v2.registry import prepare_payload
+    dl, frame, path = prices
+    frame.loc[0, "High"] = float("inf")
+    frame.to_parquet(path)
+    with pytest.raises(ValueError, match="finite"):
+        dl.ohlcv_for_symbols(["SPY"])
+    with pytest.raises(ValueError, match="cannot be null"):
+        prepare_payload("01", {"assets": None})

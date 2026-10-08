@@ -206,3 +206,13 @@ Exact checks:
 - Browser: opened `/labs/volatility-v2/feature-01`, clicked the existing Run volatility stack button, observed actual populated estimator results and completed job. `volTab.dev.logs({levels:["error"],limit:10})` returned **[]**. Screenshot: `/tmp/volatility-v2-browser.png`.
 
 These are verified wiring/completion-gate checks, not a claim that every remaining estimator review item is closed. Per-estimator gaps, obsolete shared code cleanup and final full requirement audit remain open.
+
+## Verified prototype cleanup and finite-price guard (2026-10-08)
+
+- Removed 30 unused prototype functions from `core/analytics.py`: compute-mode helpers, obsolete MLE warm starts, prototype GARCH/VAR/HMM/SJM estimators, daily bipower jump proxy, stale-filled Realized-GARCH, incorrectly scaled Hodrick covariance, approximate frequency connectedness, fake synthetic options surface and obsolete bootstrap forecasts. The active library-backed feature cores replace those implementations.
+- Before removal: queried graph definitions/inbound references, checked `rg` references and parsed backend imports. Internal references were removed together. Actual `macro_frame` callers in VRP/crisis/analogs were checked and preserved. After removal: all nine lazy feature imports and all eight API route registrations pass. The remaining 642-line shared file contains active common/data/estimator/statistical primitives, not duplicate feature implementations.
+- Required OHLC prices now reject infinity as well as missing/nonpositive observations. Explicit null asset selections fail instead of triggering a default universe.
+- `ruff check backend/app/services/volatility_v2/core/analytics.py backend/app/services/volatility_v2/core/data_loader.py backend/tests/test_volatility_v2_data_and_api.py`: passed.
+- `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_*.py -q`: **52 passed**, one environment TestClient deprecation warning.
+
+Review status is still IN PROGRESS. In particular, the remaining per-estimator capability/parameter audit and final requirement-by-requirement closure are not implied by passing the wiring gates.
