@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { runVolatilityV2Feature } from "./api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Area,
@@ -242,7 +243,7 @@ function pickData(response, section) {
   if (section.source === "summary") return response.summary_cards || [];
   if (section.source === "alerts") return response.alerts || [];
   const bucket = response[section.source] || {};
-  const keys = [section.dataKey, ...(section.fallbackKeys || [])];
+  const keys = [section.dataKey];
   for (const key of keys) {
     if (bucket?.[key] != null) return bucket[key];
     if (response?.[key] != null) return response[key];
@@ -702,9 +703,8 @@ function PercentileArc({ value }) {
   );
 }
 
-function Spark({ value }) {
-  const pts = Array.from({ length: 18 }, (_, i) => `${(i / 17) * 100},${24 - (Math.sin(i * .7) * 5 + (value % 7))}`).join(" ");
-  return <svg viewBox="0 0 100 32"><polyline points={pts} /></svg>;
+function Spark() {
+  return null;
 }
 
 function EstimatorComparison({ data }) {
@@ -1315,6 +1315,7 @@ function ExportModal({ feature, form, sections, response, onClose }) {
 
 export function VolatilityV2Workbench({ featureId, sections, response = null, onRun }) {
   const feature = useMemo(() => getVolatilityV2Feature(featureId), [featureId]);
+  const execute = onRun || ((payload) => runVolatilityV2Feature(featureId, payload));
   const outputSections = useMemo(() => sections || VOLATILITY_OUTPUT_BOOKS[feature.id] || [], [sections, feature.id]);
   const storageKey = `atlas-vol-v2:f${feature.id}:workspace`;
   const [form, setForm] = useState(() => {
@@ -1400,18 +1401,11 @@ export function VolatilityV2Workbench({ featureId, sections, response = null, on
     return () => window.removeEventListener("keydown", onKey);
   }, [activeId]);
   async function run() {
-    if (!onRun) {
-      setError("Volatility V2 UI shell is ready. API run handler is intentionally not wired in this pass.");
-      setInputOpen(false);
-      pushToast("UI shell ready — API handler not wired yet", "warning");
-      return;
-    }
     setRunning(true);
-    setProgress(0.08);
+    setProgress(0);
     setError("");
-    const progressTimer = window.setInterval(() => setProgress((value) => Math.min(0.92, value + 0.08)), 280);
     try {
-      const result = await onRun(form);
+      const result = await execute(form);
       setData(result);
       setInputOpen(false);
       setProgress(1);
@@ -1420,29 +1414,21 @@ export function VolatilityV2Workbench({ featureId, sections, response = null, on
       setError(err?.message || "Volatility run failed");
       pushToast(err?.message || "Volatility run failed", "error");
     } finally {
-      window.clearInterval(progressTimer);
       setRunning(false);
       window.setTimeout(() => setProgress(0), 800);
     }
   }
   async function runComparison() {
-    if (!onRun) {
-      pushToast("Comparison needs the API run handler when wiring is enabled", "warning");
-      setSplitMode(true);
-      return;
-    }
     setRunning(true);
-    setProgress(0.08);
-    const progressTimer = window.setInterval(() => setProgress((value) => Math.min(0.92, value + 0.08)), 280);
+    setProgress(0);
     try {
-      setCompareData(await onRun(form));
+      setCompareData(await execute(form));
       setSplitMode(true);
       setProgress(1);
       pushToast("Comparison lane refreshed", "success");
     } catch (err) {
       pushToast(err?.message || "Comparison run failed", "error");
     } finally {
-      window.clearInterval(progressTimer);
       setRunning(false);
       window.setTimeout(() => setProgress(0), 800);
     }

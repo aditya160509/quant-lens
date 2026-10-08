@@ -77,6 +77,11 @@ def contract_for(feature_id):
             "id": feature.id,
             "title": feature.title,
             "status": feature.status,
+            "aliases": {
+                alias: key
+                for alias, key in ALIASES.items()
+                if key in {field["key"] for field in module.INPUTS}
+            },
             "inputs": module.INPUTS,
             "outputs": module.OUTPUTS,
         }

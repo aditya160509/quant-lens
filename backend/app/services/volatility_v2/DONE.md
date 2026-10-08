@@ -187,3 +187,22 @@ Verified commands:
 - Real Feature 04 SPY/QQQ, 650 sessions, 252 training observations, one restart: produced 315 synchronization dates; warning correctly reports selected HMM nonconvergence rather than claiming an unqualified fit.
 
 Still open: remaining per-estimator review gaps, obsolete shared code cleanup, frontend transport/fake deletion, all-feature runtime contract validation and final browser/Jest/lint/build gates. The review remains IN PROGRESS.
+
+## Frontend wiring and fake-data deletion checkpoint (2026-10-08)
+
+- Existing Run and Compare handlers now use the correct Volatility V2 background-job routes. `api.js` reads input aliases from the backend manifest and rejects unsupported calculation controls; no second frontend calculation contract was added. Errors remain errors.
+- Removed the simulated progress timer, sine-wave Spark, cross-output fallback reshaping and all nine fabricated landing-page chart datasets. Existing previews explicitly require a feature run. No CSS, layout or frontend redesign was performed; Claude still owns the manifest-driven frontend rebuild.
+- Graph and reference checks verified landing-preview callers before replacing their fake bodies. Existing component and navigation entry points remain intact.
+
+Exact checks:
+
+- `cd frontend && npx jest src/components/volatility-v2 --runInBand`: **3 passed**, one suite. Test files use `.test.ts` because this repository's Jest configuration does not discover `.test.js`.
+- `cd frontend && npx eslint src/components/volatility-v2/api.js src/components/volatility-v2/customPagePrimitives.jsx src/app/labs/volatility-v2/page.js`: passed.
+- `cd frontend && npm run lint`: exit 0; **0 errors, 18 existing warnings outside this module**.
+- `cd frontend && npm run build`: exit 0; compiled successfully, TypeScript passed, all 142 pages generated including all nine volatility feature routes.
+- `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_*.py -q`: **51 passed**.
+- `PYTHONPATH=backend backend/venv/bin/python -m uvicorn main:app --app-dir backend --host 127.0.0.1 --port 8000`: actual application started successfully under Python 3.11.14. The isolated test environment lacked uvicorn, so the repository's existing 3.11 runtime was used without adding a dependency.
+- `cd frontend && npm run start -- --port 3000`: built application started successfully.
+- Browser: opened `/labs/volatility-v2/feature-01`, clicked the existing Run volatility stack button, observed actual populated estimator results and completed job. `volTab.dev.logs({levels:["error"],limit:10})` returned **[]**. Screenshot: `/tmp/volatility-v2-browser.png`.
+
+These are verified wiring/completion-gate checks, not a claim that every remaining estimator review item is closed. Per-estimator gaps, obsolete shared code cleanup and final full requirement audit remain open.
