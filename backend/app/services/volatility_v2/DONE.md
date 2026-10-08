@@ -171,3 +171,19 @@ Contracts/API/jobs, remaining estimator controls, frontend transport/fake deleti
 - `ruff check backend/app/api/volatility_v2.py backend/tests/test_volatility_v2_data_and_api.py`: passed.
 
 The feature manifest and early validation are still being completed; these API additions do not close the review.
+
+## Authoritative contracts and remaining causal controls (2026-10-08)
+
+- All nine feature modules now declare `INPUTS` and `OUTPUTS`. The lazy registry serves isolated copies of those declarations, replacing the aspirational contract list. Declarations cover actual response keys, conditional outputs, selected model controls, portfolio/FX/volume settings and observed-data restrictions. Existing `core/contracts.py` is a compatibility facade for this single source.
+- Shared `features/inputs.py` validates types, finite numerical bounds, declared options, booleans, horizon lists and mappings. Unsupported controls fail explicitly. Compatibility aliases are normalized, conflicting aliases fail, and explicit primary assets must belong to the selected universe. Job enqueueing validates before launching expensive estimators.
+- Corrected fractional gross caps, cash rates, transaction costs and breach thresholds; they are numbers rather than integer-only controls. Null required controls and invalid/zero history lengths fail instead of silently activating defaults.
+- HAR conditional prediction confidence and stress IRF confidence now honor declared controls. HAR bands expose correctly named lower/upper bounds and the selected confidence; p05/p95 are populated only at 90 percent.
+- Feature 04 synchronization now uses each asset's past-only HMM high-volatility/crisis probabilities. The old trailing-volatility-percentile count is no longer mislabeled as regime synchronization. Incomplete dates remain missing and nonconverged fits are excluded.
+
+Verified commands:
+
+- `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_*.py -q`: **51 passed**, one environment TestClient deprecation warning. New feature tests compare declarations with every actual response output, validate coercion/rejections and check isolated manifest copies.
+- `ruff check backend/app/services/volatility_v2/features backend/app/services/volatility_v2/registry.py backend/app/services/volatility_v2/core/har.py backend/app/services/volatility_v2/core/contracts.py backend/app/api/volatility_v2.py backend/tests/test_volatility_v2_features.py`: passed.
+- Real Feature 04 SPY/QQQ, 650 sessions, 252 training observations, one restart: produced 315 synchronization dates; warning correctly reports selected HMM nonconvergence rather than claiming an unqualified fit.
+
+Still open: remaining per-estimator review gaps, obsolete shared code cleanup, frontend transport/fake deletion, all-feature runtime contract validation and final browser/Jest/lint/build gates. The review remains IN PROGRESS.

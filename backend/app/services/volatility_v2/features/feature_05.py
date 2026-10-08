@@ -1,6 +1,7 @@
 """Feature 05: observed IV, integrated conditional variance, and BTZ inference."""
 
 from __future__ import annotations
+from .inputs import field
 import numpy as np
 import pandas as pd
 from app.services.volatility_v2.core.analytics import (
@@ -324,3 +325,115 @@ def run(payload=None):
     if gaps:
         result["status"] = "warning"
     return result
+
+
+# Authoritative contract consumed by the lazy backend manifest.
+
+INPUTS = [
+    field("assets", ["^GSPC"], kind="symbols", group="Data"),
+    field("asset", None, kind="text", group="Data"),
+    field("lookback_days", 2520, kind="integer", group="Data"),
+    field("as_of_date", None, kind="date", group="Data"),
+    field("return_horizons", [21, 63, 126, 252], kind="list", group="Model"),
+    field("zscore_lookback", 1260, kind="integer", group="Model"),
+    field("display_mode", "raw", kind=None, group="Model"),
+    field("min_train", 252, kind=None, group="Model"),
+    field("refit_interval", 21, kind=None, group="Model"),
+    field("iv_upload_id", None, kind=None, group="Data"),
+    field("physical_model", "GARCH", kind=None, group="Model"),
+    field("physical_distribution", "Student-t", kind=None, group="Model"),
+    field("states", 4, kind=None, group="Model"),
+    field("regime_refit_interval", 126, kind=None, group="Model"),
+    field("hmm_restarts", 3, kind=None, group="Model"),
+]
+
+OUTPUTS = [
+    {
+        "key": "vrp_time_series",
+        "source": "charts",
+        "label": "Vrp time series",
+        "render": "line",
+        "primary": True,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "vrp_zscore_panel",
+        "source": "charts",
+        "label": "Vrp zscore panel",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "vrp_term_structure",
+        "source": "charts",
+        "label": "Vrp term structure",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "vrp_component_attribution",
+        "source": "charts",
+        "label": "Vrp component attribution",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "btz_expanding_forecasts",
+        "source": "charts",
+        "label": "Btz expanding forecasts",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "cross_asset_vrp_comparison",
+        "source": "tables",
+        "label": "Cross asset vrp comparison",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "return_predictability_regression",
+        "source": "tables",
+        "label": "Return predictability regression",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "regime_conditional_btz",
+        "source": "tables",
+        "label": "Regime conditional btz",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "vrp_zscore_lookback_comparison",
+        "source": "tables",
+        "label": "Vrp zscore lookback comparison",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "vrp_mean_reversion_speed",
+        "source": "tables",
+        "label": "Vrp mean reversion speed",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "data_gaps",
+        "source": "tables",
+        "label": "Data gaps",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+]

@@ -1,6 +1,7 @@
 """Feature 03: genuine expanding-window HAR family forecasts."""
 
 from __future__ import annotations
+from .inputs import field
 import numpy as np
 import pandas as pd
 from app.services.volatility_v2.core.analytics import (
@@ -78,6 +79,7 @@ def run(payload=None):
                 int(payload.get("refit_interval", 21)),
                 log_target=name == "LHAR",
                 bandwidth=int(payload.get("nw_bandwidth", horizon)),
+                confidence=float(payload.get("confidence_level", 0.9)),
             )
             if not rows.forecast.notna().any():
                 raise ValueError(
@@ -133,7 +135,7 @@ def run(payload=None):
             "assets": assets,
             "estimator": estimator,
             "estimation": "statsmodels OLS/HAC with expanding training and matured labels; held-out forecasts for every selected horizon",
-            "confidence_bands": "90% conditional OLS prediction intervals, transformed for LHAR; exclude parameter selection uncertainty",
+            "confidence_bands": f"{float(payload.get('confidence_level', 0.9)):.0%} conditional OLS prediction intervals, transformed for LHAR; exclude parameter selection uncertainty",
             "removed_outputs": {
                 "HAR-X": "No macro release vintages or observed asset-specific implied volatility",
                 "HAR-J/HAR-J-Signed": "Daily OHLC cannot identify intraday bipower jump variation",
@@ -143,3 +145,95 @@ def run(payload=None):
             "historical_membership": "Explicit fixed constituent universe; no claim of historical index membership",
         },
     )
+
+
+# Authoritative contract consumed by the lazy backend manifest.
+
+INPUTS = [
+    field("confidence_level", 0.9),
+    field("assets", ["SPY", "QQQ", "IWM", "EFA", "EEM"], kind="symbols", group="Data"),
+    field("asset", None, kind="text", group="Data"),
+    field("lookback_days", 2520, kind="integer", group="Data"),
+    field("as_of_date", None, kind="date", group="Data"),
+    field("horizons", [1, 5, 10, 21, 42, 63], kind="list", group="Model"),
+    field("estimator", "yang_zhang", kind=None, group="Model"),
+    field(
+        "models",
+        None,
+        kind="list",
+        group="Model",
+        options=["HAR", "LHAR", "HAR-Leverage", "ACSV-HAR"],
+    ),
+    field("rolling_window", 21, kind="integer", group="Model"),
+    field("min_train", 252, kind=None, group="Model"),
+    field("refit_interval", 21, kind=None, group="Model"),
+    field("nw_bandwidth", None, kind="integer", group="Model"),
+    field("bootstrap_reps", 200, kind=None, group="Model"),
+]
+
+OUTPUTS = [
+    {
+        "key": "multi_horizon_forecast_chart",
+        "source": "charts",
+        "label": "Multi horizon forecast chart",
+        "render": "line",
+        "primary": True,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "walk_forward_forecast_chart",
+        "source": "charts",
+        "label": "Walk forward forecast chart",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "forecast_confidence_bands",
+        "source": "charts",
+        "label": "Forecast confidence bands",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "acsv_predictive_contribution",
+        "source": "charts",
+        "label": "Acsv predictive contribution",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "har_parameter_table",
+        "source": "tables",
+        "label": "Har parameter table",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "forecast_accuracy_table",
+        "source": "tables",
+        "label": "Forecast accuracy table",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "model_confidence_set",
+        "source": "tables",
+        "label": "Model confidence set",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "walk_forward_accuracy",
+        "source": "tables",
+        "label": "Walk forward accuracy",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+]

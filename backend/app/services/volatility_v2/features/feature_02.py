@@ -1,6 +1,7 @@
 """Feature 02: arch GARCH family MLE with true held-out one-step forecasts."""
 
 from __future__ import annotations
+from .inputs import field
 import numpy as np
 from scipy import stats
 from app.services.volatility_v2.core.analytics import (
@@ -147,3 +148,96 @@ def run(payload=None):
     if failed:
         result["status"] = "warning"
     return result
+
+
+# Authoritative contract consumed by the lazy backend manifest.
+
+INPUTS = [
+    field("assets", ["SPY"], kind="symbols", group="Data"),
+    field("asset", None, kind="text", group="Data"),
+    field("lookback_days", 2520, kind="integer", group="Data"),
+    field("as_of_date", None, kind="date", group="Data"),
+    field("var_coverage", 0.99, kind=None, group="Model"),
+    field("models", None, kind="list", group="Model"),
+    field("distributions", None, kind="list", group="Model"),
+    field("horizons", [1, 5, 10, 21, 42, 63, 126, 252], kind="list", group="Model"),
+    field("simulations", 1000, kind=None, group="Model"),
+    field("min_train", 252, kind=None, group="Model"),
+    field("refit_interval", 63, kind=None, group="Model"),
+    field("evaluation_days", 252, kind=None, group="Model"),
+]
+
+OUTPUTS = [
+    {
+        "key": "garch_term_structure",
+        "source": "charts",
+        "label": "Garch term structure",
+        "render": "line",
+        "primary": True,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "pit_test",
+        "source": "charts",
+        "label": "Pit test",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "conditional_var_series",
+        "source": "charts",
+        "label": "Conditional var series",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "long_memory_parameter_series",
+        "source": "charts",
+        "label": "Long memory parameter series",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "model_comparison_scoreboard",
+        "source": "tables",
+        "label": "Model comparison scoreboard",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "diebold_mariano_pairwise_table",
+        "source": "tables",
+        "label": "Diebold mariano pairwise table",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "pit_diagnostics",
+        "source": "tables",
+        "label": "Pit diagnostics",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "var_backtests",
+        "source": "tables",
+        "label": "Var backtests",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "aparch_delta_benchmark",
+        "source": "tables",
+        "label": "Aparch delta benchmark",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+]

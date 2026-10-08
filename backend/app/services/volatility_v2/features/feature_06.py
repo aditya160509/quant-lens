@@ -1,6 +1,7 @@
 """Feature 06: daily generalized volatility connectedness and frequency shares."""
 
 from __future__ import annotations
+from .inputs import field
 import numpy as np
 import pandas as pd
 from app.services.volatility_v2.core.analytics import (
@@ -183,3 +184,137 @@ def run(payload=None):
     if gaps or not model.stable or cor.get("converged") is False:
         out["status"] = "warning"
     return out
+
+
+# Authoritative contract consumed by the lazy backend manifest.
+
+INPUTS = [
+    field("assets", ["SPY", "QQQ", "IWM", "TLT", "GLD"], kind="symbols", group="Data"),
+    field("asset", None, kind="text", group="Data"),
+    field("lookback_days", 2520, kind="integer", group="Data"),
+    field("as_of_date", None, kind="date", group="Data"),
+    field("estimator", "yang_zhang", kind=None, group="Model"),
+    field("var_weighting", "ols", kind=None, group="Model"),
+    field("irf_bootstrap_reps", 100, kind=None, group="Model"),
+    field("cor_horizon", 21, kind=None, group="Model"),
+    field("cor_quantile", 0.95, kind=None, group="Model"),
+    field("alert_threshold", 75, kind=None, group="Model"),
+    field("estimator_window", 21, kind=None, group="Model"),
+    field("annualization", 252, kind=None, group="Model"),
+    field("rolling_window", 252, kind="integer", group="Model"),
+    field("rolling_interval", 1, kind=None, group="Model"),
+    field("fevd_horizon", 10, kind=None, group="Model"),
+    field("include_network_history", False, kind=None, group="Model"),
+    field("max_lag", 5, kind=None, group="Model"),
+    field("lag_order", 1, kind=None, group="Model"),
+    field("ew_delta", 0.99, kind=None, group="Model"),
+    field("confidence_level", 0.9, kind=None, group="Model"),
+    field("edge_threshold", 0.05, kind=None, group="Model"),
+]
+
+OUTPUTS = [
+    {
+        "key": "connectedness_index",
+        "source": "charts",
+        "label": "Connectedness index",
+        "render": "line",
+        "primary": True,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "frequency_decomposed_connectedness",
+        "source": "charts",
+        "label": "Frequency decomposed connectedness",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "connectedness_at_risk",
+        "source": "charts",
+        "label": "Connectedness at risk",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "spillover_network_graph",
+        "source": "charts",
+        "label": "Spillover network graph",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "network_history",
+        "source": "charts",
+        "label": "Network history",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "pairwise_fevd_heatmap",
+        "source": "charts",
+        "label": "Pairwise fevd heatmap",
+        "render": "heatmap",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "rolling_to_from_decomposition",
+        "source": "charts",
+        "label": "Rolling to from decomposition",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "var_impulse_response",
+        "source": "charts",
+        "label": "Var impulse response",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "var_impulse_response_bands",
+        "source": "charts",
+        "label": "Var impulse response bands",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "net_spillover_ranking",
+        "source": "tables",
+        "label": "Net spillover ranking",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "connectedness_at_risk",
+        "source": "tables",
+        "label": "Connectedness at risk",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "connectedness_regime_alert",
+        "source": "tables",
+        "label": "Connectedness regime alert",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "estimation_failures",
+        "source": "tables",
+        "label": "Estimation failures",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+]

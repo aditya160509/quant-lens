@@ -248,7 +248,11 @@ def response(feature_id: str, summary_cards: list[dict], charts: dict, tables: d
 
 def load_assets(payload: dict[str, Any] | None, default: Iterable[str] = DEFAULT_ASSETS[:1]) -> tuple[list[str], pd.DataFrame]:
     assets = parse_assets(payload, default=default)
-    lookback_days = int(number_like((payload or {}).get("lookback_days")) or number_like((payload or {}).get("window_days")) or 2520)
+    raw_lookback = (payload or {}).get("lookback_days", 2520)
+    lookback = number_like(raw_lookback)
+    if lookback is None or lookback != int(lookback) or lookback < 2:
+        raise ValueError("lookback_days must be an integer >= 2")
+    lookback_days = int(lookback)
     df = ohlcv_for_symbols(assets, lookback_days=lookback_days)
     assets = resolve_symbols(assets)
     return assets, _clean_ohlcv(df)

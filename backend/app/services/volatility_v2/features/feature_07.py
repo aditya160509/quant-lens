@@ -1,6 +1,7 @@
 """Feature 07: causal multivariate risk with observed USD returns."""
 
 from __future__ import annotations
+from .inputs import field
 
 import numpy as np
 from app.services.volatility_v2.core.analytics import (
@@ -218,3 +219,208 @@ def run(payload=None):
     if warnings:
         result["status"] = "warning"
     return result
+
+
+# Authoritative contract consumed by the lazy backend manifest.
+
+INPUTS = [
+    field(
+        "assets",
+        ["SPY", "QQQ", "IWM", "EFA", "EEM", "TLT", "GLD", "USO"],
+        kind="symbols",
+        group="Data",
+    ),
+    field("asset", None, kind="text", group="Data"),
+    field("lookback_days", 2520, kind="integer", group="Data"),
+    field("as_of_date", None, kind="date", group="Data"),
+    field("dynamics", "dcc", kind=None, group="Model"),
+    field("factor_pair", None, kind="list", group="Model"),
+    field("annualization", 252, kind=None, group="Model"),
+    field("include_midas", True, kind=None, group="Model"),
+    field("min_train", 252, kind=None, group="Model"),
+    field("refit_interval", 63, kind=None, group="Model"),
+    field("midas_k", 36, kind=None, group="Model"),
+    field("half_life", 63, kind=None, group="Model"),
+    field("quote_currencies", None, kind="object", group="Data"),
+    field("weights", None, kind="object", group="Portfolio"),
+    field("states", 4, kind="integer", group="Model"),
+    field("regime_min_train", 252, kind="integer", group="Model"),
+    field("regime_refit_interval", 126, kind="integer", group="Model"),
+    field("hmm_restarts", 3, kind="integer", group="Model"),
+    field("crisis_vix_threshold", 30.0),
+    field("crisis_percentile_window", 2520),
+    field("crisis_percentile_min_history", 252),
+    field("regime_asset"),
+    field("base_currency", "USD", options=["USD"]),
+]
+
+OUTPUTS = [
+    {
+        "key": "correlation_heatmap",
+        "source": "charts",
+        "label": "Correlation heatmap",
+        "render": "heatmap",
+        "primary": True,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "correlation_matrices",
+        "source": "charts",
+        "label": "Correlation matrices",
+        "render": "heatmap",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "dcc_midas_long_run_correlation",
+        "source": "charts",
+        "label": "Dcc midas long run correlation",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "normal_vs_crisis_correlation",
+        "source": "charts",
+        "label": "Normal vs crisis correlation",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "probability_weighted_crisis_correlation",
+        "source": "charts",
+        "label": "Probability weighted crisis correlation",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "dcc_time_series",
+        "source": "charts",
+        "label": "Dcc time series",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "dcc_midas_time_series",
+        "source": "charts",
+        "label": "Dcc midas time series",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "condition_number_history",
+        "source": "charts",
+        "label": "Condition number history",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "eigenvalue_decomposition",
+        "source": "charts",
+        "label": "Eigenvalue decomposition",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "pairwise_covariance_contribution",
+        "source": "charts",
+        "label": "Pairwise covariance contribution",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "minimum_torsion_loadings",
+        "source": "charts",
+        "label": "Minimum torsion loadings",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "minimum_torsion_factor_covariance",
+        "source": "charts",
+        "label": "Minimum torsion factor covariance",
+        "render": "line",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "sample_ewma_lw_dcc_comparison",
+        "source": "tables",
+        "label": "Sample ewma lw dcc comparison",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "portfolio_risk_attribution",
+        "source": "tables",
+        "label": "Portfolio risk attribution",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "minimum_torsion_risk_attribution",
+        "source": "tables",
+        "label": "Minimum torsion risk attribution",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "fisher_z_crisis_amplification",
+        "source": "tables",
+        "label": "Fisher z crisis amplification",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "dcc_parameters",
+        "source": "tables",
+        "label": "Dcc parameters",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "dcc_midas_parameters",
+        "source": "tables",
+        "label": "Dcc midas parameters",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "minimum_variance_portfolio",
+        "source": "tables",
+        "label": "Minimum variance portfolio",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "portfolio_comparison",
+        "source": "tables",
+        "label": "Portfolio comparison",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+    {
+        "key": "diversification_ratio",
+        "source": "tables",
+        "label": "Diversification ratio",
+        "render": "table",
+        "primary": False,
+        "help": "Observed or fitted output; empty conditional outputs have an explanation in response metadata.",
+    },
+]

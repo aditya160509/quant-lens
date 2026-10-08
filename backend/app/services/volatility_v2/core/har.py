@@ -7,14 +7,21 @@ import statsmodels.api as sm
 
 
 def expanding_forecasts(
-    x, y, horizon=1, min_train=120, refit_interval=21, log_target=False, bandwidth=None
+    x,
+    y,
+    horizon=1,
+    min_train=120,
+    refit_interval=21,
+    log_target=False,
+    bandwidth=None,
+    confidence=0.90,
 ):
     """At close t, use only origins s for which s+horizon <= t.
 
     Forecasts between refits keep the last fitted coefficients. Missing predictors
     are omitted explicitly, never forward/back filled or replaced by zero.
     """
-    if horizon < 1 or min_train < 30 or refit_interval < 1:
+    if horizon < 1 or min_train < 30 or refit_interval < 1 or not 0.5 < confidence < 1:
         raise ValueError("Invalid expanding forecast controls")
     x = x.astype(float).replace([np.inf, -np.inf], np.nan)
     y = y.astype(float).replace([np.inf, -np.inf], np.nan)
@@ -47,7 +54,11 @@ def expanding_forecasts(
             # Most recent observed response is from the matured origin plus h.
             train_end = x.index[x.index.get_loc(train.index[-1]) + horizon]
         design = np.r_[1.0, x.iloc[t].to_numpy()]
-        pred = fit.get_prediction(design[None, :]).summary_frame(alpha=0.10).iloc[0]
+        pred = (
+            fit.get_prediction(design[None, :])
+            .summary_frame(alpha=1 - confidence)
+            .iloc[0]
+        )
         correction = float(np.var(fit.resid, ddof=1) / 2) if log_target else 0.0
         value = (
             float(np.exp(pred["mean"] + correction))
@@ -68,8 +79,11 @@ def expanding_forecasts(
             "date": x.index,
             "forecast": predictions.to_numpy(),
             "actual": y.to_numpy(),
-            "p05": lower.to_numpy(),
-            "p95": upper.to_numpy(),
+            "lower": lower.to_numpy(),
+            "upper": upper.to_numpy(),
+            "confidence": confidence,
+            "p05": lower.to_numpy() if confidence == 0.90 else np.nan,
+            "p95": upper.to_numpy() if confidence == 0.90 else np.nan,
             "training_observed_through": train_ends.to_numpy(),
             "train_size": sizes.to_numpy(),
         }
