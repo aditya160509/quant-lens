@@ -1,5 +1,13 @@
 # Portfolio V2 Review: Spec vs Implementation vs Frontend
 
+## Backend rebuild status, 2026-10-08
+
+Portfolio V2 backend review work is completed and verified in this checkout. B1–B4 and A1–A9 backend failures are corrected: strict symbols, honest optimizer/frontier failures, signed exposure/NAV and manifest contracts, executed-turnover costs, true walk-forward estimation, preserved missing observations, compound monthly returns, actual trial multiplicity, historical sector restrictions, versioned caches, and background jobs. Per-feature proxies are replaced by measured/library-backed calculations or removed with explicit missing-data disclosures. The monolithic analytics implementation is removed; backend tests occupy the four framework files. A10 documentation is reconciled in [Portfolio V2 DONE.md](../../backend/app/services/portfolio_v2/DONE.md). That document records architecture, old-file fate, every feature's estimators, limitations and exact verification commands.
+
+Verification: 84 targeted backend tests pass with local real-data integration enabled, including all 13 feature runners; backend Ruff and mounted import/route checks pass. Historical membership/delisting coverage, calibration-only datasets, actual external peer/strategy inputs, and other data-dependent claims remain explicit limitations, not proxies. Frontend work, browser/Jest/build checks, other V2 consolidation, and V1 deletion are excluded by the user's current scope. The original review below is preserved as audit history, not the current completion checklist.
+
+Additional findings fixed: covariance eigenvalues were accidentally squared in PSD reconstruction; nonlinear tangency optimization could report a suboptimal solution with redundant gross/net constraints; the archived macro slope had no matching daily observations; and correlation-excluded fixed-zero strategies destabilized the allocation solve. Independent golden numbers and live-data checks cover the replacements.
+
 Date: 2026-09-29
 Scope: `backend/app/services/portfolio_v2/` (spec: `docs/portfolio features.md`, code: `core/analytics.py` 1,786 lines, `core/data_loader.py` 375 lines, `core/performance.py` 470 lines, 13 feature files), `backend/app/api/portfolio_v2.py`, `backend/app/services/portfolio.py` + `portfolio_var.py` (legacy, for duplication check), `frontend/src/app/labs/portfolio-v2/`, `frontend/src/components/portfolio-v2/`.
 
