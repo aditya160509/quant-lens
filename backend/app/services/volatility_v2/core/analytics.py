@@ -687,43 +687,6 @@ def fit_hmm_regimes(
     return out
 
 
-def dcc_garch_mle(ret: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float]]:
-    """Two-stage DCC-GARCH MLE.
-
-    Stage 1 fits univariate GARCH(1,1)-Student-t to each asset using `arch`.
-    Stage 2 maximizes the Engle DCC correlation likelihood over a,b.
-    """
-    clean = ret.dropna(axis=1, thresh=max(260, int(len(ret) * 0.6))).dropna()
-    if clean.shape[1] < 2 or len(clean) < 260:
-        raise ValueError("DCC-GARCH requires at least two assets and 260 aligned observations")
-    std = []
-    cond_vars = {}
-    for col in clean.columns:
-        _, var, z = garch_fit_for_series(clean[col], "GARCH", "Student-t")
-        std.append(z.reindex(clean.index).fillna(0.0).rename(col))
-        cond_vars[col] = var.reindex(clean.index).ffill().bfill()
-    zmat = pd.concat(std, axis=1).dropna()
-    qbar = np.cov(zmat.to_numpy(dtype=float), rowvar=False)
-
-    def neg_ll(params: np.ndarray) -> float:
-        a, b = params
-        if a < 0 or b < 0 or a + b >= 0.999:
-            return 1e10
-        return float(dcc_neg_ll_jit(zmat.to_numpy(dtype=float), qbar, float(a), float(b)))
-
-    state_key = _mle_key("dcc", clean)
-    x0 = _MLE_STATE_STORE.get(state_key, np.array([0.03, 0.94], dtype=float))
-    opt = minimize(neg_ll, x0, method="L-BFGS-B", bounds=[(1e-5, 0.35), (1e-5, 0.984)], options={"maxiter": 150, "ftol": 1e-6, "gtol": 1e-5})
-    a, b = opt.x if opt.success else np.array([0.03, 0.94])
-    if opt.success:
-        _remember_mle(state_key, opt.x)
-    z = zmat.to_numpy(dtype=float)
-    corr_3d = dcc_correlation_path(z, qbar, float(a), float(b))
-    latest_corr = pd.DataFrame(corr_3d[-1], index=zmat.columns, columns=zmat.columns)
-    latest_vol = np.sqrt(pd.DataFrame(cond_vars).reindex(zmat.index).iloc[-1].to_numpy(dtype=float) * 252)
-    latest_cov = pd.DataFrame(latest_corr.to_numpy() * np.outer(latest_vol, latest_vol), index=zmat.columns, columns=zmat.columns)
-    params = {"dcc_alpha": float(a), "dcc_beta": float(b), "dcc_loglik": float(-opt.fun), "dcc_converged": bool(opt.success)}
-    return latest_cov, latest_corr, params
 
 
 def ols_table(x: pd.DataFrame, y: pd.Series, bandwidth: int | None = None) -> tuple[np.ndarray, np.ndarray, float, np.ndarray]:
@@ -1087,48 +1050,10 @@ def connectedness_at_risk(conn_df: pd.DataFrame, macro: pd.DataFrame, current: f
 
 
 
-def two_step_rebalance(weights: np.ndarray, cov: np.ndarray, target_vol: float, gross_cap: float = 3.0) -> tuple[np.ndarray, np.ndarray]:
-    sigma = math.sqrt(max(float(weights @ cov @ weights), 1e-12))
-    step1 = weights * min(target_vol / max(sigma, 1e-12), gross_cap / max(np.abs(weights).sum(), 1e-12))
-    try:
-        c_fac = cho_factor(cov + np.eye(len(cov)) * 1e-10, check_finite=False)
-        inv = cho_solve(c_fac, np.eye(len(cov)), check_finite=False)
-        ones = np.ones(len(weights))
-        omega_w = cov @ step1
-        A = np.array([[float(omega_w @ omega_w), float(omega_w @ inv @ ones / 2)], [float(ones @ omega_w), float(ones @ inv @ ones / 2)]])
-        b = np.array([float(target_vol**2 - step1 @ cov @ step1) / 2, 0.0])
-        lam = scipy_solve(A, b, check_finite=False, assume_a="gen")
-        step2 = step1 - lam[0] * step1 - (lam[1] / 2) * (inv @ ones)
-    except Exception:
-        step2 = step1.copy()
-    gross = np.abs(step2).sum()
-    if gross > gross_cap:
-        step2 *= gross_cap / gross
-    return step1, step2
 
 
-def almgren_chriss_costs(assets: list[str], old_w: np.ndarray, new_w: np.ndarray, ohlcv: pd.DataFrame, cov: pd.DataFrame, aum: float = 1e8, gamma: float = 0.1, explicit_bps: float = 5.0) -> list[dict[str, Any]]:
-    dv = ohlcv.assign(dollar_volume=ohlcv["Close"] * ohlcv["Volume"]).sort_values("Date")
-    adv = dv.groupby("Ticker")["dollar_volume"].apply(lambda s: float(s.tail(63).mean()))
-    daily_vol = np.sqrt(np.maximum(np.diag(cov.reindex(index=assets, columns=assets).to_numpy(dtype=float)), 0) / 252)
-    dw = np.abs(new_w - old_w)
-    rows = []
-    total = 0.0
-    for i, a in enumerate(assets):
-        trade = float(dw[i] * aum)
-        mi = gamma * daily_vol[i] * trade / max(float(adv.get(a, 1e6)), 1e-12)
-        cost_bps = explicit_bps + mi * 10000
-        total += cost_bps * dw[i]
-        rows.append({"asset": a, "trade_size_usd": trade, "market_impact_bps": float(mi * 10000), "explicit_bps": explicit_bps, "total_cost_bps": float(cost_bps)})
-    rows.append({"asset": "TOTAL", "total_cost_bps": float(total)})
-    return clean_json(rows)
 
 
-def kelly_vol_target(expected_return: float, portfolio_vol: float, fixed_target: float) -> dict[str, Any]:
-    if portfolio_vol <= 0:
-        return {"kelly_optimal_vol_target": None, "error": "zero portfolio vol"}
-    val = float(np.clip(expected_return / max(portfolio_vol, 1e-12), 0.02, 0.40))
-    return {"kelly_optimal_vol_target": val, "btz_implied_return": expected_return, "dcc_portfolio_vol": portfolio_vol, "vs_fixed_target": val - fixed_target, "signal": "risk-return headroom exhausted" if val < fixed_target * 0.8 else "target justified"}
 
 
 def synthetic_vol_surface(ret: pd.Series) -> list[dict[str, Any]]:

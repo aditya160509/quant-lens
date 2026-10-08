@@ -125,3 +125,21 @@ Feature 08 stress step:
 - `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -c 'from app.services.volatility_v2.registry import run_feature; r=run_feature("08", {"assets":["SPY","QQQ","TLT"],"lookback_days":1000,"scenario":"liberation_day_2025","min_train":252,"refit_interval":126,"irf_bootstrap_reps":20,"irf_window":252,"var_max_lag":2,"mc_paths":5000}); print({"status":r["status"],"replay_days":len(r["charts"]["historical_stress_path"]),"analogs":len(r["tables"]["historical_analog_comparison"]),"analog_bands":len(r["charts"]["analog_volatility_bands"]),"adversarial_distance_squared":r["tables"]["adversarial_scenario"][0]["distance_squared_from_query"],"irf_bands":len(r["charts"]["contagion_impulse_response"]),"warnings":r["meta"]["warnings"]})'`: **ok**, 42 replay sessions, 10 analogs, 90 observed analog volatility bands, adversarial distance squared 4, 12 IRF bands, no warnings.
 
 Library references: [statsmodels Clayton copula](https://www.statsmodels.org/stable/generated/statsmodels.distributions.copula.api.ClaytonCopula.html), [sklearn GraphicalLasso](https://scikit-learn.org/stable/modules/generated/sklearn.covariance.GraphicalLasso.html).
+
+## Feature 09 allocation and execution step (2026-10-08)
+
+- Replaced the budget wrapper with dedicated `allocation.py`, `budget_forecasts.py`, `execution.py` and `liquidity.py`. Fixed, causal probability-weighted regime and actual BTZ Kelly targets use forecast information available before each replay return. EWMA, expanding GARCH with declared rolling correlation, and genuine DCC are distinct selectable sources.
+- Risk budgeting solves the convex log-barrier problem. The second step preserves net exposure and achieved variance while minimizing Euler-budget deviation. The review's original minimum-adjustment quadratic objective had zero adjustment as a feasible optimum and could not align budgets; this corrected objective is documented in the response. Higher-dimensional local optimization does not claim a global optimum.
+- Replay maintains drifting holdings and solves self-financing transaction costs against post-cost NAV. One-way turnover includes cash; traded asset notional is separate. Temporary-impact comparisons require observed USD ADV and declared volume units. The one-day linear Almgren–Chriss temporary-impact coefficient is a user assumption, not an estimated execution model. No permanent impact or short borrow fee is claimed.
+- Kelly uses observed matching IV, integrated physical variance, and expanding BTZ return predictions trained only on matured labels. Negative estimated edge yields cash. Matching IV, 252-session annualization and USD denomination are required for this leg; unsupported legs report why they are unavailable.
+- Removed `dcc_garch_mle`, `two_step_rebalance`, `almgren_chriss_costs` and `kelly_vol_target` from analytics after graph and repository reference checks confirmed no remaining callers. All nine feature imports and registered API routes passed afterward.
+
+Verified commands:
+
+- `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_math.py -q`: **36 passed**.
+- `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_*.py -q`: **44 passed**.
+- `ruff check backend/app/services/volatility_v2/core/allocation.py backend/app/services/volatility_v2/core/budget_forecasts.py backend/app/services/volatility_v2/core/execution.py backend/app/services/volatility_v2/core/liquidity.py backend/app/services/volatility_v2/features/feature_09.py backend/tests/test_volatility_v2_math.py`: passed.
+- Real Feature 09 SPY/QQQ/TLT, 700 sessions, 252 training observations, 126 refit interval, one HMM restart: **ok**, 364 common replay dates, both cost models, no warnings.
+- Real Feature 09 `^GSPC`, EWMA, Kelly, 650 sessions, 120 BTZ training observations, 63 refit interval: **warning** solely because index ADV is unavailable; Kelly was produced from observed IV with 389 replay dates and target 0.35451755355165415.
+
+The complete review is still in progress: Feature 01, remaining estimator controls, contracts/jobs, frontend wiring/fake removal and final verification remain.

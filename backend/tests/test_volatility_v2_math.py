@@ -727,3 +727,226 @@ def test_stress_irfs_use_a_source_residual_standard_deviation():
         model.ma(1)[1, 0, 1] * np.sqrt(model.covariance[1, 1])
     )
     assert row["shock_scale"] == "one_residual_sd"
+
+
+def test_convex_risk_budgets_and_two_step_alignment_conserve_constraints():
+    from app.services.volatility_v2.core.allocation import (
+        risk_budget_weights,
+        two_step_alignment,
+        fractions,
+    )
+
+    covariance = np.array(
+        [[0.04, 0.01, 0.004], [0.01, 0.09, 0.006], [0.004, 0.006, 0.025]]
+    )
+    weights = np.array([0.65, 0.25, 0.1])
+    budgets = np.array([0.3, 0.4, 0.3])
+    proposed, meta = risk_budget_weights(
+        covariance, weights, budgets, target=0.12, gross_cap=3
+    )
+    np.testing.assert_allclose(fractions(proposed, covariance), budgets, atol=1e-6)
+    assert np.sqrt(proposed @ covariance @ proposed) == pytest.approx(0.12)
+    scaled, aligned, details = two_step_alignment(
+        covariance, weights, budgets, target=0.12, gross_cap=3
+    )
+    assert aligned.sum() == pytest.approx(scaled.sum(), abs=1e-8)
+    assert aligned @ covariance @ aligned == pytest.approx(
+        scaled @ covariance @ scaled, rel=1e-6
+    )
+    assert np.abs(aligned).sum() <= 3 + 1e-8
+    assert (
+        np.sum((fractions(aligned, covariance) - budgets) ** 2)
+        <= np.sum((fractions(scaled, covariance) - budgets) ** 2) + 1e-8
+    )
+    signed, _ = risk_budget_weights(
+        covariance, np.array([0.65, -0.25, 0.1]), budgets, target=0.12
+    )
+    assert signed[1] < 0
+    np.testing.assert_allclose(fractions(signed, covariance), budgets, atol=1e-6)
+
+
+def test_execution_costs_are_self_financing_and_use_actual_trades():
+    from app.services.volatility_v2.core.execution import trade_cost
+
+    old = np.array([0.6, 0.4])
+    desired = np.array([0.3, 0.2])
+    result = trade_cost(old, desired, explicit_bps=10, aum=1e6)
+    delta = (1 - result["cost_fraction"]) * desired - old
+    assert result["cost_fraction"] == pytest.approx(
+        np.abs(delta).sum() * 10 / 10000, abs=1e-12
+    )
+    np.testing.assert_allclose(result["trade_size_usd"], np.abs(delta) * 1e6)
+    assert result["one_way_turnover_including_cash"] == pytest.approx(
+        (np.abs(delta).sum() + abs(delta.sum())) / 2
+    )
+    assert trade_cost(old, old, explicit_bps=10)["cost_fraction"] == 0
+    impact = trade_cost(
+        old,
+        desired,
+        explicit_bps=10,
+        aum=1e6,
+        impact_gamma=0.1,
+        daily_vol=np.array([0.01, 0.02]),
+        adv=np.array([1e7, 2e7]),
+    )
+    assert impact["cost_fraction"] > result["cost_fraction"]
+    with pytest.raises(ValueError, match="positive USD ADV"):
+        trade_cost(
+            old,
+            desired,
+            impact_gamma=0.1,
+            daily_vol=np.array([0.01, 0.02]),
+            adv=np.array([0, 2e7]),
+        )
+
+
+def test_overlay_uses_each_forecast_once_and_holdings_drift_without_trades():
+    from app.services.volatility_v2.core.execution import simulate
+
+    index = pd.date_range("2020-01-01", periods=8)
+    frame = pd.DataFrame(
+        {"A": [0.1, 0.1, -0.05, 0.02, 0.01, 0.02, 0.03, 0.01], "B": 0.0}, index=index
+    )
+    matrix = np.diag([0.04, 0.09])
+    covariance = pd.Series([matrix.copy() for _ in index], index=index, dtype=object)
+    reference = pd.Series({"A": 0.5, "B": 0.5})
+    target = pd.Series(np.sqrt(reference @ matrix @ reference) * 0.5, index=index)
+    result = simulate(
+        frame, covariance, reference, target=target, explicit_bps=0, schedule="weekly"
+    )
+    assert result.iloc[0].gross_return == pytest.approx(0.025)
+    assert result.iloc[0].scaling_factor == pytest.approx(0.5)
+    expected = np.array([0.25, 0.25]) * [1.1, 1] / 1.025
+    np.testing.assert_allclose(result.iloc[0].drifted_weights_after_return, expected)
+    np.testing.assert_allclose(result.iloc[1].weights_before_return, expected)
+    assert result.iloc[1].gross_traded_notional_fraction == 0
+    assert list(result.index[result.rebalance]) == [index[0], index[5]]
+    changed = frame.copy()
+    changed.iloc[5:, 0] *= 2
+    second = simulate(
+        changed, covariance, reference, target=target, explicit_bps=0, schedule="weekly"
+    )
+    pd.testing.assert_frame_equal(result.iloc[:5], second.iloc[:5])
+
+
+def test_ewma_forecasts_and_exposure_ignore_the_current_and_future_return():
+    from app.services.volatility_v2.core.budget_forecasts import covariances
+
+    index = pd.bdate_range("2020-01-01", periods=160)
+    frame = pd.DataFrame(
+        np.random.default_rng(156).normal(0, 0.01, (160, 2)),
+        index=index,
+        columns=["A", "B"],
+    )
+    first, latest, meta = covariances(
+        frame, {"forecast_source": "ewma", "min_train": 120}
+    )
+    changed = frame.copy()
+    changed.iloc[140:] *= 3
+    second, _, _ = covariances(changed, {"forecast_source": "ewma", "min_train": 120})
+    for date in index[120:141]:
+        np.testing.assert_allclose(first.loc[date], second.loc[date])
+    assert not np.allclose(first.loc[index[141]], second.loc[index[141]])
+    assert np.linalg.eigvalsh(latest).min() > 0
+
+
+def test_regime_target_strings_are_parsed_and_shifted_once_without_future_asset_data(
+    monkeypatch,
+):
+    from app.services.volatility_v2.core import budget_forecasts
+
+    index = pd.date_range("2020-01-01", periods=4)
+    returns = pd.DataFrame({"A": [0.01, -0.01, 0.02]}, index=index[:3])
+    prices = pd.DataFrame({"Date": index})
+    probs = pd.DataFrame(
+        {
+            "low_vol": [0.6, 0.2, 0.1],
+            "transition": [0.3, 0.3, 0.3],
+            "high_vol": [0.1, 0.5, 0.6],
+            "hmm_converged": True,
+        },
+        index=index[:3],
+    )
+
+    def features(frame, asset):
+        assert frame.Date.max() == returns.index[-1]
+        return frame
+
+    monkeypatch.setattr(budget_forecasts, "regime_features", features)
+    monkeypatch.setattr(
+        budget_forecasts,
+        "filtered_regimes",
+        lambda *args, **kwargs: {
+            "probabilities": probs,
+            "selected_states": 3,
+            "source_fingerprint": "fixture",
+        },
+    )
+    historical, current, _, meta = budget_forecasts.regime_targets(
+        prices,
+        "A",
+        returns,
+        {"states": 3, "regime_targets": "low:0.08,normal:0.10,high:0.16"},
+        0.1,
+    )
+    assert pd.isna(historical.iloc[0])
+    assert historical.iloc[1] == pytest.approx(0.094)
+    assert historical.iloc[2] == pytest.approx(0.126)
+    assert current == pytest.approx(0.134)
+    assert meta["assigned_targets"]["high_vol"] == 0.16
+    with pytest.raises(ValueError, match="duplicate regime aliases"):
+        budget_forecasts.regime_targets(
+            prices,
+            "A",
+            returns,
+            {
+                "regime_targets": {
+                    "low": 0.1,
+                    "low_vol": 0.2,
+                    "normal": 0.1,
+                    "high": 0.1,
+                }
+            },
+            0.1,
+        )
+
+
+def test_kelly_leverage_and_volatility_use_btz_return_units_and_real_variance():
+    from app.services.volatility_v2.core.budget_forecasts import kelly_target
+
+    result = kelly_target(
+        np.array([0.06]), np.array([[0.04]]), np.array([1.0]), gross_cap=3
+    )
+    assert result["btz_implied_annual_excess_return"] == pytest.approx(0.08)
+    assert result["unconstrained_kelly_leverage"] == pytest.approx(2)
+    assert result["kelly_optimal_vol_target"] == pytest.approx(0.4)
+    capped = kelly_target(
+        np.array([0.06]), np.array([[0.04]]), np.array([1.0]), gross_cap=1
+    )
+    assert capped["constrained_kelly_leverage"] == 1
+    assert capped["kelly_optimal_vol_target"] == pytest.approx(0.2)
+    negative = kelly_target(np.array([-0.1]), np.array([[0.04]]), np.array([1.0]))
+    assert negative["kelly_optimal_vol_target"] == 0
+
+
+def test_btz_return_training_waits_for_forward_labels_to_mature(monkeypatch):
+    from app.services.volatility_v2.core import budget_forecasts
+
+    index = pd.bdate_range("2020-01-01", periods=220)
+    frame = pd.DataFrame(
+        np.random.default_rng(215).normal(0, 0.01, (220, 1)), index=index, columns=["A"]
+    )
+    iv = pd.DataFrame({30: 0.2 + np.sin(np.arange(220) / 20) * 0.02}, index=index)
+    monkeypatch.setattr(budget_forecasts, "observed_iv", lambda *args: (iv, "fixture"))
+    monkeypatch.setattr(
+        budget_forecasts,
+        "integrated_garch_variance",
+        lambda *args: pd.DataFrame({21: 0.035}, index=index),
+    )
+    controls = {"btz_min_train": 60, "kelly_return_horizon": 21, "refit_interval": 21}
+    first, _ = budget_forecasts.btz_returns(frame, controls)
+    changed = frame.copy()
+    changed.iloc[180:] *= 2
+    second, _ = budget_forecasts.btz_returns(changed, controls)
+    pd.testing.assert_frame_equal(first.iloc[:180], second.iloc[:180])
+    assert first.iloc[-1].notna().all()
