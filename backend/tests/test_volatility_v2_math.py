@@ -950,3 +950,52 @@ def test_btz_return_training_waits_for_forward_labels_to_mature(monkeypatch):
     second, _ = budget_forecasts.btz_returns(changed, controls)
     pd.testing.assert_frame_equal(first.iloc[:180], second.iloc[:180])
     assert first.iloc[-1].notna().all()
+
+
+def test_estimator_dm_horizon_units_and_asset_isolation():
+    from app.services.volatility_v2.core.estimator_diagnostics import dm_tournament
+    rng = np.random.default_rng(190)
+    dates = pd.date_range('2020-01-01', periods=120)
+    group = pd.DataFrame({'date': dates, 'asset': 'A', 'return': rng.normal(0, .02, 120)})
+    for i, key in enumerate(['cc', 'parkinson', 'garman_klass', 'rogers_satchell', 'yang_zhang']):
+        group[key] = .2 + .01 * i + rng.uniform(0, .01, 120)
+    first = dm_tournament(group, 252, 5)
+    rescaled = group.copy()
+    rescaled[['cc', 'parkinson', 'garman_klass', 'rogers_satchell', 'yang_zhang']] *= np.sqrt(365 / 252)
+    second = dm_tournament(rescaled, 365, 5)
+    for a, b in zip(first, second):
+        assert a['observations'] == 115
+        assert a['value'] == pytest.approx(b['value'], abs=1e-9)
+    other = group.assign(asset='B', **{'return': group['return'] * 10})
+    combined = dm_tournament(pd.concat([other, group]), 252, 5)
+    assert [row for row in combined if row['asset'] == 'A'] == first
+
+
+def test_range_correlations_use_observed_pairs_and_declared_method():
+    from app.services.volatility_v2.core.estimator_diagnostics import range_correlation_matrix
+    dates = pd.date_range('2020-01-01', periods=45)
+    a = pd.DataFrame({'Date': dates, 'Ticker': 'A', 'High': np.exp(np.linspace(.01, .2, 45)), 'Low': 1.})
+    b = a.assign(Ticker='B', High=np.exp(np.linspace(.2, .01, 45))).drop(index=[2, 4, 6])
+    frame = pd.concat([a, b])
+    actual = range_correlation_matrix(frame)
+    assert actual.loc['A', 'B'] == pytest.approx(-1.)
+    cosine = range_correlation_matrix(frame, method='uncentered_cosine')
+    assert 0 < cosine.loc['A', 'B'] < 1
+    assert pd.isna(range_correlation_matrix(frame.tail(20)).loc['B', 'B'])
+
+
+def test_sampled_hourly_variation_has_no_overnight_or_gap_imputation():
+    from app.services.volatility_v2.core.intraday import variation_from_bars
+    dates = pd.date_range('2024-01-01 10:00', periods=7, freq='h')
+    returns = np.array([.01, -.02, .03, -.01, .02, -.01])
+    prices = 100 * np.exp(np.r_[0, np.cumsum(returns)])
+    frame = pd.DataFrame({'date': dates.normalize(), 'timestamp': dates, 'Close': prices})
+    actual = variation_from_bars(frame).iloc[0]
+    assert actual.sampled_hourly_variance == pytest.approx(returns @ returns)
+    expected = np.pi / 2 * 6 / 5 * (np.abs(returns[1:]) @ np.abs(returns[:-1]))
+    assert actual.sampled_hourly_bipower == pytest.approx(expected)
+    shifted = frame.copy()
+    shifted.Close *= 100
+    pd.testing.assert_frame_equal(variation_from_bars(frame), variation_from_bars(shifted), check_exact=False)
+    with pytest.raises(ValueError, match='consecutive'):
+        variation_from_bars(frame.drop(index=3))

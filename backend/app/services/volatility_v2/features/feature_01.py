@@ -5,22 +5,22 @@ from __future__ import annotations
 from app.services.volatility_v2.core.analytics import (
     ESTIMATORS,
     agreement_index,
-    bandi_russell_daily_proxy,
     clean_json,
     compact_records,
     disagreement_pair,
-    dm_tournament,
-    estimator_efficiency_table,
     load_assets,
     number_like,
     opening_gap_fragility,
-    range_correlation_matrix,
     response,
     summary_card,
     vol_adjusted_momentum,
     volatility_estimators,
     volatility_estimators_multi,
     matrix_records,
+)
+
+from app.services.volatility_v2.core.estimator_diagnostics import (
+    dm_tournament, estimator_efficiency_table, range_correlation_matrix,
 )
 
 
@@ -39,7 +39,7 @@ def run(payload=None):
     active = str(payload.get("asset") or payload.get("symbol") or assets[0]).upper().replace("-", "_")
     primary = vol[vol["asset"].eq(active)]
     if primary.empty:
-        primary = vol[vol["asset"].eq(vol["asset"].iloc[0])]
+        raise ValueError(f"Selected asset {active} has no complete estimator observations")
     latest = primary.sort_values("date").tail(1).iloc[0]
     agree = agreement_index(primary)
     latest_agree = float(agree["agreement"].dropna().iloc[-1]) if not agree["agreement"].dropna().empty else None
@@ -54,12 +54,19 @@ def run(payload=None):
     comparison = primary[["date", *ESTIMATORS, "estimator_spread"]].copy()
     comparison["min_estimator"] = comparison[ESTIMATORS].min(axis=1)
     comparison["max_estimator"] = comparison[ESTIMATORS].max(axis=1)
-    br = bandi_russell_daily_proxy(ohlcv, window=window, annualization=annualization)
     ogf = opening_gap_fragility(ohlcv)
-    range_corr = range_correlation_matrix(ohlcv)
+    range_method = str(payload.get("range_correlation_method", "pearson"))
+    range_corr = range_correlation_matrix(ohlcv, method=range_method)
     mom_adj = vol_adjusted_momentum(ohlcv, vol)
-    if not br.empty:
-        comparison = comparison.merge(br[br["asset"].eq(active)][["date", "bandi_russell_daily_proxy"]], on="date", how="left")
+    hourly = []
+    if payload.get("include_hourly_variation", False):
+        from app.services.volatility_v2.core.intraday import sampled_variation
+        sampled = sampled_variation(
+            active, primary.date.min(), primary.date.max(),
+            payload.get("hourly_timezone"), payload.get("session_timezone"),
+            int(payload.get("minimum_hourly_bars", 6)),
+        )
+        hourly = compact_records(sampled, limit=len(sampled))
     summary = [
         summary_card("Yang-Zhang Vol", float(latest["yang_zhang"]), "ann"),
         summary_card("Estimator Spread", float(latest["estimator_spread"]), "ann"),
@@ -74,25 +81,24 @@ def run(payload=None):
         "01",
         summary,
         charts={
+            "observed_hourly_variation": hourly,
             "five_estimator_comparison": compact_records(comparison),
             "estimator_disagreement_band": compact_records(comparison[["date", "min_estimator", "max_estimator", "estimator_spread"]]),
             "estimator_agreement_index": compact_records(agree),
             "annualized_vol_panel": clean_json(estimator_efficiency_table(primary)),
             "multi_window_estimator_panel": clean_json(multi_window),
-            "bandi_russell_estimator": compact_records(br[br["asset"].eq(active)]) if not br.empty else [],
             "opening_gap_fragility": compact_records(ogf[ogf["asset"].eq(active)]) if not ogf.empty else [],
             "range_correlation_matrix": matrix_records(range_corr) if not range_corr.empty else [],
             "vol_adjusted_momentum_panel": compact_records(mom_adj, limit=300),
         },
         tables={
             "estimator_efficiency": estimator_efficiency_table(primary),
-            "diebold_mariano_tournament": dm_tournament(primary),
+            "diebold_mariano_tournament": dm_tournament(primary, annualization=annualization, horizon=int(payload.get("dm_horizon", 5))),
             "cross_asset_ranked_panel": compact_records(ranked, limit=200),
             "multi_window_estimator_table": clean_json(multi_window),
-            "bandi_russell_liquidity_proxy": compact_records(br, limit=300),
             "opening_gap_fragility_detector": compact_records(ogf.sort_values("date").groupby("asset").tail(1), limit=200) if not ogf.empty else [],
             "vol_adjusted_momentum": compact_records(mom_adj, limit=300),
         },
         alerts=alerts,
-        meta={"asset": active, "assets": assets, "window": window, "annualization": annualization, "implemented_outputs": 10},
+        meta={"asset": active, "assets": assets, "window": window, "annualization": annualization, "range_correlation_method": range_method, "unsupported_outputs": {"bandi_russell_estimator": "Daily OHLC and hourly bars cannot identify optimal microstructure-noise sampling; the dimensionally invalid daily proxy was removed", "sampling_efficiency": "Requires repeated sampling under an explicit data-generating model"}, "hourly_measure": "Consecutive hourly close variation within declared session dates; opening and overnight returns excluded. No tick-noise correction or statistical jump significance is claimed", "dm_target": "Observed next-h-session sum of squared log returns; forecasts scaled to the same horizon"},
     )

@@ -143,3 +143,21 @@ Verified commands:
 - Real Feature 09 `^GSPC`, EWMA, Kelly, 650 sessions, 120 BTZ training observations, 63 refit interval: **warning** solely because index ADV is unavailable; Kelly was produced from observed IV with 389 replay dates and target 0.35451755355165415.
 
 The complete review is still in progress: Feature 01, remaining estimator controls, contracts/jobs, frontend wiring/fake removal and final verification remain.
+
+## Feature 01 diagnostic correction (2026-10-08)
+
+- Moved estimator comparison diagnostics into `core/estimator_diagnostics.py`. DM forecasts and targets now share the selected h-session horizon and annualization. Comparisons stay within each asset and use statsmodels HAC inference; insufficient or zero-variance loss differences are unavailable rather than fictitious zero test statistics.
+- Removed the daily Bandi–Russell proxy. Covariance of squared returns has fourth-power return units and cannot be subtracted from daily variance. Daily and coarse hourly OHLC cannot identify genuine optimal tick-noise sampling.
+- Range correlations now use actual pairwise observed dates, without stale fill. Pearson is default; the old uncentered normalization is available only under the explicit `uncentered_cosine` name.
+- Replaced falsely identified empirical sampling-efficiency/fat-tail diagnostics with an explicitly named temporal variance ratio. Rolling-estimate dispersion combines changing volatility and sampling noise and cannot identify either sampling efficiency or fat tails.
+- Connected the actual canonical hourly panel through `core/intraday.py`. Exact symbols, declared input/session timezones, consecutive-hour checks and explicit incomplete-day exclusion are required. Returned hourly close variation and bipower variation exclude opening/overnight returns. Their positive difference is descriptive, not a statistical jump identification. Unknown assets are never substituted with another hourly instrument.
+- The replaced four analytics helpers were removed after graph/repository references were checked and Feature 01 imports updated. All nine feature imports and API route checks still pass.
+
+Checks:
+
+- `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_*.py -q`: **47 passed**. Added horizon-unit invariance, cross-asset isolation, observed-date range correlation and hourly no-gap/no-overnight regression tests.
+- `ruff check backend/app/services/volatility_v2/core/intraday.py backend/app/services/volatility_v2/core/estimator_diagnostics.py backend/app/services/volatility_v2/features/feature_01.py backend/tests/test_volatility_v2_math.py`: passed.
+- Real Feature 01 SPY/QQQ, 400 sessions: **ok**, 25 actual DM comparisons and explicit unsupported-output reasons.
+- Real Feature 01 `^GSPC`, 400 sessions, hourly input timezone UTC and session timezone America/New_York: **ok**, 372 observed hourly variation dates, ending 2026-02-20.
+
+Contracts/API/jobs, remaining estimator controls, frontend transport/fake deletion and completion gates remain in progress.

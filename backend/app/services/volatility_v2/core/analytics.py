@@ -373,70 +373,8 @@ def volatility_estimators_multi(ohlcv: pd.DataFrame, windows: Iterable[int], ann
     return out
 
 
-def estimator_efficiency_table(vol: pd.DataFrame) -> list[dict[str, Any]]:
-    latest = vol.sort_values("date").groupby("asset").tail(1)
-    rows = []
-    theoretical = {"cc": 1.0, "parkinson": 4.9, "garman_klass": 7.4, "rogers_satchell": 6.2, "yang_zhang": 10.0}
-    base_var = float(vol["cc"].pow(2).var()) if "cc" in vol else np.nan
-    for est in ESTIMATORS:
-        emp = base_var / float(vol[est].pow(2).var()) if float(vol[est].pow(2).var() or 0) > 0 else np.nan
-        pct_full = _latest_percentile(vol[est])
-        pct_252 = _latest_percentile(vol[est].tail(252))
-        pct_5y = _latest_percentile(vol[est].tail(1260))
-        rows.append(
-            {
-                "estimator": ESTIMATOR_LABELS[est],
-                "key": est,
-                "theoretical_efficiency_vs_cc": theoretical[est],
-                "empirical_efficiency_vs_cc": emp,
-                "current_ann_vol": float(latest[est].median()) if not latest.empty else None,
-                "percentile_252d": pct_252,
-                "percentile_5y": pct_5y,
-                "percentile_full": pct_full,
-                "relative_efficiency_deviation": abs(emp / theoretical[est] - 1.0) if np.isfinite(emp) and theoretical[est] else None,
-                "fat_tail_warning": bool(np.isfinite(emp) and theoretical[est] and abs(emp / theoretical[est] - 1.0) > 0.30),
-                "color_tier": "green" if emp and emp >= 3 else "amber" if emp and emp >= 1.5 else "red",
-            }
-        )
-    return clean_json(rows)
 
 
-def dm_tournament(vol: pd.DataFrame) -> list[dict[str, Any]]:
-    if vol.empty:
-        return []
-    one = vol.sort_values("date")
-    rv = one["return"].pow(2).rolling(5).sum().shift(-5)
-    rows = []
-    vals: dict[tuple[str, str], tuple[float, float]] = {}
-    loss = {}
-    rv_np = rv.to_numpy(dtype=float)
-    for est in ESTIMATORS:
-        va = (one[est].to_numpy(dtype=float) ** 2) / 252.0
-        ratio = rv_np / np.where(va == 0, np.nan, va)
-        loss[est] = ratio - np.log(np.clip(ratio, 1e-12, None)) - 1.0
-    for i, a in enumerate(ESTIMATORS):
-        for b in ESTIMATORS[i + 1 :]:
-            d = loss[a] - loss[b]
-            d = d[np.isfinite(d)]
-            if len(d):
-                lrv = newey_west_lrv(d, bandwidth=max(1, int(len(d) ** (1 / 3))))
-                se = math.sqrt(max(lrv, 1e-18) / max(len(d), 1))
-                val = float(-d.mean() / se) if se and math.isfinite(se) and se > 0 else 0.0
-            else:
-                val = 0.0
-            pvalue = float(2 * (1 - stats.norm.cdf(abs(val))))
-            vals[(a, b)] = (val, pvalue)
-    for a in ESTIMATORS:
-        for b in ESTIMATORS:
-            if a == b:
-                val, pvalue = 0.0, 1.0
-            elif (a, b) in vals:
-                val, pvalue = vals[(a, b)]
-            else:
-                val, pvalue = vals[(b, a)]
-                val = -val
-            rows.append({"row": ESTIMATOR_LABELS[a], "col": ESTIMATOR_LABELS[b], "value": val, "p_value": pvalue, "bonferroni_significant": bool(pvalue < 0.005)})
-    return clean_json(rows)
 
 
 def agreement_index(vol: pd.DataFrame, window: int = 21) -> pd.DataFrame:
@@ -756,19 +694,6 @@ def statistical_jump_model(features: pd.DataFrame, states: int = 4, jump_penalty
     return pd.DataFrame(probs[:, order], index=x.index, columns=names)
 
 
-def bandi_russell_daily_proxy(ohlcv: pd.DataFrame, window: int = 21, annualization: int = 252) -> pd.DataFrame:
-    """Bandi-Russell correction: Parkinson variance minus twice noise variance."""
-    frames = []
-    for ticker, g in ohlcv.groupby("Ticker", sort=False):
-        g = g.sort_values("Date")
-        squared_return = np.log(g["Close"] / g["Close"].shift(1)).pow(2)
-        park_daily = np.log(g["High"] / g["Low"]).pow(2) / (4.0 * math.log(2.0))
-        noise_var = (-squared_return.rolling(window).cov(squared_return.shift(1))).clip(lower=0.0)
-        dollar_vol = (g["Close"] * g["Volume"]).replace(0, np.nan)
-        liq_rank = dollar_vol.rolling(window).mean().rank(pct=True).fillna(0.5)
-        corrected = (park_daily.rolling(window).mean() - 2.0 * noise_var).clip(lower=0.0)
-        frames.append(pd.DataFrame({"date": g["Date"], "asset": ticker, "bandi_russell_daily_proxy": np.sqrt(corrected * annualization), "microstructure_noise_variance": noise_var, "liquidity_percentile": liq_rank}))
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
 def opening_gap_fragility(ohlcv: pd.DataFrame, window: int = 63) -> pd.DataFrame:
@@ -783,20 +708,6 @@ def opening_gap_fragility(ohlcv: pd.DataFrame, window: int = 63) -> pd.DataFrame
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
 
-def range_correlation_matrix(ohlcv: pd.DataFrame, window: int = 252) -> pd.DataFrame:
-    ranges = {}
-    for ticker, g in ohlcv.groupby("Ticker", sort=False):
-        g = g.sort_values("Date").set_index("Date")
-        ranges[ticker] = np.log(g["High"] / g["Low"]).replace([np.inf, -np.inf], np.nan).tail(window)
-    panel = pd.DataFrame(ranges).dropna(axis=1, thresh=30).ffill().dropna()
-    if panel.empty:
-        return pd.DataFrame()
-    arr = panel.to_numpy(dtype=float)
-    cross = arr.T @ arr
-    park_sigma = np.sqrt(np.maximum(np.sum(arr * arr, axis=0) / (4.0 * math.log(2.0)), 1e-12))
-    corr = cross / np.maximum(np.outer(park_sigma, park_sigma) * 4.0 * math.log(2.0), 1e-12)
-    np.fill_diagonal(corr, 1.0)
-    return pd.DataFrame(np.clip(np.nan_to_num(corr, nan=0.0), -1.0, 1.0), index=panel.columns, columns=panel.columns)
 
 
 def vol_adjusted_momentum(ohlcv: pd.DataFrame, vol_panel: pd.DataFrame, lookback: int = 252) -> pd.DataFrame:
