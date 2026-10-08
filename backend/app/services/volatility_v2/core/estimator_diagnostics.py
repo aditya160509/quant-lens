@@ -23,8 +23,9 @@ def dm_tournament(vol, annualization=252, horizon=5):
         group = group.sort_values("date")
         realized = sum(group["return"].shift(-lag).pow(2) for lag in range(1, horizon + 1))
         forecast = group[ESTIMATORS].pow(2) * horizon / annualization
-        loss = realized.to_numpy()[:, None] / forecast + np.log(forecast)
-        loss = loss.where(forecast > 0).replace([np.inf, -np.inf], np.nan)
+        positive = forecast.where(forecast > 0)
+        loss = realized.to_numpy()[:, None] / positive + np.log(positive)
+        loss = loss.replace([np.inf, -np.inf], np.nan)
         for a in ESTIMATORS:
             for b in ESTIMATORS:
                 difference = (loss[a] - loss[b]).dropna()

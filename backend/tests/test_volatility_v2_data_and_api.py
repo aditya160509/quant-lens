@@ -140,3 +140,50 @@ def test_portfolio_currency_uses_observed_fx_and_rejects_stale_rates(
     fx.iloc[1:].to_parquet(fx_path)
     with pytest.raises(ValueError, match="exact-date"):
         currency.portfolio_returns(data, {"quote_currencies": {"^N225": "JPY"}})
+
+
+def test_api_errors_symbols_and_upload(prices):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api.volatility_v2 import router
+    app = FastAPI()
+    app.include_router(router)
+    with TestClient(app) as client:
+        assert client.post('/labs/volatility/v2/feature/99/run', json={}).status_code == 404
+        assert client.post('/labs/volatility/v2/feature/01/run', json={'assets': ['UNKNOWN']}).status_code == 422
+        assert client.post('/labs/volatility/v2/feature/01/run', json={'payload': [], 'assets': ['SPY']}).status_code == 422
+        assert client.get('/labs/volatility/v2/symbols?q=SP').json()['symbols'] == [{'symbol': 'SPY'}]
+        assert client.post('/labs/volatility/v2/uploads?kind=implied_volatility', files={'file': ('bad.csv', b'bad')}).status_code == 422
+        assert client.get('/labs/volatility/v2/jobs/missing').status_code == 404
+        assert client.post('/labs/volatility/v2/jobs/missing/cancel').status_code == 404
+
+
+def test_api_jobs_persist_real_results_and_detect_changed_upload(prices, tmp_path, monkeypatch):
+    from app.api import volatility_v2 as api
+    from app.services.studio.jobs import JobStore
+    from app.services.volatility_v2.core import uploads
+    store = JobStore(path=tmp_path / 'jobs.json')
+    monkeypatch.setattr(api, 'JOBS', store)
+    monkeypatch.setattr(api, 'RESULTS', tmp_path / 'results')
+    monkeypatch.setattr(uploads, 'upload_directory', lambda: tmp_path / 'uploads')
+    raw = b'date,asset,implied_vol,maturity_days,source\n2024-01-01,SPY,0.2,30,observed\n'
+    identifier = uploads.save_upload(raw, 'implied_volatility')['upload_id']
+    submitted = []
+    submit = store.submit
+    def capture(*args, **kwargs):
+        future = submit(*args, **kwargs)
+        submitted.append(future)
+        return future
+    monkeypatch.setattr(store, 'submit', capture)
+    response = api.create_job('01', {'assets': ['SPY'], 'lookback_days': 40})
+    submitted[0].result(timeout=30)
+    result = api.status(response['job_id'])
+    assert result['status'] == 'completed', result['error']
+    assert result['result']['feature_id'] == 'feature_01'
+    assert JobStore(path=store.path).get(response['job_id'])['status'] == 'completed'
+    payload = {'assets': ['SPY'], 'iv_upload_id': identifier}
+    job = store.create(job_type='test', params={'source_versions': api.sources(payload)})
+    path = uploads.upload_path(identifier)
+    path.write_bytes(path.read_bytes() + b'\n')
+    with pytest.raises(ValueError, match='changed after'):
+        api._execute(job['job_id'], '01', payload)

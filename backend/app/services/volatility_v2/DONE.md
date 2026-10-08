@@ -161,3 +161,13 @@ Checks:
 - Real Feature 01 `^GSPC`, 400 sessions, hourly input timezone UTC and session timezone America/New_York: **ok**, 372 observed hourly variation dates, ending 2026-02-20.
 
 Contracts/API/jobs, remaining estimator controls, frontend transport/fake deletion and completion gates remain in progress.
+
+## API lifecycle step (2026-10-08)
+
+- Added own-universe symbol search, validated size-capped IV upload and actual JSON/CSV-table export routes. Existing flat runs remain compatible; mixed/invalid payload envelopes fail. Unknown feature ids return 404 and invalid data/types return 422.
+- Added module-local durable Studio JobStore routes for enqueue/status/cancel, atomic separate result files and bounded workers. Jobs verify source versions before and after computation, including the chosen IV upload and optional hourly panel. Cancellation suppresses publication and clearly states that active estimator computation finishes in background. Progress reports the actual estimation stage without fabricated percentages.
+- A constant-price job regression exposed a false agreement-zero fallback and alert formatting crash. Zero-dispersion correlations now remain unavailable and no false disagreement alert is produced. DM losses mask nonpositive forecasts before taking logarithms.
+- `PYTHONPATH=backend /tmp/pca-v2-check-env/bin/python -m pytest backend/tests/test_volatility_v2_*.py -q`: **49 passed** after the final logarithm adjustment. The environment's FastAPI TestClient emits a Starlette/httpx deprecation warning; it is not an application failure.
+- `ruff check backend/app/api/volatility_v2.py backend/tests/test_volatility_v2_data_and_api.py`: passed.
+
+The feature manifest and early validation are still being completed; these API additions do not close the review.

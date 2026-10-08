@@ -392,7 +392,8 @@ def agreement_index(vol: pd.DataFrame, window: int = 21) -> pd.DataFrame:
             stds = [s.rolling(window, min_periods=3).std(ddof=0).to_numpy(dtype=float) for s in series]
             for i, j in pairs:
                 prod = pd.Series(est_arr[:, i] * est_arr[:, j]).rolling(window, min_periods=3).mean().to_numpy(dtype=float)
-                corr = (prod - means[i] * means[j]) / np.maximum(stds[i] * stds[j], 1e-12)
+                denominator = stds[i] * stds[j]
+                corr = np.divide(prod - means[i] * means[j], denominator, out=np.full(len(g), np.nan), where=denominator > 1e-14)
                 ok = np.isfinite(corr)
                 corr_sum[ok] += corr[ok]
                 corr_count[ok] += 1
@@ -404,8 +405,7 @@ def agreement_index(vol: pd.DataFrame, window: int = 21) -> pd.DataFrame:
 
 def disagreement_pair(vol: pd.DataFrame, window: int = 21) -> dict[str, Any] | None:
     sub = vol.sort_values("date").tail(window)[ESTIMATORS]
-    arr = sub.to_numpy(dtype=float)
-    corr_arr = np.corrcoef(arr, rowvar=False)
+    corr_arr = sub.corr(min_periods=3).to_numpy(dtype=float)
     best = None
     for i, a in enumerate(ESTIMATORS):
         for j, b in enumerate(ESTIMATORS[i + 1 :], start=i + 1):
