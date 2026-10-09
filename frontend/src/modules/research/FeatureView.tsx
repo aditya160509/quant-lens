@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, FileText, Loader2, Play, Square } from "lucide-react";
 import { DUR } from "@/workspace/prefs";
 import { PopMenu, Tabs, type MenuAt } from "@/workspace/ui";
+import { useWorkspace } from "@/workspace/WorkspaceShell";
 import { featureHref, metaFor, pageOf } from "./catalog";
 import { lab, runLabel } from "./lab";
 import { LedgerChip } from "./Projects";
@@ -95,6 +96,22 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [sectionIds]);
+
+  // ⌘K: run this page, open the report, or jump straight to any exhibit by number and title.
+  const { registerPalette } = useWorkspace();
+  const runRef = useRef(run.run);
+  runRef.current = run.run;
+  const exhibitList = result ? sections.flatMap((x) => shown(x).map((i) => ({ key: i.keys[0], title: i.title ?? feature.outputs.find((o) => o.key === i.keys[0])?.title ?? label(i.keys[0]) }))) : [];
+  const exhibitSig = exhibitList.map((e) => e.key + e.title).join("|");
+  useEffect(() => {
+    registerPalette("page", [
+      { id: "page-run", group: "This page", icon: Play, label: result ? "Run again" : runLabel(feature.id), meta: "⌘↵", run: () => runRef.current() },
+      ...(result ? [{ id: "page-report", group: "This page", icon: FileText, label: "Open the printable report", run: () => setPrinting(true) }] : []),
+      ...exhibitList.map((e, i) => ({ id: `ex-${i}`, group: "Exhibits", label: `Exhibit ${i + 1}: ${e.title}`, run: () => window.dispatchEvent(new CustomEvent("research:jump", { detail: e.key })) })),
+    ]);
+    return () => registerPalette("page", []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exhibitSig, feature.id, Boolean(result), registerPalette]);
 
   const scope = `${feature.id}:${run.jobId ?? "draft"}`;
   // Exhibits are numbered through the whole page, in section order, so "Exhibit 7" means the same card in the tabbed view and the report.
@@ -311,10 +328,8 @@ function Progress({ startedAt, status, progress }: { startedAt: number | null; s
   // Each distinct stage message the API reports becomes a step; earlier ones are done.
   const [stages, setStages] = useState<{ text: string; at: number }[]>([]);
   const msg = p?.message;
-  useEffect(() => {
-    if (!msg) return;
-    setStages((cur) => (cur.length && cur[cur.length - 1].text === msg ? cur : [...cur, { text: msg, at: Date.now() }]));
-  }, [msg]);
+  // Adjusting state while rendering (not in an effect): a new message appends a step, timed by the 200 ms clock.
+  if (msg && stages[stages.length - 1]?.text !== msg) setStages([...stages, { text: msg, at: now }]);
   return (
     <div style={{ marginTop: 16 }}>
     {stages.length > 1 ? (
