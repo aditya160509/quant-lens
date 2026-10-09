@@ -9,7 +9,7 @@ import { PopMenu, Tabs, type MenuAt } from "@/workspace/ui";
 import { featureHref, metaFor, pageOf } from "./catalog";
 import { lab, runLabel } from "./lab";
 import { LedgerChip } from "./Projects";
-import { useActiveSignal } from "./api";
+import { useActiveSignal, useJob, useRuns } from "./api";
 import { isNum, label, num, out } from "./format";
 import { layoutFor, verdictFor, type Item, type Section } from "./layouts";
 import { arrange, cardId, useCardPrefs, useFeaturePrefs } from "./cardPrefs";
@@ -136,7 +136,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         <AnimatePresence initial={false}>
           {result ? (
             <motion.div key={run.jobId ?? "r"} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: DUR.slow, ease: [0.2, 0, 0, 1] }}>
-              <VerdictStrip feature={feature} result={result} />
+              <VerdictStrip feature={feature} result={result} jobId={run.jobId} />
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -246,8 +246,12 @@ function RunContext({ feature, run }: { feature: FeatureSpec; run: FeatureRun })
   );
 }
 
-function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: FeatureResult }) {
+function VerdictStrip({ feature, result, jobId }: { feature: FeatureSpec; result: FeatureResult; jobId?: string | null }) {
   const v = verdictFor(feature, result);
+  // The run before this one, for "change since last run" under each number.
+  const prevId = useRuns((st) => st.runs.find((r) => r.featureId === feature.id && r.status === "completed" && r.jobId !== jobId && (st.runs.find((x) => x.jobId === jobId)?.startedAt ?? Infinity) > r.startedAt)?.jobId ?? null);
+  const prev = useJob(prevId);
+  const before = new Map((prev.data?.result?.summary_cards ?? []).filter((c) => isNum(c.value)).map((c) => [c.label, c.value as number]));
   const stamped = lab().id === "ml" && Boolean(STAMP[v.tone ?? ""]);
   // The stamp already says the verdict; a "Verdict" card would repeat it.
   const cards = (result.summary_cards ?? []).filter((c) => !(typeof c.value === "string" && ["red", "amber", "green"].includes(c.value)) && !(stamped && /^verdict$/i.test(c.label))).slice(0, 5);
@@ -267,6 +271,13 @@ function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: Featu
           {cards.map((c) => (
             <div key={c.label} className="kpi">
               <div className="l" title={c.label}>{c.label}</div>
+              {(() => {
+                const b = before.get(c.label);
+                if (!isNum(c.value) || b === undefined || Math.abs(c.value - b) < 1e-9) return null;
+                const d = c.value - b;
+                const f = UNIT_FMT[c.unit ?? ""] ?? kpi;
+                return <div className="kpi-delta num" title="Change since the previous run of this page">{d > 0 ? "▲" : "▼"} {f(Math.abs(d))}</div>;
+              })()}
               <div className={`v${isNum(c.value) ? "" : " word"}${isNum(c.value) && /return|alpha|sharpe|t-stat|spread|premium/i.test(c.label) && c.value !== 0 ? (c.value > 0 ? " up" : " down") : ""}`}>{isNum(c.value) && UNIT_FMT[c.unit ?? ""] ? UNIT_FMT[c.unit ?? ""](c.value) : isNum(c.value) ? kpi(c.value) : typeof c.value === "string" && /^[a-z][a-z0-9_]*$/.test(c.value) ? label(c.value) : String(c.value)}</div>
             </div>
           ))}

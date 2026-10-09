@@ -303,6 +303,9 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .kpi:first-child { padding-left: 2px; }
 .kpi .l { font-size: 11.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.01em; }
 .kpi .v { margin-top: 5px; font: 500 24px/1.15 var(--mono); letter-spacing: -0.035em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.kpi { display: flex; flex-direction: column; }
+.kpi .v { order: 2; }
+.kpi-delta { order: 3; margin-top: 3px; font-size: 11px; color: var(--text-3); }
 .kpi .v.word { font: 550 20px/1.25 var(--font); letter-spacing: -0.02em; }
 .kpi .v.up { color: var(--up); } .kpi .v.down { color: var(--down); }
 .progress { position: relative; width: 160px; height: 3px; border-radius: 2px; background: var(--raise); overflow: hidden; }
