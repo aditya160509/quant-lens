@@ -111,7 +111,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   );
 
   return (
-    <div ref={scroller} className="island results" style={{ overflowY: "auto", overflowX: "hidden" }}>
+    <div ref={scroller} className="island results" data-lab={lab().id} style={{ overflowY: "auto", overflowX: "hidden" }}>
       <div ref={hero} style={{ padding: "22px 22px 6px" }}>
         <PageSwitch featureId={feature.id} />
         <div className="fv-head">
@@ -248,11 +248,9 @@ function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: Featu
   return (
     <div className="verdict">
       {v.headline ? (
-        <div className="verdict-lead" style={{ background: `color-mix(in oklch, ${color} 7%, var(--panel))`, boxShadow: `inset 0 0 0 1px color-mix(in oklch, ${color} 22%, transparent)` }}>
-          <span style={{ width: 8, height: 8, marginTop: 7, borderRadius: 3, background: color, flex: "none", boxShadow: `0 0 0 4px color-mix(in oklch, ${color} 18%, transparent)` }} />
-          <p style={{ fontSize: 14, lineHeight: 1.55, color: "var(--text)" }}>
-            <b style={{ fontWeight: 600, color }}>{lead}</b>{rest.length ? <span style={{ color: "var(--text-2)" }}> {rest.join(" ")}</span> : null}
-          </p>
+        <div className="verdict-lead" style={{ ["--tone" as string]: color }}>
+          {lab().id === "ml" && STAMP[v.tone ?? ""] ? <span className="verdict-stamp">{STAMP[v.tone ?? ""]}</span> : null}
+          <p><b>{lead}</b>{rest.length ? <> {rest.join(" ")}</> : null}</p>
         </div>
       ) : null}
       {lab().signal && explain(cards).length ? <p className="verdict-explain">{explain(cards).join(" ")}</p> : null}
@@ -261,7 +259,7 @@ function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: Featu
           {cards.map((c) => (
             <div key={c.label} className="kpi">
               <div className="l" title={c.label}>{c.label}</div>
-              <div className={`v${isNum(c.value) && /return|alpha|sharpe|t-stat|spread|premium/i.test(c.label) && c.value !== 0 ? (c.value > 0 ? " up" : " down") : ""}`}>{isNum(c.value) && UNIT_FMT[c.unit ?? ""] ? UNIT_FMT[c.unit ?? ""](c.value) : isNum(c.value) ? kpi(c.value) : typeof c.value === "string" && /^[a-z][a-z0-9_]*$/.test(c.value) ? label(c.value) : String(c.value)}</div>
+              <div className={`v${isNum(c.value) ? "" : " word"}${isNum(c.value) && /return|alpha|sharpe|t-stat|spread|premium/i.test(c.label) && c.value !== 0 ? (c.value > 0 ? " up" : " down") : ""}`}>{isNum(c.value) && UNIT_FMT[c.unit ?? ""] ? UNIT_FMT[c.unit ?? ""](c.value) : isNum(c.value) ? kpi(c.value) : typeof c.value === "string" && /^[a-z][a-z0-9_]*$/.test(c.value) ? label(c.value) : String(c.value)}</div>
             </div>
           ))}
         </div>
@@ -269,6 +267,9 @@ function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: Featu
     </div>
   );
 }
+
+/** The stamp over a verdict: what the colour means, in a word, for labs that judge (ML). */
+const STAMP: Record<string, string> = { up: "Held up", warn: "Mixed", down: "Failed" };
 
 /** Units the API states explicitly are formatted as such; anything else falls back to kpi(). */
 const UNIT_FMT: Record<string, (v: number) => string> = {
