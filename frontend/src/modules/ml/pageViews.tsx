@@ -29,7 +29,6 @@ const signed = (v: unknown, fmt: (x: number) => string) => (isNum(v) ? `${v > 0 
 const tone = (v: unknown) => (isNum(v) ? (v > 0 ? "var(--up)" : v < 0 ? "var(--down)" : undefined) : undefined);
 const usd = (v: unknown) => (!isNum(v) ? "–" : v >= 1e9 ? `$${(v / 1e9).toFixed(1)}bn` : v >= 1e6 ? `$${(v / 1e6).toFixed(0)}m` : `$${Math.round(v).toLocaleString()}`);
 
-const MODEL_KIND: Record<string, "model" | "control"> = { ensemble: "model", lightgbm: "model", xgboost: "model", catboost: "model", ridge: "control", ols3: "control", ic_composite: "control" };
 const MODEL: Record<string, string> = { ensemble: "Ensemble", lightgbm: "LightGBM", ridge: "Ridge", ols3: "3-factor OLS", ic_composite: "IC composite", xgboost: "XGBoost", catboost: "CatBoost" };
 const STRATEGY: Record<string, string> = {
   min_variance: "Min variance (shrinkage)", turnover_aware: "Min variance, trade only when worth it", standard_hrp: "Hierarchical risk parity", inverse_variance: "Inverse variance", equal_weight: "Equal weight",
@@ -103,6 +102,10 @@ export function MlNext({ result, feature }: ViewProps) {
     </div>
   );
 }
+
+/** Comparator colours: distinct hues, pulled toward grey so the series under test (accent) stays the loudest. */
+const QUIET = ["var(--c2)", "var(--c3)", "var(--c5)", "var(--c4)", "var(--c6)", "var(--c8)"];
+const quiet = (i: number) => `color-mix(in oklch, ${QUIET[i % QUIET.length]} 62%, var(--text-4))`;
 
 /* ---------------------------------------------------------------- Alpha */
 
@@ -180,8 +183,8 @@ export function AlphaNetCurve({ rows, result }: ViewProps) {
   if (!rows.length) return <Empty />;
   // The model is the accent; controls are neutral (dashed for the one it must beat), never red, which would read as "bad".
   const primary = str(out(result, "controls").find((r) => r.primary)?.model) || "ensemble";
-  const style = (k: string) => (k === primary ? { color: "var(--accent)", width: 2.2 } : k === "ic_composite" ? { color: "var(--text-2)", width: 1.5, dash: true } : MODEL_KIND[k] === "model" ? { color: "color-mix(in oklch, var(--accent) 45%, var(--text-4))", width: 1.2 } : { color: "var(--text-4)", width: 1.2 });
-  return <TimeSeries data={data} x="date" height={240} yLabel="Growth of $1, net of costs" series={keys.map((k) => ({ key: k, label: nm(k), ...style(k) }))} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />;
+  const style = (k: string, i: number) => (k === primary ? { color: "var(--accent)", width: 2.2 } : { color: quiet(i), width: 1.3 });
+  return <TimeSeries data={data} x="date" height={260} yLabel="Growth of $1, net of costs" directLabels series={keys.map((k, i) => ({ key: k, label: nm(k), ...style(k, i) }))} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />;
 }
 
 type Driver = { feature: string; delta: number };
@@ -518,11 +521,11 @@ export function EquityCompare({ rows, result }: ViewProps) {
   }, [rows, key]);
   if (!rows.length) return <Empty />;
   const chosen = str(out(result, "controls_summary").find((r) => r.kind === "chosen")?.strategy) || keys[0];
-  const style = (k: string) => (k === chosen ? { color: "var(--accent)", width: 2.2 } : k === "turnover_aware" ? { color: "var(--accent)", width: 1.4, dash: true } : { color: "var(--text-4)", width: 1.2 });
+  const style = (k: string, i: number) => (k === chosen ? { color: "var(--accent)", width: 2.2 } : k === "turnover_aware" ? { color: "var(--accent)", width: 1.4, dash: true } : { color: quiet(i), width: 1.3 });
   return (
     <div>
-      <TimeSeries data={data} x="date" height={250} yLabel="Growth of $1, net of costs" series={keys.map((k) => ({ key: k, label: nm(k), ...style(k) }))} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />
-      <TimeSeries data={dd} x="date" height={110} legend={false} format={(v) => pct(v, 0)} yLabel="Drawdown" series={keys.map((k) => ({ key: k, label: nm(k), ...style(k), width: k === chosen ? 1.6 : 1 }))} />
+      <TimeSeries data={data} x="date" height={260} yLabel="Growth of $1, net of costs" directLabels series={keys.map((k, i) => ({ key: k, label: nm(k), ...style(k, i) }))} refLines={[{ y: 1, color: "var(--line-3)", dash: true }]} />
+      <TimeSeries data={dd} x="date" height={110} legend={false} format={(v) => pct(v, 0)} yLabel="Drawdown" series={keys.map((k, i) => ({ key: k, label: nm(k), ...style(k, i), width: k === chosen ? 1.6 : 1 }))} />
     </div>
   );
 }

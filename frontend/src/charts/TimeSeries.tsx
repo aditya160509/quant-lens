@@ -48,6 +48,8 @@ export type TimeSeriesProps = {
   bars?: { key: string; label?: string };
   /** Top-right slot beside the legend. */
   toolbar?: ReactNode;
+  /** Name each line at its end instead of in a legend, as in a printed figure. */
+  directLabels?: boolean;
 };
 
 const M = { top: 12, right: 56, bottom: 26, left: 8 };
@@ -60,7 +62,7 @@ const RIBBON_H = 14;
  */
 function TimeSeriesImpl({
   data, x = "date", series: seriesProp, band, refLines = [], markers = [], regions = [], ribbon, highlight, height = 260,
-  format = fmtTick, yLabel, notesKey, legend = true, robust = false, zeroFill = false, bars, toolbar,
+  format = fmtTick, yLabel, notesKey, legend = true, robust = false, zeroFill = false, bars, toolbar, directLabels = false,
 }: TimeSeriesProps) {
   const uid = useId();
   const series = useMemo<Series[]>(() => (bars ? [...seriesProp, { key: bars.key, label: bars.label ?? bars.key, kind: "bars" as const }] : seriesProp), [seriesProp, bars]);
@@ -202,7 +204,7 @@ function TimeSeriesImpl({
   const legendSeries = paths.filter((p) => !p.s.muted);
   const visibleSeries = legendSeries.filter((p) => !hidden.has(p.s.key));
   const lastRow = visible[visible.length - 1];
-  const legendItems = legend && legendSeries.length > 1
+  const legendItems = legend && !directLabels && legendSeries.length > 1
     ? legendSeries.map((p) => ({ id: p.s.key, hidden: hidden.has(p.s.key), label: p.s.label, color: p.color, dash: p.s.dash, value: (() => { const v = num((hovered ?? lastRow)?.r[p.s.key]); return v === null ? undefined : format(v); })() }))
     : null;
 
@@ -330,6 +332,22 @@ function TimeSeriesImpl({
             const v = lv ? num(lv.r[p.s.key]) : null;
             return v === null ? null : <AxisTag key={`end-${p.s.key}`} x={x1 + 2} y={ys(clampY(v))} text={format(v)} tone={p.color} />;
           })}
+
+          {directLabels ? (() => {
+            // End-of-line names, pushed apart so none overlap; the series under test is drawn bold.
+            const ends = visibleSeries.filter((p) => p.s.kind !== "bars").map((p) => {
+              const lv = [...p.pts].reverse().find((d) => d.t <= tDomain[1]);
+              const v = lv ? num(lv.r[p.s.key]) : null;
+              return v === null ? null : { p, y: ys(clampY(v)) };
+            }).filter((e): e is { p: (typeof visibleSeries)[number]; y: number } => e !== null).sort((a, b) => a.y - b.y);
+            for (let i = 1; i < ends.length; i++) ends[i].y = Math.max(ends[i].y, ends[i - 1].y + 13);
+            const over = ends.length ? ends[ends.length - 1].y - (M.top + plotH - 4) : 0;
+            if (over > 0) for (const e of ends) e.y -= over;
+            return ends.map(({ p, y }) => (
+              <text key={`dl-${p.s.key}`} x={x1 - 6} y={y - 5} textAnchor="end" fontSize={11} fontWeight={(p.s.width ?? 0) >= 2 ? 600 : 450} fill={p.color}
+                paintOrder="stroke" stroke="var(--island)" strokeWidth={3} strokeLinejoin="round" style={{ fontFamily: "var(--font)", pointerEvents: "none" }}>{p.s.label}</text>
+            ));
+          })() : null}
 
           {markers.map((m, i) => {
             const t = parseDate(m.date);
