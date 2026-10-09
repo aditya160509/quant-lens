@@ -38,6 +38,8 @@
   /* Comparators and controls: the thing under test is saturated, everything it is measured against is quiet. */
   --ctl: oklch(0.6 0.02 260);
   --ctl-soft: oklch(0.6 0.02 260 / 0.35);
+  /* Comparator tints, as in a printed figure: pink for alternatives, green for related variants, grey for baselines, then cream and lilac. */
+  --tint-1: oklch(0.76 0.09 18); --tint-2: oklch(0.78 0.1 150); --tint-3: oklch(0.72 0.012 260); --tint-4: oklch(0.83 0.09 88); --tint-5: oklch(0.74 0.09 315);
   /* Sequential ramp (low to high) and the diverging midpoint. */
   --q1: oklch(0.24 0.05 258); --q2: oklch(0.3 0.08 258); --q3: oklch(0.38 0.11 258); --q4: oklch(0.47 0.14 258); --q5: oklch(0.56 0.16 258);
   --q6: oklch(0.65 0.15 258); --q7: oklch(0.74 0.12 258); --q8: oklch(0.83 0.08 258); --q9: oklch(0.91 0.04 258);
@@ -91,6 +93,7 @@
   --c8: oklch(0.64 0.15 135);
   --ctl: oklch(0.62 0.02 260);
   --ctl-soft: oklch(0.62 0.02 260 / 0.3);
+  --tint-1: oklch(0.62 0.13 20); --tint-2: oklch(0.6 0.12 150); --tint-3: oklch(0.6 0.012 260); --tint-4: oklch(0.68 0.12 80); --tint-5: oklch(0.58 0.12 315);
   --q1: oklch(0.96 0.02 258); --q2: oklch(0.9 0.05 258); --q3: oklch(0.83 0.08 258); --q4: oklch(0.74 0.12 258); --q5: oklch(0.65 0.15 258);
   --q6: oklch(0.56 0.17 258); --q7: oklch(0.47 0.16 258); --q8: oklch(0.38 0.13 258); --q9: oklch(0.3 0.1 258);
   --mid: oklch(0.95 0.003 260);
@@ -325,6 +328,10 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .results[data-lab="ml"] .card:hover::after, .results[data-lab="ml"] .card:focus-within::after { opacity: 1; }
 .results[data-lab="ml"] .card.flash::after { opacity: 1; box-shadow: inset 0 0 0 1px var(--accent-line), 0 0 0 4px var(--accent-soft); }
 .results[data-lab="ml"] .card-h { padding: 0 0 8px; min-height: 0; border-bottom: 1px solid var(--line); }
+.results[data-lab="ml"] .card-h { position: relative; }
+/* Tools float over the title on hover instead of reserving width the finding-title needs. */
+.results[data-lab="ml"] .card-h .tools { position: absolute; right: 0; top: -6px; z-index: 2; padding: 2px 2px 2px 10px; border-radius: 8px; background: var(--island); box-shadow: -10px 0 12px -6px var(--island); pointer-events: none; }
+.results[data-lab="ml"] .card:hover .card-h .tools, .results[data-lab="ml"] .card:focus-within .card-h .tools { pointer-events: auto; }
 .results[data-lab="ml"] .card-h h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.012em; }
 .results[data-lab="ml"] .card-b { padding: 14px 0 0; }
 .ex-no { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { Bars } from "@/charts/Bars";
 import { Diverging } from "@/charts/Diverging";
+import { Dumbbell } from "@/charts/Dumbbell";
+import { Radar } from "@/charts/Radar";
 import { StackedArea } from "@/charts/StackedArea";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { useManifest } from "@/modules/research/api";
@@ -108,6 +110,47 @@ const QUIET = ["var(--c2)", "var(--c3)", "var(--c5)", "var(--c4)", "var(--c6)", 
 const quiet = (i: number) => `color-mix(in oklch, ${QUIET[i % QUIET.length]} 62%, var(--text-4))`;
 
 /* ---------------------------------------------------------------- Alpha */
+
+const nz = (v: unknown) => (isNum(v) ? v : null);
+
+/** Every model on every metric at once, outward is better; the model under test is filled. */
+export function AlphaRadar({ rows }: ViewProps) {
+  if (rows.length < 2) return <Empty />;
+  return (
+    <div>
+      <Radar axes={[
+        { key: "test_ic", label: "Held-out IC", format: (v) => v.toFixed(3) },
+        { key: "ic_tstat", label: "IC t-stat", format: (v) => v.toFixed(2) },
+        { key: "ew_spread", label: "EW spread", format: (v) => pct(v, 2) },
+        { key: "vw_spread", label: "VW spread", format: (v) => pct(v, 2) },
+        { key: "net_sharpe", label: "Net Sharpe", format: (v) => v.toFixed(2) },
+        { key: "turnover", label: "Turnover", better: "low", format: (v) => pct(v, 0) },
+        { key: "capacity_usd", label: "Capacity", format: (v) => usd(v) },
+      ]} series={rows.map((r) => ({ label: nm(r.model), primary: Boolean(r.primary), values: { test_ic: nz(r.test_ic), ic_tstat: nz(r.ic_tstat), ew_spread: nz(r.ew_spread), vw_spread: nz(r.vw_spread), net_sharpe: nz(r.net_sharpe), turnover: nz(r.turnover), capacity_usd: nz(r.capacity_usd) } }))} />
+      <p className="ml-note">Each axis is rescaled across the models shown, so the rim is the best of them and the centre the worst; turnover is flipped so outward is always better. Hover an axis or a model for the raw numbers.</p>
+    </div>
+  );
+}
+
+/** The chosen allocation against its controls on return, risk, drawdown and trading cost. */
+export function StrategyRadar({ rows }: ViewProps) {
+  if (rows.length < 3) return <Empty />;
+  const key = "strategy" in (rows[0] ?? {}) ? "strategy" : "model";
+  const primary = rows.find((r) => r.kind === "chosen") ?? rows[0];
+  return (
+    <div>
+      <Radar axes={[
+        { key: "annual_return", label: "Return", format: (v) => pct(v) },
+        { key: "sharpe", label: "Sharpe", format: (v) => v.toFixed(2) },
+        { key: "annual_volatility", label: "Volatility", better: "low", format: (v) => pct(v) },
+        { key: "max_drawdown", label: "Max drawdown", format: (v) => pct(v) },
+        { key: "average_turnover", label: "Turnover", better: "low", format: (v) => pct(v, 0) },
+        { key: "cost_drag_annual", label: "Cost drag", better: "low", format: (v) => pct(v, 2) },
+      ]} series={rows.map((r) => ({ label: nm(r[key]), primary: r === primary, values: { annual_return: nz(r.annual_return), sharpe: nz(r.sharpe), annual_volatility: nz(r.annual_volatility), max_drawdown: nz(r.max_drawdown), average_turnover: nz(r.average_turnover), cost_drag_annual: nz(r.cost_drag_annual) } }))} />
+      <p className="ml-note">Outward is better on every axis: lower volatility, shallower drawdown, less turnover and cost. Rescaled across the strategies shown.</p>
+    </div>
+  );
+}
 
 /** The model against the simple alternatives it must beat, on held-out data. */
 export function AlphaControls({ rows }: ViewProps) {
@@ -359,9 +402,20 @@ export function StrategyCompare({ rows, feature }: ViewProps) {
   // The strategy under test is the accent; unmanaged and the controls are the yardsticks.
   const primary = rows.find((r) => r.kind === "chosen") ?? rows.find((r) => ["vol_targeted", "regime_filtered", "min_variance"].includes(str(r[key]))) ?? rows[0];
   const sorted = [...rows].sort((a, b) => (n(b.sharpe) ?? -9) - (n(a.sharpe) ?? -9));
+  // With two or three strategies, the fair yardstick (same exposure, else unmanaged) against the one under test, metric by metric.
+  const yard = rows.length <= 3 ? rows.find((r) => r[key] === "constant_exposure") ?? rows.find((r) => r[key] === "unmanaged" && r !== primary) ?? rows.find((r) => r !== primary) : undefined;
   return (
     <div>
-      <Bars bars={sorted.filter((r) => isNum(r.sharpe)).map((r) => ({ label: nm(r[key]), value: r.sharpe as number, color: r === primary ? "var(--accent)" : undefined, muted: r !== primary }))} signed={false} height={190} yLabel="Annualised Sharpe" format={(v) => v.toFixed(2)} />
+      {yard ? (
+        <Dumbbell aLabel={nm(yard[key])} bLabel={nm(primary[key])} rows={[
+          { label: "Sharpe", a: nz(yard.sharpe), b: nz(primary.sharpe), format: (v) => v.toFixed(2) },
+          { label: "Annual return", a: nz(yard.annual_return), b: nz(primary.annual_return), format: (v) => pct(v) },
+          { label: "Volatility", a: nz(yard.annual_volatility), b: nz(primary.annual_volatility), format: (v) => pct(v), better: "low" },
+          { label: "Max drawdown", a: nz(yard.max_drawdown), b: nz(primary.max_drawdown), format: (v) => pct(v) },
+        ]} />
+      ) : (
+        <Bars bars={sorted.filter((r) => isNum(r.sharpe)).map((r) => ({ label: nm(r[key]), value: r.sharpe as number, color: r === primary ? "var(--accent)" : undefined, muted: r !== primary }))} signed={false} height={190} yLabel="Annualised Sharpe" format={(v) => v.toFixed(2)} />
+      )}
       <div className="ml-table-wrap">
         <table className="ml-table">
           <thead><tr><th>{feature.id === "ml05" ? "Allocation" : "Strategy"}</th><th>Return</th><th>Volatility</th><th>Sharpe</th><th>Max drawdown</th>{"average_turnover" in primary ? <th>Turnover</th> : null}{"cost_drag_annual" in primary ? <th>Cost drag</th> : null}{"average_exposure" in primary || "mean_size" in primary ? <th>Avg exposure</th> : null}</tr></thead>

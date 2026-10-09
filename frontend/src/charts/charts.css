@@ -4,3 +4,31 @@
 .dv-row { display: grid; align-items: center; min-height: var(--row-h, 26px); }
 .dv-bar { transition: width 200ms ease, left 200ms ease; }
 .dv-row:hover { background: var(--panel-2); }
+
+/* Radar */
+.radar-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; margin-top: 4px; font-size: 12px; color: var(--text-2); }
+.radar-legend button { display: inline-flex; align-items: center; gap: 6px; padding: 2px 0; }
+.radar-legend button[data-primary] { color: var(--text); font-weight: 600; }
+.radar-legend i { width: 10px; height: 10px; border-radius: 2px; }
+.radar-readout { position: absolute; top: 4px; right: 0; border-collapse: collapse; font-size: 11.5px; background: color-mix(in oklch, var(--raise) 92%, transparent); border-radius: 8px; box-shadow: var(--shadow); pointer-events: none; }
+.radar-readout td { padding: 3px 10px; color: var(--text-3); }
+.radar-readout td.num { color: var(--text); text-align: right; }
+
+/* Dumbbell */
+.dumbbell { display: grid; gap: 0; font-size: 12.5px; }
+.db-key, .db-row { display: grid; grid-template-columns: minmax(90px, 160px) minmax(0, 1fr) 72px; align-items: center; gap: 14px; }
+.db-key { padding-bottom: 8px; font-size: 11.5px; color: var(--text-3); border-bottom: 1px solid var(--line); }
+.db-key > span:nth-child(2) { display: flex; align-items: center; gap: 6px; }
+.db-key > span:last-child { text-align: right; }
+.db-key .db-dot { position: static; transform: none; }
+.db-row { height: 46px; border-bottom: 1px solid var(--line); }
+.db-label { color: var(--text-2); }
+.db-track { position: relative; height: 100%; }
+.db-line { position: absolute; top: 50%; height: 2px; margin-top: -1px; border-radius: 1px; opacity: 0.7; }
+.db-zero { position: absolute; top: 10px; bottom: 10px; width: 1px; background: var(--line-3); }
+.db-dot { position: absolute; top: 50%; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; display: inline-block; flex: none; }
+.db-dot.a { background: var(--tint-3); box-shadow: 0 0 0 1.5px var(--island); }
+.db-dot.b { background: var(--accent); box-shadow: 0 0 0 1.5px var(--island); }
+.db-dot span { position: absolute; bottom: 13px; left: 50%; transform: translateX(-50%); font-size: 10.5px; color: var(--text-3); white-space: nowrap; }
+.db-dot.b span { color: var(--text); font-weight: 600; top: 13px; bottom: auto; }
+.db-delta { text-align: right; font-weight: 600; }

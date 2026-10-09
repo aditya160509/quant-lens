@@ -45,7 +45,9 @@ function BarsImpl({ bars, height = 240, format = fmtTick, refLines = [], signed 
   const ys = scaleLinear().domain([Math.min(...values), Math.max(...values)]).range([height - M.bottom, top]).nice();
   const xs = scaleBand().domain(bars.map((_, i) => `${i}`)).range([M.left, Math.max(M.left + 10, width - M.right)]).paddingInner(bars.length > 30 ? 0.15 : 0.32).paddingOuter(0.2);
   const zero = ys(0);
-  const color = (b: BarDatum) => b.color ?? (b.muted ? "var(--ctl)" : signed ? (b.value >= 0 ? "var(--up)" : "var(--down)") : "var(--s1)");
+  // Comparators take the tint family in order (alternatives, related, baseline, ...), so each stays identifiable but none competes with the bar under test.
+  const tintOf = new Map(bars.filter((b) => b.muted && !b.color).map((b, i) => [b, `var(--tint-${(i % 5) + 1})`]));
+  const color = (b: BarDatum) => b.color ?? (b.muted ? tintOf.get(b) ?? "var(--ctl)" : signed ? (b.value >= 0 ? "var(--up)" : "var(--down)") : "var(--s1)");
   const hb = hover === null ? null : bars[hover];
   const labels = !hideLabels && bars.length <= 24;
   // Bars never grow fatter than 56 px: wide bars read as blocks, not as values.
@@ -68,8 +70,8 @@ function BarsImpl({ bars, height = 240, format = fmtTick, refLines = [], signed 
             return (
               <g key={i} onPointerEnter={() => setHover(i)}>
                 <rect x={x - off - xs.step() * 0.15} y={top} width={xs.step()} height={height - top - M.bottom} fill="transparent" />
-                <path d={barPath(x, w, y, zero)} fill={color(b)} fillOpacity={(b.muted ? 0.28 : 0.92) * (hover === null || active ? 1 : 0.5)}
-                  stroke={b.muted ? color(b) : "none"} strokeOpacity={hover === null || active ? 0.9 : 0.45} strokeWidth={1} />
+                <path d={barPath(x, w, y, zero)} fill={color(b)} fillOpacity={(b.muted ? 0.42 : 0.95) * (hover === null || active ? 1 : 0.5)}
+                  stroke={b.muted ? color(b) : `color-mix(in oklch, ${color(b)} 70%, var(--text))`} strokeOpacity={hover === null || active ? 1 : 0.45} strokeWidth={1.2} />
                 {b.lo !== null && b.lo !== undefined && b.hi !== null && b.hi !== undefined ? (
                   <g stroke="var(--text)" strokeOpacity={0.75} strokeWidth={1.1}>
                     <line x1={x + w / 2} x2={x + w / 2} y1={ys(b.lo)} y2={ys(b.hi)} />

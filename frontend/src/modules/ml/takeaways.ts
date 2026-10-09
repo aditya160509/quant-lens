@@ -38,6 +38,20 @@ const GEN: Record<string, Gen> = {
     const sig = t !== null && Math.abs(t) < 1.96 ? "; its interval includes zero" : "";
     return `${cap(nm(m.model))} ${vs} on held-out IC${sig}`;
   },
+  "ml02:controls:alphaRadar": (r) => {
+    const rows = out(r, "controls"), m = rows.find((x) => x.primary);
+    if (!m) return null;
+    const cols = ["test_ic", "ic_tstat", "ew_spread", "vw_spread", "net_sharpe", "capacity_usd"];
+    const wins = cols.filter((c) => isNum(m[c]) && rows.every((x) => x === m || !isNum(x[c]) || (m[c] as number) >= (x[c] as number))).length;
+    return `${cap(nm(m.model))} leads on ${wins} of ${cols.length} return and capacity metrics`;
+  },
+  "ml05:controls_summary:strategyRadar": (r) => {
+    const rows = out(r, "controls_summary"), ch = rows.find((x) => x.kind === "chosen");
+    if (!ch) return null;
+    const best = top(rows.filter((x) => x !== ch), "sharpe");
+    const lessRisk = rows.filter((x) => x !== ch && isNum(x.annual_volatility) && isNum(ch.annual_volatility) && (ch.annual_volatility as number) < (x.annual_volatility as number)).length;
+    return `${cap(nm(ch.strategy))} carries less risk than ${lessRisk} of ${rows.length - 1} alternatives${best && isNum(best.sharpe) && isNum(ch.sharpe) && best.sharpe > ch.sharpe ? `, but ${nm(best.strategy)} earns more per unit of it` : ""}`;
+  },
   "ml02:decile_spreads:": (r) => {
     const s = out(r, "decile_summary").find((x) => x.model === "ensemble" && x.weighting === "equal") ?? out(r, "decile_summary")[0];
     const sp = n(s?.spread), t = n(s?.t_stat);

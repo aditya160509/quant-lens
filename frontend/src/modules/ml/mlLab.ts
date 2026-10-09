@@ -160,7 +160,7 @@ const LAYOUTS: Record<string, FeatureLayout> = {
     sections: [
       sec("ranking", "Ranking", [card("prediction_rank_table", 7, { title: "Today's ranking · click a name" }), card("ticker_contributions", 5, { view: "mlWaterfall", title: "Why this name ranks here" })]),
       sec("changed", "What changed", [card("what_changed", 12, { title: "Moves since the last rebalance" })], "Names that entered or left the top of the ranking, with the features that moved them."),
-      sec("controls", "Against controls", [card("controls", 12, { title: "The model against simple alternatives, held-out" }), card("decile_spreads", 6, { title: "Returns by prediction bucket" }), card("net_of_cost_curve", 6, { title: "Long-short after costs" })],
+      sec("controls", "Against controls", [card("controls", 12, { title: "The model against simple alternatives, held-out" }), card("controls", 5, { view: "alphaRadar", title: "Every metric at once" }), card("decile_spreads", 7, { title: "Returns by prediction bucket" }), card("net_of_cost_curve", 12, { title: "Long-short after costs" })],
         "A model earns its complexity only if it beats Ridge, a 3-factor OLS and the IC-weighted composite out of sample."),
       sec("explain", "Explain", [card("shap_beeswarm", 7, { title: "What drives predictions" }), card("feature_families", 5, { title: "Contribution by feature family" })], "Exact TreeSHAP values on the latest predictions: direction, size and spread of each feature's effect."),
       sec("quality", "Model quality", [card("rolling_monthly_ic_series", 6, { title: "IC by month, held-out period" }), card("ensemble", 6, { title: "How the blend was chosen" }), card("feature_drift", 6, { title: "Feature drift and retrain check" }), card("training_audit", 6, { view: "mlProvenance", title: "Trained and tested on" }), card("model_ic_leaderboard", 12, { title: "Models by test IC" })]),
@@ -227,7 +227,7 @@ const LAYOUTS: Record<string, FeatureLayout> = {
     sections: [
       sec("trade", "Your trades", [card("trade_list", 12, { title: "Rebalance your holdings" }), card("holding_risk", 12, { title: "Risk contribution per holding" })], "Shown when you paste holdings in the Study panel."),
       sec("weights", "Weights", [card(["weight_stability", "risk_contribution_decomposition"], 12, { title: "Target weights, their stability and where the risk sits" })]),
-      sec("controls", "Against controls", [card("controls_summary", 12, { title: "Walk-forward, net of costs, against the controls" }), card("controls_equity", 8, { title: "Growth of $1 by allocation" }), card("rebalance_log", 4, { title: "Trade only when it pays" })],
+      sec("controls", "Against controls", [card("controls_summary", 7, { title: "Walk-forward, net of costs, against the controls" }), card("controls_summary", 5, { view: "strategyRadar", title: "Every metric at once" }), card("controls_equity", 8, { title: "Growth of $1 by allocation" }), card("rebalance_log", 4, { title: "Trade only when it pays" })],
         "Shrinkage minimum variance has to beat equal weight, inverse variance and risk parity after costs to earn its place."),
       sec("structure", "Cluster structure", [card("cluster_dendrograms", 12, { title: "Clustering tree and reordered correlations" })]),
       sec("bl", "With alpha views", [card("black_litterman_posterior_return_vector", 6, { title: "Prior → posterior returns" }), card("alpha_views", 6, { view: "mlBlWeights", title: "How the views tilt the weights" })]),
@@ -278,9 +278,9 @@ const VV = group(() => import("./validateViews") as Promise<Record<string, unkno
 const PV = group(() => import("./pageViews") as Promise<Record<string, unknown>>);
 registerViews({
   mlProvenance: PV.MlProvenance, mlNext: PV.MlNext, alphaControls: PV.AlphaControls, alphaDeciles: PV.AlphaDeciles, alphaNetCurve: PV.AlphaNetCurve, alphaWhatChanged: PV.AlphaWhatChanged,
-  alphaFamilies: PV.AlphaFamilies, alphaDrift: PV.AlphaDrift, alphaEnsemble: PV.AlphaEnsemble, riskToday: PV.RiskToday, riskVarEs: PV.RiskVarEs, strategyCompare: PV.StrategyCompare, riskStress: PV.RiskStress,
+  alphaFamilies: PV.AlphaFamilies, alphaDrift: PV.AlphaDrift, alphaEnsemble: PV.AlphaEnsemble, riskToday: PV.RiskToday, riskVarEs: PV.RiskVarEs, strategyCompare: PV.StrategyCompare, riskStress: PV.RiskStress, alphaRadar: PV.AlphaRadar, strategyRadar: PV.StrategyRadar,
   allocStability: PV.AllocStability, allocTrades: PV.AllocTrades, allocRebalances: PV.AllocRebalances, alphaSectors: PV.AlphaSectors, allocSectors: PV.AllocSectors, shapImportance: PV.ShapImportance, regimeSpells: PV.RegimeSpells, barrierTimeline: PV.BarrierTimeline, barrierMethods: PV.BarrierMethods, metaProbability: PV.MetaProbability, equityCompare: PV.EquityCompare,
-}, ["barrierTimeline", "metaProbability", "equityCompare", "alphaControls", "alphaDeciles", "alphaNetCurve", "alphaEnsemble", "strategyCompare", "riskStress"]);
+}, ["alphaRadar", "strategyRadar", "barrierTimeline", "metaProbability", "equityCompare", "alphaControls", "alphaDeciles", "alphaNetCurve", "alphaEnsemble", "strategyCompare", "riskStress"]);
 registerViews({
   valVerdict: VV.ValVerdict, valAutopsy: VV.ValAutopsy, valCostCurve: VV.ValCostCurve, valControls: VV.ValControls, valShuffle: VV.ValShuffle, valCpcv: VV.ValCpcv, valMonteCarlo: VV.ValMonteCarlo,
   valTransfer: VV.ValTransfer, valPlateau: VV.ValPlateau, valStability: VV.ValStability, valOverfit: VV.ValOverfit, valLeakage: VV.ValLeakage, valImprove: VV.ValImprove, valReceipt: VV.ValReceipt,
