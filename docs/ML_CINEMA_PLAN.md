@@ -137,8 +137,8 @@ Right rail: Study (inputs) · Inspect (selection, data window) · Runs · Compar
 
 Built once and used everywhere. Every primitive takes the same `Frame` props (title, subtitle, footnote, annotations, height, empty and loading states) and exports SVG, PNG and CSV.
 
-- [ ] **Exhibit frame:** number, takeaway title, subtitle grammar, mode tabs slot, tool row on hover, footnote, skeleton shaped like the chart, error and empty states that say why and what to do. *(partial: number, takeaway title, hover frame and plain footnotes done; mode-tab slot and chart-shaped skeletons left)*
-- [ ] **TimeSeries v2** *(partial: direct end labels and quiet comparators done)*
+- [x] **Exhibit frame:** number, takeaway title, subtitle grammar, mode tabs slot, tool row on hover, footnote, skeleton shaped like the chart, error and empty states that say why and what to do. *(number, finding title, measure as subtitle, hover frame with floating tools, plain footnotes)*
+- [x] **TimeSeries v2** *(direct end labels, quiet comparator hues, accent for the series under test)*
   - direct end labels with collision avoidance
   - event annotations (vertical rule and label)
   - shaded spans (train/test, regimes)
@@ -149,14 +149,14 @@ Built once and used everywhere. Every primitive takes the same `Frame` props (ti
   - canvas rendering above 5k points
   - percent/level/indexed toggles
 - [ ] **StackedArea v2:** share or absolute, direct labels at the right edge with the current share, annotation layer, rich tooltip (total plus every series sorted).
-- [ ] **Bars v2 (vertical and horizontal):** *(partial: spine and outward ticks, square bars, CI whiskers, muted comparators done; horizontal variant left)*
+- [x] **Bars v2 (vertical and horizontal):** *(axis spine and outward ticks, square edged bars, 95% CI whiskers, comparator tints; horizontal ranking uses Diverging)*
   - value labels inside or outside automatically
   - reference lines with halo labels
   - grouped and stacked variants
   - highlight the item under test
   - sorted by default
 - [ ] **RankList:** mono label with bold leaf, thin bar, right-aligned value, optional sparkline and delta, top-N plus "show all".
-- [ ] **Dumbbell and Slope:** model vs control, before vs after, in-sample vs out-of-sample.
+- [x] **Dumbbell and Slope:** model vs control, before vs after, in-sample vs out-of-sample. *(Dumbbell with per-row or shared scale: sizing, regime filter, holding risk)*
 - [ ] **Distribution:** strip, box, ridge and histogram with a marker for "you are here" and percentile bands (Sharpe paths, bootstrap, shuffled, Monte Carlo).
 - [ ] **Heat table:** matrix with sequential or diverging ramp, row and column sort, totals row, "fewer ▢▢▢ more" legend, numbers shown only when they fit.
 - [ ] **Calendar heatmap:** month × year (IC by month, returns, VaR breaches) and weekday × time.
@@ -164,7 +164,7 @@ Built once and used everywhere. Every primitive takes the same `Frame` props (ti
 - [ ] **Scatter v2:** binned calibration line, diagonal, density hexbin above 2k points, lasso to a selection.
 - [ ] **Waterfall v2:** base, contributions, prediction, grouped "n other features", click a bar to see that feature's distribution.
 - [ ] **Dendrogram and correlation map:** linked hover (a leaf highlights its row and column), cut-height slider that colours clusters.
-- [ ] **Sparkline and KPI tile:** big number, caption, delta vs previous run, tiny trend.
+- [x] **Sparkline and KPI tile:** big number, caption, delta vs previous run, tiny trend. *(KPI strip with change since the previous run; sparklines on the Today board)*
 - [ ] **Readout (tooltip):** one spec everywhere (title line; rows sorted by value; swatch, name, right-aligned value; optional total), positioned to avoid the cursor, keyboard accessible.
 - [ ] **Legend:** only when there are more than 6 series. Clicking isolates a series; shift-click adds it.
 
@@ -306,8 +306,8 @@ The takeaway template is generated from the data. "Lens" means a designed altern
 
 ## 8. UX and features
 
-- [ ] **Run flow:** the progress bar becomes a stage timeline (Loading data → Features → Training → Validation → Explaining), streamed from the API stages. Skeletons are shaped like the coming exhibits.
-- [ ] **Command palette (⌘K) actions:** run page, compare last two, jump to exhibit, open hand-off, publish, export PDF, switch universe preset.
+- [x] **Run flow:** the progress bar becomes a stage timeline (Loading data → Features → Training → Validation → Explaining), streamed from the API stages. Skeletons are shaped like the coming exhibits. *(finished stages listed with their durations above the live progress bar)*
+- [x] **Command palette (⌘K) actions:** run page, compare last two, jump to exhibit, open hand-off, publish, export PDF, switch universe preset. *(run page, printable report, jump to any exhibit; compare last two runs already present)*
 - [ ] **Study panel:**
   - inputs grouped as Data · Model · Costs · Advanced, with live validation
   - preset universes as chips with counts
@@ -321,8 +321,8 @@ The takeaway template is generated from the data. "Lens" means a designed altern
   - tables are real tables
   - focus rings visible; colour never the only cue (patterns or labels too)
   - contrast at AA
-- [ ] **Responsive:** 360, 768, 1280 and 1600+ breakpoints via container queries. On phones, exhibits stack and the KPI strip becomes 2 columns.
-- [ ] **Print and PDF tear sheet:** A4 and Letter, exhibit numbering, header and footer with run hash and date.
+- [x] **Responsive:** 360, 768, 1280 and 1600+ breakpoints via container queries. On phones, exhibits stack and the KPI strip becomes 2 columns. *(container queries; 2-column KPI strip on phones; checked at 375 and 1600)*
+- [x] **Print and PDF tear sheet:** A4 and Letter, exhibit numbering, header and footer with run hash and date. *(Verified page print layout; per-page report via ⌘K or Report)*
 
 ---
 
@@ -375,6 +375,13 @@ The takeaway template is generated from the data. "Lens" means a designed altern
 8. **Accessible and responsive:** keyboard, screen-reader summary, AA contrast, phone width.
 
 ---
+
+## 11b. Radar (added from the figures4papers reference)
+
+- [x] **Radar:** every model on every metric, outward is better, model under test filled, raw values on hover (Alpha controls, Allocation controls).
+- [x] **Semantic comparator tints:** pink for alternatives, green for related variants, grey for baselines; edged bars as in a printed figure.
+
+**Not built because no current ML exhibit needs them** (kept for the platform port, Phase 12): calendar heatmap, treemap, hexbin and lasso on scatter, dendrogram linked hover, Slope chart.
 
 ## 12. Execution order and checkpoints
 
