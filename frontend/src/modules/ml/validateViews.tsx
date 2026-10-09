@@ -126,7 +126,6 @@ export function ValAutopsy({ result }: ViewProps) {
   if (!causes.length) return <Empty />;
   return (
     <div className="val-autopsy">
-      {a.sentence ? <p className="val-sentence">{String(a.sentence)}</p> : null}
       <ol>
         {causes.map((c, i) => {
           const tone = c.severity >= 0.66 ? "var(--down)" : c.severity >= 0.33 ? "var(--warn)" : "var(--text-4)";

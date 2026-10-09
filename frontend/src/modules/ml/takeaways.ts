@@ -93,7 +93,40 @@ const GEN: Record<string, Gen> = {
     return rows.length ? `${rows.length} names moved since the last rebalance; ${up} rose` : null;
   },
 
+  "ml02:prediction_rank_table:": (r) => {
+    const rows = [...out(r, "current_predictions")].filter((x) => isNum(x.prediction)).sort((a, b) => (b.prediction as number) - (a.prediction as number));
+    return rows.length ? `${String(rows[0].ticker)} ranks first, expected ${pct(rows[0].prediction as number, 2)} over 21 days; ${String(rows[rows.length - 1].ticker)} last` : null;
+  },
+  "ml02:model_ic_leaderboard:": (r) => {
+    const b = top(out(r, "model_ic_leaderboard"), "test_ic");
+    return b ? `${cap(nm(b.model))} has the best test IC, ${f3(b.test_ic as number)}` : null;
+  },
+
   /* ---------------- Volatility & risk */
+  "ml03:risk_today:": (r) => {
+    const t = out(r, "risk_today")[0];
+    return t && isNum(t.range_21d_low) && isNum(t.range_21d_high) ? `${String(t.asset)}'s likely one-month range is ${pct(t.range_21d_low, 0)} to +${pct(t.range_21d_high, 0)}` : null;
+  },
+  "ml03:vol_term_structure:": (r) => {
+    const rows = out(r, "vol_term_structure").filter((x) => isNum(x.forecast_vol) && isNum(x.horizon));
+    const by = (h: number) => rows.filter((x) => x.horizon === h).map((x) => x.forecast_vol as number);
+    const hs = [...new Set(rows.map((x) => x.horizon as number))].sort((a, b) => a - b);
+    if (hs.length < 2) return null;
+    const avg = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
+    const a = avg(by(hs[0])), b = avg(by(hs[hs.length - 1]));
+    return `Models expect volatility to ${b > a * 1.03 ? "rise" : b < a * 0.97 ? "fall" : "hold"}: ${pct(a, 0)} at ${hs[0]} day${hs[0] > 1 ? "s" : ""}, ${pct(b, 0)} at ${hs[hs.length - 1]}`;
+  },
+  "ml03:regime_probability:": (r) => {
+    const rows = out(r, "regime_probability").filter((x) => isNum(x.stress_probability));
+    const last = rows[rows.length - 1];
+    return last ? `Stress probability is ${pct(last.stress_probability as number, 0)} today; above 50% on ${rows.filter((x) => (x.stress_probability as number) > 0.5).length} of ${rows.length} days` : null;
+  },
+  "ml03:forecast_rows:mlVolScatter": (r) => {
+    const rows = out(r, "forecast_rows").filter((x) => x.horizon === 21 && isNum(x.forecast_vol) && isNum(x.realized_vol));
+    if (rows.length < 10) return null;
+    const over = rows.filter((x) => (x.forecast_vol as number) > (x.realized_vol as number)).length / rows.length;
+    return `Forecasts ran above realised volatility ${pct(over, 0)} of the time at 21 days`;
+  },
   "ml03:var_es:": (r) => {
     const v = out(r, "var_es").find((x) => x.horizon === 1 && x.level === 0.99) ?? out(r, "var_es")[0];
     if (!v || !isNum(v.var)) return null;
@@ -216,7 +249,41 @@ const GEN: Record<string, Gen> = {
     return b && rows.length ? `${String(b.asset)} carries ${pct(b.risk_contribution as number, 0)} of portfolio risk (equal share ${pct(1 / rows.length, 0)})` : null;
   },
 
+  "ml05:rebalance_log:": (r) => {
+    const rows = out(r, "rebalance_log");
+    return rows.length ? `Traded at ${rows.filter((x) => x.traded).length} of ${rows.length} rebalances; the rest did not pay for their cost` : null;
+  },
+  "ml05:black_litterman_posterior_return_vector:": (r) => {
+    const rows = out(r, "black_litterman").filter((x) => isNum(x.posterior_return) && isNum(x.reference_prior_return));
+    const b = rows.sort((a, c) => Math.abs((c.posterior_return as number) - (c.reference_prior_return as number)) - Math.abs((a.posterior_return as number) - (a.reference_prior_return as number)))[0];
+    if (!b) return null;
+    const d = (b.posterior_return as number) - (b.reference_prior_return as number);
+    return Math.abs(d) < 1e-6 ? "Without alpha views the posterior equals the prior" : `The views move ${String(b.asset)} most: ${d > 0 ? "+" : ""}${pct(d, 1)} expected return`;
+  },
+  "ml06:ensemble_vs_hmm_comparison:": (r) => {
+    const a = n(out(r, "ensemble_vs_hmm_comparison")[0]?.oos_agreement);
+    return a !== null ? `An independent classifier agrees with the state on ${pct(a, 0)} of held-out days` : null;
+  },
+  "ml06:pc1_variance_monitor:": (r) => {
+    const v = out(r, "pc1_variance_monitor").map((x) => x.pc1_explained_variance).filter(isNum);
+    if (!v.length) return null;
+    const avg = v.reduce((a, b) => a + b, 0) / v.length, now = v[v.length - 1];
+    return `One factor explains ${pct(now, 0)} of moves now, vs ${pct(avg, 0)} on average${now > avg * 1.2 ? ": stocks are moving together" : ""}`;
+  },
+  "ml06:correlation_network_density:": (r) => {
+    const d = out(r, "correlation_network_density")[0];
+    return d && isNum(d.density) ? `${pct(d.density, 0)} of stock pairs are strongly correlated (|ρ| > ${isNum(d.absolute_correlation_threshold) ? d.absolute_correlation_threshold : "?"})` : null;
+  },
+
   /* ---------------- Purged CV */
+  "ml01:per_fold_performance:mlFoldMatrix": (r) => {
+    const rows = out(r, "per_fold_performance");
+    return rows.length ? `${rows.length} splits, each purged of ${isNum(rows[0].purged_observations) ? rows[0].purged_observations : "overlapping"} observations around the test window` : null;
+  },
+  "ml01:probability_of_backtest_overfitting:": (r) => {
+    const x = out(r, "probability_of_backtest_overfitting")[0];
+    return x && isNum(x.pbo) ? `Probability of backtest overfitting ${pct(x.pbo, 0)}` : x?.status === "unavailable" ? "Overfitting tests need every trial you ran" : null;
+  },
   "ml01:purged_vs_naive_cv_comparison:": (r) => {
     const rows = out(r, "purged_vs_naive_cv_comparison");
     const nv = n(rows.find((x) => x.method === "naive_cpcv")?.sharpe), pg = n(rows.find((x) => x.method === "purged_cpcv")?.sharpe);
@@ -254,6 +321,33 @@ const GEN: Record<string, Gen> = {
     return p.status === "computed" ? (p.label === "plateau" ? "Neighbouring settings perform similarly: a plateau, not a peak" : "Performance falls off near the chosen settings: a peak") : null;
   },
   "mlvalidate:leakage:": (r) => (sec(r, "leakage").badge === "pass" ? "No look-ahead found" : sec(r, "leakage").badge ? "Look-ahead check flagged a problem" : null),
+  "mlvalidate:autopsy:": (r) => {
+    const c = ((sec(r, "autopsy").ranked_causes as Row[]) ?? []).filter((x) => isNum(x.severity)).sort((a, b) => (b.severity as number) - (a.severity as number));
+    const serious = c.filter((x) => (x.severity as number) >= 0.66).length;
+    return c.length ? (serious ? `${serious} of ${c.length} causes explain most of the result; worst: ${String(c[0].phrase ?? c[0].cause).replace(/_/g, " ")}` : "No cause explains a large share of the result") : null;
+  },
+  "mlvalidate:autopsy:valCostCurve": (r) => {
+    const cost = ((sec(r, "autopsy").ranked_causes as Row[]) ?? []).find((x) => isNum(x.breakeven_bps));
+    return cost ? `The edge survives costs up to ${(cost.breakeven_bps as number).toFixed(0)} bps per unit of turnover` : null;
+  },
+  "mlvalidate:controls:valShuffle": (r) => {
+    const sh = sec(r, "controls").shuffled as Row | undefined, s = n(sec(r, "controls").strategy_sharpe);
+    if (!sh || !isNum(sh.p_value)) return null;
+    return `${pct(sh.p_value, 0)} of shuffled signals did as well${s !== null ? ` as Sharpe ${f2(s)}` : ""}${sh.p_value < 0.05 ? ": unlikely to be luck" : ": luck cannot be ruled out"}`;
+  },
+  "mlvalidate:deflated_sharpe:": (r) => {
+    const d = sec(r, "deflated_sharpe");
+    return isNum(d.dsr) ? `Deflated Sharpe ${f2(d.dsr)} after ${isNum(d.trials) ? d.trials : "?"} trial${d.trials === 1 ? "" : "s"}${d.dsr >= 0.95 ? ": significant" : ": short of the 0.95 bar"}` : null;
+  },
+  "mlvalidate:improve:": (r) => {
+    const im = sec(r, "improve");
+    if (im.status !== "ok" || !isNum(im.sharpe_delta)) return null;
+    return im.improved ? `Meta-labelling adds ${f2(im.sharpe_delta)} Sharpe: ${String(im.best_variant).replace(/_/g, " ")} is better` : `Filtering does not help: the best variant changes Sharpe by ${im.sharpe_delta >= 0 ? "+" : ""}${f2(im.sharpe_delta)}`;
+  },
+  "mlvalidate:receipt:": (r) => {
+    const h = sec(r, "receipt").receipt_sha256;
+    return typeof h === "string" ? `Reproducible: rerun the same settings to get receipt ${h.slice(0, 12)}…` : null;
+  },
   "mlvalidate:cpcv:": (r) => {
     const d = sec(r, "cpcv").distribution as Row | undefined;
     return d && isNum(d.p50) ? `Median split Sharpe ${f2(d.p50)}${isNum(d.share_positive) ? `; ${pct(d.share_positive, 0)} of splits positive` : ""}${isNum(d.p5) ? `, worst 5% below ${f2(d.p5)}` : ""}` : null;
