@@ -137,8 +137,8 @@ Right rail: Study (inputs) · Inspect (selection, data window) · Runs · Compar
 
 Built once and used everywhere. Every primitive takes the same `Frame` props (title, subtitle, footnote, annotations, height, empty and loading states) and exports SVG, PNG and CSV.
 
-- [ ] **Exhibit frame:** number, takeaway title, subtitle grammar, mode tabs slot, tool row on hover, footnote, skeleton shaped like the chart, error and empty states that say why and what to do.
-- [ ] **TimeSeries v2**
+- [ ] **Exhibit frame:** number, takeaway title, subtitle grammar, mode tabs slot, tool row on hover, footnote, skeleton shaped like the chart, error and empty states that say why and what to do. *(partial: number, takeaway title, hover frame and plain footnotes done; mode-tab slot and chart-shaped skeletons left)*
+- [ ] **TimeSeries v2** *(partial: direct end labels and quiet comparators done)*
   - direct end labels with collision avoidance
   - event annotations (vertical rule and label)
   - shaded spans (train/test, regimes)
@@ -149,7 +149,7 @@ Built once and used everywhere. Every primitive takes the same `Frame` props (ti
   - canvas rendering above 5k points
   - percent/level/indexed toggles
 - [ ] **StackedArea v2:** share or absolute, direct labels at the right edge with the current share, annotation layer, rich tooltip (total plus every series sorted).
-- [ ] **Bars v2 (vertical and horizontal):**
+- [ ] **Bars v2 (vertical and horizontal):** *(partial: spine and outward ticks, square bars, CI whiskers, muted comparators done; horizontal variant left)*
   - value labels inside or outside automatically
   - reference lines with halo labels
   - grouped and stacked variants
@@ -216,7 +216,7 @@ The takeaway template is generated from the data. "Lens" means a designed altern
   - a sparkline of the ranking's IC
   - today's regime pill
   - the last verdict stamp
-- [ ] **"Today" board:** current regime, 1-month vol for the watched names, top 5 ranking names with drivers, the last Validate verdict, allocation drift. Each tile links to its exhibit.
+- [x] **"Today" board:** current regime, 1-month vol for the watched names, top 5 ranking names with drivers, the last Validate verdict, allocation drift. Each tile links to its exhibit. *(regime, risk, top 5, last verdict, allocation weights)*
 - [ ] **Activity:** recent runs as a timeline with verdict colours; a calendar heatmap of runs.
 
 ### Validate my strategy
@@ -296,11 +296,11 @@ The takeaway template is generated from the data. "Lens" means a designed altern
 - **Alpha views:** slope chart from prior to posterior per name, shown only when views exist.
 
 ### Strategy studio
-- [ ] A pipeline diagram drawn as a live flow (nodes with status, edges carrying artifact ids). Clicking a node opens its page; each node shows its verdict stamp.
+- [ ] A pipeline diagram drawn as a live flow (nodes with status, edges carrying artifact ids). Clicking a node opens its page; each node shows its verdict stamp. *(partial: left-to-right flow at ≥1000 px with status per node; edges do not yet carry artifact ids)*
 - [ ] "Run the whole pipeline" button that chains the hand-offs, with progress shown on the nodes.
 
 ### Verified page
-- [ ] A public tear-sheet design: big stamp, hash ribbon, exhibits in print layout, and an "as of" watermark.
+- [x] A public tear-sheet design: big stamp, hash ribbon, exhibits in print layout, and an "as of" watermark. *(stamp, hash ribbon, numbered findings, print layout)*
 
 ---
 
