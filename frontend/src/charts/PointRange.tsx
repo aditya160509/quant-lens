@@ -58,7 +58,7 @@ function PointRangeImpl({ series, xLabel, yLabel, height = 300, event = null, sh
           {shadePre && event ? <rect x={M.left} y={M.top} width={Math.max(0, xs(event.x) - M.left)} height={height - M.top - M.bottom} fill="var(--text)" fillOpacity={0.03} /> : null}
           <GridY scale={ys} x1={M.left} x2={width - M.right} ticks={5} zero={false} />
           {refY !== null && refY >= yMin && refY <= yMax ? <line x1={M.left} x2={width - M.right} y1={crisp(ys(refY))} y2={crisp(ys(refY))} stroke="var(--line-3)" /> : null}
-          <AxisY scale={ys} x={M.left} ticks={5} format={format} />
+          <AxisY scale={ys} x={M.left} ticks={5} format={format} spine />
           <AxisX scale={xs} y={height - M.bottom} ticks={Math.min(10, allX.length)} format={(v) => formatX(v)} />
           <AxisLabel x={width - M.right} y={height - 2} anchor="end">{xLabel}</AxisLabel>
           <AxisLabel x={M.left} y={M.top - 5}>{yLabel}</AxisLabel>

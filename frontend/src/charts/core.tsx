@@ -77,11 +77,16 @@ export function GridX({ scale, y1, y2, ticks = 6 }: { scale: Linear; y1: number;
   );
 }
 
-export function AxisY({ scale, x, ticks = 5, format = fmtTick, side = "left" }: { scale: Linear; x: number; ticks?: number; format?: (v: number) => string; side?: "left" | "right" }) {
+/** Y axis labels; with `spine`, also the axis line and short outward ticks, as in a printed figure. */
+export function AxisY({ scale, x, ticks = 5, format = fmtTick, side = "left", spine }: { scale: Linear; x: number; ticks?: number; format?: (v: number) => string; side?: "left" | "right"; spine?: boolean }) {
+  const [a, b] = scale.range();
+  const d = side === "left" ? -1 : 1;
   return (
     <g>
+      {spine ? <line x1={crisp(x)} x2={crisp(x)} y1={a} y2={b} stroke="var(--line-3)" /> : null}
+      {spine ? scale.ticks(ticks).map((t) => <line key={`t${t}`} x1={x} x2={x + 4 * d} y1={crisp(scale(t))} y2={crisp(scale(t))} stroke="var(--line-3)" />) : null}
       {scale.ticks(ticks).map((t) => (
-        <text key={t} x={side === "left" ? x - 8 : x + 8} y={scale(t)} dy="0.32em" textAnchor={side === "left" ? "end" : "start"} fontSize={10.5} fill="var(--text-3)">
+        <text key={t} x={side === "left" ? x - (spine ? 9 : 8) : x + (spine ? 9 : 8)} y={scale(t)} dy="0.32em" textAnchor={side === "left" ? "end" : "start"} fontSize={10.5} fill="var(--text-3)">
           {format(t)}
         </text>
       ))}
@@ -89,9 +94,12 @@ export function AxisY({ scale, x, ticks = 5, format = fmtTick, side = "left" }: 
   );
 }
 
-export function AxisX({ scale, y, ticks = 6, format = fmtTick }: { scale: Linear; y: number; ticks?: number; format?: (v: number) => string }) {
+export function AxisX({ scale, y, ticks = 6, format = fmtTick, spine }: { scale: Linear; y: number; ticks?: number; format?: (v: number) => string; spine?: boolean }) {
+  const [a, b] = scale.range();
   return (
     <g>
+      {spine ? <line x1={a} x2={b} y1={crisp(y)} y2={crisp(y)} stroke="var(--line-3)" /> : null}
+      {spine ? scale.ticks(ticks).map((t) => <line key={`t${t}`} x1={crisp(scale(t))} x2={crisp(scale(t))} y1={y} y2={y + 4} stroke="var(--line-3)" />) : null}
       {scale.ticks(ticks).map((t) => (
         <text key={t} x={scale(t)} y={y + 15} textAnchor="middle" fontSize={10.5} fill="var(--text-3)">{format(t)}</text>
       ))}

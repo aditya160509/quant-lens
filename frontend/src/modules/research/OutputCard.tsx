@@ -12,6 +12,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { Explore, ExploreControls, VIEW_LABEL, defaults, overlay, useExplore, viewsFor, type ViewKind } from "./outputs/explore";
 import { useJob, useRuns } from "./api";
+import { lab } from "./lab";
 import { cardId, usePins } from "./cardPrefs";
 import type { FeatureResult, FeatureSpec } from "./types";
 
@@ -21,7 +22,7 @@ const useLens = create<{ lens: Record<string, string>; set: (id: string, view: s
     { name: "lab-card-lens", storage: createJSONStorage(() => localStorage), version: 1 }),
 );
 
-export function OutputCard({ item, feature, result, maximized, onToggleMax, onHide, onMove, onSpan, scope }: {
+export function OutputCard({ item, feature, result, maximized, onToggleMax, onHide, onMove, onSpan, scope, index }: {
   item: Item;
   feature: FeatureSpec;
   result: FeatureResult;
@@ -31,6 +32,8 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   onMove?: (d: -1 | 1) => void;
   onSpan?: (span: number) => void;
   scope: string;
+  /** Exhibit number on the page, for labs that number them. */
+  index?: number;
 }) {
   const body = useRef<HTMLDivElement>(null);
   const key = item.keys[0];
@@ -67,6 +70,7 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const [about, setAbout] = useState(false);
   const title = item.title ?? spec?.title ?? label(key);
   const hint = item.hint ?? spec?.description;
+  const finding = custom || overlayId ? null : lab().takeaway?.(feature.id, key, item.view, result) ?? null;
   const name = `${feature.id}_${key}`;
   const svg = () => body.current?.querySelector("svg[role='img']") as SVGSVGElement | null;
 
@@ -83,10 +87,18 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
     <section className="card" id={`out-${key}`} aria-labelledby={`h-${key}`} style={maximized ? { minHeight: "100%" } : undefined}
       onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}>
       <header className="card-h">
-        <div style={{ minWidth: 0, display: "grid" }}>
-          <h3 id={`h-${key}`}>{title}</h3>
-          {hint ? <span className="sub">{hint}</span> : null}
-        </div>
+        {finding ? (
+          <div style={{ minWidth: 0, display: "grid", gap: 3 }}>
+            <span className="ex-no">{index !== undefined ? <b>Exhibit {index}</b> : null}{title}</span>
+            <h3 id={`h-${key}`} className="ex-title">{finding}</h3>
+          </div>
+        ) : (
+          <div style={{ minWidth: 0, display: "grid" }}>
+            {index !== undefined && lab().takeaway ? <span className="ex-no"><b>Exhibit {index}</b></span> : null}
+            <h3 id={`h-${key}`}>{title}</h3>
+            {hint ? <span className="sub">{hint}</span> : null}
+          </div>
+        )}
         <div className="tools">
           {(kinds.length > 1 || alts.length > 0) && viewName !== "latex" ? (
             <button className="btn sm ghost view-as" aria-haspopup="menu" aria-label="View as" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setViewMenu({ x: r.right - 200, y: r.bottom + 4 }); }}>

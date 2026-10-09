@@ -8,6 +8,7 @@ import type { FeatureLayout, Item, Section } from "@/modules/research/layouts";
 import { group, registerAlternates, registerViews } from "@/modules/research/outputs/registry";
 import { isNum, out } from "@/modules/research/format";
 import type { FeatureSpec, InputSpec, OutputSpec } from "@/modules/research/types";
+import { takeaway } from "./takeaways";
 
 /** ML features carry an "ml" prefix in the workspace so their runs and settings never collide with Research. */
 const ID = (raw: string) => `ml${raw}`;
@@ -309,6 +310,7 @@ const VerifiedPage = dynamic(() => import("./VerifiedPage").then((m) => m.Verifi
 
 export const ML_LAB: LabConfig = {
   id: "ml",
+  takeaway,
   title: "Machine learning",
   root: "/ml",
   base: `${API_BASE_URL}/ml/v2`,

@@ -97,6 +97,12 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   }, [sectionIds]);
 
   const scope = `${feature.id}:${run.jobId ?? "draft"}`;
+  // Exhibits are numbered through the whole page, in section order, so "Exhibit 7" means the same card in the tabbed view and the report.
+  const exhibitNo = (secId: string, k: number) => {
+    let base = 1;
+    for (const x of sections) { if (x.id === secId) return base + k; base += shown(x).length; }
+    return base + k;
+  };
   const maxItem = maxKey && active ? active.items.find((i) => i.keys[0] === maxKey) : null;
 
   const runButton = (
@@ -154,9 +160,9 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
               <section key={sec.id} className="out-grid report-sec">
                 <h2 className="report-h">{sec.label}</h2>
                 {sec.intro ? <div className="section-h"><p>{sec.intro}</p></div> : null}
-                {shown(sec).map((item) => (
+                {shown(sec).map((item, k) => (
                   <div key={item.keys.join("+") + (item.view ?? "")} style={{ gridColumn: `span ${item.span}`, minWidth: 0 }}>
-                    <OutputCard item={item} feature={feature} result={result} maximized={false} onToggleMax={() => undefined} scope={scope} />
+                    <OutputCard item={item} feature={feature} result={result} maximized={false} onToggleMax={() => undefined} scope={scope} index={exhibitNo(sec.id, k)} />
                   </div>
                 ))}
               </section>
@@ -174,12 +180,12 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
               {hiddenIn(active).length ? (
                 <div style={{ gridColumn: "1 / -1" }}><button className="btn sm ghost" onClick={() => hiddenIn(active).forEach((i) => setPref(feature.id, cardId(i), { hidden: false }))}>Show {hiddenIn(active).length} hidden</button></div>
               ) : null}
-              {shown(active).map((item) => (
+              {shown(active).map((item, k) => (
                 <motion.div key={item.keys.join("+") + (item.view ?? "")} style={{ gridColumn: `span ${item.span}`, minWidth: 0 }}
                   variants={{ hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0, transition: { duration: DUR.base, ease: [0.2, 0, 0, 1] } } }}>
                   <OutputCard item={item} feature={feature} result={result} maximized={false} onToggleMax={() => setMaxKey(item.keys[0])} onHide={() => setPref(feature.id, cardId(item), { hidden: true })}
                     onMove={(d) => { const list = shown(active); const i = list.findIndex((x) => cardId(x) === cardId(item)); const j = i + d; if (j < 0 || j >= list.length) return; list.forEach((x, k) => setPref(feature.id, cardId(x), { order: k === i ? j : k === j ? i : k })); }}
-                    onSpan={(span) => setPref(feature.id, cardId(item), { span })} scope={scope} />
+                    onSpan={(span) => setPref(feature.id, cardId(item), { span })} scope={scope} index={exhibitNo(active.id, k)} />
                 </motion.div>
               ))}
               {result.meta.research_caveats?.length ? <Caveats items={result.meta.research_caveats} /> : null}

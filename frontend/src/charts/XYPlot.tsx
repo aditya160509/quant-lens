@@ -84,8 +84,8 @@ function XYPlotImpl({
           <GridY scale={ys} x1={M.left} x2={M.left + plotW} ticks={5} />
           <GridX scale={xs} y1={M.top} y2={height - M.bottom} ticks={6} />
           {xa < 0 && xb > 0 ? <line x1={crisp(xs(0))} x2={crisp(xs(0))} y1={M.top} y2={height - M.bottom} stroke="var(--line-3)" /> : null}
-          <AxisY scale={ys} x={M.left} ticks={5} format={formatY} />
-          <AxisX scale={xs} y={height - M.bottom} ticks={6} format={formatX} />
+          <AxisY scale={ys} x={M.left} ticks={5} format={formatY} spine />
+          <AxisX scale={xs} y={height - M.bottom} ticks={6} format={formatX} spine />
           <AxisLabel x={M.left + plotW} y={height - 2} anchor="end">{xLabel}</AxisLabel>
           <AxisLabel x={M.left} y={M.top - 4}>{yLabel}</AxisLabel>
           {quadrants ? (

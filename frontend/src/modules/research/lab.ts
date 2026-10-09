@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import type { FeatureLayout } from "./layouts";
-import type { FeatureSpec } from "./types";
+import type { FeatureResult, FeatureSpec } from "./types";
 
 /**
  * One workspace engine serves several labs (Research, Machine learning). A lab supplies its API,
@@ -42,6 +42,8 @@ export type LabConfig = {
   /** Pages with their own component instead of a feature, keyed by Page.id (needs Page.slug). The "verified" key
    * also serves /<root>/verified/[id], with the id passed in. */
   specials?: Record<string, ComponentType<{ features: FeatureSpec[]; id?: string }>>;
+  /** Exhibit titles that state the finding; null keeps the descriptive title. Labs that set it also number their exhibits. */
+  takeaway?: (featureId: string, key: string, view: string | undefined, result: FeatureResult) => string | null;
   /** What to do before the first run, shown over the empty page. */
   emptyHint?: (featureId: string) => string;
   /** Verb on the run button for a feature, e.g. "Train and test"; defaults to "Run study". */

@@ -2,9 +2,10 @@
 
 import { scaleBand, scaleLinear } from "d3";
 import { memo, useState } from "react";
-import { AxisY, GridY, Readout, ReadoutRow, ReadoutTitle, Svg, crisp, fmtTick, useWidth } from "./core";
+import { AxisY, Readout, ReadoutRow, ReadoutTitle, Svg, crisp, fmtTick, useWidth } from "./core";
 
-export type BarDatum = { label: string; value: number; lo?: number | null; hi?: number | null; color?: string; detail?: [string, string][] };
+/** `muted` marks a comparator (control, baseline, alternative): drawn pale with an outline so the bar under test stands out. */
+export type BarDatum = { label: string; value: number; lo?: number | null; hi?: number | null; color?: string; muted?: boolean; detail?: [string, string][] };
 
 type Props = {
   bars: BarDatum[];
@@ -24,7 +25,7 @@ const M = { top: 18, right: 12, bottom: 30, left: 48 };
 /** A bar rounded only at its value end, so it reads as growing from the zero line. */
 function barPath(x: number, w: number, y: number, zero: number) {
   const h = Math.max(1, Math.abs(zero - y));
-  const r = Math.min(3, w / 4, h);
+  const r = Math.min(1.5, w / 4, h);
   if (y <= zero) {
     const t = zero - h;
     return `M${x},${zero}V${t + r}Q${x},${t} ${x + r},${t}H${x + w - r}Q${x + w},${t} ${x + w},${t + r}V${zero}Z`;
@@ -44,7 +45,7 @@ function BarsImpl({ bars, height = 240, format = fmtTick, refLines = [], signed 
   const ys = scaleLinear().domain([Math.min(...values), Math.max(...values)]).range([height - M.bottom, top]).nice();
   const xs = scaleBand().domain(bars.map((_, i) => `${i}`)).range([M.left, Math.max(M.left + 10, width - M.right)]).paddingInner(bars.length > 30 ? 0.15 : 0.32).paddingOuter(0.2);
   const zero = ys(0);
-  const color = (b: BarDatum) => b.color ?? (signed ? (b.value >= 0 ? "var(--up)" : "var(--down)") : "var(--s1)");
+  const color = (b: BarDatum) => b.color ?? (b.muted ? "var(--ctl)" : signed ? (b.value >= 0 ? "var(--up)" : "var(--down)") : "var(--s1)");
   const hb = hover === null ? null : bars[hover];
   const labels = !hideLabels && bars.length <= 24;
   // Bars never grow fatter than 56 px: wide bars read as blocks, not as values.
@@ -57,8 +58,7 @@ function BarsImpl({ bars, height = 240, format = fmtTick, refLines = [], signed 
     <div ref={ref} style={{ position: "relative" }}>
       {width > 0 ? (
         <Svg width={width} height={height} label="Bar chart" onPointerLeave={() => setHover(null)}>
-          <GridY scale={ys} x1={M.left} x2={width - M.right} ticks={5} />
-          <AxisY scale={ys} x={M.left} ticks={5} format={format} />
+          <AxisY scale={ys} x={M.left - 4} ticks={5} format={format} spine />
           {yLabel ? <text x={M.left} y={M.top - 6} fontSize={10.5} fill="var(--text-4)" style={{ fontFamily: "var(--font)" }}>{yLabel}</text> : null}
           {bars.map((b, i) => {
             const x = (xs(`${i}`) ?? 0) + off;
@@ -68,9 +68,10 @@ function BarsImpl({ bars, height = 240, format = fmtTick, refLines = [], signed 
             return (
               <g key={i} onPointerEnter={() => setHover(i)}>
                 <rect x={x - off - xs.step() * 0.15} y={top} width={xs.step()} height={height - top - M.bottom} fill="transparent" />
-                <path d={barPath(x, w, y, zero)} fill={color(b)} fillOpacity={hover === null || active ? 0.9 : 0.42} />
+                <path d={barPath(x, w, y, zero)} fill={color(b)} fillOpacity={(b.muted ? 0.28 : 0.92) * (hover === null || active ? 1 : 0.5)}
+                  stroke={b.muted ? color(b) : "none"} strokeOpacity={hover === null || active ? 0.9 : 0.45} strokeWidth={1} />
                 {b.lo !== null && b.lo !== undefined && b.hi !== null && b.hi !== undefined ? (
-                  <g stroke="var(--text-2)" strokeWidth={1.2}>
+                  <g stroke="var(--text)" strokeOpacity={0.75} strokeWidth={1.1}>
                     <line x1={x + w / 2} x2={x + w / 2} y1={ys(b.lo)} y2={ys(b.hi)} />
                     <line x1={x + w / 2 - 4} x2={x + w / 2 + 4} y1={ys(b.lo)} y2={ys(b.lo)} />
                     <line x1={x + w / 2 - 4} x2={x + w / 2 + 4} y1={ys(b.hi)} y2={ys(b.hi)} />

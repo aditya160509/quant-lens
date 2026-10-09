@@ -119,7 +119,8 @@ export function AlphaControls({ rows }: ViewProps) {
         <Segmented<"test_ic" | "net_sharpe"> label="Metric" value={metric} onChange={setMetric} options={[{ value: "test_ic", label: "Held-out IC" }, { value: "net_sharpe", label: "Net Sharpe" }]} />
       </div>
       <Bars bars={sorted.filter((r) => isNum(r[metric])).map((r) => ({
-        label: nm(r.model), value: r[metric] as number, color: r.primary ? "var(--accent)" : r === best ? "var(--text-3)" : "var(--line-3)",
+        label: nm(r.model), value: r[metric] as number, color: r.primary ? "var(--accent)" : undefined, muted: !r.primary,
+        ...(metric === "test_ic" && isNum(r.ic_tstat) && Math.abs(r.ic_tstat) > 0.05 ? { lo: (r.test_ic as number) - 1.96 * Math.abs((r.test_ic as number) / r.ic_tstat), hi: (r.test_ic as number) + 1.96 * Math.abs((r.test_ic as number) / r.ic_tstat) } : {}),
         detail: [["Kind", str(r.kind)], ["IC t-stat", f2(r.ic_tstat)], ["EW spread", pct(r.ew_spread, 2)], ["VW spread", pct(r.vw_spread, 2)], ["Turnover", pct(r.turnover, 0)], ["Capacity", usd(r.capacity_usd)]],
       }))} signed={false} height={220} yLabel={metric === "test_ic" ? "Rank IC, held-out" : "Annualised Sharpe, net"} format={(v) => (metric === "test_ic" ? v.toFixed(3) : v.toFixed(2))} />
       <div className="ml-table-wrap">
@@ -242,7 +243,7 @@ export function AlphaEnsemble({ rows }: ViewProps) {
   return (
     <div>
       <Stats items={[["Chosen blend", chosen ? `${pct(chosen.lightgbm, 0)} LightGBM` : "–"], ["Validation IC", f3(chosen?.validation_ic)]]} />
-      <Bars bars={sorted.map((r) => ({ label: pct(r.lightgbm, 0), value: n(r.validation_ic) ?? 0, color: r.chosen ? "var(--accent)" : "var(--line-3)" }))} signed={false} height={180} yLabel="Validation IC" format={(v) => v.toFixed(3)} />
+      <Bars bars={sorted.map((r) => ({ label: pct(r.lightgbm, 0), value: n(r.validation_ic) ?? 0, color: r.chosen ? "var(--accent)" : undefined, muted: !r.chosen }))} signed={false} height={180} yLabel="Validation IC" format={(v) => v.toFixed(3)} />
       <p className="ml-note">x-axis: LightGBM&apos;s share of the blend, the rest Ridge.</p>
     </div>
   );
@@ -357,7 +358,7 @@ export function StrategyCompare({ rows, feature }: ViewProps) {
   const sorted = [...rows].sort((a, b) => (n(b.sharpe) ?? -9) - (n(a.sharpe) ?? -9));
   return (
     <div>
-      <Bars bars={sorted.filter((r) => isNum(r.sharpe)).map((r) => ({ label: nm(r[key]), value: r.sharpe as number, color: r === primary ? "var(--accent)" : "var(--line-3)" }))} signed={false} height={190} yLabel="Annualised Sharpe" format={(v) => v.toFixed(2)} />
+      <Bars bars={sorted.filter((r) => isNum(r.sharpe)).map((r) => ({ label: nm(r[key]), value: r.sharpe as number, color: r === primary ? "var(--accent)" : undefined, muted: r !== primary }))} signed={false} height={190} yLabel="Annualised Sharpe" format={(v) => v.toFixed(2)} />
       <div className="ml-table-wrap">
         <table className="ml-table">
           <thead><tr><th>{feature.id === "ml05" ? "Allocation" : "Strategy"}</th><th>Return</th><th>Volatility</th><th>Sharpe</th><th>Max drawdown</th>{"average_turnover" in primary ? <th>Turnover</th> : null}{"cost_drag_annual" in primary ? <th>Cost drag</th> : null}{"average_exposure" in primary || "mean_size" in primary ? <th>Avg exposure</th> : null}</tr></thead>

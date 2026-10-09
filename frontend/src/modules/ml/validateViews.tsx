@@ -169,8 +169,8 @@ export function ValControls({ result }: ViewProps) {
   const shuffledP95 = n((c.shuffled as Row | undefined)?.control_sharpe_p95);
   const bars = [
     { label: "Strategy", value: strat, color: "var(--accent)" },
-    ...rows.filter((r) => r.name !== "shuffled_signal").map((r) => ({ label: nameOf(r.name), value: r.sharpe as number, color: r.name === c.best_control ? "var(--text-2)" : "var(--line-3)", detail: [["Total return", pct(r.total_return)], ...(r.note ? [["Note", String(r.note)]] : [])] as [string, string][] })),
-    ...(shuffledP95 !== null ? [{ label: "Shuffled (95th pct)", value: shuffledP95, color: c.best_control === "shuffled_signal" ? "var(--text-2)" : "var(--line-3)" }] : []),
+    ...rows.filter((r) => r.name !== "shuffled_signal").map((r) => ({ label: nameOf(r.name), value: r.sharpe as number, muted: true, detail: [["Total return", pct(r.total_return)], ...(r.note ? [["Note", String(r.note)]] : [])] as [string, string][] })),
+    ...(shuffledP95 !== null ? [{ label: "Shuffled (95th pct)", value: shuffledP95, muted: true }] : []),
   ];
   const missing = [...((c.unavailable as Row[]) ?? []), ...((c.controls as Row[]) ?? []).filter((r) => !isNum(r.sharpe))];
   return (
@@ -237,7 +237,7 @@ export function ValTransfer({ result }: ViewProps) {
   if (!tests.length) return <Empty />;
   return (
     <div>
-      <Bars bars={[{ label: "In-sample", value: n(s.reference_sharpe) ?? 0, color: "var(--line-3)" }, ...tests.map((t) => ({ label: nameOf(t.name), value: t.sharpe as number }))]} height={200} yLabel="Annualised Sharpe" format={(v) => v.toFixed(2)} />
+      <Bars bars={[{ label: "In-sample", value: n(s.reference_sharpe) ?? 0, muted: true }, ...tests.map((t) => ({ label: nameOf(t.name), value: t.sharpe as number }))]} height={200} yLabel="Annualised Sharpe" format={(v) => v.toFixed(2)} />
       <p className="ml-note"><b>{String(s.scope ?? "")}.</b> {String(s.rule ?? "")}.</p>
     </div>
   );

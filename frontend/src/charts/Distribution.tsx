@@ -64,7 +64,7 @@ function DistributionImpl({ values, observed = null, tail = "right", xLabel = "S
                 fill={shaded ? "var(--accent)" : "var(--text-3)"} fillOpacity={hover === i ? 0.9 : shaded ? 0.7 : 0.35} />
             );
           })}
-          <AxisX scale={x} y={height - M.bottom} ticks={7} />
+          <AxisX scale={x} y={height - M.bottom} ticks={7} spine />
           <AxisLabel x={width - M.right} y={height - 2} anchor="end">{xLabel}</AxisLabel>
           {observed !== null && Number.isFinite(observed) ? (
             <g>
