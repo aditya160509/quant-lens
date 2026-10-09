@@ -2,14 +2,17 @@
 
 import { memo } from "react";
 
-export type DumbbellRow = { label: string; a: number | null; b: number | null; format: (v: number) => string; better?: "high" | "low" };
+/** `better` omitted with `neutral` set: a change with no good or bad direction (e.g. a weight moving). */
+export type DumbbellRow = { label: string; a: number | null; b: number | null; format: (v: number) => string; better?: "high" | "low"; neutral?: boolean };
 
 /**
  * Before and after, metric by metric: a grey dot for the yardstick (a), an accent dot for the
  * strategy under test (b), joined by a line that is green when b is better and red when worse.
  * Each row has its own scale, so metrics in different units sit together; the numbers are printed.
  */
-function DumbbellImpl({ rows, aLabel, bLabel }: { rows: DumbbellRow[]; aLabel: string; bLabel: string }) {
+function DumbbellImpl({ rows, aLabel, bLabel, shared }: { rows: DumbbellRow[]; aLabel: string; bLabel: string; /** One scale for every row, when the rows share a unit and should be compared. */ shared?: boolean }) {
+  const all = rows.flatMap((r) => [r.a, r.b]).filter((v): v is number => v !== null);
+  const gLo = Math.min(0, ...all), gHi = Math.max(...all);
   return (
     <div className="dumbbell" role="table" aria-label={`${bLabel} against ${aLabel}`}>
       <div className="db-key" role="row">
@@ -20,10 +23,10 @@ function DumbbellImpl({ rows, aLabel, bLabel }: { rows: DumbbellRow[]; aLabel: s
       {rows.filter((r) => r.a !== null && r.b !== null).map((r) => {
         const a = r.a as number, b = r.b as number;
         const lo = Math.min(a, b), hi = Math.max(a, b), pad = (hi - lo || Math.abs(hi) || 1) * 0.35;
-        const x0 = lo - pad, x1 = hi + pad;
+        const x0 = shared ? gLo : lo - pad, x1 = shared ? gHi + (gHi - gLo) * 0.08 : hi + pad;
         const pos = (v: number) => `${((v - x0) / (x1 - x0)) * 100}%`;
         const better = r.better === "low" ? b < a : b > a;
-        const tone = a === b ? "var(--text-4)" : better ? "var(--up)" : "var(--down)";
+        const tone = a === b || r.neutral ? "var(--text-3)" : better ? "var(--up)" : "var(--down)";
         const zero = x0 < 0 && x1 > 0 ? pos(0) : null;
         return (
           <div key={r.label} className="db-row" role="row">

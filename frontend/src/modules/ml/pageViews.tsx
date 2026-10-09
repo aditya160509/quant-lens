@@ -152,6 +152,21 @@ export function StrategyRadar({ rows }: ViewProps) {
   );
 }
 
+/** Each holding's share of portfolio risk now and after the trades, against an equal share. */
+export function HoldingRisk({ rows }: ViewProps) {
+  const list = rows.filter((r) => isNum(r.current_risk_contribution) || isNum(r.target_risk_contribution));
+  if (!list.length) return <Empty />;
+  const sorted = [...list].sort((a, b) => (n(b.current_risk_contribution) ?? 0) - (n(a.current_risk_contribution) ?? 0));
+  return (
+    <div>
+      <Dumbbell aLabel="Now" bLabel="After trades" shared rows={sorted.map((r) => ({
+        label: `${str(r.asset)} · ${pct(r.current_weight, 0)} → ${pct(r.target_weight, 0)}`, a: nz(r.current_risk_contribution), b: nz(r.target_risk_contribution), format: (v) => pct(v, 1), neutral: true,
+      }))} />
+      <p className="ml-note">Share of total portfolio variance each holding carries, before and after the trade list; an equal share would be {pct(1 / list.length, 0)} each. Weights are shown beside each name.</p>
+    </div>
+  );
+}
+
 /** The model against the simple alternatives it must beat, on held-out data. */
 export function AlphaControls({ rows }: ViewProps) {
   const [metric, setMetric] = useState<"test_ic" | "net_sharpe">("test_ic");

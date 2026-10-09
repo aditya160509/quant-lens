@@ -168,6 +168,13 @@ const GEN: Record<string, Gen> = {
     const s = out(r, "rebalance_summary")[0];
     return rows.length ? `${rows.length} trades${s && isNum(s.cost_bps) ? ` costing ${(s.cost_bps as number).toFixed(1)} bps` : ""}${s ? (s.trade_recommended ? "; worth making" : "; the expected gain does not cover the cost") : ""}` : "No trades needed";
   },
+  "ml05:holding_risk:": (r) => {
+    const rows = out(r, "holding_risk").filter((x) => isNum(x.current_risk_contribution));
+    const b = top(rows, "current_risk_contribution");
+    if (!b) return null;
+    const after = n(b.target_risk_contribution);
+    return `${String(b.asset)} carries ${pct(b.current_risk_contribution as number, 0)} of portfolio risk now${after !== null ? `, ${pct(after, 0)} after the trades` : ""}`;
+  },
   "ml05:weight_stability:": (r) => {
     const rows = out(r, "weight_stability").filter((x) => isNum(x.p05) && isNum(x.p95));
     const wide = rows.sort((a, b) => ((b.p95 as number) - (b.p05 as number)) - ((a.p95 as number) - (a.p05 as number)))[0];
