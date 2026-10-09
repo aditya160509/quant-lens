@@ -686,7 +686,7 @@ export function MlBlShift({ rows }: ViewProps) {
 function useStateNames(result: ViewProps["result"]) {
   const labels = ((result.meta as Row).state_labels ?? {}) as Record<string, string>;
   const nameOf = (k: string) => labels[k] ?? labels[`state_${k.replace(/^\D+_?/, "")}`] ?? label(k);
-  const colourOf = (k: string) => { const s = nameOf(k); return s === "Stress" ? "var(--down)" : s === "Calm" ? "var(--up)" : s.startsWith("Normal") ? "var(--s1)" : undefined; };
+  const colourOf = (k: string) => { const s = nameOf(k); return s === "Stress" ? "var(--stress)" : s === "Calm" ? "var(--calm)" : s.startsWith("Normal") ? "var(--normal)" : undefined; };
   return { nameOf, colourOf };
 }
 

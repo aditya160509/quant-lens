@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, FileText, Loader2, Play, Square } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, FileText, Loader2, Play, Square } from "lucide-react";
 import { DUR } from "@/workspace/prefs";
 import { PopMenu, Tabs, type MenuAt } from "@/workspace/ui";
 import { featureHref, metaFor, pageOf } from "./catalog";
@@ -297,13 +297,29 @@ function Progress({ startedAt, status, progress }: { startedAt: number | null; s
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 200); return () => clearInterval(id); }, []);
   const secs = startedAt ? Math.max(0, (now - startedAt) / 1000) : 0;
+  // Each distinct stage message the API reports becomes a step; earlier ones are done.
+  const [stages, setStages] = useState<{ text: string; at: number }[]>([]);
+  const msg = p?.message;
+  useEffect(() => {
+    if (!msg) return;
+    setStages((cur) => (cur.length && cur[cur.length - 1].text === msg ? cur : [...cur, { text: msg, at: Date.now() }]));
+  }, [msg]);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16, padding: "10px 14px", borderRadius: 10, background: "var(--panel)", boxShadow: "inset 0 0 0 1px var(--line)", fontSize: 12.5, color: "var(--text-2)" }}>
+    <div style={{ marginTop: 16 }}>
+    {stages.length > 1 ? (
+      <ol className="run-stages" aria-label="Run stages">
+        {stages.slice(0, -1).map((st, i) => (
+          <li key={`${st.text}-${i}`} data-done><Check size={11} />{st.text}<span className="num">{((stages[i + 1].at - st.at) / 1000).toFixed(1)}s</span></li>
+        ))}
+      </ol>
+    ) : null}
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, background: "var(--panel)", boxShadow: "inset 0 0 0 1px var(--line)", fontSize: 12.5, color: "var(--text-2)" }}>
       <Loader2 size={14} className="spin" style={{ color: "var(--accent)" }} />
       <span>{status === "queued" ? "Queued" : status === "submitting" ? "Submitting the study" : p?.message || "Estimating"}</span>
       <div className="progress">{percent !== null && percent > 0 ? <i style={{ animation: "none", width: `${percent}%`, transition: "width .4s var(--ease)" }} /> : <i />}</div>
       {percent !== null && percent > 0 ? <span className="num" style={{ color: "var(--text-3)" }}>{Math.round(percent)}%</span> : null}
       <span className="num" style={{ marginLeft: "auto", color: "var(--text-3)" }}>{secs.toFixed(1)}s</span>
+    </div>
     </div>
   );
 }

@@ -121,7 +121,58 @@ const GEN: Record<string, Gen> = {
     return `At the same average exposure, regime switching ${f.sharpe > c.sharpe ? "raised" : "lowered"} Sharpe to ${f2(f.sharpe)} from ${f2(c.sharpe)}`;
   },
 
+  "ml06:regime_probability_time_series:": (r) => {
+    const rows = out(r, "regime_probability_time_series");
+    const keys = Object.keys(rows[0] ?? {}).filter((k) => /^state_\d+$/.test(k));
+    if (!rows.length || !keys.length) return null;
+    const dom = (x: Row) => keys.reduce((a, k) => ((n(x[k]) ?? 0) > (n(x[a]) ?? 0) ? k : a), keys[0]);
+    const now = dom(rows[rows.length - 1]);
+    let run = 1;
+    for (let i = rows.length - 2; i >= 0 && dom(rows[i]) === now; i--) run++;
+    return `${stateName(r, now)} for the last ${run} sessions`;
+  },
+  "ml06:regime_transition_heatmap:": (r) => {
+    const m = out(r, "regime_transition_heatmap").filter((x) => x.row === x.col && isNum(x.value) && (x.value as number) < 1);
+    const longest = m.sort((a, b) => (b.value as number) - (a.value as number))[0];
+    return longest ? `${stateName(r, `state_${String(longest.row).replace(/\D/g, "")}`)} is the most persistent state: about ${Math.round(1 / (1 - (longest.value as number)))} sessions per visit` : null;
+  },
+  "ml06:regime_conditional_asset_returns:": (r) => {
+    const rows = out(r, "regime_conditional_asset_returns").filter((x) => isNum(x.mean_log_return));
+    const stress = rows.filter((x) => /stress/i.test(stateName(r, `state_${String(x.regime).replace(/\D/g, "")}`)));
+    const worst = (stress.length ? stress : rows).sort((a, b) => (a.mean_log_return as number) - (b.mean_log_return as number))[0];
+    return worst ? `${String(worst.asset)} is hurt most${stress.length ? " in stress" : ""}: ${pct(worst.mean_log_return as number, 2)} a day` : null;
+  },
+
+  /* ---------------- Improve */
+  "ml04:label_method_comparison:": (r) => {
+    const rows = out(r, "label_method_comparison");
+    const f = rows.find((x) => x.method === "fixed"), v = rows.find((x) => x.method === "vol_scaled");
+    return isNum(f?.negative_rate) && isNum(v?.negative_rate) ? `Volatility-scaled barriers stop out ${pct(v.negative_rate, 0)} of trades vs ${pct(f.negative_rate, 0)} with fixed barriers` : null;
+  },
+  "ml04:cqr_coverage_audit:": (r) => {
+    const rows = out(r, "cqr_coverage_audit").filter((x) => isNum(x.empirical_coverage));
+    if (!rows.length) return null;
+    const avg = rows.reduce((a, x) => a + (x.empirical_coverage as number), 0) / rows.length, tgt = n(rows[0].target_coverage);
+    return `Intervals covered ${pct(avg, 0)} of outcomes${tgt !== null ? ` against a ${pct(tgt, 0)} target${avg < tgt - 0.03 ? ": too narrow" : avg > tgt + 0.05 ? ": conservative" : ""}` : ""}`;
+  },
+
   /* ---------------- Allocation */
+  "ml05:controls_equity:": (r) => {
+    const last = new Map<string, number>();
+    for (const x of out(r, "controls_equity")) if (isNum(x.equity)) last.set(String(x.strategy), x.equity);
+    const ranked = [...last.entries()].sort((a, b) => b[1] - a[1]);
+    return ranked.length ? `${cap(nm(ranked[0][0]))} grew $1 the most, to $${f2(ranked[0][1])}` : null;
+  },
+  "ml05:trade_list:": (r) => {
+    const rows = out(r, "trade_list").filter((x) => isNum(x.trade_weight) && Math.abs(x.trade_weight as number) > 1e-4);
+    const s = out(r, "rebalance_summary")[0];
+    return rows.length ? `${rows.length} trades${s && isNum(s.cost_bps) ? ` costing ${(s.cost_bps as number).toFixed(1)} bps` : ""}${s ? (s.trade_recommended ? "; worth making" : "; the expected gain does not cover the cost") : ""}` : "No trades needed";
+  },
+  "ml05:weight_stability:": (r) => {
+    const rows = out(r, "weight_stability").filter((x) => isNum(x.p05) && isNum(x.p95));
+    const wide = rows.sort((a, b) => ((b.p95 as number) - (b.p05 as number)) - ((a.p95 as number) - (a.p05 as number)))[0];
+    return wide ? `${String(wide.asset)}'s weight is the least certain: ${pct(wide.p05 as number, 0)} to ${pct(wide.p95 as number, 0)} across resamples` : null;
+  },
   "ml05:controls_summary:": (r) => {
     const rows = out(r, "controls_summary");
     const ch = rows.find((x) => x.kind === "chosen"), best = top(rows.filter((x) => x.kind === "control"), "sharpe");
@@ -169,6 +220,12 @@ const GEN: Record<string, Gen> = {
     return d && isNum(d.p50) ? `Median split Sharpe ${f2(d.p50)}${isNum(d.share_positive) ? `; ${pct(d.share_positive, 0)} of splits positive` : ""}${isNum(d.p5) ? `, worst 5% below ${f2(d.p5)}` : ""}` : null;
   },
 };
+
+/** Calm / Normal / Stress from the API's state labels, else "State n". */
+function stateName(r: FeatureResult, key: string) {
+  const labels = ((r.meta as unknown as Row).state_labels ?? {}) as Record<string, string>;
+  return labels[key] ?? `State ${key.replace(/\D/g, "")}`;
+}
 
 export function takeaway(featureId: string, key: string, view: string | undefined, result: FeatureResult): string | null {
   const g = GEN[`${featureId}:${key}:${view ?? ""}`];

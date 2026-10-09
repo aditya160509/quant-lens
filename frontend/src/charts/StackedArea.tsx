@@ -40,7 +40,7 @@ function StackedAreaImpl({ data, x = "date", keys, labels, height = 260, normali
           onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); setHover(nearest(times, xs.invert(e.clientX - r.left))); }}
           onPointerLeave={() => setHover(null)}>
           <GridY scale={ys} x1={M.left} x2={width - M.right} ticks={4} />
-          {layers.map((l) => <path key={l.key} d={path(l as never) ?? ""} fill={color(l.key)} fillOpacity={0.78} stroke="var(--panel)" strokeWidth={0.6} />)}
+          {layers.map((l) => <path key={l.key} d={path(l as never) ?? ""} fill={color(l.key)} fillOpacity={0.5} stroke={color(l.key)} strokeOpacity={0.9} strokeWidth={1} />)}
           <AxisY scale={ys} x={width - M.right} ticks={4} format={fmt} side="right" />
           {ticks.map((t) => <text key={t} x={xs(t)} y={height - 6} textAnchor="middle" fontSize={10.5} fill="var(--text-4)">{fmtDate(t)}</text>)}
           {hover !== null ? <line x1={crisp(xs(rows[hover].t))} x2={crisp(xs(rows[hover].t))} y1={M.top} y2={height - M.bottom} stroke="var(--text-3)" strokeDasharray="3 3" /> : null}

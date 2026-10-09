@@ -730,7 +730,7 @@ export function RegimeSpells({ rows, result }: ViewProps) {
     const last = spells[spells.length - 1];
     if (last && last.state === s) { last.to = str(r.date); last.days += 1; } else spells.push({ state: s, from: str(r.date), to: str(r.date), days: 1 });
   }
-  const colour = (s: string) => (labels[s] === "Stress" ? "var(--down)" : labels[s] === "Calm" ? "var(--up)" : "var(--s1)");
+  const colour = (s: string) => (labels[s] === "Stress" ? "var(--stress)" : labels[s] === "Calm" ? "var(--calm)" : "var(--normal)");
   return (
     <div className="ml-table-wrap">
       <table className="ml-table">
