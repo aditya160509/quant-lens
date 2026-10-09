@@ -138,7 +138,7 @@ const LAYOUTS: Record<string, FeatureLayout> = {
     ],
     verdict: (r) => {
       const v = verdictOf(r);
-      return v?.label ? { headline: `${v.label}. ${v.headline ?? ""}`, tone: VTONE[v.label] ?? null } : { headline: null, tone: null };
+      return v?.label ? { headline: v.headline || v.label, tone: VTONE[v.label] ?? null } : { headline: null, tone: null };
     },
   },
   ml01: {

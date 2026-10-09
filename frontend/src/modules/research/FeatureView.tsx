@@ -248,14 +248,16 @@ function RunContext({ feature, run }: { feature: FeatureSpec; run: FeatureRun })
 
 function VerdictStrip({ feature, result }: { feature: FeatureSpec; result: FeatureResult }) {
   const v = verdictFor(feature, result);
-  const cards = (result.summary_cards ?? []).filter((c) => !(typeof c.value === "string" && ["red", "amber", "green"].includes(c.value))).slice(0, 5);
+  const stamped = lab().id === "ml" && Boolean(STAMP[v.tone ?? ""]);
+  // The stamp already says the verdict; a "Verdict" card would repeat it.
+  const cards = (result.summary_cards ?? []).filter((c) => !(typeof c.value === "string" && ["red", "amber", "green"].includes(c.value)) && !(stamped && /^verdict$/i.test(c.label))).slice(0, 5);
   const color = v.tone === "up" ? "var(--up)" : v.tone === "down" ? "var(--down)" : v.tone === "warn" ? "var(--warn)" : "var(--accent)";
   const [lead, ...rest] = (v.headline ?? "").split(/(?<=\.)\s/);
   return (
     <div className="verdict">
       {v.headline ? (
         <div className="verdict-lead" style={{ ["--tone" as string]: color }}>
-          {lab().id === "ml" && STAMP[v.tone ?? ""] ? <span className="verdict-stamp">{STAMP[v.tone ?? ""]}</span> : null}
+          {stamped ? <span className="verdict-stamp">{STAMP[v.tone ?? ""]}</span> : null}
           <p><b>{lead}</b>{rest.length ? <> {rest.join(" ")}</> : null}</p>
         </div>
       ) : null}

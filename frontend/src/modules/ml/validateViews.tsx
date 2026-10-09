@@ -102,6 +102,9 @@ export function ValVerdict({ result }: ViewProps) {
         ["Edge over best control", isNum(controls.edge_vs_best) ? `${controls.edge_vs_best > 0 ? "+" : ""}${f2(controls.edge_vs_best)}` : "–", isNum(controls.edge_vs_best) ? (controls.edge_vs_best > 0 ? "var(--up)" : "var(--down)") : undefined],
         ["Checks", `${checks.filter((c) => c.status === "pass").length} pass · ${v.warnings ?? 0} warn · ${v.fails ?? 0} fail`],
       ]} />
+      <div className="val-score" role="img" aria-label={`${checks.length} checks, in order: ${sorted.map((c) => c.status).join(", ")}`}>
+        {sorted.map((c) => <i key={c.name} data-s={c.status} title={`${nameOf(c.name)}: ${c.status}`} />)}
+      </div>
       <ul className="val-checks">
         {sorted.map((c) => (
           <li key={c.name} data-s={c.status}><StatusIcon status={c.status} /><b>{nameOf(c.name)}</b><span>{humanise(c.detail)}</span></li>
