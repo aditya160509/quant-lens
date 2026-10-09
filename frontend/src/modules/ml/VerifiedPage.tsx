@@ -5,6 +5,7 @@ import { BadgeCheck, Copy } from "lucide-react";
 import { useState } from "react";
 import { get } from "@/modules/research/api";
 import type { FeatureResult, FeatureSpec } from "@/modules/research/types";
+import { takeaway } from "./takeaways";
 import { ValAutopsy, ValControls, ValCostCurve, ValCpcv, ValLeakage, ValMonteCarlo, ValOverfit, ValPlateau, ValReceipt, ValTransfer, ValVerdict, verdictOf } from "./validateViews";
 
 type Stamped = { id: string; sha256: string; created_at: string; result: FeatureResult };
@@ -26,6 +27,8 @@ const CARDS = [
   ["Reproducibility receipt", ValReceipt, "receipt"],
 ] as const;
 
+const WIDE = new Set(["The verdict and every check behind it", "Against simple alternatives", "Reproducibility receipt"]);
+
 /** A frozen Validate result: read-only, stamped with the hash of its content, shareable by link. */
 export function VerifiedPage({ id }: { features: FeatureSpec[]; id?: string }) {
   const q = useQuery({ queryKey: ["ml", "verified", id], queryFn: () => get<Stamped>(`/verified/${id}`), enabled: Boolean(id), staleTime: Infinity, retry: false });
@@ -40,6 +43,7 @@ export function VerifiedPage({ id }: { features: FeatureSpec[]; id?: string }) {
       <header className="verified-head" style={{ ["--tone" as string]: tone }}>
         <span className="verified-badge"><BadgeCheck size={14} />Verified result</span>
         <h1><span className="verified-stamp">{v?.label}</span>{v?.headline}</h1>
+        <div className="verified-ribbon num" aria-label="Content hash">{sha256.match(/.{1,8}/g)?.join(" ")}</div>
         <div className="verified-meta">
           <span>Published {new Date(created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span>
           <button type="button" className="val-hash num" onClick={() => { void navigator.clipboard?.writeText(sha256); setCopied(true); setTimeout(() => setCopied(false), 1200); }} title="Copy the SHA-256 of this result">
@@ -49,9 +53,10 @@ export function VerifiedPage({ id }: { features: FeatureSpec[]; id?: string }) {
         </div>
       </header>
       <div className="verified-grid">
-        {CARDS.map(([title, View, key]) => (
-          <section key={title} className="verified-card" data-wide={title.startsWith("The verdict") || title.startsWith("Reproducibility") || undefined}>
-            <h2>{title}</h2>
+        {CARDS.map(([title, View, key], i) => (
+          <section key={title} className="verified-card" data-wide={WIDE.has(title) || undefined}>
+            <span className="ex-no"><b>Exhibit {i + 1}</b>{title}</span>
+            <h2>{(View === ValCostCurve || View === ValVerdict ? null : takeaway("mlvalidate", key, undefined, result)) ?? title}</h2>
             <View rows={[]} result={result} feature={SPEC} keys={[key]} scope={`verified:${q.data.id}`} />
           </section>
         ))}

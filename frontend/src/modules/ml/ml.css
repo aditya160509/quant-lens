@@ -199,15 +199,23 @@
 .val-actions-note { flex-basis: 100%; font-size: 11.5px; color: var(--text-4); }
 
 .verified { max-width: 1180px; margin: 0 auto; padding: 28px 24px 64px; display: grid; gap: 20px; }
-.verified-head { display: grid; gap: 10px; padding: 22px 24px; border-radius: 14px; background: color-mix(in oklch, var(--tone) 6%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--tone) 26%, transparent); }
-.verified-badge { display: inline-flex; align-items: center; gap: 6px; justify-self: start; font-size: 11.5px; font-weight: 600; letter-spacing: .02em; color: var(--accent); }
-.verified-head h1 { margin: 0; font-size: 19px; line-height: 1.45; font-weight: 500; color: var(--text); text-wrap: pretty; }
-.verified-stamp { display: inline-block; margin-right: 10px; padding: 3px 10px; border-radius: 8px; font-size: 14px; font-weight: 650; letter-spacing: .04em; vertical-align: 2px; color: var(--tone); box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--tone) 50%, transparent); }
+.verified-head { position: relative; display: grid; gap: 12px; padding: 4px 0 22px 18px; border-bottom: 1px solid var(--line); }
+.verified-head::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 26px; width: 3px; border-radius: 2px; background: var(--tone); }
+.verified-badge { display: inline-flex; align-items: center; gap: 6px; justify-self: start; font: 600 10.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.verified-head h1 { margin: 0; font-size: 22px; line-height: 1.4; font-weight: 500; letter-spacing: -0.015em; color: var(--text); text-wrap: pretty; max-width: 900px; }
+.verified-stamp { display: inline-block; margin-right: 12px; padding: 4px 10px; border-radius: 4px; font: 650 13px/1.2 var(--mono); letter-spacing: .08em; vertical-align: 3px; color: var(--tone); background: color-mix(in oklch, var(--tone) 9%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--tone) 55%, transparent); transform: rotate(-1.5deg); }
+.verified-ribbon { font-size: 10.5px; letter-spacing: .12em; color: var(--text-4); word-break: break-all; }
 .verified-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12px; color: var(--text-3); }
-.verified-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.verified-card { padding: 14px 16px; border-radius: 12px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); min-width: 0; }
+.verified-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 32px; }
+.verified-card { display: grid; gap: 6px; align-content: start; min-width: 0; }
 .verified-card[data-wide] { grid-column: 1 / -1; }
-.verified-card h2 { margin: 0 0 12px; font-size: 13px; font-weight: 550; color: var(--text); }
+.verified-card h2 { margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-size: 15px; font-weight: 600; letter-spacing: -0.012em; line-height: 1.35; color: var(--text); text-wrap: balance; }
+@media print {
+  .verified { max-width: none; padding: 0; }
+  .verified-grid { gap: 28px 24px; }
+  .verified-card { break-inside: avoid; }
+  .verified-head::after { content: "Frozen result · verify with the SHA-256 above"; position: absolute; right: 0; top: 4px; font: 10px var(--mono); color: var(--text-4); }
+}
 
 .studio { max-width: 920px; margin: 0 auto; padding: 24px 20px 64px; display: grid; gap: 18px; }
 .studio-head h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; color: var(--text); }
