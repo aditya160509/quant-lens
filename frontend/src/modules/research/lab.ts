@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import type { FeatureLayout } from "./layouts";
-import type { FeatureResult, FeatureSpec } from "./types";
+import type { FeatureResult, FeatureSpec, RunRecord } from "./types";
 
 /**
  * One workspace engine serves several labs (Research, Machine learning). A lab supplies its API,
@@ -34,6 +34,8 @@ export type LabConfig = {
     stages: { id: string; label: string; intro: string; ids: string[] }[];
     /** Large "start here" tiles above the stages; each shows its feature's latest verdict once it has run. */
     actions?: { id: string; title: string; body: string; cta: string }[];
+    /** Replaces the start tiles once any of them has a finished run: the latest answer from each page. */
+    today?: ComponentType<{ features: FeatureSpec[]; runs: RunRecord[] }>;
     /** Words for the headline counts, e.g. "Held up" instead of "Pass". */
     words?: { tests: string; pass: string; mixed: string; fail: string };
   };

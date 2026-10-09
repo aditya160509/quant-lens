@@ -61,7 +61,7 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
           ))}
         </div>
 
-        {L.overview?.actions?.length ? (
+        {L.overview?.today && L.overview.actions?.some((a) => latestRun(runs, a.id)?.status === "completed") ? <L.overview.today features={features} runs={runs} /> : L.overview?.actions?.length ? (
           <div className="ov-actions">
             {L.overview.actions.filter((a) => byId.has(a.id)).map((a) => {
               const m = metaFor(a.id);

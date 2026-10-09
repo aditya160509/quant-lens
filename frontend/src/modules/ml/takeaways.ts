@@ -152,7 +152,7 @@ const GEN: Record<string, Gen> = {
   "mlvalidate:leakage:": (r) => (sec(r, "leakage").badge === "pass" ? "No look-ahead found" : sec(r, "leakage").badge ? "Look-ahead check flagged a problem" : null),
   "mlvalidate:cpcv:": (r) => {
     const d = sec(r, "cpcv").distribution as Row | undefined;
-    return d && isNum(d.median) ? `Median Sharpe across purged splits ${f2(d.median)}` : null;
+    return d && isNum(d.p50) ? `Median split Sharpe ${f2(d.p50)}${isNum(d.share_positive) ? `; ${pct(d.share_positive, 0)} of splits positive` : ""}${isNum(d.p5) ? `, worst 5% below ${f2(d.p5)}` : ""}` : null;
   },
 };
 

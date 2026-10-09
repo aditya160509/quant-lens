@@ -9,6 +9,7 @@ import { group, registerAlternates, registerViews } from "@/modules/research/out
 import { isNum, out } from "@/modules/research/format";
 import type { FeatureSpec, InputSpec, OutputSpec } from "@/modules/research/types";
 import { takeaway } from "./takeaways";
+import { TodayBoard } from "./TodayBoard";
 
 /** ML features carry an "ml" prefix in the workspace so their runs and settings never collide with Research. */
 const ID = (raw: string) => `ml${raw}`;
@@ -327,6 +328,7 @@ export const ML_LAB: LabConfig = {
   runLabel: (id) => (id === "mlvalidate" ? "Validate" : id === "ml05" ? "Allocate" : id === "ml03" || id === "ml06" ? "Forecast" : "Train and test"),
   defaultUniverse: "35 US large caps",
   overview: {
+    today: TodayBoard,
     actions: [
       { id: "mlvalidate", title: "Validate my strategy", body: "Upload returns, predictions or every trial you ran. Get HELD UP, MIXED or FAILED, and the exact reason.", cta: "Upload and validate" },
       { id: "ml02", title: "Today's ranking", body: "35 large caps ranked by expected 21-day return, each explained feature by feature, beside the simple signal it has to beat.", cta: "Rank the universe" },
