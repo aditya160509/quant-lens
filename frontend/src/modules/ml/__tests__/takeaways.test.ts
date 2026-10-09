@@ -33,6 +33,11 @@ describe("ML takeaways", () => {
     expect(takeaway("mlvalidate", "monte_carlo", undefined, r)).toBe("17% of resampled histories have no positive Sharpe");
   });
 
+  it("does not call a tiny purging gap an overstatement", () => {
+    const r = res({ purged_vs_naive_cv_comparison: [{ method: "naive_cpcv", sharpe: 0.0148 }, { method: "purged_cpcv", sharpe: -0.0365 }] });
+    expect(takeaway("ml01", "purged_vs_naive_cv_comparison", undefined, r)).toBe("Purging barely moves Sharpe (0.01 to -0.04): no leakage inflation");
+  });
+
   it("returns null when the data cannot support a sentence, or for an unknown exhibit", () => {
     expect(takeaway("ml02", "controls", undefined, res({ controls: [] }))).toBeNull();
     expect(takeaway("ml02", "nope", undefined, res({}))).toBeNull();

@@ -144,6 +144,30 @@ const GEN: Record<string, Gen> = {
   },
 
   /* ---------------- Improve */
+  "ml04:triple_barrier_label_distribution:": (r) => {
+    const rows = out(r, "triple_barrier_label_distribution").filter((x) => isNum(x.count));
+    const tot = rows.reduce((a, x) => a + (x.count as number), 0);
+    const stop = rows.find((x) => Number(x.label) === -1), pt = rows.find((x) => Number(x.label) === 1);
+    return tot && stop && pt ? `${pct((stop.count as number) / tot, 0)} of trades hit the stop first, ${pct((pt.count as number) / tot, 0)} the target` : null;
+  },
+  "ml04:event_outcome_timeline:": (r) => {
+    const rows = out(r, "event_outcome_timeline");
+    if (!rows.length) return null;
+    const stop = rows.filter((x) => Number(x.label) === -1).length;
+    return `Of the latest ${rows.length} events, ${pct(stop / rows.length, 0)} touched the stop-loss first`;
+  },
+  "ml04:barrier_hit_path_examples:": (r) => {
+    const rows = out(r, "barrier_hit_path_examples");
+    if (!rows.length) return null;
+    const pt = rows.filter((x) => Number(x.label) === 1).length, stop = rows.filter((x) => Number(x.label) === -1).length;
+    return `In ${rows.length} sampled trades the stop was hit ${stop} times, the target ${pt}`;
+  },
+  "ml04:barrier_sensitivity_surface:": (r) => {
+    const rows = out(r, "barrier_sensitivity_surface").filter((x) => isNum(x.negative_rate) && isNum(x.stop_loss));
+    if (rows.length < 2) return null;
+    const lo = rows.reduce((a, x) => ((x.negative_rate as number) < (a.negative_rate as number) ? x : a)), hi = rows.reduce((a, x) => ((x.negative_rate as number) > (a.negative_rate as number) ? x : a));
+    return `Stop-outs range from ${pct(lo.negative_rate as number, 0)} to ${pct(hi.negative_rate as number, 0)} across barrier widths`;
+  },
   "ml04:label_method_comparison:": (r) => {
     const rows = out(r, "label_method_comparison");
     const f = rows.find((x) => x.method === "fixed"), v = rows.find((x) => x.method === "vol_scaled");
@@ -196,7 +220,15 @@ const GEN: Record<string, Gen> = {
   "ml01:purged_vs_naive_cv_comparison:": (r) => {
     const rows = out(r, "purged_vs_naive_cv_comparison");
     const nv = n(rows.find((x) => x.method === "naive_cpcv")?.sharpe), pg = n(rows.find((x) => x.method === "purged_cpcv")?.sharpe);
-    return nv !== null && pg !== null ? `Purging moves Sharpe from ${f2(nv)} to ${f2(pg)}${nv > pg ? ": the naive split overstated it" : ""}` : null;
+    if (nv === null || pg === null) return null;
+    return Math.abs(nv - pg) < 0.1 ? `Purging barely moves Sharpe (${f2(nv)} to ${f2(pg)}): no leakage inflation` : `Purging moves Sharpe from ${f2(nv)} to ${f2(pg)}${nv > pg ? ": the naive split overstated it" : ""}`;
+  },
+  "ml01:backtest_paths_chart:": (r) => {
+    const last = new Map<string, number>();
+    for (const x of out(r, "backtest_paths_chart")) if (isNum(x.equity)) last.set(String(x.path), x.equity);
+    const v = [...last.values()].sort((a, b) => a - b);
+    if (!v.length) return null;
+    return `Median path turned $1 into $${f2(v[Math.floor(v.length / 2)])}; ${v.filter((x) => x > 1).length} of ${v.length} paths made money`;
   },
   "ml01:cpcv_sharpe_distribution:": (r) => {
     const s = out(r, "cpcv_sharpe_distribution").map((x) => x.sharpe).filter(isNum).sort((a, b) => a - b);
