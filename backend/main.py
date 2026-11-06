@@ -1,14 +1,9 @@
-from fastapi import FastAPI, HTTPException, Body, Query
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 import uvicorn
 import logging
-import pandas as pd
-import numpy as np
-from typing import List, Dict, Optional
-from pydantic import BaseModel
-import concurrent.futures
 from pathlib import Path
 
 # Load environment variables from project root .env
@@ -18,7 +13,7 @@ if env_path.exists():
 else:
     load_dotenv()  # Fallback to default search
 
-from app import data_loader, metrics
+from app import data_loader
 from app.api import options, markets, security, orderbook
 from app.api import prices
 from app.api import nse_india  # NSE India Stock Market API (FREE)
@@ -54,7 +49,6 @@ ALLOWED_ORIGINS = [
 ]
 
 # In production, set CORS_ALLOW_ALL=false
-import os
 if os.environ.get("CORS_ALLOW_ALL", "true").lower() == "true":
     ALLOWED_ORIGINS = ["*"]
 

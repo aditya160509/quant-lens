@@ -41,11 +41,11 @@ One search everywhere, at the level of TradingView's. It replaces the current we
 
 | Area | Backend | Frontend | Plan doc |
 |---|---|---|---|
-| ML | Done | Done, tagged `ml-design-v1`; polish open | `design/ML_CINEMA_PLAN.md` |
-| Research | Done | On the new workspace | `product/RESEARCH_PRODUCT_REVIEW_FINAL_BATCH.md` |
-| Screener | Done | Old v2 pages | `product/SCREENER_V2_PRODUCT_REVIEW.md` |
-| Factors | Done | Old v2 pages, fake sparkline | `product/FACTORS_V2_PRODUCT_REVIEW.md` |
-| Volatility | Done | Old v2 pages, hardcoded hero | `product/VOLATILITY_V2_PRODUCT_REVIEW.md` |
+| ML | Done | Done, tagged `ml-design-v1`; polish open | `ML_CINEMA_PLAN.md` |
+| Research | Done | On the new workspace | `../reviews/product/RESEARCH_PRODUCT_REVIEW_FINAL_BATCH.md` |
+| Screener | Done | Old v2 pages | `../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md` |
+| Factors | Done | Old v2 pages, fake sparkline | `../reviews/product/FACTORS_V2_PRODUCT_REVIEW.md` |
+| Volatility | Done | Old v2 pages, hardcoded hero | `../reviews/product/VOLATILITY_V2_PRODUCT_REVIEW.md` |
 | PCA | Done | Old v2 pages | Product review missing |
 | Portfolio | Done | Old v2 pages | Product review missing |
 | Studio | Working | Working | Product review missing |
@@ -88,7 +88,7 @@ The working standard is the F1 project (`~/Documents/f1/daedalus-x/docs/build`).
 
 ## 5. Open source stack
 
-Licences and activity were checked on GitHub on 2026-11-06. Sources are in `references/2026-11-open-source.md`. A pick is confirmed by a short spike in our app before it replaces anything.
+Licences and activity were checked on GitHub on 2026-11-06. Sources are in `../references/2026-11-open-source.md`. A pick is confirmed by a short spike in our app before it replaces anything.
 
 ### Interface
 
@@ -165,7 +165,7 @@ Phase 0 tooling is deferred by the owner. The repo stays private on GitHub.
 
 ### Step 1: Finish ML (now)
 
-From `design/ML_CINEMA_PLAN.md`: 17 items done, 3 partly done, 16 open, so about half. Two open items are platform work that belongs to Step 2, which leaves 14 for ML. The ticks may lag the code, so the first task is to check each one.
+From `ML_CINEMA_PLAN.md`: 17 items done, 3 partly done, 16 open, so about half. Two open items are platform work that belongs to Step 2, which leaves 14 for ML. The ticks may lag the code, so the first task is to check each one.
 
 Before Screener, finish the items Screener reuses:
 
@@ -180,9 +180,9 @@ Then hill climb: Heat table, Distribution, Scatter v2, Waterfall v2, Dendrogram 
 
 ### Step 2: Screener
 
-First redo `product/SCREENER_V2_PRODUCT_REVIEW.md` against the feature rule: Finviz, TradingView, Koyfin, Stock Rover, Portfolio123, Screener.in, Tickertape, Trendlyne, Chartink and others, with what each charges for. The stages below then change to match.
+First redo `../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md` against the feature rule: Finviz, TradingView, Koyfin, Stock Rover, Portfolio123, Screener.in, Tickertape, Trendlyne, Chartink and others, with what each charges for. The stages below then change to match.
 
-Current spec: `product/SCREENER_V2_PRODUCT_REVIEW.md`. The product is Screen, Rank, Test, Monitor. It wins on the step after the filter, because other screeners stop at a list. Perplexity and Fiscal.ai already offer plain-English screening, so that alone is no edge; proof is.
+Current spec: `../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md`. The product is Screen, Rank, Test, Monitor. It wins on the step after the filter, because other screeners stop at a list. Perplexity and Fiscal.ai already offer plain-English screening, so that alone is no edge; proof is.
 
 Only these merge steps are pulled in. The rest of the merge map waits for the module that needs it.
 
@@ -219,7 +219,7 @@ Steps 3 to 6 repeat the same six stages. Module tables below list only what is s
 
 ### Step 3: Factors
 
-Spec: `product/FACTORS_V2_PRODUCT_REVIEW.md`. About 4 to 6 sessions. A factor lab that shows its own limits; it is not sold as a Barra replacement.
+Spec: `../reviews/product/FACTORS_V2_PRODUCT_REVIEW.md`. About 4 to 6 sessions. A factor lab that shows its own limits; it is not sold as a Barra replacement.
 
 | Stage | Build | Merge | Done when |
 |---|---|---|---|
@@ -235,7 +235,7 @@ Spec: `product/FACTORS_V2_PRODUCT_REVIEW.md`. About 4 to 6 sessions. A factor la
 
 ### Step 4: Volatility
 
-Spec: `product/VOLATILITY_V2_PRODUCT_REVIEW.md`. About 5 to 7 sessions. Lead with V03 HAR, V01 estimators and V06 connectedness.
+Spec: `../reviews/product/VOLATILITY_V2_PRODUCT_REVIEW.md`. About 5 to 7 sessions. Lead with V03 HAR, V01 estimators and V06 connectedness.
 
 | Stage | Build | Merge | Done when |
 |---|---|---|---|
@@ -252,7 +252,7 @@ Spec: `product/VOLATILITY_V2_PRODUCT_REVIEW.md`. About 5 to 7 sessions. Lead wit
 
 ### Step 5: PCA
 
-Write `product/PCA_V2_PRODUCT_REVIEW.md` first; page cuts below are provisional. Lead with F04 residual stat-arb, F03 risk decomposition and F08 contagion.
+Write `../reviews/product/PCA_V2_PRODUCT_REVIEW.md` first; page cuts below are provisional. Lead with F04 residual stat-arb, F03 risk decomposition and F08 contagion.
 
 | Stage | Build | Merge | Done when |
 |---|---|---|---|
@@ -266,7 +266,7 @@ Write `product/PCA_V2_PRODUCT_REVIEW.md` first; page cuts below are provisional.
 
 ### Step 6: Portfolio
 
-Write `product/PORTFOLIO_V2_PRODUCT_REVIEW.md` first; 13 engines become fewer pages. Lead with F08 contagion, F04 reverse stress and F02 honest backtest.
+Write `../reviews/product/PORTFOLIO_V2_PRODUCT_REVIEW.md` first; 13 engines become fewer pages. Lead with F08 contagion, F04 reverse stress and F02 honest backtest.
 
 | Stage | Build | Merge | Done when |
 |---|---|---|---|
@@ -280,7 +280,7 @@ Write `product/PORTFOLIO_V2_PRODUCT_REVIEW.md` first; 13 engines become fewer pa
 
 ### Step 7: Studio with Chart inside
 
-Write `product/STUDIO_PRODUCT_REVIEW.md` first. Sell Results and Validate first. Proposal: Chart becomes a tab in Studio and `/trade` redirects there, because it is not sold alone and Studio needs it for replay and results.
+Write `../reviews/product/STUDIO_PRODUCT_REVIEW.md` first. Sell Results and Validate first. Proposal: Chart becomes a tab in Studio and `/trade` redirects there, because it is not sold alone and Studio needs it for replay and results.
 
 | Stage | Build | Done when |
 |---|---|---|
