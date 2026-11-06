@@ -21,12 +21,7 @@ type ModuleLink = { id: string; label: string; href: string; icon: LucideIcon };
 /** Modules shown in the rail. Research lives in the workspace; the others move in as they are rebuilt. */
 export const MODULES: ModuleLink[] = [
   { id: "research", label: "Research", href: "/research", icon: FlaskConical },
-  { id: "screener", label: "Screener", href: "/labs/screener-v2", icon: SlidersHorizontal },
-  { id: "factors", label: "Factors", href: "/labs/factors-v2", icon: ChartNetwork },
   { id: "ml", label: "Machine learning", href: "/ml", icon: BrainCircuit },
-  { id: "pca", label: "PCA", href: "/labs/pca-v2", icon: Orbit },
-  { id: "volatility", label: "Volatility", href: "/labs/volatility-v2", icon: Activity },
-  { id: "portfolio", label: "Portfolio", href: "/labs/portfolio-v2", icon: PieChart },
 ];
 
 export type PaletteItem = { id: string; group: string; label: string; icon?: LucideIcon; meta?: string; keywords?: string[]; run: () => void };

@@ -59,10 +59,10 @@ export default function HomeTerminalSection() {
             // DISABLED: Monitor page removed - redirect to labs instead
             } else if (baseCmd === 'monitor') {
                 setLogs(prev => [...prev, `MONITOR DEPRECATED. REDIRECTING TO LABS...`]);
-                setTimeout(() => window.location.href = `/labs`, 1000);
+                setTimeout(() => window.location.href = `/ml`, 1000);
             } else if (baseCmd === 'labs') {
                 setLogs(prev => [...prev, `UNLOCING QUANTUM RESEARCH MODULES...`]);
-                setTimeout(() => window.location.href = `/labs`, 1000);
+                setTimeout(() => window.location.href = `/ml`, 1000);
             } else if (COMMAND_MAP[baseCmd]) {
                 setLogs(prev => [...prev, COMMAND_MAP[baseCmd]]);
             } else {

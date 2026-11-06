@@ -14,12 +14,10 @@ import {
 const footerLinks = {
   Platform: [
     { name: "Trade", href: "/trade" },
-    { name: "Labs", href: "/labs" },
-    { name: "Portfolio", href: "/labs/portfolio-v2" },
+    { name: "ML", href: "/ml" },
+    { name: "Research", href: "/research" },
   ],
   Research: [
-    { name: "Factor Analysis", href: "/labs/factors-v2" },
-    { name: "Volatility", href: "/labs/volatility-v2" },
     { name: "ML Models", href: "/ml" },
   ],
   Company: [

@@ -31,7 +31,6 @@ export default function GlobalLayout({ children }) {
         { name: "Home", path: "/" },
         { name: "Trade", path: "/trade" },
         { name: "Studio", path: "/studio" },
-        { name: "Labs", path: "/labs" },
         { name: "ML", path: "/ml" },
         { name: "Research", path: "/research" },
     ];

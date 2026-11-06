@@ -79,60 +79,6 @@ export async function fetchFundamentals(ticker, compact = false) {
     return handleResponse(res, "Failed to fetch fundamentals");
 }
 
-export async function searchFactorsV2Symbols(query = "", options = {}) {
-    const params = new URLSearchParams({
-        q: query,
-        limit: String(options.limit || 25),
-    });
-    if (options.assetType) params.set("asset_type", options.assetType);
-    const res = await fetch(`${API_BASE_URL}/labs/factors/v2/symbols?${params.toString()}`);
-    return handleResponse(res, "Failed to search Factors V2 symbols");
-}
-
-async function waitFactorsV2Job(job) {
-    while (true) {
-        const state = await handleResponse(await fetch(`${API_BASE_URL}/labs/factors/v2/jobs/${job.job_id}`), "Failed to read Factors V2 job");
-        if (state.status === "completed") return state.result;
-        if (["failed", "cancelled", "interrupted"].includes(state.status)) throw new Error(state.error || `Factors V2 job ${state.status}`);
-        await new Promise(resolve => setTimeout(resolve, 500));
-    }
-}
-
-export async function runFactorsV2Feature(featureId, payload = {}) {
-    const normalized = String(featureId).replace("feature_", "").replace("feature-", "").padStart(2, "0");
-    const job = await handleResponse(await fetch(`${API_BASE_URL}/labs/factors/v2/feature/${normalized}/jobs`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ payload })
-    }), `Failed to run Factors V2 feature ${normalized}`);
-    return waitFactorsV2Job(job);
-}
-
-export async function runFactorsV2All(payload = {}, featurePayloads = {}) {
-    const merged = Object.fromEntries(Object.entries(featurePayloads).map(([fid, params]) => [fid, { ...payload, ...params }]));
-    const job = await handleResponse(await fetch(`${API_BASE_URL}/labs/factors/v2/run-all`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feature_payloads: merged })
-    }), "Failed to run all Factors V2 features");
-    return waitFactorsV2Job(job);
-}
-
-export async function runScreenerV2Feature(featureId, payload = {}) {
-    const normalized = String(featureId).replace("feature_", "").replace("feature-", "").padStart(2, "0");
-    const res = await fetch(`${API_BASE_URL}/screener-v2/run/${normalized}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payload })
-    });
-    return handleResponse(res, `Failed to run Screener V2 feature ${normalized}`);
-}
-
-export async function searchScreenerV2Symbols(query = "", options = {}) {
-    const params = new URLSearchParams({ q: query, limit: String(options.limit || 25) });
-    return handleResponse(await fetch(`${API_BASE_URL}/screener-v2/symbols?${params}`), "Failed to search Screener V2 symbols");
-}
-
-// =============================================================================
-// ALPHA MODELS - Momentum & Mean Reversion Intelligence
-// =============================================================================
-
 export async function fetchDependencyMap(symbol) {
     const res = await fetch(`${API_BASE_URL}/research/e/dependency_map?symbol=${symbol}`);
     return handleResponse(res, "Failed to fetch dependency map");

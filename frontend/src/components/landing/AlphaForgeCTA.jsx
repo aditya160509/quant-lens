@@ -40,7 +40,7 @@ export default function AlphaForgeCTA() {
 
            <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
               <Link
-                href="/labs"
+                href="/ml"
                 className="group w-full sm:w-auto px-12 py-5 rounded-2xl font-black text-lg
                            bg-violet-600 text-white shadow-[0_0_50px_rgba(139,92,246,0.5)]
                            hover:shadow-[0_0_80px_rgba(139,92,246,1)] hover:scale-105

@@ -43,11 +43,11 @@ One search everywhere, at the level of TradingView's. It replaces the current we
 |---|---|---|---|
 | ML | Done | Done, tagged `ml-design-v1`; polish open | `ML_CINEMA_PLAN.md` |
 | Research | Done | On the new workspace | `../reviews/product/RESEARCH_PRODUCT_REVIEW_FINAL_BATCH.md` |
-| Screener | Done | Old v2 pages | `../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md` |
-| Factors | Done | Old v2 pages, fake sparkline | `../reviews/product/FACTORS_V2_PRODUCT_REVIEW.md` |
-| Volatility | Done | Old v2 pages, hardcoded hero | `../reviews/product/VOLATILITY_V2_PRODUCT_REVIEW.md` |
-| PCA | Done | Old v2 pages | Product review missing |
-| Portfolio | Done | Old v2 pages | Product review missing |
+| Screener | Done | Removed; rebuild | `../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md` |
+| Factors | Done | Removed; rebuild | `../reviews/product/FACTORS_V2_PRODUCT_REVIEW.md` |
+| Volatility | Done | Removed; rebuild | `../reviews/product/VOLATILITY_V2_PRODUCT_REVIEW.md` |
+| PCA | Done | Removed; rebuild | Product review missing |
+| Portfolio | Done | Removed; rebuild | Product review missing |
 | Studio | Working | Working | Product review missing |
 | Chart | On legacy data files | Working; moving into Studio | Part of the Studio review |
 | Widget workspace | None | Removed with Sovereign | Plan missing |
@@ -58,7 +58,7 @@ One search everywhere, at the level of TradingView's. It replaces the current we
 - Build only with data we have. Print data limits on results.
 - Open source first. Check licence, maintenance and bundle size, then adopt. Hand-write only what is our product.
 - Each module moves to `LabConfig` and the shared kit. No new per-module primitives.
-- A rebuild ships, then its old `/labs/*-v2` pages and `components/*-v2` are deleted in the same change.
+- Old v2 frontends were removed on 2026-11-06 (tag `pre-v2-frontend-removal`). Screener, Factors, PCA, Volatility and Portfolio have backends but no UI until rebuilt.
 - Commit and push to `main` after each verified step.
 
 ## 4. Quality bar and research
@@ -198,7 +198,7 @@ Only these merge steps are pulled in. The rest of the merge map waits for the mo
 | 2.8 Test | S5 returns into ML Validate, data banner | Steps 0 to 3 and 15 | ML Validate | One PBO and deflated Sharpe; trials counted |
 | 2.9 Monitor | Schedules, alert rules, precision scoreboard, digest | Step 17 | APScheduler, Apprise | An alert reaches a real channel |
 | 2.10 Extras | Template gallery, plain English to formula | None | LLM call | Output is an editable formula |
-| 2.11 Ship | Verified pages, palette, phone, accessibility, baselines | None | Playwright | Tag `screener-v1`; old pages deleted |
+| 2.11 Ship | Verified pages, palette, phone, accessibility, baselines | None | Playwright | Tag `screener-v1` |
 
 Rules for the build:
 
@@ -215,7 +215,7 @@ Steps 3 to 6 repeat the same six stages. Module tables below list only what is s
 3. **Pages:** build each page from `Exhibit`, `KpiStrip`, `DataTable v2` and custom charts, with finding titles and chart controls.
 4. **Merge:** pull in only the merge map steps this module needs, with golden tests first.
 5. **New:** add the module's A++ features.
-6. **Ship:** states, phone, accessibility, tests, baselines. Tag it, delete old pages and `components/*-v2`, and hill climb.
+6. **Ship:** states, phone, accessibility, tests, baselines. Tag it and hill climb.
 
 ### Step 3: Factors
 

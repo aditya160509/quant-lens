@@ -87,7 +87,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Test through ML Validate, with trial ledger
 - [ ] Monitor with APScheduler and Apprise
 - [ ] Templates and plain English to formula
-- [ ] Ship, tag `screener-v1`, delete old pages
+- [ ] Ship, tag `screener-v1`
 
 ## Step 3: Factors
 - [ ] Remove sine sparkline, duplicate keys
@@ -101,7 +101,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Validate hand-off
 - [ ] PDF and CSV report
 - [ ] Shared loader for Factors
-- [ ] Ship, tag `factors-v1`, delete old pages
+- [ ] Ship, tag `factors-v1`
 
 ## Step 4: Volatility
 - [ ] Remove hero literals, fallbacks, synthetic surface request
@@ -114,7 +114,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Budget page, shared Kelly, Validate hand-off
 - [ ] Data gap ledger
 - [ ] Pre-registered vol target
-- [ ] Ship, tag `volatility-v1`, delete old pages
+- [ ] Ship, tag `volatility-v1`
 
 ## Step 5: PCA
 - [ ] Product review
@@ -123,7 +123,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Biplot, MP overlay, loading heatmap, rolling loadings
 - [ ] Stat-arb trade list with Validate
 - [ ] Contagion alerts
-- [ ] Ship, tag `pca-v1`, delete old pages
+- [ ] Ship, tag `pca-v1`
 
 ## Step 6: Portfolio
 - [ ] Product review
@@ -133,7 +133,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Risk kernel, reverse stress, contagion
 - [ ] Honest backtest through Validate
 - [ ] Shared loader, uploads, universes
-- [ ] Ship, tag `portfolio-v1`, delete old pages
+- [ ] Ship, tag `portfolio-v1`
 
 ## Step 7: Studio and Chart
 - [ ] Product review; decide Paper

@@ -102,7 +102,7 @@ export default function HeroSection() {
               className="flex flex-col sm:flex-row gap-6 justify-center"
             >
               <Link
-                href="/labs"
+                href="/ml"
                 className="group px-12 py-5 rounded-full font-bold text-[12px] uppercase tracking-widest
                            bg-white text-black hover:bg-violet-500 hover:text-white
                            transition-all duration-500 flex items-center justify-center gap-3 shadow-[0_10px_40px_rgba(255,255,255,0.05)]"
@@ -112,7 +112,7 @@ export default function HeroSection() {
               </Link>
               
               <Link
-                href="/labs"
+                href="/ml"
                 className="group px-12 py-5 rounded-full font-bold text-[12px] uppercase tracking-widest
                            bg-white/5 border border-white/10 text-white
                            hover:border-violet-500/40 hover:bg-white/10
