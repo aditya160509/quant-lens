@@ -176,7 +176,7 @@ class MultiAssetCatalog:
                 f"{len(calendar_gap_dates)} calendar gaps longer than seven days were retained."
             )
         if method == "ratio_adjusted" and len(continuous):
-            adjusted = pd.to_numeric(continuous["close"], errors="coerce").to_numpy(dtype=float)
+            adjusted = pd.to_numeric(continuous["close"], errors="coerce").to_numpy(dtype=float, copy=True)
             roll_locations = np.flatnonzero(
                 continuous["ticker"].ne(continuous["ticker"].shift()).to_numpy()
             )[1:]

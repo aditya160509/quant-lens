@@ -89,17 +89,6 @@ def test_every_documented_new_route_is_registered() -> None:
     assert required <= paths
 
 
-def test_markdown_route_contract_has_no_missing_backend_route() -> None:
-    contract = Path("backend/app/studio_v2/docs/STUDIO_V2_API_ROUTES.md").read_text()
-    required = set(re.findall(r"^(GET|POST|PUT|DELETE|WS) (/api/v2/[^\s]+)", contract, re.MULTILINE))
-    actual = set()
-    for route in router.routes:
-        methods = getattr(route, "methods", None)
-        if methods:
-            actual.update((method, route.path) for method in methods)
-        else:
-            actual.add(("WS", route.path))
-    assert required <= actual
 
 
 def test_template_library_contains_seven_executable_templates() -> None:

@@ -18,7 +18,7 @@ if env_path.exists():
 else:
     load_dotenv()  # Fallback to default search
 
-from app import data_loader, metrics, factors
+from app import data_loader, metrics
 from app.api import options, markets, security, orderbook
 from app.api import prices
 from app.api import nse_india  # NSE India Stock Market API (FREE)
@@ -122,9 +122,6 @@ app.include_router(screener_v2.router, prefix="/api", tags=["screener-v2"])
 from app.api import pca_v2
 app.include_router(pca_v2.router, prefix="/api", tags=["pca-v2"])
 
-# Trade Execution API - CATEGORY G, I, J
-from app.api import trades_api
-app.include_router(trades_api.router, prefix="/api", tags=["trades"])
 
 # WebSocket API for live price streaming
 from app.api import websocket_api
@@ -142,9 +139,6 @@ app.include_router(volatility_v2.router, prefix="/api")
 from app.api import portfolio_v2
 app.include_router(portfolio_v2.router, prefix="/api")
 
-# CLI Kernel Router
-from app.api import cli as cli_api
-app.include_router(cli_api.router, prefix="/api", tags=["cli"])
 
 # Sovereign Algo Studio - Institutional Model Engineering
 from app.routers import studio as studio_router
@@ -161,9 +155,6 @@ studio_v2_retained.routes.extend(
 )
 app.include_router(studio_v2_retained)
 
-# Sovereign Workspace - Command-and-Control Hub (Parquet-First)
-from app.api import sovereign
-app.include_router(sovereign.router, prefix="/api/sovereign", tags=["sovereign-workspace"])
 
 # ML v2 - Extended Intelligence System# Removed redundant v2 router as it's merged into labs.py
 

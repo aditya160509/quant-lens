@@ -14,7 +14,7 @@ export type InputSpec = {
   options?: (string | number)[];
   min?: number;
   max?: number;
-  /** Rules from the API (docs/RESEARCH_V3_CONTRACTS.md §3); the form falls back to its own maps when absent. */
+  /** Rules from the API (docs/architecture/RESEARCH_V3_CONTRACTS.md §3); the form falls back to its own maps when absent. */
   required?: boolean;
   depends_on?: { field: string; values?: (string | number | boolean)[]; present?: boolean } | null;
   conflicts_with?: string[];

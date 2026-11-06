@@ -239,10 +239,6 @@ interface TradingContextValue {
     setTimeframe: (tf: Timeframe) => void;
     updateOrderIntent: (intent: Partial<OrderIntent>) => void;
     resetOrder: () => void;
-    executeOrder: () => Promise<void>;
-    closePosition: () => Promise<void>;
-    modifyStopLoss: (price: number) => Promise<void>;
-    modifyTakeProfit: (price: number) => Promise<void>;
 }
 
 const TradingContext = createContext<TradingContextValue | null>(null);
@@ -350,32 +346,6 @@ export function TradingProvider({ children, initialSymbol }: TradingProviderProp
         };
     }, [state.symbol]);
 
-    // Fetch initial price when symbol changes (fallback if WS not ready)
-    useEffect(() => {
-        const fetchPrice = async () => {
-            try {
-                const res = await fetch(`http://127.0.0.1:8000/api/trades/prices/${state.symbol}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    dispatch({
-                        type: 'SET_PRICE',
-                        payload: {
-                            price: data.price,
-                            change: 0,
-                            changePercent: 0,
-                        },
-                    });
-                }
-            } catch (e) {
-                console.warn('Failed to fetch initial price:', e);
-            }
-        };
-
-        if (state.symbol && state.lastPrice === 0) {
-            fetchPrice();
-        }
-    }, [state.symbol, state.lastPrice]);
-
     // Detect exchange from symbol
     const detectExchange = useCallback((symbol: string): Exchange => {
         const upper = symbol.toUpperCase();
@@ -413,149 +383,6 @@ export function TradingProvider({ children, initialSymbol }: TradingProviderProp
         dispatch({ type: 'RESET_ORDER_INTENT' });
     }, []);
 
-    // Execute order (calls backend API)
-    const executeOrder = useCallback(async () => {
-        dispatch({ type: 'SET_TRADE_STATE', payload: 'EXECUTING' });
-        dispatch({ type: 'SET_LOADING', payload: true });
-        
-        try {
-            const response = await fetch('/api/trades/execute', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    symbol: state.symbol,
-                    exchange: state.exchange,
-                    ...state.orderIntent,
-                }),
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Trade execution failed');
-            }
-
-            const result = await response.json();
-            
-            // Create position from result
-            const position: Position = {
-                id: result.tradeId,
-                symbol: state.symbol,
-                exchange: state.exchange,
-                side: state.orderIntent.side,
-                quantity: state.orderIntent.quantity,
-                avgEntry: result.fillPrice || state.lastPrice,
-                currentPrice: state.lastPrice,
-                unrealizedPnl: 0,
-                unrealizedPnlPercent: 0,
-                stopLoss: state.orderIntent.stopLoss,
-                takeProfit: state.orderIntent.takeProfit,
-                entryTimestamp: Date.now(),
-                breakEvenPrice: result.breakEvenPrice || result.fillPrice || state.lastPrice,
-            };
-
-            dispatch({ type: 'SET_POSITION', payload: position });
-            dispatch({ type: 'RESET_ORDER_INTENT' });
-        } catch (error) {
-            dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Unknown error' });
-            dispatch({ type: 'SET_TRADE_STATE', payload: 'INTENT' });
-        } finally {
-            dispatch({ type: 'SET_LOADING', payload: false });
-        }
-    }, [state.symbol, state.exchange, state.orderIntent, state.lastPrice]);
-
-    // Close position
-    const closePosition = useCallback(async () => {
-        if (!state.position) return;
-        
-        const positionToClose = state.position; // Capture before clearing
-        
-        dispatch({ type: 'SET_TRADE_STATE', payload: 'EXITING' });
-        dispatch({ type: 'SET_LOADING', payload: true });
-
-        try {
-            const response = await fetch(`/api/trades/${state.position.id}/close`, {
-                method: 'POST',
-            });
-
-            let exitPrice = state.lastPrice;
-            let realizedPnl = positionToClose.unrealizedPnl;
-
-            if (response.ok) {
-                const result = await response.json();
-                exitPrice = result.exitPrice || state.lastPrice;
-                realizedPnl = result.realizedPnl || positionToClose.unrealizedPnl;
-            }
-
-            // Save to localStorage history (works without database)
-            const historyKey = 'quant360_trade_history';
-            const existingHistory = JSON.parse(localStorage.getItem(historyKey) || '[]');
-            const tradeRecord = {
-                id: positionToClose.id,
-                symbol: positionToClose.symbol,
-                side: positionToClose.side,
-                quantity: positionToClose.quantity,
-                entryPrice: positionToClose.avgEntry,
-                exitPrice: exitPrice,
-                pnl: realizedPnl,
-                entryTime: positionToClose.entryTimestamp,
-                exitTime: Date.now(),
-                duration: formatDuration(positionToClose.entryTimestamp, Date.now()),
-            };
-            localStorage.setItem(historyKey, JSON.stringify([tradeRecord, ...existingHistory].slice(0, 100)));
-
-            dispatch({ type: 'SET_POSITION', payload: null });
-        } catch (error) {
-            dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Unknown error' });
-            dispatch({ type: 'SET_TRADE_STATE', payload: 'ACTIVE_POSITION' });
-        } finally {
-            dispatch({ type: 'SET_LOADING', payload: false });
-        }
-    }, [state.position, state.lastPrice]);
-
-    // Modify stop loss
-    const modifyStopLoss = useCallback(async (price: number) => {
-        if (!state.position) return;
-        
-        try {
-            const response = await fetch(`/api/trades/${state.position.id}/stop`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ stopLoss: price }),
-            });
-
-            if (!response.ok) throw new Error('Failed to update stop loss');
-
-            dispatch({
-                type: 'SET_POSITION',
-                payload: { ...state.position, stopLoss: price },
-            });
-        } catch (error) {
-            dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Unknown error' });
-        }
-    }, [state.position]);
-
-    // Modify take profit
-    const modifyTakeProfit = useCallback(async (price: number) => {
-        if (!state.position) return;
-        
-        try {
-            const response = await fetch(`/api/trades/${state.position.id}/target`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ takeProfit: price }),
-            });
-
-            if (!response.ok) throw new Error('Failed to update take profit');
-
-            dispatch({
-                type: 'SET_POSITION',
-                payload: { ...state.position, takeProfit: price },
-            });
-        } catch (error) {
-            dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Unknown error' });
-        }
-    }, [state.position]);
-
     // Update position PnL when price changes (throttled to avoid infinite loop)
     const lastUpdateRef = useRef<number>(0);
     useEffect(() => {
@@ -576,10 +403,6 @@ export function TradingProvider({ children, initialSymbol }: TradingProviderProp
         setTimeframe,
         updateOrderIntent,
         resetOrder,
-        executeOrder,
-        closePosition,
-        modifyStopLoss,
-        modifyTakeProfit,
     };
 
     return (

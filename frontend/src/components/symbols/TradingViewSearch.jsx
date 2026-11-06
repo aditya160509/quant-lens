@@ -35,32 +35,12 @@ export default function TradingViewSearch({
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [activeTab, setActiveTab] = useState('All');
     const [error, setError] = useState(null);
-    const [allTickers, setAllTickers] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
 
     const inputRef = useRef(null);
     const dropdownRef = useRef(null);
 
-    // Fetch universal tickers on mount
-    useEffect(() => {
-        const fetchTickers = async () => {
-            try {
-                const res = await fetch('/api/sovereign/available-tickers');
-                const json = await res.json();
-                if (json.status === 'ok' && json.tickers) {
-                    setAllTickers(json.tickers);
-                }
-            } catch (err) {
-                console.error("Failed to fetch universal tickers:", err);
-            }
-        };
-        fetchTickers();
-    }, []);
-
-    const searchUniverse = useMemo(() => {
-        if (allTickers.length > 0) return allTickers;
-        return getUniverse();
-    }, [allTickers]);
+    const searchUniverse = useMemo(() => getUniverse(), []);
 
 
     // Available tabs based on content

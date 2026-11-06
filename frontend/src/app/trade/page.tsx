@@ -24,11 +24,6 @@ const SignalsTab = dynamic(
     { ssr: false, loading: () => <TabLoader label="Signals" /> }
 );
 
-const TradeTab = dynamic(
-    () => import('@/components/trading/tabs/TradeTab'),
-    { ssr: false, loading: () => <TabLoader label="Trade" /> }
-);
-
 // Loading placeholder for tabs
 function TabLoader({ label }: { label: string }) {
     return (
@@ -43,7 +38,6 @@ function TabLoader({ label }: { label: string }) {
 const TABS = [
     { id: 'chart', label: 'Chart', shortcut: '1' },
     { id: 'signals', label: 'Signals', shortcut: '2' },
-    { id: 'trade', label: 'Trade', shortcut: '3' },
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
@@ -137,7 +131,6 @@ function TradingPageContent({ initialSymbol, initialTab }: { initialSymbol?: str
                     <Suspense fallback={<TabLoader label={TABS.find(t => t.id === activeTab)?.label || 'Content'} />}>
                         {activeTab === 'chart' && <ChartTab />}
                         {activeTab === 'signals' && <SignalsTab />}
-                        {activeTab === 'trade' && <TradeTab />}
                     </Suspense>
                 </div>
             </div>

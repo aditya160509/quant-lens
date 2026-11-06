@@ -9,6 +9,9 @@ from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
 import logging
 
+import numpy as np
+import pandas as pd
+
 from ..services.universe import (
     validate_symbols,
     check_limits,
@@ -16,11 +19,76 @@ from ..services.universe import (
     normalize_symbol,
 )
 from ..services.research_cache import research_cache
-from ..services.research_data import get_prices_daily, get_prices_multi
+from .. import data_loader
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/prices", tags=["prices"])
+
+def get_prices_daily(ticker: str, lookback_days: int) -> pd.DataFrame:
+    """
+    Get daily OHLCV data for a ticker.
+    
+    Args:
+        ticker: Stock symbol
+        lookback_days: Number of days to fetch
+        
+    Returns:
+        DataFrame with columns: date (index), open, high, low, close, volume
+    """
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=lookback_days + 30)  # Buffer for weekends/holidays
+    
+    start_str = start_date.strftime("%Y-%m-%d")
+    end_str = end_date.strftime("%Y-%m-%d")
+    
+    # Check cache
+    cached, hit = research_cache.get_prices(ticker, "1d", start_str, end_str)
+    if hit and cached is not None:
+        return cached
+    
+    try:
+        df = data_loader.get_price_history(
+            [ticker],
+            start=start_str,
+            end=end_str,
+            interval="1d"
+        )
+        
+        if df.empty:
+            logger.warning(f"No data for ticker {ticker}")
+            return pd.DataFrame()
+        
+        # Handle MultiIndex columns from yfinance
+        if isinstance(df.columns, pd.MultiIndex):
+            # Extract columns for this ticker
+            result = pd.DataFrame(index=df.index)
+            for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+                if (col, ticker) in df.columns:
+                    result[col.lower()] = df[(col, ticker)]
+                elif col in df.columns.get_level_values(0):
+                    result[col.lower()] = df.xs(col, axis=1, level=0).iloc[:, 0]
+        else:
+            result = df.copy()
+            result.columns = [c.lower() for c in result.columns]
+        
+        # Ensure we have required columns
+        required = ['open', 'high', 'low', 'close', 'volume']
+        for col in required:
+            if col not in result.columns:
+                result[col] = np.nan
+        
+        result = result[required].dropna(subset=['close'])
+        
+        # Cache the result
+        research_cache.set_prices(ticker, "1d", start_str, end_str, result)
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error fetching prices for {ticker}: {e}")
+        return pd.DataFrame()
+
 
 # ===== Request/Response Models =====
 

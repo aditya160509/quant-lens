@@ -29,7 +29,7 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from ..auth.dependencies import CurrentUser, get_current_user
+from .shared.local_user import CurrentUser, get_current_user
 
 from .algorithm_lab.collaboration import CollaboratorSession
 from .algorithm_lab.compute_budget import ComputeBudget

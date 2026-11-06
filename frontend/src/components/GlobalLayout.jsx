@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
-import TerminalOverlay from './TerminalOverlay';
 import ThemeToggle from './ui/ThemeToggle';
 
 // Register GSAP plugins
@@ -69,10 +68,6 @@ export default function GlobalLayout({ children }) {
 
                     {/* Right side - Theme toggle, Terminal hint, time, and user menu */}
                     <div className="flex shrink-0 items-center gap-2 lg:gap-4">
-                        <div className="hidden xl:flex items-center gap-1 text-[10px] font-mono text-terminal-dim">
-                            <kbd className="px-1.5 py-0.5 rounded bg-terminal-black border border-terminal-gray">⌘K</kbd>
-                            <span>Terminal</span>
-                        </div>
                         <div className="hidden md:block"><ThemeToggle /></div>
                         <div className="hidden xl:block font-mono text-xs text-terminal-green">
                             {time}
@@ -87,7 +82,6 @@ export default function GlobalLayout({ children }) {
             </main>
 
             {/* Terminal Overlay - Global, triggered by ⌘K */}
-            {!isWorkspace && <TerminalOverlay />}
         </div>
     );
 }

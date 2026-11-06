@@ -5,7 +5,6 @@ import HUDContainer from './HUDContainer';
 import CauseEngine from './CauseEngine';
 import SignalSummary from './SignalSummary';
 import ImpactMatrix from './ImpactMatrix';
-import QuickTradePanel from './QuickTradePanel';
 import { Activity, Brain, Zap } from 'lucide-react';
 
 export default function CommandGrid() {

@@ -1,5 +1,9 @@
 # Codex Project Notes
 
+## Start here
+
+Read `docs/PLAN.md` and `docs/CHECKLIST.md`. Tick progress in the checklist. Backend uses Python 3.12 and uv (`backend/.venv`). Commit and push to `main` after each verified step. `research_exports/` is the paper package; never clean it up.
+
 ## Codebase Memory
 
 This repo has been indexed with `codebase-memory-mcp`.

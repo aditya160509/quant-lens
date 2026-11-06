@@ -860,7 +860,7 @@ class MonteCarloEngine:
         sample_paths = equity_paths[sample_indices].tolist()
         
         # Histogram bins for final value distribution
-        hist_counts, hist_edges = np.histogram(final_values, bins=50)
+        hist_counts, hist_edges = np.histogram(final_values, bins=50 if np.ptp(final_values) > 1e-9 else 1)
         histogram = {
             'counts': hist_counts.tolist(),
             'edges': hist_edges.tolist()
