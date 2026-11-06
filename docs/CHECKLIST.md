@@ -7,7 +7,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [x] Remove trades, Sovereign, CLI and auth
 - [x] Organize docs
 - [x] Python 3.12 with uv
-- [x] Backend tests green
+- [ ] Backend tests green (3 fail: stale `category7_macro_regime` manifest entry)
 - [ ] pnpm 12
 - [ ] tsrs and TypeScript 7
 - [ ] oxlint and oxfmt, remove ESLint
