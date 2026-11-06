@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, Suspense, useCallback, useMemo } from 'react';
-import { fetchSecurityDetail, fetchIntradayMarketData, fetchOptionsChain, getMacroImpact, fetchSecurityIndicators, fetchLiquidity, fetchFundamentals, fetchMarketIntraday, fetchMonitorNews } from '@/lib/api';
+import { fetchSecurityDetail, fetchIntradayMarketData, fetchOptionsChain, fetchSecurityIndicators, fetchFundamentals, fetchMarketIntraday } from '@/lib/api';
 import { getNseOptionsChain, getNseEquity, getNseIntraday, getNseTradeInfo, getNseCorporateInfo, getNseHistorical, getNseEarnings, getEarningsWithFallback, getOptionsWithFallback, isNseApiHealthy } from '@/lib/api/nse_india';
 import TerminalPanel from '@/components/TerminalPanel';
 import PageGrid from '@/components/PageGrid';
@@ -35,7 +35,6 @@ function SecurityPageContent() {
     const [intradayInterval, setIntradayInterval] = useState("5m");
     const [activeTab, setActiveTab] = useState("chart"); // chart, options, earnings, macro, analysis
     const [optionsData, setOptionsData] = useState(null);
-    const [macroData, setMacroData] = useState(null);
     const [liveQuote, setLiveQuote] = useState(null);
     const [liquidity, setLiquidity] = useState(null);
     const [fundamentals, setFundamentals] = useState(null);
@@ -123,10 +122,6 @@ function SecurityPageContent() {
                 // Fetch Indicators separately
                 const indRes = await fetchSecurityIndicators(symbol, period, interval);
 
-                // Fetch Liquidity
-                const liqRes = await fetchLiquidity(symbol);
-                setLiquidity(liqRes);
-
                 // Fetch Fundamentals (E7)
                 try {
                     const fundRes = await fetchFundamentals(symbol, true);
@@ -161,19 +156,6 @@ function SecurityPageContent() {
                         console.log('Intraday bars not available:', e);
                         setIntradayBars([]);
                         setSessionInfo(null);
-                    }
-
-                    // Fetch news for intraday view
-                    setNewsLoading(true);
-                    try {
-                        const newsRes = await fetchMonitorNews('US', 20);
-                        // News API returns {items: [...]} structure
-                        setIntradayNews(newsRes?.items || []);
-                    } catch (e) {
-                        console.log('News not available:', e);
-                        setIntradayNews([]);
-                    } finally {
-                        setNewsLoading(false);
                     }
                 }
 
@@ -302,9 +284,6 @@ function SecurityPageContent() {
                     console.error('[Earnings] Error:', err);
                     setNseEarnings({ error: err.message });
                 }
-            } else if (activeTab === "macro") {
-                const mac = await getMacroImpact(symbol);
-                setMacroData(mac);
             }
 
             // === FETCH NSE SPECIFIC DATA FOR INDIAN STOCKS ===
@@ -524,7 +503,6 @@ function SecurityPageContent() {
                     {isIndianStock && (
                         <button onClick={() => setActiveTab("earnings")} className={`px-2 py-0.5 text-[10px] ${activeTab === "earnings" ? "bg-terminal-cyan text-terminal-black" : "text-terminal-cyan/60 hover:text-terminal-cyan"}`}>EARNINGS</button>
                     )}
-                    <button onClick={() => setActiveTab("macro")} className={`px-2 py-0.5 text-[10px] ${activeTab === "macro" ? "bg-terminal-yellow text-terminal-black" : "text-terminal-dim hover:text-terminal-text"}`}>MACRO</button>
                     <button onClick={() => setActiveTab("analysis")} className={`px-2 py-0.5 text-[10px] ${activeTab === "analysis" ? "bg-terminal-yellow text-terminal-black" : "text-terminal-dim hover:text-terminal-text"}`}>ANALYSIS</button>
                 </div>
             </div>
@@ -1063,36 +1041,6 @@ function SecurityPageContent() {
                                     )}
                                 </div>
                             </div>
-                        )}
-                    </div>
-                )
-            }
-
-            {
-                activeTab === "macro" && (
-                    <div className="col-span-12 h-[600px] bg-terminal-dark border border-terminal-gray p-4">
-                        <h2 className="text-lg font-bold text-terminal-yellow mb-4">MACRO SENSITIVITY</h2>
-                        {macroData ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {macroData.map((item, i) => (
-                                    <div key={i} className="bg-terminal-black border border-terminal-gray p-4 rounded">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className="text-terminal-dim uppercase text-xs">{item.factor}</span>
-                                            <span className={`font-bold font-mono ${item.impact.startsWith('-') ? 'text-terminal-red' : 'text-terminal-green'}`}>
-                                                {item.impact}
-                                            </span>
-                                        </div>
-                                        <div className="text-sm text-terminal-text mb-2">
-                                            Scenario: {item.change}
-                                        </div>
-                                        <div className="text-xs text-terminal-dim italic">
-                                            {item.desc}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-center text-terminal-dim p-8">Loading Macro Sensitivity...</div>
                         )}
                     </div>
                 )

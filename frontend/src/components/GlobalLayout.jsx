@@ -7,7 +7,6 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 import TerminalOverlay from './TerminalOverlay';
-import { UserMenu } from './auth/UserMenu';
 import ThemeToggle from './ui/ThemeToggle';
 
 // Register GSAP plugins
@@ -34,21 +33,17 @@ export default function GlobalLayout({ children }) {
         { name: "Trade", path: "/trade" },
         { name: "Studio", path: "/studio" },
         { name: "Labs", path: "/labs" },
-        { name: "Docs", path: "/documentation" },
-        { name: "Portfolio", path: "/portfolio" },
+        { name: "ML", path: "/ml" },
+        { name: "Research", path: "/research" },
     ];
 
-    // Auth pages should have minimal chrome
-    const isAuthPage = pathname?.startsWith('/login') || 
-                       pathname?.startsWith('/signup') || 
-                       pathname?.startsWith('/forgot-password');
     // Workspace modules render their own full-screen chrome and command palette
     const isWorkspace = pathname?.startsWith('/research');
 
     return (
         <div className="min-h-screen flex flex-col bg-terminal-black text-terminal-text font-sans selection:bg-terminal-yellow selection:text-terminal-black">
             {/* Top Nav Bar - Hidden on Auth Pages only */}
-            {!isAuthPage && !isWorkspace && (
+            {!isWorkspace && (
                 <header className={`h-12 border-b border-terminal-gray ${pathname === '/' ? 'bg-transparent absolute top-0 left-0 right-0 z-50' : 'bg-terminal-dark'} flex items-center gap-3 overflow-hidden px-3 sm:px-4 shrink-0`}>
                     <div className="flex min-w-0 flex-1 items-center gap-4 lg:gap-8">
                         <Link href="/" className="shrink-0 text-terminal-yellow font-bold tracking-[0.3em] text-lg hover:opacity-80 transition-opacity flex items-center gap-2">
@@ -74,12 +69,6 @@ export default function GlobalLayout({ children }) {
 
                     {/* Right side - Theme toggle, Terminal hint, time, and user menu */}
                     <div className="flex shrink-0 items-center gap-2 lg:gap-4">
-                        <Link 
-                            href="/pricing"
-                            className="hidden lg:block text-xs font-mono text-terminal-dim hover:text-terminal-yellow transition-colors"
-                        >
-                            PRICING
-                        </Link>
                         <div className="hidden xl:flex items-center gap-1 text-[10px] font-mono text-terminal-dim">
                             <kbd className="px-1.5 py-0.5 rounded bg-terminal-black border border-terminal-gray">⌘K</kbd>
                             <span>Terminal</span>
@@ -88,7 +77,6 @@ export default function GlobalLayout({ children }) {
                         <div className="hidden xl:block font-mono text-xs text-terminal-green">
                             {time}
                         </div>
-                        <UserMenu />
                     </div>
                 </header>
             )}

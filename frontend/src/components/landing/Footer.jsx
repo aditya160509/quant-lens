@@ -15,13 +15,12 @@ const footerLinks = {
   Platform: [
     { name: "Trade", href: "/trade" },
     { name: "Labs", href: "/labs" },
-    { name: "Portfolio", href: "/portfolio" },
+    { name: "Portfolio", href: "/labs/portfolio-v2" },
   ],
   Research: [
-    { name: "Factor Analysis", href: "/labs/factors" },
-    { name: "Volatility", href: "/labs/volatility" },
-    { name: "ML Models", href: "/labs/ml" },
-    { name: "Regimes", href: "/labs/regimes" },
+    { name: "Factor Analysis", href: "/labs/factors-v2" },
+    { name: "Volatility", href: "/labs/volatility-v2" },
+    { name: "ML Models", href: "/ml" },
   ],
   Company: [
     { name: "About", href: "#" },

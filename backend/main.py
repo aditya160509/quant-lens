@@ -19,14 +19,9 @@ else:
     load_dotenv()  # Fallback to default search
 
 from app import data_loader, metrics, factors
-from app.api import labs, portfolio, cluster_b, options, markets, security, orderbook, registry, macro
-from app.api import portfolio_risk_api  # Portfolio Risk VaR System
-from app.api import liquidity_api  # Liquidity Intelligence Engine
-from app.api import screener_api  # QUANT360 Screener
+from app.api import options, markets, security, orderbook
 from app.api import prices
-from app.api import markets_daily  # Markets Daily Cognition Terminal
 from app.api import nse_india  # NSE India Stock Market API (FREE)
-from app.api import research_quantitative  # Quantitative Math Lab
 from app.api import factors_v2  # Factors V2 - 14-feature institutional factor intelligence
 from app.api import research_v2  # Research V2 - empirical finance test battery
 from app.api import screener_v2
@@ -92,7 +87,6 @@ from app.studio_v2.shared.observability import StudioObservabilityMiddleware
 # Scoped by path so streaming endpoints elsewhere are never buffered.
 from starlette.middleware.gzip import GZipMiddleware
 
-
 class _LabGZip(GZipMiddleware):
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http" and scope["path"].startswith(("/api/ml/v2", "/api/labs/research")):
@@ -100,33 +94,16 @@ class _LabGZip(GZipMiddleware):
         else:
             await self.app(scope, receive, send)
 
-
 app.add_middleware(_LabGZip, minimum_size=1024)
 app.add_middleware(StudioObservabilityMiddleware)
 
-# Include Routers
-# Include Routers
-app.include_router(labs.router, prefix="/api/labs", tags=["labs"])
-app.include_router(portfolio.router, prefix="/api/portfolio", tags=["portfolio"])
-app.include_router(cluster_b.router, prefix="/api", tags=["cluster_b"])
 app.include_router(options.router, prefix="/api/options", tags=["options"])
 app.include_router(markets.router, prefix="/api/markets", tags=["markets"])
 app.include_router(security.router, prefix="/api/security", tags=["security"])
-app.include_router(liquidity_api.router, prefix="/api", tags=["liquidity-intelligence"])
 app.include_router(orderbook.router, prefix="/api/orderbook", tags=["orderbook"])
-
-
-app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
-app.include_router(macro.router, prefix="/api/macro", tags=["macro"])
-app.include_router(portfolio_risk_api.router, prefix="/api/portfolio-risk", tags=["portfolio-risk"])
 
 # Price/Quote Routers
 app.include_router(prices.router, tags=["prices"])
-
-# Research Routers (Cluster D)
-
-# Quantitative Math Lab - SDE, Kalman, Cointegration, Spectral
-app.include_router(research_quantitative.router, prefix="/api", tags=["quantitative-lab"])
 
 # Factors V2 - Institutional Factor Intelligence
 # Mounted under /api/labs/factors/v2 so legacy /api/labs/factors remains untouched.
@@ -136,31 +113,10 @@ from app.api import research_v2_reports; app.include_router(research_v2_reports.
 from app.api import research_v2_signals; app.include_router(research_v2_signals.router, prefix="/api", tags=["research-v2-signals"])
 from app.api import research_v2_projects; app.include_router(research_v2_projects.router, prefix="/api", tags=["research-v2-projects"])
 
-# Research Router (Cluster E)
-
-# Research Router (Cluster F+G)
-
-
-# Markets Daily Cognition Terminal Router
-app.include_router(markets_daily.router, prefix="/api/markets_daily", tags=["markets_daily"])
-
 # NSE India Router (FREE - No API key needed)
 app.include_router(nse_india.router, prefix="/api", tags=["nse-india"])
 
-# Market Labs - 7-Engine Market Structure Analysis
-from app.api import market_labs
-app.include_router(market_labs.router, prefix="/api/market-labs", tags=["market-labs"])
-
-# QUANT360 Screener - 8-Tab Market Intelligence
-app.include_router(screener_api.router, prefix="/api", tags=["quant360-screener"])
 app.include_router(screener_v2.router, prefix="/api", tags=["screener-v2"])
-
-
-# PCA Eigenphysics - Advanced PCA Analysis Terminal
-from app.api import pca_eigenphysics
-app.include_router(pca_eigenphysics.router, prefix="/api", tags=["pca-eigenphysics"])
-
-# PCA God Mode Omega - Institutional-Grade PCA System  
 
 # PCA V2 quantitative feature suite
 from app.api import pca_v2
@@ -174,9 +130,9 @@ app.include_router(trades_api.router, prefix="/api", tags=["trades"])
 from app.api import websocket_api
 app.include_router(websocket_api.router, tags=["websocket"])
 
-# ML God Stack - 11 Module ML Intelligence System (Labs → ML + Portfolio)
-from app.api import ml_api
-app.include_router(ml_api.router, prefix="/api", tags=["ml-god-stack"])
+# ML V2
+from app.api.ml_v2 import router as ml_v2_router
+app.include_router(ml_v2_router, prefix="/api", tags=["ml-v2"])
 
 # Volatility V2 quantitative engines
 from app.api import volatility_v2
@@ -185,21 +141,6 @@ app.include_router(volatility_v2.router, prefix="/api")
 # Portfolio V2 institutional portfolio engines
 from app.api import portfolio_v2
 app.include_router(portfolio_v2.router, prefix="/api")
-
-
-# Payments API - Razorpay (INR) + Stripe (USD)
-from app.api import payments_api
-app.include_router(payments_api.router, prefix="/api", tags=["payments"])
-
-# Accuracy Status API - Check enhancement status
-
-# Alpha Models API - Momentum and Mean Reversion Intelligence
-from app.api import alpha
-app.include_router(alpha.router, prefix="/api/alpha", tags=["alpha-models"])
-
-# Historical Prices API - CSV-First Data Management
-
-# Strategy Institutional - God-Mode Architecture
 
 # CLI Kernel Router
 from app.api import cli as cli_api
@@ -225,8 +166,6 @@ from app.api import sovereign
 app.include_router(sovereign.router, prefix="/api/sovereign", tags=["sovereign-workspace"])
 
 # ML v2 - Extended Intelligence System# Removed redundant v2 router as it's merged into labs.py
-
-
 
 # Import rate limiter for stats
 try:
@@ -313,92 +252,9 @@ def get_universe_endpoint():
     all_tickers.sort()
     return all_tickers
 
-
 # =============================================================================
 # SIMPLE LIQUIDITY ENDPOINT - For Security Page
 # =============================================================================
-
-@app.get("/api/liquidity/{ticker}")
-def get_liquidity_metrics(ticker: str):
-    """
-    Get liquidity metrics for a specific ticker.
-    Used by the Security page to display liquidity info in header.
-    
-    Returns:
-        - liquidity_label: HIGH, MEDIUM, LOW, VERY_LOW
-        - liquidity_color: Tailwind color class
-        - estimated_spread_bps: Estimated bid-ask spread in basis points
-        - avg_volume: Average daily volume (20-day)
-        - avg_dollar_volume: Average daily dollar volume
-        - liquidity_score: Normalized 0-100 score
-    """
-    import yfinance as yf
-    
-    try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period="3mo")
-        
-        if hist.empty:
-            raise HTTPException(status_code=404, detail=f"No data found for {ticker}")
-        
-        # Calculate metrics
-        avg_volume = hist['Volume'].tail(20).mean()
-        avg_close = hist['Close'].tail(20).mean()
-        avg_dollar_volume = avg_volume * avg_close if avg_close > 0 else 0
-        
-        # Calculate volatility for spread estimation
-        returns = hist['Close'].pct_change().dropna()
-        volatility = returns.std() * np.sqrt(252) if len(returns) > 0 else 0
-        
-        # Estimate spread (simplified model: higher volatility + lower volume = higher spread)
-        # Base spread inversely proportional to dollar volume, adjusted by volatility
-        if avg_dollar_volume > 0:
-            base_spread_bps = max(1, 100 / np.log10(avg_dollar_volume + 1))
-            volatility_adj = 1 + volatility * 2  # Higher vol = wider spread
-            estimated_spread_bps = base_spread_bps * volatility_adj
-        else:
-            estimated_spread_bps = 50  # Default high spread for illiquid
-        
-        # Liquidity score (0-100)
-        # Based on dollar volume thresholds
-        if avg_dollar_volume >= 100_000_000:  # $100M+/day
-            liquidity_score = 95
-            liquidity_label = "ULTRA"
-            liquidity_color = "bg-terminal-cyan/20 text-terminal-cyan"
-        elif avg_dollar_volume >= 10_000_000:  # $10M+/day
-            liquidity_score = 80
-            liquidity_label = "HIGH"
-            liquidity_color = "bg-terminal-green/20 text-terminal-green"
-        elif avg_dollar_volume >= 1_000_000:  # $1M+/day
-            liquidity_score = 60
-            liquidity_label = "MEDIUM"
-            liquidity_color = "bg-terminal-yellow/20 text-terminal-yellow"
-        elif avg_dollar_volume >= 100_000:  # $100K+/day
-            liquidity_score = 40
-            liquidity_label = "LOW"
-            liquidity_color = "bg-terminal-orange/20 text-terminal-orange"
-        else:
-            liquidity_score = 20
-            liquidity_label = "VERY_LOW"
-            liquidity_color = "bg-terminal-red/20 text-terminal-red"
-        
-        return {
-            "ticker": ticker.upper(),
-            "liquidity_label": liquidity_label,
-            "liquidity_color": liquidity_color,
-            "estimated_spread_bps": round(estimated_spread_bps, 2),
-            "avg_volume": round(avg_volume),
-            "avg_dollar_volume": round(avg_dollar_volume),
-            "liquidity_score": liquidity_score,
-            "volatility_annual": round(volatility * 100, 2) if volatility else 0
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching liquidity for {ticker}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

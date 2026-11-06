@@ -2,7 +2,6 @@
 
 import React from 'react';
 import HUDContainer from './HUDContainer';
-import DependencyMap from './DependencyMap';
 import CauseEngine from './CauseEngine';
 import SignalSummary from './SignalSummary';
 import ImpactMatrix from './ImpactMatrix';
@@ -17,7 +16,7 @@ export default function CommandGrid() {
             <div className="flex-1 min-h-0 w-full grid grid-cols-12 gap-2">
                 
                 {/* Left Panel: Cause Engine (Cols 1-3) */}
-                <div className="col-span-3 h-full">
+                <div className="col-span-6 h-full">
                     <HUDContainer 
                         title="Cause Engine" 
                         icon={<Activity size={12} />}
@@ -27,19 +26,8 @@ export default function CommandGrid() {
                     </HUDContainer>
                 </div>
 
-                {/* Center Panel: Dependency Map (Cols 4-9) */}
-                <div className="col-span-6 h-full">
-                    <HUDContainer 
-                        title="Neural Dependency Map" 
-                        icon={<Brain size={12} />}
-                        className="h-full bg-black/60 shadow-[inset_0_0_100px_rgba(139,92,246,0.05)]"
-                    >
-                        <DependencyMap />
-                    </HUDContainer>
-                </div>
-
                 {/* Right Panel: Impact Matrix (Cols 10-12) */}
-                <div className="col-span-3 h-full">
+                <div className="col-span-6 h-full">
                     <HUDContainer 
                         title="Impact Matrix" 
                         icon={< Zap size={12} />}

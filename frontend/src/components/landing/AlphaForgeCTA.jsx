@@ -49,15 +49,6 @@ export default function AlphaForgeCTA() {
                 ENTER TERMINAL
                 <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform" />
               </Link>
-              
-              <Link
-                href="/auth/register"
-                className="group w-full sm:w-auto px-10 py-5 rounded-2xl font-bold text-lg
-                           bg-white/5 border border-white/10 text-white
-                           hover:bg-white/10 hover:border-violet-500/50 transition-all duration-300"
-              >
-                Create Account
-              </Link>
            </div>
 
            <div className="mt-20 flex justify-center gap-12 opacity-30 grayscale contrast-150">
