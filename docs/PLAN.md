@@ -8,6 +8,35 @@ One quant research platform where every number is real, every result says how fa
 
 Modules: Home, Chart, ML, Research, Screener, Factors, PCA, Volatility, Portfolio, Studio, and a widget workspace. PCA, Factors, Portfolio and Volatility keep their own pages. Only duplicated features merge.
 
+## 1b. What the product is about
+
+**Proposed position: the research platform that tells you whether to trust the answer.** Other tools give you a list, a chart or a backtest. We give the same things, then show the evidence, the limits and what would change the result.
+
+- **For everyone.** A retail user gets a clear answer in plain words and one click. A professional opens the same result and finds the method, controls and raw numbers. One product, with depth on demand.
+- **The loop.** Find, rank, prove, size, monitor. Every module serves a step of this loop and hands off to the next.
+- **The edge.** Honest validation, shown on every result. It should be the reason people stay.
+
+### Feature rule for every module
+
+1. **Parity:** list what the best paid and free tools in India and globally offer. Everything people actually pay for goes in the feature table.
+2. **Ours:** add what only we can do.
+3. **Cut:** remove anything fancy, technical or unused. If a retail user or a professional would not miss it, it goes.
+4. **Data:** a feature needing data we do not have is marked "needs data", with the source and cost, and is not faked.
+5. Learn from competitors' ideas; build our own design. Do not copy their look, text or code.
+
+Every product review, including those already written, is redone against this rule before its module is built.
+
+### Global search (shared, built for Screener)
+
+One search everywhere, at the level of TradingView's. It replaces the current weak search.
+
+- Opens from anywhere by keyboard; a large overlay, not a small box.
+- Finds symbol, name and ISIN; tolerant of typos; instant.
+- Tabs for Symbols, Screens, Runs and Docs. Filter chips for Stocks, Funds, Indices, Forex and similar, shown only where we hold data.
+- Rows show logo, ticker, full name, type and exchange.
+- Hover or arrow keys reveal actions: open chart, see overview, add to screen, run in a lab.
+- Shows recent and popular symbols before typing.
+
 ## 2. Where we are
 
 | Area | Backend | Frontend | Plan doc |
@@ -151,7 +180,9 @@ Then hill climb: Heat table, Distribution, Scatter v2, Waterfall v2, Dendrogram 
 
 ### Step 2: Screener
 
-Full spec: `product/SCREENER_V2_PRODUCT_REVIEW.md`. The product is Screen, Rank, Test, Monitor. It wins on the step after the filter, because other screeners stop at a list. Perplexity and Fiscal.ai already offer plain-English screening, so that alone is no edge; proof is.
+First redo `product/SCREENER_V2_PRODUCT_REVIEW.md` against the feature rule: Finviz, TradingView, Koyfin, Stock Rover, Portfolio123, Screener.in, Tickertape, Trendlyne, Chartink and others, with what each charges for. The stages below then change to match.
+
+Current spec: `product/SCREENER_V2_PRODUCT_REVIEW.md`. The product is Screen, Rank, Test, Monitor. It wins on the step after the filter, because other screeners stop at a list. Perplexity and Fiscal.ai already offer plain-English screening, so that alone is no edge; proof is.
 
 Only these merge steps are pulled in. The rest of the merge map waits for the module that needs it.
 
@@ -162,7 +193,7 @@ Only these merge steps are pulled in. The rest of the merge map waits for the mo
 | 2.3 Table | Server sort, page and count; column sets; filter chips with live counts | None | DuckDB | 4,158 names scroll smoothly; no silent cap |
 | 2.4 Formula | One language on `signal_lang`, autocomplete, preview | Step 16, with only the data path it needs | CodeMirror 6 | `core/formula.py` is a thin adapter |
 | 2.5 Trust | Why-here rows and near-miss explorer | None | Funnel data | Each name shows every filter, value and margin |
-| 2.6 Quick look | Ticker drawer shared with ML | None | Base UI | Opens from any ranked table |
+| 2.6 Search and quick look | Global search; ticker drawer shared with ML | None | Base UI, cmdk | Any symbol opens from anywhere by keyboard |
 | 2.7 Rank | Composite, weights, waterfall, ML ranker hand-off | None | ML Alpha | Rules and learned ranks compare side by side |
 | 2.8 Test | S5 returns into ML Validate, data banner | Steps 0 to 3 and 15 | ML Validate | One PBO and deflated Sharpe; trials counted |
 | 2.9 Monitor | Schedules, alert rules, precision scoreboard, digest | Step 17 | APScheduler, Apprise | An alert reaches a real channel |

@@ -48,6 +48,8 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] ML leftovers: Study panel, Inspect panel, Compare mode, empty and error states, accessibility
 
 ## Planning
+- [ ] Agree the product position
+- [ ] Redo ML, Research, Factors and Volatility reviews against the feature rule
 - [x] Factors product review
 - [x] Volatility product review
 - [x] Cross-module merge map
@@ -72,6 +74,8 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Dense series engine with uPlot or canvas
 
 ## Step 2: Screener
+- [ ] Redo product review: full paid feature parity, India and global
+- [ ] Global search
 - [ ] `/screener` on `LabConfig`
 - [ ] Shared kit used by ML and Screener
 - [ ] DuckDB table, filters and counts
