@@ -88,6 +88,24 @@ Licences and activity were checked on GitHub on 2026-11-06. Sources are in `refe
 | GPU charts | None yet | | ChartGPU is young. SciChart and LightningChart are paid |
 | Remove later | Plotly, ECharts, Recharts, visx, three.js, ogl, gsap, lenis | | Six chart and animation stacks are too many. Remove each once nothing imports it |
 
+### Chart system: ours
+
+Charts are the product, so we own them. Open source is only the engine underneath: d3 for scales, uPlot or canvas for speed, `lightweight-charts` or KLineChart for price. Nothing ships with a library's default look. Every chart goes through `src/charts`, so its look, behaviour and options are ours.
+
+Every exhibit gives the user as much freedom as possible:
+
+| Control | Choice |
+|---|---|
+| Form | Switch between sensible chart types for the same data, including a table |
+| Data | Series on or off, compare a run, change range, sort, top N |
+| Scale | Linear, log, percent, indexed to 100, shared or separate axes |
+| Look | Palette, line and bar style, labels, grid, density, light or dark |
+| Marks | Annotations, reference lines, regime bands, events |
+| Output | SVG, PNG, CSV, copy, add to report, send to workspace |
+| Memory | Save as a preset per exhibit or for all exhibits; reset to our default |
+
+Our default must already look finished, so nobody needs the controls. Options are declared once per chart type, so a new chart gets the panel for free and a saved preset works in the widget workspace.
+
 ### Type
 
 | Use | Pick | Licence |
@@ -157,25 +175,113 @@ Rules for the build:
 - Remove S4 leaderboard, correlation and historical strategy outputs, the S2 factor zoo, and S5 Monte Carlo and PBO duplicates.
 - Open decisions needed before 2.8: PBO convention, trial ledger owner.
 
-### Step 3: Remaining merges
+### The module recipe
 
-Execution and covariance kernels, purged CV, Monte Carlo and the rest of `architecture/CROSS_MODULE_MERGE_MAP.md`, each pulled in by the module that needs it.
+Steps 3 to 6 repeat the same six stages. Module tables below list only what is specific.
 
-### Step 4: Module rebuilds
+1. **Clean:** remove fake numbers and duplicate keys; add the data banner.
+2. **Workspace:** new route on `LabConfig`; forms from the backend manifest; prune inputs.
+3. **Pages:** build each page from `Exhibit`, `KpiStrip`, `DataTable v2` and custom charts, with finding titles and chart controls.
+4. **Merge:** pull in only the merge map steps this module needs, with golden tests first.
+5. **New:** add the module's A++ features.
+6. **Ship:** states, phone, accessibility, tests, baselines. Tag it, delete old pages and `components/*-v2`, and hill climb.
 
-First write the PCA and Portfolio product reviews. Then rebuild Factors, Volatility, PCA and Portfolio. Each one: `LabConfig`, exhibits, finding titles, data banner, tests, baselines, delete old pages.
+### Step 3: Factors
 
-### Step 5: Studio with Chart inside
+Spec: `product/FACTORS_V2_PRODUCT_REVIEW.md`. About 4 to 6 sessions. A factor lab that shows its own limits; it is not sold as a Barra replacement.
 
-Proposal: Chart becomes a tab in Studio and `/trade` redirects there. Chart is not sold on its own, Studio needs the same chart for replay and results, and it removes one app. Write the Studio review first, then add diffs and the file tree, and replace `data_loader.py`, `robust_data_fetcher.py` and `indicators.py` with parquet-first data.
+| Stage | Build | Merge | Done when |
+|---|---|---|---|
+| 3.1 Clean | Remove the sine sparkline and duplicate manifest keys; add the look-ahead audit and banner; fix the `hedging_recommendation` doc mismatch | None | No number is drawn from a formula or literal |
+| 3.2 Workspace | `/factors`, 14 features behind 5 pages, display-only controls removed | None | Forms come from `GET /features` |
+| 3.3 Value and exposure | F01, F02, with F03 and F12 as tabs; holdings beside benchmark; DNA with units | None | Bottleneck exposure is named |
+| 3.4 Regime and timing | F04, F05, with F06 persistence; regime pill; decay curves | Regime kernel (step 10) | Half-life has an interval and the published decay warning |
+| 3.5 Test and capacity | F07, F09; capacity sweep; break-even cost | Execution kernel (step 5) | NAV matches the old run within tolerance |
+| 3.6 Risk and construction | F08, F10, F11 as lenses | Covariance and construction (steps 6, 8) | One engine serves Factors and Portfolio |
+| 3.7 Monitor | F13, alert precision, F14 export | Scheduler and alerts from Screener | Alerts show their matured hit rate |
+| 3.8 Validate | F07 hand-off with trial count | Already built for Screener | One click reaches Validate |
+| 3.9 Ship | Recipe stage 6; PDF and CSV report | Shared loader for this module (step 11) | Tag `factors-v1` |
 
-### Step 6: Widget workspace
+### Step 4: Volatility
 
-TakeProfit-style drag-and-drop dashboard built from module exhibits, with one shared ticker and date context.
+Spec: `product/VOLATILITY_V2_PRODUCT_REVIEW.md`. About 5 to 7 sessions. Lead with V03 HAR, V01 estimators and V06 connectedness.
 
-### Step 7: Product shell
+| Stage | Build | Merge | Done when |
+|---|---|---|---|
+| 4.1 Clean | Remove hero literals, cross-type fallback keys, the synthetic surface request, duplicate keys | None | Missing data shows the backend's message |
+| 4.2 Workspace | `/volatility`, 6 pages, inputs pruned, 41-input Budget form cut down | None | Forms come from the manifest |
+| 4.3 Estimators | V01; estimator choice with the reason | Range-based estimators (row 27) | Each ticker shows its best estimator and why |
+| 4.4 Forecast | V02, V03; model confidence set exhibit | GARCH owner decision | No single "best" model without its set |
+| 4.5 Regime | V04 on the kernel built for Factors | Reuse | Same answer as Factors on the same input |
+| 4.6 Risk premium | V05, gated when IV data is missing | None | Page says plainly what it cannot compute |
+| 4.7 Cross-asset | V06, V07 on the shared covariance engine | Reuse, plus one DCC | Spillover chart uses shared kernels |
+| 4.8 Budget | V09, shared Kelly, Validate hand-off | Kelly (row 22) | Sizing lives in the Portfolio engine |
+| 4.9 New | Data gap ledger on every page; pre-registered vol target | None | Saved targets are scored after the fact |
+| 4.10 Ship | Recipe stage 6 | Shared loader for this module | Tag `volatility-v1` |
 
-New Home, auth, profile, payments and docs. Pricing waits for the data licence.
+### Step 5: PCA
+
+Write `product/PCA_V2_PRODUCT_REVIEW.md` first; page cuts below are provisional. Lead with F04 residual stat-arb, F03 risk decomposition and F08 contagion.
+
+| Stage | Build | Merge | Done when |
+|---|---|---|---|
+| 5.1 Review | Keep, cut, merge per feature, with TinyFish research | None | Review committed |
+| 5.2 Clean | Remove preview filler; surface fallback flags in results | None | Requested and resolved data both show |
+| 5.3 Workspace | `/pca` with the agreed pages | None | Forms come from the manifest |
+| 5.4 Custom exhibits | Real biplot, MP overlay, loading heatmap, rolling loadings | PCA kernel (row 8) | Marchenko-Pastur bound is drawn on the spectrum |
+| 5.5 Trade list | Stat-arb list with half-life and decay | Validate hand-off | Each trade has its evidence |
+| 5.6 Monitor | Contagion alerts | Scheduler and alerts | Alerts show precision |
+| 5.7 Ship | Recipe stage 6 | Shared loader | Tag `pca-v1` |
+
+### Step 6: Portfolio
+
+Write `product/PORTFOLIO_V2_PRODUCT_REVIEW.md` first; 13 engines become fewer pages. Lead with F08 contagion, F04 reverse stress and F02 honest backtest.
+
+| Stage | Build | Merge | Done when |
+|---|---|---|---|
+| 6.1 Review | Keep, cut, merge per engine, with research | None | Review committed |
+| 6.2 Clean | One NAV key, real sparklines or none, infeasible points shown | None | Every number means what it says |
+| 6.3 Workspace | `/portfolio` with the agreed pages and uploads | None | Forms come from the manifest |
+| 6.4 Construction | Optimisers, HRP, Black-Litterman, risk budgets | Steps 6 and 8 | Golden tests match Riskfolio or skfolio |
+| 6.5 Risk | VaR, reverse stress, contagion | Risk kernel (step 7) | One VaR across the platform |
+| 6.6 Backtest | Honest backtest through Validate | Reuse | DSR uses the true trial count |
+| 6.7 Ship | Recipe stage 6 | Shared loader, uploads, universes (steps 11 to 13) | Tag `portfolio-v1` |
+
+### Step 7: Studio with Chart inside
+
+Write `product/STUDIO_PRODUCT_REVIEW.md` first. Sell Results and Validate first. Proposal: Chart becomes a tab in Studio and `/trade` redirects there, because it is not sold alone and Studio needs it for replay and results.
+
+| Stage | Build | Done when |
+|---|---|---|
+| 7.1 Review | Keep, cut, merge the six modes, and decide Paper | Review committed |
+| 7.2 Market data | Parquet-first data replaces `data_loader.py`, `robust_data_fetcher.py`, `indicators.py` | Those files are deleted |
+| 7.3 Chart | Custom TradingView-grade chart: drawings, indicators, layouts, replay | Chart tab replaces `/trade` |
+| 7.4 Develop | T3 Code shell ideas, `@pierre/diffs`, `@pierre/trees` | Strategy changes show as diffs |
+| 7.5 Results and Validate | Same exhibits and Validate as the labs | No second report style |
+| 7.6 Compose | One-click report with Typst | Certified run becomes a PDF |
+| 7.7 Ship | Remove the rest of `studio_v2`; fix its manifest and tests | Tag `studio-v1` |
+
+### Step 8: Widget workspace
+
+Write the plan first. Research TakeProfit and OpenBB widget models.
+
+| Stage | Build | Done when |
+|---|---|---|
+| 8.1 Model | Any exhibit can become a widget | One config, no copied charts |
+| 8.2 Grid | Drag, resize, save, restore, templates | Layout survives reload |
+| 8.3 Context | Linked ticker, date and universe | Changing a ticker updates linked widgets |
+| 8.4 Live | Refresh, alerts and presets in widgets | Saved chart presets carry over |
+| 8.5 Ship | Phone view, accessibility, baselines | Tag `workspace-v1` |
+
+### Step 9: Product shell
+
+| Stage | Build | Done when |
+|---|---|---|
+| 9.1 Home | New landing on real product screens | Old `landing` removed |
+| 9.2 Auth | Accounts, profile, per-user data | Local user removed |
+| 9.3 Data licence | Check what we can resell | Written decision |
+| 9.4 Payments | Pricing and billing | Test payment passes |
+| 9.5 Docs | Public docs, method notes, onboarding | Each module has a method page |
 
 ### Deferred: Phase 0
 

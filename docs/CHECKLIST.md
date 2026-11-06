@@ -35,7 +35,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Run Playwright after the cleanup
 - [ ] Remove `@supabase` and other unused npm packages
 
-## Phase 1: Shared kit
+## Shared kit (with Step 2)
 - [ ] Port T3 Code shell components
 - [ ] Research the best open source option for each kit component
 - [ ] `Exhibit`
@@ -47,7 +47,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Shared tooltip and legend
 - [ ] ML leftovers: Study panel, Inspect panel, Compare mode, empty and error states, accessibility
 
-## Phase 2: Planning
+## Planning
 - [x] Factors product review
 - [x] Volatility product review
 - [x] Cross-module merge map
@@ -60,47 +60,99 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Decide trial ledger owner
 - [ ] Decide the other merge map items
 
-## Phase 3: Validation merge
-- [ ] Golden fixtures
-- [ ] `services/shared` maths package
-- [ ] One PBO
-- [ ] One deflated Sharpe
-- [ ] One purged CV and Monte Carlo
-- [ ] Execution kernel
-- [ ] Covariance kernel
+## Chart system
+- [ ] Option schema per chart type
+- [ ] Customise panel on every exhibit
+- [ ] Form switch
+- [ ] Scale and axis controls
+- [ ] Palette and style controls
+- [ ] Annotations and reference lines
+- [ ] SVG, PNG and CSV export
+- [ ] Saved presets
+- [ ] Dense series engine with uPlot or canvas
 
-## Phase 4: Module rebuilds
-- [ ] Screener: `/screener` on `LabConfig`
-- [ ] Screener: DuckDB table, filters and counts
-- [ ] Screener: CodeMirror formula bar on `signal_lang`
-- [ ] Screener: why-here and near-miss
-- [ ] Screener: quick-look drawer
-- [ ] Screener: Rank and ML hand-off
-- [ ] Screener: Test through ML Validate
-- [ ] Screener: Monitor with APScheduler and Apprise
-- [ ] Screener: templates and plain English to formula
-- [ ] Screener: tag `screener-v1`, delete old pages
-- [ ] Factors rebuild, delete old pages
-- [ ] Volatility rebuild, delete old pages
-- [ ] PCA rebuild, delete old pages
-- [ ] Portfolio rebuild, delete old pages
+## Step 2: Screener
+- [ ] `/screener` on `LabConfig`
+- [ ] Shared kit used by ML and Screener
+- [ ] DuckDB table, filters and counts
+- [ ] CodeMirror formula bar on `signal_lang`
+- [ ] Why-here and near-miss
+- [ ] Quick-look drawer
+- [ ] Rank and ML hand-off
+- [ ] Golden fixtures, one PBO, one deflated Sharpe
+- [ ] Test through ML Validate, with trial ledger
+- [ ] Monitor with APScheduler and Apprise
+- [ ] Templates and plain English to formula
+- [ ] Ship, tag `screener-v1`, delete old pages
 
-## Phase 5: Studio and Chart
+## Step 3: Factors
+- [ ] Remove sine sparkline, duplicate keys
+- [ ] Look-ahead audit and data banner
+- [ ] `/factors` from the manifest
+- [ ] Value and exposure page
+- [ ] Regime kernel; Regime and timing page
+- [ ] Execution kernel; Test and capacity page
+- [ ] Covariance and construction engines; Risk page
+- [ ] Monitor page with alert precision
+- [ ] Validate hand-off
+- [ ] PDF and CSV report
+- [ ] Shared loader for Factors
+- [ ] Ship, tag `factors-v1`, delete old pages
+
+## Step 4: Volatility
+- [ ] Remove hero literals, fallbacks, synthetic surface request
+- [ ] `/volatility` from the manifest, inputs pruned
+- [ ] Estimators page with estimator choice
+- [ ] Forecast page with confidence set
+- [ ] Regime page on shared kernel
+- [ ] Risk premium page, gated
+- [ ] Cross-asset page, one DCC
+- [ ] Budget page, shared Kelly, Validate hand-off
+- [ ] Data gap ledger
+- [ ] Pre-registered vol target
+- [ ] Ship, tag `volatility-v1`, delete old pages
+
+## Step 5: PCA
+- [ ] Product review
+- [ ] Remove filler; show fallback flags
+- [ ] `/pca` from the manifest
+- [ ] Biplot, MP overlay, loading heatmap, rolling loadings
+- [ ] Stat-arb trade list with Validate
+- [ ] Contagion alerts
+- [ ] Ship, tag `pca-v1`, delete old pages
+
+## Step 6: Portfolio
+- [ ] Product review
+- [ ] One NAV key; no fake sparklines
+- [ ] `/portfolio` from the manifest, uploads
+- [ ] Construction engines with golden tests
+- [ ] Risk kernel, reverse stress, contagion
+- [ ] Honest backtest through Validate
+- [ ] Shared loader, uploads, universes
+- [ ] Ship, tag `portfolio-v1`, delete old pages
+
+## Step 7: Studio and Chart
+- [ ] Product review; decide Paper
 - [ ] Decide Chart as a Studio tab
-- [ ] Parquet-first market data
-- [ ] Delete `data_loader.py`, `robust_data_fetcher.py`, `indicators.py`
-- [ ] TradingView-grade chart
-- [ ] `@pierre/diffs` and `@pierre/trees`
-- [ ] Remove the rest of `studio_v2`
+- [ ] Parquet-first data; delete old data files
+- [ ] Custom chart with drawings, indicators, layouts, replay
+- [ ] T3 Code shell, diffs, file tree
+- [ ] Shared exhibits in Results and Validate
+- [ ] Typst one-click report
+- [ ] Remove rest of `studio_v2`; tag `studio-v1`
 
-## Phase 6: Widget workspace
-- [ ] Widget list and layout
-- [ ] Shared ticker and date context
-- [ ] Save and restore layouts
+## Step 8: Widget workspace
+- [ ] Plan and research
+- [ ] Any exhibit as a widget
+- [ ] Grid, save, restore, templates
+- [ ] Linked ticker, date, universe
+- [ ] Refresh, alerts, presets
+- [ ] Ship, tag `workspace-v1`
 
-## Phase 7: Product shell
+## Step 9: Product shell
 - [ ] New Home
-- [ ] Auth and profile
-- [ ] Data licence
+- [ ] Auth, profile, per-user data
+- [ ] Data licence decision
 - [ ] Payments and pricing
-- [ ] Public docs
+- [ ] Public docs and method pages
+
