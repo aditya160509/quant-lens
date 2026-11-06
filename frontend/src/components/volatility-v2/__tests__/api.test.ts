@@ -10,13 +10,14 @@ test('payload follows backend aliases and rejects unsupported calculations', () 
 
 test('run obtains the manifest and returns the actual completed background result', async () => {
  const result = {feature_id:'feature_01', charts:{five_estimator_comparison:[{cc:.2}]}};
- global.fetch = jest.fn()
+ const fetchMock = jest.fn()
    .mockResolvedValueOnce({ok:true,json:async()=>({features:[contract]})})
    .mockResolvedValueOnce({ok:true,json:async()=>({job_id:'observed-job'})})
    .mockResolvedValueOnce({ok:true,json:async()=>({status:'completed',result})});
+ global.fetch = fetchMock;
  expect(await runVolatilityV2Feature('01',{assets:'SPY'})).toEqual(result);
- expect(fetch.mock.calls[1][0]).toContain('/feature/01/jobs');
- expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({payload:{assets:'SPY'}});
+ expect(fetchMock.mock.calls[1][0]).toContain('/feature/01/jobs');
+ expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({payload:{assets:'SPY'}});
 });
 
 test('backend errors remain errors, with no demo fallback', async () => {

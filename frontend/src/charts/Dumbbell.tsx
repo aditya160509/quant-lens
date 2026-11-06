@@ -11,7 +11,7 @@ export type DumbbellRow = { label: string; a: number | null; b: number | null; f
  * Each row has its own scale, so metrics in different units sit together; the numbers are printed.
  */
 function DumbbellImpl({ rows, aLabel, bLabel, shared }: { rows: DumbbellRow[]; aLabel: string; bLabel: string; /** One scale for every row, when the rows share a unit and should be compared. */ shared?: boolean }) {
-  const all = rows.flatMap((r) => [r.a, r.b]).filter((v): v is number => v !== null);
+  const all = rows.flatMap((r) => [r.a, r.b]).filter((v): v is number => v !== null && Number.isFinite(v));
   const gLo = Math.min(0, ...all), gHi = Math.max(...all);
   return (
     <div className="dumbbell" role="table" aria-label={`${bLabel} against ${aLabel}`}>
@@ -20,11 +20,11 @@ function DumbbellImpl({ rows, aLabel, bLabel, shared }: { rows: DumbbellRow[]; a
         <span><i className="db-dot a" />{aLabel}<i className="db-dot b" style={{ marginLeft: 12 }} />{bLabel}</span>
         <span>Change</span>
       </div>
-      {rows.filter((r) => r.a !== null && r.b !== null).map((r) => {
+      {rows.filter((r) => r.a !== null && Number.isFinite(r.a) && r.b !== null && Number.isFinite(r.b)).map((r) => {
         const a = r.a as number, b = r.b as number;
         const lo = Math.min(a, b), hi = Math.max(a, b), pad = (hi - lo || Math.abs(hi) || 1) * 0.35;
         const x0 = shared ? gLo : lo - pad, x1 = shared ? gHi + (gHi - gLo) * 0.08 : hi + pad;
-        const pos = (v: number) => `${((v - x0) / (x1 - x0)) * 100}%`;
+        const pos = (v: number) => `${((x1 === x0 ? 0.5 : (v - x0) / (x1 - x0))) * 100}%`;
         const better = r.better === "low" ? b < a : b > a;
         const tone = a === b || r.neutral ? "var(--text-3)" : better ? "var(--up)" : "var(--down)";
         const zero = x0 < 0 && x1 > 0 ? pos(0) : null;

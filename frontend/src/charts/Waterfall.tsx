@@ -11,14 +11,14 @@ const ROW = 24;
  * One prediction explained: from the base value, each feature pushes the output up or down until it
  * reaches the prediction. Largest pushes first; the rest are folded into "other features".
  */
-function WaterfallImpl({ base, items, maxRows = 10, format = fmtTick }: { base: number; items: { label: string; value: number }[]; maxRows?: number; format?: (v: number) => string }) {
+function WaterfallImpl({ base, items, maxRows = 10, format = fmtTick, onSelect }: { base: number; items: { id?: string; label: string; value: number }[]; maxRows?: number; format?: (v: number) => string; onSelect?: (id: string) => void }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const steps = useMemo(() => {
     const sorted = [...items].filter((i) => Number.isFinite(i.value)).sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
     const head = sorted.slice(0, maxRows);
     const rest = sorted.slice(maxRows).reduce((a, i) => a + i.value, 0);
-    const list = rest ? [...head, { label: `${sorted.length - maxRows} other features`, value: rest }] : head;
-    const steps: { label: string; value: number; from: number; to: number }[] = [];
+    const list = sorted.length > maxRows ? [...head, { label: `${sorted.length - maxRows} other features`, value: rest }] : head;
+    const steps: { id?: string; label: string; value: number; from: number; to: number }[] = [];
     let acc = base;
     for (const i of [...list].reverse()) { steps.push({ ...i, from: acc, to: acc + i.value }); acc += i.value; }
     return steps.reverse();
@@ -31,7 +31,7 @@ function WaterfallImpl({ base, items, maxRows = 10, format = fmtTick }: { base: 
   return (
     <div ref={ref}>
       {width > 0 ? (
-        <Svg width={width} height={height} label="Waterfall of feature contributions">
+        <Svg width={width} height={height} label={`Feature contributions from base ${format(base)} to prediction ${format(final)}`} role={onSelect ? "group" : "img"}>
           <line x1={crisp(xs(base))} x2={crisp(xs(base))} y1={M.top} y2={height - M.bottom} stroke="var(--line-3)" strokeDasharray="3 3" />
           <line x1={crisp(xs(final))} x2={crisp(xs(final))} y1={M.top} y2={height - M.bottom} stroke="var(--accent)" strokeDasharray="3 3" />
           {steps.map((s, i) => {
@@ -39,7 +39,9 @@ function WaterfallImpl({ base, items, maxRows = 10, format = fmtTick }: { base: 
             const up = s.value >= 0;
             const x0 = xs(Math.min(s.from, s.to)), x1 = xs(Math.max(s.from, s.to));
             return (
-              <g key={s.label}>
+              <g key={s.label} role={onSelect && s.id ? "button" : undefined} tabIndex={onSelect && s.id ? 0 : undefined} aria-label={onSelect && s.id ? `Inspect ${s.label}, contribution ${format(s.value)}` : undefined}
+                onClick={() => { if (s.id) onSelect?.(s.id); }} onKeyDown={(e) => { if (s.id && onSelect && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelect(s.id); } }}>
+                <title>{s.label}: {format(s.value)}</title>
                 <text x={M.left - 10} y={y + ROW / 2 + 4} textAnchor="end" fontSize={11} fill="var(--text-2)" style={{ fontFamily: "var(--font)" }}>{s.label.length > 20 ? `${s.label.slice(0, 19)}…` : s.label}</text>
                 <rect x={x0} y={y + 4} width={Math.max(1.5, x1 - x0)} height={ROW - 8} rx={2} fill={up ? "var(--up)" : "var(--down)"} fillOpacity={0.85} />
                 <text x={x1 + 6} y={y + ROW / 2 + 4} fontSize={10.5} fill={up ? "var(--up)" : "var(--down)"}>{up ? "+" : ""}{format(s.value)}</text>

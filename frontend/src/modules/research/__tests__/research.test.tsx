@@ -1,8 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { CalendarHeatmap } from "@/charts/CalendarHeatmap";
+import { Dumbbell } from "@/charts/Dumbbell";
+import { Heatmap } from "@/charts/Heatmap";
+import { RankList } from "@/charts/RankList";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { verdictFor } from "../layouts";
 import { specTitle } from "../format";
-import { TestsTable } from "../outputs/tables";
-import { toPayload, validate } from "../StudyForm";
+import { clusterIds, leafOrder, validLinkage } from "@/charts/clustering";
+import { DataTable, TestsTable } from "../outputs/tables";
+import { StudyForm, toPayload, validate } from "../StudyForm";
 import type { FeatureResult, FeatureSpec } from "../types";
 
 const feature: FeatureSpec = {
@@ -62,4 +67,123 @@ describe("robustness verdict", () => {
     expect(verdictFor(f02, result(10, 32, 0.07)).tone).toBe("warn");
     expect(verdictFor(f02, result(0, 32, 0.66)).headline).toMatch(/^Not robust\. Only 0 of 32/);
   });
+});
+
+describe("monthly calendar semantics", () => {
+  it("averages repeated months and distinguishes zero from missing observations", () => {
+    render(<CalendarHeatmap title="Monthly IC" data={[
+      { date: "2026-01-01", value: 0.2 }, { date: "2026-01-31", value: 0.4 },
+      { date: "2026-02-01", value: 0 }, { date: "invalid", value: 1 },
+      { date: "2026-03-01", value: Number.NaN },
+    ]} />);
+    expect(screen.getByRole("table", { name: "Monthly IC" })).toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Monthly IC" })).getByTitle("Jan 2026: 0.300")).toHaveTextContent("0.300");
+    expect(within(screen.getByRole("table", { name: "Monthly IC" })).getByTitle("Feb 2026: 0.000")).toHaveTextContent("0.000");
+    expect(within(screen.getByRole("table", { name: "Monthly IC" })).getByTitle("Mar 2026: No observation")).toHaveTextContent("–");
+  });
+
+  it("sums counts only when explicitly requested", () => {
+    render(<CalendarHeatmap title="Runs" signed={false} aggregate="sum" data={[
+      { date: "2026-01-01", value: 2 }, { date: "2026-01-02", value: 3 },
+    ]} format={String} />);
+    expect(within(screen.getByRole("table", { name: "Runs" })).getByTitle("Jan 2026: 5")).toHaveTextContent("5");
+  });
+});
+
+
+describe("ranked contributions", () => {
+  it("sorts by magnitude and lets readers reveal every finite contribution", () => {
+    render(<RankList title="Drivers" top={2} format={String} items={[
+      { label: "family/small", value: 1 }, { label: "family/negative", value: -5 },
+      { label: "family/large", value: 4 }, { label: "invalid", value: Number.NaN },
+    ]} />);
+    expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("negative");
+    expect(screen.queryByText("small")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show all 3" }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+    expect(screen.getByText("small")).toBeInTheDocument();
+    expect(screen.queryByText("invalid")).not.toBeInTheDocument();
+  });
+});
+
+
+describe("cinema interaction regressions", () => {
+  it("keeps every table row reachable and sorts across pages", () => {
+    render(<DataTable rows={Array.from({ length: 5 }, (_, i) => ({ ticker: `Name${i}`, score: i }))} opts={{ max: 2 }} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Rows 1–2 of 5");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Rows 3–4 of 5");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Rows 5–5 of 5");
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Score" }));
+    fireEvent.click(screen.getByRole("button", { name: "Score" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Rows 1–2 of 5");
+    expect(screen.getAllByRole("row")[1]).toHaveTextContent("Name4");
+  });
+
+  it("keeps cluster identity consistent below the cut and rejects cyclic linkage", () => {
+    const merges = [{ left: 0, right: 1, distance: 1 }, { left: 2, right: 3, distance: 2 }, { left: 4, right: 5, distance: 5 }];
+    expect(leafOrder(merges, 4)).toEqual([0, 1, 2, 3]);
+    expect(clusterIds(merges, 4, 3)).toEqual([0, 0, 1, 1]);
+    expect(clusterIds(merges, 4, 5)).toEqual([0, 0, 0, 0]);
+    expect(clusterIds(merges, 4, 0)).toEqual([0, 1, 2, 3]);
+    expect(validLinkage([{ left: 0, right: 2, distance: 1 }], 2)).toBe(false);
+    expect(validLinkage([{ left: 0, right: 0, distance: 1 }], 2)).toBe(false);
+  });
+
+
+});
+
+
+describe("heat table ordering", () => {
+  it("sorts rows and columns while preserving labels, missing cells and totals", () => {
+    render(<Heatmap rows={["A", "B"]} cols={["X", "Y"]} values={[[1, 4], [3, null]]} totals format={String} />);
+    fireEvent.click(screen.getByRole("button", { name: "X" }));
+    expect(screen.getAllByRole("row")[1]).toHaveTextContent("B3–");
+    fireEvent.click(screen.getByRole("button", { name: "A" }));
+    expect(screen.getAllByRole("columnheader")[1]).toHaveTextContent("Y");
+    expect(screen.getAllByRole("row").at(-1)).toHaveTextContent("Total44");
+    expect(screen.getByTitle("B · Y: No observation")).toHaveTextContent("–");
+    fireEvent.click(screen.getByRole("button", { name: "Reset order" }));
+    expect(screen.getAllByRole("row")[1]).toHaveTextContent("A14");
+  });
+});
+
+
+describe("study feedback", () => {
+  it("validates edits before submission and clears corrected errors", () => {
+    const spec = { ...feature, inputs: [{ key: "horizon", type: "number" as const, default: 21, min: 1, max: 63, group: "Model", label: "Horizon", help: "Number of sessions ahead to predict." }] };
+    const { rerender } = render(<StudyForm feature={spec} form={{ horizon: 0 }} setForm={() => {}} errors={{}} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Minimum 1");
+    expect(screen.getByRole("button", { name: /Explain this setting/ })).toBeInTheDocument();
+    rerender(<StudyForm feature={spec} form={{ horizon: 21 }} setForm={() => {}} errors={{ horizon: "Minimum 1" }} />);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+
+it("aggregates activity by UTC weekday and hour without filling missing hours", () => {
+  render(<CalendarHeatmap hourly title="Activity" aggregate="sum" signed={false} format={String} data={[
+    { date: "2026-10-19T10:15:00Z", value: 1 }, { date: "2026-10-26T10:30:00Z", value: 1 },
+  ]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Weekday × hour (UTC)" }));
+  const table = within(screen.getByRole("table", { name: "Activity" }));
+  expect(table.getByTitle("Mon 10:00 UTC: 2")).toHaveTextContent("2");
+  expect(table.getByTitle("Mon 11:00 UTC: No observation")).toHaveTextContent("–");
+});
+
+
+it("requires a validation source before submitting a job", () => {
+  const spec: FeatureSpec = { ...feature, id: "mlvalidate", inputs: [{ key: "upload_id", label: "Data", type: "text", group: "Data" }] };
+  expect(validate(spec, {}).upload_id).toMatch(/Upload data/);
+  expect(validate(spec, { artifact_id: "allocation-result" })).toEqual({});
+  expect(validate(spec, { upload_id: "uploaded-returns" })).toEqual({});
+});
+
+
+it("keeps zero-change dumbbells finite on a shared scale", () => {
+  const { container } = render(<Dumbbell shared aLabel="Before" bLabel="After" rows={[{ label: "Cost", a: 0, b: 0, format: String }]} />);
+  expect(container.querySelector(".db-dot.a[title]")).toHaveStyle({ left: "50%" });
+  expect(container.innerHTML).not.toMatch(/NaN|Infinity/);
 });

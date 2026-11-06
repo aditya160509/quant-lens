@@ -222,14 +222,11 @@
 .studio-head p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-3); max-width: 70ch; }
 .studio-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
 .studio-steps li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 14px; position: relative; padding-bottom: 14px; }
-.studio-steps li:not(:last-child)::before { content: ""; position: absolute; left: 15px; top: 30px; bottom: 0; width: 2px; background: var(--line-2); }
-.studio-steps li[data-done]:not(:last-child)::before { background: color-mix(in oklch, var(--up) 45%, var(--line-2)); }
 .studio-num { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; font-size: 13px; font-weight: 600; color: var(--text-2); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line-2); position: relative; z-index: 1; }
 .studio-steps li[data-done] .studio-num { color: var(--panel); background: var(--up); box-shadow: none; }
 .studio-card { padding: 12px 14px; border-radius: 12px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 8px; }
 .studio-card-h { display: flex; align-items: center; gap: 8px; color: var(--text-2); }
 .studio-card-h b { font-size: 14px; font-weight: 600; color: var(--text); }
-.studio-page { font-size: 12px; color: var(--text-4); }
 .studio-status { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-4); }
 .studio-card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
 .studio-card .studio-headline { padding: 6px 10px; border-left: 2px solid; border-radius: 0 6px 6px 0; background: var(--panel-2); color: var(--text-2); }
@@ -240,7 +237,6 @@
 @container studio (min-width: 1000px) {
   .studio-steps { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0 14px; }
   .studio-steps li { grid-template-columns: 1fr; grid-template-rows: 32px auto; gap: 12px; padding-bottom: 0; }
-  .studio-steps li:not(:last-child)::before { left: 40px; right: -14px; top: 15px; bottom: auto; width: auto; height: 2px; }
   .studio-card { height: 100%; align-content: start; }
   .studio-foot { flex-direction: column; align-items: flex-start; margin-top: auto; }
 }
@@ -378,3 +374,22 @@
 .today-weights { display: flex; height: 30px; gap: 2px; border-radius: 4px; overflow: hidden; }
 .today-weights i { position: relative; min-width: 3px; opacity: 0.85; }
 .today-weights span { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font: 600 10.5px var(--mono); color: oklch(0.15 0 0); white-space: nowrap; overflow: hidden; max-width: calc(100% - 8px); }
+
+.ml-activity { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 16px; }
+.ml-activity summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin-bottom: 16px; }
+.ml-activity-list { list-style: none; padding: 0; margin: 16px 0 0; }
+.ml-activity-list li { border-bottom: 1px solid var(--line); }
+.ml-activity-list a { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 16px; padding: 12px 0; font-size: 12px; }
+.ml-activity-list time { color: var(--text-2); }
+.ml-activity-list span { flex-basis: 100%; }
+.studio-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.cluster-cut { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 12px; color: var(--text-2); margin-bottom: 12px; }
+.cluster-cut input { flex: 1; min-width: 120px; accent-color: var(--accent); }
+.corr-grid button { aspect-ratio: 1; min-width: 0; padding: 0; font: 10px var(--mono); color: var(--text); }
+.corr-grid button[data-x] { box-shadow: inset 0 0 0 1px var(--text-2); }
+.corr-grid button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.studio-input { display: grid; gap: 4px; font-size: 12px; color: var(--text-2); }
+.studio-input code { overflow-wrap: anywhere; font: 11px var(--mono); }
+.ml-method { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-2); }
+.ml-method summary { cursor: pointer; }
+.ml-method p { max-width: 75ch; line-height: 1.6; margin-top: 8px; }

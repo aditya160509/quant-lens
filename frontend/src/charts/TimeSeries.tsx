@@ -3,6 +3,7 @@
 import { area as d3area, curveMonotoneX, curveStepAfter, line as d3line, scaleLinear, scaleTime } from "d3";
 import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Camera, MessageSquarePlus, Minus, RectangleHorizontal, RotateCcw, TrendingUp, X } from "lucide-react";
+import { useChartScope } from "./ChartScope";
 import { useNotes } from "./annotations";
 import { useDataWindow } from "./dataWindow";
 import { copyPng } from "./export";
@@ -61,16 +62,20 @@ const RIBBON_H = 14;
  * a categorical ribbon and notes pinned to dates.
  */
 function TimeSeriesImpl({
-  data, x = "date", series: seriesProp, band, refLines = [], markers = [], regions = [], ribbon, highlight, height = 260,
+  data, x = "date", series: seriesProp, band, refLines = [], markers: suppliedMarkers = [], regions = [], ribbon, highlight, height = 260,
   format = fmtTick, yLabel, notesKey, legend = true, robust = false, zeroFill = false, bars, toolbar, directLabels = false,
 }: TimeSeriesProps) {
   const uid = useId();
+  const chartScope = useChartScope();
+  const markers: NonNullable<TimeSeriesProps["markers"]> = [...new Map([...suppliedMarkers, ...(chartScope?.events ?? [])].map((m) => [`${m.date}|${m.label}`, m])).values()];
   const series = useMemo<Series[]>(() => (bars ? [...seriesProp, { key: bars.key, label: bars.label ?? bars.key, kind: "bars" as const }] : seriesProp), [seriesProp, bars]);
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
-  const toggle = (k: string) => setHidden((h) => { const n = new Set(h); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const toggle = (k: string, additive: boolean) => setHidden((h) => { if (!additive) { const names = series.filter((s) => !s.muted).map((s) => s.key); return names.filter((id) => !h.has(id)).length === 1 && !h.has(k) ? new Set() : new Set(names.filter((id) => id !== k)); } const n = new Set(h); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const [ref, width] = useWidth<HTMLDivElement>();
   const svgRef = useRef<SVGSVGElement>(null);
-  const [zoom, setZoom] = useState<[number, number] | null>(null);
+  const [localZoom, setLocalZoom] = useState<[number, number] | null>(null);
+  const zoom = chartScope?.linked ? chartScope.range : localZoom;
+  const setZoom = chartScope?.linked ? chartScope.setRange : setLocalZoom;
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const [noting, setNoting] = useState(false);
   const [leveling, setLeveling] = useState(false);
@@ -214,8 +219,9 @@ function TimeSeriesImpl({
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: legendItems || notesKey || zoom || toolbar ? 24 : 0, marginBottom: 4 }}>
-        {legendItems ? <Legend items={legendItems} onToggle={toggle} /> : null}
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, minHeight: legendItems || notesKey || zoom || toolbar ? 24 : 0, marginBottom: 4 }}>
+        {legendItems ? <Legend isolate items={legendItems} onToggle={toggle} /> : null}
+        {chartScope ? <button className="btn sm ghost" aria-pressed={chartScope.linked} onClick={() => { if (chartScope.linked) setLocalZoom(chartScope.range); chartScope.setLinked(!chartScope.linked); }}>Linked zoom</button> : null}
         <span style={{ marginLeft: "auto", display: "flex", gap: 4, alignItems: "center" }}>
           {toolbar}
           {zoom ? <button className="btn sm ghost" onClick={() => setZoom(null)}><RotateCcw size={11} />Reset zoom</button> : null}
@@ -245,7 +251,9 @@ function TimeSeriesImpl({
         </span>
       </div>
       {width > 0 ? (
-        <Svg ref={svgRef} width={width} height={height} label={`${series.map((s) => s.label).join(", ")} over time`}
+        <Svg ref={svgRef} width={width} height={height} label={`${series.map((s) => s.label).join(", ")} over time. Use arrow keys to inspect dates.`} tabIndex={0}
+          onFocus={() => { if (visible.length) setHover(visible[visible.length - 1].t, uid); }} onBlur={() => { if (useCrosshair.getState().source === uid) setHover(null, null); }}
+          onKeyDown={(e) => { if (["ArrowLeft", "ArrowRight", "Home", "End", "Escape"].includes(e.key) && visible.length) { e.preventDefault(); if (e.key === "Escape") { setHover(null, null); return; } const visibleTimes = visible.map((d) => d.t); const i = hoverT === null ? visibleTimes.length - 1 : nearest(visibleTimes, hoverT); const next = e.key === "Home" ? 0 : e.key === "End" ? visibleTimes.length - 1 : Math.max(0, Math.min(visibleTimes.length - 1, i + (e.key === "ArrowLeft" ? -1 : 1))); setHover(visibleTimes[next], uid); } }}
           onPointerMove={onMove} onPointerLeave={() => { setHover(null, null); }} onPointerDown={onDown} onPointerUp={onUp}
           onDoubleClick={() => setZoom(null)} style={{ cursor: noting || leveling || tool ? "copy" : "crosshair" }}>
           <defs>
@@ -419,7 +427,7 @@ function TimeSeriesImpl({
       {hovered && isSource && visibleSeries.length > 0 && !legendItems ? (
         <Readout x={xs(hovered.t)} y={28} width={width} w={200}>
           <ReadoutTitle>{fmtDate(hovered.t, true)}</ReadoutTitle>
-          {visibleSeries.map((p) => { const v = num(hovered.r[p.s.key]); return v === null ? null : <ReadoutRow key={p.s.key} label={p.s.label} value={format(v)} swatch={p.color} />; })}
+          {[...visibleSeries].sort((a, b) => (num(hovered.r[b.s.key]) ?? -Infinity) - (num(hovered.r[a.s.key]) ?? -Infinity)).map((p) => { const v = num(hovered.r[p.s.key]); return v === null ? null : <ReadoutRow key={p.s.key} label={p.s.label} value={format(v)} swatch={p.color} />; })}
           {band && num(hovered.r[band.lo]) !== null ? <ReadoutRow label={band.label ?? "95% band"} value={`${format(num(hovered.r[band.lo]) as number)} to ${format(num(hovered.r[band.hi]) as number)}`} /> : null}
           {ribbon ? <ReadoutRow label={ribbon.label ?? "State"} value={String(hovered.r[ribbon.key] ?? "–")} /> : null}
         </Readout>

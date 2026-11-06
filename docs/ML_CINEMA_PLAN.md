@@ -148,19 +148,19 @@ Built once and used everywhere. Every primitive takes the same `Frame` props (ti
   - crosshair synced across the page
   - canvas rendering above 5k points
   - percent/level/indexed toggles
-- [ ] **StackedArea v2:** share or absolute, direct labels at the right edge with the current share, annotation layer, rich tooltip (total plus every series sorted).
+- [x] **StackedArea v2:** share or absolute, direct labels at the right edge with the current share, annotation layer, rich tooltip (total plus every series sorted).
 - [x] **Bars v2 (vertical and horizontal):** *(axis spine and outward ticks, square edged bars, 95% CI whiskers, comparator tints; horizontal ranking uses Diverging)*
   - value labels inside or outside automatically
   - reference lines with halo labels
   - grouped and stacked variants
   - highlight the item under test
   - sorted by default
-- [ ] **RankList:** mono label with bold leaf, thin bar, right-aligned value, optional sparkline and delta, top-N plus "show all".
+- [~] **RankList:** mono label with bold leaf, thin bar, right-aligned value, optional sparkline and delta, top-N plus "show all".
 - [x] **Dumbbell and Slope:** model vs control, before vs after, in-sample vs out-of-sample. *(Dumbbell with per-row or shared scale: sizing, regime filter, holding risk)*
 - [ ] **Distribution:** strip, box, ridge and histogram with a marker for "you are here" and percentile bands (Sharpe paths, bootstrap, shuffled, Monte Carlo).
 - [ ] **Heat table:** matrix with sequential or diverging ramp, row and column sort, totals row, "fewer ▢▢▢ more" legend, numbers shown only when they fit.
-- [ ] **Calendar heatmap:** month × year (IC by month, returns, VaR breaches) and weekday × time.
-- [ ] **Treemap:** zoom with breadcrumb and right-click or Esc to zoom out, mode toggles (size by weight or risk, colour by return, IC or drift), labels when they fit.
+- [~] **Calendar heatmap:** month × year (IC by month, returns, VaR breaches) and weekday × time.
+- [~] **Treemap:** zoom with breadcrumb and right-click or Esc to zoom out, mode toggles (size by weight or risk, colour by return, IC or drift), labels when they fit.
 - [ ] **Scatter v2:** binned calibration line, diagonal, density hexbin above 2k points, lasso to a selection.
 - [ ] **Waterfall v2:** base, contributions, prediction, grouped "n other features", click a bar to see that feature's distribution.
 - [ ] **Dendrogram and correlation map:** linked hover (a leaf highlights its row and column), cut-height slider that colours clusters.
@@ -217,7 +217,7 @@ The takeaway template is generated from the data. "Lens" means a designed altern
   - today's regime pill
   - the last verdict stamp
 - [x] **"Today" board:** current regime, 1-month vol for the watched names, top 5 ranking names with drivers, the last Validate verdict, allocation drift. Each tile links to its exhibit. *(regime, risk, top 5, last verdict, allocation weights)*
-- [ ] **Activity:** recent runs as a timeline with verdict colours; a calendar heatmap of runs.
+- [x] **Activity:** recent runs as a timeline with verdict colours; a calendar heatmap of runs.
 
 ### Validate my strategy
 | Output | Exhibit | Takeaway template |
@@ -297,7 +297,7 @@ The takeaway template is generated from the data. "Lens" means a designed altern
 
 ### Strategy studio
 - [ ] A pipeline diagram drawn as a live flow (nodes with status, edges carrying artifact ids). Clicking a node opens its page; each node shows its verdict stamp. *(partial: left-to-right flow at ≥1000 px with status per node; edges do not yet carry artifact ids)*
-- [ ] "Run the whole pipeline" button that chains the hand-offs, with progress shown on the nodes.
+- [x] "Run the whole pipeline" button that chains the supported hand-offs, with current-stage progress and run status on the nodes. Alpha feeds Filter and Allocation; Allocation feeds Validate. Size runs independently. Stops on failure, absent artifacts, navigation, or an explicit stop; an already submitted run continues in Runs.
 
 ### Verified page
 - [x] A public tear-sheet design: big stamp, hash ribbon, exhibits in print layout, and an "as of" watermark. *(stamp, hash ribbon, numbered findings, print layout)*
@@ -315,7 +315,7 @@ The takeaway template is generated from the data. "Lens" means a designed altern
 - [ ] **Inspect panel:** shows the current selection (ticker, model, date, state) with every number about it from all exhibits.
 - [ ] **Compare mode:** two runs side by side and overlaid; a KPI delta strip.
 - [ ] **Empty, error and stale states:** each says why and what to do, with one primary action.
-- [ ] **Onboarding:** a 3-step coach on first visit (validate → rank → size), dismissible and remembered.
+- [x] **Onboarding:** a 3-step coach on first visit (validate → rank → size), dismissible and remembered.
 - [ ] **Accessibility:**
   - every chart gets `role=img` with a generated summary sentence (the takeaway)
   - tables are real tables
@@ -381,7 +381,35 @@ The takeaway template is generated from the data. "Lens" means a designed altern
 - [x] **Radar:** every model on every metric, outward is better, model under test filled, raw values on hover (Alpha controls, Allocation controls).
 - [x] **Semantic comparator tints:** pink for alternatives, green for related variants, grey for baselines; edged bars as in a printed figure.
 
-**Not built because no current ML exhibit needs them** (kept for the platform port, Phase 12): calendar heatmap, treemap, hexbin and lasso on scatter, dendrogram linked hover, Slope chart.
+**Still open:** hexbin and lasso on scatter, dendrogram linked hover, and a dedicated Slope primitive. Calendar and treemap now have real ML callers; their remaining variants are tracked above.
+
+
+## Continuation checkpoint, 2026-10-13
+
+The existing `ml-design-v1` tag predates this audit. It is preserved, not recreated or moved. The complete definition of done below has **not** yet been demonstrated.
+
+Implemented in this continuation:
+- Stacked areas: share/absolute lenses; normalized values consistently in labels, tooltips and Inspect; direct labels with collision spacing; sorted complete readouts with absolute totals; shared crosshair; keyboard dates; regime-switch annotations; finite epoch dates; one-observation rendering; memoized geometry.
+- Calendar: month/year aggregation, explicit missing months, sequential counts and signed IC, accessible data table, SVG/PNG through the existing exhibit export. Used for monthly IC and saved-run activity. Weekday/time remains open.
+- RankList: sorted magnitude, bold leaf labels, exact values, notes, optional deltas, top-N/show-all. Reused by feature families and SHAP importance. Sparkline support remains open.
+- Treemap: allocation sector/name and feature-family lenses, breadcrumb, keyboard/click drill-down, Escape/right-click return, weight/risk area switch, signed risk-minus-weight colour, SVG/PNG through the exhibit. Additional colour-mode toggles remain open.
+- Studio: sequential runner using existing APIs and each page's saved settings. Displays actual artifact IDs. No unsupported Filter → Size or Size → Allocation link is implied; those API contracts do not exist. Missing artifacts and failed jobs stop subsequent work. The pipeline is scoped to the open Studio page; navigating away stops future submissions.
+- ML onboarding: validate → rank → size, dismissible and persisted separately from Research. Only completed studies count, not link clicks.
+- Overview: recovery text replaces endless skeletons for expired results; saved-history activity includes a monthly count and linked recent runs.
+- Ranking selection populates Inspect; Escape clears Inspect. This is not yet the complete page-wide selection contract.
+- Fixed two pre-existing TypeScript test-mock references so strict typecheck can run without changing production behavior.
+
+Validation commands are run from `frontend`:
+```sh
+npm test -- --runInBand src/modules/ml/__tests__/takeaways.test.ts src/modules/research/__tests__/research.test.tsx src/components/volatility-v2/__tests__/api.test.ts
+npx tsc --noEmit
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:3100 npx playwright test --config=e2e/playwright.research.config.ts --grep cinema --workers=1 --output=/tmp/ml-cinema-final
+npm run build
+```
+
+The browser fixtures are explicitly synthetic contract fixtures, not saved investment results. They cover normalized keyboard readouts and screenshots in both themes at 375/1440, onboarding persistence, successful artifact chaining, missing-artifact stopping, treemap drill-down/size switching, calendar SVG export and expired-result recovery. They do not replace the requested real-run replay coverage on every page.
+
+Remaining release gates and functionality include the full distribution family, weekday/time calendars, scatter binning/lasso, waterfall distribution drill-down, linked dendrogram cut controls, complete shared zoom/selection/compare behavior, table virtualization/TanStack requirements, backend event/63-day sparkline contracts, and the every-page real-fixture, accessibility, rubric and performance audit. Phase 12 remains a separate platform-port plan.
 
 ## 12. Execution order and checkpoints
 

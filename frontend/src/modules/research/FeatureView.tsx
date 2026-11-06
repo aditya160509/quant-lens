@@ -1,5 +1,6 @@
 "use client";
 
+import { ChartScope } from "@/charts/ChartScope";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -134,6 +135,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   );
 
   return (
+    <ChartScope key={run.jobId ?? feature.id} events={result?.meta.events}>
     <div ref={scroller} className="island results" data-lab={lab().id} style={{ overflowY: "auto", overflowX: "hidden" }}>
       <div ref={hero} style={{ padding: "22px 22px 6px" }}>
         <PageSwitch featureId={feature.id} />
@@ -141,8 +143,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
           <div className="ov-icon" style={{ width: 40, height: 40, borderRadius: 11 }}><Icon size={19} strokeWidth={1.6} /></div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{meta.name}</h1>
-            <p style={{ marginTop: 4, color: "var(--text-2)", fontSize: 13.5 }}>{meta.question}</p>
-            <p style={{ marginTop: 6, color: "var(--text-3)", fontSize: 12.5, maxWidth: 860, lineHeight: 1.55 }}>{feature.description}</p>
+            {lab().id !== "ml" ? <><p style={{ marginTop: 4, color: "var(--text-2)", fontSize: 13.5 }}>{meta.question}</p><p style={{ marginTop: 6, color: "var(--text-3)", fontSize: 12.5, maxWidth: 860, lineHeight: 1.55 }}>{feature.description}</p></> : null}
           </div>
           {runButton}
         </div>
@@ -211,8 +212,10 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         ) : (
           <Placeholder items={active?.items ?? []} running={running} onRun={run.run} featureId={feature.id} />
         )}
+        {lab().id === "ml" && feature.description ? <details className="ml-method"><summary>Method</summary><p>{feature.description}</p></details> : null}
       </div>
     </div>
+    </ChartScope>
   );
 }
 

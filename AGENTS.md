@@ -37,11 +37,6 @@ Complete the current task with the minimum sufficient change.
 
 - Read the relevant code, tests, and configuration directly. Do not work from search snippets or guesses.
 - If the requirement is ambiguous or the premise is unverified, resolve that before building on it.
-- State a minimal plan:
-  - **Outcome:** the exact behavior requested
-  - **Non-goal:** what this task will not do
-  - **Files:** the smallest set expected to change
-  - **Proof:** the check that will prove the change works
 - Start with one implementation path. Split work only when the task has genuinely independent parts.
 
 ### While editing
@@ -72,9 +67,6 @@ Read-only discovery is always allowed. If the task has not already authorized it
 - Do not backfill unrelated coverage or introduce test infrastructure for this task alone.
 - Do not use passing tests as justification for extra abstractions or scope.
 
-### If the plan grows
-
-Stop when the work starts adding future-use layers, workaround stacks, unrelated cleanup, or tests for unstated behavior. Rewrite a smaller plan and confirm the new scope.
 
 ### Done means
 
@@ -84,41 +76,6 @@ Stop when the work starts adding future-use layers, workaround stacks, unrelated
 - No debug code, backup copies, dead paths, or scratch files remain.
 - Assumptions, limitations, and unverified runtime behavior are stated plainly.
 
-## Editorial Standards for JFS/BIR Manuscript
+"Cut taglines, helper text and secondary labels. If a screen needs them to make sense, fix the layout."
 
-### Absolute Rules
-- **No em dashes (—)** — replace with commas, semicolons, colons, or restructure sentences
-- **No raw underscore subscripts** in equations (e.g., `IAI_t` → `IAI_{t}` or proper rendered form)
-- **Every equation must be numbered** sequentially (1), (2), (3)... and cross-referenced by number
-- **Every Greek letter/symbol must be defined** in Notation Table near Section 4
-- **Every acronym spelled out on first use**: IAI, GASI, AST, CSAD, AUC, FPR, DM, EM, AMM, ES95, FSI, CQL, DCV
-- **Tables 1-N and Figures 1-N must be sequential** with no gaps, referenced in text before appearing
-- **Abstract must be 150-250 words**
-
-### Writing Style
-- Tighten "which is" / "which was" / "that is" constructions — usually removable
-- Active voice for findings ("we test," "we find"), not passive ("it is found that")
-- Short declarative sentences for key claims; save complex sentences for nuance
-- One idea per sentence, one point per paragraph
-- Every section opens with one sentence stating what it does
-- Transitions between sections — bridge "what we just showed" to "what comes next"
-- Conclusion must synthesize, not restate abstract
-- Consistent terminology throughout (pick "coordination regime" and use everywhere)
-- Consistent number formatting in tables (3 decimals for coefficients, 4 for ratios)
-- Lead with headline number, then support it
-- Every statistical claim: number + test + plain-language meaning together
-
-### Figure/Table Rules
-- Every table/figure must be readable on its own (busy reader gets point from note alone)
-- Table notes explain what's shown, not just cite source
-- Captions specific enough to stand alone
-- Order of presentation matches order of discussion
-- No figure/table included without being referenced and discussed in text
-
-### Submission Compliance
-- Keywords: 4-6 matching journal convention
-- JEL codes: verify current and match content
-- DOI links on all references that have them
-- Footnote numbering sequential, none orphaned
-- Author contributions (CRediT), conflict of interest, funding statements present
-- Highlights/graphical abstract if journal requires
+"Make the best decision that will elevate all three: the user experience (UX), developer experience (DX), and agent experience (AX) always, without breaking anything."

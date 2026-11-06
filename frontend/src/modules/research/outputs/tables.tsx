@@ -1,6 +1,8 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import * as Popover from "@radix-ui/react-popover";
 import "./tables.css";
 import { RegSettingsPopover } from "./table/RegSettingsPopover";
@@ -100,17 +102,24 @@ export function DataTable({ rows, opts }: Pick<ViewProps, "rows" | "opts">) {
     const id = setTimeout(() => setFlash({}), 600);
     return () => clearTimeout(id);
   }, [flash]);
-  const order2 = useMemo(() => {
-    const idx = rows.map((_, i) => i);
-    if (!sort) return idx;
-    return idx.sort((i, j) => {
-      const x = rows[i][sort.key], y = rows[j][sort.key];
-      if (isNum(x) && isNum(y)) return (x - y) * sort.dir;
-      return String(x ?? "").localeCompare(String(y ?? "")) * sort.dir;
-    });
-  }, [rows, sort]);
-  const max = (opts?.max as number | undefined) ?? 400;
-  const shown = order2.slice(0, max);
+  const definitions = useMemo<ColumnDef<Row>[]>(() => base.map((key) => ({
+    id: key, accessorFn: (row) => row[key],
+    sortingFn: (a, b) => {
+      const x = a.original[key], y = b.original[key];
+      return isNum(x) && isNum(y) ? x - y : String(x ?? "").localeCompare(String(y ?? ""));
+    },
+  })), [base]);
+  const sorting = useMemo(() => sort ? [{ id: sort.key, desc: sort.dir === -1 }] : [], [sort]);
+  const table = useReactTable({ data: rows, columns: definitions, autoResetPageIndex: false,
+    state: { sorting },
+    getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel(),
+  });
+  const order2 = table.getRowModel().rows.map((row) => row.index);
+  const max = Math.max(1, Math.floor(Number(opts?.max) || 400));
+  const [page, setPage] = useState(0);
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / max) - 1));
+  const shown = order2.slice(currentPage * max, (currentPage + 1) * max);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const numeric = new Set(cols.filter((c) => rows.some((r) => isNum(r[c]))));
   const bound = useMemo(() => {
     const m: Record<string, number> = {};
@@ -118,7 +127,6 @@ export function DataTable({ rows, opts }: Pick<ViewProps, "rows" | "opts">) {
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, cols]);
-  if (!rows.length) return <Empty />;
   const groups = groupCols(cols);
   const twoLevel = groups.some((g) => g.head);
   const move = (c: string, d: number) => {
@@ -141,6 +149,15 @@ export function DataTable({ rows, opts }: Pick<ViewProps, "rows" | "opts">) {
     shown.forEach((i) => { const g = String(rows[i][groupKey] ?? "Other"); seen.set(g, [...(seen.get(g) ?? []), i]); });
     seen.forEach((ix, g) => { items.push({ kind: "group", g, n: ix.length }); if (!collapsed.includes(g)) ix.forEach((i) => items.push({ kind: "row", i, sub: true })); });
   } else shown.forEach((i) => items.push({ kind: "row", i, sub: false }));
+  const virtual = items.length > 200;
+  const virtualizer = useVirtualizer({ count: virtual ? items.length : 0,
+    getScrollElement: () => scrollRef.current, estimateSize: () => density === "compact" ? 24 : 32,
+    overscan: 8, initialRect: { width: 800, height: 440 },
+  });
+  const windowRows = virtual ? virtualizer.getVirtualItems() : [];
+  const visibleItems = virtual ? windowRows.map((row) => ({ item: items[row.index], index: row.index })) : items.map((item, index) => ({ item, index }));
+  const changePage = (next: number) => { setPage(next); setSel(null); if (scrollRef.current) scrollRef.current.scrollTop = 0; };
+  if (!rows.length) return <Empty />;
   const render = (r: Row, i: number, c: string) => {
     const v = r[c];
     const d = flash[`${i}:${c}`];
@@ -159,13 +176,15 @@ export function DataTable({ rows, opts }: Pick<ViewProps, "rows" | "opts">) {
   };
   const sortTh = (c: string, text: string) => (
     <th key={c} className={`sortable${numeric.has(c) ? " r" : ""}`} aria-sort={sort?.key === c ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
-      onClick={() => setSort((s) => (s?.key === c ? (s.dir === 1 ? { key: c, dir: -1 } : null) : { key: c, dir: 1 }))}>
+      >
+      <button className="dt-sort" onClick={() => { setPage(0); setSort((s) => (s?.key === c ? (s.dir === 1 ? { key: c, dir: -1 } : null) : { key: c, dir: 1 })); }}>
       {text}
       {sort?.key === c ? (sort.dir === 1 ? <ArrowUp size={10} style={{ marginLeft: 4, verticalAlign: -1 }} /> : <ArrowDown size={10} style={{ marginLeft: 4, verticalAlign: -1 }} />) : null}
+      </button>
     </th>
   );
   return (
-    <div className="dt" data-density={density} onKeyDown={onKey}>
+    <div className="dt" data-virtual={virtual} data-density={density} onKeyDown={onKey}>
       <div className="dt-bar">
         <button className="btn sm ghost" aria-pressed={tint} onClick={() => setTint(!tint)}>Heat tint</button>
         <button className="btn sm ghost" onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}>{density === "compact" ? "Comfortable" : "Compact"}</button>
@@ -187,19 +206,20 @@ export function DataTable({ rows, opts }: Pick<ViewProps, "rows" | "opts">) {
           </Popover.Portal>
         </Popover.Root>
       </div>
-      <div className="tbl-wrap" style={{ maxHeight: (opts?.maxHeight as number | undefined) ?? 440 }}>
+      <div ref={scrollRef} className="tbl-wrap" style={{ maxHeight: (opts?.maxHeight as number | undefined) ?? 440 }}>
         <table className="tbl">
           <thead>
             {twoLevel ? <tr>{groups.map((g, k) => (g.head ? <th key={k} colSpan={g.span} className="grp">{label(g.head)}</th> : <th key={k} />))}</tr> : null}
             <tr>{groups.flatMap((g) => g.cols.map((c) => sortTh(c, shortName(c, g.head))))}</tr>
           </thead>
           <tbody>
-            {items.map((it, k) => {
+            {virtual && windowRows[0]?.start > 0 ? <tr aria-hidden="true"><td colSpan={cols.length} style={{ height: windowRows[0].start, padding: 0, border: 0 }} /></tr> : null}
+            {visibleItems.map(({ item: it, index: k }) => {
               if (it.kind === "group") {
                 const closed = collapsed.includes(it.g);
                 return (
-                  <tr key={`g${k}`} className="gr" onClick={() => setCollapsed(closed ? collapsed.filter((x) => x !== it.g) : [...collapsed, it.g])} aria-expanded={!closed}>
-                    <td colSpan={cols.length}><ChevronRight size={12} style={{ marginRight: 6, verticalAlign: -2, transform: closed ? "none" : "rotate(90deg)", transition: "transform .15s" }} />{it.g}<span className="stat-s" style={{ marginLeft: 8 }}>{it.n}</span></td>
+                  <tr key={`g${k}`} className="gr">
+                    <td colSpan={cols.length}><button className="dt-sort" aria-expanded={!closed} onClick={() => setCollapsed(closed ? collapsed.filter((x) => x !== it.g) : [...collapsed, it.g])}><ChevronRight size={12} style={{ marginRight: 6, verticalAlign: -2, transform: closed ? "none" : "rotate(90deg)", transition: "transform .15s" }} />{it.g}<span className="stat-s" style={{ marginLeft: 8 }}>{it.n}</span></button></td>
                   </tr>
                 );
               }
@@ -212,12 +232,13 @@ export function DataTable({ rows, opts }: Pick<ViewProps, "rows" | "opts">) {
                 </tr>
               );
             })}
+            {virtual && windowRows.length ? <tr aria-hidden="true"><td colSpan={cols.length} style={{ height: Math.max(0, virtualizer.getTotalSize() - windowRows[windowRows.length - 1].end), padding: 0, border: 0 }} /></tr> : null}
           </tbody>
         </table>
-        {rows.length > max ? <div className="stat-s" style={{ padding: "8px 12px" }}>Showing {max} of {rows.length} rows. The CSV export has all of them.</div> : null}
       </div>
+      {rows.length > max ? <nav className="dt-pages" aria-label="Table pages"><span role="status">Rows {currentPage * max + 1}–{Math.min((currentPage + 1) * max, rows.length)} of {rows.length}</span><button className="btn sm ghost" disabled={currentPage === 0} onClick={() => changePage(currentPage - 1)}>Previous</button><button className="btn sm ghost" disabled={(currentPage + 1) * max >= rows.length} onClick={() => changePage(currentPage + 1)}>Next</button></nav> : null}
       <div className="dt-cards">
-        {shown.map((i) => (
+        {!virtual && shown.map((i) => (
           <div key={i} className="dt-card" onClick={() => setSel(i)}>
             {cols.map((c) => <div key={c}><span>{label(c)}</span><span>{render(rows[i], i, c)}</span></div>)}
           </div>

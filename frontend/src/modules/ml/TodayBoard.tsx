@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CalendarHeatmap } from "@/charts/CalendarHeatmap";
 import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { latestRun, useJob } from "@/modules/research/api";
@@ -33,7 +34,7 @@ function Tile({ id, label, run, span = 4, children }: { id: string; label: strin
   return (
     <Link href={featureHref(id)} className="today-tile" style={{ gridColumn: `span ${span}` }}>
       <span className="today-h"><Icon size={13} strokeWidth={1.7} />{label}<ArrowUpRight size={13} className="today-go" /></span>
-      {result ? children(result) : run ? <span className="skel" style={{ height: 64, display: "block" }} /> : <span className="today-empty">Not run yet. Open to run it.</span>}
+      {result ? children(result) : job.isLoading && run?.status === "completed" ? <span className="skel" style={{ height: 64, display: "block" }} /> : <span className="today-empty">{!run ? "Not run yet. Open to run it." : run.status === "running" || run.status === "queued" ? "Study in progress. Open to see its stages." : "This result is unavailable. Open the study and run it again."}</span>}
     </Link>
   );
 }
@@ -128,6 +129,18 @@ export function TodayBoard({ features, runs }: { features: FeatureSpec[]; runs: 
           }}
         </Tile>
       </div>
+      <details className="ml-activity">
+        <summary>Recent activity · {runs.length} saved runs</summary>
+        <CalendarHeatmap hourly title="Saved run activity" signed={false} aggregate="sum" format={String} data={runs.map((r) => ({ date: r.startedAt, value: 1 }))} />
+        <p className="ml-note">Local history retains up to 60 runs across the labs. Counts describe saved history, not all runs on the server.</p>
+        <ol className="ml-activity-list">{runs.slice(0, 10).map((r) => <li key={r.jobId}>
+          <Link href={`${featureHref(r.featureId)}?run=${encodeURIComponent(r.jobId)}`}>
+            <time className="num" dateTime={new Date(r.startedAt).toISOString()}>{new Date(r.startedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time>
+            <b>{metaFor(r.featureId, r.featureName).name}</b>
+            <span style={{ color: r.tone === "up" ? "var(--up)" : r.tone === "down" ? "var(--down)" : r.tone === "warn" ? "var(--warn)" : "var(--text-2)" }}>{r.headline ?? r.status}</span>
+          </Link>
+        </li>)}</ol>
+      </details>
     </section>
   );
 }

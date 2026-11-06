@@ -137,10 +137,11 @@ export function fmtTick(v: number): string {
 
 /** Floating readout positioned inside a relatively positioned chart container. */
 export function Readout({ x, y, width, children, w = 230 }: { x: number; y: number; width: number; children: ReactNode; w?: number }) {
-  const left = x + 18 + w > width ? x - 18 - w : x + 18;
+  const fitted = Math.min(w, Math.max(0, width));
+  const left = x + 18 + fitted > width ? x - 18 - fitted : x + 18;
   return (
     <div role="status" style={{
-      position: "absolute", left: Math.max(0, left), top: y, width: w, pointerEvents: "none", zIndex: 6,
+      position: "absolute", left: Math.max(0, left), top: y, width: fitted, maxWidth: "100%", pointerEvents: "none", zIndex: 6,
       padding: "9px 11px", borderRadius: 9, background: "color-mix(in oklch, var(--raise) 92%, transparent)", backdropFilter: "blur(8px)",
       boxShadow: "var(--shadow)", fontSize: 12, lineHeight: 1.6,
     }}>
@@ -229,7 +230,7 @@ export function nearest(sorted: number[], v: number): number {
 export const diverging = (s: number, neg = "var(--down)", pos = "var(--up)") =>
   `color-mix(in oklch, ${s >= 0 ? pos : neg} ${Math.round(Math.min(1, Math.abs(s)) * 78)}%, var(--panel-2))`;
 
-export function Legend({ items, onToggle }: { items: { label: string; color: string; value?: ReactNode; dash?: boolean; id?: string; hidden?: boolean }[]; onToggle?: (id: string) => void }) {
+export function Legend({ items, onToggle, isolate = false }: { isolate?: boolean; items: { label: string; color: string; value?: ReactNode; dash?: boolean; id?: string; hidden?: boolean }[]; onToggle?: (id: string, additive: boolean) => void }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: 12, color: "var(--text-2)" }}>
       {items.map((it) => {
@@ -242,8 +243,8 @@ export function Legend({ items, onToggle }: { items: { label: string; color: str
         );
         const style = { display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", opacity: it.hidden ? 0.45 : 1, transition: "opacity 120ms" } as const;
         return onToggle ? (
-          <button key={it.label} type="button" className="chart-legend-item" aria-pressed={!it.hidden} title={it.hidden ? "Show series" : "Hide series"}
-            onClick={() => onToggle(it.id ?? it.label)} style={style}>{inner}</button>
+          <button key={it.label} type="button" className="chart-legend-item" aria-pressed={!it.hidden} title={isolate ? "Click to isolate; Shift-click to add or remove" : it.hidden ? "Show series" : "Hide series"}
+            onClick={(e) => onToggle(it.id ?? it.label, e.shiftKey)} style={style}>{inner}</button>
         ) : <span key={it.label} style={style}>{inner}</span>;
       })}
     </div>

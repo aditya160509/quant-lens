@@ -74,3 +74,19 @@ def test_gjr_news_impact_uses_squared_shock_once():
     negative = next(row['next_variance'] for row in rows if row['shock_sigma']==-2.)
     assert positive == pytest.approx(5.4)
     assert negative == pytest.approx(8.6)
+
+
+def test_response_emits_only_known_window_events_without_mutating_metadata():
+    from app.services.ml_v2.core.common import response
+    meta = {"events": [{"date": "2024-02-02", "label": "Refit", "kind": "refit"}]}
+    result = response("02", [], {}, {}, meta=meta, provenance={
+        "train_window": {"start": "2024-01-01", "end": "2024-01-31"},
+        "test_window": {"start": "2024-02-08", "end": "2024-03-01"},
+    })
+    assert [event["date"] for event in result["meta"]["events"]] == ["2024-02-02", "2024-01-31", "2024-02-08"]
+    assert len(meta["events"]) == 1
+    empty = response("01", [], {}, {}, provenance={
+        "train_window": {"end": "2024-01-31", "note": "purged complement"},
+        "test_window": {"start": "not a date"},
+    })
+    assert empty["meta"]["events"] == []

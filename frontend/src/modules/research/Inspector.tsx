@@ -30,6 +30,11 @@ export function Inspector({ feature, run }: { feature: FeatureSpec; run: Feature
   })();
 
   useEffect(() => () => select(null), [feature.id, select]);
+  useEffect(() => {
+    const clear = (e: KeyboardEvent) => { if (e.key === "Escape") select(null); };
+    window.addEventListener("keydown", clear);
+    return () => window.removeEventListener("keydown", clear);
+  }, [select]);
 
   return (
     <aside className="island" aria-label="Inspector">

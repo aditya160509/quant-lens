@@ -3,6 +3,7 @@
 import { BadgeCheck, Check, Copy, History, Minus, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { Distribution } from "@/charts/Distribution";
 import { Bars } from "@/charts/Bars";
 import { Heatmap } from "@/charts/Heatmap";
 import { post, useRuns } from "@/modules/research/api";
@@ -204,12 +205,11 @@ export function ValCpcv({ result }: ViewProps) {
   const s = section(result, "cpcv");
   const d = (s.distribution ?? {}) as Dist;
   if (!isNum(d.p5)) return <Empty />;
-  const split = ((s.split_sharpes as unknown[]) ?? []).filter(isNum);
+  const split = (Array.isArray(s.split_sharpes) ? s.split_sharpes : []).filter(isNum);
   return (
     <div>
       <Kpis items={[["Median Sharpe", f2(d.p50)], ["Positive", pct(d.share_positive, 0), isNum(d.share_positive) ? (d.share_positive >= 0.8 ? "var(--up)" : d.share_positive >= 0.5 ? "var(--warn)" : "var(--down)") : undefined], ["Splits", String(s.splits ?? split.length)]]} />
-      <RangeStrip d={d} mark={null} />
-      {split.length ? <div className="val-dots" aria-label="Sharpe per split">{split.map((v, i) => <i key={i} title={`Split ${i + 1}: ${v.toFixed(2)}`} style={{ background: v > 0 ? "var(--up)" : "var(--down)" }} />)}</div> : null}
+      {split.length ? <Distribution values={split} initialView="strip" xLabel="Purged split Sharpe" /> : <RangeStrip d={d} mark={null} />}
       <p className="ml-note">{String(s.note ?? `${s.n_groups} date groups, ${s.k_test_groups} held out per split.`)}</p>
     </div>
   );

@@ -83,17 +83,21 @@ export function validate(feature: FeatureSpec, form: FormState): Record<string, 
       else if (f.max !== undefined && n > f.max) errors[f.key] = `Maximum ${f.max}`;
     }
   }
+  if (feature.id === "mlvalidate" && feature.inputs.some((f) => f.key === "upload_id") && !form.upload_id && !form.artifact_id && !form.source_result) errors.upload_id = "Upload data or choose an Alpha or Allocation run.";
   return errors;
 }
 
 const isChanged = (f: InputSpec, v: unknown) => JSON.stringify(v ?? "") !== JSON.stringify(f.default ?? "");
 
-export function StudyForm({ feature, form, setForm, errors }: {
+export function StudyForm({ feature, form, setForm, errors: submittedErrors }: {
   feature: FeatureSpec;
   form: FormState;
   setForm: (updater: (cur: FormState) => FormState) => void;
   errors: Record<string, string>;
 }) {
+  const liveErrors = validate(feature, form);
+  // Show invalid edited values immediately; required defaults wait until submission.
+  const errors = Object.fromEntries(Object.entries(liveErrors).filter(([key]) => submittedErrors[key] || isChanged(feature.inputs.find((f) => f.key === key)!, form[key])));
   const hasUniverse = feature.inputs.some((f) => f.type === "ticker_list");
   const level = useFormLevel((st) => st.level);
   const setLevel = useFormLevel((st) => st.set);
@@ -231,7 +235,7 @@ function Field({ field: f, value, error, onChange, onReset, sweep, onSweep, chil
         ) : null}
       </span>
       {sweep !== undefined ? <input className="input num" value={sweep} placeholder="Values, e.g. 5, 10, 20" aria-label={`${f.label} sweep values`} onChange={(e) => onSweep?.(e.target.value)} /> : (Children.toArray(children).length ? children : null) ?? (f.key === "lookback_days" ? <WindowBrush field={f} value={Number(value ?? f.default ?? 3650)} onChange={onChange} /> : <Control field={f} value={value} onChange={onChange} />)}
-      {error ? <span className="err">{error}</span> : null}
+      {error ? <span className="err" role="alert">{error}</span> : null}
     </div>
   );
 }
@@ -239,7 +243,7 @@ function Field({ field: f, value, error, onChange, onReset, sweep, onSweep, chil
 function HelpTip({ text }: { text: string }) {
   return (
     <Tooltip label={<span style={{ display: "block", maxWidth: 280, lineHeight: 1.5 }}>{text}</span>} side="left">
-      <Info size={12} style={{ color: "var(--text-4)", marginLeft: 6, verticalAlign: -1, cursor: "help" }} aria-label={text} />
+      <button type="button" className="btn sm icon ghost" aria-label={`Explain this setting: ${text}`} style={{ display: "inline-flex", marginLeft: 4, verticalAlign: "middle" }}><Info size={12} aria-hidden /></button>
     </Tooltip>
   );
 }

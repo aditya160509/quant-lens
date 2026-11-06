@@ -2,6 +2,8 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { create } from "zustand";
+import { CalendarHeatmap } from "@/charts/CalendarHeatmap";
+import { useSelection } from "@/modules/research/selection";
 import { Bars } from "@/charts/Bars";
 import { Beeswarm } from "@/charts/Beeswarm";
 import { Dendrogram, leafOrder, type Merge } from "@/charts/Dendrogram";
@@ -11,7 +13,7 @@ import { Heatmap } from "@/charts/Heatmap";
 import { StackedArea } from "@/charts/StackedArea";
 import { TimeSeries, type Series } from "@/charts/TimeSeries";
 import { Waterfall } from "@/charts/Waterfall";
-import { XYPlot } from "@/charts/XYPlot";
+import { XYPlot, type XYPoint } from "@/charts/XYPlot";
 import { parseDate } from "@/charts/core";
 import { Segmented } from "@/workspace/ui";
 import { isNum, label, out, pct } from "@/modules/research/format";
@@ -40,6 +42,14 @@ const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.lengt
 const quantile = (sorted: number[], q: number) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))))] : NaN);
 const sig = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : Math.abs(v) >= 1 ? v.toFixed(2) : Math.abs(v) >= 0.01 ? v.toFixed(3) : Number(v.toPrecision(2)).toString());
 const pctFmt = (v: number) => `${(v * 100).toFixed(Math.abs(v) < 0.1 ? 2 : 1)}%`;
+function inspectScatter(points: XYPoint[], xLabel: string, yLabel: string) {
+  if (!points.length) { useSelection.getState().select(null); return; }
+  const one = points.length === 1 ? points[0] : null;
+  useSelection.getState().select({ title: one?.label ?? `${points.length} observations`, rows: one
+    ? [[xLabel, sig(one.x)], [yLabel, sig(one.y)], ...(one.group ? [["Group", one.group] as [string, string]] : []), ...(one.detail ?? [])]
+    : [["Observations", points.length], [`Mean ${xLabel}`, sig(mean(points.map((p) => p.x)))], [`Mean ${yLabel}`, sig(mean(points.map((p) => p.y)))]] });
+}
+
 
 /** Long rows (x, series, y) to wide rows (x, one column per series), in first-seen series order. */
 export function pivot(rows: Row[], x: string, s: string, y: string): { data: Row[]; keys: string[] } {
@@ -97,7 +107,7 @@ export function MlAuto({ rows, spec, opts }: ViewProps) {
   }
   if (type === "scatter" && e.x && e.y) {
     const pts = rows.filter((r) => isNum(r[e.x!]) && isNum(r[e.y!])).map((r) => ({ x: r[e.x!] as number, y: r[e.y!] as number, group: e.series ? str(r[e.series]) : undefined }));
-    return <XYPlot points={pts} xLabel={label(e.x)} yLabel={label(e.y)} robust />;
+    return <XYPlot points={pts} xLabel={label(e.x)} yLabel={label(e.y)} robust onSelection={(points) => inspectScatter(points, label(e.x), label(e.y))} />;
   }
   if (type === "heatmap") return <LongHeatmap rows={rows} />;
   return <DataTable rows={rows} opts={opts} />;
@@ -268,7 +278,7 @@ export function MlRankTable({ rows, result, scope }: ViewProps) {
         const d = (drivers.get(str(r.ticker)) ?? []).filter((x) => isNum(x.shap_value)).sort((a, b) => Math.abs(b.shap_value as number) - Math.abs(a.shap_value as number)).slice(0, 3);
         return (
           <div key={str(r.ticker)} className="ml-rank-r" role="button" tabIndex={0} aria-pressed={(picked ?? str(sorted[0]?.ticker)) === str(r.ticker)}
-            title={`Explain ${str(r.ticker)}`} onClick={() => pick(runOf(scope), str(r.ticker))} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(runOf(scope), str(r.ticker)); } }}>
+            title={`Explain ${str(r.ticker)}`} onClick={() => { pick(runOf(scope), str(r.ticker)); useSelection.getState().select({ title: str(r.ticker), rows: Object.entries(r).map(([k, v]) => [label(k), typeof v === "object" ? JSON.stringify(v) : str(v)]) }); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(runOf(scope), str(r.ticker)); useSelection.getState().select({ title: str(r.ticker), rows: Object.entries(r).map(([k, v]) => [label(k), typeof v === "object" ? JSON.stringify(v) : str(v)]) }); } }}>
             <span className="num">{i + 1}</span>
             <b>{str(r.ticker)}</b>
             <span className="muted">{str(r.sector)}</span>
@@ -302,6 +312,7 @@ export function MlBeeswarm({ rows }: ViewProps) {
 }
 
 export function MlWaterfall({ rows, result, scope }: ViewProps) {
+  const [inspectedFeature, setInspectedFeature] = useState<string | null>(null);
   const contrib = out(result, "ticker_contributions");
   const ranked = useMemo(() => [...contrib].sort((a, b) => (n(a.rank) ?? 0) - (n(b.rank) ?? 0)), [contrib]);
   const picked = usePick((st) => st.picks[runOf(scope)]);
@@ -316,7 +327,8 @@ export function MlWaterfall({ rows, result, scope }: ViewProps) {
           <Picker<string> label="Name" value={t} options={ranked.map((r) => str(r.ticker))} onChange={(v) => pick(runOf(scope), v)} />
           <span className="ml-sub" style={{ margin: 0 }}>Rank {str(row.rank)} of {ranked.length} · predicted {pctFmt(n(row.prediction) ?? 0)} · click any name in the ranking</span>
         </Bar>
-        <Waterfall base={n(row.base_value) ?? 0} items={Object.entries(c).filter(([, v]) => isNum(v)).map(([k, v]) => ({ label: label(k), value: v }))} format={(v) => pctFmt(v)} />
+        <Waterfall base={n(row.base_value) ?? 0} items={Object.entries(c).filter(([, v]) => isNum(v)).map(([k, v]) => ({ id: k, label: label(k), value: v }))} format={(v) => pctFmt(v)} onSelect={setInspectedFeature} />
+        {inspectedFeature ? <div className="ml-feature-detail"><button className="btn sm ghost" onClick={() => setInspectedFeature(null)}>Close feature details</button><Distribution xLabel={`${label(inspectedFeature)} across names`} values={out(result, "shap_beeswarm").filter((r) => str(r.feature) === inspectedFeature).map((r) => r.feature_value).filter(isNum)} observed={n(out(result, "shap_beeswarm").find((r) => str(r.feature) === inspectedFeature && str(r.ticker) === t)?.feature_value)} observedLabel={t} /></div> : null}
       </div>
     );
   }
@@ -327,6 +339,7 @@ export function MlWaterfall({ rows, result, scope }: ViewProps) {
 
 /** IC by month with its average: a signal that works shows more green than red, not one lucky month. */
 export function MlIcBars({ rows, spec }: ViewProps) {
+  const [lens, setLens] = useState("calendar");
   const e = (spec?.encoding ?? {}) as { x?: string; y?: string };
   const x = e.x ?? (rows[0] && "month" in rows[0] ? "month" : "date");
   const y = e.y ?? Object.keys(rows[0] ?? {}).find((k) => /ic/i.test(k) && isNum(rows[0][k])) ?? "ic";
@@ -336,7 +349,8 @@ export function MlIcBars({ rows, spec }: ViewProps) {
   return (
     <div>
       <Stats items={[["Mean IC", sig(m), m >= 0 ? "var(--up)" : "var(--down)"], ["IC IR", sd > 0 ? (m / sd).toFixed(2) : "–"], ["Positive", pct(v.filter((a) => a > 0).length / (v.length || 1), 0)], ["Periods", v.length]]} />
-      <Bars bars={rows.filter((r) => isNum(r[y])).map((r) => ({ label: str(r[x]), value: r[y] as number }))} format={sig} refLines={[{ y: m, label: "mean" }]} hideLabels={rows.length > 24} />
+      <div className="chart-mode-tabs" role="group" aria-label="IC display">{["calendar", "bars"].map((v) => <button key={v} aria-pressed={lens === v} onClick={() => setLens(v)}>{v === "calendar" ? "Calendar" : "Bars"}</button>)}</div>
+      {lens === "calendar" ? <CalendarHeatmap title="Information coefficient by month" data={rows.filter((r) => isNum(r[y])).map((r) => ({ date: str(r[x]), value: r[y] as number }))} format={sig} /> : <Bars bars={rows.filter((r) => isNum(r[y])).map((r) => ({ label: str(r[x]), value: r[y] as number }))} format={sig} refLines={[{ y: m, label: "mean" }]} hideLabels={rows.length > 24} />}
     </div>
   );
 }
@@ -427,6 +441,7 @@ export function MlVolScatter({ rows, result }: ViewProps) {
         <Segmented<string> label="Horizon" value={String(hh)} onChange={(v) => setH(Number(v))} options={horizons.map((x) => ({ value: String(x), label: `${x}d` }))} />
       </Bar>
       <XYPlot points={pts} xLabel="Forecast volatility" yLabel="Realised volatility" diagonal robust formatX={pctFmt} formatY={pctFmt}
+        onSelection={(points) => inspectScatter(points, "Forecast volatility", "Realised volatility")}
         groupColors={{ "Each forecast": "color-mix(in oklch, var(--text-3) 35%, transparent)" }}
         lines={[{ label: "Average realised, by forecast decile", color: "var(--accent)", points: curve }]} />
       <p className="ml-note">On the dashed diagonal the forecast is right on average. Above it the model under-forecasts risk; below it, over-forecasts.</p>
@@ -622,20 +637,24 @@ export function MlRiskContrib({ rows }: ViewProps) {
 
 /** The clustering tree, and the covariance matrix reordered to match it so blocks line up. */
 export function MlDendrogram({ rows, result }: ViewProps) {
+  const [cutShare, setCutShare] = useState(0.7);
+  const [activeLeaves, setActiveLeaves] = useState<string[]>([]);
   const cov = out(result, "quasi_diagonalized_covariance_heatmap");
   // The linkage indexes assets in input order (the weight vector); the covariance arrives already in leaf order.
   const assets = out(result, "hrp_weight_vector").map((r) => str(r.asset));
   const order = useMemo(() => [...new Set(cov.map((r) => str(r.row)))], [cov]);
   const merges = rows.map((r) => ({ left: Number(r.left), right: Number(r.right), distance: Number(r.distance), count: n(r.count) ?? undefined })) as Merge[];
   if (!rows.length || assets.length < 2) return <Empty />;
+  const maxDistance = Math.max(...merges.map((m) => m.distance), 1e-9);
   const treeOrder = leafOrder(merges, assets.length).map((i) => assets[i]);
   const matrix = order.length ? order : treeOrder;
   const cell = new Map(cov.map((r) => [`${str(r.row)}|${str(r.col)}`, n(r.value)]));
   const d = matrix.map((a) => Math.sqrt(Math.max(cell.get(`${a}|${a}`) ?? 0, 1e-18)));
   return (
     <div>
-      <Dendrogram merges={merges} leaves={assets} />
-      {cov.length ? <CorrMap names={matrix} value={(i, j) => { const c = cell.get(`${matrix[i]}|${matrix[j]}`); return c === null || c === undefined ? null : c / (d[i] * d[j]); }} /> : null}
+      <label className="cluster-cut">Cluster cut <input aria-label="Cluster cut height" type="range" min={0} max={1} step={0.01} value={cutShare} onChange={(e) => setCutShare(Number(e.target.value))} /><span className="num">{(cutShare * maxDistance).toFixed(3)}</span></label>
+      <Dendrogram merges={merges} leaves={assets} cut={cutShare * maxDistance} activeLeaves={activeLeaves} onHoverLeaf={(leaf) => setActiveLeaves(leaf ? [leaf] : [])} />
+      {cov.length ? <CorrMap names={matrix} activeLeaves={activeLeaves} onHoverLeaves={setActiveLeaves} value={(i, j) => { const c = cell.get(`${matrix[i]}|${matrix[j]}`); return c === null || c === undefined ? null : c / (d[i] * d[j]); }} /> : null}
       <p className="ml-note">Correlations implied by the covariance, in HRP&apos;s seriated order. Square blocks along the diagonal are the clusters HRP splits on.{order.length && order.join() !== treeOrder.join() ? " The matrix order is the API's quasi-diagonal order." : ""}</p>
     </div>
   );
@@ -643,7 +662,7 @@ export function MlDendrogram({ rows, result }: ViewProps) {
 
 /** A correlation matrix that stays readable at any size: square cells sized to the card, colour for the value,
  * the exact pair on hover, and numbers printed only when the matrix is small enough to read them. */
-function CorrMap({ names, value }: { names: string[]; value: (i: number, j: number) => number | null }) {
+function CorrMap({ names, value, activeLeaves = [], onHoverLeaves }: { names: string[]; value: (i: number, j: number) => number | null; activeLeaves?: string[]; onHoverLeaves?: (leaves: string[]) => void }) {
   const [hover, setHover] = useState<[number, number] | null>(null);
   const N = names.length, numbers = N <= 12;
   const colour = (v: number | null) => (v === null ? "transparent" : v >= 0 ? `color-mix(in oklch, var(--up) ${Math.round(Math.min(1, v) * 85)}%, var(--panel-2))` : `color-mix(in oklch, var(--down) ${Math.round(Math.min(1, -v) * 85)}%, var(--panel-2))`);
@@ -651,12 +670,14 @@ function CorrMap({ names, value }: { names: string[]; value: (i: number, j: numb
   return (
     <div className="corr">
       <div className="corr-read">{hover ? <><b>{names[hover[0]]}</b> × <b>{names[hover[1]]}</b> <span className="num" style={{ color: hv !== null && hv < 0 ? "var(--down)" : "var(--up)" }}>{hv === null ? "–" : hv.toFixed(2)}</span></> : <span>Hover a cell for the pair and its correlation</span>}</div>
-      <div className="corr-grid" style={{ gridTemplateColumns: `52px repeat(${N}, minmax(0, 1fr))` }} onPointerLeave={() => setHover(null)}>
+      <div className="corr-grid" style={{ gridTemplateColumns: `52px repeat(${N}, minmax(0, 1fr))` }} onPointerLeave={() => { setHover(null); onHoverLeaves?.([]); }}>
         {names.map((r, i) => [
-          <span key={`l${r}`} className="corr-l" data-on={hover?.[0] === i || undefined}>{r}</span>,
+          <span key={`l${r}`} className="corr-l" data-on={hover?.[0] === i || activeLeaves.includes(r) || undefined}>{r}</span>,
           ...names.map((c, j) => {
             const v = value(i, j);
-            return <i key={`${r}|${c}`} style={{ background: colour(v) }} data-x={hover && (hover[0] === i || hover[1] === j) ? "1" : undefined} onPointerEnter={() => setHover([i, j])}>{numbers && v !== null ? v.toFixed(2) : null}</i>;
+            return <button key={`${r}|${c}`} type="button" aria-label={`${r} × ${c}: ${v === null ? "unavailable" : v.toFixed(3)}`} tabIndex={(hover ? hover[0] === i && hover[1] === j : i === 0 && j === 0) ? 0 : -1} data-cell={`${i}-${j}`} style={{ background: colour(v) }} data-x={activeLeaves.includes(r) || activeLeaves.includes(c) ? "1" : undefined}
+              onPointerEnter={() => { setHover([i, j]); onHoverLeaves?.([r, c]); }} onFocus={() => { setHover([i, j]); onHoverLeaves?.([r, c]); }}
+              onKeyDown={(e) => { const moves: Record<string, [number, number]> = { ArrowLeft: [i, j - 1], ArrowRight: [i, j + 1], ArrowUp: [i - 1, j], ArrowDown: [i + 1, j] }; const next = moves[e.key]; if (next) { e.preventDefault(); const [a, b] = next.map((k) => Math.max(0, Math.min(N - 1, k))); e.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-cell="${a}-${b}"]`)?.focus(); } else if (e.key === "Escape") { setHover(null); onHoverLeaves?.([]); } }}>{numbers && v !== null ? v.toFixed(2) : null}</button>;
           }),
         ])}
       </div>
@@ -705,7 +726,7 @@ export function MlRegimes({ rows, result }: ViewProps) {
   return (
     <div>
       <Stats items={[["Current state", isState ? nameOf(now) : label(now), isState ? colourOf(now) : undefined], ["Days in state", run], ...keys.map((k) => [`Time in ${isState ? nameOf(k) : label(k)}`, pct(dom.filter((d) => d === k).length / dom.length, 0)] as [string, string])]} />
-      <StackedArea data={rows} keys={keys} colors={colors} labels={Object.fromEntries(keys.map((k) => [k, isState ? nameOf(k) : label(k)]))} height={240} />
+      <StackedArea data={rows} keys={keys} colors={colors} labels={Object.fromEntries(keys.map((k) => [k, isState ? nameOf(k) : label(k)]))} height={240} events={rows.flatMap((r, i) => i > 0 && dom[i] !== dom[i - 1] ? [{ date: str(r.date), label: isState ? nameOf(dom[i]) : label(dom[i]), kind: "regime_switch" }] : [])} />
     </div>
   );
 }

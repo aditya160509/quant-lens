@@ -72,7 +72,7 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const hint = item.hint ?? spec?.description;
   const finding = custom || overlayId ? null : lab().takeaway?.(feature.id, key, item.view, result) ?? null;
   const name = `${feature.id}_${key}`;
-  const svg = () => body.current?.querySelector("svg[role='img']") as SVGSVGElement | null;
+  const svg = () => body.current?.querySelector("svg[role='img'], svg[role='group']") as SVGSVGElement | null;
 
   const canTable = isChart && rows.length > 0;
   const copy = () => {

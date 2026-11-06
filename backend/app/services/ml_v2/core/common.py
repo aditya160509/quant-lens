@@ -123,6 +123,22 @@ def response(
     status: str = "ok",
     provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    metadata = dict(meta or {})
+    events = list(metadata.get("events") or [])
+    # Boundaries are facts from the run receipt, not inferred market events.
+    for key, edge, label, kind in (
+        ("train_window", "end", "Training ends", "train_end"),
+        ("test_window", "start", "Held-out window begins", "test_start"),
+    ):
+        window = (provenance or {}).get(key)
+        if not isinstance(window, dict) or window.get("note"):
+            continue  # A purged complement is not one contiguous training window.
+        date = pd.to_datetime(window.get(edge), errors="coerce", utc=True)
+        if date is not None and not pd.isna(date):
+            event = {"date": date.strftime("%Y-%m-%d"), "label": label, "kind": kind}
+            if event not in events:
+                events.append(event)
+    metadata["events"] = events
     out = {
         "feature_id": f"feature_{str(feature_id).zfill(2)}",
         "status": status,
@@ -130,7 +146,7 @@ def response(
         "charts": charts,
         "tables": tables,
         "alerts": alerts or [],
-        "meta": meta or {},
+        "meta": metadata,
     }
     if provenance is not None:
         out["provenance"] = provenance

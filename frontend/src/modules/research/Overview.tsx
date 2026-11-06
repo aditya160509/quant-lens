@@ -79,7 +79,7 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
             })}
           </div>
         ) : null}
-        {L.signal ? <Onboarding /> : null}
+        {L.signal || L.id === "ml" ? <Onboarding ml={L.id === "ml"} /> : null}
         <Board features={features} />
 
         {stages.map((stage, si) => (

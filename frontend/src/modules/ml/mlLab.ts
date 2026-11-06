@@ -277,10 +277,11 @@ const V = group(() => import("./views") as Promise<Record<string, unknown>>);
 const VV = group(() => import("./validateViews") as Promise<Record<string, unknown>>);
 const PV = group(() => import("./pageViews") as Promise<Record<string, unknown>>);
 registerViews({
+  allocTreemap: PV.AllocTreemap, shapTreemap: PV.ShapTreemap,
   mlProvenance: PV.MlProvenance, mlNext: PV.MlNext, alphaControls: PV.AlphaControls, alphaDeciles: PV.AlphaDeciles, alphaNetCurve: PV.AlphaNetCurve, alphaWhatChanged: PV.AlphaWhatChanged,
   alphaFamilies: PV.AlphaFamilies, alphaDrift: PV.AlphaDrift, alphaEnsemble: PV.AlphaEnsemble, riskToday: PV.RiskToday, riskVarEs: PV.RiskVarEs, strategyCompare: PV.StrategyCompare, riskStress: PV.RiskStress, alphaRadar: PV.AlphaRadar, holdingRisk: PV.HoldingRisk, strategyRadar: PV.StrategyRadar,
   allocStability: PV.AllocStability, allocTrades: PV.AllocTrades, allocRebalances: PV.AllocRebalances, alphaSectors: PV.AlphaSectors, allocSectors: PV.AllocSectors, shapImportance: PV.ShapImportance, regimeSpells: PV.RegimeSpells, barrierTimeline: PV.BarrierTimeline, barrierMethods: PV.BarrierMethods, metaProbability: PV.MetaProbability, equityCompare: PV.EquityCompare,
-}, ["alphaRadar", "strategyRadar", "barrierTimeline", "metaProbability", "equityCompare", "alphaControls", "alphaDeciles", "alphaNetCurve", "alphaEnsemble", "strategyCompare", "riskStress"]);
+}, ["allocTreemap", "shapTreemap", "alphaRadar", "strategyRadar", "barrierTimeline", "metaProbability", "equityCompare", "alphaControls", "alphaDeciles", "alphaNetCurve", "alphaEnsemble", "strategyCompare", "riskStress"]);
 registerViews({
   valVerdict: VV.ValVerdict, valAutopsy: VV.ValAutopsy, valCostCurve: VV.ValCostCurve, valControls: VV.ValControls, valShuffle: VV.ValShuffle, valCpcv: VV.ValCpcv, valMonteCarlo: VV.ValMonteCarlo,
   valTransfer: VV.ValTransfer, valPlateau: VV.ValPlateau, valStability: VV.ValStability, valOverfit: VV.ValOverfit, valLeakage: VV.ValLeakage, valImprove: VV.ValImprove, valReceipt: VV.ValReceipt,
@@ -299,8 +300,8 @@ registerViews({
 
 registerAlternates({
   mlRankTable: [{ label: "By sector", view: "alphaSectors" }],
-  allocStability: [{ label: "By sector", view: "allocSectors" }],
-  mlBeeswarm: [{ label: "Importance ranking", view: "shapImportance" }, { label: "By feature family", view: "alphaFamilies" }],
+  allocStability: [{ label: "By sector", view: "allocSectors" }, { label: "Sector treemap", view: "allocTreemap" }],
+  mlBeeswarm: [{ label: "Importance ranking", view: "shapImportance" }, { label: "By feature family", view: "alphaFamilies" }, { label: "Family treemap", view: "shapTreemap" }],
   mlVolPanel: [{ label: "Calibration (forecast vs realised)", view: "mlVolScatter" }],
   mlVolScatter: [{ label: "Through time", view: "mlVolPanel" }],
   mlRegimes: [{ label: "Spell history", view: "regimeSpells" }],

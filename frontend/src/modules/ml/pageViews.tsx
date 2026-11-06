@@ -6,6 +6,8 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Bars } from "@/charts/Bars";
 import { Diverging } from "@/charts/Diverging";
 import { Dumbbell } from "@/charts/Dumbbell";
+import { Treemap } from "@/charts/Treemap";
+import { RankList } from "@/charts/RankList";
 import { Radar } from "@/charts/Radar";
 import { StackedArea } from "@/charts/StackedArea";
 import { TimeSeries } from "@/charts/TimeSeries";
@@ -282,18 +284,7 @@ export function AlphaFamilies({ rows }: ViewProps) {
   if (!rows.length) return <Empty />;
   const sorted = [...rows].filter((r) => isNum(r.mean_abs_shap)).sort((a, b) => (b.mean_abs_shap as number) - (a.mean_abs_shap as number));
   const total = sorted.reduce((s, r) => s + (r.mean_abs_shap as number), 0) || 1;
-  return (
-    <div className="ml-shares">
-      {sorted.map((r) => (
-        <div key={str(r.family)}>
-          <span>{label(str(r.family))}</span>
-          <span className="ml-share-bar"><i style={{ width: `${((r.mean_abs_shap as number) / total) * 100}%` }} /></span>
-          <b className="num">{pct((r.mean_abs_shap as number) / total, 0)}</b>
-          <em>{(Array.isArray(r.features) ? (r.features as string[]) : []).slice(0, 6).map(label).join(", ")}</em>
-        </div>
-      ))}
-    </div>
-  );
+  return <RankList title="Feature family contributions" items={sorted.map((r) => ({ label: label(str(r.family)), value: (r.mean_abs_shap as number) / total, note: (Array.isArray(r.features) ? r.features as string[] : []).map(label).join(", ") }))} format={(v) => pct(v, 1)} />;
 }
 
 /** Validation IC across LightGBM–Ridge blends; the chosen blend is the one validation preferred, never the test. */
@@ -729,9 +720,9 @@ export function AllocSectors({ result }: ViewProps) {
 export function ShapImportance({ result }: ViewProps) {
   const rows = out(result, "shap_feature_importance");
   if (!rows.length) return <Empty />;
-  const items = [...rows].filter((r) => isNum(r.mean_abs_shap)).sort((a, b) => (b.mean_abs_shap as number) - (a.mean_abs_shap as number)).slice(0, 15)
+  const items = [...rows].filter((r) => isNum(r.mean_abs_shap)).sort((a, b) => (b.mean_abs_shap as number) - (a.mean_abs_shap as number))
     .map((r) => ({ label: label(str(r.feature)), value: r.mean_abs_shap as number, note: label(str(r.family)) }));
-  return <Diverging rows={items} format={(v) => pct(v, 2)} labelWidth={150} />;
+  return <RankList title="Feature importance" items={items} format={(v) => pct(v, 2)} top={15} />;
 }
 
 /** The regime history as a list of spells: when each state started, how long it lasted. */
@@ -759,4 +750,17 @@ export function RegimeSpells({ rows, result }: ViewProps) {
       <p className="ml-note">Most recent spells first; a spell is a run of sessions with the same most-likely state.</p>
     </div>
   );
+}
+
+/** Allocation by sector, with the same risk-share denominator as the sector report. */
+export function AllocTreemap({ result }: ViewProps) {
+  const weights = out(result, "hrp_weight_vector");
+  const risks = out(result, "risk_contribution_decomposition");
+  const total = risks.reduce((sum, r) => sum + Math.max(0, n(r.risk_contribution) ?? 0), 0);
+  const risk = new Map(risks.filter((r) => isNum(r.risk_contribution)).map((r) => [str(r.asset), total > 0 ? Math.max(0, r.risk_contribution as number) / total : undefined]));
+  return <Treemap title="Allocation by sector and name" sizeLabel="Weight" alternativeSizeLabel="Risk share" colorLabel="risk share minus weight" format={(v) => pct(v, 1)} colorFormat={(v) => pct(v, 1)} items={weights.filter((r) => isNum(r.weight)).map((r) => ({ label: str(r.asset), group: str(r.sector) || "Unknown sector", size: r.weight as number, alternativeSize: risk.get(str(r.asset)), colorValue: risk.get(str(r.asset)) === undefined ? undefined : risk.get(str(r.asset))! - (r.weight as number) }))} />;
+}
+
+export function ShapTreemap({ result }: ViewProps) {
+  return <Treemap title="Feature contributions by family" sizeLabel="Mean absolute SHAP" format={(v) => pct(v, 2)} items={out(result, "shap_feature_importance").filter((r) => isNum(r.mean_abs_shap)).map((r) => ({ label: label(str(r.feature)), group: label(str(r.family)) || "Unknown family", size: r.mean_abs_shap as number }))} />;
 }
