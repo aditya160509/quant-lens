@@ -2,7 +2,19 @@
 
 Tick items here only. The plan is in [PLAN.md](PLAN.md).
 
-## Phase 0: Foundation
+## Now: finish ML
+- [ ] Check every open item in the cinema plan against the code
+- [ ] One tooltip and legend
+- [ ] Empty, error and stale states
+- [ ] Study panel groups and validation
+- [ ] Compare mode and Inspect panel
+- [ ] Finish RankList, Calendar heatmap, Treemap
+- [ ] Accessibility pass
+- [ ] Heat table, Distribution, Scatter v2, Waterfall v2, Dendrogram linking
+- [ ] Live overview tiles and pipeline diagram
+- [ ] Fresh design pass
+
+## Phase 0: Foundation (deferred)
 - [x] Remove v1 pages, legacy services and routers
 - [x] Remove trades, Sovereign, CLI and auth
 - [x] Organize docs
@@ -59,11 +71,14 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 
 ## Phase 4: Module rebuilds
 - [ ] Screener: `/screener` on `LabConfig`
-- [ ] Screener: table, filters, formula bar
+- [ ] Screener: DuckDB table, filters and counts
+- [ ] Screener: CodeMirror formula bar on `signal_lang`
 - [ ] Screener: why-here and near-miss
+- [ ] Screener: quick-look drawer
 - [ ] Screener: Rank and ML hand-off
 - [ ] Screener: Test through ML Validate
-- [ ] Screener: Monitor and alerts
+- [ ] Screener: Monitor with APScheduler and Apprise
+- [ ] Screener: templates and plain English to formula
 - [ ] Screener: tag `screener-v1`, delete old pages
 - [ ] Factors rebuild, delete old pages
 - [ ] Volatility rebuild, delete old pages
@@ -71,6 +86,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Portfolio rebuild, delete old pages
 
 ## Phase 5: Studio and Chart
+- [ ] Decide Chart as a Studio tab
 - [ ] Parquet-first market data
 - [ ] Delete `data_loader.py`, `robust_data_fetcher.py`, `indicators.py`
 - [ ] TradingView-grade chart
