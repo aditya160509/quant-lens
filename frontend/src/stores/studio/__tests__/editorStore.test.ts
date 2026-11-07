@@ -3,9 +3,9 @@ import { defaultEditorState, useStudioEditorStore } from '../editorStore';
 
 describe('useStudioEditorStore', () => {
     beforeEach(() => {
-        jest.mocked(window.localStorage.getItem).mockReset();
-        jest.mocked(window.localStorage.setItem).mockReset();
-        jest.mocked(window.localStorage.removeItem).mockReset();
+        vi.mocked(window.localStorage.getItem).mockReset();
+        vi.mocked(window.localStorage.setItem).mockReset();
+        vi.mocked(window.localStorage.removeItem).mockReset();
         useStudioEditorStore.getState().resetEditor();
     });
 
@@ -36,7 +36,7 @@ describe('useStudioEditorStore', () => {
     });
 
     it('hydrates drafts from the legacy storage keys', () => {
-        jest.mocked(window.localStorage.getItem).mockImplementation((key) => (
+        vi.mocked(window.localStorage.getItem).mockImplementation((key) => (
             key === 'sovereign_studio_code_a' ? 'alpha draft' : 'beta draft'
         ));
 

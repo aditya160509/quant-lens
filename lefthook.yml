@@ -1,0 +1,13 @@
+pre-commit:
+  parallel: true
+  commands:
+    frontend:
+      root: frontend/
+      glob: "*.{ts,tsx,js,jsx}"
+      run: pnpm typecheck && pnpm lint
+    python:
+      root: backend/
+      glob: "*.py"
+      run: .venv/bin/ruff check {staged_files}
+    secrets:
+      run: gitleaks git --staged --redact --no-banner

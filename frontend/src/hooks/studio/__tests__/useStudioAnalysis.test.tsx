@@ -3,10 +3,10 @@ import { useStudioAnalysis } from '../useStudioAnalysis';
 import { useStudioResultStore } from '@/stores/studio/resultStore';
 import { createStudioJob, waitForStudioJobEvents } from '@/lib/studioApi';
 
-jest.mock('@/lib/studioApi', () => ({
-    createStudioJob: jest.fn(),
-    waitForStudioJobEvents: jest.fn(),
-    cancelStudioJob: jest.fn().mockResolvedValue({ status: 'success' }),
+vi.mock('@/lib/studioApi', () => ({
+    createStudioJob: vi.fn(),
+    waitForStudioJobEvents: vi.fn(),
+    cancelStudioJob: vi.fn().mockResolvedValue({ status: 'success' }),
 }));
 
 const monteCarloResult = {
@@ -42,7 +42,7 @@ const walkForwardResult = {
 
 describe('useStudioAnalysis durable jobs', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         useStudioResultStore.getState().resetResults();
         useStudioResultStore.getState().setData((current) => ({
             ...current,
@@ -51,8 +51,8 @@ describe('useStudioAnalysis durable jobs', () => {
     });
 
     it('runs Monte Carlo through the durable job API with explicit assumptions', async () => {
-        jest.mocked(createStudioJob).mockResolvedValue({ job_id: 'mc-job', status: 'queued', estimate: { work_units: 25200, budget_utilization_pct: 0.1, size: 'small', basis: 'simulation paths × horizon bars' } });
-        jest.mocked(waitForStudioJobEvents).mockResolvedValue(monteCarloResult);
+        vi.mocked(createStudioJob).mockResolvedValue({ job_id: 'mc-job', status: 'queued', estimate: { work_units: 25200, budget_utilization_pct: 0.1, size: 'small', basis: 'simulation paths × horizon bars' } });
+        vi.mocked(waitForStudioJobEvents).mockResolvedValue(monteCarloResult);
         const { result } = renderHook(() => useStudioAnalysis());
 
         await act(async () => result.current.runMonteCarlo(100, 'moving_block_bootstrap', 5));
@@ -66,8 +66,8 @@ describe('useStudioAnalysis durable jobs', () => {
     });
 
     it('runs walk-forward through the durable job API with leakage controls', async () => {
-        jest.mocked(createStudioJob).mockResolvedValue({ job_id: 'wf-job', status: 'queued', estimate: { work_units: 650, budget_utilization_pct: 0.03, size: 'small', basis: 'return observations × folds' } });
-        jest.mocked(waitForStudioJobEvents).mockResolvedValue(walkForwardResult);
+        vi.mocked(createStudioJob).mockResolvedValue({ job_id: 'wf-job', status: 'queued', estimate: { work_units: 650, budget_utilization_pct: 0.03, size: 'small', basis: 'return observations × folds' } });
+        vi.mocked(waitForStudioJobEvents).mockResolvedValue(walkForwardResult);
         const { result } = renderHook(() => useStudioAnalysis());
 
         await act(async () => result.current.runWalkForward(5, 2, 1));

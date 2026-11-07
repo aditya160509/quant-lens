@@ -2,8 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import PortfolioView, { parseHoldingsCsv, parseReturnCsv } from "../PortfolioView";
 import { studioRequest } from "@/lib/studioApi";
 
-jest.mock("@/lib/studioApi", () => ({ studioRequest: jest.fn() }));
-const request = studioRequest as jest.Mock;
+vi.mock("@/lib/studioApi", () => ({ studioRequest: vi.fn() }));
+const request = studioRequest as ReturnType<typeof vi.fn>;
 const fillAssumptions = () => {
   [[1, "SPY", "8", "20", "50"], [2, "TLT", "4", "10", "50"]].forEach(([index, ticker, expected, volatility, current]) => {
     fireEvent.change(screen.getByLabelText(`ticker ${index}`), { target: { value: ticker } });
@@ -14,8 +14,9 @@ const fillAssumptions = () => {
 };
 
 describe("PortfolioView", () => {
-  beforeEach(() => request.mockReset());
-
+  beforeEach(() => {
+    request.mockReset();
+  });
   it("submits explicit assumptions and renders a reconciled artifact", async () => {
     request.mockResolvedValue({ portfolio: {
       artifact_id: "portfolio_test", engine_version: "studio-portfolio-1.0", objective: "max_sharpe",

@@ -3,8 +3,8 @@ import ReplayView from '../ReplayView';
 import { getStudioJob } from '@/lib/studioApi';
 import { useStudioResultStore } from '@/stores/studio/resultStore';
 
-jest.mock('@/lib/studioApi', () => ({ getStudioJob: jest.fn() }));
-jest.mock('../results/VirtualTradeLedger', () => ({
+vi.mock('@/lib/studioApi', () => ({ getStudioJob: vi.fn() }));
+vi.mock('../results/VirtualTradeLedger', () => ({
     __esModule: true,
     default: () => <div>trade ledger</div>,
     tradeReturn: (trade: { pnl?: number }) => trade.pnl ?? null,
@@ -24,7 +24,7 @@ describe('ReplayView persisted deep links', () => {
     beforeEach(() => {
         useStudioResultStore.getState().resetResults();
         window.history.replaceState(null, '', '/studio?run=run-1&event=signal%3A0');
-        jest.mocked(getStudioJob).mockResolvedValue({ job_id: 'run-1', status: 'completed', result: executionResult });
+        vi.mocked(getStudioJob).mockResolvedValue({ job_id: 'run-1', status: 'completed', result: executionResult });
     });
 
     it('loads and validates the persisted execution artifact without rerunning it', async () => {
@@ -41,7 +41,7 @@ describe('ReplayView persisted deep links', () => {
     it('compares two compatible persisted event streams without executing code', async () => {
         render(<ReplayView />);
         await waitFor(() => expect(useStudioResultStore.getState().data.runId).toBe('run-1'));
-        jest.mocked(getStudioJob).mockResolvedValueOnce({ job_id: 'run-2', status: 'completed', result: { ...executionResult, candles: [{ ...executionResult.candles[0], close: 99 }] } });
+        vi.mocked(getStudioJob).mockResolvedValueOnce({ job_id: 'run-2', status: 'completed', result: { ...executionResult, candles: [{ ...executionResult.candles[0], close: 99 }] } });
 
         fireEvent.change(screen.getByRole('textbox', { name: 'Comparison run ID' }), { target: { value: 'run-2' } });
         fireEvent.click(screen.getByRole('button', { name: 'Compare' }));

@@ -20,20 +20,20 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [x] Organize docs
 - [x] Python 3.12 with uv
 - [ ] Backend tests green (3 fail: stale `category7_macro_regime` manifest entry)
-- [ ] pnpm 12
-- [ ] tsrs and TypeScript 7
-- [ ] oxlint and oxfmt, remove ESLint
-- [ ] Vitest, remove Jest
+- [x] pnpm 12
+- [x] tsrs and TypeScript 7
+- [x] oxlint and oxfmt, remove ESLint (2026-11-07: about 990 warnings backlog; no bulk format yet)
+- [x] Vitest, remove Jest
 - [ ] Pyrefly, deptry, vulture, pip-audit
 - [ ] pytest-xdist, with before and after timings
-- [ ] knip, jscpd, size-limit, React Compiler
-- [ ] lefthook with gitleaks
-- [ ] `THIRD_PARTY.md`
+- [x] knip, jscpd, size-limit (duplication 11.6%, above the 5% target)
+- [x] lefthook with gitleaks
+- [x] `THIRD_PARTY.md`
 - [ ] Replace BEA, BLS, EIA, FRED and QuickStats keys (owner)
 - [ ] Choose history rewrite or keep (owner), then make repo public
 - [ ] Measure the 4.6 GB launch per process and fix the top cause
 - [ ] Run Playwright after the cleanup
-- [ ] Remove `@supabase` and other unused npm packages
+- [x] Remove `@supabase` and other unused npm packages
 
 ## Shared kit (with Step 2)
 - [ ] Port T3 Code shell components

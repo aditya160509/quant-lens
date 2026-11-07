@@ -7,7 +7,7 @@ import StudioPaneBoundary from '../../StudioPaneBoundary';
 
 describe('integration hardest', () => {
     it('StudioPaneBoundary does not throw on null data and shows fallback', () => {
-        const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
         const Throwing = () => { throw new Error('canvas fail'); };
         render(
             <StudioPaneBoundary resetKey="test">
@@ -18,7 +18,7 @@ describe('integration hardest', () => {
         spy.mockRestore();
     });
     it('retry button clears error', async () => {
-        const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
         const Throwing = () => { throw new Error('first fail'); };
         render(
             <StudioPaneBoundary resetKey="1">

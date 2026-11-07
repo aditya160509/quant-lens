@@ -4,14 +4,14 @@ import { useStudioResultStore } from '@/stores/studio/resultStore';
 import { useStudioEditorStore } from '@/stores/studio/editorStore';
 import { getPromotionAudit, recordPromotionAudit } from '@/lib/studioApi';
 
-jest.mock('@/hooks/studio/useStudioAnalysis', () => ({ useStudioAnalysis: () => ({ runWalkForward: jest.fn(), cancelWalkForward: jest.fn() }) }));
-jest.mock('@/lib/studioApi', () => ({ getPromotionAudit: jest.fn(), recordPromotionAudit: jest.fn() }));
+vi.mock('@/hooks/studio/useStudioAnalysis', () => ({ useStudioAnalysis: () => ({ runWalkForward: vi.fn(), cancelWalkForward: vi.fn() }) }));
+vi.mock('@/lib/studioApi', () => ({ getPromotionAudit: vi.fn(), recordPromotionAudit: vi.fn() }));
 
 describe('Validate promotion audit', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.mocked(getPromotionAudit).mockResolvedValue({ records: [] });
-    jest.mocked(recordPromotionAudit).mockResolvedValue({ audit: { audit_id: 'audit-1', action: 'override', actor: 'risk', rationale: 'reviewed', created_at: '2026-09-22', record_hash: 'abcdef0123456789' } });
+    vi.clearAllMocks();
+    vi.mocked(getPromotionAudit).mockResolvedValue({ records: [] });
+    vi.mocked(recordPromotionAudit).mockResolvedValue({ audit: { audit_id: 'audit-1', action: 'override', actor: 'risk', rationale: 'reviewed', created_at: '2026-09-22', record_hash: 'abcdef0123456789' } });
     useStudioEditorStore.setState({ codeA: 'strategy' });
     useStudioResultStore.getState().resetResults();
     useStudioResultStore.setState((state) => ({

@@ -9,7 +9,7 @@ function BrokenPane(): never {
 
 describe('StudioPaneBoundary', () => {
     beforeEach(() => {
-        console.error = jest.fn();
+        console.error = vi.fn();
     });
 
     afterEach(() => {

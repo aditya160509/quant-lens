@@ -6,16 +6,16 @@ import { useStudioPreferenceStore } from "@/stores/studio/preferenceStore";
 import { useStudioWorkspaceStore } from "@/stores/studio/workspaceStore";
 import { useStudioResultStore } from "@/stores/studio/resultStore";
 
-jest.mock("@/hooks/studio/useDataStudio", () => ({
+vi.mock("@/hooks/studio/useDataStudio", () => ({
   useDataStudio: () => ({
-    loadCatalog: jest.fn().mockResolvedValue([{ name: "market_universe", source_type: "OHLCV", update_frequency: "daily" }]),
-    loadFreshness: jest.fn().mockResolvedValue([{ source_name: "market_universe", status: "fresh", data_as_of: "2026-01-02", lag_trading_days: 0 }]),
-    loadManifests: jest.fn().mockResolvedValue({ datasets: [{ id: "market_universe_daily", status: "valid", rows: 10, format: "parquet", path: "backend/data/market_universe.parquet", provenance: { source: "test", license_status: "review", transformation_version: "v1", point_in_time_policy: "not guaranteed", adjustment_policy: "proxy" } }] }),
-    loadUploads: jest.fn().mockResolvedValue({ uploads: [] }),
-    deleteUpload: jest.fn().mockResolvedValue({ status: "deleted" }),
-    loadSeries: jest.fn().mockResolvedValue({ count: 0, total_count: 0, limit: 100, series: [] }),
-    uploadDataset: jest.fn().mockResolvedValue({ source_name: "sample", validation_report: { rows: 1 } }),
-    cancel: jest.fn(),
+    loadCatalog: vi.fn().mockResolvedValue([{ name: "market_universe", source_type: "OHLCV", update_frequency: "daily" }]),
+    loadFreshness: vi.fn().mockResolvedValue([{ source_name: "market_universe", status: "fresh", data_as_of: "2026-01-02", lag_trading_days: 0 }]),
+    loadManifests: vi.fn().mockResolvedValue({ datasets: [{ id: "market_universe_daily", status: "valid", rows: 10, format: "parquet", path: "backend/data/market_universe.parquet", provenance: { source: "test", license_status: "review", transformation_version: "v1", point_in_time_policy: "not guaranteed", adjustment_policy: "proxy" } }] }),
+    loadUploads: vi.fn().mockResolvedValue({ uploads: [] }),
+    deleteUpload: vi.fn().mockResolvedValue({ status: "deleted" }),
+    loadSeries: vi.fn().mockResolvedValue({ count: 0, total_count: 0, limit: 100, series: [] }),
+    uploadDataset: vi.fn().mockResolvedValue({ source_name: "sample", validation_report: { rows: 1 } }),
+    cancel: vi.fn(),
   }),
 }));
 
@@ -26,7 +26,7 @@ describe("Studio shell controls", () => {
   });
 
   it("updates the editor rail through the preference store", () => {
-    render(<StudioActivityRail settingsOpen={false} onToggleSettings={jest.fn()} dataOpen={false} onToggleData={jest.fn()} />);
+    render(<StudioActivityRail settingsOpen={false} onToggleSettings={vi.fn()} dataOpen={false} onToggleData={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle strategy editor" }));
 
@@ -34,7 +34,7 @@ describe("Studio shell controls", () => {
   });
 
   it("updates execution assumptions and exposes a close action", () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<ExecutionAssumptionsPanel onClose={onClose} />);
 
     fireEvent.change(screen.getByRole("slider", { name: "Slippage basis points" }), { target: { value: "4.5" } });
@@ -47,14 +47,14 @@ describe("Studio shell controls", () => {
   });
 
   it("opens the shared data inspector from the activity rail", () => {
-    const onToggleData = jest.fn();
-    render(<StudioActivityRail settingsOpen={false} onToggleSettings={jest.fn()} dataOpen={false} onToggleData={onToggleData} />);
+    const onToggleData = vi.fn();
+    render(<StudioActivityRail settingsOpen={false} onToggleSettings={vi.fn()} dataOpen={false} onToggleData={onToggleData} />);
     fireEvent.click(screen.getByRole("button", { name: "Toggle data inspector" }));
     expect(onToggleData).toHaveBeenCalledTimes(1);
   });
 
   it("renders governed inventory and reported data-quality fields", async () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     useStudioResultStore.setState((state) => ({ data: { ...state.data, candles: [{ time: 1, open: 1, high: 2, low: 0.5, close: 1.5, volume: 10 }], metadata: { data_quality: { status: "observed", source: "test-source", observations: 1, timezone: "UTC", currency: "USD", calendar: "XNYS", corporate_actions: "unknown", look_ahead_check: "not_verified" }, warnings: [] } } }));
     render(<DataInspectorPanel onClose={onClose} />);
     expect(screen.getAllByText("test-source")).toHaveLength(2);

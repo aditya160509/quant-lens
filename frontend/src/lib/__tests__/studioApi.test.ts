@@ -2,13 +2,13 @@ import { createStudioJob, getStudioJob, recordPromotionAudit, StudioApiError, st
 
 describe('studioRequest', () => {
     beforeEach(() => {
-        global.fetch = jest.fn();
+        global.fetch = vi.fn();
     });
 
-    afterEach(() => jest.restoreAllMocks());
+    afterEach(() => vi.restoreAllMocks());
 
     it('adds the contract version and request ID', async () => {
-        const fetchMock = jest.mocked(global.fetch).mockResolvedValue({
+        const fetchMock = vi.mocked(global.fetch).mockResolvedValue({
             ok: true,
             status: 200,
             json: async () => ({ status: 'success' }),
@@ -24,7 +24,7 @@ describe('studioRequest', () => {
     });
 
     it('normalizes the backend error envelope', async () => {
-        jest.mocked(global.fetch).mockResolvedValue({
+        vi.mocked(global.fetch).mockResolvedValue({
             ok: false,
             status: 422,
             json: async () => ({
@@ -45,7 +45,7 @@ describe('studioRequest', () => {
     });
 
     it('retries retryable GET responses once with the same request identity', async () => {
-        const fetchMock = jest.mocked(global.fetch)
+        const fetchMock = vi.mocked(global.fetch)
             .mockResolvedValueOnce({
                 ok: false,
                 status: 503,
@@ -65,7 +65,7 @@ describe('studioRequest', () => {
     });
 
     it('rejects responses that fail an explicit contract validator', async () => {
-        jest.mocked(global.fetch).mockResolvedValue({
+        vi.mocked(global.fetch).mockResolvedValue({
             ok: true,
             status: 200,
             json: async () => ({ unexpected: true }),
@@ -78,7 +78,7 @@ describe('studioRequest', () => {
 
     it('reports caller cancellation without retrying', async () => {
         const controller = new AbortController();
-        const fetchMock = jest.mocked(global.fetch).mockImplementation(async (_input, init) => {
+        const fetchMock = vi.mocked(global.fetch).mockImplementation(async (_input, init) => {
             controller.abort();
             throw (init?.signal as AbortSignal).reason;
         });
@@ -90,7 +90,7 @@ describe('studioRequest', () => {
     });
 
     it('creates and waits for a durable Studio job', async () => {
-        const fetchMock = jest.mocked(global.fetch)
+        const fetchMock = vi.mocked(global.fetch)
             .mockResolvedValueOnce({
                 ok: true,
                 status: 200,
@@ -109,7 +109,7 @@ describe('studioRequest', () => {
     });
 
     it('retrieves a persisted Studio job by encoded ID', async () => {
-        const fetchMock = jest.mocked(global.fetch).mockResolvedValue({
+        const fetchMock = vi.mocked(global.fetch).mockResolvedValue({
             ok: true,
             status: 200,
             json: async () => ({ status: 'success', job: { job_id: 'run/1', status: 'completed', result: { candles: [] } } }),
@@ -123,13 +123,13 @@ describe('studioRequest', () => {
         class MockEventSource {
             static instance: MockEventSource;
             listeners = new Map<string, (event: MessageEvent) => void>();
-            close = jest.fn();
+            close = vi.fn();
             constructor(public url: string) { MockEventSource.instance = this; }
             addEventListener(name: string, listener: (event: MessageEvent) => void) { this.listeners.set(name, listener); }
             emit(name: string, payload: unknown) { this.listeners.get(name)?.({ type: name, data: JSON.stringify(payload) } as MessageEvent); }
         }
         Object.defineProperty(globalThis, 'EventSource', { configurable: true, value: MockEventSource });
-        jest.mocked(global.fetch).mockResolvedValue({
+        vi.mocked(global.fetch).mockResolvedValue({
             ok: true,
             status: 200,
             json: async () => ({ status: 'success', job: { job_id: 'job-2', status: 'completed', result: { status: 'success', paths: [] } } }),
@@ -149,7 +149,7 @@ describe('studioRequest', () => {
     });
 
     it('records a promotion decision against an encoded durable job ID', async () => {
-        const fetchMock = jest.mocked(global.fetch).mockResolvedValue({ ok: true, status: 200, json: async () => ({ status: 'success', audit: { audit_id: 'audit-1' } }) } as Response);
+        const fetchMock = vi.mocked(global.fetch).mockResolvedValue({ ok: true, status: 200, json: async () => ({ status: 'success', audit: { audit_id: 'audit-1' } }) } as Response);
 
         await recordPromotionAudit('job/3', { action: 'override', actor: 'risk', rationale: 'Approved exception' });
 

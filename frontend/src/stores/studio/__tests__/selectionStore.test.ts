@@ -2,9 +2,9 @@ import { useStudioSelectionStore } from '../selectionStore';
 
 describe('useStudioSelectionStore', () => {
     beforeEach(() => {
-        jest.mocked(window.localStorage.getItem).mockReset();
-        jest.mocked(window.localStorage.setItem).mockReset();
-        jest.mocked(window.localStorage.removeItem).mockReset();
+        vi.mocked(window.localStorage.getItem).mockReset();
+        vi.mocked(window.localStorage.setItem).mockReset();
+        vi.mocked(window.localStorage.removeItem).mockReset();
         useStudioSelectionStore.getState().resetSelections();
     });
 
@@ -22,7 +22,7 @@ describe('useStudioSelectionStore', () => {
     });
 
     it('ignores malformed persisted selection data during hydration', () => {
-        jest.mocked(window.localStorage.getItem).mockImplementation((key) => {
+        vi.mocked(window.localStorage.getItem).mockImplementation((key) => {
             if (key === 'sovereign_studio_drawings') return '{bad json';
             if (key === 'sovereign_studio_selected_patterns') return '["doji"]';
             return '{}';

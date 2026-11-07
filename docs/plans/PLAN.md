@@ -2,6 +2,22 @@
 
 The single forward plan. Progress lives in [CHECKLIST.md](CHECKLIST.md). Updated 2026-11-06.
 
+## 0. Use now
+
+| Job | Command or tool |
+|---|---|
+| Frontend packages | `pnpm` (npm is gone) |
+| Types | `pnpm typecheck` (tsrs); `pnpm typecheck:ref` (TypeScript 7) |
+| Lint, format | `pnpm lint` (oxlint), `pnpm format` (oxfmt) |
+| Web tests | `pnpm test` (Vitest); `pnpm test:e2e:labs` (Playwright) |
+| All web checks | `pnpm check` |
+| Web gates | `pnpm knip`, `pnpm dup`, `pnpm size`, `pnpm compiler:check` |
+| Python | `cd backend`, then `uv sync`, `uv run ...` (Python 3.12) |
+| Python checks | `uv run ruff check .`, `uv run pyrefly check app`, `uv run deptry .`, `uv run vulture app --min-confidence 80` |
+| Python tests | `.venv/bin/python -m pytest tests -q -n auto` |
+| Commit hooks | `lefthook install` once |
+| Code search | codebase-memory first; TinyFish for web research |
+
 ## 1. Goal
 
 One quant research platform where every number is real, every result says how far it can be trusted, and every screen matches the ML cinema standard.

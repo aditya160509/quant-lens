@@ -1,5 +1,4 @@
 /**
- * @jest-environment jsdom
  */
 import { setupHiDPI, createResizeObserver } from '../canvas';
 
@@ -18,11 +17,13 @@ describe('canvas HiDPI hardest', () => {
     });
     it('ResizeObserver cleanup disconnects', () => {
         const div = document.createElement('div');
-        const spy = jest.spyOn(global, 'ResizeObserver').mockImplementation(() => ({ observe: jest.fn(), disconnect: jest.fn(), unobserve: jest.fn() }));
+        const disconnect = vi.fn();
+        const original = global.ResizeObserver;
+        global.ResizeObserver = class { observe = vi.fn(); unobserve = vi.fn(); disconnect = disconnect; } as unknown as typeof ResizeObserver;
         const cleanup = createResizeObserver(div, () => {});
         expect(typeof cleanup).toBe('function');
         cleanup();
-        expect(spy.mock.results[0].value.disconnect).toHaveBeenCalled();
-        spy.mockRestore();
+        expect(disconnect).toHaveBeenCalled();
+        global.ResizeObserver = original;
     });
 });

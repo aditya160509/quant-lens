@@ -1,5 +1,4 @@
 /**
- * @jest-environment jsdom
  */
 import React from 'react';
 import { render } from '@testing-library/react';
@@ -8,8 +7,8 @@ import { exportCanvasToPNG } from '../canvas';
 describe('a11y hardest', () => {
     it('export creates download link with correct MIME', () => {
         const canvas = document.createElement('canvas');
-        canvas.toDataURL = jest.fn(() => 'data:image/png;base64,xxx');
-        const createElementSpy = jest.spyOn(document, 'createElement');
+        canvas.toDataURL = vi.fn(() => 'data:image/png;base64,xxx');
+        const createElementSpy = vi.spyOn(document, 'createElement');
         exportCanvasToPNG(canvas, 'test.png');
         expect(canvas.toDataURL).toHaveBeenCalledWith('image/png');
         createElementSpy.mockRestore();

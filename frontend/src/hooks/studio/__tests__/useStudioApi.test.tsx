@@ -22,12 +22,12 @@ function mockResponse(
   { contentType = "application/json", status = 200 }: { contentType?: string; status?: number } = {},
 ): Response {
   return {
-    blob: jest.fn().mockResolvedValue(payload),
-    headers: { get: jest.fn().mockReturnValue(contentType) },
-    json: jest.fn().mockResolvedValue(payload),
+    blob: vi.fn().mockResolvedValue(payload),
+    headers: { get: vi.fn().mockReturnValue(contentType) },
+    json: vi.fn().mockResolvedValue(payload),
     ok: status >= 200 && status < 300,
     status,
-    text: jest.fn().mockResolvedValue(typeof payload === "string" ? payload : JSON.stringify(payload)),
+    text: vi.fn().mockResolvedValue(typeof payload === "string" ? payload : JSON.stringify(payload)),
   } as unknown as Response;
 }
 
@@ -41,7 +41,7 @@ function rejectWhenAborted<T>(request: Deferred<T>, signal?: AbortSignal | null)
 }
 
 describe("useStudioApi", () => {
-  const fetchMock = jest.fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>();
+  const fetchMock = vi.fn<typeof fetch>();
 
   beforeEach(() => {
     fetchMock.mockReset();
@@ -49,7 +49,7 @@ describe("useStudioApi", () => {
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it("serializes JSON requests and exposes the loading-to-success lifecycle", async () => {
@@ -216,7 +216,7 @@ describe("useStudioApi", () => {
   });
 
   it("classifies deadline aborts as timeout failures", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     const pending = deferred<Response>();
     fetchMock.mockImplementation((_url, init) => {
       rejectWhenAborted(pending, init?.signal);
@@ -231,7 +231,7 @@ describe("useStudioApi", () => {
       settled = request.catch((error) => error);
     });
     await act(async () => {
-      jest.advanceTimersByTime(25);
+      vi.advanceTimersByTime(25);
       expect(await settled).toMatchObject({ code: "TIMEOUT", message: "Request timed out", retryable: true });
     });
 

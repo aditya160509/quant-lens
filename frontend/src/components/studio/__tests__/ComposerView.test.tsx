@@ -3,8 +3,8 @@ import ComposerView from '../ComposerView';
 import { useStudioResultStore } from '@/stores/studio/resultStore';
 import { studioRequest } from '@/lib/studioApi';
 
-jest.mock('@/lib/studioApi', () => ({ studioRequest: jest.fn() }));
-const request = studioRequest as jest.Mock;
+vi.mock('@/lib/studioApi', () => ({ studioRequest: vi.fn() }));
+const request = studioRequest as ReturnType<typeof vi.fn>;
 
 describe('ComposerView', () => {
   beforeEach(() => {

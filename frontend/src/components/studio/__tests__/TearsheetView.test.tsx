@@ -13,11 +13,11 @@ const metric = (value: number | null, unit = 'ratio', methodology = 'verified fo
 
 describe('TearsheetView canonical artifact rendering', () => {
     beforeEach(() => {
-        const gradient = { addColorStop: jest.fn() };
-        jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-            fillRect: jest.fn(), setTransform: jest.fn(), beginPath: jest.fn(), moveTo: jest.fn(), lineTo: jest.fn(),
-            closePath: jest.fn(), fill: jest.fn(), stroke: jest.fn(), fillText: jest.fn(), setLineDash: jest.fn(),
-            createLinearGradient: jest.fn(() => gradient),
+        const gradient = { addColorStop: vi.fn() };
+        vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+            fillRect: vi.fn(), setTransform: vi.fn(), beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(),
+            closePath: vi.fn(), fill: vi.fn(), stroke: vi.fn(), fillText: vi.fn(), setLineDash: vi.fn(),
+            createLinearGradient: vi.fn(() => gradient),
         } as unknown as ReturnType<HTMLCanvasElement['getContext']>);
         useStudioWorkspaceStore.setState({ ticker: 'SPY' });
         useStudioResultStore.getState().setData({
@@ -40,7 +40,7 @@ describe('TearsheetView canonical artifact rendering', () => {
         });
     });
 
-    afterEach(() => jest.restoreAllMocks());
+    afterEach(() => vi.restoreAllMocks());
 
     it('shows canonical values, lineage, warnings, and no invented verdict', () => {
         render(<TearsheetView />);

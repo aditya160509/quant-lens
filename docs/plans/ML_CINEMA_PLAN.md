@@ -2,6 +2,44 @@
 
 Date: 2026-10-06. Status marks: [ ] open, [~] in progress, [x] done. Each phase ends at a commit; the plan ends at the tag `ml-design-v1`.
 
+## Status, 2026-11-07
+
+17 items done, 3 partly done, 16 open. Two open items are platform work. The owner is running this plan.
+
+Commands now, from `frontend`: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm test:e2e:labs`. The older `npm` and `jest` commands below are history.
+
+### T3 Code inspection
+
+Commit `257e4073`, MIT licence. Findings from `apps/web`:
+
+- **No charts.** No chart library or chart components are in its web source, so the "in-thread visualisations" named under References are not available to port. Our chart kit stays ours.
+- **Size:** about 1,245 files in `components`, 2,575 lines of CSS and 274 custom properties.
+- **Stack:** Base UI, shadcn `base-mira` style, Tailwind 4, cva, lucide, zustand. We are not on Base UI yet.
+
+| Take | From T3 Code | Use in ML |
+|---|---|---|
+| Dense type | `--text-2xs` 11px, `--text-3xs` 10px | Chart ticks, badges, table meta; replace one-off sizes |
+| Semantic geometry | `--control-radius`, `--floating-content-inset`, `--command-shell-inset` | Controls, popovers and palette stop drifting apart |
+| Radius scale | Base `0.5rem`; sm, md, lg, xl derived | Replaces per-component radii |
+| Status set | `success`, `warning`, `error`, `info`, each with foreground and 8% `surface` via `color-mix` | Verdicts and banners; keep our `--up`, `--down`, regime tokens |
+| Contrast setting | `--appearance-contrast-*` | User contrast control; helps AA |
+| Font settings | Separate interface and code size settings | User font size in the customise panel |
+| Motion | `--ease-drawer` `cubic-bezier(0.32, 0.72, 0, 1)` | Panels and popovers |
+| Skeleton | One stepped opacity pulse, in block, card and pill shapes | Cheap skeletons shaped like exhibits |
+| Button sizes | `micro`, `xs`, `sm`, `compact`, icon sizes, taller on touch | One control set for exhibit tools |
+| Control depth | `inset-shadow-control-highlight` and `pressed` | Primary buttons |
+| Layer order | `--z-sheet` and documented layers | Stops overlay clashes |
+| Scrollbar | `--app-scrollbar-*`, 6px | Tables and rails |
+| Layout | `--workspace-gutter`, safe-area insets, 52px top bar | Shell and phone |
+
+Components worth porting: `ui/` set (`button`, `menu`, `combobox`, `autocomplete`, `number-field`, `toggle-group`, `sheet`, `sidebar`, `empty`, `skeleton`, `toast`, `kbd`, `scroll-area`, `table`, `middle-truncate`), `CommandPalette*`, `RightPanelSheet`, `RightPanelTabs`, `WorkspacePageHeader`, `WorkspaceBreadcrumb`, `AnimatedHeight`, `RelativeTime`, `RenderErrorBoundary`, `AppearanceSettingsPanel`.
+
+Skip: composer, git, terminal, provider, auth and desktop code. Keep our blue-led palette and Geist unless the font test says otherwise. Copied code keeps its notice in `THIRD_PARTY.md`.
+
+Add to the open work: move shared controls to the ported Base UI set, and adopt the tokens above in `workspace.css`.
+
+---
+
 **Scope:** every page, output, table, control and state in the Machine learning lab (`/ml`). Research gets the same system afterwards (Phase 9).
 
 **References**

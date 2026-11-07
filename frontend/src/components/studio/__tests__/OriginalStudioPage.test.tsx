@@ -2,20 +2,20 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import OriginalStudioPage from "../OriginalStudioPage";
 import { useStudioWorkspaceStore } from "@/stores/studio/workspaceStore";
 
-const replace = jest.fn();
+const replace = vi.fn();
 const router = { replace };
-const setActiveTab = jest.fn();
+const setActiveTab = vi.fn();
 let query = "";
 
-jest.mock("next/navigation", () => ({
+vi.mock("next/navigation", () => ({
   usePathname: () => "/studio",
   useRouter: () => router,
   useSearchParams: () => new URLSearchParams(query),
 }));
-jest.mock("../StudioStore", () => ({
+vi.mock("../StudioStore", () => ({
   StudioProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock("../StudioLayout", () => ({
+vi.mock("../StudioLayout", () => ({
   __esModule: true,
   default: () => <main data-testid="original-studio-layout">Develop workspace</main>,
 }));
