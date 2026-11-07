@@ -3,10 +3,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
+
 @pytest.fixture
 def local_market(monkeypatch):
-    from app.services.ml_v2.core import data_loader
     import importlib
+
+    from app.services.ml_v2.core import data_loader
     rng = np.random.default_rng(77)
     dates = pd.bdate_range("2022-01-03", periods=380)
     symbols = [f"T{i}" for i in range(8)]
@@ -32,6 +34,7 @@ def local_market(monkeypatch):
 @pytest.mark.parametrize("feature", ["01", "02", "03", "04", "05", "06"])
 def test_feature_runs_on_local_observations(local_market, feature):
     import json
+
     from app.services.ml_v2.registry import run_feature
     payload = {"symbols":local_market,"max_symbols":8,"lookback_days":380}
     payload.update({"01":{"model_type":"ridge","cpcv_n_groups":4},"02":{"model_family":"ridge"},
@@ -58,6 +61,8 @@ def test_alpha_controls_exact_contributions_formulas_and_artifact(local_market):
     stored = get_artifact(result["meta"]["artifact_id"])
     assert set(stored["predictions"]) == set(local_market)
     assert {row["weighting"] for row in result["tables"]["decile_summary"]} == {"equal", "value"}
+    predictions = result["tables"]["current_predictions"]
+    assert predictions and all(isinstance(r["spark"], list) and 2 <= len(r["spark"]) <= 22 for r in predictions)
     monitoring = result["meta"]["monitoring"]
     assert isinstance(monitoring["retrain_recommended"], bool)
     assert all(r["drift"] >= 0 and r["flag"] == (r["drift"] > monitoring["drift_threshold_sd"]) for r in result["tables"]["feature_drift"])

@@ -13,11 +13,39 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [x] Heat table, Distribution, Scatter v2, Waterfall v2, Dendrogram linking
 - [x] Live overview tiles and pipeline diagram
 - [ ] Fresh design pass
-- [x] `DataTable v2`
-- [x] Quick-look drawer
-- [x] One token source
-- [x] Shared tooltip and legend
-- [x] ML leftovers: Study panel, Inspect panel, Compare mode, empty and error states, accessibility
+
+## Phase 0: Foundation (deferred)
+- [x] Remove v1 pages, legacy services and routers
+- [x] Remove trades, Sovereign, CLI and auth
+- [x] Organize docs
+- [x] Python 3.12 with uv
+- [x] Backend tests green (673 passed, 13 skipped, about 50s in parallel)
+- [x] pnpm 12
+- [x] tsrs and TypeScript 7
+- [x] oxlint and oxfmt, remove ESLint (2026-11-07: about 990 warnings backlog; no bulk format yet)
+- [x] Vitest, remove Jest
+- [x] Pyrefly, deptry, vulture, pip-audit
+- [x] pytest-xdist (130s to about 50s)
+- [x] knip, jscpd, size-limit (duplication 11.6%, above the 5% target)
+- [x] lefthook with gitleaks
+- [x] `THIRD_PARTY.md`
+- [ ] Replace BEA, BLS, EIA, FRED and QuickStats keys (owner)
+- [ ] Choose history rewrite or keep (owner), then make repo public
+- [x] Measure launch memory: about 1.6 GB with 5 pages compiled (plain requests; confirm in a browser)
+- [x] Playwright: research spec run without the backend. Baselines refreshed for the six stale screenshots (signal dark/light, cinema 375/1440). Remaining failures are pages that need live results (`/research/canonical`, `/ml/cpcv`, `/ml/validate`); rerun with the backend up.
+- [x] Remove `@supabase` and other unused npm packages
+
+## Shared kit (with Step 2)
+- [ ] Port T3 Code shell components
+- [ ] Research the best open source option for each kit component
+- [ ] `Exhibit`
+- [ ] `KpiStrip`
+- [ ] `RankList` in all modules
+- [ ] `DataTable v2`
+- [ ] Quick-look drawer
+- [ ] One token source
+- [ ] Shared tooltip and legend
+- [ ] ML leftovers: Study panel, Inspect panel, Compare mode, empty and error states, accessibility
 
 ## Planning
 - [ ] Agree the product position

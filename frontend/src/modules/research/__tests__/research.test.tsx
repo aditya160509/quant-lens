@@ -1,7 +1,7 @@
 import { CalendarHeatmap } from "@/charts/CalendarHeatmap";
 import { Dumbbell } from "@/charts/Dumbbell";
 import { Heatmap } from "@/charts/Heatmap";
-import { RankList } from "@/charts/RankList";
+import { RankList, Spark } from "@/charts/RankList";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { verdictFor } from "../layouts";
 import { specTitle } from "../format";
@@ -105,13 +105,12 @@ describe("ranked contributions", () => {
     expect(screen.queryByText("invalid")).not.toBeInTheDocument();
   });
 
-  it("draws an optional trend beside the value without hiding the value", () => {
-    const { container } = render(<RankList title="Drivers" format={String} items={[
-      { label: "momentum/score", value: 3, spark: [1, 2, 1.5, 3] },
-      { label: "value/score", value: 2 },
-    ]} />);
-    expect(container.querySelectorAll(".rank-spark")).toHaveLength(1);
-    expect(screen.getByText("3")).toBeInTheDocument();
+  it("draws a trend from finite samples and survives gaps", () => {
+    const { container } = render(<Spark values={[1, Number.NaN, 2, Number.POSITIVE_INFINITY, 3]} />);
+    const line = container.querySelector("polyline");
+    expect(line).not.toBeNull();
+    expect(line?.getAttribute("points")).not.toMatch(/NaN|Infinity/);
+    expect(line?.getAttribute("points")?.split(" ")).toHaveLength(3);
   });
 });
 

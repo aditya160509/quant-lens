@@ -193,7 +193,7 @@ Built once and used everywhere. Every primitive takes the same `Frame` props (ti
   - grouped and stacked variants
   - highlight the item under test
   - sorted by default
-- [x] **RankList:** mono label with bold leaf, thin bar, right-aligned value, optional sparkline and delta, top-N plus "show all". *(sparkline added 2026-11-07; `spark` is decorative, the exact value stays printed)*
+- [x] **RankList:** mono label with bold leaf, thin bar, right-aligned value, optional delta, top-N plus "show all". *(shared `Spark` trend primitive used by the ML ranking table and Today board; the exact value stays printed)*
 - [x] **Dumbbell and Slope:** model vs control, before vs after, in-sample vs out-of-sample. *(Dumbbell with per-row or shared scale: sizing, regime filter, holding risk)*
 - [x] **Distribution:** strip, box, ridge and histogram with a marker for "you are here" and percentile bands (Sharpe paths, bootstrap, shuffled, Monte Carlo). *(central-90% band, keyboard bins, exact tail share)*
 - [x] **Heat table:** matrix with sequential or diverging ramp, row and column sort, totals row, "fewer ▢▢▢ more" legend, numbers shown only when they fit. *(`Heatmap`: sort by row or column, totals opt-in, per-row margin, outline, highlight, grouped headers)*

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { CalendarHeatmap } from "@/charts/CalendarHeatmap";
+import { Spark } from "@/charts/RankList";
 import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { latestRun, useJob } from "@/modules/research/api";
@@ -13,19 +14,6 @@ import { verdictOf } from "./validateViews";
 type Row = Record<string, unknown>;
 const n = (v: unknown) => (isNum(v) ? v : null);
 const pct = (v: number, d = 1) => `${(v * 100).toFixed(d)}%`;
-
-/** A tiny trend line, scaled to its own range. */
-function Spark({ values, color = "var(--accent)", w = 120, h = 28 }: { values: number[]; color?: string; w?: number; h?: number }) {
-  if (values.length < 2) return null;
-  const lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;
-  const pts = values.map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - 2 - ((v - lo) / span) * (h - 4)).toFixed(1)}`);
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden className="today-spark">
-      <polyline points={pts.join(" ")} fill="none" stroke={color} strokeWidth={1.4} strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={w} cy={pts[pts.length - 1].split(",")[1]} r={2.2} fill={color} />
-    </svg>
-  );
-}
 
 function Tile({ id, label, run, span = 4, children }: { id: string; label: string; run?: RunRecord; span?: number; children: (r: FeatureResult) => ReactNode }) {
   const job = useJob(run?.status === "completed" ? run.jobId : null);
@@ -68,8 +56,11 @@ export function TodayBoard({ features, runs }: { features: FeatureSpec[]; runs: 
           {(r) => {
             const rows = [...out(r, "current_predictions")].filter((x) => isNum(x.prediction)).sort((a, b) => (b.prediction as number) - (a.prediction as number)).slice(0, 5);
             const max = Math.max(...rows.map((x) => Math.abs(x.prediction as number)), 1e-9);
-            const icKey = Object.keys(out(r, "rolling_monthly_ic_series")[0] ?? {}).find((k) => /ic/i.test(k) && isNum(out(r, "rolling_monthly_ic_series")[0][k]));
-            const ic = icKey ? out(r, "rolling_monthly_ic_series").map((x) => n(x[icKey])).filter((v): v is number => v !== null) : [];
+            const monthly = out(r, "rolling_monthly_ic_series");
+            const first = monthly[0] ?? {};
+            const icKey = ["rolling_ic", "ic", "monthly_ic"].find((k) => isNum(first[k]))
+              ?? Object.keys(first).find((k) => /ic/i.test(k) && isNum(first[k]));
+            const ic = icKey ? monthly.map((x) => n(x[icKey])).filter((v): v is number => v !== null) : [];
             return (
               <>
                 <ol className="today-rank">
@@ -81,7 +72,7 @@ export function TodayBoard({ features, runs }: { features: FeatureSpec[]; runs: 
                     </li>
                   ))}
                 </ol>
-                {ic.length > 1 ? <span className="today-cap" style={{ display: "flex", alignItems: "center", gap: 8 }}>Ranking IC <Spark values={ic} color={ic[ic.length - 1] >= 0 ? "var(--up)" : "var(--down)"} w={110} h={20} /></span> : null}
+                {ic.length > 1 ? <span className="today-cap" style={{ display: "flex", alignItems: "center", gap: 8 }}>Ranking IC <Spark values={ic} color={ic[ic.length - 1] >= 0 ? "var(--up)" : "var(--down)"} width={110} height={20} className="today-spark" /></span> : null}
               </>
             );
           }}
@@ -99,7 +90,7 @@ export function TodayBoard({ features, runs }: { features: FeatureSpec[]; runs: 
               <>
                 <span className="today-big" style={{ color: tone }}>{name}</span>
                 <span className="today-cap">{p !== null ? `${pct(p, 0)} probability` : ""}{cur?.date ? ` · ${String(cur.date)}` : ""}</span>
-                <Spark values={hist} color={tone} w={180} />
+                <Spark values={hist} color={tone} width={180} height={28} dot className="today-spark" />
               </>
             );
           }}
@@ -114,7 +105,7 @@ export function TodayBoard({ features, runs }: { features: FeatureSpec[]; runs: 
                 <div><span>{String(t.asset)} · next month vol</span><b className="num">{isNum(t.vol_21d) ? pct(t.vol_21d, 0) : "–"}</b></div>
                 <div><span>1-day 99% VaR</span><b className="num">{isNum(t.var_99) ? pct(t.var_99, 1) : "–"}</b></div>
                 <div><span>Size for target risk</span><b className="num">{isNum(t.size_multiple) ? `${t.size_multiple.toFixed(2)}×` : "–"}</b></div>
-                <div><span>Stress probability, 6 months</span><Spark values={stress} color="var(--stress)" w={150} /></div>
+                <div><span>Stress probability, 6 months</span><Spark values={stress} color="var(--stress)" width={150} height={28} className="today-spark" /></div>
               </div>
             );
           }}
