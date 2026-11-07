@@ -209,7 +209,7 @@ function TimeSeriesImpl({
   const legendSeries = paths.filter((p) => !p.s.muted);
   const visibleSeries = legendSeries.filter((p) => !hidden.has(p.s.key));
   const lastRow = visible[visible.length - 1];
-  const legendItems = legend && !directLabels && legendSeries.length > 1
+  const legendItems = legend && (directLabels ? legendSeries.length > 6 : legendSeries.length > 1)
     ? legendSeries.map((p) => ({ id: p.s.key, hidden: hidden.has(p.s.key), label: p.s.label, color: p.color, dash: p.s.dash, value: (() => { const v = num((hovered ?? lastRow)?.r[p.s.key]); return v === null ? undefined : format(v); })() }))
     : null;
 

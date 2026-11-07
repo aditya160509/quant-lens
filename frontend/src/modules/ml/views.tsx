@@ -6,6 +6,7 @@ import { CalendarHeatmap } from "@/charts/CalendarHeatmap";
 import { useSelection } from "@/modules/research/selection";
 import { Bars } from "@/charts/Bars";
 import { Beeswarm } from "@/charts/Beeswarm";
+import { Spark } from "@/charts/RankList";
 import { Dendrogram, leafOrder, type Merge } from "@/charts/Dendrogram";
 import { Distribution } from "@/charts/Distribution";
 import { Diverging } from "@/charts/Diverging";
@@ -282,7 +283,7 @@ export function MlRankTable({ rows, result, scope }: ViewProps) {
             <span className="num">{i + 1}</span>
             <b>{str(r.ticker)}</b>
             <span className="muted">{str(r.sector)}</span>
-            <span className="ml-rank-cell"><em className="num" style={{ color: p >= 0 ? "var(--up)" : "var(--down)" }}>{pctFmt(p)}</em><span className="ml-rank-bar"><i style={{ width: `${(Math.abs(p) / maxAbs) * 50}%`, [p >= 0 ? "left" : "right"]: "50%", background: p >= 0 ? "var(--up)" : "var(--down)" }} /></span></span>
+            <span className="ml-rank-cell"><em className="num" style={{ color: p >= 0 ? "var(--up)" : "var(--down)" }}>{pctFmt(p)}</em><span className="ml-rank-bar"><i style={{ width: `${(Math.abs(p) / maxAbs) * 50}%`, [p >= 0 ? "left" : "right"]: "50%", background: p >= 0 ? "var(--up)" : "var(--down)" }} /></span>{Array.isArray(r.spark) && r.spark.length > 1 ? <Spark values={r.spark as number[]} /> : null}</span>
             <span className="ml-drivers">{d.map((x) => <span key={str(x.feature)} className={(x.shap_value as number) >= 0 ? "up" : "down"}>{label(str(x.feature))}</span>)}</span>
           </div>
         );

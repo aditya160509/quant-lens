@@ -104,6 +104,15 @@ describe("ranked contributions", () => {
     expect(screen.getByText("small")).toBeInTheDocument();
     expect(screen.queryByText("invalid")).not.toBeInTheDocument();
   });
+
+  it("draws an optional trend beside the value without hiding the value", () => {
+    const { container } = render(<RankList title="Drivers" format={String} items={[
+      { label: "momentum/score", value: 3, spark: [1, 2, 1.5, 3] },
+      { label: "value/score", value: 2 },
+    ]} />);
+    expect(container.querySelectorAll(".rank-spark")).toHaveLength(1);
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
 });
 
 

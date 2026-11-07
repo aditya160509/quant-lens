@@ -60,6 +60,7 @@
 .rank-track, .rank-track > i { display: block; height: 2px; }
 .rank-track { background: var(--line); margin-top: 8px; }
 .rank-value { text-align: right; }
+.rank-spark { display: block; margin: 0 0 4px auto; overflow: visible; }
 .treemap-chart g[role="button"] { cursor: pointer; }
 .treemap-chart g[role="button"]:focus-visible { outline: none; }
 .treemap-chart g[role="button"]:focus-visible rect { stroke: var(--accent); stroke-width: 3; }

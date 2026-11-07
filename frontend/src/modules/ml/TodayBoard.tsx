@@ -68,16 +68,21 @@ export function TodayBoard({ features, runs }: { features: FeatureSpec[]; runs: 
           {(r) => {
             const rows = [...out(r, "current_predictions")].filter((x) => isNum(x.prediction)).sort((a, b) => (b.prediction as number) - (a.prediction as number)).slice(0, 5);
             const max = Math.max(...rows.map((x) => Math.abs(x.prediction as number)), 1e-9);
+            const icKey = Object.keys(out(r, "rolling_monthly_ic_series")[0] ?? {}).find((k) => /ic/i.test(k) && isNum(out(r, "rolling_monthly_ic_series")[0][k]));
+            const ic = icKey ? out(r, "rolling_monthly_ic_series").map((x) => n(x[icKey])).filter((v): v is number => v !== null) : [];
             return (
-              <ol className="today-rank">
-                {rows.map((x, i) => (
-                  <li key={String(x.ticker)}>
-                    <span className="num">{i + 1}</span><b>{String(x.ticker)}</b>
-                    <i style={{ width: `${(Math.abs(x.prediction as number) / max) * 100}%` }} />
-                    <span className="num">{pct(x.prediction as number, 2)}</span>
-                  </li>
-                ))}
-              </ol>
+              <>
+                <ol className="today-rank">
+                  {rows.map((x, i) => (
+                    <li key={String(x.ticker)}>
+                      <span className="num">{i + 1}</span><b>{String(x.ticker)}</b>
+                      <i style={{ width: `${(Math.abs(x.prediction as number) / max) * 100}%` }} />
+                      <span className="num">{pct(x.prediction as number, 2)}</span>
+                    </li>
+                  ))}
+                </ol>
+                {ic.length > 1 ? <span className="today-cap" style={{ display: "flex", alignItems: "center", gap: 8 }}>Ranking IC <Spark values={ic} color={ic[ic.length - 1] >= 0 ? "var(--up)" : "var(--down)"} w={110} h={20} /></span> : null}
+              </>
             );
           }}
         </Tile>

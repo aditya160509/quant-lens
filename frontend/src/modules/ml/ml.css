@@ -40,7 +40,8 @@
 .ml-rank-bar { position: relative; height: 18px; }
 .ml-rank-bar::before { content: ""; position: absolute; left: 50%; top: 2px; bottom: 2px; width: 1px; background: var(--line-3); }
 .ml-rank-bar i { position: absolute; top: 4px; height: 10px; border-radius: 2px; opacity: 0.85; }
-.ml-rank-cell { display: grid; grid-template-columns: 52px 1fr; gap: 8px; align-items: center; min-width: 0; }
+.ml-rank-cell { display: grid; grid-template-columns: 52px minmax(0, 1fr) 56px; gap: 8px; align-items: center; min-width: 0; }
+.ml-rank-cell .rank-spark { margin: 0; }
 .ml-rank-cell em { font-style: normal; font-size: 11.5px; text-align: right; }
 .ml-drivers { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .ml-drivers span { font-size: 10.5px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }

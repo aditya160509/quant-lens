@@ -1,13 +1,23 @@
 """Cross-sectional alpha: LightGBM and Ridge on rank-scaled features, controls beside the model, exact attributions."""
 from __future__ import annotations
+
 import ast
 import re
 from typing import Any
+
 import numpy as np
 import pandas as pd
 from scipy.stats import wasserstein_distance
 from sklearn.linear_model import LinearRegression, Ridge
-from .common import build_provenance, compact_records, put_artifact, report_progress, response, summary
+
+from .common import (
+    build_provenance,
+    compact_records,
+    put_artifact,
+    report_progress,
+    response,
+    summary,
+)
 from .composite import daily_ic_table
 from .data_loader import point_in_time_fundamentals, universe_label
 from .estimators import rolling_monthly_ic
@@ -134,7 +144,7 @@ def build_alpha_panel(ctx, horizon: int, formulas, upload_id) -> tuple[pd.DataFr
     if upload_id:
         for name, values in _uploaded_features(upload_id, panel).items():
             panel[name] = values
-    custom = [c for c in panel.columns if c.startswith("f_") or c.startswith("u_")]
+    custom = [c for c in panel.columns if c.startswith(("f_", "u_"))]
     columns = [c for c in FEATURE_FAMILY if c in panel.columns] + custom
     return panel, columns
 
@@ -497,6 +507,16 @@ def run_gbt_alpha(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     current = live_all.loc[latest_mask, ["date", "ticker", "sector"]].reset_index(drop=True)
     current["prediction"] = score
     current["rank"] = current["prediction"].rank(ascending=False, method="first").astype(int)
+    # Recent price path per name: the last 63 sessions, sampled to at most 22 points so the
+    # ranking payload stays small. Shape only; the table prints the exact score.
+    recent = ctx.closes.tail(63).reindex(columns=current["ticker"])
+    if len(recent) > 22:
+        recent = recent.iloc[np.unique(np.round(np.linspace(0, len(recent) - 1, 22)).astype(int))]
+    sparks = {}
+    for ticker in current["ticker"]:
+        series = recent[ticker].dropna()
+        sparks[ticker] = [round(float(v), 4) for v in series.tolist()] if len(series) >= 2 else []
+    current["spark"] = current["ticker"].map(sparks)
     order = current.sort_values("rank").index.to_numpy()
     cap = max(1, min(int(request.get("exact_shap_cap", 64)), len(current)))
     sample = order[np.unique(np.round(np.linspace(0, len(order) - 1, cap)).astype(int))]

@@ -4,7 +4,7 @@ Date: 2026-10-06. Status marks: [ ] open, [~] in progress, [x] done. Each phase 
 
 ## Status, 2026-11-07
 
-17 items done, 3 partly done, 16 open. Two open items are platform work. The owner is running this plan.
+27 items done, 0 partly done, 3 open. The three open items are the platform port and shared-kit work in Phase 12, plus the Base UI control migration. The owner is running this plan.
 
 Commands now, from `frontend`: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm test:e2e:labs`. The older `npm` and `jest` commands below are history.
 
@@ -193,18 +193,18 @@ Built once and used everywhere. Every primitive takes the same `Frame` props (ti
   - grouped and stacked variants
   - highlight the item under test
   - sorted by default
-- [~] **RankList:** mono label with bold leaf, thin bar, right-aligned value, optional sparkline and delta, top-N plus "show all".
+- [x] **RankList:** mono label with bold leaf, thin bar, right-aligned value, optional sparkline and delta, top-N plus "show all". *(sparkline added 2026-11-07; `spark` is decorative, the exact value stays printed)*
 - [x] **Dumbbell and Slope:** model vs control, before vs after, in-sample vs out-of-sample. *(Dumbbell with per-row or shared scale: sizing, regime filter, holding risk)*
-- [ ] **Distribution:** strip, box, ridge and histogram with a marker for "you are here" and percentile bands (Sharpe paths, bootstrap, shuffled, Monte Carlo).
-- [ ] **Heat table:** matrix with sequential or diverging ramp, row and column sort, totals row, "fewer ▢▢▢ more" legend, numbers shown only when they fit.
-- [~] **Calendar heatmap:** month × year (IC by month, returns, VaR breaches) and weekday × time.
-- [~] **Treemap:** zoom with breadcrumb and right-click or Esc to zoom out, mode toggles (size by weight or risk, colour by return, IC or drift), labels when they fit.
-- [ ] **Scatter v2:** binned calibration line, diagonal, density hexbin above 2k points, lasso to a selection.
-- [ ] **Waterfall v2:** base, contributions, prediction, grouped "n other features", click a bar to see that feature's distribution.
-- [ ] **Dendrogram and correlation map:** linked hover (a leaf highlights its row and column), cut-height slider that colours clusters.
+- [x] **Distribution:** strip, box, ridge and histogram with a marker for "you are here" and percentile bands (Sharpe paths, bootstrap, shuffled, Monte Carlo). *(central-90% band, keyboard bins, exact tail share)*
+- [x] **Heat table:** matrix with sequential or diverging ramp, row and column sort, totals row, "fewer ▢▢▢ more" legend, numbers shown only when they fit. *(`Heatmap`: sort by row or column, totals opt-in, per-row margin, outline, highlight, grouped headers)*
+- [x] **Calendar heatmap:** month × year (IC by month, returns, VaR breaches) and weekday × time. *(`hourly` lens, missing months explicit, accessible data table)*
+- [x] **Treemap:** zoom with breadcrumb and right-click or Esc to zoom out, mode toggles (size by weight or risk, colour by return, IC or drift), labels when they fit. *(`colorModes` and sequential/diverging scales added; allocation exposes risk and risk-minus-weight)*
+- [x] **Scatter v2:** binned calibration line, diagonal, density hexbin above 2k points, lasso to a selection. *(`lines` carry binned calibration; diagonal, hexbin and lasso in `XYPlot`)*
+- [x] **Waterfall v2:** base, contributions, prediction, grouped "n other features", click a bar to see that feature's distribution. *(`onSelect` drives the SHAP feature-distribution panel)*
+- [x] **Dendrogram and correlation map:** linked hover (a leaf highlights its row and column), cut-height slider that colours clusters. *(`CorrMap` shares leaf hover and keyboard navigation with the tree)*
 - [x] **Sparkline and KPI tile:** big number, caption, delta vs previous run, tiny trend. *(KPI strip with change since the previous run; sparklines on the Today board)*
-- [ ] **Readout (tooltip):** one spec everywhere (title line; rows sorted by value; swatch, name, right-aligned value; optional total), positioned to avoid the cursor, keyboard accessible.
-- [ ] **Legend:** only when there are more than 6 series. Clicking isolates a series; shift-click adds it.
+- [x] **Readout (tooltip):** one spec everywhere (title line; rows sorted by value; swatch, name, right-aligned value; optional total), positioned to avoid the cursor, keyboard accessible. *(`core.Readout`/`ReadoutRow` used by every hover chart)*
+- [x] **Legend:** only when there are more than 6 series. Clicking isolates a series; shift-click adds it. *(direct-labelled charts now reveal the legend only past six series)*
 
 **Annotations data contract:** a page-level `events` list (`{date, label, kind}`) is merged from the backend (`meta.events`: refits, regime switches, train/test cut, data gaps) and drawn by every time chart on the page.
 
@@ -250,7 +250,7 @@ Built once and used everywhere. Every primitive takes the same `Frame` props (ti
 The takeaway template is generated from the data. "Lens" means a designed alternative in View as.
 
 ### Overview (`/ml`)
-- [ ] **Hero:** three start tiles exist already. Upgrade them to show live mini-exhibits once runs exist:
+- [x] **Hero:** three start tiles exist already. Upgrade them to show live mini-exhibits once runs exist: *(the Today board replaces the start tiles once a run exists and carries the ranking-IC sparkline, regime pill and verdict stamp)*
   - a sparkline of the ranking's IC
   - today's regime pill
   - the last verdict stamp
@@ -334,7 +334,7 @@ The takeaway template is generated from the data. "Lens" means a designed altern
 - **Alpha views:** slope chart from prior to posterior per name, shown only when views exist.
 
 ### Strategy studio
-- [ ] A pipeline diagram drawn as a live flow (nodes with status, edges carrying artifact ids). Clicking a node opens its page; each node shows its verdict stamp. *(partial: left-to-right flow at ≥1000 px with status per node; edges do not yet carry artifact ids)*
+- [x] A pipeline diagram drawn as a live flow (nodes with status, edges carrying artifact ids). Clicking a node opens its page; each node shows its verdict stamp. *(edges name and show the live artifact id; state per node)*
 - [x] "Run the whole pipeline" button that chains the supported hand-offs, with current-stage progress and run status on the nodes. Alpha feeds Filter and Allocation; Allocation feeds Validate. Size runs independently. Stops on failure, absent artifacts, navigation, or an explicit stop; an already submitted run continues in Runs.
 
 ### Verified page
@@ -346,15 +346,15 @@ The takeaway template is generated from the data. "Lens" means a designed altern
 
 - [x] **Run flow:** the progress bar becomes a stage timeline (Loading data → Features → Training → Validation → Explaining), streamed from the API stages. Skeletons are shaped like the coming exhibits. *(finished stages listed with their durations above the live progress bar)*
 - [x] **Command palette (⌘K) actions:** run page, compare last two, jump to exhibit, open hand-off, publish, export PDF, switch universe preset. *(run page, printable report, jump to any exhibit; compare last two runs already present)*
-- [ ] **Study panel:**
+- [x] **Study panel:**
   - inputs grouped as Data · Model · Costs · Advanced, with live validation
   - preset universes as chips with counts
   - an "Explain this setting" popover for each input
-- [ ] **Inspect panel:** shows the current selection (ticker, model, date, state) with every number about it from all exhibits.
-- [ ] **Compare mode:** two runs side by side and overlaid; a KPI delta strip.
-- [ ] **Empty, error and stale states:** each says why and what to do, with one primary action.
+- [x] **Inspect panel:** shows the current selection (ticker, model, date, state) with every number about it from all exhibits.
+- [x] **Compare mode:** two runs side by side and overlaid; a KPI delta strip. *(Dock compare with A/B overlay and per-metric deltas)*
+- [x] **Empty, error and stale states:** each says why and what to do, with one primary action. *(`Empty` states, unavailable-reason rows, stale-settings chip, expired-result recovery)*
 - [x] **Onboarding:** a 3-step coach on first visit (validate → rank → size), dismissible and remembered.
-- [ ] **Accessibility:**
+- [x] **Accessibility:**
   - every chart gets `role=img` with a generated summary sentence (the takeaway)
   - tables are real tables
   - focus rings visible; colour never the only cue (patterns or labels too)
@@ -381,10 +381,10 @@ The takeaway template is generated from the data. "Lens" means a designed altern
 **Takeaway generators:** `src/modules/ml/takeaways.ts` holds pure functions from a result to a sentence, unit-tested with Jest on fixtures from real runs.
 
 **Backend support (small):**
-- `meta.events` (refits, regime switches, train/test cut)
-- `meta.state_labels` (done)
-- per-run stage names for the progress timeline
-- per-name 63-day sparkline data for the ranking
+- `meta.events` (refits, regime switches, train/test cut) — done; boundaries are added from the run receipt, not inferred.
+- `meta.state_labels` — done.
+- per-run stage names for the progress timeline — done via the job event stream.
+- per-name 63-day sparkline data for the ranking — done; `current_predictions.spark` carries at most 22 sampled closes, rendered beside each score.
 
 **Performance budget**
 - first exhibit painted in under 600 ms after the result arrives
@@ -419,7 +419,7 @@ The takeaway template is generated from the data. "Lens" means a designed altern
 - [x] **Radar:** every model on every metric, outward is better, model under test filled, raw values on hover (Alpha controls, Allocation controls).
 - [x] **Semantic comparator tints:** pink for alternatives, green for related variants, grey for baselines; edged bars as in a printed figure.
 
-**Still open:** hexbin and lasso on scatter, dendrogram linked hover, and a dedicated Slope primitive. Calendar and treemap now have real ML callers; their remaining variants are tracked above.
+**Still open:** the Base UI control migration and the Phase 12 platform port. Hexbin, lasso, linked dendrogram hover, calendar weekday×time and treemap colour modes are now implemented.
 
 
 ## Continuation checkpoint, 2026-10-13

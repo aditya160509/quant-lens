@@ -758,9 +758,17 @@ export function AllocTreemap({ result }: ViewProps) {
   const risks = out(result, "risk_contribution_decomposition");
   const total = risks.reduce((sum, r) => sum + Math.max(0, n(r.risk_contribution) ?? 0), 0);
   const risk = new Map(risks.filter((r) => isNum(r.risk_contribution)).map((r) => [str(r.asset), total > 0 ? Math.max(0, r.risk_contribution as number) / total : undefined]));
-  return <Treemap title="Allocation by sector and name" sizeLabel="Weight" alternativeSizeLabel="Risk share" colorLabel="risk share minus weight" format={(v) => pct(v, 1)} colorFormat={(v) => pct(v, 1)} items={weights.filter((r) => isNum(r.weight)).map((r) => ({ label: str(r.asset), group: str(r.sector) || "Unknown sector", size: r.weight as number, alternativeSize: risk.get(str(r.asset)), colorValue: risk.get(str(r.asset)) === undefined ? undefined : risk.get(str(r.asset))! - (r.weight as number) }))} />;
+  return <Treemap title="Allocation by sector and name" sizeLabel="Weight" alternativeSizeLabel="Risk share" colorModes={[{ key: "risk-minus-weight", label: "Risk minus weight" }, { key: "risk", label: "Risk share" }]} format={(v) => pct(v, 1)} colorFormat={(v) => pct(v, 1)} items={weights.filter((r) => isNum(r.weight)).map((r) => {
+    const share = risk.get(str(r.asset));
+    const weight = r.weight as number;
+    return {
+      label: str(r.asset), group: str(r.sector) || "Unknown sector", size: weight, alternativeSize: share,
+      colorValue: share === undefined ? undefined : share - weight,
+      colors: { risk: share, "risk-minus-weight": share === undefined ? undefined : share - weight },
+    };
+  })} />;
 }
 
 export function ShapTreemap({ result }: ViewProps) {
-  return <Treemap title="Feature contributions by family" sizeLabel="Mean absolute SHAP" format={(v) => pct(v, 2)} items={out(result, "shap_feature_importance").filter((r) => isNum(r.mean_abs_shap)).map((r) => ({ label: label(str(r.feature)), group: label(str(r.family)) || "Unknown family", size: r.mean_abs_shap as number }))} />;
+  return <Treemap title="Feature contributions by family" sizeLabel="Mean absolute SHAP" colorLabel="Mean absolute SHAP" colorScale="sequential" format={(v) => pct(v, 2)} colorFormat={(v) => pct(v, 2)} items={out(result, "shap_feature_importance").filter((r) => isNum(r.mean_abs_shap)).map((r) => ({ label: label(str(r.feature)), group: label(str(r.family)) || "Unknown family", size: r.mean_abs_shap as number, colorValue: r.mean_abs_shap as number }))} />;
 }
