@@ -306,3 +306,5 @@ backend/app/studio_v2/storage/strategies/
 
 # Keep frontend source despite the generic lib/ rule
 !frontend/src/lib/
+
+frontend/e2e/output/

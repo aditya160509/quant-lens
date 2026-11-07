@@ -31,8 +31,8 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [x] `THIRD_PARTY.md`
 - [ ] Replace BEA, BLS, EIA, FRED and QuickStats keys (owner)
 - [ ] Choose history rewrite or keep (owner), then make repo public
-- [ ] Measure the 4.6 GB launch per process and fix the top cause
-- [ ] Run Playwright after the cleanup
+- [x] Measure launch memory: about 1.6 GB with 5 pages compiled (plain requests; confirm in a browser)
+- [ ] Playwright: 23 passed, 8 failed, all screenshot differences, with the backend running. Failing: `/ml/cpcv` and `/ml/validate` (dark, light) and the cinema fixture (dark, light, 375, 1440). Likely stale baselines: they still show Sign In, removed modules and the page description, which ML pages now hide (`FeatureView.tsx:146`). Review the images, then run `pnpm exec playwright test --config=e2e/playwright.research.config.ts --update-snapshots`.
 - [x] Remove `@supabase` and other unused npm packages
 
 ## Shared kit (with Step 2)
