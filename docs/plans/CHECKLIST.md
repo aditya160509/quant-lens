@@ -19,13 +19,13 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [x] Remove trades, Sovereign, CLI and auth
 - [x] Organize docs
 - [x] Python 3.12 with uv
-- [ ] Backend tests green (3 fail: stale `category7_macro_regime` manifest entry)
+- [x] Backend tests green (673 passed, 13 skipped, about 50s in parallel)
 - [x] pnpm 12
 - [x] tsrs and TypeScript 7
 - [x] oxlint and oxfmt, remove ESLint (2026-11-07: about 990 warnings backlog; no bulk format yet)
 - [x] Vitest, remove Jest
-- [ ] Pyrefly, deptry, vulture, pip-audit
-- [ ] pytest-xdist, with before and after timings
+- [x] Pyrefly, deptry, vulture, pip-audit
+- [x] pytest-xdist (130s to about 50s)
 - [x] knip, jscpd, size-limit (duplication 11.6%, above the 5% target)
 - [x] lefthook with gitleaks
 - [x] `THIRD_PARTY.md`
