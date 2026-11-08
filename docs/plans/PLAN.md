@@ -1,6 +1,6 @@
 # Plan
 
-The single forward plan. Progress lives in [CHECKLIST.md](CHECKLIST.md). Updated 2026-11-06.
+The single forward plan. Progress lives in [CHECKLIST.md](CHECKLIST.md). Updated 2026-11-08.
 
 ## 0. Use now
 
@@ -179,6 +179,21 @@ Self-host through `next/font`. Numbers always use tabular figures. One screensho
 
 Phase 0 tooling is deferred by the owner. The repo stays private on GitHub.
 
+### Merge order (6a)
+
+From `../architecture/CROSS_MODULE_MERGE_MAP.md`. Each merge needs its golden tests first. The proposed defaults wait for the owner (map section 0).
+
+| Order | Merge | Map steps | Needed by |
+|---|---|---|---|
+| 1 | Chart kit and UI: `Exhibit`, `KpiStrip`, `DataTable v2`, shared `RankList` | 18 | Screener, then every module |
+| 2 | Validation statistics with golden fixtures first: DSR, PBO, purged CV, Monte Carlo into ML Validate | 0 to 4 | Screener Test |
+| 3 | Execution and covariance kernels | 5, 6 | Factors, Volatility, PCA, Portfolio |
+| 4 | Optimisers, risk, HAC and bootstrap, regime filter | 7 to 10 | Factors, Volatility, PCA, Portfolio |
+| 5 | Data, universes, uploads, jobs | 11 to 14 | When a rebuild needs them. Screener needs the data path for India (map decision 16) |
+| 6 | Trial ledger, formula language, scheduler, within Screener | 15 to 17 | Screener Test, Rank, Monitor |
+
+Screener carries merges 1, 2 and 6. Merges 3 to 5 wait for the module that needs them. Proposed defaults, awaiting owner decision: PBO uses ML's form, the Research store owns the trial ledger, deflated Sharpe uses cross-trial variance, HRP uses ward linkage.
+
 ### Step 1: Finish ML (now)
 
 From `ML_CINEMA_PLAN.md`: 17 items done, 3 partly done, 16 open, so about half. Two open items are platform work that belongs to Step 2, which leaves 14 for ML. The ticks may lag the code, so the first task is to check each one.
@@ -196,31 +211,31 @@ Then hill climb: Heat table, Distribution, Scatter v2, Waterfall v2, Dendrogram 
 
 ### Step 2: Screener
 
-First redo `../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md` against the feature rule: Finviz, TradingView, Koyfin, Stock Rover, Portfolio123, Screener.in, Tickertape, Trendlyne, Chartink and others, with what each charges for. The stages below then change to match.
+Spec: `../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md`, redone 2026-11-08 against the feature rule. Sources: `../references/2026-11-screener-competitors.md`. It lists 83 features people pay for in India and globally: 35 exist in the backend, 29 are builds on data we hold, 19 need data we do not have. Twenty items are cut, with reasons.
 
-Current spec: `../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md`. The product is Screen, Rank, Test, Monitor. It wins on the step after the filter, because other screeners stop at a list. Perplexity and Fiscal.ai already offer plain-English screening, so that alone is no edge; proof is.
-
-Only these merge steps are pulled in. The rest of the merge map waits for the module that needs it.
+The product is Screen, Rank, Test, Monitor, plus global search. Other screeners stop at a list. We add trust on every result, why-here, near-miss, proof in one click, a trial counter and alert precision. Plain-English screening is offered by Fiscal.ai, YCharts and TradingView already, so it is parity, not an edge.
 
 | Stage | Build | Merge step used | Tools | Done when |
 |---|---|---|---|---|
 | 2.1 Workspace | `/screener` on `LabConfig`, 4 pages, manifest adapter | None | Current kit | Pages load from the backend manifest |
-| 2.2 Kit | `Exhibit`, `KpiStrip`, `DataTable v2`, shared `RankList` | Step 18 | TanStack | ML uses them too |
-| 2.3 Table | Server sort, page and count; column sets; filter chips with live counts | None | DuckDB | 4,158 names scroll smoothly; no silent cap |
-| 2.4 Formula | One language on `signal_lang`, autocomplete, preview | Step 16, with only the data path it needs | CodeMirror 6 | `core/formula.py` is a thin adapter |
-| 2.5 Trust | Why-here rows and near-miss explorer | None | Funnel data | Each name shows every filter, value and margin |
-| 2.6 Search and quick look | Global search; ticker drawer shared with ML | None | Base UI, cmdk | Any symbol opens from anywhere by keyboard |
-| 2.7 Rank | Composite, weights, waterfall, ML ranker hand-off | None | ML Alpha | Rules and learned ranks compare side by side |
-| 2.8 Test | S5 returns into ML Validate, data banner | Steps 0 to 3 and 15 | ML Validate | One PBO and deflated Sharpe; trials counted |
-| 2.9 Monitor | Schedules, alert rules, precision scoreboard, digest | Step 17 | APScheduler, Apprise | An alert reaches a real channel |
-| 2.10 Extras | Template gallery, plain English to formula | None | LLM call | Output is an editable formula |
+| 2.2 Kit | `Exhibit`, `KpiStrip`, `DataTable v2`, shared `RankList` | Merge 1 (step 18) | TanStack | ML uses them too |
+| 2.3 Table and data | Server sort, page and count; column sets and saved views; filter chips with live counts and coverage; universes, watchlists, country; per-ticker price loader so about 400 Indian names open | Map decision 16 | DuckDB | 4,158 names scroll smoothly; no silent cap; an NSE name screens |
+| 2.4 Formula | One language on `signal_lang`, named custom metrics, autocomplete, preview | Merge 6 (step 16), data path only | CodeMirror 6 | `core/formula.py` is a thin adapter |
+| 2.5 Trust | Trust badges, hatched unknowns, why-here rows, near-miss explorer, evidence badge per filter | None | Funnel data | Each name shows every filter, value and margin |
+| 2.6 Search and quick look | Global search (symbol, name, typo-tolerant; ISIN marked needs data); ticker drawer shared with ML; pros, cons and red flags; one-page report | None | Base UI, cmdk, Typst | Any symbol opens from anywhere by keyboard |
+| 2.7 Rank | Composite, weights, waterfall, template gallery of about 30 formulas, ML ranker hand-off | None | ML Alpha | Rules and learned ranks compare side by side |
+| 2.8 Test | S5 returns into ML Validate, data banner, trial counter, rolling start dates | Merge 2 (steps 0 to 4), merge 6 (step 15) | ML Validate | One PBO and deflated Sharpe; trials counted |
+| 2.9 Monitor | Schedules, alert rules, delivered-alert tracking, precision scoreboard, digest, email, push and webhook | Merge 6 (step 17) | APScheduler, Apprise | An alert reaches a real channel and its outcome is scored |
+| 2.10 Extras | Plain English to formula, API keys, share links | None | LLM call | Output is an editable formula |
 | 2.11 Ship | Verified pages, palette, phone, accessibility, baselines | None | Playwright | Tag `screener-v1` |
 
 Rules for the build:
 
 - Every result prints its limits: 90-day statement lag, survivorship, 2021+ fundamentals.
+- A feature that needs data we lack is marked "needs data" on screen and in the docs. It is not faked. The 19 items and their sources are in the review, section 4.
 - Remove S4 leaderboard, correlation and historical strategy outputs, the S2 factor zoo, and S5 Monte Carlo and PBO duplicates.
-- Open decisions needed before 2.8: PBO convention, trial ledger owner.
+- Open decisions needed before 2.8: PBO convention and trial ledger owner. Needed before 2.3: the India price-store decision.
+- Data purchases (estimates, shareholding, long history, delisted, real-time) are business decisions after launch of `screener-v1`.
 
 ### The module recipe
 
