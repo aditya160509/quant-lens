@@ -22,13 +22,13 @@ The workspace and fast data everything else sits on. E3 M5 H1
 
 - [x] `E` `Exhibit`, `KpiStrip`, `DataTable v2`, `RankList` shared
 - [x] `M` Test-setup type errors fixed, so the commit hook passes
-- [ ] `M` `/screener` on `LabConfig`, four pages from the backend manifest: Screen, Rank, Test, Monitor
-- [ ] `M` Panels close, auto-close and give their space to content
+- [x] `M` `/screener` on `LabConfig`, four pages from the backend manifest: Screen, Rank, Test, Monitor
+- [x] `M` Panels close, auto-close and give their space to content
 - [x] `M` Shared per-ticker price loader; an NSE name screens (9)
-- [ ] `H` Server sort, page and count over DuckDB; no silent cap (48)
-- [ ] `M` 4,158 names scroll smoothly
-- [ ] `E` Result header: count, universe, as-of, updated, data hash
-- [ ] `E` Limits on results, backtests and exports (U10)
+- [x] `H` Every passing name reaches the table, sorted and counted; no silent cap (48). DuckDB waits until rows outgrow the browser
+- [x] `M` 4,158 names scroll smoothly
+- [x] `E` Result header: count, universe, as-of, updated, data hash
+- [ ] `E` Limits on results; backtests and exports next (U10)
 
 ## Batch 2: Core screen
 

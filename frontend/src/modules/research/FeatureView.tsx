@@ -16,6 +16,7 @@ import { isNum, label, num, out } from "./format";
 import { layoutFor, verdictFor, type Item, type Section } from "./layouts";
 import { arrange, cardId, useCardPrefs, useFeaturePrefs } from "./cardPrefs";
 import { KpiStrip } from "@/kit/KpiStrip";
+import { useLayout } from "@/workspace/layout";
 import { OutputCard } from "./OutputCard";
 import type { FeatureRun } from "./ResearchApp";
 import { Control } from "./StudyForm";
@@ -44,6 +45,12 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   const scroller = useRef<HTMLDivElement>(null);
   const hero = useRef<HTMLDivElement>(null);
   const running = RUNNING.has(run.status);
+  // A finished run needs the width more than the form does; the reader can reopen the panel.
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    if (wasRunning.current && !running && run.status === "completed") useLayout.getState().set("right", false, true);
+    wasRunning.current = running;
+  }, [running, run.status]);
   const result = run.result;
   const visible = (s: Section) => (result ? s.items.filter((i) => i.keys.some((k) => out(result, k).length > 0) && !repeatsKpis(result, i)) : s.items);
   const shown = (s: Section) => arrange(visible(s), prefs);

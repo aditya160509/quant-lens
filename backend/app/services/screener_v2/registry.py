@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from importlib import import_module
 from functools import lru_cache
-from typing import Any, Callable
+from importlib import import_module
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -53,12 +54,18 @@ def feature_manifest() -> list[dict[str, Any]]:
             for feature in _build_registry().values()]
 
 
+def hash_versions() -> int:
+    from .core.data_loader import MARKET_UNIVERSE, MASTER_FUNDAMENTALS
+    from .core.performance import _path_version
+    return _path_version(MARKET_UNIVERSE) ^ _path_version(MASTER_FUNDAMENTALS)
+
+
 def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     feature = get_feature(feature_id)
     module = _load(feature.module)
-    runner: Callable[[dict[str, Any] | None], dict[str, Any]] = getattr(module, "run")
-    from .core.data_loader import as_of_context, load_market_ohlcv, default_as_of
+    runner: Callable[[dict[str, Any] | None], dict[str, Any]] = module.run
     from .core.currency import instrument_context
+    from .core.data_loader import as_of_context, default_as_of, load_market_ohlcv
     from .features.inputs import normalize_payload
     payload = normalize_payload(feature.inputs, payload or {})
     import pandas as pd
@@ -77,4 +84,7 @@ def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) ->
         if (payload or {}).get("screen_id"):
             from .core.state import save_run
             save_run(str(payload["screen_id"]), str(result.get("meta", {}).get("as_of_date") or payload.get("as_of_date") or "latest"), result)
+        meta = result.setdefault("meta", {})
+        meta.setdefault("research_caveats", meta.get("limitations", []))
+        meta["data_version"] = format(hash_versions(), "x")[-8:]
         return result

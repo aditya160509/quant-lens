@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
-  Activity, BrainCircuit, ChartNetwork, Command as CommandIcon, FlaskConical, Home, Moon, Orbit, PanelBottom, PanelLeft, PanelRight,
+  Activity, BrainCircuit, ChartNetwork, Command as CommandIcon, FlaskConical, Home, ListFilter, Moon, Orbit, PanelBottom, PanelLeft, PanelRight,
   PieChart, Search, Settings2, SlidersHorizontal, Sun, type LucideIcon,
 } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
@@ -22,6 +22,7 @@ type ModuleLink = { id: string; label: string; href: string; icon: LucideIcon };
 export const MODULES: ModuleLink[] = [
   { id: "research", label: "Research", href: "/research", icon: FlaskConical },
   { id: "ml", label: "Machine learning", href: "/ml", icon: BrainCircuit },
+  { id: "screener", label: "Screener", href: "/screener", icon: ListFilter },
 ];
 
 export type PaletteItem = { id: string; group: string; label: string; icon?: LucideIcon; meta?: string; keywords?: string[]; run: () => void };

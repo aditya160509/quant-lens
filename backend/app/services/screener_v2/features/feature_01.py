@@ -3,20 +3,19 @@
 from __future__ import annotations
 
 from typing import Any
-from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
 import pandas as pd
 
 from ..core.common import access_meta, records, response
-from ..core.screener import apply_filters, heatmap_view, quick_look, top_table
-from ..core.panel import metric_panel
 from ..core.data_loader import parse_symbols
-
+from ..core.panel import metric_panel
+from ..core.screener import apply_filters, heatmap_view, quick_look, top_table
+from .inputs import enrich, filter_inputs, merge_inputs, shared_inputs
 
 FEATURE_ID = "01"
 FEATURE_NAME = "Core Multi-Factor Screener Engine"
 
-INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master', 'description': 'Universe symbols or master universe alias.'}, {'key': 'max_symbols', 'type': 'number', 'default': 500, 'description': 'Maximum symbols loaded from the master universe.'}, {'key': 'lookback_days', 'type': 'number', 'default': 756}, {'key': 'sector', 'type': 'text', 'default': 'all'}, {'key': 'industry_group', 'type': 'text', 'default': 'all'}, {'key': 'market_cap_min', 'type': 'number', 'default': None}, {'key': 'dollar_volume_min', 'type': 'number', 'default': None}, {'key': 'score_min', 'type': 'number', 'default': None}, {'key': 'heatmap_metric', 'type': 'text', 'default': 'core_quant_score'}, {'key': 'include_market_cap_buckets', 'type': 'boolean', 'default': True}]))
+INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master', 'description': 'Universe symbols or master universe alias.'}, {'key': 'top_n', 'type': 'number', 'default': 5000, 'description': 'Rows returned; the default returns every name that passes.'}, {'key': 'max_symbols', 'type': 'number', 'default': 5000, 'description': 'Maximum symbols loaded from the master universe.'}, {'key': 'lookback_days', 'type': 'number', 'default': 756}, {'key': 'sector', 'type': 'text', 'default': 'all'}, {'key': 'industry_group', 'type': 'text', 'default': 'all'}, {'key': 'market_cap_min', 'type': 'number', 'default': None}, {'key': 'dollar_volume_min', 'type': 'number', 'default': None}, {'key': 'score_min', 'type': 'number', 'default': None}, {'key': 'heatmap_metric', 'type': 'text', 'default': 'core_quant_score'}, {'key': 'include_market_cap_buckets', 'type': 'boolean', 'default': True}]))
 
 OUTPUTS = [{'key': 'filter_funnel_waterfall', 'source': 'charts', 'render': 'table', 'primary': True, 'label': 'Filter Funnel Waterfall'}, {'key': 'cross_sectional_percentile_context', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Cross Sectional Percentile Context'}, {'key': 'heatmap_view', 'source': 'charts', 'render': 'heatmap', 'primary': False, 'label': 'Heatmap View'}, {'key': 'quick_look_card', 'source': 'charts', 'render': 'metrics', 'primary': False, 'label': 'Quick Look Card'}, {'key': 'market_cap_bucket_distribution', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Market Cap Bucket Distribution'}, {'key': 'ranked_screener_table', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Ranked Screener Table'}, {'key': 'saved_screens', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Saved Screens'}]
 
