@@ -54,14 +54,14 @@ def statement_snapshots(symbols):
 
 
 def enterprise_claims(frame):
-    """Observed debt, preferred and noncontrolling claims; absent is unknown."""
+    """Debt must be observed; the vendor omits preferred and minority rows when a company has none."""
     debt = pd.to_numeric(_pick(frame, ["Total Debt"]), errors="coerce")
     preferred = pd.to_numeric(_pick(frame, ["Preferred Stock Equity", "Preferred Stock"]), errors="coerce")
     minority = pd.to_numeric(_pick(frame, ["Minority Interest"]), errors="coerce")
     gross = pd.to_numeric(_pick(frame, ["Total Equity Gross Minority Interest"]), errors="coerce")
     equity = pd.to_numeric(_pick(frame, ["Stockholders Equity"]), errors="coerce")
     minority = minority.fillna(gross - equity)
-    return debt + preferred + minority
+    return debt + preferred.fillna(0) + minority.fillna(0)
 
 
 def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = None) -> pd.DataFrame:
@@ -151,7 +151,7 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
     out['quote_currency'] = [specs[symbol].get('quote_currency') for symbol in out.index]
     out['currency_units_unavailable_reason'] = np.where(out.market_cap.notna(), None, 'missing reported ordinary shares, verified financial/quote currency, quote share units, or exact-date FX')
     out["enterprise_value"] = out["market_cap"] + enterprise_claims(df) - cash
-    out["enterprise_value_basis"] = "observed market cap + debt + preferred equity + noncontrolling interests - cash; missing claims remain unknown"
+    out["enterprise_value_basis"] = "observed market cap + debt + preferred equity + noncontrolling interests - cash; missing debt remains unknown, unreported preferred and noncontrolling claims count as zero"
     out["trailing_pe"] = _safe_div(out["market_cap"], net_income.where(net_income > 0))
     out["pb_ratio"] = _safe_div(out["market_cap"], equity_book.where(equity_book > 0))
     out["ps_ratio"] = _safe_div(out["market_cap"], revenue.where(revenue > 0))

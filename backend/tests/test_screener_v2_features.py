@@ -212,12 +212,12 @@ def test_statement_valuation_and_roic_match_independent_numbers(local_data):
     assert row.revenue_growth_yoy == pytest.approx(900 / 800 - 1)
 
 
-def test_missing_claims_are_not_assumed_to_be_zero(local_data):
+def test_missing_debt_leaves_enterprise_value_unknown(local_data):
     import pandas as pd
 
     from app.services.screener_v2.core.data_loader import as_of_context
     from app.services.screener_v2.core.fundamentals import latest_fundamental_features
-    local_data['fund']['Preferred Stock Equity'] = float('nan')
+    local_data['fund']['Total Debt'] = float('nan')
     with as_of_context(local_data['market'].Date.max()):
         row = latest_fundamental_features(['AAA']).iloc[0]
     assert pd.isna(row.enterprise_value)
