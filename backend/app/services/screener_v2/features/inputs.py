@@ -36,6 +36,7 @@ RANGE_FILTERS = {
     'prox52': 'Price to 252-session high', 'high_proximity': 'Return from 252-session high', 'vratio': 'Current volume to mean trailing volume',
     'yang_zhang_vol': '63-session Yang-Zhang volatility scaled to 21 sessions; historical estimate, not a forecast',
     'amihud_percentile': 'Amihud liquidity percentile', 'score': 'Core quant score',
+    'piotroski': 'Piotroski checks passed among those known', 'piotroski_known': 'Piotroski checks with data, 0 to 9', 'altman': 'Altman Z-score',
     'bollinger_width_percentile': 'Trailing Bollinger width percentile', 'prox52_percentile': 'Cross-sectional proximity percentile',
     'ps': 'Price to sales',
     'ev_ebitda': 'Enterprise value to EBITDA',

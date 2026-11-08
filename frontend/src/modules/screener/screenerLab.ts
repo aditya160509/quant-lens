@@ -69,6 +69,7 @@ export const SCREENER_LAB: LabConfig = {
       sections: [
         { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], span: 12, view: "dataTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, hide: RESULT_HIDDEN } }] },
         { id: "funnel", label: "Funnel", items: [{ keys: ["filter_funnel_waterfall"], span: 6 }, { keys: ["market_cap_bucket_distribution"], span: 6 }] },
+        { id: "coverage", label: "Coverage", items: [{ keys: ["metric_coverage"], span: 12, view: "dataTable", opts: { max: 500, maxHeight: 640 } }] },
       ],
     },
   },

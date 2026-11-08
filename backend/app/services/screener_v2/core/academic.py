@@ -1,11 +1,14 @@
 """Screener V2 academic computations."""
 from __future__ import annotations
+
 from typing import Any
+
 import numpy as np
 import pandas as pd
-from .data_loader import fundamental_history
+
 from .common import clean_json, number_like, records
-from .stats import _pick, _safe_div, rank_pct
+from .data_loader import fundamental_history
+from .stats import _pick, rank_pct
 from .validation import point_in_time_scorer, score_backtest
 
 
@@ -64,7 +67,7 @@ def piotroski_criteria_spec(panel: pd.DataFrame, symbols: list[str]) -> pd.DataF
         if "periodType" in hist:
             hist = hist[hist.periodType.eq("annual")]
         hist = hist.sort_values("reportDate").drop_duplicates("reportDate", keep="last") if not hist.empty else hist
-        def values(fields):
+        def values(fields, hist=hist):
             return pd.to_numeric(_pick(hist, fields), errors="coerce")
         assets = values(["Total Assets"])
         beginning = assets.shift(1).where(assets.shift(1) > 0)
@@ -100,6 +103,7 @@ def piotroski_criteria_spec(panel: pd.DataFrame, symbols: list[str]) -> pd.DataF
                 tests[key] = None
         complete = all(value is not None for value in tests.values())
         rows.append({"ticker": symbol, **tests, "piotroski_f_score_spec": sum(tests.values()) if complete else None,
+                     "piotroski_passed": sum(value for value in tests.values() if value is not None) if any(value is not None for value in tests.values()) else None,
                      "piotroski_available_criteria": sum(value is not None for value in tests.values()),
                      "piotroski_missing_criteria": [key for key, value in tests.items() if value is None]})
     return pd.DataFrame(rows)
