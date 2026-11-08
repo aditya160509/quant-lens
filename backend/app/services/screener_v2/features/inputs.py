@@ -37,6 +37,7 @@ RANGE_FILTERS = {
     'yang_zhang_vol': '63-session Yang-Zhang volatility scaled to 21 sessions; historical estimate, not a forecast',
     'amihud_percentile': 'Amihud liquidity percentile', 'score': 'Core quant score',
     'piotroski': 'Piotroski checks passed among those known', 'piotroski_known': 'Piotroski checks with data, 0 to 9', 'altman': 'Altman Z-score',
+    'drawdown': 'Worst peak-to-trough fall over 252 sessions, negative',
     'bollinger_width_percentile': 'Trailing Bollinger width percentile', 'prox52_percentile': 'Cross-sectional proximity percentile',
     'ps': 'Price to sales',
     'ev_ebitda': 'Enterprise value to EBITDA',

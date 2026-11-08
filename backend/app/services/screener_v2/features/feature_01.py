@@ -8,7 +8,7 @@ import pandas as pd
 
 from ..core.academic import academic_strategy_scores
 from ..core.common import access_meta, records, response
-from ..core.data_loader import parse_symbols
+from ..core.data_loader import close_matrix, parse_symbols
 from ..core.panel import metric_panel
 from ..core.screener import apply_filters, heatmap_view, quick_look, top_table
 from .inputs import enrich, filter_inputs, merge_inputs, shared_inputs
@@ -28,6 +28,8 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     dropped = panel.attrs.get("dropped_symbols", [])
     scores = academic_strategy_scores(panel)[["ticker", "piotroski_passed", "piotroski_available_criteria", "altman_z_score"]]
     panel = panel.merge(scores, on="ticker", how="left", validate="one_to_one")
+    closes = close_matrix(symbols, 252)
+    panel["max_drawdown_252d"] = panel["ticker"].map((closes / closes.cummax() - 1).min(skipna=True))
     coverage = [{"metric": name, "known": int(panel[name].notna().sum()), "total": len(panel), "share": float(panel[name].notna().mean())}
                 for name in panel.select_dtypes("number").columns]
     filtered, funnel = apply_filters(panel, payload)

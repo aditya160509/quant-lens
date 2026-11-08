@@ -52,7 +52,7 @@ function headline(r: FeatureResult) {
   return { headline: parts.filter(Boolean).join(" · ") || null, tone: null };
 }
 
-const RESULT_COLUMNS = ["rank", "ticker", "company_name", "sector", "exchange", "price", "market_cap", "core_quant_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile", "trailing_pe", "pb_ratio", "roe", "revenue_growth_yoy", "return_6m", "realized_vol_63d"];
+const RESULT_COLUMNS = ["rank", "ticker", "company_name", "sector", "exchange", "price", "market_cap", "core_quant_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile", "trailing_pe", "pb_ratio", "roe", "revenue_growth_yoy", "return_1d", "return_1m", "return_6m", "realized_vol_63d", "max_drawdown_252d", "piotroski_passed", "altman_z_score"];
 /** Provenance and always-empty fields, kept out of the columns. */
 const RESULT_HIDDEN = ["currency_units_unavailable_reason", "quote_currency", "financial_currency", "market_value_currency", "market_cap_statement_currency", "market_cap_observation_date", "market_cap_basis", "price_observation_date", "valuation_score_definition", "fundamental_basis", "enterprise_value_basis", "beta_effective_source", "beta_252_unavailable_reason", "float_percent", "forward_pe"];
 

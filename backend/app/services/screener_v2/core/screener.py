@@ -103,6 +103,7 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
         ("yang_zhang_vol_21d_estimate", "yang_zhang_vol_min", "yang_zhang_vol_max", "Yang-Zhang trailing volatility estimate"),
         ("amihud_percentile", "amihud_percentile_min", "amihud_percentile_max", "Amihud percentile"),
         ("core_quant_score", "score_min", "score_max", "Quant score"),
+        ("max_drawdown_252d", "drawdown_min", "drawdown_max", "Max drawdown"),
         ("piotroski_passed", "piotroski_min", "piotroski_max", "Piotroski checks passed"),
         ("piotroski_available_criteria", "piotroski_known_min", "piotroski_known_max", "Piotroski checks known"),
         ("altman_z_score", "altman_min", "altman_max", "Altman Z"),
@@ -155,6 +156,7 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
     if payload.get("exclude_negative_pe") and "trailing_pe" in filtered:
         apply("Negative P/E exclusion", pd.to_numeric(filtered["trailing_pe"], errors="coerce") > 0)
     if payload.get("exclude_penny_stocks", True):
+        apply("No USD price on this date", pd.to_numeric(filtered["price_usd"], errors="coerce").notna())
         apply("Penny stock exclusion", pd.to_numeric(filtered["price_usd"], errors="coerce").ge(1.0))
     if payload.get("sma_bullish_only"):
         apply("SMA bullish", pd.to_numeric(filtered.get("sma50_above_sma200", 0), errors="coerce").fillna(0) > 0)
@@ -185,6 +187,9 @@ def top_table(panel: pd.DataFrame, n: int = DEFAULT_TOP_N) -> pd.DataFrame:
         "market_cap",
         "valuation_score_definition",
         "fundamental_basis",
+        "return_1d",
+        "return_1m",
+        "max_drawdown_252d",
         "piotroski_passed",
         "piotroski_available_criteria",
         "altman_z_score",

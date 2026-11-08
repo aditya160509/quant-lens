@@ -43,7 +43,7 @@ A usable screener: every filter, live counts, real table. E18 M8 H1
 - [x] `E` Piotroski F-score (9 checks, unknowns kept) and Altman Z (19)
 - [x] `E` Momentum, 52-week high proximity, SMA distance, cross flags (20)
 - [x] `E` Technicals: RSI, MACD, ADX, stochastic, Bollinger, ATR, OBV (21)
-- [ ] `E` Risk: realised volatility, beta, drawdown, idiosyncratic volatility, max daily return (22)
+- [x] `E` Risk: realised volatility, beta, drawdown, idiosyncratic volatility, max daily return (22)
 - [x] `E` Liquidity: Amihud percentile, volume ratio (23)
 - [x] `E` Percentile versus sector or universe as a filter (24)
 - [ ] `M` Chips with greater, less, between, in, top N, and live counts (37)
