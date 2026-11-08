@@ -75,19 +75,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 
 ## Step 2: Screener
 - [x] Redo product review: full paid feature parity, India and global
-- [ ] Global search
-- [ ] `/screener` on `LabConfig`
-- [ ] Shared kit used by ML and Screener
-- [ ] DuckDB table, filters and counts
-- [ ] CodeMirror formula bar on `signal_lang`
-- [ ] Why-here and near-miss
-- [ ] Quick-look drawer
-- [ ] Rank and ML hand-off
-- [ ] Golden fixtures, one PBO, one deflated Sharpe
-- [ ] Test through ML Validate, with trial ledger
-- [ ] Monitor with APScheduler and Apprise
-- [ ] Templates and plain English to formula
-- [ ] Ship, tag `screener-v1`
+- [ ] Build: see [SCREENER_CHECKLIST.md](SCREENER_CHECKLIST.md); ship and tag `screener-v1`
 
 ## Step 3: Factors
 - [ ] Remove sine sparkline, duplicate keys
