@@ -29,8 +29,8 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [x] knip, jscpd, size-limit (duplication 11.6%, above the 5% target)
 - [x] lefthook with gitleaks
 - [x] `THIRD_PARTY.md`
-- [ ] Replace BEA, BLS, EIA, FRED and QuickStats keys (owner)
-- [ ] Choose history rewrite or keep (owner), then make repo public
+- [x] History rewritten to remove old `.env` and `venv`
+- [ ] Make repo public (owner)
 - [x] Measure launch memory: about 1.6 GB with 5 pages compiled (plain requests; confirm in a browser)
 - [x] Playwright: research spec run without the backend. Baselines refreshed for the six stale screenshots (signal dark/light, cinema 375/1440). Remaining failures are pages that need live results (`/research/canonical`, `/ml/cpcv`, `/ml/validate`); rerun with the backend up.
 - [x] Remove `@supabase` and other unused npm packages
