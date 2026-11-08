@@ -1,5 +1,7 @@
 # Screener checklist
 
+Open-source picks for every batch: [Screener open source](../references/2026-11-screener-open-source.md).
+
 Tick Screener items here only. Spec: [product review](../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md). Stages: [PLAN step 2](PLAN.md). Numbers in brackets are parity rows; U numbers are our own features.
 
 This is the one list of everything to build. The review stays the spec and has no ticks.
