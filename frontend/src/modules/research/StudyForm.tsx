@@ -1,5 +1,6 @@
 "use client";
 
+import { FilterChips, isRangeField } from "./FilterChips";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { AnimatePresence, motion } from "framer-motion";
@@ -141,7 +142,7 @@ export function StudyForm({ feature, form, setForm, errors: submittedErrors }: {
               {isOpen ? (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22, ease: [0.2, 0, 0, 1] }} style={{ overflow: "hidden" }}>
                   <div style={{ display: "grid", gap: 16, padding: "2px 16px 18px" }}>
-                    {fields.map((f) => (
+                    {(group === "Filters" ? fields.filter((f) => !isRangeField(f)) : fields).map((f) => (
                       <Field key={f.key} field={f} value={form[f.key]} error={errors[f.key]} onChange={set(f.key)} onReset={() => set(f.key)(f.default ?? "")}
                         sweep={sweeps[f.key]} onSweep={(list) => setSweep(feature.id, f.key, list)}>
                         {f.type === "ticker_list" ? (
@@ -153,6 +154,7 @@ export function StudyForm({ feature, form, setForm, errors: submittedErrors }: {
                         ) : null}
                       </Field>
                     ))}
+                    {group === "Filters" ? <FilterChips fields={fields.filter(isRangeField)} form={form} setForm={setForm} /> : null}
                   </div>
                 </motion.div>
               ) : null}
