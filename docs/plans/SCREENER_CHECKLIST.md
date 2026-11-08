@@ -24,7 +24,7 @@ The workspace and fast data everything else sits on. E3 M5 H1
 - [x] `M` Test-setup type errors fixed, so the commit hook passes
 - [ ] `M` `/screener` on `LabConfig`, four pages from the backend manifest: Screen, Rank, Test, Monitor
 - [ ] `M` Panels close, auto-close and give their space to content
-- [ ] `M` Shared per-ticker price loader; an NSE name screens (9)
+- [x] `M` Shared per-ticker price loader; an NSE name screens (9)
 - [ ] `H` Server sort, page and count over DuckDB; no silent cap (48)
 - [ ] `M` 4,158 names scroll smoothly
 - [ ] `E` Result header: count, universe, as-of, updated, data hash

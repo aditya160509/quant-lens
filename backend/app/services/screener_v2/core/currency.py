@@ -1,13 +1,15 @@
 """Explicit instrument units and observed USD conversion, without rate filling."""
-from contextlib import contextmanager
-from contextvars import ContextVar
 import math
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
+
 import numpy as np
 import pandas as pd
+
 from . import data_loader
 
-CONFIG = ContextVar('screener_instrument_units', default={})
+CONFIG = ContextVar('screener_instrument_units', default={})  # noqa: B039
 
 
 @contextmanager
@@ -58,16 +60,22 @@ def instrument_specs(symbols):
     rows = eligible.sort_values('reportDate').groupby('ticker').tail(1) if not eligible.empty else eligible
     source_specs = rows.set_index('ticker').to_dict('index') if not rows.empty else {}
     declared = CONFIG.get().get('instruments', {})
+    currency_seen = source.dropna(subset=['currency']).groupby('ticker').currency.last().to_dict() if 'currency' in source and not source.empty else {}
     result = {}
     for symbol in symbols:
         row = source_specs.get(symbol, {})
         quote = row.get('quoteCurrency')
-        # This is only a US quote denomination rule, never a financial-currency or ADR-unit inference.
-        if not isinstance(quote, str) and '_' not in symbol and row.get('currency') == 'USD':
-            quote = 'USD'
+        if not isinstance(quote, str):
+            quote = currency_seen.get(symbol) or ('INR' if symbol.endswith(('_NS', '_BO')) else None)
+        financial = row.get('financialCurrency')
+        units = row.get('quoted_units_per_ordinary_share')
+        # shortcut: statement currency is absent from our data, so only US and Indian listings assume it equals the quote with one share per unit; a vendor field would widen this and catch depositary receipts.
+        if not isinstance(financial, str) and quote in {'USD', 'INR'}:
+            financial = quote
+            units = 1. if pd.isna(units) else units
         spec = {'quote_currency': quote if isinstance(quote, str) else None,
-                'financial_currency': row.get('financialCurrency') if isinstance(row.get('financialCurrency'), str) else None,
-                'quoted_units_per_ordinary_share': row.get('quoted_units_per_ordinary_share')}
+                'financial_currency': financial if isinstance(financial, str) else None,
+                'quoted_units_per_ordinary_share': units}
         if symbol == 'SPY':
             spec['quote_currency'] = 'USD'
         spec.update(declared.get(symbol, {}))

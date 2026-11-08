@@ -1,5 +1,6 @@
 """Acceptance tests for persistent feature state and deterministic exports."""
 import pytest
+
 from app.services.screener_v2.core import state
 
 
@@ -39,7 +40,15 @@ def test_saved_universe_membership_is_exact(store):
 def local_data(tmp_path, monkeypatch):
     import numpy as np
     import pandas as pd
-    from app.services.screener_v2.core import data_loader, performance, fundamentals, estimators, panel, validation
+
+    from app.services.screener_v2.core import (
+        data_loader,
+        estimators,
+        fundamentals,
+        panel,
+        performance,
+        validation,
+    )
     dates = pd.bdate_range('2023-01-02', periods=800)
     frames = []
     for index, ticker in enumerate(['AAA', 'BBB', 'CCC', 'SPY']):
@@ -73,7 +82,8 @@ def local_data(tmp_path, monkeypatch):
 @pytest.mark.parametrize('feature_id', ['01', '02', '03', '04', '05', '06', '07', '08'])
 def test_all_feature_outputs_are_json_safe_and_declared(local_data, feature_id):
     import json
-    from app.services.screener_v2.registry import run_feature, get_feature
+
+    from app.services.screener_v2.registry import get_feature, run_feature
     result = run_feature(feature_id, {'tickers': ['AAA', 'BBB', 'CCC'], 'watchlist': 'AAA BBB CCC', 'lookback_days': 60, 'top_n': 1})
     assert result['status'] == 'ok'
     json.dumps(result, allow_nan=False)
@@ -86,8 +96,9 @@ def test_all_feature_outputs_are_json_safe_and_declared(local_data, feature_id):
 
 def test_future_price_and_statement_changes_do_not_change_historical_screen(local_data):
     import pandas as pd
-    from app.services.screener_v2.registry import run_feature
+
     from app.services.screener_v2.core.performance import clear_performance_caches
+    from app.services.screener_v2.registry import run_feature
     cutoff = local_data['market'].Date.sort_values().unique()[-80]
     payload = {'tickers': ['AAA', 'BBB', 'CCC'], 'as_of_date': str(pd.Timestamp(cutoff).date()), 'top_n': 3}
     before = run_feature('01', payload)
@@ -102,7 +113,9 @@ def test_future_price_and_statement_changes_do_not_change_historical_screen(loca
 
 
 def test_export_is_lossless_quoted_and_honors_columns():
-    import csv, io
+    import csv
+    import io
+
     from app.services.screener_v2.core.exports import build_export_payload
     rows = [{'ticker': f'T{i}', 'company': 'Quoted\tcompany\nname', 'score': None} for i in range(1001)]
     result = build_export_payload('08', {'export_format': 'json', 'columns': ['ticker', 'company', 'score']}, rows)
@@ -117,9 +130,10 @@ def test_export_is_lossless_quoted_and_honors_columns():
 
 def test_historical_training_labels_never_pass_the_training_date(local_data):
     import pandas as pd
+
     from app.services.screener_v2.core.composite import historical_weights
-    from app.services.screener_v2.core.panel import metric_panel
     from app.services.screener_v2.core.data_loader import as_of_context
+    from app.services.screener_v2.core.panel import metric_panel
     cutoff = local_data['market'].Date.max()
     with as_of_context(cutoff):
         current = metric_panel({'as_of_date': str(cutoff.date())}, ['AAA', 'BBB', 'CCC'])
@@ -145,6 +159,7 @@ def test_schedules_claim_once_and_publish_dispatch_state(store):
 
 def test_alert_precision_uses_persisted_matured_observations(store, monkeypatch):
     import pandas as pd
+
     from app.services.screener_v2.core import alerts
     dates = pd.bdate_range('2025-01-01', periods=4)
     prices = pd.DataFrame({'A': [100., 110., 121., 133.1]}, index=dates)
@@ -161,6 +176,7 @@ def test_alert_precision_uses_persisted_matured_observations(store, monkeypatch)
 @pytest.mark.parametrize('feature_id', ['02', '03', '04'])
 def test_current_filters_do_not_shrink_historical_universe(local_data, monkeypatch, feature_id):
     from importlib import import_module
+
     from app.services.screener_v2.registry import run_feature
     module = import_module(f'app.services.screener_v2.features.feature_{feature_id}')
     original = module.score_backtest
@@ -195,6 +211,7 @@ def test_statement_valuation_and_roic_match_independent_numbers(local_data):
 
 def test_missing_claims_are_not_assumed_to_be_zero(local_data):
     import pandas as pd
+
     from app.services.screener_v2.core.data_loader import as_of_context
     from app.services.screener_v2.core.fundamentals import latest_fundamental_features
     local_data['fund']['Preferred Stock Equity'] = float('nan')
@@ -206,8 +223,10 @@ def test_missing_claims_are_not_assumed_to_be_zero(local_data):
 
 def test_owned_job_route_runs_feature_and_publishes_real_result(local_data, monkeypatch, tmp_path):
     import time
+
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
+
     from app.api import screener_v2
     from app.services.studio.jobs import JobStore
     monkeypatch.setattr(screener_v2, 'JOBS', JobStore(path=tmp_path / 'jobs.json'))
@@ -252,8 +271,9 @@ def test_valuation_cards_contain_four_real_dimensions_and_honor_window(local_dat
 
 def test_nonstock_weekends_do_not_change_the_us_backtest_calendar(local_data):
     import pandas as pd
-    from app.services.screener_v2.core.validation import score_backtest
+
     from app.services.screener_v2.core.performance import clear_performance_caches
+    from app.services.screener_v2.core.validation import score_backtest
     dates = pd.date_range(local_data['market'].Date.min(), local_data['market'].Date.max())
     coin = pd.DataFrame({'Ticker': 'COIN_TEST', 'Date': dates, 'Open': 100., 'High': 101., 'Low': 99., 'Close': 100., 'Volume': 1000.})
     local_data['market'] = pd.concat([local_data['market'], coin], ignore_index=True)
@@ -267,6 +287,7 @@ def test_nonstock_weekends_do_not_change_the_us_backtest_calendar(local_data):
 
 def test_fx_valuation_uses_quote_units_and_reporting_currency(local_data, monkeypatch):
     import pandas as pd
+
     from app.services.screener_v2.core import data_loader
     from app.services.screener_v2.core.currency import instrument_context
     from app.services.screener_v2.core.fundamentals import latest_fundamental_features
@@ -287,9 +308,10 @@ def test_fx_valuation_uses_quote_units_and_reporting_currency(local_data, monkey
 
 def test_unknown_share_and_currency_metadata_does_not_manufacture_valuation(local_data):
     import pandas as pd
+
     from app.services.screener_v2.core import data_loader
     from app.services.screener_v2.core.fundamentals import latest_fundamental_features
-    local_data['fund'] = local_data['fund'].drop(columns=['financialCurrency', 'quoted_units_per_ordinary_share'])
+    local_data['fund'] = local_data['fund'].drop(columns=['financialCurrency', 'quoted_units_per_ordinary_share', 'currency', 'quoteCurrency'])
     with data_loader.as_of_context(local_data['market'].Date.max()):
         row = latest_fundamental_features(['AAA']).iloc[0]
     assert pd.isna(row.market_cap)
@@ -301,6 +323,7 @@ def test_unknown_share_and_currency_metadata_does_not_manufacture_valuation(loca
 def test_foreign_portfolio_returns_include_observed_fx_and_reject_missing_marks(local_data, monkeypatch):
     import numpy as np
     import pandas as pd
+
     from app.services.screener_v2.core import data_loader
     from app.services.screener_v2.core.currency import instrument_context
     from app.services.screener_v2.core.validation import score_backtest
@@ -322,6 +345,7 @@ def test_foreign_portfolio_returns_include_observed_fx_and_reject_missing_marks(
 
 def test_future_currency_metadata_cannot_change_past_valuation(local_data):
     import pandas as pd
+
     from app.services.screener_v2.core import data_loader
     from app.services.screener_v2.core.currency import instrument_context
     from app.services.screener_v2.core.fundamentals import latest_fundamental_features
@@ -341,8 +365,9 @@ def test_future_currency_metadata_cannot_change_past_valuation(local_data):
 
 def test_default_date_uses_observed_calendar_not_newer_unrelated_asset(local_data):
     import pandas as pd
-    from app.services.screener_v2.registry import run_feature
+
     from app.services.screener_v2.core.performance import clear_performance_caches
+    from app.services.screener_v2.registry import run_feature
     calendar_date = local_data['market'].Date.max()
     unrelated = local_data['market'].tail(1).copy()
     unrelated['Ticker'] = 'UNRELATED'
@@ -356,6 +381,7 @@ def test_default_date_uses_observed_calendar_not_newer_unrelated_asset(local_dat
 def test_dollar_volume_and_beta_use_usd_rather_than_native_currency(local_data, monkeypatch):
     import numpy as np
     import pandas as pd
+
     from app.services.screener_v2.core import data_loader
     from app.services.screener_v2.core.currency import instrument_context
     from app.services.screener_v2.core.estimators import latest_technical_features
@@ -373,10 +399,11 @@ def test_dollar_volume_and_beta_use_usd_rather_than_native_currency(local_data, 
 
 def test_explicit_foreign_calendar_controls_indicators_and_execution_sessions(local_data):
     import pandas as pd
+
     from app.services.screener_v2.core.currency import instrument_context
     from app.services.screener_v2.core.estimators import latest_technical_features
-    from app.services.screener_v2.core.validation import score_backtest
     from app.services.screener_v2.core.performance import clear_performance_caches
+    from app.services.screener_v2.core.validation import score_backtest
     stock_mask = local_data['market'].Ticker.eq('AAA')
     friday = stock_mask & local_data['market'].Date.dt.weekday.eq(4)
     local_data['market'].loc[friday, 'Date'] += pd.Timedelta(days=2)
@@ -394,6 +421,7 @@ def test_explicit_foreign_calendar_controls_indicators_and_execution_sessions(lo
 
 def test_issued_shares_are_not_a_proxy_for_outstanding_ordinary_shares(local_data):
     import pandas as pd
+
     from app.services.screener_v2.core.data_loader import as_of_context
     from app.services.screener_v2.core.fundamentals import latest_fundamental_features
     local_data['fund']['Share Issued'] = 1000.

@@ -1,9 +1,19 @@
 """Screener V2 fundamentals computations."""
 from __future__ import annotations
+
 from typing import Any
+
 import numpy as np
 import pandas as pd
-from .data_loader import AS_OF, eligible_reports, close_matrix, fundamental_history, load_fundamentals, ohlcv_for_symbols
+
+from .data_loader import (
+    AS_OF,
+    close_matrix,
+    eligible_reports,
+    fundamental_history,
+    load_fundamentals,
+    ohlcv_for_symbols,
+)
 from .stats import _pick, _safe_div, rank_pct
 
 
@@ -107,6 +117,8 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
     shares = pd.to_numeric(_pick(df, ["Ordinary Shares Number"]), errors="coerce")
     prices_at_date = close_matrix(symbols, 1)
     last_prices = prices_at_date.iloc[-1].reindex(out.index) if not prices_at_date.empty else pd.Series(np.nan, index=out.index)
+    # Recent Indian quarterlies omit the period-end count; the diluted average is the closest reported figure.
+    shares = shares.fillna(avg_shares)
     out["shares_outstanding"] = shares
     from .currency import instrument_specs, usd_rates
     specs = instrument_specs(symbols)
