@@ -33,6 +33,10 @@ If the UI is not running:
 
 Deletion/refactor rule: this workspace often has many uncommitted user changes. Before deleting anything, verify with the graph, `rg`, import/route registration checks, and preferably a backend/frontend smoke test. Do not delete files merely because they look isolated in the full graph.
 
+## Web research
+
+Use the `use-tinyfish` skill for all web search, page fetching, docs, pricing and competitor research: TinyFish search, then fetch.
+
 ## Scope Guard
 
 Complete the current task with the minimum sufficient change.
