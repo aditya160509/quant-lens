@@ -1,9 +1,12 @@
 """Lossless screen exports with declared formats and selected columns."""
 from __future__ import annotations
+
 import json
 from typing import Any
+
 import pandas as pd
-from .common import records
+
+from .common import LIMITS, records
 
 
 def build_export_payload(feature_id: str, payload: dict[str, Any], result_rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -20,9 +23,11 @@ def build_export_payload(feature_id: str, payload: dict[str, Any], result_rows: 
     rows = records(frame)
     csv_text, tsv = frame.to_csv(index=False), frame.to_csv(index=False, sep='\t')
     ticker_list = '\n'.join(str(row['ticker']) for row in result_rows if row.get('ticker'))
-    json_payload = {'payload': payload, 'rows': rows}
+    json_payload = {'payload': payload, 'limits': list(LIMITS), 'rows': rows}
+    # Downloads carry their limits; the raw csv/tsv fields stay parser-clean.
+    limit_header = ''.join(f'# {limit}\n' for limit in LIMITS)
     format = str(payload.get('export_format', 'csv')).lower()
-    formats = {'csv': (csv_text, 'text/csv', 'csv'), 'tsv': (tsv, 'text/tab-separated-values', 'tsv'),
+    formats = {'csv': (limit_header + csv_text, 'text/csv', 'csv'), 'tsv': (limit_header + tsv, 'text/tab-separated-values', 'tsv'),
                'json': (json.dumps(json_payload, allow_nan=False), 'application/json', 'json'),
                'tickers': (ticker_list, 'text/plain', 'txt')}
     if format not in formats:

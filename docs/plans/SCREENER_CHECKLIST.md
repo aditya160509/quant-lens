@@ -28,7 +28,7 @@ The workspace and fast data everything else sits on. E3 M5 H1
 - [x] `H` Every passing name reaches the table, sorted and counted; no silent cap (48). DuckDB waits until rows outgrow the browser
 - [x] `M` 4,158 names scroll smoothly
 - [x] `E` Result header: count, universe, as-of, updated, data hash
-- [ ] `E` Limits on results; backtests and exports next (U10)
+- [x] `E` Limits on results, backtests and exports (U10)
 
 ## Batch 2: Core screen
 

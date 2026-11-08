@@ -1,7 +1,9 @@
 """Screener V2 common computations."""
 from __future__ import annotations
+
 import math
 from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -93,8 +95,25 @@ def matrix_records(matrix: pd.DataFrame, value_name: str = "value") -> list[dict
     return clean_json(rows)
 
 
+LIMITS = ("Fundamentals start in 2021; earlier dates have prices only.",
+          "No historical filing vintages or revision timestamps; 90-day lag does not eliminate restatement bias.",
+          "No historical index membership or delisting payoff data; results are conditional on the chosen local universe.",
+          "Current descriptive sector and industry labels are not historical classifications.", "No ADR/depositary-unit conversion history or separate historical financial-currency metadata; statement/quote share and currency compatibility remain source-data limitations.")
+
+
 def access_meta(payload: dict | None = None, issues: list[str] | None = None) -> dict[str, Any]:
-    from .data_loader import AS_OF, MARKET_UNIVERSE, MASTER_FUNDAMENTALS, FF5_DAILY, MOM_DAILY, CATEGORY7_MACRO, FX_DAILY, available_symbols, parse_symbols, load_market_ohlcv
+    from .data_loader import (
+        AS_OF,
+        CATEGORY7_MACRO,
+        FF5_DAILY,
+        FX_DAILY,
+        MARKET_UNIVERSE,
+        MASTER_FUNDAMENTALS,
+        MOM_DAILY,
+        available_symbols,
+        load_market_ohlcv,
+        parse_symbols,
+    )
     payload = payload or {}
     def version(path):
         return {"path": str(path), "exists": path.exists(), "modified_ns": path.stat().st_mtime_ns if path.exists() else None}
@@ -116,6 +135,4 @@ def access_meta(payload: dict | None = None, issues: list[str] | None = None) ->
             "universe_order": "fixed local coverage order among equities in the fundamentals inventory; not historical index membership",
             "universe_currency": "USD market values, dollar volume and portfolio returns use exact-date observed FX. Instrument financial currency and quote share units must be explicitly available; unsupported valuations remain null.",
             "fundamental_availability_lag_days": 90, "access_issues": issues or [],
-            "limitations": ["No historical filing vintages or revision timestamps; 90-day lag does not eliminate restatement bias.",
-                            "No historical index membership or delisting payoff data; results are conditional on the chosen local universe.",
-                            "Current descriptive sector and industry labels are not historical classifications.", "No ADR/depositary-unit conversion history or separate historical financial-currency metadata; statement/quote share and currency compatibility remain source-data limitations."]}
+            "limitations": list(LIMITS)}

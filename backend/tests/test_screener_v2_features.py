@@ -124,6 +124,9 @@ def test_export_is_lossless_quoted_and_honors_columns():
     parsed = list(csv.DictReader(io.StringIO(result['tsv']), delimiter='\t'))
     assert parsed[0]['company'] == rows[0]['company']
     assert result['ticker_list'].splitlines()[-1] == 'T1000'
+    assert result['json_payload']['limits']
+    download = build_export_payload('08', {}, rows)['content']
+    assert download.startswith('# Fundamentals start in 2021')
     with pytest.raises(ValueError, match='Unknown export columns'):
         build_export_payload('08', {'columns': ['fake']}, rows)
 
