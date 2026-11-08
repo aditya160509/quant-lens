@@ -8,7 +8,7 @@ const ACRONYMS: Record<string, string> = {
   ar: "AR", tsls: "2SLS", vix: "VIX", cs: "CS", pdf: "PDF", csv: "CSV", bm: "B/M", ivol: "IVOL", us: "US", ff5: "FF5", bhy: "BHY",
   mr: "MR", hhi: "HHI", aic: "AIC", bic: "BIC", smd: "SMD", twfe: "TWFE", fe: "FE", mkt: "Mkt", rf: "RF", smb: "SMB", hml: "HML",
   rmw: "RMW", cma: "CMA", dfbeta: "DFBETA", dffits: "DFFITS", ci90: "90% CI", ci: "CI", pct: "%", "5pct": "5%", "10pct": "10%",
-  vs: "vs", t: "t", p: "p", auto: "auto", n: "N", jb: "JB", ff3: "FF3", mom: "Mom", ex: "ex", id: "ID",
+  vs: "vs", t: "t", p: "p", auto: "auto", n: "N", jb: "JB", ff3: "FF3", mom: "Momentum", hl: "HL", ex: "ex", id: "ID",
 };
 
 /** snake_case to a readable label: "standard_errors" → "Standard errors", "nw_auto" → "NW auto". */
@@ -16,11 +16,14 @@ export function label(key: unknown): string {
   const words = String(key ?? "").replace(/[-_]+/g, " ").trim().split(/\s+/);
   return words
     .map((w, i) => {
+      // Tickers arrive upper case ("GE", "T"); keys arrive lower case. Never title-case a ticker.
+      if (/^[A-Z][A-Z0-9.]*$/.test(w)) return w;
       const k = w.toLowerCase();
       if (ACRONYMS[k]) return ACRONYMS[k];
       return i === 0 ? k.charAt(0).toUpperCase() + k.slice(1) : k;
     })
-    .join(" ");
+    .join(" ")
+    .replace(/(\d) (?=\d)/g, "$1-"); // "mom 12 1" reads "Momentum 12-1"
 }
 
 /** Number formatting tuned for statistics: fixed decimals, exponent only when needed. */

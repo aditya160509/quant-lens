@@ -1,6 +1,6 @@
 "use client";
 
-import { createElement, useState, useRef, type ReactNode } from "react";
+import { createElement, useState, useRef } from "react";
 import { ArrowDown, ArrowUp, BookOpen, Pin, Check, ChevronDown, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
 import { Exhibit } from "@/kit/Exhibit";
 import { downloadCsv, downloadPng, downloadSvg } from "@/charts/export";
@@ -85,7 +85,7 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const openSettings = () => { useLayout.getState().set("right", true, true); };
 
   return (
-    <Exhibit id={key} name={title} finding={finding} hint={hint} index={finding || lab().takeaway ? index : undefined} flush={item.flush} bodyRef={body}
+    <Exhibit id={key} name={title} finding={finding} hint={hint} flush={item.flush} bodyRef={body}
       style={maximized ? { minHeight: "100%" } : undefined} onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
       tools={<>
           {(kinds.length > 1 || alts.length > 0) && viewName !== "latex" ? (
@@ -93,18 +93,6 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
               {custom ? VIEW_LABEL[custom.kind] : "View"}<ChevronDown size={11} />
             </button>
           ) : null}
-          {canTable ? (
-            <Tooltip label={asTable ? "Show chart" : "Show table"}>
-              <button className="btn sm icon ghost" onClick={() => setAsTable((v) => !v)} aria-label={asTable ? "Show chart" : "Show table"} aria-pressed={asTable}>{asTable ? <BarChart3 size={13} /> : <Table2 size={13} />}</button>
-            </Tooltip>
-          ) : null}
-          {isChart && !asTable ? (
-            <>
-              <ToolButton label="Download SVG" onClick={() => { const s = svg(); if (s) downloadSvg(s, name); }}>SVG</ToolButton>
-              <ToolButton label="Download PNG" onClick={() => { const s = svg(); if (s) void downloadPng(s, name); }}>PNG</ToolButton>
-            </>
-          ) : null}
-          {rows.length && !["latex", "csv", "pdf"].includes(viewName) ? <ToolButton label="Download CSV" onClick={() => downloadCsv(rows, name)}>CSV</ToolButton> : null}
           <Tooltip label="More">
             <button className="btn sm icon ghost" aria-haspopup="menu" aria-label="More actions" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.right - 220, y: r.bottom + 4 }); }}><MoreHorizontal size={13} /></button>
           </Tooltip>
@@ -191,8 +179,4 @@ function MethodDrawer({ title, hint, feature, result, onClose }: { title: string
       {result.meta.research_caveats?.length ? <><h4 className="insp-h">Caveats</h4><ul style={{ paddingLeft: 18 }}>{result.meta.research_caveats.map((c) => <li key={c}>{c}</li>)}</ul></> : null}
     </aside>
   );
-}
-
-function ToolButton({ label: l, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
-  return <button className="btn sm ghost" style={{ fontFamily: "var(--mono)", fontSize: 10.5, color: "var(--text-3)" }} onClick={onClick} aria-label={l} title={l}>{children}</button>;
 }

@@ -56,3 +56,7 @@ These set the level of finish. Learn from them; do not copy their look.
 | 21 | Sector names truncate while the table has room elsewhere: "Communicatio..." | Ranking |
 | 22 | Output label cut off: "The model against simple alternatives," | Outputs list |
 | 23 | Heatmap has repeated labels ("Feature → Feature value", "Feature →") | [Heatmap](refs/ml-explain-heatmap.webp) |
+
+## Status (2026-11-08, Screener design pass)
+
+Fixed in the shared shell and kit: 1, 2, 3, 4, 6, 13, 14, 17, 18, 19, 20 (partly), 22. Not applicable on the Screener, not re-checked on ML: 8, 9, 10, 11, 21, 23. Open: 5 and 12 (absent on the Screener, where panels start closed), 7 (header and KPI block still about 40% of the first screen), 15 (universe is still a chip with a text field; the picker belongs to Batch 2 custom universes), 16 (search enlarged; type tabs and chips wait for Batch 3).

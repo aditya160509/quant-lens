@@ -46,8 +46,6 @@ export type LabConfig = {
   specials?: Record<string, ComponentType<{ features: FeatureSpec[]; id?: string }>>;
   /** Exhibit titles that state the finding; null keeps the descriptive title. Labs that set it also number their exhibits. */
   takeaway?: (featureId: string, key: string, view: string | undefined, result: FeatureResult) => string | null;
-  /** What to do before the first run, shown over the empty page. */
-  emptyHint?: (featureId: string) => string;
   /** Verb on the run button for a feature, e.g. "Train and test"; defaults to "Run study". */
   runLabel?: (featureId: string) => string;
   /** Research extras: Signal and Report card pages, projects, ledger, active signal. */

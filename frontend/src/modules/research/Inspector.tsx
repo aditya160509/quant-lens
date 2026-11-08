@@ -71,9 +71,9 @@ export function Inspector({ feature, run }: { feature: FeatureSpec; run: Feature
         </>
       ) : (
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", borderTop: "1px solid var(--line)" }}>
-          <section style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
-            <h4 className="insp-h">{selection?.title ?? "Selection"}</h4>
-            {selection ? (
+          {selection ? (
+            <section style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
+              <h4 className="insp-h">{selection.title}</h4>
               <dl style={{ margin: 0, display: "grid" }}>
                 {selection.rows.map(([k, v]) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "6px 0", fontSize: 12.5, borderBottom: "1px solid var(--grid)" }}>
@@ -82,14 +82,9 @@ export function Inspector({ feature, run }: { feature: FeatureSpec; run: Feature
                   </div>
                 ))}
               </dl>
-            ) : (
-              <p style={{ color: "var(--text-3)", fontSize: 12.5, lineHeight: 1.55 }}>Point at a specification on the curve, or any chart, to see every detail here.</p>
-            )}
-          </section>
-          <section style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
-            <h4 className="insp-h">Data window</h4>
-            <DataWindow />
-          </section>
+            </section>
+          ) : null}
+          <DataWindow />
           <Outline feature={feature} run={run} />
         </div>
       )}
@@ -104,10 +99,10 @@ function Outline({ feature, run }: { feature: FeatureSpec; run: FeatureRun }) {
   const setPref = useCardPrefs((st) => st.set);
   const resetPrefs = useCardPrefs((st) => st.reset);
   return (
-    <section style={{ padding: "14px 8px" }}>
-      <h4 className="insp-h" style={{ padding: "0 8px", display: "flex", alignItems: "center" }}>Outputs
-        {Object.keys(prefs).length ? <button className="btn sm ghost" style={{ marginLeft: "auto", height: 22 }} onClick={() => resetPrefs(feature.id)}>Reset layout</button> : null}
-      </h4>
+    <details style={{ padding: "14px 8px" }}>
+      <summary className="insp-h" style={{ padding: "0 8px", display: "flex", alignItems: "center", cursor: "pointer" }}>Outputs
+        {Object.keys(prefs).length ? <button className="btn sm ghost" style={{ marginLeft: "auto", height: 22 }} onClick={(e) => { e.preventDefault(); resetPrefs(feature.id); }}>Reset layout</button> : null}
+      </summary>
       {layout.sections.map((s) => (
         <div key={s.id} style={{ marginBottom: 8 }}>
           <div style={{ padding: "4px 8px", fontSize: 11.5, color: "var(--text-4)", fontWeight: 500 }}>{s.label}</div>
@@ -127,7 +122,7 @@ function Outline({ feature, run }: { feature: FeatureSpec; run: FeatureRun }) {
           })}
         </div>
       ))}
-    </section>
+    </details>
   );
 }
 

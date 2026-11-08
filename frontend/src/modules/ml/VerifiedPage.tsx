@@ -54,8 +54,8 @@ export function VerifiedPage({ id }: { features: FeatureSpec[]; id?: string }) {
         </div>
       </header>
       <div className="verified-grid">
-        {CARDS.map(([title, View, key], i) => (
-          <Exhibit key={title} id={key} className="verified-card" wide={WIDE.has(title)} level={2} index={i + 1} name={title}
+        {CARDS.map(([title, View, key]) => (
+          <Exhibit key={title} id={key} className="verified-card" wide={WIDE.has(title)} level={2} name={title}
             finding={(View === ValCostCurve || View === ValVerdict ? null : takeaway("mlvalidate", key, undefined, result)) ?? title}>
             <View rows={[]} result={result} feature={SPEC} keys={[key]} scope={`verified:${q.data.id}`} />
           </Exhibit>

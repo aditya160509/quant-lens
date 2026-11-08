@@ -151,7 +151,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
           <div className="ov-icon" style={{ width: 40, height: 40, borderRadius: 11 }}><Icon size={19} strokeWidth={1.6} /></div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{meta.name}</h1>
-            {lab().id !== "ml" ? <><p style={{ marginTop: 4, color: "var(--text-2)", fontSize: 13.5 }}>{meta.question}</p><p style={{ marginTop: 6, color: "var(--text-3)", fontSize: 12.5, maxWidth: 860, lineHeight: 1.55 }}>{feature.description}</p></> : null}
+            {lab().id !== "ml" ? <><p style={{ marginTop: 4, color: "var(--text-2)", fontSize: 13.5 }}>{meta.question}</p><p style={{ marginTop: 6, color: "var(--text-3)", fontSize: 12.5, maxWidth: 860, lineHeight: 1.55 }}>{feature.description !== meta.question ? feature.description : null}</p></> : null}
           </div>
           {runButton}
         </div>
@@ -253,7 +253,9 @@ function RunContext({ feature, run }: { feature: FeatureSpec; run: FeatureRun })
       {groups.map((g) => {
         const tickers = g.fields.find((f) => f.type === "ticker_list");
         const defaultUniverse = g.id === "universe" && tickers && !String(run.form[tickers.key] ?? "").trim() ? lab().defaultUniverse : undefined;
-        const text = defaultUniverse ?? (g.fields.map((f) => summarize(f, run.form[f.key])).filter(Boolean).slice(0, 3).join(" · ") || "Default");
+        const parts = g.fields.map((f) => ({ f, v: summarize(f, run.form[f.key]) })).filter((x) => x.v).slice(0, 3);
+        // With several values, each carries its field name, so "2y · 6" reads as "Lookback 2y · Horizon 6".
+        const text = defaultUniverse ?? (parts.map((x) => (parts.length > 1 && g.id !== "universe" ? `${x.f.label} ${x.v}` : x.v)).join(" · ") || "Default");
         return (
           <button key={g.id} type="button" className="chip" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setOpen({ id: g.id, at: { x: r.left, y: r.bottom + 4 } }); }}>
             <span style={{ color: "var(--text-4)" }}>{g.label}</span>{text}<ChevronDown size={11} />
@@ -373,9 +375,7 @@ function Placeholder({ items, running, onRun, featureId }: { items: Item[]; runn
       {!running ? (
         <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "start center", paddingTop: 70 }}>
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: DUR.base }}
-            style={{ textAlign: "center", background: "var(--panel)", padding: "22px 28px", borderRadius: 14, boxShadow: "var(--shadow)", maxWidth: 400 }}>
-            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>Ready when you are</div>
-            <div style={{ color: "var(--text-3)", fontSize: 12.5, lineHeight: 1.55, marginBottom: 14 }}>{lab().emptyHint?.(featureId) ?? "Set the universe, signal and options in the Study panel on the right, then run it. Results appear here section by section."}</div>
+            style={{ textAlign: "center", background: "var(--panel)", padding: 14, borderRadius: 14, boxShadow: "var(--shadow)", maxWidth: 400 }}>
             <button className="btn primary" onClick={onRun}><Play size={11} fill="currentColor" />{lab().runLabel ? runLabel(featureId) : "Run with these settings"}<span className="kbd" style={{ background: "transparent", color: "inherit", boxShadow: "none", opacity: 0.55 }}>⌘↵</span></button>
           </motion.div>
         </div>

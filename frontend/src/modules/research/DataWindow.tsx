@@ -8,10 +8,10 @@ export function DataWindow() {
   const t = useCrosshair((s) => s.t);
   const entries = useDataWindow((s) => s.entries);
   const list = Object.values(entries);
-  if (t === null) {
-    return <div style={{ fontSize: 12, color: "var(--text-3)", padding: 8 }}>Hover any chart to read every series at that date.</div>;
-  }
+  if (t === null) return null;
   return (
+    <section style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
+    <h4 className="insp-h">Data window</h4>
     <div style={{ display: "grid", gap: 10, fontSize: 12 }}>
       <div className="num" style={{ color: "var(--text-2)", fontWeight: 600 }}>{fmtDate(t, true)}</div>
       {list.map((e) => {
@@ -30,5 +30,6 @@ export function DataWindow() {
         );
       })}
     </div>
+    </section>
   );
 }

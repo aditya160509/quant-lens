@@ -119,7 +119,7 @@
 .val-strip-mark[data-edge="r"] em { left: auto; right: 0; transform: none; }
 .val-strip-mark[data-edge="l"] em { left: 0; transform: none; }
 .ml-rank-r[role="button"] { cursor: pointer; border-radius: 6px; }
-.ml-rank-r[aria-pressed="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.ml-rank-r[aria-pressed="true"] { background: var(--accent-soft); }
 .ml-rank-r:focus-visible { outline: 2px solid var(--accent-line); outline-offset: -2px; }
 
 /* ---------------------------------------------------------------- Alpha, risk, allocation */
@@ -130,7 +130,7 @@
 .ml-table td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; color: var(--text-2); }
 .ml-table td em { font-style: normal; font-size: 10.5px; color: var(--text-4); }
 .ml-table tr[data-primary] td { color: var(--text); background: var(--accent-soft); }
-.ml-table tr[data-primary] td:first-child { box-shadow: inset 2px 0 0 var(--accent); font-weight: 550; }
+.ml-table tr[data-primary] td:first-child { font-weight: 550; }
 
 .ml-next { display: grid; gap: 6px; }
 .ml-next button { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-3); transition: background .15s, box-shadow .15s; }
@@ -228,7 +228,7 @@
 .studio-card-h b { font-size: 14px; font-weight: 600; color: var(--text); }
 .studio-status { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-4); }
 .studio-card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
-.studio-card .studio-headline { padding: 6px 10px; border-left: 2px solid; border-radius: 0 6px 6px 0; background: var(--panel-2); color: var(--text-2); }
+.studio-card .studio-headline { padding: 6px 10px; border-radius: 6px; background: var(--panel-2); color: var(--text-2); }
 .studio-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 11.5px; color: var(--text-4); }
 .studio-foot .btn { display: inline-flex; align-items: center; gap: 5px; flex: none; text-decoration: none; }
 /* Wide screens: the pipeline reads left to right, nodes joined by the hand-off line. */

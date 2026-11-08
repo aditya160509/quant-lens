@@ -188,13 +188,15 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
   return (
     <div className="dt" data-virtual={virtual} data-density={density} onKeyDown={onKey}>
       <div className="dt-bar">
-        <button className="btn sm ghost" aria-pressed={tint} onClick={() => setTint(!tint)}>Heat tint</button>
-        <button className="btn sm ghost" onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}>{density === "compact" ? "Comfortable" : "Compact"}</button>
-        <button className="btn sm ghost" onClick={() => void navigator.clipboard?.writeText(toMarkdown(cols, order2.map((i) => rows[i])))}>Copy as Markdown</button>
         <Popover.Root>
-          <Popover.Trigger asChild><button className="btn sm ghost" aria-label="Columns"><Columns3 size={13} />Columns</button></Popover.Trigger>
+          <Popover.Trigger asChild><button className="btn sm ghost" aria-label="Table options"><Columns3 size={13} />Table</button></Popover.Trigger>
           <Popover.Portal container={typeof document === "undefined" ? undefined : document.querySelector<HTMLElement>(".ws")}>
             <Popover.Content className="tbl-pop" align="end" sideOffset={6} collisionPadding={12}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 2, paddingBottom: 6 }}>
+        <button className="btn sm ghost" aria-pressed={tint} onClick={() => setTint(!tint)}>Heat tint</button>
+                <button className="btn sm ghost" onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}>{density === "compact" ? "Comfortable" : "Compact"}</button>
+                <button className="btn sm ghost" onClick={() => void navigator.clipboard?.writeText(toMarkdown(cols, order2.map((i) => rows[i])))}>Copy as Markdown</button>
+              </div>
               <div className="tp-list">
                 {[...cols, ...hidden].map((c) => (
                   <div key={c} className="tp-term">
