@@ -18,7 +18,8 @@ import { XYPlot, type XYPoint } from "@/charts/XYPlot";
 import { parseDate } from "@/charts/core";
 import { Segmented } from "@/workspace/ui";
 import { isNum, label, out, pct } from "@/modules/research/format";
-import { DataTable, Empty } from "@/modules/research/outputs/tables";
+import { DataTable, Empty } from "@/kit/DataTable";
+import { KpiStrip } from "@/kit/KpiStrip";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import type { Row } from "@/modules/research/types";
 
@@ -69,11 +70,7 @@ export function pivot(rows: Row[], x: string, s: string, y: string): { data: Row
 }
 
 function Stats({ items }: { items: [string, ReactNode, string?][] }) {
-  return (
-    <div className="ml-stats">
-      {items.map(([l, v, tone]) => <div key={l}><span>{l}</span><b className="num" style={tone ? { color: tone } : undefined}>{v}</b></div>)}
-    </div>
-  );
+  return <KpiStrip compact items={items.map(([l, value, tone]) => ({ label: l, value, tone }))} />;
 }
 
 function Picker<T extends string | number>({ label: l, value, options, onChange }: { label: string; value: T; options: T[]; onChange: (v: T) => void }) {

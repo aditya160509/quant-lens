@@ -3,6 +3,8 @@
 .dt-bar { display: flex; gap: 6px; align-items: center; padding: 0 0 6px; justify-content: flex-end; }
 .dt .tbl td, .dt .tbl th { height: var(--row-h); padding-block: 0; font-variant-numeric: tabular-nums; }
 .dt .tbl th.grp { text-align: center; border-bottom: 1px solid var(--line); color: var(--text-3); font-weight: 500; }
+.dt .tbl td:first-child { position: sticky; left: 0; z-index: 0; background: var(--panel); }
+.dt .tbl thead th:first-child { left: 0; z-index: 3; }
 .dt .tbl tr.gr td { background: var(--panel-2); font-weight: 600; cursor: pointer; }
 .dt .tbl tr.sub td:first-child { padding-left: 26px; }
 .dt .tbl tbody tr[data-sel="true"] td { background: color-mix(in oklch, var(--accent) 12%, transparent); }

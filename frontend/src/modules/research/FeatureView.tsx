@@ -15,6 +15,7 @@ import { useActiveSignal, useJob, useRuns } from "./api";
 import { isNum, label, num, out } from "./format";
 import { layoutFor, verdictFor, type Item, type Section } from "./layouts";
 import { arrange, cardId, useCardPrefs, useFeaturePrefs } from "./cardPrefs";
+import { KpiStrip } from "@/kit/KpiStrip";
 import { OutputCard } from "./OutputCard";
 import type { FeatureRun } from "./ResearchApp";
 import { Control } from "./StudyForm";
@@ -287,21 +288,19 @@ function VerdictStrip({ feature, result, jobId }: { feature: FeatureSpec; result
       ) : null}
       {lab().signal && explain(cards).length ? <p className="verdict-explain">{explain(cards).join(" ")}</p> : null}
       {cards.length ? (
-        <div className="kpis">
-          {cards.map((c) => (
-            <div key={c.label} className="kpi">
-              <div className="l" title={c.label}>{c.label}</div>
-              {(() => {
-                const b = before.get(c.label);
-                if (!isNum(c.value) || b === undefined || Math.abs(c.value - b) < 1e-9) return null;
-                const d = c.value - b;
-                const f = UNIT_FMT[c.unit ?? ""] ?? kpi;
-                return <div className="kpi-delta num" title="Change since the previous run of this page">{d > 0 ? "▲" : "▼"} {f(Math.abs(d))}</div>;
-              })()}
-              <div className={`v${isNum(c.value) ? "" : " word"}${isNum(c.value) && /return|alpha|sharpe|t-stat|spread|premium/i.test(c.label) && c.value !== 0 ? (c.value > 0 ? " up" : " down") : ""}`}>{isNum(c.value) && UNIT_FMT[c.unit ?? ""] ? UNIT_FMT[c.unit ?? ""](c.value) : isNum(c.value) ? kpi(c.value) : typeof c.value === "string" && /^[a-z][a-z0-9_]*$/.test(c.value) ? label(c.value) : String(c.value)}</div>
-            </div>
-          ))}
-        </div>
+        <KpiStrip items={cards.map((c) => {
+          const b = before.get(c.label);
+          const d = isNum(c.value) && b !== undefined && Math.abs(c.value - b) >= 1e-9 ? c.value - b : null;
+          const f = UNIT_FMT[c.unit ?? ""] ?? kpi;
+          const signed = isNum(c.value) && c.value !== 0 && /return|alpha|sharpe|t-stat|spread|premium/i.test(c.label);
+          return {
+            label: c.label,
+            delta: d === null ? undefined : `${d > 0 ? "▲" : "▼"} ${f(Math.abs(d))}`,
+            word: !isNum(c.value),
+            tone: signed ? ((c.value as number) > 0 ? "var(--up)" : "var(--down)") : undefined,
+            value: isNum(c.value) ? f(c.value) : typeof c.value === "string" && /^[a-z][a-z0-9_]*$/.test(c.value) ? label(c.value) : String(c.value),
+          };
+        })} />
       ) : null}
     </div>
   );

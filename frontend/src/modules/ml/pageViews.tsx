@@ -14,7 +14,8 @@ import { TimeSeries } from "@/charts/TimeSeries";
 import { useManifest } from "@/modules/research/api";
 import { featureHref } from "@/modules/research/catalog";
 import { isNum, label, out } from "@/modules/research/format";
-import { Empty } from "@/modules/research/outputs/tables";
+import { Empty } from "@/kit/DataTable";
+import { KpiStrip } from "@/kit/KpiStrip";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import { useStudies } from "@/modules/research/store";
 import { defaultsFor } from "@/modules/research/StudyForm";
@@ -41,11 +42,7 @@ const STRATEGY: Record<string, string> = {
 const nm = (k: unknown) => MODEL[str(k)] ?? STRATEGY[str(k)] ?? label(str(k));
 
 function Stats({ items }: { items: [string, ReactNode, string?, string?][] }) {
-  return (
-    <div className="ml-stats">
-      {items.map(([l, v, c, t]) => <div key={l} title={t}><span>{l}</span><b className="num" style={c ? { color: c } : undefined}>{v}</b></div>)}
-    </div>
-  );
+  return <KpiStrip compact items={items.map(([l, value, tone, title]) => ({ label: l, value, tone, title }))} />;
 }
 
 /* ---------------------------------------------------------------- provenance and hand-offs (every page) */

@@ -10,7 +10,7 @@ import { SpecCurve, type Spec } from "@/charts/SpecCurve";
 import { cell, choiceLabel, first, isNum, label, num, pTone, pct, pval, specTitle, toneVar, tstat } from "../format";
 import { useSelection } from "../selection";
 import type { Row } from "../types";
-import { DataTable, Empty, TBar } from "./tables";
+import { DataTable, Empty, TBar } from "@/kit/DataTable";
 import type { ViewProps } from "./types";
 
 /** Columns of a specification row that describe analyst choices rather than results. */

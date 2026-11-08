@@ -38,10 +38,10 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 ## Shared kit (with Step 2)
 - [ ] Port T3 Code shell components
 - [ ] Research the best open source option for each kit component
-- [ ] `Exhibit`
-- [ ] `KpiStrip`
-- [ ] `RankList` in all modules
-- [ ] `DataTable v2`
+- [x] `Exhibit`
+- [x] `KpiStrip`
+- [x] `RankList` in all modules
+- [x] `DataTable v2`
 - [ ] Quick-look drawer
 - [ ] One token source
 - [ ] Shared tooltip and legend

@@ -11,7 +11,7 @@ import { Heatmap } from "@/charts/Heatmap";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { XYPlot } from "@/charts/XYPlot";
 import { label } from "../format";
-import { DataTable } from "./tables";
+import { DataTable } from "@/kit/DataTable";
 
 /**
  * "View as": any output can be re-drawn as any chart its columns support, with the

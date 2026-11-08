@@ -15,7 +15,7 @@ import { Segmented } from "@/workspace/ui";
 import { first, fmtKey, isNum, label, num, out, pct, pval, tstat } from "../format";
 import type { Row } from "../types";
 import { DivergingBars, SimulateNull, withSwitch } from "./robustness";
-import { Empty } from "./tables";
+import { Empty } from "@/kit/DataTable";
 import type { ViewProps } from "./types";
 
 const n = (v: unknown): number | null => (isNum(v) ? v : null);

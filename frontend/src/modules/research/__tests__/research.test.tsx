@@ -7,6 +7,7 @@ import { verdictFor } from "../layouts";
 import { specTitle } from "../format";
 import { clusterIds, leafOrder, validLinkage } from "@/charts/clustering";
 import { DataTable, TestsTable } from "../outputs/tables";
+import { toMarkdown } from "@/kit/DataTable";
 import { StudyForm, toPayload, validate } from "../StudyForm";
 import type { FeatureResult, FeatureSpec } from "../types";
 
@@ -90,6 +91,14 @@ describe("monthly calendar semantics", () => {
   });
 });
 
+
+describe("table markdown", () => {
+  it("keeps every row in one column per field when cells hold pipes or newlines", () => {
+    expect(toMarkdown(["ticker", "note"], [{ ticker: "A|B", note: "one\ntwo" }, { ticker: "C", note: null }])).toBe(
+      "| Ticker | Note |\n| --- | --- |\n| A\\|B | one two |\n| C |  |",
+    );
+  });
+});
 
 describe("ranked contributions", () => {
   it("sorts by magnitude and lets readers reveal every finite contribution", () => {

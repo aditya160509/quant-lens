@@ -1,5 +1,6 @@
 "use client";
 
+import { Exhibit } from "@/kit/Exhibit";
 import { useQuery } from "@tanstack/react-query";
 import { BadgeCheck, Copy } from "lucide-react";
 import { useState } from "react";
@@ -54,11 +55,10 @@ export function VerifiedPage({ id }: { features: FeatureSpec[]; id?: string }) {
       </header>
       <div className="verified-grid">
         {CARDS.map(([title, View, key], i) => (
-          <section key={title} className="verified-card" data-wide={WIDE.has(title) || undefined}>
-            <span className="ex-no"><b>Exhibit {i + 1}</b>{title}</span>
-            <h2>{(View === ValCostCurve || View === ValVerdict ? null : takeaway("mlvalidate", key, undefined, result)) ?? title}</h2>
+          <Exhibit key={title} id={key} className="verified-card" wide={WIDE.has(title)} level={2} index={i + 1} name={title}
+            finding={(View === ValCostCurve || View === ValVerdict ? null : takeaway("mlvalidate", key, undefined, result)) ?? title}>
             <View rows={[]} result={result} feature={SPEC} keys={[key]} scope={`verified:${q.data.id}`} />
-          </section>
+          </Exhibit>
         ))}
       </div>
     </div>

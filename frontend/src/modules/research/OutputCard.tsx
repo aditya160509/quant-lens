@@ -2,6 +2,7 @@
 
 import { createElement, useState, useRef, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, BookOpen, Pin, Check, ChevronDown, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
+import { Exhibit } from "@/kit/Exhibit";
 import { downloadCsv, downloadPng, downloadSvg } from "@/charts/export";
 import { useLayout } from "@/workspace/layout";
 import { MenuItem, PopMenu, Tooltip, type MenuAt } from "@/workspace/ui";
@@ -84,22 +85,9 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const openSettings = () => { useLayout.getState().set("right", true, true); };
 
   return (
-    <section className="card" id={`out-${key}`} aria-labelledby={`h-${key}`} style={maximized ? { minHeight: "100%" } : undefined}
-      onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}>
-      <header className="card-h">
-        {finding ? (
-          <div style={{ minWidth: 0, display: "grid", gap: 3 }}>
-            <span className="ex-no">{index !== undefined ? <b>Exhibit {index}</b> : null}{title}</span>
-            <h3 id={`h-${key}`} className="ex-title">{finding}</h3>
-          </div>
-        ) : (
-          <div style={{ minWidth: 0, display: "grid" }}>
-            {index !== undefined && lab().takeaway ? <span className="ex-no"><b>Exhibit {index}</b></span> : null}
-            <h3 id={`h-${key}`}>{title}</h3>
-            {hint ? <span className="sub">{hint}</span> : null}
-          </div>
-        )}
-        <div className="tools">
+    <Exhibit id={key} name={title} finding={finding} hint={hint} index={finding || lab().takeaway ? index : undefined} flush={item.flush} bodyRef={body}
+      style={maximized ? { minHeight: "100%" } : undefined} onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
+      tools={<>
           {(kinds.length > 1 || alts.length > 0) && viewName !== "latex" ? (
             <button className="btn sm ghost view-as" aria-haspopup="menu" aria-label="View as" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setViewMenu({ x: r.right - 200, y: r.bottom + 4 }); }}>
               {custom ? VIEW_LABEL[custom.kind] : "View"}<ChevronDown size={11} />
@@ -125,24 +113,8 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
               {maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
             </button>
           </Tooltip>
-        </div>
-      </header>
-      <div ref={body} className={`card-b${item.flush ? " flush" : ""}`}>
-        {overlayId ? (
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: 12, color: "var(--text-3)" }}>
-              <span>Overlay: <b style={{ color: "var(--text)", fontWeight: 500 }}>B</b> = run from {new Date(others.find((r) => r.jobId === overlayId)?.startedAt ?? 0).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-              <button className="btn sm ghost" style={{ marginLeft: "auto" }} onClick={() => setOverlayId(null)}><X size={12} />Remove overlay</button>
-            </div>
-            {merged ? <Explore rows={merged.rows} config={merged.config} /> : <div style={{ color: "var(--text-3)", fontSize: 12.5 }}>{other.isLoading ? "Loading run B…" : "That run is no longer on the server, or has no data for this output."}</div>}
-          </div>
-        ) : custom ? (
-          <>
-            <ExploreControls rows={rows} config={custom} onChange={(c) => setCustom(cfgId, c)} />
-            <Explore rows={rows} config={custom} />
-          </>
-        ) : createElement(viewFor(viewName), { rows, result, feature, spec, keys: item.keys, opts: item.opts, scope })}
-      </div>
+      </>}
+      after={<>
       <PopMenu at={viewMenu} onClose={() => setViewMenu(null)} width={200}>
         <div className="hd">View as</div>
         <MenuItem icon={!custom && viewName === designed ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => { setCustom(cfgId, null); setLens(lensId, null); }}>Designed view</MenuItem>
@@ -184,7 +156,22 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
         <MenuItem icon={<BookOpen size={13} />} onClick={() => setAbout(true)}>About this method</MenuItem>
       </PopMenu>
       {about ? <MethodDrawer title={title} hint={hint} feature={feature} result={result} onClose={() => setAbout(false)} /> : null}
-    </section>
+      </>}>
+        {overlayId ? (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: 12, color: "var(--text-3)" }}>
+              <span>Overlay: <b style={{ color: "var(--text)", fontWeight: 500 }}>B</b> = run from {new Date(others.find((r) => r.jobId === overlayId)?.startedAt ?? 0).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+              <button className="btn sm ghost" style={{ marginLeft: "auto" }} onClick={() => setOverlayId(null)}><X size={12} />Remove overlay</button>
+            </div>
+            {merged ? <Explore rows={merged.rows} config={merged.config} /> : <div style={{ color: "var(--text-3)", fontSize: 12.5 }}>{other.isLoading ? "Loading run B…" : "That run is no longer on the server, or has no data for this output."}</div>}
+          </div>
+        ) : custom ? (
+          <>
+            <ExploreControls rows={rows} config={custom} onChange={(c) => setCustom(cfgId, c)} />
+            <Explore rows={rows} config={custom} />
+          </>
+        ) : createElement(viewFor(viewName), { rows, result, feature, spec, keys: item.keys, opts: item.opts, scope })}
+    </Exhibit>
   );
 }
 

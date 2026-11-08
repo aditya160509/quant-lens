@@ -10,7 +10,8 @@ import { post, useRuns } from "@/modules/research/api";
 import { isNum, label } from "@/modules/research/format";
 import { lab } from "@/modules/research/lab";
 import { useStudies } from "@/modules/research/store";
-import { Empty } from "@/modules/research/outputs/tables";
+import { Empty } from "@/kit/DataTable";
+import { KpiStrip } from "@/kit/KpiStrip";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import type { FeatureResult, Row } from "@/modules/research/types";
 
@@ -80,11 +81,7 @@ function RangeStrip({ d, mark, markLabel, format = f2, domain }: { d: Dist; mark
 }
 
 function Kpis({ items }: { items: [string, ReactNode, string?, string?][] }) {
-  return (
-    <div className="ml-stats">
-      {items.map(([l, v, tone, title]) => <div key={l} title={title}><span>{l}</span><b className="num" style={tone ? { color: tone } : undefined}>{v}</b></div>)}
-    </div>
-  );
+  return <KpiStrip compact items={items.map(([l, value, tone, title]) => ({ label: l, value, tone, title }))} />;
 }
 
 /* ---------------------------------------------------------------- verdict hero */

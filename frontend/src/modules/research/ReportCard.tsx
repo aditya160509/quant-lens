@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Check, ClipboardCheck, Download, FlaskConical, Link2, ListChecks, Play, ShieldCheck, Sigma, X } from "lucide-react";
-import { DataTable } from "./outputs/tables";
+import { DataTable } from "@/kit/DataTable";
 import { DUR } from "@/workspace/prefs";
 import { Chip, Segmented } from "@/workspace/ui";
 import { reportUrl, shareJob, submitBatch, submitReportCard, submitValidation, useActiveSignal, useJob, useLibrary, type ReportCard } from "./api";
