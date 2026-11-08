@@ -2,6 +2,8 @@
 
 Tick Screener items here only. Spec: [product review](../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md). Stages: [PLAN step 2](PLAN.md). Numbers in brackets are parity rows; U numbers are our own features.
 
+This is the one list of everything to build. The review stays the spec and has no ticks.
+
 ## Standard
 
 - [ ] Finish matches [the finish target](../reviews/design/ML_UI_ISSUES.md); none of the 23 logged issues appear here
@@ -125,6 +127,44 @@ Tick Screener items here only. Spec: [product review](../reviews/product/SCREENE
 - [ ] Delivered-alert tracking and precision scoreboard (U7)
 - [ ] Digest
 - [ ] API keys and limits (57)
+
+## Backend ready: put on screen
+
+- [ ] Filter by sector, industry, exchange, market-cap range (1)
+- [ ] Price, volume and dollar-volume floors, penny-stock exclusion (3)
+- [ ] Custom universe: pasted tickers, CSV upload, saved universes (4)
+- [ ] Run as of a past date (6)
+- [ ] Valuation: P/E, P/B, P/S, P/CF, EV/EBIT, EV/EBITDA, earnings and FCF yield (15)
+- [ ] Profitability and quality: ROE, ROIC, margins, GP/A, interest coverage (16)
+- [ ] Growth: revenue and EPS YoY, 3-year CAGR (17)
+- [ ] Health and payout: debt/equity, debt/EBITDA, current ratio, dividend yield, payout (18)
+- [ ] Piotroski F-score (9 checks, unknowns kept) and Altman Z (19)
+- [ ] Momentum, 52-week high proximity, SMA distance, cross flags (20)
+- [ ] Technicals: RSI, MACD, ADX, stochastic, Bollinger, ATR, OBV (21)
+- [ ] Risk: realised volatility, beta, drawdown, idiosyncratic volatility, max daily return (22)
+- [ ] Liquidity: Amihud percentile, volume ratio (23)
+- [ ] Percentile versus sector or universe as a filter (24)
+- [ ] Query or formula language with custom ratios (39)
+- [ ] Historical functions (lag, change, rolling rank, cross above) (41)
+- [ ] Live count after each filter, with the bottleneck filter shown (42)
+- [ ] Composite score and ranking system with weights (43)
+- [ ] Pre-built screens and templates (44)
+- [ ] Sector-relative percentile bars in rows (51)
+- [ ] Treemap and heatmap lens (52)
+- [ ] Compare up to 6 to 25 names side by side (55)
+- [ ] Export CSV, Excel, JSON, ticker list (56)
+- [ ] Price chart with ranges 1M to 10Y (60)
+- [ ] Ratios with sector percentile and own-history percentile (61)
+- [ ] Score summary: valuation, quality, momentum, low vol, thesis line (62)
+- [ ] Peer comparison table (64)
+- [ ] Piotroski 9-check grid, Altman zone (66)
+- [ ] Saved screens, rename, duplicate (70)
+- [ ] Run history with entries, exits and rank shifts (71)
+- [ ] Scheduled re-runs (72)
+- [ ] Fundamental-change alerts (results out) (76)
+- [ ] Backtest a screen with rebalances (78)
+- [ ] Compare with benchmark (79)
+- [ ] Overfitting tests: deflated Sharpe, PBO, bootstrap, controls (80)
 
 ## Ship
 
