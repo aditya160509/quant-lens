@@ -9,8 +9,8 @@ type Node = { label: string; children?: Node[]; size?: number; colorValue?: numb
 type ColorMode = { key: string; label: string };
 
 /** Zoom from families/sectors into their members. Rectangles and labels encode magnitude; signed colour retains its sign. */
-export function Treemap({ items, title, sizeLabel, alternativeSizeLabel, colorLabel, colorModes, colorScale = "diverging", format = fmtTick, colorFormat = fmtTick }: {
-  items: Item[]; title: string; sizeLabel: string; alternativeSizeLabel?: string; colorLabel?: string; colorModes?: ColorMode[]; /** Sequential for magnitudes that cannot be negative (importance); diverging for signed measures. */ colorScale?: "diverging" | "sequential"; format?: (v: number) => string; colorFormat?: (v: number) => string;
+export function Treemap({ items, title, sizeLabel, alternativeSizeLabel, colorLabel, colorModes, colorScale = "diverging", colorAggregate = "sum", format = fmtTick, colorFormat = fmtTick }: {
+  items: Item[]; title: string; sizeLabel: string; alternativeSizeLabel?: string; colorLabel?: string; colorModes?: ColorMode[]; /** Sequential for magnitudes that cannot be negative (importance); diverging for signed measures. */ colorScale?: "diverging" | "sequential"; /** A group takes the sum of its members' colour values (weights) or their mean (returns, ratios). */ colorAggregate?: "sum" | "mean"; format?: (v: number) => string; colorFormat?: (v: number) => string;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [group, setGroup] = useState<string | null>(null);
@@ -28,11 +28,11 @@ export function Treemap({ items, title, sizeLabel, alternativeSizeLabel, colorLa
     const children = group ? leaves(clean.filter((r) => r.group === group)) : groups.map((name) => {
       const rows = clean.filter((r) => r.group === name);
       const values = rows.map(colorOf);
-      return { label: name, children: leaves(rows), colorValue: values.every((v) => v !== undefined && Number.isFinite(v)) ? (values as number[]).reduce((a, b) => a + b, 0) : undefined };
+      return { label: name, children: leaves(rows), colorValue: values.every((v) => v !== undefined && Number.isFinite(v)) ? (values as number[]).reduce((a, b) => a + b, 0) / (colorAggregate === "mean" ? values.length : 1) : undefined };
     });
     const root = hierarchy<Node>({ label: title, children }).sum((r) => Math.abs(r.size ?? 0)).sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
     return treemap<Node>().size([Math.max(1, width), height]).padding(3).round(true)(root).children ?? [];
-  }, [items, alternate, group, width, title, activeMode]);
+  }, [items, alternate, group, width, title, activeMode, colorAggregate]);
   const max = Math.max(...nodes.map((n) => Math.abs(n.data.colorValue ?? 0)), 1e-12);
   const fillOf = (v: number) => colorScale === "sequential"
     ? `color-mix(in oklch, var(--accent) ${Math.round(Math.min(1, Math.abs(v) / max) * 72)}%, var(--panel-2))`

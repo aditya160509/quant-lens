@@ -1,6 +1,7 @@
 import { Bell, FlaskConical, Scale, SlidersHorizontal, Sigma, Table2, Trophy } from "lucide-react";
 import { API_BASE_URL } from "@/lib/apiBase";
 import { isNum } from "@/modules/research/format";
+import { group, registerAlternates, registerViews } from "@/modules/research/outputs/registry";
 import type { FeatureMeta, LabConfig, Page } from "@/modules/research/lab";
 import type { FeatureResult, FeatureSpec, InputSpec, OutputSpec } from "@/modules/research/types";
 
@@ -52,9 +53,22 @@ function headline(r: FeatureResult) {
   return { headline: parts.filter(Boolean).join(" · ") || null, tone: null };
 }
 
-const RESULT_COLUMNS = ["rank", "ticker", "company_name", "sector", "exchange", "price", "market_cap", "core_quant_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile", "trailing_pe", "pb_ratio", "roe", "revenue_growth_yoy", "return_1d", "return_1m", "return_6m", "realized_vol_63d", "max_drawdown_252d", "piotroski_passed", "altman_z_score"];
+/** The standing disclosure on a backtest: what the numbers cannot tell. */
+function testBanner(r: FeatureResult) {
+  const meta = r.meta as Meta;
+  const parts = ["Today's names only: no delisted returns", "benchmark SPY", "fundamentals from 2021, 90-day lag", meta.as_of_date ? `prices to ${meta.as_of_date}` : null];
+  return { headline: parts.filter(Boolean).join(" · "), tone: "warn" as const };
+}
+
+const RESULT_COLUMNS = ["rank", "ticker", "company_name", "sector", "exchange", "price", "market_cap", "core_quant_score", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile", "trailing_pe", "pb_ratio", "roe", "revenue_growth_yoy", "return_1d", "return_1m", "return_6m", "realized_vol_63d", "max_drawdown_252d", "piotroski_passed", "altman_z_score"];
+/** Percentiles drawn as bars on a 0 to 100 scale. */
+const RESULT_BARS = ["sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile"];
 /** Provenance and always-empty fields, kept out of the columns. */
 const RESULT_HIDDEN = ["currency_units_unavailable_reason", "quote_currency", "financial_currency", "market_value_currency", "market_cap_statement_currency", "market_cap_observation_date", "market_cap_basis", "price_observation_date", "valuation_score_definition", "fundamental_basis", "enterprise_value_basis", "beta_effective_source", "beta_252_unavailable_reason", "float_percent", "forward_pe"];
+
+const SV = group(() => import("./views") as Promise<Record<string, unknown>>);
+registerViews({ screenTreemap: SV.ScreenTreemap }, []);
+registerAlternates({ rankedTable: [{ label: "Sector treemap", view: "screenTreemap" }] });
 
 export const SCREENER_LAB: LabConfig = {
   id: "screener",
@@ -67,9 +81,16 @@ export const SCREENER_LAB: LabConfig = {
     sc01: {
       verdict: headline,
       sections: [
-        { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], span: 12, view: "dataTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, hide: RESULT_HIDDEN } }] },
+        { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], span: 12, view: "rankedTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, bars: RESULT_BARS, hide: RESULT_HIDDEN } }] },
         { id: "funnel", label: "Funnel", items: [{ keys: ["filter_funnel_waterfall"], span: 6 }, { keys: ["market_cap_bucket_distribution"], span: 6 }] },
         { id: "coverage", label: "Coverage", items: [{ keys: ["metric_coverage"], span: 12, view: "dataTable", opts: { max: 500, maxHeight: 640 } }] },
+      ],
+    },
+    sc05: {
+      verdict: testBanner,
+      sections: [
+        { id: "performance", label: "Performance", items: [{ keys: ["equity_curve"], span: 8 }, { keys: ["full_performance_statistics"], span: 4 }, { keys: ["rolling_performance"], span: 12 }] },
+        { id: "rebalancing", label: "Rebalancing", items: [{ keys: ["rebalancing_date_sensitivity"], span: 6 }, { keys: ["holding_period_sensitivity"], span: 6 }, { keys: ["turnover_report"], span: 12 }] },
       ],
     },
   },

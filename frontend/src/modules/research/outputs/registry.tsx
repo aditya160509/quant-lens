@@ -32,7 +32,7 @@ const BarListSwitch = dynamic(
  */
 export const VIEWS: Record<string, ComponentType<ViewProps>> = {
   // tables
-  dataTable: T.DataTable, keyValue: T.Facts, facts: T.Facts, testCard: T.TestsTable, tests: T.TestsTable, regressionTable: T.RegressionTable,
+  dataTable: T.DataTable, rankedTable: T.DataTable, keyValue: T.Facts, facts: T.Facts, testCard: T.TestsTable, tests: T.TestsTable, regressionTable: T.RegressionTable,
   tstats: T.TStatTable, reportCard: T.ReportCard, scorecard: T.Scorecard, publicationTable: T.PublicationTable, latex: T.Latex, csv: T.CsvExport,
   pdf: T.PdfExport, summaryLine: T.Prose, verdict: T.Prose, explanation: T.Prose, prose: T.Prose,
   // robustness

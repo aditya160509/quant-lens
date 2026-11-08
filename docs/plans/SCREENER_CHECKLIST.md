@@ -47,7 +47,7 @@ A usable screener: every filter, live counts, real table. E18 M8 H1
 - [x] `E` Liquidity: Amihud percentile, volume ratio (23)
 - [x] `E` Percentile versus sector or universe as a filter (24)
 - [ ] `M` Chips with greater, less, between, in, top N, and live counts (37)
-- [ ] `E` Live count after each filter, with the bottleneck filter shown (42)
+- [x] `E` Live count after each filter, with the bottleneck filter shown (42)
 - [x] `E` Market-cap buckets with counts (2)
 - [ ] `M` Country and currency filter (8)
 - [ ] `M` Custom universe: pasted tickers, CSV upload, saved universes (4)
@@ -58,9 +58,9 @@ A usable screener: every filter, live counts, real table. E18 M8 H1
 - [ ] `M` Row actions: watchlist, alert, ML, Research (59)
 - [ ] `M` Undo, redo, disable a filter (47)
 - [ ] `H` AND/OR groups and nesting, round-trip with formula (38)
-- [ ] `E` Sector-relative percentile bars in rows (51)
+- [x] `E` Sector-relative percentile bars in rows (51)
 - [ ] `M` Trust badge per result and row; hatched unknowns (U1)
-- [ ] `E` Export CSV, Excel, JSON, ticker list (56)
+- [x] `E` Export CSV, Excel, JSON, ticker list (56)
 
 ## Batch 3: Search and quick look
 
@@ -110,14 +110,14 @@ Any output, any way. E2 M8 H4
 - [ ] `M` Absolute or percentile per column: within universe, sector or own history (50)
 - [ ] `H` Group by and pivot on any column, with count, median, mean and sum rows
 - [ ] `M` Conditional formats per column: bars, heat, signed colour, rules
-- [ ] `E` Density, column order, width, pinning and hiding
+- [x] `E` Density, column order, width, pinning and hiding
 - [ ] `M` Exhibits can be resized, reordered, hidden, expanded or sent to the workspace
 - [ ] `H` Save any arrangement as a view: for this screen or all screens; share it; reset to our default (49)
 - [ ] `H` The whole state lives in the URL, so any view can be linked
 - [ ] `M` Export any view as CSV, Excel, Markdown, SVG, PNG or PDF
 - [ ] `M` Every action has a keyboard path and a palette entry
 - [ ] `M` Scatter lens (53) and mini-chart grid (54)
-- [ ] `E` Treemap and heatmap lens (52)
+- [x] `E` Treemap and heatmap lens (52)
 
 ## Batch 6: Trust
 

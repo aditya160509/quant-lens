@@ -3,7 +3,7 @@
 import { createElement, useState, useRef } from "react";
 import { ArrowDown, ArrowUp, BookOpen, Pin, Check, ChevronDown, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
 import { Exhibit } from "@/kit/Exhibit";
-import { downloadCsv, downloadPng, downloadSvg } from "@/charts/export";
+import { downloadCsv, downloadJson, downloadPng, downloadSvg, downloadTickers, downloadXlsx } from "@/charts/export";
 import { useLayout } from "@/workspace/layout";
 import { MenuItem, PopMenu, Tooltip, type MenuAt } from "@/workspace/ui";
 import { label, out } from "./format";
@@ -132,6 +132,9 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
           <MenuItem icon={<Download size={13} />} onClick={() => { const sv = svg(); if (sv) downloadSvg(sv, name); }}>Export SVG</MenuItem>
           <MenuItem icon={<Download size={13} />} onClick={() => { const sv = svg(); if (sv) void downloadPng(sv, name); }}>Export PNG</MenuItem></> : null}
         {exportable ? <MenuItem icon={<Download size={13} />} onClick={() => downloadCsv(rows, name)}>Export CSV</MenuItem> : null}
+        {exportable && lab().id === "screener" ? <MenuItem icon={<Download size={13} />} onClick={() => downloadJson(rows, name, (result.meta as { limitations?: string[] }).limitations)}>Export JSON</MenuItem> : null}
+        {exportable && lab().id === "screener" ? <MenuItem icon={<Download size={13} />} onClick={() => void downloadXlsx(rows, name, `${lab().base}/export/xlsx`)}>Export Excel</MenuItem> : null}
+        {exportable && lab().id === "screener" && "ticker" in rows[0] ? <MenuItem icon={<Download size={13} />} onClick={() => downloadTickers(rows, name)}>Export tickers</MenuItem> : null}
         {onSpan ? <><div className="sep" /><div className="hd">Width</div>
           <div className="menu-seg">{[[4, "⅓"], [6, "½"], [8, "⅔"], [12, "Full"]].map(([sp, t]) => (
             <button key={sp} type="button" aria-pressed={item.span === sp} onClick={() => { onSpan(sp as number); setMenu(null); }}>{t}</button>

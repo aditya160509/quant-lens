@@ -12,6 +12,18 @@ from .data_loader import close_matrix
 
 DEFAULT_TOP_N = 50
 
+# Ready-made screens: plain filter payloads that any filter the caller sets overrides.
+SCREEN_TEMPLATES: dict[str, dict[str, Any]] = {
+    "quality_compounders": {"roe_min": 0.15, "net_margin_min": 0.10, "debt_equity_max": 1.0, "piotroski_min": 6},
+    "deep_value": {"pe_max": 12, "pb_max": 1.5, "exclude_negative_pe": True},
+    "momentum_leaders": {"momentum_percentile_min": 80, "high_proximity_min": -0.10, "dist_sma_200_min": 0},
+    "growth_at_a_reasonable_price": {"pe_max": 25, "eps_growth_yoy_min": 0.15, "revenue_growth_yoy_min": 0.10, "roe_min": 0.12},
+    "dividend_income": {"dividend_yield_min": 0.03, "payout_ratio_max": 0.7, "debt_equity_max": 1.5, "dividend_paying_only": True},
+    "low_volatility": {"realized_vol_max": 0.25, "beta_max": 0.9, "drawdown_min": -0.25},
+    "safe_balance_sheet": {"altman_min": 3, "current_ratio_min": 1.5, "interest_coverage_min": 5, "debt_ebitda_max": 3},
+    "oversold_quality": {"rsi_max": 30, "roe_min": 0.10, "quality_percentile_min": 60},
+}
+
 
 def _range_filter(df: pd.DataFrame, col: str, min_value: Any = None, max_value: Any = None) -> pd.Series:
     mask = pd.Series(True, index=df.index)
@@ -31,7 +43,12 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
     payload = payload or {}
     if panel.empty:
         return panel, []
-    payload = dict(payload)
+    template = payload.get("screen_template")
+    if template and template not in SCREEN_TEMPLATES:
+        raise ValueError(f"Unknown screen template: {template}")
+    chosen = SCREEN_TEMPLATES.get(template, {})
+    # A switch left off in the form is "unset", so a template can turn it on.
+    payload = {**chosen, **{k: v for k, v in payload.items() if not (chosen.get(k) is True and v is False)}}
     if any(key in payload for key in ("vol_forecast_min", "vol_forecast_max")):
         raise ValueError("HAR forecasts are unavailable; use explicitly named yang_zhang_vol_min/max estimates")
     for key, column in [("industry_group", "industry_group"), ("industry_groups", "industry_group"), ("exchange", "exchange"), ("exchanges", "exchange")]:
@@ -199,6 +216,7 @@ def top_table(panel: pd.DataFrame, n: int = DEFAULT_TOP_N) -> pd.DataFrame:
         "dollar_volume_20d",
         "vratio",
         "core_quant_score",
+        "sector_relative_score",
         "valuation_percentile",
         "quality_percentile",
         "momentum_percentile",
@@ -228,7 +246,11 @@ def top_table(panel: pd.DataFrame, n: int = DEFAULT_TOP_N) -> pd.DataFrame:
         "amihud_percentile",
     ]
     keep = [c for c in cols if c in panel.columns]
-    return panel[keep].head(n).copy()
+    table = panel[keep].head(n).copy()
+    # A blank label is an unknown one.
+    text = table.select_dtypes("object").columns
+    table[text] = table[text].replace("", "Unknown")
+    return table
 
 
 def heatmap_view(panel: pd.DataFrame, metric: str = "core_quant_score") -> list[dict[str, Any]]:

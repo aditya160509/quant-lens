@@ -31,7 +31,7 @@ export function serializeSvg(svg: SVGSVGElement): string {
   return new XMLSerializer().serializeToString(clone);
 }
 
-function download(name: string, blob: Blob) {
+export function download(name: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -106,4 +106,20 @@ export async function copyPng(svg: SVGSVGElement, name = "chart", scale = 3): Pr
     download(`${name}.png`, blob);
     return false;
   }
+}
+
+/** JSON carries the run's printed limits beside the rows. */
+export function downloadJson(rows: Record<string, unknown>[], name: string, limits: string[] = []) {
+  download(`${name}.json`, new Blob([JSON.stringify({ limits, rows })], { type: "application/json" }));
+}
+
+export function downloadTickers(rows: Record<string, unknown>[], name: string) {
+  download(`${name}.txt`, new Blob([rows.map((r) => r.ticker).filter(Boolean).join("\n")], { type: "text/plain" }));
+}
+
+/** The server writes the workbook, with unknowns spelled out and a Limits sheet. */
+export async function downloadXlsx(rows: Record<string, unknown>[], name: string, url: string) {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows }) });
+  if (!res.ok) throw new Error(`Excel export failed (${res.status})`);
+  download(`${name}.xlsx`, await res.blob());
 }

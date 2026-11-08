@@ -131,6 +131,28 @@ def test_export_is_lossless_quoted_and_honors_columns():
         build_export_payload('08', {'columns': ['fake']}, rows)
 
 
+def test_excel_export_spells_out_unknowns_and_prints_limits():
+    import io
+    import zipfile
+
+    from app.services.screener_v2.core.common import LIMITS
+    from app.services.screener_v2.core.exports import build_xlsx
+    book = zipfile.ZipFile(io.BytesIO(build_xlsx([{'ticker': 'A', 'pe': 12.5}, {'ticker': 'B', 'pe': None}])))
+    strings = book.read('xl/sharedStrings.xml').decode()
+    assert 'Unknown' in strings and LIMITS[0] in strings
+
+
+def test_screen_template_filters_with_counts_and_user_settings_win():
+    import pandas as pd
+
+    from app.services.screener_v2.core.screener import apply_filters
+    panel = pd.DataFrame({'ticker': list('ABCD'), 'sector': 'Tech', 'industry': 'x', 'price_usd': 10.0, 'roe': [0.2, 0.2, 0.05, None],
+                          'net_margin': 0.2, 'debt_equity': [0.5, 2.0, 0.5, 0.5], 'piotroski_passed': 7})
+    kept, stages = apply_filters(panel, {'screen_template': 'quality_compounders'})
+    assert list(kept.ticker) == ['A'] and [s['removed'] for s in stages if s['stage'] == 'ROE'] == [2]
+    assert list(apply_filters(panel, {'screen_template': 'quality_compounders', 'debt_equity_max': 3})[0].ticker) == ['A', 'B']
+
+
 def test_historical_training_labels_never_pass_the_training_date(local_data):
     import pandas as pd
 

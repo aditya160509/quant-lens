@@ -1,10 +1,12 @@
 """Lossless screen exports with declared formats and selected columns."""
 from __future__ import annotations
 
+import io
 import json
 from typing import Any
 
 import pandas as pd
+import xlsxwriter
 
 from .common import LIMITS, records
 
@@ -36,3 +38,24 @@ def build_export_payload(feature_id: str, payload: dict[str, Any], result_rows: 
     return {'feature_id': feature_id, 'row_count': len(rows), 'columns': columns, 'format': format,
             'content': content, 'media_type': media_type, 'filename': f'screener-v2-{feature_id}.{extension}',
             'tsv_preview': tsv[:5000], 'tsv': tsv, 'csv': csv_text, 'ticker_list': ticker_list, 'json_payload': json_payload}
+
+
+def build_xlsx(rows: list[dict[str, Any]]) -> bytes:
+    """One Results sheet (unknowns written as Unknown) and a Limits sheet."""
+    columns = list(dict.fromkeys(key for row in rows for key in row))
+    buffer = io.BytesIO()
+    book = xlsxwriter.Workbook(buffer, {"in_memory": True, "nan_inf_to_errors": True})
+    sheet = book.add_worksheet("Results")
+    head = book.add_format({"bold": True})
+    for j, name in enumerate(columns):
+        sheet.write(0, j, name, head)
+    for i, row in enumerate(rows, 1):
+        for j, name in enumerate(columns):
+            value = row.get(name)
+            sheet.write(i, j, "Unknown" if pd.isna(value) else value)
+    sheet.freeze_panes(1, 0)
+    limits = book.add_worksheet("Limits")
+    for i, text in enumerate(LIMITS):
+        limits.write(i, 0, text)
+    book.close()
+    return buffer.getvalue()

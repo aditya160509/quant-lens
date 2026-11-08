@@ -72,7 +72,9 @@ RANGE_FILTERS = {
 
 
 def filter_inputs():
-    result = [field(key, default='all', group='Filters') for key in ['sector', 'industry', 'industry_group', 'exchange']]
+    from ..core.screener import SCREEN_TEMPLATES
+    result = [field('screen_template', 'select', '', 'Filters', options=['', *SCREEN_TEMPLATES])]
+    result += [field(key, default='all', group='Filters') for key in ['sector', 'industry', 'industry_group', 'exchange']]
     for key, description in RANGE_FILTERS.items():
         for bound in ['min', 'max']:
             result.append(field(f'{key}_{bound}', 'number', None, 'Filters', description))

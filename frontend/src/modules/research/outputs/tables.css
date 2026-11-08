@@ -43,3 +43,8 @@
 .dt[data-virtual="true"] .tbl-wrap { display: block; }
 .dt[data-virtual="true"] .dt-cards { display: none; }
 .dt[data-virtual="true"] .tbl td { white-space: nowrap; }
+
+.pbar { position: relative; display: block; min-width: 88px; padding: 0 4px; isolation: isolate; }
+.pbar > i { position: absolute; inset: 2px auto 2px 0; background: color-mix(in oklch, var(--accent, var(--up)) 22%, transparent); border-radius: 2px; z-index: -1; }
+.dt-grip { position: absolute; top: 0; right: 0; bottom: 0; width: 6px; cursor: col-resize; touch-action: none; }
+.dt-grip:hover { background: var(--line-3); }

@@ -34,6 +34,8 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
                 for name in panel.select_dtypes("number").columns]
     filtered, funnel = apply_filters(panel, payload)
     bottleneck = max(funnel[1:], key=lambda stage: stage["removed"], default=None)
+    bottleneck = bottleneck if bottleneck and bottleneck["removed"] else None
+    funnel = [{**stage, "bottleneck": "Most removed" if stage is bottleneck else None} for stage in funnel]
     top_n = int(payload.get("top_n") or 50)
     ranked = top_table(filtered, n=top_n)
     # Dollar bands; names with no market cap stay visible as Unknown.
@@ -71,7 +73,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         summary_cards=[
             {"label": "Universe loaded", "value": len(panel)},
             {"label": "After filters", "value": len(filtered)},
-            {"label": "Bottleneck filter", "value": f"{bottleneck['stage']} (-{bottleneck['removed']:,})" if bottleneck else None},
+            {"label": "Bottleneck filter", "value": bottleneck["stage"] if bottleneck else None},
             {"label": "Valuation-ready stocks", "value": int(filtered.valuation_percentile.notna().sum())},
             {"label": "Top score", "value": float(filtered["core_quant_score"].max()) if not filtered.empty else None},
             {"label": "Focus ticker", "value": ql.get("ticker")},

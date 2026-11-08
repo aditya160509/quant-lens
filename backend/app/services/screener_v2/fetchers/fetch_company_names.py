@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import io
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pandas as pd
 import requests
+import yfinance as yf
 
 BACKEND = Path(__file__).resolve().parents[4]
 OUT = BACKEND / "data/fundamentals/company_names.parquet"
@@ -25,7 +27,30 @@ def main() -> None:
     india = pd.read_csv(io.StringIO(nse.text))
     india.columns = india.columns.str.strip()
     frames.append(pd.DataFrame({"ticker": india.SYMBOL + ".NS", "company_name": india["NAME OF COMPANY"], "source": "nse"}))
-    pd.concat(frames).drop_duplicates("ticker").to_parquet(OUT, index=False)
+    # Earlier Yahoo hits are kept, so a rerun only retries what is still missing.
+    if OUT.exists():
+        previous = pd.read_parquet(OUT)
+        frames.append(previous[previous.source == "yahoo"])
+    names = pd.concat(frames).drop_duplicates("ticker")
+    from app.services.screener_v2.core.data_loader import available_symbols
+
+    # Symbols the SEC and NSE lists miss (other exchanges, delisted US names) come from Yahoo; still-missing stay unknown.
+    known = set(names.ticker)
+    todo = [s for s in available_symbols() if not {s, s.replace("_", "-"), s.replace("_", ".")} & known]
+
+    def yahoo(sym: str) -> str | None:
+        try:
+            head, _, suffix = sym.rpartition("_")
+            info = yf.Ticker(f"{head.replace('_', '-')}.{suffix}" if head else sym).get_info()
+        except Exception:  # noqa: BLE001 - Yahoo fails in many ways; a miss stays unknown
+            return None
+        return info.get("longName") or info.get("shortName")
+
+    with ThreadPoolExecutor(2) as pool:
+        found = list(pool.map(yahoo, todo))
+    extra = pd.DataFrame({"ticker": todo, "company_name": found, "source": "yahoo"}).dropna(subset=["company_name"])
+    pd.concat([names, extra]).to_parquet(OUT, index=False)
+    print(f"{len(extra)} of {len(todo)} extra names found")
 
 
 if __name__ == "__main__":

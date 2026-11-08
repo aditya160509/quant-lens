@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as Popover from "@radix-ui/react-popover";
-import { ArrowDown, ArrowUp, ChevronRight, Columns3, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronRight, Columns3, Pin, X } from "lucide-react";
 import { Spark } from "@/charts/RankList";
 import { columns, fmtKey, isNum, isPKey, isTKey, label, pTone, toneVar } from "@/modules/research/format";
 import type { Row } from "@/modules/research/types";
@@ -76,16 +76,21 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
   const hideOpt = opts?.hide as string[] | undefined;
   const order = opts?.columns as string[] | undefined;
   const groupKey = opts?.groupKey as string | undefined;
+  const bars = opts?.bars as string[] | undefined;
   const base = useMemo(() => {
     const all = columns(rows).filter((c) => !(hideOpt ?? []).includes(c));
     return order ? [...order.filter((c) => all.includes(c)), ...all.filter((c) => !order.includes(c))] : all;
   }, [rows, hideOpt, order]);
   const [colOrder, setColOrder] = useState<string[] | null>(null);
   const [hidden, setHidden] = useState<string[]>([]);
+  const [pinned, setPinned] = useState<string[]>([]);
+  const [widths, setWidths] = useState<Record<string, number>>({});
+  const [lefts, setLefts] = useState<Record<string, number>>({});
   const cols = useMemo(() => {
     const o = colOrder ? [...colOrder.filter((c) => base.includes(c)), ...base.filter((c) => !colOrder.includes(c))] : base;
-    return o.filter((c) => !hidden.includes(c));
-  }, [base, colOrder, hidden]);
+    const shown = o.filter((c) => !hidden.includes(c));
+    return [...shown.filter((c) => pinned.includes(c)), ...shown.filter((c) => !pinned.includes(c))];
+  }, [base, colOrder, hidden, pinned]);
   const [sort, setSort] = useState<SortState>(null);
   const [tint, setTint] = useState(opts?.tint === true);
   const [density, setDensity] = useState<"compact" | "comfortable">("comfortable");
@@ -129,6 +134,34 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, cols]);
+  const headRow = useRef<HTMLTableRowElement>(null);
+  // A pinned column sticks at the summed width of the pinned columns before it.
+  useLayoutEffect(() => {
+    const next: Record<string, number> = {};
+    let x = 0;
+    headRow.current?.querySelectorAll<HTMLElement>("th[data-col]").forEach((th) => {
+      const c = th.dataset.col as string;
+      if (!pinned.includes(c)) return;
+      next[c] = x;
+      x += th.getBoundingClientRect().width;
+    });
+    setLefts((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+  }, [pinned, widths, cols, rows]);
+  const colStyle = (c: string, head = false): CSSProperties | undefined => {
+    const style: CSSProperties = {};
+    if (widths[c]) { style.width = widths[c]; style.minWidth = widths[c]; style.maxWidth = widths[c]; }
+    if (pinned.includes(c)) { style.position = "sticky"; style.left = lefts[c] ?? 0; style.zIndex = head ? 4 : 2; style.background = "var(--panel)"; }
+    return Object.keys(style).length ? style : undefined;
+  };
+  const startResize = (c: string, e: PointerEvent<HTMLSpanElement>) => {
+    e.preventDefault();
+    const th = e.currentTarget.parentElement as HTMLElement;
+    const x0 = e.clientX, w0 = th.getBoundingClientRect().width;
+    const move = (m: globalThis.PointerEvent) => setWidths((w) => ({ ...w, [c]: Math.max(48, Math.round(w0 + m.clientX - x0)) }));
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
   const groups = groupCols(cols);
   const twoLevel = groups.some((g) => g.head);
   const move = (c: string, d: number) => {
@@ -163,7 +196,7 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
   const render = (r: Row, i: number, c: string) => {
     const v = r[c];
     const d = flash[`${i}:${c}`];
-    const content = Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : fmtKey(c, v);
+    const content = bars?.includes(c) && isNum(v) ? <span className="pbar"><i style={{ width: `${Math.max(0, Math.min(100, v))}%` }} />{fmtKey(c, v)}</span> : Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : fmtKey(c, v);
     return <>{content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -177,12 +210,13 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
     }
   };
   const sortTh = (c: string, text: string) => (
-    <th key={c} className={`sortable${numeric.has(c) ? " r" : ""}`} aria-sort={sort?.key === c ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
+    <th key={c} data-col={c} style={colStyle(c, true)} className={`sortable${numeric.has(c) ? " r" : ""}`} aria-sort={sort?.key === c ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
       >
       <button className="dt-sort" onClick={() => { setPage(0); setSort((s) => (s?.key === c ? (s.dir === 1 ? { key: c, dir: -1 } : null) : { key: c, dir: 1 })); }}>
       {text}
       {sort?.key === c ? (sort.dir === 1 ? <ArrowUp size={10} style={{ marginLeft: 4, verticalAlign: -1 }} /> : <ArrowDown size={10} style={{ marginLeft: 4, verticalAlign: -1 }} />) : null}
       </button>
+      <span className="dt-grip" role="separator" aria-label={`Resize ${text}`} onPointerDown={(e) => startResize(c, e)} />
     </th>
   );
   return (
@@ -202,6 +236,7 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
                   <div key={c} className="tp-term">
                     <input type="checkbox" checked={!hidden.includes(c)} aria-label={`Show ${c}`} onChange={() => setHidden(hidden.includes(c) ? hidden.filter((x) => x !== c) : [...hidden, c])} />
                     <span style={{ flex: 1 }}>{label(c)}</span>
+                    <button className="btn sm ghost" aria-pressed={pinned.includes(c)} aria-label={`Pin ${label(c)}`} onClick={() => setPinned(pinned.includes(c) ? pinned.filter((x) => x !== c) : [...pinned, c])}><Pin size={11} /></button>
                     <button className="btn sm ghost" aria-label="Move left" onClick={() => move(c, -1)}><ArrowUp size={11} /></button>
                     <button className="btn sm ghost" aria-label="Move right" onClick={() => move(c, 1)}><ArrowDown size={11} /></button>
                   </div>
@@ -215,7 +250,7 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
         <table className="tbl">
           <thead>
             {twoLevel ? <tr>{groups.map((g, k) => (g.head ? <th key={k} colSpan={g.span} className="grp">{label(g.head)}</th> : <th key={k} />))}</tr> : null}
-            <tr>{groups.flatMap((g) => g.cols.map((c) => sortTh(c, shortName(c, g.head))))}</tr>
+            <tr ref={headRow}>{groups.flatMap((g) => g.cols.map((c) => sortTh(c, shortName(c, g.head))))}</tr>
           </thead>
           <tbody>
             {virtual && windowRows[0]?.start > 0 ? <tr aria-hidden="true"><td colSpan={cols.length} style={{ height: windowRows[0].start, padding: 0, border: 0 }} /></tr> : null}
@@ -232,7 +267,7 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
               return (
                 <tr key={`r${it.i}`} className={`clickable${it.sub ? " sub" : ""}`} data-sel={sel === it.i} tabIndex={0} onClick={() => setSel(it.i)} onKeyDown={(e) => { if (e.key === "Enter") setSel(it.i); }}>
                   {cols.map((c, j) => (
-                    <td key={c} className={`${numeric.has(c) ? "r num" : ""}${j === 0 ? " strong" : ""}${flash[`${it.i}:${c}`] !== undefined ? " flash" : ""}`} style={cellStyle(c, r[c])}>{render(r, it.i, c)}</td>
+                    <td key={c} className={`${numeric.has(c) ? "r num" : ""}${j === 0 ? " strong" : ""}${flash[`${it.i}:${c}`] !== undefined ? " flash" : ""}`} style={{ ...cellStyle(c, r[c]), ...colStyle(c) }}>{render(r, it.i, c)}</td>
                   ))}
                 </tr>
               );

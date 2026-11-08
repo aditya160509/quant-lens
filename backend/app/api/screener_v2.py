@@ -6,16 +6,19 @@ import asyncio
 import csv
 import io
 import json
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from app.services.screener_v2.core.data_loader import (
+    BACKEND_DATA,
+    available_symbols,
+    parse_symbols,
+)
+from app.services.screener_v2.core.exports import build_xlsx
 from app.services.screener_v2.registry import feature_manifest, get_feature, run_feature
-
-
-from app.services.screener_v2.core.data_loader import BACKEND_DATA, available_symbols, parse_symbols
 from app.services.studio.jobs import JobStore
 
 RESULTS_DIR = BACKEND_DATA / "screener_v2" / "results"
@@ -26,6 +29,10 @@ router = APIRouter(prefix="/screener-v2")
 
 class FeatureRequest(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class RowsRequest(BaseModel):
+    rows: list[dict[str, Any]]
 
 
 @router.get("/features")
@@ -48,8 +55,8 @@ async def run_screener_feature(feature_id: str, request: FeatureRequest) -> dict
 @router.post("/run/{feature_id}/csv")
 async def run_screener_feature_csv(
     feature_id: str,
-    file: UploadFile = File(...),
-    payload: str = Form("{}"),
+    file: Annotated[UploadFile, File()],
+    payload: Annotated[str, Form()] = "{}",
 ) -> dict[str, Any]:
     raw = await file.read(2_000_001)
     if len(raw) > 2_000_000:
@@ -71,7 +78,7 @@ async def run_screener_feature_csv(
     try:
         fields = json.loads(payload)
         if not isinstance(fields, dict):
-            raise ValueError("payload must be a JSON object")
+            raise TypeError("payload must be a JSON object")
         return await asyncio.to_thread(run_feature, feature_id, {**fields, "tickers": tickers, "max_symbols": min(len(tickers), 5000)})
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -105,15 +112,34 @@ async def export_screener_feature_csv(feature_id: str, request: FeatureRequest) 
     )
 
 
+@router.post("/export/xlsx")
+async def export_rows_xlsx(request: RowsRequest) -> Response:
+    return Response(
+        content=build_xlsx(request.rows),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="screener-v2.xlsx"'},
+    )
+
+
 @router.get("/symbols")
 def search_symbols(q: str = Query("", max_length=40), limit: int = Query(25, ge=1, le=100)) -> dict[str, Any]:
-    query = q.strip().upper().replace(".", "_").replace("-", "_")
+    from app.services.screener_v2.core.fundamentals import _company_names
+
+    text = q.strip().upper()
+    ticker_q = text.replace(".", "_").replace("-", "_")
+    names = _company_names()
     try:
-        hits = [s for s in available_symbols() if query in s]
+        symbols = available_symbols()
     except FileNotFoundError as exc:
         raise HTTPException(503, str(exc)) from exc
-    hits.sort(key=lambda s: (not s.startswith(query), s))
-    return {"results": [{"ticker": s} for s in hits[:limit]]}
+    hits = []
+    for s in symbols:
+        name = names.get(s) or names.get(s.replace("_", "-")) or names.get(s.replace("_", "."))
+        in_name = bool(text) and name is not None and text in name.upper()
+        if ticker_q in s or in_name:
+            hits.append((not s.startswith(ticker_q), not (name or "").upper().startswith(text), s, name))
+    hits.sort()
+    return {"total": len(hits), "results": [{"ticker": s, "company_name": name} for _, _, s, name in hits[:limit]]}
 
 
 def _execute(job_id: str, feature_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -127,9 +153,17 @@ def _execute(job_id: str, feature_id: str, payload: dict[str, Any]) -> dict[str,
 
 
 def _submit_feature(feature_id, payload, idempotency_key=None):
-    from app.services.screener_v2.features.inputs import normalize_payload
-    from app.services.screener_v2.core.data_loader import MARKET_UNIVERSE, MASTER_FUNDAMENTALS, FF5_DAILY, MOM_DAILY, CATEGORY7_MACRO, FX_DAILY, default_as_of
     from app.services.screener_v2.core.currency import instrument_context
+    from app.services.screener_v2.core.data_loader import (
+        CATEGORY7_MACRO,
+        FF5_DAILY,
+        FX_DAILY,
+        MARKET_UNIVERSE,
+        MASTER_FUNDAMENTALS,
+        MOM_DAILY,
+        default_as_of,
+    )
+    from app.services.screener_v2.features.inputs import normalize_payload
     feature = get_feature(feature_id)
     payload = normalize_payload(feature.inputs, payload)
     parse_symbols(payload)
@@ -223,7 +257,7 @@ def run_saved_screen(screen_id: str) -> dict[str, Any]:
 
 @router.get('/screens/{screen_id}/history')
 def saved_screen_history(screen_id: str, limit: int = Query(20, ge=1, le=100)) -> dict[str, Any]:
-    from app.services.screener_v2.core.state import run_history, get_screen
+    from app.services.screener_v2.core.state import get_screen, run_history
     try:
         get_screen(screen_id)
         return {'runs': run_history(screen_id, limit)}
@@ -250,7 +284,7 @@ def put_universe(universe_id: str, request: UniverseRequest) -> dict[str, Any]:
 
 
 @router.post('/uploads')
-async def upload_universe(file: UploadFile = File(...), kind: str = Query('universe')) -> dict[str, Any]:
+async def upload_universe(file: Annotated[UploadFile, File()], kind: str = Query('universe')) -> dict[str, Any]:
     from app.services.screener_v2.core.data_loader import store_universe_upload
     if kind != 'universe':
         raise HTTPException(422, 'Only universe CSV uploads are supported')
@@ -308,6 +342,7 @@ def schedules() -> dict[str, Any]:
 
 
 from app.services.screener_v2.core.scheduler import ScreenScheduler
+
 SCHEDULER = ScreenScheduler(_submit_feature)
 
 

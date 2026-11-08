@@ -3,11 +3,11 @@ import { resolve, join } from "node:path";
 import { expect, test } from "playwright/test";
 
 /**
- * Visual smoke tests for the lab workspace (Research and Machine learning) in dark and light.
+ * Visual smoke tests for the lab workspace (Research, Machine learning and Screener) in dark and light.
  * Run with `npm run test:e2e:labs` (one worker: parallel first loads on the dev server race the page switch).
  * Update baselines with: npm run test:e2e:labs -- --update-snapshots
  */
-const PAGES = ["/research", "/research/signal", "/research/report", "/research/canonical", "/ml", "/ml/cpcv", "/ml/validate", "/ml/studio"];
+const PAGES = ["/research", "/research/signal", "/research/report", "/research/canonical", "/ml", "/ml/cpcv", "/ml/validate", "/ml/studio", "/screener", "/screener/screen", "/screener/composite", "/screener/backtest", "/screener/alerts"];
 
 for (const scheme of ["dark", "light"] as const) {
   test.describe(`research ${scheme}`, () => {

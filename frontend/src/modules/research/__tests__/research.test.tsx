@@ -140,6 +140,14 @@ describe("cinema interaction regressions", () => {
     expect(screen.getAllByRole("row")[1]).toHaveTextContent("Name4");
   });
 
+  it("draws percentile bars and pins a chosen column first", () => {
+    const { container } = render(<DataTable rows={[{ ticker: "AAA", sector_relative_score: 80, price: 3 }]} opts={{ bars: ["sector_relative_score"] }} />);
+    expect(container.querySelector(".pbar > i")).toHaveStyle({ width: "80%" });
+    fireEvent.click(screen.getByRole("button", { name: "Table options" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pin Price" }));
+    expect(container.querySelector("th[data-col='price']")?.getAttribute("style")).toContain("sticky");
+  });
+
   it("keeps cluster identity consistent below the cut and rejects cyclic linkage", () => {
     const merges = [{ left: 0, right: 1, distance: 1 }, { left: 2, right: 3, distance: 2 }, { left: 4, right: 5, distance: 5 }];
     expect(leafOrder(merges, 4)).toEqual([0, 1, 2, 3]);
