@@ -57,10 +57,10 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Portfolio product review
 - [ ] Studio product review
 - [ ] Widget workspace plan
-- [ ] Decide PBO convention
-- [ ] Decide HRP linkage
-- [ ] Decide trial ledger owner
-- [ ] Decide the other merge map items
+- [x] Decide PBO convention
+- [x] Decide HRP linkage
+- [x] Decide trial ledger owner
+- [x] Decide the other merge map items
 
 ## Chart system
 - [ ] Option schema per chart type
@@ -74,7 +74,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Dense series engine with uPlot or canvas
 
 ## Step 2: Screener
-- [ ] Redo product review: full paid feature parity, India and global
+- [x] Redo product review: full paid feature parity, India and global
 - [ ] Global search
 - [ ] `/screener` on `LabConfig`
 - [ ] Shared kit used by ML and Screener

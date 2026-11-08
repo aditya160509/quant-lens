@@ -35,7 +35,7 @@ Screener is the first module rebuilt, so it pays for these shared pieces. Later 
 
 Not carried by Screener: execution and covariance kernels (steps 5, 6), optimisers and risk (7, 8), HAC and bootstrap (9), regime filter (10), the data, universes, uploads and jobs merges (11 to 14). Screener's cost loop (`core/backtest.py::simulate`) stays until step 5 runs for Factors.
 
-### Proposed defaults, awaiting owner decision
+### Decided defaults (section 8)
 
 These are not decided. Work on the merges above waits for the owner to confirm or change them.
 
@@ -184,23 +184,28 @@ Rows for items already deleted (legacy covariance, VaR, `services/ml/`, root pca
 | `frontend/src/charts/` duplicates inside module files | Step 18 | Visual baselines |
 | Research `jobs` SQLite table and `research_v2/jobs.json` | Step 14, after data migration | Job endpoint tests |
 
-## 8. Open decisions for the owner
+## 8. Decisions
 
-1. PBO convention. Adopt ML's logit form (rank/(N+1)) everywhere? The Research ledger and Research report values will change.
-2. Shared package. Confirm `services/shared/` and who owns it. `docs/reviews/code/PLATFORM_CODE_10_BY_10_COMPLETE_SPEC.md` section 1 proposes `services/shared/market_data.py`.
-3. Covariance owner: Portfolio v2 (widest menu) or ML allocation?
-4. Trial ledger owner. The decided doc says ML A1.6 (open), but Research already has a ledger, and ML's own validate file says it is "shared with Research". Propose the Research store.
-5. HRP linkage default: ward (ML) or single (Portfolio)?
-6. DSR trial variance default. Portfolio's 1/(n-1) estimator variance, or cross-trial variance as Research does?
-7. Regime kernel owner (Volatility or ML), and the covariance structure for HMM (diagonal or full).
-8. Legacy routes: closed. They were deleted in commit 7f03b270.
-9. Upload storage: ML in-memory with TTL, or disk as the other modules do? Saved upload ids change either way.
-10. Universe registry owner and fallback. Silent default or 422 on unknown symbols (Screener already raises on dict input)?
-11. Job store: Studio JSON `JobStore` or Research SQLite jobs?
-12. Report composition: Research TeX and PDF stays separate from Studio `ReportComposer`? (Proposed: yes.)
-13. Bootstrap: stationary everywhere, or keep PCA and ML fixed-block schemes?
-14. GARCH and DCC owner: Volatility only, or keep ML's arch module? Which DCC is canonical?
-15. Cornish-Fisher fix timing: closed. The legacy route is gone.
+Decided 2026-11-08 under owner delegation. Golden fixtures still record old values before any change.
+
+| # | Decision | Choice | Why |
+|---|---|---|---|
+| 1 | PBO convention | ML's logit of rank/(N+1) everywhere | Standard CSCV form; Research ledger and report values will change, so announce it |
+| 2 | Shared package | `services/shared/`, owned by the platform, pure maths and `market_data.py` | No module should import another for maths |
+| 3 | Covariance owner | Portfolio v2 | Widest estimator menu |
+| 4 | Trial ledger owner | Research store | The only ledger that exists |
+| 5 | HRP linkage default | Ward | Single linkage chains clusters; users may still choose |
+| 6 | DSR trial variance | Cross-trial variance | That is what the statistic deflates by |
+| 7 | Regime kernel | Volatility owns it; covariance is a parameter, diagonal by default, full optional | Diagonal is stable on short samples |
+| 8 | Legacy routes | Closed, deleted in 7f03b270 | |
+| 9 | Upload storage | Disk, with ML's validation and caps | Saved uploads must survive a restart |
+| 10 | Universe registry | Research registry; unknown symbols return 422 | A silent fallback hides bad input |
+| 11 | Job store | Studio `JobStore` | Already used by every module |
+| 12 | Report composition | Research and Studio stay separate | Different products |
+| 13 | Bootstrap | Stationary everywhere, through `arch` | One method, one result |
+| 14 | GARCH and DCC | Volatility owns them; `volatility_v2/core/dcc.py` is canonical | Volatility is the specialist module; ML calls it |
+| 15 | Cornish-Fisher fix | Closed, the legacy route is gone | |
+| 16 | Non-US prices | Shared loader adds the per-ticker store to the universe | 335 `.NS` price files and 431 Indian fundamentals are otherwise unreachable; India screening depends on it |
 
 ## 9. Unverified
 
@@ -210,5 +215,4 @@ Rows for items already deleted (legacy covariance, VaR, `services/ml/`, root pca
 - Review docs (`docs/reviews/code/*_V2_REVIEW.md`, `docs/reviews/code/PLATFORM_CODE_10_BY_10_COMPLETE_SPEC.md`) were used only as pointers. Their line numbers and file counts were not rechecked, except where cited above.
 - `AGENTS.md` graph size is stale (17,630 nodes now, 18,129 written).
 
-16. Non-US prices for Screener. `screener_v2/core/data_loader.py` reads only `market_universe.parquet` (4,158 tickers, almost all US), but `backend/data/prices/` holds about 3,000 per-ticker files including 335 `.NS` files, and `master_fundamentals.parquet` already has 333 NSE and 98 BSE tickers. Decide whether the shared loader (step 11) adds the per-ticker store to the universe. India screening depends on it.
 - The "Same maths?" and "Risk" cells were not rewritten after the deletions; some still discuss deleted copies.

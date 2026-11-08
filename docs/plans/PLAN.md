@@ -192,7 +192,7 @@ From `../architecture/CROSS_MODULE_MERGE_MAP.md`. Each merge needs its golden te
 | 5 | Data, universes, uploads, jobs | 11 to 14 | When a rebuild needs them. Screener needs the data path for India (map decision 16) |
 | 6 | Trial ledger, formula language, scheduler, within Screener | 15 to 17 | Screener Test, Rank, Monitor |
 
-Screener carries merges 1, 2 and 6. Merges 3 to 5 wait for the module that needs them. Proposed defaults, awaiting owner decision: PBO uses ML's form, the Research store owns the trial ledger, deflated Sharpe uses cross-trial variance, HRP uses ward linkage.
+Screener carries merges 1, 2 and 6. Merges 3 to 5 wait for the module that needs them. Decided (merge map section 8): PBO uses ML's form, the Research store owns the trial ledger, deflated Sharpe uses cross-trial variance, HRP uses ward linkage.
 
 ### Step 1: Finish ML (now)
 
@@ -234,7 +234,7 @@ Rules for the build:
 - Every result prints its limits: 90-day statement lag, survivorship, 2021+ fundamentals.
 - A feature that needs data we lack is marked "needs data" on screen and in the docs. It is not faked. The 19 items and their sources are in the review, section 4.
 - Remove S4 leaderboard, correlation and historical strategy outputs, the S2 factor zoo, and S5 Monte Carlo and PBO duplicates.
-- Open decisions needed before 2.8: PBO convention and trial ledger owner. Needed before 2.3: the India price-store decision.
+- Decided in merge map section 8: PBO form, trial ledger owner, and adding the India price store to the shared loader.
 - Data purchases (estimates, shareholding, long history, delisted, real-time) are business decisions after launch of `screener-v1`.
 
 ### The module recipe
