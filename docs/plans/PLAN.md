@@ -211,7 +211,7 @@ Then hill climb: Heat table, Distribution, Scatter v2, Waterfall v2, Dendrogram 
 
 ### Step 2: Screener
 
-Spec: `../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md`, redone 2026-11-08 against the feature rule. Sources: `../references/2026-11-screener-competitors.md`. It lists 83 features people pay for in India and globally: 35 exist in the backend, 29 are builds on data we hold, 19 need data we do not have. Twenty items are cut, with reasons.
+Spec: `../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md`, redone 2026-11-08 against the feature rule. Sources: `../references/2026-11-screener-competitors.md`. It lists 76 features people pay for in India and globally: 35 exist in the backend, 29 are builds on data we hold, 12 wait for new data (8 free, 4 paid). Twenty-six items are cut, with reasons.
 
 The product is Screen, Rank, Test, Monitor, plus global search. Other screeners stop at a list. We add trust on every result, why-here, near-miss, proof in one click, a trial counter and alert precision. Plain-English screening is offered by Fiscal.ai, YCharts and TradingView already, so it is parity, not an edge.
 
@@ -232,7 +232,7 @@ The product is Screen, Rank, Test, Monitor, plus global search. Other screeners 
 Rules for the build:
 
 - Every result prints its limits: 90-day statement lag, survivorship, 2021+ fundamentals.
-- A feature that needs data we lack is marked "needs data" on screen and in the docs. It is not faked. The 19 items and their sources are in the review, section 4.
+- A feature that needs data we lack is marked "needs data" on screen and in the docs. It is not faked. The 12 kept for later and their sources are in the review, section 4.
 - Remove S4 leaderboard, correlation and historical strategy outputs, the S2 factor zoo, and S5 Monte Carlo and PBO duplicates.
 - Decided in merge map section 8: PBO form, trial ledger owner, and adding the India price store to the shared loader.
 - Data purchases (estimates, shareholding, long history, delisted, real-time) are business decisions after launch of `screener-v1`.

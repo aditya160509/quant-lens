@@ -24,10 +24,10 @@ Every screener people pay for does the same four things: filter, show a table, s
 
 Our position follows the platform rule: **the screener that tells you whether to trust the answer.**
 
-- **Parity first.** Section 4 lists 83 features people pay for. 35 exist in the backend, 29 are builds on data we hold, and 19 need data we do not have.
+- **Parity first.** Section 4 lists 76 features people pay for. 35 exist in the backend, 29 are builds on data we hold, and 12 are kept for later because they need new data: 8 from free public sources and 4 paid. Seven more were cut (section 7).
 - **Then what only we do.** Section 6: trust on every result, why-here, near-miss, proof in one click, ML hand-off, alert precision.
 - **Cut the rest.** Section 7 lists 20 things we will not build, with reasons.
-- **Do not fake data.** Estimates, shareholding, long history, delisted names and real-time prices are marked "needs data".
+- **Do not fake data.** Estimates, shareholding, long history, delisted names and real-time prices are marked for later, never faked.
 
 Two facts change the earlier plan:
 
@@ -93,7 +93,7 @@ Prices as listed 2026-11-08; details and marks of what is unverified are in the 
 
 ## 4. Parity table
 
-Status values: **have backend** (code exists and was read), **build** (data in hand; code or UI is new), **needs data** (we do not hold it; source and cost given). "Tier" is the cheapest paid tier that shows the feature, where known. Competitor abbreviations: SI Screener.in, TL Trendlyne, TT Tickertape, CK Chartink, SE StockEdge, MC Moneycontrol, FV Finviz, TV TradingView, KF Koyfin, SR Stock Rover, SO Stockopedia, SA Seeking Alpha, SW Simply Wall St, GF GuruFocus, ZK Zacks, TK TIKR, FA Fiscal.ai, YC YCharts, P123 Portfolio123, QC QuantConnect, BB Bloomberg, LS LSEG.
+Status values: **have backend** (code exists and was read), **build** (data in hand; code or UI is new), **later, free data** (not built now; public source) and **later, paid data** (not built now; needs a vendor). "Tier" is the cheapest paid tier that shows the feature, where known. Competitor abbreviations: SI Screener.in, TL Trendlyne, TT Tickertape, CK Chartink, SE StockEdge, MC Moneycontrol, FV Finviz, TV TradingView, KF Koyfin, SR Stock Rover, SO Stockopedia, SA Seeking Alpha, SW Simply Wall St, GF GuruFocus, ZK Zacks, TK TIKR, FA Fiscal.ai, YC YCharts, P123 Portfolio123, QC QuantConnect, BB Bloomberg, LS LSEG.
 
 ### 4.1 Universe and data
 
@@ -107,11 +107,9 @@ Status values: **have backend** (code exists and was read), **build** (data in h
 | 6 | Run as of a past date | P123, SR Plus historical, TL rewind (StratQ weekly) | have backend | `as_of_date` with the 90-day availability lag |
 | 7 | Coverage per metric ("P/B known for N of M") | None (we add) | build | Small count endpoint |
 | 8 | Country and currency filter | TV, KF, TK, GF | build | Currency metadata and FX conversion exist; country from exchange suffix |
-| 9 | India NSE and BSE coverage | SI, TL, TT, CK, SE, MC | build | About 400 names reachable by loader change (decision 16). Full list needs data below |
-| 10 | Full India listed universe (about 6,000) | TT 6,033 | needs data | Source: NSE and BSE master and bhavcopy files (public, redistribution terms unverified) or a vendor. Cost: not checked |
-| 11 | Global exchanges (150+ exchanges from 50+ countries) | TV, KF, TK, GF | needs data | We hold fundamentals for about 20 markets but prices and listings are partial. Vendor needed. Cost: by quote |
-| 12 | Index constituents as a universe (Nifty 50, S&P 500) | All | needs data | Current lists: NSE index files are public; S&P lists are licensed. Historical membership: Norgate or Sharadar. Cost: by quote |
-| 13 | Mutual fund and ETF screener | TT (MF 50+ filters), TV, KF, SR, SA | needs data | We hold some ETF prices, no holdings or expense ratios. India MF: AMFI NAV files are public. Cost: not checked |
+| 9 | India NSE and BSE coverage | SI, TL, TT, CK, SE, MC | build | About 400 names reachable by loader change (decision 16). Full list is row 10, later |
+| 10 | Full India listed universe (about 6,000) | TT 6,033 | later, free data | Source: NSE and BSE master and bhavcopy files (public, redistribution terms unverified) or a vendor. Cost: not checked |
+| 12 | Index constituents as a universe (Nifty 50, S&P 500) | All | later, free data | Nifty lists only, from public NSE index files. S&P lists are licensed and stay cut (C17) |
 | 14 | Crypto, forex and futures screens (price only) | TV | build | `crypto_daily`, `fx_daily`, `futures_daily` held. Technical filters only |
 
 ### 4.2 Filters
@@ -130,16 +128,14 @@ Status values: **have backend** (code exists and was read), **build** (data in h
 | 24 | Percentile versus sector or universe as a filter | SR Ultimate, SO, SA | have backend | Percentiles computed in the panel; filter UI is new (see 51) |
 | 25 | Candlestick and chart-pattern recognition | SE Pro (15+ patterns), TV, FV | build | Pure OHLCV maths. Weak evidence; ships last and labelled |
 | 26 | Hourly-timeframe screens | TL StratQ, TV, CK | build | Hourly file held. Rules identical to daily |
-| 27 | Minute-level and real-time screens | CK (1 to 3 min), TL StratQ (15 min), FV, TV | needs data | Source: exchange real-time licence. NSE and US feeds are paid. Cost: not checked |
-| 28 | Analyst consensus: targets, ratings, EPS and revenue estimates, revisions | TL, TT Pro, KF, TK, SA, ZK, SR, GF | needs data | Largest paid feature in the market. Source: LSEG, FactSet or a mid-price API. Cost: by quote |
-| 29 | Earnings calendar, surprises, results dashboard | TL, KF, SR, TK | needs data | Source: same vendors, or exchange filings (India) and SEC (US). Cost: free for filings, parsing effort |
-| 30 | Shareholding: promoter, FII, DII, pledge, change over quarters | SI, TL, TT, SE Pro | needs data | Source: NSE and BSE quarterly shareholding filings (public). Cost: free, parsing effort |
-| 31 | Delivery percentage, bulk and block deals, F&O open interest, FII and DII flows | SI (delivery chart), SE, TL | needs data | Source: NSE bhavcopy and deal files (public). `services/nse_direct.py` exists; coverage unverified |
-| 32 | Insider trades | SI, TL, FV, GF, KF | needs data | US: SEC Form 4 (free). India: SEBI disclosures (public) |
-| 33 | Institutional and guru holdings (13F) | GF, TK, SO | needs data | US: SEC 13F (free) |
-| 34 | Dividend history (5 to 30 years) | SR Ultimate, KF, GF | needs data | Statements start 2021. Source: corporate-actions vendor |
-| 35 | Segment results, credit ratings | SI, TL | needs data | Source: exchange filings, rating agencies. Cost: not checked |
-| 36 | Statement depth of 10 to 30 years | SI 10y, KF 10Y, SR 20Y, TK 30Y, GF 30y | needs data | We hold 2021 to 2025 only. Source: Sharadar, EODHD or a similar vendor. Cost: by quote |
+| 27 | Minute-level and real-time screens | CK (1 to 3 min), TL StratQ (15 min), FV, TV | later, paid data | Source: exchange real-time licence. NSE and US feeds are paid. Cost: not checked |
+| 28 | Analyst consensus: targets, ratings, EPS and revenue estimates, revisions | TL, TT Pro, KF, TK, SA, ZK, SR, GF | later, paid data | Largest paid feature in the market. Source: LSEG, FactSet or a mid-price API. Cost: by quote |
+| 29 | Earnings calendar, surprises, results dashboard | TL, KF, SR, TK | later, free data | Source: same vendors, or exchange filings (India) and SEC (US). Cost: free for filings, parsing effort |
+| 30 | Shareholding: promoter, FII, DII, pledge, change over quarters | SI, TL, TT, SE Pro | later, free data | Source: NSE and BSE quarterly shareholding filings (public). Cost: free, parsing effort |
+| 31 | Delivery percentage, bulk and block deals, F&O open interest, FII and DII flows | SI (delivery chart), SE, TL | later, free data | Source: NSE bhavcopy and deal files (public). `services/nse_direct.py` exists; coverage unverified |
+| 32 | Insider trades | SI, TL, FV, GF, KF | later, free data | US: SEC Form 4 (free). India: SEBI disclosures (public) |
+| 33 | Institutional and guru holdings (13F) | GF, TK, SO | later, free data | US: SEC 13F (free) |
+| 36 | Statement depth of 10 to 30 years | SI 10y, KF 10Y, SR 20Y, TK 30Y, GF 30y | later, paid data | We hold 2021 to 2025 only. Source: Sharadar, EODHD or a similar vendor. Cost: by quote |
 
 ### 4.3 Expression, ranking and templates
 
@@ -171,7 +167,6 @@ Status values: **have backend** (code exists and was read), **build** (data in h
 | 55 | Compare up to 6 to 25 names side by side | SA 6, FV 25, SR | have backend | Peer table in `core/valuation.py`; UI is a build |
 | 56 | Export CSV, Excel, JSON, ticker list | FV Elite, KF, SR, SI, TT Pro, GF | have backend | `core/exports.py`, `/export`; Excel file type is a build |
 | 57 | API access and spreadsheet add-in | GF, TL (Excel Connect), FV, FA (API, MCP), TV (MCP) | build | Internal REST routes exist; keys, limits and docs are new. MCP later |
-| 58 | Auto-refresh every 10 seconds | FV, TV | needs data | Needs real-time prices (see 27). End-of-day only today |
 | 59 | Add to watchlist, to alert, to ML or Research from a row | FV, TV, SR | build | |
 
 ### 4.5 Stock quick-look and detail
@@ -186,8 +181,7 @@ Status values: **have backend** (code exists and was read), **build** (data in h
 | 65 | Automatic pros, cons and red flags | SI x-ray, TT red flags | build | Rules on metrics we hold |
 | 66 | Piotroski 9-check grid, Altman zone | SO, GF | have backend | |
 | 67 | One-page stock report (PDF) | SR research reports, SA | build | Typst, from data we hold |
-| 68 | Fair value or DCF | SR, GF, SW | needs data | Needs estimates (row 28). A DCF on our own assumptions would be a guess, so it is not built |
-| 69 | Logos | TV, TT, KF | needs data | No logo source held. Monogram fallback. Licence: not checked |
+| 69 | Logos | TV, TT, KF | later, free data | No logo source held. Monogram fallback. Use monograms until a licensed source is checked |
 
 ### 4.6 Monitor
 
@@ -200,7 +194,6 @@ Status values: **have backend** (code exists and was read), **build** (data in h
 | 74 | Webhook alerts | TV (paid) | build | Same layer |
 | 75 | Price and indicator alerts on one stock | TV, KF, SR, TL, FV | build | End-of-day conditions. Intraday needs row 27 |
 | 76 | Fundamental-change alerts (results out) | SI, TL | have backend | `fundamental_change_rows` |
-| 77 | Alert frequency of 1 to 15 minutes | CK, TL StratQ | needs data | Real-time feed (row 27) |
 
 ### 4.7 Test and learn
 
@@ -210,10 +203,10 @@ Status values: **have backend** (code exists and was read), **build** (data in h
 | 79 | Compare with benchmark | TL, P123, GF | have backend | SPY required; random-screen and equal-weight controls are in ML Validate |
 | 80 | Overfitting tests: deflated Sharpe, PBO, bootstrap, controls | None | have backend | CSCV PBO in `core/backtest.py`; the rest lives in ML Validate (merge steps 0 to 4). Trial counting is a build (section 6) |
 | 81 | ML ranking on the same features | P123 AI Factor | build | Hand-off to ML Alpha |
-| 82 | Point-in-time data with delisted names | P123, GF Pro | needs data | Source: Sharadar, EODHD Custom or Norgate. Cost: by quote. Removes the Test banner |
+| 82 | Point-in-time data with delisted names | P123, GF Pro | later, paid data | Source: Sharadar, EODHD Custom or Norgate. Cost: by quote. Removes the Test banner |
 | 83 | Rolling screen backtests over many start dates | P123, TL | build | Loop over `simulate` with different offsets |
 
-**Counts.** 83 rows: have backend 35, build 29, needs data 19. By group: universe and data 4 / 6 / 4; filters 10 / 2 / 10; expression and templates 5 / 6 / 0; results screen 4 / 7 / 1; quick-look 5 / 3 / 2; monitor 4 / 3 / 1; test 3 / 2 / 1 (have / build / needs data).
+**Counts.** 76 rows: have backend 35, build 29, later with free data 8, later with paid data 4. Row numbers are stable, so cut rows leave gaps.
 
 ---
 
@@ -255,7 +248,7 @@ Every element the market shows, with what we have. "Trust" elements are ours.
 | Peers | SI, SE | Have |
 | Statements and trends | SI, SA | 2021 to 2025 only |
 | Pros, cons and red flags | SI, TT | Build |
-| Shareholding, insiders, estimates, news | SI, TL, SA | Needs data |
+| Shareholding, insiders, estimates | SI, TL, SA | Later (rows 28, 30, 32) |
 | Alerts on this name, add to watchlist, screen or lab | FV, TV | Build |
 | Data note: sources, lag, missing inputs | None | Build |
 
@@ -306,6 +299,12 @@ Reason codes: **N** not a screener job; **E** weak evidence or invites overfitti
 | C18 | 800 columns on day one | SI | N: a pruned set with the formula bar covers it |
 | C19 | Seats, shared workspaces, white-label reports | KF Advisor, YC | N for now: team tier comes later |
 | C20 | Crypto and forex fundamentals | TV | D: price-only screens only (row 14) |
+| C21 | Global exchanges beyond the roughly 20 markets we hold | TV, KF, TK, GF | D: vendor by quote, partial prices today |
+| C22 | Mutual fund and ETF screener | TT, TV, KF, SR, SA | D, S: no holdings or expense ratios; a separate product |
+| C23 | Long dividend history | SR, KF, GF | D: comes with statement depth (row 36) if bought |
+| C24 | Segment results, credit ratings | SI, TL | D: rating data is licensed, filings need heavy parsing |
+| C25 | Fair value or DCF | SR, GF, SW | D, E: see C16; revisit only with analyst estimates |
+| C26 | Alerts every 1 to 15 minutes | CK, TL | D: needs a real-time feed |
 
 ---
 
@@ -339,7 +338,7 @@ Four pages, as before, plus the global shell.
 | Screen | Chips, formula bar, table, lenses, quick-look, why-here, near-miss, templates, plain English | 1 to 9, 15 to 24, 37 to 59, 60 to 69 |
 | Rank | Composite, weights, waterfall, ML ranker hand-off | 43, 81 |
 | Test | Backtest, Validate hand-off, data banner, trial counter | 78 to 80, 83 |
-| Monitor | Saved screens, schedules, alert rules, precision scoreboard, digest | 70 to 77 |
+| Monitor | Saved screens, schedules, alert rules, precision scoreboard, digest | 70 to 76 |
 
 Build order matches PLAN step 2 (stages 2.1 to 2.11). Merges Screener carries are in `docs/architecture/CROSS_MODULE_MERGE_MAP.md` section 0 and in PLAN section 6a.
 
