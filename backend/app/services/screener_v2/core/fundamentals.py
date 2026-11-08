@@ -1,6 +1,7 @@
 """Screener V2 fundamentals computations."""
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -8,6 +9,7 @@ import pandas as pd
 
 from .data_loader import (
     AS_OF,
+    MASTER_FUNDAMENTALS,
     close_matrix,
     eligible_reports,
     fundamental_history,
@@ -15,6 +17,16 @@ from .data_loader import (
     ohlcv_for_symbols,
 )
 from .stats import _pick, _safe_div, rank_pct
+
+
+@lru_cache(maxsize=1)
+def _company_names() -> dict[str, str]:
+    # shortcut: SEC and NSE lists only (44% of symbols), add a global source for other markets.
+    path = MASTER_FUNDAMENTALS.parent / "company_names.parquet"
+    if not path.exists():
+        return {}
+    names = pd.read_parquet(path, columns=["ticker", "company_name"])
+    return dict(zip(names.ticker, names.company_name, strict=True))
 
 
 def statement_snapshots(symbols):
@@ -71,7 +83,7 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
     df["ticker"] = df.index
     out = pd.DataFrame(index=df.index)
     out["ticker"] = df["ticker"]
-    out["company_name"] = _pick(df, ["shortName", "longName", "companyName"], "").fillna("").astype(str)
+    out["company_name"] = out["ticker"].map(_company_names()).fillna("Unknown")
     out["exchange"] = _pick(df, ["exchange", "fullExchangeName"], "").fillna("").astype(str)
     out["sector"] = _pick(df, ["sector"], "Unknown").fillna("Unknown").astype(str)
     out["industry"] = _pick(df, ["industry"], "Unknown").fillna("Unknown").astype(str)

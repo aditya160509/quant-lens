@@ -33,7 +33,8 @@ export function num(v: unknown, digits = 3): string {
   if (!isNum(v)) return String(v);
   const a = Math.abs(v);
   if (a === 0) return "0";
-  if (a >= 1e7 || a < 10 ** -(digits + 1)) return v.toExponential(2).replace("e+", "e");
+  if (a >= 1e7) return v.toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 2 });
+  if (a < 10 ** -(digits + 1)) return v.toExponential(2).replace("e+", "e");
   if (Number.isInteger(v) && a >= 1) return v.toLocaleString("en-US");
   if (a >= 1000) return v.toLocaleString("en-US", { maximumFractionDigits: 1 });
   return v.toFixed(digits);
