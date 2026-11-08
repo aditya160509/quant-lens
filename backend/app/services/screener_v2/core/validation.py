@@ -1,11 +1,20 @@
 """Screener V2 validation computations."""
 from __future__ import annotations
+
 import math
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from .data_loader import as_of_context, close_matrix, load_factor_returns, ohlcv_for_symbols
+
 from .common import clean_json, records
+from .data_loader import (
+    as_of_context,
+    close_matrix,
+    load_factor_returns,
+    ohlcv_for_symbols,
+)
 from .stats import TRADING_DAYS
 
 
@@ -43,8 +52,14 @@ def score_backtest(
         raise ValueError("Sector-neutral execution is unavailable without historical sector membership")
     calendar_symbol = CONFIG.get().get("calendar_ticker", "SPY")
     specs = instrument_specs(symbols)
+    excluded_non_usd: list[str] = []
     if any(spec.get("quote_currency") != "USD" for spec in specs.values()) and not CONFIG.get().get("explicit_calendar"):
-        raise ValueError("Non-USD portfolios require explicit instrument_metadata and calendar_ticker")
+        # A USD session calendar cannot hold foreign quotes without filling them, so test only USD-quoted names.
+        excluded_non_usd = [symbol for symbol in symbols if specs[symbol].get("quote_currency") != "USD"]
+        symbols = [symbol for symbol in symbols if symbol not in set(excluded_non_usd)]
+        specs = {symbol: specs[symbol] for symbol in symbols}
+        if not symbols:
+            raise ValueError("Non-USD portfolios require explicit instrument_metadata and calendar_ticker")
     source_prices = close_matrix(list(dict.fromkeys(symbols + [calendar_symbol, "SPY"])), lookback_days=(lookback_days + 252) * 2)
     if calendar_symbol not in source_prices or source_prices[calendar_symbol].notna().sum() < 254:
         raise ValueError("Backtest trading calendar requires at least 254 observed calendar instrument sessions")
@@ -112,6 +127,7 @@ def score_backtest(
         ),
     }
     stats["portfolio_currency"] = "USD"
+    stats["excluded_non_usd_count"] = len(excluded_non_usd)
     stats["calendar_ticker"] = calendar_symbol
     stats["fx_policy"] = "exact-date observed spot rates; no filling; missing conversion invalidates the run"
     curve = pd.DataFrame({"date": equity.index, "strategy": equity.values, "benchmark": benchmark.reindex(equity.index).values, "drawdown": drawdown.values})
@@ -135,11 +151,11 @@ def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cach
             raise ValueError(f"Historical {key} filters require dated classification membership unavailable locally")
     if payload.get("sector_neutral") or isinstance(payload.get("components"), dict) and payload["components"].get("sector_neutral"):
         raise ValueError("Historical sector neutralization requires dated sector membership unavailable locally")
+    from .academic import academic_strategy_scores
+    from .composite import InsufficientTrainingData, component_scores, composite_config
+    from .formula import evaluate_formula
     from .panel import metric_panel
     from .screener import apply_filters
-    from .formula import evaluate_formula
-    from .composite import composite_config, component_scores, InsufficientTrainingData
-    from .academic import academic_strategy_scores
     panels = shared_cache if shared_cache is not None else {}
     cache, unavailable_dates = {}, {}
     def panel_at(date):

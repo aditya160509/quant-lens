@@ -1,12 +1,14 @@
 """Screener V2 screener computations."""
 from __future__ import annotations
+
 import re
 from typing import Any
+
 import numpy as np
 import pandas as pd
-from .data_loader import close_matrix
-from .common import records, clean_json, number_like
 
+from .common import clean_json, number_like, records
+from .data_loader import close_matrix
 
 DEFAULT_TOP_N = 50
 
@@ -46,14 +48,14 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
         }
         if preset in preset_map:
             payload["dollar_volume_min"] = preset_map[preset]
-    stages: list[dict[str, Any]] = [{"stage": "Initial universe", "remaining": int(len(panel)), "removed": 0}]
+    stages: list[dict[str, Any]] = [{"stage": "Initial universe", "remaining": len(panel), "removed": 0}]
     filtered = panel.copy()
 
     def apply(stage: str, mask: pd.Series) -> None:
         nonlocal filtered
         before = len(filtered)
         filtered = filtered[mask.reindex(filtered.index).fillna(False)]
-        stages.append({"stage": stage, "remaining": int(len(filtered)), "removed": int(before - len(filtered))})
+        stages.append({"stage": stage, "remaining": len(filtered), "removed": int(before - len(filtered))})
 
     sectors = payload.get("sectors") or payload.get("sector")
     if sectors and str(sectors).lower() not in {"all", "any"}:
@@ -101,10 +103,39 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
         ("yang_zhang_vol_21d_estimate", "yang_zhang_vol_min", "yang_zhang_vol_max", "Yang-Zhang trailing volatility estimate"),
         ("amihud_percentile", "amihud_percentile_min", "amihud_percentile_max", "Amihud percentile"),
         ("core_quant_score", "score_min", "score_max", "Quant score"),
+        ("ps_ratio", "ps_min", "ps_max", "P/S"),
+        ("ev_ebitda", "ev_ebitda_min", "ev_ebitda_max", "EV/EBITDA"),
+        ("earnings_yield", "earnings_yield_min", "earnings_yield_max", "Earnings yield"),
+        ("fcf_yield", "fcf_yield_min", "fcf_yield_max", "FCF yield"),
+        ("gpa", "gpa_min", "gpa_max", "GP/A"),
+        ("gross_margin", "gross_margin_min", "gross_margin_max", "Gross margin"),
+        ("operating_margin", "operating_margin_min", "operating_margin_max", "Operating margin"),
+        ("net_margin", "net_margin_min", "net_margin_max", "Net margin"),
+        ("roa", "roa_min", "roa_max", "ROA"),
+        ("current_ratio", "current_ratio_min", "current_ratio_max", "Current ratio"),
+        ("dividend_yield", "dividend_yield_min", "dividend_yield_max", "Dividend yield"),
+        ("return_1d", "return_1d_min", "return_1d_max", "1D return"),
+        ("return_1m", "return_1m_min", "return_1m_max", "1M return"),
+        ("return_3m", "return_3m_min", "return_3m_max", "3M return"),
+        ("return_6m", "return_6m_min", "return_6m_max", "6M return"),
+        ("return_12m", "return_12m_min", "return_12m_max", "12M return"),
+        ("momentum_jt", "momentum_min", "momentum_max", "Momentum 12-1"),
+        ("dist_sma_50", "dist_sma_50_min", "dist_sma_50_max", "Distance to SMA 50"),
+        ("dist_sma_200", "dist_sma_200_min", "dist_sma_200_max", "Distance to SMA 200"),
+        ("rsi_14", "rsi_min", "rsi_max", "RSI"),
+        ("macd_histogram", "macd_histogram_min", "macd_histogram_max", "MACD histogram"),
+        ("bollinger_pct_b", "bollinger_pct_b_min", "bollinger_pct_b_max", "Bollinger %B"),
+        ("obv_20d_slope", "obv_slope_min", "obv_slope_max", "OBV slope"),
+        ("realized_vol_252d", "realized_vol_min", "realized_vol_max", "Realised volatility"),
+        ("beta_252", "beta_min", "beta_max", "Beta"),
+        ("sector_relative_score", "sector_score_percentile_min", "sector_score_percentile_max", "Sector percentile"),
+        ("momentum_percentile", "momentum_percentile_min", "momentum_percentile_max", "Momentum percentile"),
+        ("quality_percentile", "quality_percentile_min", "quality_percentile_max", "Quality percentile"),
+        ("valuation_percentile", "valuation_percentile_min", "valuation_percentile_max", "Valuation percentile"),
     ]:
         if lo_key not in payload and hi_key not in payload:
             continue
-        if col not in filtered or filtered[col].notna().sum() == 0:
+        if col not in panel or panel[col].notna().sum() == 0:
             raise ValueError(f"Requested filter {label} is unavailable in the local data")
         for bound in (lo_key, hi_key):
             if bound in payload and number_like(payload[bound]) is None:
