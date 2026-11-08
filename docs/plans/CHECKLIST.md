@@ -12,7 +12,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [x] Accessibility pass
 - [x] Heat table, Distribution, Scatter v2, Waterfall v2, Dendrogram linking
 - [x] Live overview tiles and pipeline diagram
-- [ ] Fresh design pass
+- [ ] Fresh design pass: [issues and finish target](../reviews/design/ML_UI_ISSUES.md)
 
 ## Phase 0: Foundation (deferred)
 - [x] Remove v1 pages, legacy services and routers
