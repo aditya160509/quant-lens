@@ -36,15 +36,17 @@ function toSpec(f: RawFeature): FeatureSpec {
   return { id: ID(f.id), name: f.name, description: CATALOG[ID(f.id)]?.question ?? "", inputs: f.inputs.map((i) => ({ ...i, group: i.group || "Settings" })), outputs };
 }
 
-type Meta = FeatureResult["meta"] & { as_of_date?: string; universe_count?: number; data_version?: string };
+type Meta = FeatureResult["meta"] & { as_of_date?: string; universe_count?: number; data_version?: string; data_sources?: Record<string, { modified_ns?: number }> };
 
 /** The result header: how many names passed, out of what, as of when, on which data. */
 function headline(r: FeatureResult) {
   const meta = r.meta as Meta;
   const passed = r.summary_cards?.find((c) => c.label === "After filters")?.value;
+  const mtimes = Object.values(meta.data_sources ?? {}).map((d) => d.modified_ns).filter(isNum);
   const parts = [
     isNum(passed) && isNum(meta.universe_count) ? `${passed.toLocaleString()} of ${meta.universe_count.toLocaleString()} names pass` : null,
     meta.as_of_date ? `as of ${meta.as_of_date}` : null,
+    mtimes.length ? `updated ${new Date(Math.max(...mtimes) / 1e6).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : null,
     meta.data_version ? `data ${meta.data_version}` : null,
   ];
   return { headline: parts.filter(Boolean).join(" · ") || null, tone: null };
