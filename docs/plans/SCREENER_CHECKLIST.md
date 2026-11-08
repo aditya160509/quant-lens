@@ -66,7 +66,7 @@ A usable screener: every filter, live counts, real table. E18 M8 H1
 
 Find any name and read it without leaving. E10 M11 H1
 
-- [ ] `E` Fuzzy search library chosen after a spike, licence checked
+- [x] `E` Fuzzy search library chosen after a spike, licence checked: uFuzzy (MIT)
 - [ ] `E` Ticker, company name; confirm name coverage for all symbols
 - [ ] `M` Large overlay from anywhere by keyboard
 - [ ] `M` Tabs: Symbols, Screens, Runs, Docs
