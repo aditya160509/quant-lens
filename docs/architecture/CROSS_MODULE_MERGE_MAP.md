@@ -37,9 +37,7 @@ Not carried by Screener: execution and covariance kernels (steps 5, 6), optimise
 
 ### Decided defaults (section 8)
 
-These are not decided. Work on the merges above waits for the owner to confirm or change them.
-
-| Decision | Proposed default |
+| Decision | Default |
 |---|---|
 | 1 PBO convention | ML's form (logit of rank/(N+1)) |
 | 4 Trial ledger owner | Research store (`services/research_v2/store/ledger.py`) |
