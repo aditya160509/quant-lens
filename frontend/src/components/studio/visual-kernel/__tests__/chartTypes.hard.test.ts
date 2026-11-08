@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { toHeikinAshi, toRenko, resampleCandles, createPriceScale } from '../scales';
 
 describe('chart types hardest', () => {

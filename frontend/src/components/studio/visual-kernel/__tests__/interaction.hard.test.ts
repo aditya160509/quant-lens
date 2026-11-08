@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { hitTestCandle, drawCrosshair, drawAnnotations } from '../interaction';
 import { createLinearScale } from '../scales';
 

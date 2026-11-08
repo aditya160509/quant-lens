@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen } from '@testing-library/react';
 import StudioPaneBoundary from '../StudioPaneBoundary';
 

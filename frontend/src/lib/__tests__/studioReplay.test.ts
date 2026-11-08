@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { buildReplayEvents, compareReplayRuns, matchesReplayBreakpoint, positionStateAtCursor, replayFillCausality } from '../studioReplay';
 
 const run = {

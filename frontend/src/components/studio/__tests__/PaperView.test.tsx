@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import PaperView from '../PaperView';
 import { useStudioResultStore } from '@/stores/studio/resultStore';

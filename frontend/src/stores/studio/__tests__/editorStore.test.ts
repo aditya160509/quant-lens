@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { STRATEGIES } from '@/components/studio/constants';
 import { defaultEditorState, useStudioEditorStore } from '../editorStore';
 

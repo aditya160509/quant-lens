@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import OriginalStudioPage from "../OriginalStudioPage";
 import { useStudioWorkspaceStore } from "@/stores/studio/workspaceStore";

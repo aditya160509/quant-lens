@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render, screen } from '@testing-library/react';
 import TearsheetView from '../TearsheetView';
 import { useStudioResultStore } from '@/stores/studio/resultStore';

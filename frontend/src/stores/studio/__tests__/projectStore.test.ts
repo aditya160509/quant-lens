@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach } from "vitest";
 import { useStudioProjectStore } from '../projectStore';
 
 describe('useStudioProjectStore', () => {

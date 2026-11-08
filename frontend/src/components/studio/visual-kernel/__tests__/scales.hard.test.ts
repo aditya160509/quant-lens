@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { createLinearScale, createPriceScale, createTimeScale } from '../scales';
 
 describe('scales hardest invariants', () => {

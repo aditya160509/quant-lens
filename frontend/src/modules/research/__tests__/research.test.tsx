@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { CalendarHeatmap } from "@/charts/CalendarHeatmap";
 import { Dumbbell } from "@/charts/Dumbbell";
 import { Heatmap } from "@/charts/Heatmap";

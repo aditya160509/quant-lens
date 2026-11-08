@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { takeaway } from "../takeaways";
 import type { FeatureResult } from "@/modules/research/types";
 

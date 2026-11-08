@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { persistDataStudioDraft } from '../dataStudioStore';
 
 describe('Studio browser persistence policy', () => {

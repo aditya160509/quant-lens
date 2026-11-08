@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import PortfolioView, { parseHoldingsCsv, parseReturnCsv } from "../PortfolioView";
 import { studioRequest } from "@/lib/studioApi";

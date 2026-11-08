@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { buildStudioResultsCsv, buildStudioResultsHtml, buildStudioResultsJson, canonicalMetric, deriveOrdersFromSignals, formatCanonicalMetric, normalizeStudioExecutionResult, observedReturnDiagnostics, replayFillLinkage, studioComparisonCompatibility } from '../studioResults';
 
 describe('canonical Studio results', () => {

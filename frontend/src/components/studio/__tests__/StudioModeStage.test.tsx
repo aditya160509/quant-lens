@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { fireEvent, render, screen } from '@testing-library/react';
 import StudioModeStage from '../shell/StudioModeStage';
 import { useStudioWorkspaceStore } from '@/stores/studio/workspaceStore';

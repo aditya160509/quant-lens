@@ -21,7 +21,7 @@ Tags: `E` easy, up to a few hours. `M` medium, about a session. `H` hard, severa
 The workspace and fast data everything else sits on. E3 M5 H1
 
 - [x] `E` `Exhibit`, `KpiStrip`, `DataTable v2`, `RankList` shared
-- [ ] `M` Test-setup type errors fixed, so the commit hook passes
+- [x] `M` Test-setup type errors fixed, so the commit hook passes
 - [ ] `M` `/screener` on `LabConfig`, four pages from the backend manifest: Screen, Rank, Test, Monitor
 - [ ] `M` Panels close, auto-close and give their space to content
 - [ ] `M` Shared per-ticker price loader; an NSE name screens (9)

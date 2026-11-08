@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { folderOf, normalizeFolder } from '@/stores/studio/projectStore';
 import { analyzePythonSource, extractSymbols, filterCompletions } from '@/components/studio/Editor';
 import { paginateVariable, VARIABLES_PAGE_SIZE } from '@/components/studio/develop/ExecutionDock';

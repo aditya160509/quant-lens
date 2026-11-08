@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createStudioJob, getStudioJob, recordPromotionAudit, StudioApiError, studioRequest, waitForStudioJob, waitForStudioJobEvents } from '../studioApi';
 
 describe('studioRequest', () => {

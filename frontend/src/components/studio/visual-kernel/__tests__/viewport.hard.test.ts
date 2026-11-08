@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { clampViewport, zoomAt, panBy, visibleRange } from '../viewport';
 
 describe('viewport hardest', () => {

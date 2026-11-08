@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from "vitest";
 /**
  */
 import { setupHiDPI, createResizeObserver } from '../canvas';

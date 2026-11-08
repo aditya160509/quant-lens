@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import StudioActivityRail from "../shell/StudioActivityRail";
 import ExecutionAssumptionsPanel from "../shell/ExecutionAssumptionsPanel";
