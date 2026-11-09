@@ -128,12 +128,15 @@ async def export_rows_xlsx(request: RowsRequest) -> Response:
 @router.get("/facets")
 async def facets() -> dict[str, Any]:
     """Every value a filter can take, with how many names hold it."""
-    from app.services.screener_v2.core.screener import country_of
+    from app.services.screener_v2.core.screener import RANGE_FILTERS, country_of
 
     def build():
         p = lookup.panel()
         columns = {"sector": p.sector, "industry": p.industry, "exchange": p.exchange, "country": p.ticker.map(country_of), "currency": p.quote_currency.fillna("Unknown")}
-        return {k: [{"name": str(n), "count": int(c)} for n, c in col.value_counts().items()] for k, col in columns.items()}
+        out = {k: [{"name": str(n), "count": int(c)} for n, c in col.value_counts().items()] for k, col in columns.items()}
+        # Numeric metrics a rule can test, with how many names have a value.
+        out["metric"] = [{"name": lo[:-4], "label": label, "count": int(p[col].notna().sum())} for col, lo, _, label in RANGE_FILTERS if col in p]
+        return out
     return await asyncio.to_thread(_lookup_call, build)
 
 

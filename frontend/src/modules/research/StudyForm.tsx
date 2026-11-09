@@ -4,11 +4,12 @@ import { FilterChips, isRangeField } from "./FilterChips";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { AnimatePresence, motion } from "framer-motion";
-import { Children, useMemo, useRef, useState } from "react";
+import { Children, createElement, useMemo, useRef, useState } from "react";
 import { BookOpen, ChevronDown, Link2, Info, Loader2, Repeat, RotateCcw, Save, Trash2, Upload, X } from "lucide-react";
 import { MenuItem, PopMenu, Segmented, Tooltip, type MenuAt } from "@/workspace/ui";
 import { uploadFile, useUniverse, type UploadInfo } from "./api";
 import { label } from "./format";
+import { lab } from "./lab";
 import { usePresets, useSweeps } from "./store";
 import { useUniverses } from "./api";
 import type { FeatureSpec, InputSpec } from "./types";
@@ -149,12 +150,13 @@ export function StudyForm({ feature, form, setForm, errors: submittedErrors }: {
                           <UniverseBuilder value={Array.isArray(form[f.key]) ? (form[f.key] as string[]).join(",") : String(form[f.key] ?? "")} onChange={set(f.key)}
                             maxSymbols={maxField ? Number(form.max_symbols ?? maxField.default ?? 400) : undefined} onMaxSymbols={maxField ? set("max_symbols") : undefined} />
                         ) : null}
+                        {lab().widgets?.[f.key] ? createElement(lab().widgets![f.key], { field: f, value: form[f.key], onChange: set(f.key) }) : null}
                         {f.type === "ticker_list" && f.key === "universe" ? (
                           <MarketFilters form={form} set={(k, v) => setForm((cur) => ({ ...cur, [k]: v }))} />
                         ) : null}
                       </Field>
                     ))}
-                    {group === "Filters" ? <FilterChips fields={fields.filter(isRangeField)} form={form} setForm={setForm} /> : null}
+                    {group === "Filters" ? <FilterChips scope={feature.id} fields={fields.filter(isRangeField)} form={form} setForm={setForm} /> : null}
                   </div>
                 </motion.div>
               ) : null}
@@ -251,6 +253,8 @@ function HelpTip({ text }: { text: string }) {
 }
 
 export function Control({ field: f, value, onChange }: { field: InputSpec; value: unknown; onChange: (v: unknown) => void }) {
+  const Own = f.type === "text" ? lab().controls?.[f.key] : undefined;
+  if (Own) return <Own value={String(value ?? "")} onChange={onChange} />;
   switch (f.type) {
     case "select": {
       const opts = f.options ?? [];

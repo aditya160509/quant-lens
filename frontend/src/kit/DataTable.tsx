@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as Popover from "@radix-ui/react-popover";
@@ -78,6 +78,8 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
   const order = opts?.columns as string[] | undefined;
   const groupKey = opts?.groupKey as string | undefined;
   const bars = opts?.bars as string[] | undefined;
+  const rowActions = opts?.rowActions as ((row: Row) => ReactNode) | undefined;
+  const hatch = opts?.hatch === true;
   const base = useMemo(() => {
     const all = columns(rows).filter((c) => !(hideOpt ?? []).includes(c));
     return order ? [...order.filter((c) => all.includes(c)), ...all.filter((c) => !order.includes(c))] : all;
@@ -251,16 +253,16 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
         <table className="tbl">
           <thead>
             {twoLevel ? <tr>{groups.map((g, k) => (g.head ? <th key={k} colSpan={g.span} className="grp">{label(g.head)}</th> : <th key={k} />))}</tr> : null}
-            <tr ref={headRow}>{groups.flatMap((g) => g.cols.map((c) => sortTh(c, shortName(c, g.head))))}</tr>
+            <tr ref={headRow}>{groups.flatMap((g) => g.cols.map((c) => sortTh(c, shortName(c, g.head))))}{rowActions ? <th aria-label="Actions" /> : null}</tr>
           </thead>
           <tbody>
-            {virtual && windowRows[0]?.start > 0 ? <tr aria-hidden="true"><td colSpan={cols.length} style={{ height: windowRows[0].start, padding: 0, border: 0 }} /></tr> : null}
+            {virtual && windowRows[0]?.start > 0 ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0)} style={{ height: windowRows[0].start, padding: 0, border: 0 }} /></tr> : null}
             {visibleItems.map(({ item: it, index: k }) => {
               if (it.kind === "group") {
                 const closed = collapsed.includes(it.g);
                 return (
                   <tr key={`g${k}`} className="gr">
-                    <td colSpan={cols.length}><button className="dt-sort" aria-expanded={!closed} onClick={() => setCollapsed(closed ? collapsed.filter((x) => x !== it.g) : [...collapsed, it.g])}><ChevronRight size={12} style={{ marginRight: 6, verticalAlign: -2, transform: closed ? "none" : "rotate(90deg)", transition: "transform .15s" }} />{it.g}<span className="stat-s" style={{ marginLeft: 8 }}>{it.n}</span></button></td>
+                    <td colSpan={cols.length + (rowActions ? 1 : 0)}><button className="dt-sort" aria-expanded={!closed} onClick={() => setCollapsed(closed ? collapsed.filter((x) => x !== it.g) : [...collapsed, it.g])}><ChevronRight size={12} style={{ marginRight: 6, verticalAlign: -2, transform: closed ? "none" : "rotate(90deg)", transition: "transform .15s" }} />{it.g}<span className="stat-s" style={{ marginLeft: 8 }}>{it.n}</span></button></td>
                   </tr>
                 );
               }
@@ -268,12 +270,13 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
               return (
                 <tr key={`r${it.i}`} className={`clickable${it.sub ? " sub" : ""}`} data-sel={sel === it.i} tabIndex={0} onClick={() => setSel(it.i)} onKeyDown={(e) => { if (e.key === "Enter") setSel(it.i); }}>
                   {cols.map((c, j) => (
-                    <td key={c} className={`${numeric.has(c) ? "r num" : ""}${j === 0 ? " strong" : ""}${flash[`${it.i}:${c}`] !== undefined ? " flash" : ""}`} style={{ ...cellStyle(c, r[c]), ...colStyle(c) }}>{render(r, it.i, c)}</td>
+                    <td key={c} className={`${numeric.has(c) ? "r num" : ""}${j === 0 ? " strong" : ""}${flash[`${it.i}:${c}`] !== undefined ? " flash" : ""}${hatch && (r[c] === null || r[c] === undefined || r[c] === "Unknown") ? " unk" : ""}`} style={{ ...cellStyle(c, r[c]), ...colStyle(c) }}>{render(r, it.i, c)}</td>
                   ))}
+                  {rowActions ? <td className="ra" onClick={(e) => e.stopPropagation()}>{rowActions(r)}</td> : null}
                 </tr>
               );
             })}
-            {virtual && windowRows.length ? <tr aria-hidden="true"><td colSpan={cols.length} style={{ height: Math.max(0, virtualizer.getTotalSize() - windowRows[windowRows.length - 1].end), padding: 0, border: 0 }} /></tr> : null}
+            {virtual && windowRows.length ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0)} style={{ height: Math.max(0, virtualizer.getTotalSize() - windowRows[windowRows.length - 1].end), padding: 0, border: 0 }} /></tr> : null}
           </tbody>
         </table>
       </div>

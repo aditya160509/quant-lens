@@ -175,6 +175,45 @@ RANGE_FILTERS: list[tuple[str, str, str, str]] = [
 ]
 
 
+def tree_mask(df: pd.DataFrame, node: dict[str, Any]) -> pd.Series:
+    """AND/OR groups of rules (react-querybuilder shape); an unknown value never passes a rule."""
+    if "rules" in node:
+        masks = [tree_mask(df, r) for r in node["rules"] if not r.get("disabled")]
+        if not masks:
+            return pd.Series(True, index=df.index)
+        out = masks[0]
+        for m in masks[1:]:
+            out = out & m if str(node.get("combinator", "and")).lower() == "and" else out | m
+        return ~out if node.get("not") else out
+    columns = {lo[:-4]: col for col, lo, _, _ in RANGE_FILTERS} | {"sector": "sector", "industry": "industry", "industry_group": "industry_group", "exchange": "exchange", "country": "country", "currency": "quote_currency"}
+    field, op, value = node.get("field"), node.get("operator"), node.get("value")
+    col = columns.get(field)
+    if col == "country" and "country" not in df:
+        df = df.assign(country=df["ticker"].map(country_of))
+    if col not in df:
+        raise ValueError(f"Unknown filter field: {field}")
+    items = [str(x).strip() for x in (value if isinstance(value, list) else str(value).split(",")) if str(x).strip()]
+    series = df[col]
+    if op in {"in", "notIn", "=", "!="} and not pd.api.types.is_numeric_dtype(series):
+        hit = series.astype(str).str.lower().isin({i.lower() for i in items})
+        return (hit if op in {"in", "="} else ~hit) & series.notna()
+    try:
+        nums = [float(i) for i in items]
+    except ValueError as exc:
+        raise ValueError(f"Rule on {field} needs a number") from exc
+    numeric = pd.to_numeric(series, errors="coerce")
+    if op == "between":
+        if len(nums) != 2:
+            raise ValueError(f"Rule on {field} needs two numbers")
+        return numeric.between(*nums)
+    if not nums:
+        raise ValueError(f"Rule on {field} has no value")
+    compare = {"<": numeric < nums[0], "<=": numeric <= nums[0], ">": numeric > nums[0], ">=": numeric >= nums[0], "=": numeric == nums[0], "!=": numeric.ne(nums[0]) & numeric.notna(), "in": numeric.isin(nums), "notIn": ~numeric.isin(nums) & numeric.notna()}
+    if op not in compare:
+        raise ValueError(f"Unsupported operator: {op}")
+    return compare[op]
+
+
 def _range_filter(df: pd.DataFrame, col: str, min_value: Any = None, max_value: Any = None) -> pd.Series:
     mask = pd.Series(True, index=df.index)
     if col not in df.columns:
@@ -249,6 +288,8 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
                 raise ValueError(f"Requested filter {label} is unavailable in the local data")
             allowed = {str(v).strip().lower() for v in (wanted if isinstance(wanted, list) else re.split(r"[,;]", str(wanted))) if str(v).strip()}
             apply(label, column.astype(str).str.lower().isin(allowed), key)
+    if payload.get("filter_tree"):
+        apply("Filter groups", tree_mask(filtered, payload["filter_tree"]), "filter_tree")
     listed = payload.get("ticker_in")
     if listed:
         names = {str(v).strip().upper().replace(".", "_").replace("-", "_") for v in (listed if isinstance(listed, list) else re.split(r"[,;\s]+", str(listed))) if str(v).strip()}

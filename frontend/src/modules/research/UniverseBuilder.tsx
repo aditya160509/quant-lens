@@ -5,6 +5,7 @@ import { ClipboardPaste, X } from "lucide-react";
 import { Segmented } from "@/workspace/ui";
 import { lab } from "./lab";
 import { useUniverse } from "./api";
+import { UniversePicks } from "@/modules/screener/filters/UniversePicks";
 import { SymbolPick } from "@/modules/screener/search/SymbolPick";
 
 type Mode = "all" | "sectors" | "custom";
@@ -88,6 +89,7 @@ export function UniverseBuilder({ value, onChange, maxSymbols, onMaxSymbols }: {
             <div style={{ flex: 1 }}><SymbolPick exclude={custom} onPick={(t) => addTickers([t])} /></div>
             <button type="button" className="btn sm ghost" onClick={() => setPaste((p) => !p)} title="Paste a list"><ClipboardPaste size={12} />Paste</button>
           </div>
+          {lab().id === "screener" ? <UniversePicks tickers={custom} onChange={onChange} /> : null}
           {paste ? (
             <div style={{ display: "grid", gap: 6 }}>
               <textarea className="input" rows={3} value={pasted} placeholder="AAPL, MSFT NVDA&#10;AMZN" onChange={(e) => setPasted(e.target.value)} />

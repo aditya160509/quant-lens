@@ -48,3 +48,7 @@
 .pbar > i { position: absolute; inset: 2px auto 2px 0; background: color-mix(in oklch, var(--accent, var(--up)) 22%, transparent); border-radius: 2px; z-index: -1; }
 .dt-grip { position: absolute; top: 0; right: 0; bottom: 0; width: 6px; cursor: col-resize; touch-action: none; }
 .dt-grip:hover { background: var(--line-3); }
+
+/* Unknown values are hatched, never blank or zero. */
+.tbl td.unk { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line) 3px 4px); }
+.tbl td.ra { white-space: nowrap; width: 1%; }

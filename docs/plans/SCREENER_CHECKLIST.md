@@ -46,20 +46,20 @@ A usable screener: every filter, live counts, real table. E18 M8 H1
 - [x] `E` Risk: realised volatility, beta, drawdown, idiosyncratic volatility, max daily return (22)
 - [x] `E` Liquidity: Amihud percentile, volume ratio (23)
 - [x] `E` Percentile versus sector or universe as a filter (24)
-- [ ] `M` Chips with greater, less, between, in, top N, and live counts (37)
+- [x] `M` Chips with greater, less, between, in, top N, and live counts (37) (untested)
 - [x] `E` Live count after each filter, with the bottleneck filter shown (42)
 - [x] `E` Market-cap buckets with counts (2)
-- [ ] `M` Country and currency filter (8)
-- [ ] `M` Custom universe: pasted tickers, CSV upload, saved universes (4)
-- [ ] `M` Watchlists as universe and filter (5)
+- [x] `M` Country and currency filter (8) (untested)
+- [x] `M` Custom universe: pasted tickers, CSV upload, saved universes (4) (untested)
+- [x] `M` Watchlists as universe and filter (5) (untested)
 - [x] `E` Run as of a past date (6)
 - [x] `E` Coverage per metric (7)
-- [ ] `M` 1D and 1M returns, quarterly profit and sales variance, sparkline
-- [ ] `M` Row actions: watchlist, alert, ML, Research (59)
-- [ ] `M` Undo, redo, disable a filter (47)
-- [ ] `H` AND/OR groups and nesting, round-trip with formula (38)
+- [x] `M` 1D and 1M returns, quarterly profit and sales variance, sparkline (untested)
+- [x] `M` Row actions: watchlist, alert, ML, Research (59) (untested)
+- [x] `M` Undo, redo, disable a filter (47) (untested)
+- [x] `H` AND/OR groups and nesting, round-trip with formula (38) (untested)
 - [x] `E` Sector-relative percentile bars in rows (51)
-- [ ] `M` Trust badge per result and row; hatched unknowns (U1)
+- [x] `M` Trust badge per result and row; hatched unknowns (U1) (untested)
 - [x] `E` Export CSV, Excel, JSON, ticker list (56)
 
 ## Batch 3: Search and quick look
@@ -134,11 +134,11 @@ Why people stay. E0 M6 H0
 
 E2 M2 H1
 
-- [ ] `M` Composite, weights and waterfall
-- [ ] `E` Composite score and ranking system with weights (43)
-- [ ] `E` Pre-built screens and templates (44)
-- [ ] `M` About 30 templates, named by formula
-- [ ] `H` ML hand-off; rules and learned ranks side by side (81, U6)
+- [x] `M` Composite, weights and waterfall (untested)
+- [x] `E` Composite score and ranking system with weights (43) (untested)
+- [x] `E` Pre-built screens and templates (44) (untested)
+- [x] `M` About 30 templates, named by formula (untested)
+- [x] `H` ML hand-off; rules and learned ranks side by side (81, U6) (untested)
 
 ## Batch 8: Test
 

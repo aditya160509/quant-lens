@@ -2,6 +2,7 @@ import dynamic from "next/dynamic";
 import { Bell, FlaskConical, Layers, Scale, SlidersHorizontal, Sigma, Table2, Trophy } from "lucide-react";
 import { createElement } from "react";
 import { SCREENER_BASE } from "./base";
+import { FilterTree } from "./filters/FilterTree";
 import { InFilter } from "./filters/InFilter";
 import { WatchlistFilter } from "./filters/WatchlistFilter";
 import { ComponentWeights } from "./rank/ComponentWeights";
@@ -124,7 +125,7 @@ export const SCREENER_LAB: LabConfig = {
   submit: (featureId, payload) => ({ path: `/feature/${RAW(featureId)}/jobs`, body: { payload } }),
   signal: false,
   specials: { more: MorePage },
-  widgets: { sector: InFilter, industry: InFilter, exchange: InFilter, country: InFilter, currency: InFilter, ticker_in: WatchlistFilter, screen_template: TemplatePicker, components: ComponentWeights },
+  widgets: { sector: InFilter, industry: InFilter, exchange: InFilter, country: InFilter, currency: InFilter, ticker_in: WatchlistFilter, filter_tree: FilterTree, screen_template: TemplatePicker, components: ComponentWeights },
   funnel: (result) => Object.fromEntries(((result?.charts?.filter_funnel_waterfall ?? []) as { key?: string; removed: number; remaining: number }[]).filter((s) => s.key).map((s) => [s.key as string, { removed: s.removed, remaining: s.remaining }])),
   defaultUniverse: "All names we hold",
   overview: {

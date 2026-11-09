@@ -68,15 +68,19 @@ RANGE_FILTERS = {
     'momentum_percentile': 'Universe momentum percentile',
     'quality_percentile': 'Universe quality percentile',
     'valuation_percentile': 'Universe valuation percentile',
+    'qtr_sales_yoy': 'Latest quarter sales against the same quarter a year earlier',
+    'qtr_profit_yoy': 'Latest quarter net income against the same quarter a year earlier',
 }
 
 
 def filter_inputs():
     from ..core.screener import SCREEN_TEMPLATES
     result = [field('screen_template', 'select', '', 'Filters', options=['', *SCREEN_TEMPLATES])]
-    result += [field(key, default='all', group='Filters') for key in ['sector', 'industry', 'industry_group', 'exchange']]
+    result += [field(key, default='all', group='Filters') for key in ['sector', 'industry', 'industry_group', 'exchange', 'country', 'currency']]
+    result.append(field('filter_tree', 'json', None, 'Filters', 'Groups of rules joined by AND and OR, applied with the filters above.'))
+    result.append(field('ticker_in', 'text', None, 'Filters', 'Keep only these tickers, such as a watchlist.'))
     for key, description in RANGE_FILTERS.items():
-        for bound in ['min', 'max']:
+        for bound in ['min', 'max', 'top']:
             result.append(field(f'{key}_{bound}', 'number', None, 'Filters', description))
     for key, default in [('exclude_penny_stocks', True), ('exclude_negative_pe', False), ('dividend_paying_only', False), ('sma_bullish_only', False), ('macd_bullish_only', False), ('obv_positive_only', False)]:
         result.append(field(key, 'boolean', default, 'Filters'))
