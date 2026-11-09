@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import polars as pl
+import pyarrow.parquet as pq
 
 from .performance import (
     _path_version,
@@ -82,30 +83,31 @@ def _read_parquet(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
 
 
 OHLCV_COLUMNS = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
+NORMALIZED_TICKER = pl.col("Ticker").str.strip_chars().str.to_uppercase().str.replace_all(r"[.\-]", "_")
+_CLOSE = pl.col("Close")
+BAD_CLOSE = _CLOSE.is_not_null() & _CLOSE.is_not_nan() & ((_CLOSE <= 0) | _CLOSE.is_infinite())
 
 
 def _standardize_frame(frame: pl.DataFrame) -> tuple[pl.DataFrame, dict[str, Any]]:
-    """Sort by ticker and date, resolve aliases and blank unusable closes; expects typed columns."""
+    """Sort by ticker and date, resolve aliases and blank unusable closes; expects typed Ticker, Date and Close."""
     if frame["Date"].null_count() or frame["Ticker"].null_count():
         raise ValueError("Market data contains missing/invalid dates or tickers")
-    frame = frame.with_columns(pl.col("Ticker").str.strip_chars().str.to_uppercase().str.replace_all(r"[.\-]", "_")).sort(["Ticker", "Date"], maintain_order=True)
+    frame = frame.with_columns(NORMALIZED_TICKER).sort(["Ticker", "Date"], maintain_order=True)
     if frame["Ticker"].eq("").any():
         raise ValueError("Market data requires nonempty tickers")
     duplicated = frame.select(pl.struct("Ticker", "Date").is_duplicated().alias("dup"))["dup"]
     alias_count = 0
     if duplicated.any():
         # pandas treats NaN as equal to NaN, which is the rule identical aliases must follow.
-        aliases = frame.filter(duplicated).to_pandas()[OHLCV_COLUMNS].drop_duplicates()
+        aliases = frame.filter(duplicated).to_pandas().drop_duplicates()
         if aliases.duplicated(["Ticker", "Date"]).any():
             raise ValueError("Conflicting observed quotes after ticker normalization")
         before = frame.height
         frame = frame.unique(["Ticker", "Date"], keep="first", maintain_order=True)
         alias_count = before - frame.height
-    close = pl.col("Close")
-    bad = close.is_not_null() & close.is_not_nan() & ((close <= 0) | close.is_infinite())
-    unsupported = frame.filter(bad)
+    unsupported = frame.filter(BAD_CLOSE)
     if unsupported.height:
-        frame = frame.with_columns(pl.when(bad).then(None).otherwise(pl.col(c)).alias(c) for c in OHLCV_COLUMNS[2:])
+        frame = frame.with_columns(pl.when(BAD_CLOSE).then(None).otherwise(pl.col(c)).alias(c) for c in OHLCV_COLUMNS[2:] if c in frame.columns)
     return frame, {
         "identical_alias_rows_removed": alias_count,
         "unsupported_nonpositive_or_nonfinite_close_rows": unsupported.height,
@@ -133,35 +135,58 @@ def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-@lru_cache(maxsize=1)
-def _load_market_frame_versioned(version: int) -> tuple[pl.DataFrame, dict[str, Any]]:
-    frame, integrity = _standardize_frame(pl.scan_parquet(str(MARKET_UNIVERSE)).select(OHLCV_COLUMNS).collect())
-    names = frame["Ticker"].unique(maintain_order=True).to_list()
-    return frame.with_columns(pl.col("Ticker").cast(pl.Enum(names))), integrity
-
-
-def _market_frame_and_integrity() -> tuple[pl.DataFrame, dict[str, Any]]:
+def load_market_frame() -> pl.LazyFrame:
+    """A lazy scan of the raw market file; callers filter it, then standardize what they collect."""
     if not MARKET_UNIVERSE.exists():
         raise FileNotFoundError(f"Required market dataset is missing: {MARKET_UNIVERSE}")
-    return _load_market_frame_versioned(_path_version(MARKET_UNIVERSE))
+    return pl.scan_parquet(str(MARKET_UNIVERSE)).select(OHLCV_COLUMNS)
 
 
-def load_market_frame() -> pl.DataFrame:
-    """The whole market as Polars; convert only subsets to pandas."""
-    return _market_frame_and_integrity()[0]
+@lru_cache(maxsize=1)
+def _market_anomalies_versioned(version: int) -> tuple[pl.DataFrame, dict[str, Any]]:
+    """Standardized rows of tickers with aliases or unusable closes, so the clean majority never needs a full load."""
+    if not MARKET_UNIVERSE.exists():
+        raise FileNotFoundError(f"Required market dataset is missing: {MARKET_UNIVERSE}")
+    # One row group at a time with dictionary tickers: only integer keys outlive each group.
+    source = pq.ParquetFile(MARKET_UNIVERSE, read_dictionary=["Ticker"])
+    codes: dict[str, int] = {}
+    keys = np.empty(source.metadata.num_rows, dtype="int64")
+    flagged: set[str] = set()
+    position = 0
+    for group in range(source.num_row_groups):
+        for batch in source.read_row_group(group, columns=["Ticker", "Date", "Close"], use_threads=False).to_batches():
+            tickers, dates, close = batch.columns
+            if tickers.null_count or dates.null_count:
+                raise ValueError("Market data contains missing/invalid dates or tickers")
+            names = [normalize_symbol(name) for name in tickers.dictionary.to_pylist()]
+            mapped = np.array([codes.setdefault(name, len(codes)) for name in names], dtype="int64")
+            rows = mapped[tickers.indices.to_numpy(zero_copy_only=False)]
+            days = dates.cast("timestamp[s]", safe=False).to_numpy(zero_copy_only=False).astype("int64") // 86_400
+            keys[position:position + len(rows)] = rows * 100_000 + days + 50_000
+            position += len(rows)
+            values = close.to_numpy(zero_copy_only=False)
+            flagged.update(names[i] for i in np.unique(tickers.indices.to_numpy(zero_copy_only=False)[(values <= 0) | np.isinf(values)]))
+    # Sorting integers costs a fraction of hashing 10M structs; a collision only flags a ticker for the exact check below.
+    keys.sort()
+    repeated = {int(code) for code in np.unique(keys[1:][keys[1:] == keys[:-1]] // 100_000)}
+    del keys
+    flagged.update(name for name, code in codes.items() if code in repeated or name == "")
+    scan = pl.scan_parquet(str(MARKET_UNIVERSE)).select(OHLCV_COLUMNS)
+    return _standardize_frame(scan.filter(NORMALIZED_TICKER.is_in(sorted(flagged))).collect())
 
 
 def market_source_integrity() -> dict[str, Any]:
-    return _market_frame_and_integrity()[1]
+    return _market_anomalies_versioned(_path_version(MARKET_UNIVERSE))[1]
 
 
 def latest_market_date():
-    return pd.Timestamp(load_market_frame()["Date"].max())
+    return pd.Timestamp(load_market_frame().lazy().select(pl.col("Date").max()).collect().item())
 
 
 def load_market_ohlcv() -> pd.DataFrame:
-    result = frame_to_pandas(load_market_frame())
-    result.attrs["source_integrity"] = market_source_integrity()
+    frame, integrity = _standardize_frame(load_market_frame().lazy().collect())
+    result = frame_to_pandas(frame)
+    result.attrs["source_integrity"] = integrity
     return result
 
 
@@ -172,15 +197,16 @@ def load_hourly_ohlcv() -> pd.DataFrame:
 
 @lru_cache(maxsize=1)
 def _available_symbols_versioned(version: int, fundamentals_version: int) -> tuple[str, ...]:
-    frame = load_market_frame()
-    if frame.is_empty():
-        return ()
     fundamentals = load_fundamentals()
     if "ticker" not in fundamentals:
         raise FileNotFoundError("Equity universe requires a local fundamentals ticker inventory")
     equities = set(fundamentals.ticker)
-    close = pl.col("Close")
-    observed = frame.group_by(pl.col("Ticker").cast(pl.String)).agg((close.is_not_null() & close.is_not_nan()).sum().alias("n"))
+    anomalies = _market_anomalies_versioned(_path_version(MARKET_UNIVERSE))[0]
+    usable = (pl.col("Close").is_not_null() & pl.col("Close").is_not_nan()).sum().alias("n")
+    # Group on raw names first: a few thousand strings get normalized instead of ten million.
+    by_name = load_market_frame().lazy().group_by("Ticker").agg(usable).with_columns(NORMALIZED_TICKER).collect()
+    clean = by_name.filter(~pl.col("Ticker").is_in(anomalies["Ticker"].unique().to_list())).group_by("Ticker").agg(pl.col("n").sum())
+    observed = pl.concat([clean, anomalies.group_by("Ticker").agg(usable)])
     pairs = sorted((t, int(n)) for t, n in observed.iter_rows() if t in equities)
     counts = pd.Series(dict(pairs), dtype="int64").sort_values(ascending=False)
     return tuple(str(x) for x in counts[counts > 0].index)

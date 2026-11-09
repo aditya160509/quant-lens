@@ -104,8 +104,9 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["prox52"] = out["price"] / rolling_high.replace(0, np.nan)
     out["pct_from_52w_high"] = out["price"] / rolling_high - 1.0
     out["pct_above_52w_low"] = out["price"] / rolling_low - 1.0
+    smas = {}
     for window in [20, 50, 100, 200]:
-        ma_series = prices.rolling(window).mean()
+        ma_series = smas[window] = prices.rolling(window).mean()
         ma = ma_series.iloc[-1]
         out[f"sma_{window}"] = ma
         out[f"dist_sma_{window}"] = out["price"] / ma - 1.0
@@ -119,17 +120,18 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
         out[f"crossed_below_sma_{window}_today"] = (~above_today & above_yesterday).astype(float).where(valid_cross)
     out["sma20_above_sma50"] = (out["sma_20"] > out["sma_50"]).astype(float).where(out["sma_20"].notna() & out["sma_50"].notna())
     out["sma50_above_sma200"] = (out["sma_50"] > out["sma_200"]).astype(float).where(out["sma_50"].notna() & out["sma_200"].notna())
-    short_cross = prices.rolling(20).mean() - prices.rolling(50).mean()
-    long_cross = prices.rolling(50).mean() - prices.rolling(200).mean()
+    short_cross = smas[20] - smas[50]
+    long_cross = smas[50] - smas[200]
     out["sma20_50_cross_days"] = short_cross.tail(cross_lookback).apply(_last_sign_cross_age)
     out["sma50_200_cross_days"] = long_cross.tail(cross_lookback).apply(_last_sign_cross_age)
-    cross_50_200 = sma_cross_event(prices.rolling(50).mean(), prices.rolling(200).mean())
+    cross_50_200 = sma_cross_event(smas[50], smas[200])
     out["golden_cross_today"] = (cross_50_200.iloc[-1] == 1).astype(float)
     out["death_cross_today"] = (cross_50_200.iloc[-1] == -1).astype(float)
     out["golden_cross_within_20d"] = (cross_50_200.tail(20) == 1).any().astype(float)
     out["death_cross_within_20d"] = (cross_50_200.tail(20) == -1).any().astype(float)
     out["golden_cross_age_days"] = cross_50_200.tail(cross_lookback).apply(lambda s: _last_event_age(s, 1.0))
     out["death_cross_age_days"] = cross_50_200.tail(cross_lookback).apply(lambda s: _last_event_age(s, -1.0))
+    del smas, ma_series, short_cross, long_cross, cross_50_200
     ema12 = prices.ewm(span=macd_fast, adjust=False, min_periods=macd_fast).mean()
     ema26 = prices.ewm(span=macd_slow, adjust=False, min_periods=macd_slow).mean()
     macd = ema12 - ema26
@@ -140,6 +142,7 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["macd_histogram"] = macd_hist.iloc[-1]
     out["macd_bullish"] = (out["macd"] > out["macd_signal"]).astype(float).where(out["macd"].notna() & out["macd_signal"].notna())
     out["macd_cross_days"] = macd_hist.tail(20).apply(_last_sign_cross_age)
+    del ema12, ema26, macd, macd_signal, macd_hist
     bb_mid = prices.rolling(bb_period).mean()
     bb_std = prices.rolling(bb_period).std(ddof=0)
     bb_upper = bb_mid + bb_std_multiple * bb_std
@@ -149,6 +152,7 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["bollinger_pct_b"] = (prices.iloc[-1] - bb_lower.iloc[-1]) / (bb_upper.iloc[-1] - bb_lower.iloc[-1]).replace(0, np.nan)
     out["bollinger_band_width"] = (bb_upper.iloc[-1] - bb_lower.iloc[-1]) / bb_mid.iloc[-1].replace(0, np.nan)
     out["bollinger_width_percentile"] = rank_pct(out["bollinger_band_width"])
+    del bb_mid, bb_std, bb_upper, bb_lower
     ranges = [highs - lows, (highs - prices.shift(1)).abs(), (lows - prices.shift(1)).abs()]
     tr_columns = ranges[0].columns.union(ranges[1].columns).union(ranges[2].columns)
     a, b, c = (x.reindex(columns=tr_columns).to_numpy() for x in ranges)
@@ -170,16 +174,19 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["adx_14"] = dx.apply(lambda col: _wilder_smooth(col, adx_period)).iloc[-1]
     out["dmi_plus"] = plus_di.iloc[-1]
     out["dmi_minus"] = minus_di.iloc[-1]
+    del tr, atr, up_move, down_move, plus_dm, minus_dm, atr_dm, plus_di, minus_di, dx
     low14 = lows.rolling(stochastic_period).min()
     high14 = highs.rolling(stochastic_period).max()
     stoch_k = (prices - low14) / (high14 - low14).replace(0, np.nan) * 100
     out["stochastic_k"] = stoch_k.iloc[-1]
     out["stochastic_d"] = stoch_k.rolling(stochastic_d_period).mean().iloc[-1]
     out["williams_r"] = -100 * (high14.iloc[-1] - prices.iloc[-1]) / (high14.iloc[-1] - low14.iloc[-1]).replace(0, np.nan)
+    del low14, high14, stoch_k
     signed_volume = np.sign(prices.diff()) * volumes
     obv = signed_volume.cumsum()
     from scipy.stats import linregress
     out["obv_20d_slope"] = obv.tail(20).apply(lambda column: linregress(np.arange(len(column)), column).slope if column.notna().all() and len(column) == 20 else np.nan)
+    del signed_volume, obv
     delta = prices.diff()
     gain = delta.clip(lower=0).apply(lambda col: _wilder_smooth(col, rsi_period))
     loss = (-delta.clip(upper=0)).apply(lambda col: _wilder_smooth(col, rsi_period))
@@ -187,6 +194,7 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     rsi = 100 - 100 / (1 + rs)
     rsi = rsi.mask((loss == 0) & (gain > 0), 100).mask((gain == 0) & (loss > 0), 0).mask((gain == 0) & (loss == 0), 50)
     out["rsi_14"] = rsi.iloc[-1]
+    del delta, gain, loss, rs, rsi
     prior_close = prices.iloc[-2] if len(prices) > 1 else pd.Series(np.nan, index=out.index)
     out["gap_1d"] = _safe_div(opens.iloc[-1].reindex(out.index) - prior_close.reindex(out.index), prior_close.reindex(out.index))
     out["max_1d_return_252d"] = rets.tail(252).max()

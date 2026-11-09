@@ -290,3 +290,17 @@ Run on macOS arm64 against real tickers (AAPL, MSFT, JPM, XOM, TSLA, KO; 800 ses
 - **Polars: adopted** for the market frame, subsets and matrices.
 - **edgartools, nselib:** not added; no fetcher uses them.
 - **DuckDB, Apprise, uPlot, Lezer:** not measured in this pass.
+
+## Design: precomputed daily indicators (not built)
+
+One parquet per market-file version, `backend/data/screener_v2/indicators/<market_mtime>.parquet`, keyed by ticker and date, sorted by ticker, holding only each ticker's latest row per session in the default periods. A run reads its symbols and date through the same predicate pushdown as the market scan.
+
+Point-in-time rules:
+
+- A row for date D uses only sessions up to and including D, on the calendar ticker's sessions.
+- Warmup matches the live path: SMA needs its full window, EMA seeds at its first observation with `min_periods`, Wilder seeds on the mean of the first full window from the first finite value.
+- `as_of_date` selects the row dated at or before the cutoff, never a later one.
+- The fixed 756-session window must be fixed per row, because EMA and Wilder depend on where the window starts. Store the window start with the row.
+- Non-default periods, a non-SPY calendar and USD-converted fields fall back to the live path.
+
+Expected savings, estimated and not measured: the indicator stage (0.8 GB and about 35 s on the full universe, 2026-11-09) falls to one parquet read of 3,833 rows, under 50 MB and under 1 s. Cost is one nightly build of about the same 35 s per stored date, so history should be limited to the dates backtests use.

@@ -85,14 +85,17 @@ _OHLCV = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
 def _subset_frame(symbols: tuple[str, ...], lookback_days: int | None, columns: tuple[str, ...] | None, as_of) -> pl.DataFrame:
     from . import data_loader
 
-    query = data_loader.load_market_frame().lazy().filter(pl.col("Ticker").cast(pl.String).is_in(list(symbols)))
+    data_loader.market_source_integrity()  # a corrupt file must fail even when the requested symbols are clean
+    query = data_loader.load_market_frame().lazy().filter(data_loader.NORMALIZED_TICKER.is_in(list(symbols)))
     if as_of is not None:
         query = query.filter(pl.col("Date") <= pd.Timestamp(as_of))
     if lookback_days:
         latest = query.select(pl.col("Date").max()).collect().item()
         if latest is not None:
             query = query.filter(pl.col("Date") >= pd.Timestamp(latest) - pd.Timedelta(days=int(lookback_days) * 2))
-    return query.select(list(columns) if columns else _OHLCV).collect()
+    names = list(columns) if columns else _OHLCV
+    frame, _ = data_loader._standardize_frame(query.select(list(dict.fromkeys(["Ticker", "Date", "Close", *names]))).collect())
+    return frame.select(names)
 
 
 def _ohlcv_subset(symbols: tuple[str, ...], lookback_days: int | None = None, version: int | None = None, columns: tuple[str, ...] | None = None, as_of=None) -> pd.DataFrame:
@@ -107,7 +110,7 @@ def _matrix(symbols: tuple[str, ...], lookback: int, field: str) -> pd.DataFrame
     raw = _subset_frame(symbols, max(lookback + 260, lookback), ("Ticker", "Date", field), None)
     if not raw.height:
         return pd.DataFrame()
-    wide = raw.with_columns(pl.col("Ticker").cast(pl.String)).pivot(on="Ticker", index="Date", values=field).sort("Date").tail(lookback)
+    wide = raw.pivot(on="Ticker", index="Date", values=field).sort("Date").tail(lookback)
     out = wide.drop("Date").to_pandas()
     out.index = pd.DatetimeIndex(wide["Date"].to_numpy(), name="Date")
     out.columns = pd.Index(out.columns.tolist(), dtype=object, name="Ticker")
