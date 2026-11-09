@@ -50,7 +50,8 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 ## Planning
 - [ ] Agree the product position
 - [ ] Redo ML, Research, Factors and Volatility reviews against the feature rule
-  - Factors review redone 2026-11-09 (ML, Research and Volatility still open)
+  - ML and Research reviews redone 2026-11-09 (`ML_V2_PRODUCT_REVIEW.md`, `RESEARCH_PRODUCT_REVIEW_FINAL_BATCH.md`); not ticked, follow-up items are in each review's build checklist
+  - Factors review redone 2026-11-09
   - Volatility review redone 2026-11-09; VOLATILITY_CHECKLIST.md updated to match (not ticked)
 - [x] Factors product review
 - [x] Volatility product review
