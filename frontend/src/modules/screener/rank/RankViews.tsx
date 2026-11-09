@@ -1,10 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { Waterfall } from "@/charts/Waterfall";
 import { DataTable, Empty } from "@/kit/DataTable";
 import { useRuns } from "@/modules/research/api";
 import { isNum, num, out } from "@/modules/research/format";
+import { useStudies } from "@/modules/research/store";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import type { FeatureResult } from "@/modules/research/types";
 import { API_BASE_URL } from "@/lib/apiBase";
@@ -24,6 +26,7 @@ export function ScoreWaterfall({ result }: ViewProps) {
 
 /** The rule-based composite rank beside the latest ML alpha model's rank for the same names. */
 export function RankVsMl({ result, opts }: ViewProps) {
+  const router = useRouter();
   const rules = out(result, "composite_score_universe_ranking");
   const run = useRuns((s) => s.runs.find((r) => r.featureId === "ml02" && r.status === "completed"));
   const ml = useQuery({
@@ -32,10 +35,19 @@ export function RankVsMl({ result, opts }: ViewProps) {
     enabled: Boolean(run), staleTime: Infinity, retry: false,
   });
   const learned = new Map(out(ml.data?.result ?? ({} as FeatureResult), "prediction_rank_table").map((r) => [String(r.ticker), r.rank]));
-  if (!run) return <Empty text="Unknown: no ML alpha run yet. Run the Alpha model in ML to compare." />;
+  if (!run) return <Empty text="Unknown" />;
   const rows = rules.map((r) => {
     const m = learned.get(String(r.ticker));
     return { ticker: r.ticker, rules_rank: r.rank, ml_rank: isNum(m) ? m : null, rank_gap: isNum(m) && isNum(r.rank) ? m - r.rank : null };
   });
-  return <DataTable rows={rows} opts={{ ...opts, hatch: true }} />;
+  const train = () => {
+    useStudies.setState((s) => ({ forms: { ...s.forms, ml02: { ...(s.forms.ml02 ?? {}), universe: rules.map((r) => String(r.ticker)).join(",") } } }));
+    router.push("/ml/alpha");
+  };
+  return (
+    <div>
+      <button type="button" className="btn sm" onClick={train}>Train a ranker on this</button>
+      <DataTable rows={rows} opts={{ ...opts, hatch: true }} />
+    </div>
+  );
 }

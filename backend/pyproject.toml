@@ -47,6 +47,7 @@ dependencies = [
     "xgboost>=2.0.0",
     "xlsxwriter>=3.3.1",
     "yfinance>=0.2.28",
+    "apprise>=2.2.0",
 ]
 
 [dependency-groups]

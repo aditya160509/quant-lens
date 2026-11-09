@@ -224,6 +224,9 @@ def _execute(job_id: str, feature_id: str, payload: dict[str, Any]) -> dict[str,
     result.setdefault("meta", {})["run"] = {"id": job_id, "feature_id": feature_id, "payload": payload, "metrics": list_metrics()}
     from app.services.screener_v2.core.ledger_bridge import record_trial
     record_trial(feature_id, payload, result)
+    if payload.get("screen_id"):
+        from app.services.screener_v2.core.notify import deliver
+        deliver(str(payload["screen_id"]), result)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     path = RESULTS_DIR / f"{job_id}.json"
     tmp = path.with_suffix(".tmp")
@@ -589,6 +592,40 @@ async def download_screen(feature_id: str, request: FeatureRequest) -> Response:
         raise HTTPException(422, str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(503, str(exc)) from exc
+
+
+class ChannelsRequest(BaseModel):
+    urls: list[str] = Field(max_length=10)
+    digest: bool = False
+
+
+@router.put('/screens/{screen_id}/channels')
+def put_channels(screen_id: str, request: ChannelsRequest) -> dict[str, Any]:
+    from app.services.screener_v2.core.state import set_channels
+    try:
+        set_channels(screen_id, request.urls, request.digest)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return get_channels(screen_id)
+
+
+@router.get('/screens/{screen_id}/channels')
+def get_channels(screen_id: str) -> dict[str, Any]:
+    from app.services.screener_v2.core.state import channels
+    # Only the scheme is returned: the rest of an Apprise URL is a secret.
+    return {'channels': [{'service': c['url'].split('://')[0], 'digest': c['digest']} for c in channels(screen_id)]}
+
+
+@router.get('/screens/{screen_id}/events')
+def screen_events(screen_id: str) -> dict[str, Any]:
+    from app.services.screener_v2.core.state import screen_events as events
+    return {'events': events(screen_id)}
+
+
+@router.get('/screens/{screen_id}/precision')
+def screen_precision(screen_id: str) -> dict[str, Any]:
+    from app.services.screener_v2.core.alerts import realized_alert_precision
+    return {'precision': realized_alert_precision(screen_id, delivered_only=True)}
 
 
 class ScheduleRequest(BaseModel):

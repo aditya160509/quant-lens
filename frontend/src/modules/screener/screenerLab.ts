@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { Bell, FlaskConical, Layers, Scale, SlidersHorizontal, Sigma, Table2, Trophy } from "lucide-react";
+import { Bell, Bookmark, FlaskConical, Layers, Scale, SlidersHorizontal, Sigma, Table2, Trophy } from "lucide-react";
 import { createElement } from "react";
 import { SCREENER_BASE } from "./base";
 import { FilterTree } from "./filters/FilterTree";
@@ -32,6 +32,7 @@ const PAGES: Page[] = [
   { id: "rank", label: "Rank", icon: Trophy, question: CATALOG.sc03.question, features: ["sc03"] },
   { id: "test", label: "Test", icon: FlaskConical, question: CATALOG.sc05.question, features: ["sc05"] },
   { id: "monitor", label: "Monitor", icon: Bell, question: CATALOG.sc06.question, features: ["sc06", "sc08"] },
+  { id: "saved", label: "Saved", icon: Bookmark, question: "Screens you keep, when they re-run and who they alert.", features: [], slug: "saved" },
   { id: "more", label: "More", icon: Layers, question: "Other markets, hourly bars, formulas, sharing and API keys.", features: [], slug: "more" },
 ];
 
@@ -72,12 +73,13 @@ function testBanner(r: FeatureResult) {
 }
 
 const rowActions = (row: Record<string, unknown>) => (typeof row.ticker === "string" ? createElement(RowActions, { ticker: row.ticker }) : null);
-const RESULT_COLUMNS = ["rank", "ticker", "company_name", "sector", "exchange", "country", "quote_currency", "data_coverage", "price", "trend_3m", "market_cap", "core_quant_score", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile", "trailing_pe", "pb_ratio", "roe", "revenue_growth_yoy", "return_1d", "return_1m", "return_6m", "qtr_sales_yoy", "qtr_profit_yoy", "realized_vol_63d", "max_drawdown_252d", "piotroski_passed", "altman_z_score"];
+const RESULT_COLUMNS = ["rank", "ticker", "company_name", "sector", "exchange", "country", "quote_currency", "data_coverage", "statement_age_days", "price", "trend_3m", "market_cap", "core_quant_score", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile", "trailing_pe", "pb_ratio", "roe", "revenue_growth_yoy", "return_1d", "return_1m", "return_6m", "qtr_sales_yoy", "qtr_profit_yoy", "realized_vol_63d", "max_drawdown_252d", "piotroski_passed", "altman_z_score"];
 /** Percentiles drawn as bars on a 0 to 100 scale. */
 const RESULT_BARS = ["data_coverage", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile"];
 /** Provenance and always-empty fields, kept out of the columns. */
 const RESULT_HIDDEN = ["currency_units_unavailable_reason", "financial_currency", "market_value_currency", "market_cap_statement_currency", "market_cap_observation_date", "market_cap_basis", "price_observation_date", "valuation_score_definition", "fundamental_basis", "enterprise_value_basis", "beta_effective_source", "beta_252_unavailable_reason", "float_percent", "forward_pe"];
 
+const SavedPage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./saved/SavedPage"), { ssr: false });
 const MorePage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./extras/MorePage"), { ssr: false });
 const SV = group(() => import("./views") as Promise<Record<string, unknown>>);
 const ST = group(() => import("./test/ProofViews") as Promise<Record<string, unknown>>);
@@ -124,9 +126,9 @@ export const SCREENER_LAB: LabConfig = {
   manifest: (raw) => (raw as { features: RawFeature[] }).features.filter((f) => ID(f.id) in CATALOG).map(toSpec),
   submit: (featureId, payload) => ({ path: `/feature/${RAW(featureId)}/jobs`, body: { payload } }),
   signal: false,
-  specials: { more: MorePage },
+  specials: { saved: SavedPage, more: MorePage },
   widgets: { sector: InFilter, industry: InFilter, exchange: InFilter, country: InFilter, currency: InFilter, ticker_in: WatchlistFilter, filter_tree: FilterTree, screen_template: TemplatePicker, components: ComponentWeights },
-  funnel: (result) => Object.fromEntries(((result?.charts?.filter_funnel_waterfall ?? []) as { key?: string; removed: number; remaining: number }[]).filter((s) => s.key).map((s) => [s.key as string, { removed: s.removed, remaining: s.remaining }])),
+  funnel: (result) => Object.fromEntries(((result?.charts?.filter_funnel_waterfall ?? []) as { key?: string; removed: number; remaining: number; bottleneck?: string | null }[]).filter((s) => s.key).map((s) => [s.key as string, { removed: s.removed, remaining: s.remaining, bottleneck: Boolean(s.bottleneck) }])),
   defaultUniverse: "All names we hold",
   overview: {
     intro: "Screen, rank, test and monitor, with every limit printed on the result.",

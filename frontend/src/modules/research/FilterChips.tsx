@@ -78,7 +78,7 @@ export function FilterChips({ scope, fields, form, setForm }: {
       {active.map((m) => (
         <div key={m.name} title={m.help} style={{ display: "flex", alignItems: "center", gap: 6, opacity: off[m.name] ? 0.5 : 1 }}>
           <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--text-2)" }}>{m.label}</span>
-          {counts[m.name] ? <span className="num" style={{ fontSize: 11, color: "var(--text-3)" }} title={`${counts[m.name].remaining.toLocaleString()} left`}>−{counts[m.name].removed.toLocaleString()}</span> : null}
+          {counts[m.name] ? <span className="num" style={{ fontSize: 11, color: "var(--text-3)" }} title={`${counts[m.name].remaining.toLocaleString()} left`}>{counts[m.name].bottleneck ? "● " : ""}−{counts[m.name].removed.toLocaleString()}</span> : null}
           {bound(m.name, "min", m.label)}
           {bound(m.name, "max", m.label)}
           {m.top ? bound(m.name, "top", m.label) : null}
@@ -104,4 +104,4 @@ export function FilterChips({ scope, fields, form, setForm }: {
 }
 
 const NONE: Record<string, Partial<Record<Side, unknown>>> = {};
-const NONE_COUNTS: Record<string, { removed: number; remaining: number }> = {};
+const NONE_COUNTS: Record<string, { removed: number; remaining: number; bottleneck?: boolean }> = {};

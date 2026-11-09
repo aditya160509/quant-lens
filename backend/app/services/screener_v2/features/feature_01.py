@@ -28,7 +28,7 @@ FEATURE_NAME = "Core Multi-Factor Screener Engine"
 
 INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master', 'description': 'Universe symbols or master universe alias.'}, {'key': 'top_n', 'type': 'number', 'default': 5000, 'description': 'Rows returned; the default returns every name that passes.'}, {'key': 'max_symbols', 'type': 'number', 'default': 5000, 'description': 'Maximum symbols loaded from the master universe.'}, {'key': 'lookback_days', 'type': 'number', 'default': 756}, {'key': 'sector', 'type': 'text', 'default': 'all'}, {'key': 'industry_group', 'type': 'text', 'default': 'all'}, {'key': 'market_cap_min', 'type': 'number', 'default': None}, {'key': 'dollar_volume_min', 'type': 'number', 'default': None}, {'key': 'score_min', 'type': 'number', 'default': None}, {'key': 'heatmap_metric', 'type': 'text', 'default': 'core_quant_score'}, {'key': 'include_market_cap_buckets', 'type': 'boolean', 'default': True}, {'key': 'metric_filters', 'type': 'json', 'default': None, 'description': 'Limits on your named metrics, as {"name": {"min": 0, "max": 1}}.'}]))
 
-OUTPUTS = [{'key': 'metric_coverage', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Metric Coverage'}, {'key': 'filter_funnel_waterfall', 'source': 'charts', 'render': 'table', 'primary': True, 'label': 'Filter Funnel Waterfall'}, {'key': 'cross_sectional_percentile_context', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Cross Sectional Percentile Context'}, {'key': 'heatmap_view', 'source': 'charts', 'render': 'heatmap', 'primary': False, 'label': 'Heatmap View'}, {'key': 'quick_look_card', 'source': 'charts', 'render': 'metrics', 'primary': False, 'label': 'Quick Look Card'}, {'key': 'market_cap_bucket_distribution', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Market Cap Bucket Distribution'}, {'key': 'ranked_screener_table', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Ranked Screener Table'}, {'key': 'saved_screens', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Saved Screens'}]
+OUTPUTS = [{'key': 'run_changes', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Run Changes'}, {'key': 'metric_coverage', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Metric Coverage'}, {'key': 'filter_funnel_waterfall', 'source': 'charts', 'render': 'table', 'primary': True, 'label': 'Filter Funnel Waterfall'}, {'key': 'cross_sectional_percentile_context', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Cross Sectional Percentile Context'}, {'key': 'heatmap_view', 'source': 'charts', 'render': 'heatmap', 'primary': False, 'label': 'Heatmap View'}, {'key': 'quick_look_card', 'source': 'charts', 'render': 'metrics', 'primary': False, 'label': 'Quick Look Card'}, {'key': 'market_cap_bucket_distribution', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Market Cap Bucket Distribution'}, {'key': 'ranked_screener_table', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Ranked Screener Table'}, {'key': 'saved_screens', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Saved Screens'}]
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -42,6 +42,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     panel = panel.merge(quarterly_variance(symbols, payload.get("as_of_date")), on="ticker", how="left", validate="one_to_one")
     panel["country"] = panel["ticker"].map(country_of)
     panel["data_coverage"] = data_coverage(panel)
+    panel["statement_age_days"] = (pd.Timestamp(payload.get("as_of_date")) - pd.to_datetime(panel["quarter_end"], errors="coerce")).dt.days
     panel["max_drawdown_252d"] = panel["ticker"].map((closes / closes.cummax() - 1).min(skipna=True))
     panel = add_metric_columns(panel)
     remember(panel)
@@ -84,8 +85,10 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
             "amihud_percentile",
         ] if c in filtered.columns
     ]].head(250)
-    from ..core.state import list_screens
+    from ..core.state import compare_and_store, list_screens
     ql = quick_look(filtered, payload.get("focus_ticker"))
+    from ..core.data_loader import ohlcv_for_symbols
+    changes = compare_and_store(str(payload["screen_id"]), records(ranked), str(ohlcv_for_symbols(symbols).Date.max().date()), int(payload.get("rank_shift") or 10)) if payload.get("screen_id") else []
     return response(
         FEATURE_ID,
         summary_cards=[
@@ -104,6 +107,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
             "heatmap_view": heatmap_view(filtered, str(payload.get("heatmap_metric") or "core_quant_score")),
             "quick_look_card": ql,
             "market_cap_bucket_distribution": market_cap_bucket_distribution,
+            "run_changes": changes,
         },
         tables={
             "ranked_screener_table": records(ranked),

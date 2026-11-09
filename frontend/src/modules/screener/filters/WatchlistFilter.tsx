@@ -9,7 +9,7 @@ export function WatchlistFilter({ value, onChange }: { field: InputSpec; value: 
   const lists = useWatchlists((s) => s.lists);
   const names = Object.keys(lists).filter((n) => lists[n].length);
   const current = names.find((n) => lists[n].join(",") === String(value ?? ""));
-  if (!names.length) return <div className="hint">Star a name in the results to start a watchlist.</div>;
+  if (!names.length) return null;
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
       <select className="input" aria-label="Watchlist" value={current ?? ""} onChange={(e) => onChange(e.target.value ? lists[e.target.value].join(",") : "")}>

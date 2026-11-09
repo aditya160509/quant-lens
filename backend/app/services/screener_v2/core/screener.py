@@ -22,9 +22,9 @@ SCREEN_TEMPLATES: dict[str, dict[str, Any]] = {
     "low_volatility": {"realized_vol_max": 0.25, "beta_max": 0.9, "drawdown_min": -0.25},
     "safe_balance_sheet": {"altman_min": 3, "current_ratio_min": 1.5, "interest_coverage_min": 5, "debt_ebitda_max": 3},
     "oversold_quality": {"rsi_max": 30, "roe_min": 0.10, "quality_percentile_min": 60},
-    "magic_formula_like": {"roic_min": 0.15, "earnings_yield_min": 0.08},
-    "piotroski_value": {"pb_max": 1.5, "piotroski_min": 7},
-    "net_net_like": {"pb_max": 0.7, "current_ratio_min": 2},
+    "high_roic_high_earnings_yield": {"roic_min": 0.15, "earnings_yield_min": 0.08},
+    "cheap_high_fscore": {"pb_max": 1.5, "piotroski_min": 7},
+    "below_book_liquid": {"pb_max": 0.7, "current_ratio_min": 2},
     "shareholder_yield": {"dividend_yield_min": 0.02, "fcf_yield_min": 0.05, "payout_ratio_max": 0.8},
     "fcf_machines": {"fcf_yield_min": 0.06, "operating_margin_min": 0.15, "debt_ebitda_max": 3},
     "high_roic_growth": {"roic_min": 0.15, "revenue_growth_yoy_min": 0.10, "revenue_growth_3y_cagr_min": 0.10},
@@ -40,15 +40,12 @@ SCREEN_TEMPLATES: dict[str, dict[str, Any]] = {
     "beaten_down_quality": {"high_proximity_max": -0.35, "roe_min": 0.12, "piotroski_min": 6},
     "liquid_large": {"dollar_volume_min": 100_000_000},
     "breakout_52w": {"prox52_min": 0.97, "vratio_min": 1.5},
-    "minervini_trend": {"dist_sma_50_min": 0, "dist_sma_200_min": 0, "high_proximity_min": -0.25, "momentum_percentile_min": 70, "sma_bullish_only": True},
+    "uptrend_above_averages": {"dist_sma_50_min": 0, "dist_sma_200_min": 0, "high_proximity_min": -0.25, "momentum_percentile_min": 70, "sma_bullish_only": True},
     "golden_cross_recent": {"golden_cross_within_n_days": 10},
-    "macd_obv_confirm": {"macd_bullish_only": True, "obv_positive_only": True, "adx_min": 25},
-    "oversold_bounce": {"rsi_max": 30, "bollinger_pct_b_max": 0.05},
-    "overbought_fade": {"rsi_min": 75, "dist_sma_50_min": 0.15},
     "volume_surge": {"vratio_min": 3, "dollar_volume_min": 5_000_000},
 }
 # Rule-of-thumb technical screens with little published evidence; the page says so.
-WEAK_EVIDENCE = {"breakout_52w", "minervini_trend", "golden_cross_recent", "macd_obv_confirm", "oversold_bounce", "overbought_fade", "volume_surge", "oversold_quality"}
+WEAK_EVIDENCE = {"breakout_52w", "uptrend_above_averages", "golden_cross_recent", "volume_surge", "oversold_quality"}
 
 
 def template_formula(filters: dict[str, Any]) -> str:
@@ -351,6 +348,7 @@ def top_table(panel: pd.DataFrame, n: int = DEFAULT_TOP_N) -> pd.DataFrame:
         "exchange",
         "country",
         "data_coverage",
+        "statement_age_days",
         "price",
         "market_cap",
         "valuation_score_definition",

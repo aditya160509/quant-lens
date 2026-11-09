@@ -160,15 +160,15 @@ One honest proof path. E4 M4 H3
 
 E3 M5 H1
 
-- [ ] `E` Saved screens, rename, duplicate (70)
-- [ ] `M` Saved screens and schedules on the shared scheduler
-- [ ] `E` Scheduled re-runs (72)
-- [ ] `M` Run history with entries, exits and rank shifts (71)
-- [ ] `M` Email, push and webhook with Apprise (73, 74)
-- [ ] `M` End-of-day price and indicator alerts (75)
-- [ ] `M` Fundamental-change alerts (results out) (76)
-- [ ] `E` Digest
-- [ ] `H` Delivered-alert tracking and precision scoreboard (U7)
+- [x] `E` Saved screens, rename, duplicate (70) (untested)
+- [x] `M` Saved screens and schedules on the shared scheduler (untested)
+- [x] `E` Scheduled re-runs (72) (untested)
+- [x] `M` Run history with entries, exits and rank shifts (71) (untested)
+- [x] `M` Email, push and webhook with Apprise (73, 74) (untested)
+- [x] `M` End-of-day price and indicator alerts (75) (untested)
+- [x] `M` Fundamental-change alerts (results out) (76) (untested)
+- [x] `E` Digest (untested)
+- [x] `H` Delivered-alert tracking and precision scoreboard (U7) (untested)
 
 ## Batch 10: Signature ideas
 

@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from typing import Any
-from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
+from ..core.alerts import (
+    alert_precision_backtest,
+    current_alerts,
+    realized_alert_precision,
+)
 from ..core.common import access_meta, records, response
-from ..core.alerts import alert_precision_backtest, current_alerts, realized_alert_precision
-from ..core.panel import metric_panel
 from ..core.data_loader import parse_symbols
-
+from ..core.panel import metric_panel
+from ..core.screener import quarterly_variance
+from .inputs import enrich, merge_inputs, shared_inputs
 
 FEATURE_ID = "06"
 FEATURE_NAME = "Alert Engine and Watchlist Monitor"
@@ -25,10 +29,12 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     symbols = parse_symbols(payload, default_limit=25, max_symbols=250)
     panel = metric_panel(payload, symbols=symbols)
     score_min = float(payload.get("alert_score_min", 80))
+    if not panel.empty:
+        panel = panel.merge(quarterly_variance(symbols, payload.get("as_of_date")), on="ticker", how="left", validate="one_to_one")
     alerts = current_alerts(panel, payload)
     entries = panel[panel["core_quant_score"] >= score_min][["ticker", "core_quant_score", "sector"]].copy() if not panel.empty else panel
-    from ..core.state import compare_and_store
     from ..core.data_loader import ohlcv_for_symbols
+    from ..core.state import compare_and_store
     entries = records(entries)
     changes = compare_and_store(str(payload["screen_id"]), entries, str(ohlcv_for_symbols(symbols).Date.max().date())) if payload.get("screen_id") else []
     from ..core.state import store_alerts

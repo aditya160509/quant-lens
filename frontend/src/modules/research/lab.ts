@@ -42,7 +42,7 @@ export type LabConfig = {
   /** A custom control for an input, keyed by the input's key. */
   widgets?: Record<string, ComponentType<{ field: InputSpec; value: unknown; onChange: (v: unknown) => void }>>;
   /** Per-filter counts from a finished run, keyed by the filter's metric name. */
-  funnel?: (result: FeatureResult | undefined) => Record<string, { removed: number; remaining: number }>;
+  funnel?: (result: FeatureResult | undefined) => Record<string, { removed: number; remaining: number; bottleneck?: boolean }>;
   /** Inputs drawn by a lab's own control instead of the default field, keyed by input key. */
   controls?: Record<string, ComponentType<{ value: string; onChange: (v: unknown) => void }>>;
   /** What an empty ticker list means for this lab, shown in the Universe chip. */

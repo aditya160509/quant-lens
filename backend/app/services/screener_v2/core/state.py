@@ -47,6 +47,8 @@ def _connection():
     conn.execute('CREATE TABLE IF NOT EXISTS definitions (screen_id TEXT PRIMARY KEY, name TEXT NOT NULL, feature_id TEXT NOT NULL, payload TEXT NOT NULL)')
     conn.execute('CREATE TABLE IF NOT EXISTS universes (universe_id TEXT PRIMARY KEY, name TEXT NOT NULL, symbols TEXT NOT NULL)')
     conn.execute('CREATE TABLE IF NOT EXISTS runs (run_id INTEGER PRIMARY KEY, screen_id TEXT NOT NULL, as_of_date TEXT NOT NULL, result TEXT NOT NULL)')
+    conn.execute('CREATE TABLE IF NOT EXISTS channels (screen_id TEXT NOT NULL, url TEXT NOT NULL, digest INTEGER NOT NULL, PRIMARY KEY (screen_id, url))')
+    conn.execute('CREATE TABLE IF NOT EXISTS deliveries (screen_id TEXT NOT NULL, date TEXT NOT NULL, ticker TEXT NOT NULL, type TEXT NOT NULL, metric TEXT NOT NULL, ok INTEGER NOT NULL, error TEXT)')
     try:
         with conn:
             yield conn
@@ -127,10 +129,33 @@ def store_alerts(screen_id: str, date: str, alerts: list[dict]) -> None:
                          [(screen_id, date, row['ticker'], row['type'], str(row.get('metric', '')), json.dumps(row, allow_nan=False)) for row in alerts])
 
 
-def alert_history(screen_id: str) -> list[dict]:
+def alert_history(screen_id: str, delivered_only: bool = False) -> list[dict]:
     with _connection() as conn:
         conn.execute('CREATE TABLE IF NOT EXISTS alert_history (screen_id TEXT, date TEXT, ticker TEXT, type TEXT, metric TEXT, payload TEXT, PRIMARY KEY (screen_id, date, ticker, type, metric))')
-        return [{'date': row[0], **json.loads(row[1])} for row in conn.execute('SELECT date, payload FROM alert_history WHERE screen_id=? ORDER BY date', (screen_id,))]
+        sent = ' AND EXISTS (SELECT 1 FROM deliveries d WHERE d.screen_id=a.screen_id AND d.date=a.date AND d.ticker=a.ticker AND d.type=a.type AND d.metric=a.metric AND d.ok=1)' if delivered_only else ''
+        return [{'date': row[0], **json.loads(row[1])} for row in conn.execute(f'SELECT date, payload FROM alert_history a WHERE screen_id=?{sent} ORDER BY date', (screen_id,))]
+
+
+def set_channels(screen_id: str, urls: list[str], digest: bool) -> None:
+    get_screen(screen_id)
+    with _connection() as conn:
+        conn.execute('DELETE FROM channels WHERE screen_id=?', (screen_id,))
+        conn.executemany('INSERT INTO channels VALUES (?, ?, ?)', [(screen_id, url.strip(), int(digest)) for url in urls if url.strip()])
+
+
+def channels(screen_id: str) -> list[dict]:
+    with _connection() as conn:
+        return [{'url': r[0], 'digest': bool(r[1])} for r in conn.execute('SELECT url, digest FROM channels WHERE screen_id=?', (screen_id,))]
+
+
+def record_deliveries(screen_id: str, date: str, alerts: list[dict], ok: bool, error: str | None = None) -> None:
+    with _connection() as conn:
+        conn.executemany('INSERT INTO deliveries VALUES (?, ?, ?, ?, ?, ?, ?)', [(screen_id, date, a['ticker'], a['type'], str(a.get('metric', '')), int(ok), error) for a in alerts])
+
+
+def screen_events(screen_id: str, limit: int = 500) -> list[dict]:
+    with _connection() as conn:
+        return [json.loads(r[0]) for r in conn.execute('SELECT event FROM events WHERE screen_id=? ORDER BY as_of_date DESC, rowid DESC LIMIT ?', (screen_id, limit))]
 
 
 def _schedule_schema(conn):

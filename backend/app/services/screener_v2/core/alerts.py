@@ -1,12 +1,15 @@
 """Screener V2 alerts computations."""
 from __future__ import annotations
+
 from typing import Any
+
 import numpy as np
 import pandas as pd
+
+from .common import clean_json
 from .data_loader import close_matrix
-from .common import clean_json, number_like
-from .stats import _wilder_smooth
 from .estimators import sma_cross_event
+from .stats import _wilder_smooth
 
 
 def alert_precision_backtest(panel: pd.DataFrame, alert_type_field_map: dict[str, str], forward_days: tuple[int, ...] = (1, 5, 21)) -> list[dict[str, Any]]:
@@ -56,9 +59,22 @@ def fundamental_change_rows(panel: pd.DataFrame, threshold: float = 0.20) -> lis
 
 
 
-def current_alerts(panel, payload):
-    from .formula import evaluate_formula
+def results_out_rows(panel: pd.DataFrame, as_of: Any) -> list[dict[str, Any]]:
+    """Quarters that became usable this week, once the 90-day statement lag has passed."""
+    if "quarter_end" not in panel or not as_of:
+        return []
     from .common import records
+    usable = pd.to_datetime(panel["quarter_end"], errors="coerce") + pd.Timedelta(days=90)
+    cutoff = pd.Timestamp(as_of)
+    profit = pd.to_numeric(panel.get("qtr_profit_yoy"), errors="coerce")
+    rows = pd.DataFrame({"ticker": panel.ticker, "type": "RESULTS_OUT", "metric": "qtr_profit_yoy", "value": profit, "severity": "medium",
+                         "direction": np.sign(profit), "message": "Quarter ended " + panel["quarter_end"].astype(str) + " is now counted, after the 90-day lag."})
+    return records(rows[usable.between(cutoff - pd.Timedelta(days=7), cutoff).fillna(False)])
+
+
+def current_alerts(panel, payload):
+    from .common import records
+    from .formula import evaluate_formula
     alerts = []
     def field(name):
         return pd.to_numeric(panel.get(name, pd.Series(np.nan, index=panel.index)), errors='coerce')
@@ -95,12 +111,12 @@ def current_alerts(panel, payload):
     append(field('macd_bullish').eq(1) | field('sma50_above_sma200').eq(1) | field('bollinger_pct_b').ge(.95), 'BULLISH_TECHNICAL_CONDITION', field('macd_histogram'), 'Observed bullish SMA, MACD or Bollinger condition.', direction=1)
     streak = pd.concat([field('consecutive_up_days'), field('consecutive_down_days')], axis=1).max(axis=1)
     append(streak.ge(5), 'CONSECUTIVE_DAYS', streak, 'Observed consecutive-day threshold reached.')
-    return alerts + fundamental_change_rows(panel, float(payload.get('fundamental_change_threshold', .2)))
+    return alerts + fundamental_change_rows(panel, float(payload.get('fundamental_change_threshold', .2))) + results_out_rows(panel, payload.get('as_of_date'))
 
 
-def realized_alert_precision(screen_id, horizons=(1, 5, 21)):
+def realized_alert_precision(screen_id, horizons=(1, 5, 21), delivered_only=False):
     from .state import alert_history
-    events = alert_history(screen_id)
+    events = alert_history(screen_id, delivered_only)
     if not events:
         return []
     symbols = sorted({row['ticker'] for row in events})
