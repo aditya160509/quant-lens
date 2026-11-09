@@ -1,8 +1,10 @@
 """Portfolio V2 stats engine."""
 
 from __future__ import annotations
-from typing import Any
+
 import math
+from typing import Any
+
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -134,7 +136,7 @@ def pbo_cscv(
             }
         )
     return {
-        "pbo": float(np.mean(np.asarray(logits) < 0)),
+        "pbo": float(np.mean(np.asarray(logits) <= 0)),
         "distribution": rows,
         "combination_count": len(rows),
         "partition_count": len(chunks),
