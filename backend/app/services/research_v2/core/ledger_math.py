@@ -1,13 +1,14 @@
 """Multiple-testing math for the trial ledger: deflated Sharpe hurdle, Harvey-Liu haircut, PBO via CSCV."""
 from __future__ import annotations
 
-from itertools import combinations
 from math import e
 
 import numpy as np
 from scipy.stats import norm
 
 EULER_GAMMA = 0.5772156649015329
+
+from app.services.shared.stats import cscv_pbo as shared_cscv_pbo
 
 
 def deflated_sharpe_hurdle(n_trials: int, sharpe_variance: float) -> float | None:
@@ -32,16 +33,7 @@ def pbo_cscv(returns: np.ndarray, n_splits: int = 8) -> float | None:
     m = np.asarray(returns, dtype=float)
     if m.ndim != 2 or m.shape[1] < 8 or m.shape[0] < n_splits * 2:
         return None
-    blocks = np.array_split(np.arange(m.shape[0]), n_splits)
-    logits = []
-    for train_ids in combinations(range(n_splits), n_splits // 2):
-        test_ids = [i for i in range(n_splits) if i not in train_ids]
-        tr = m[np.concatenate([blocks[i] for i in train_ids])]
-        te = m[np.concatenate([blocks[i] for i in test_ids])]
-        sr_tr = tr.mean(0) / (tr.std(0, ddof=1) + 1e-12)
-        sr_te = te.mean(0) / (te.std(0, ddof=1) + 1e-12)
-        best = int(np.argmax(sr_tr))
-        rank = (sr_te < sr_te[best]).sum() + 0.5 * ((sr_te == sr_te[best]).sum() - 1)
-        w = (rank + 1) / (len(sr_te) + 1)
-        logits.append(np.log(w / (1 - w)))
-    return float(np.mean(np.asarray(logits) <= 0))
+    try:
+        return shared_cscv_pbo(m, n_splits)["pbo"]
+    except ValueError:  # non-finite or constant strategy returns have no defined Sharpe
+        return None

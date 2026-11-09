@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import itertools
 import math
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,8 @@ GRADING_RULES = {
     "factor_zoo": "Spanning-alpha |t| against the benchmark library: same bands as significance.",
     "costs": "Net Sharpe as a share of gross Sharpe: A >= 0.8, B >= 0.6, C >= 0.4, D >= 0.2.",
 }
+
+from app.services.shared.stats import cscv_pbo as shared_cscv_pbo
 
 
 def grade_from_thresholds(value: float | None, cuts: tuple[float, ...], higher_better: bool = True) -> str:
@@ -187,7 +190,7 @@ def referee_checklist(res: dict[str, dict[str, Any]], costs: dict[str, Any] | No
             kept = s[held.month != 1]
             tt = mean_test(kept, max(panel.holding_months, 4))
             ls_ex = (abs(tt["t"]) >= 2.0, f"Long-short t = {tt['t']:.2f} excluding January returns ({len(kept)} of {len(s)} periods).")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             ls_ex = (None, f"Could not compute: {exc}")
     out.append(_check("january", "Is the effect more than a January effect?", *(ls_ex or (None, "No panel."))))
     if costs and costs.get("available"):
@@ -249,7 +252,7 @@ def explain(res: dict[str, dict[str, Any]], grades: list[dict[str, Any]], ov: di
 def run_report_card(payload: dict[str, Any]) -> dict[str, Any]:
     """One worker job: features 01, 02, 03, 04, 05, 08, 11 on one payload and one cached panel, then grading."""
 
-    from .registry import _load, FEATURE_MODULES
+    from .registry import FEATURE_MODULES, _load
 
     base = {**payload, "include_merged": False}
     res: dict[str, dict[str, Any]] = {}
@@ -262,7 +265,7 @@ def run_report_card(payload: dict[str, Any]) -> dict[str, Any]:
             module = next(m for m in FEATURE_MODULES if m.endswith(f"_{fid}"))
             try:
                 res[fid] = _load(module).run(base)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 errors[fid] = str(exc)
         out: dict[str, Any] = {"feature_id": "report_card", "status": "ok", "summary_cards": [], "charts": {}, "tables": {}, "meta": {"config": {k: v for k, v in payload.items() if not str(k).startswith("_")}, "component_errors": errors}}
         attach_audit(out, panels, payload)
@@ -309,7 +312,7 @@ def run_batch(payload: dict[str, Any], signals: list[str]) -> dict[str, Any]:
                 ic = panel.signal.corrwith(panel.dependent, axis=1, method="spearman").mean()
                 sharpe = float(ls.mean() / ls.std() * np.sqrt(12 / panel.holding_months)) if ls.std() else None
                 rows.append({"signal": s, "t_stat": float(sig["t_stat"]), "p": float(sig["p_value"]), "sharpe": sharpe, "ic": float(ic), "months": int(sig["months"]), "ls_t_stat": mean_test(ls, max(panel.holding_months, 4))["t"]})
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 rows.append({"signal": s, "error": str(exc)})
     ok = [r for r in rows if "error" not in r]
     for r, a in zip(ok, bhy_adjust([r["p"] for r in ok])):
@@ -332,7 +335,7 @@ def _sharpe(s: pd.Series, per_year: float) -> float | None:
 
 
 def _span(s: pd.Series) -> dict[str, Any]:
-    return {"start": s.index.min().strftime("%Y-%m-%d") if len(s) else None, "end": s.index.max().strftime("%Y-%m-%d") if len(s) else None, "n": int(len(s))}
+    return {"start": s.index.min().strftime("%Y-%m-%d") if len(s) else None, "end": s.index.max().strftime("%Y-%m-%d") if len(s) else None, "n": len(s)}
 
 
 def pbo_cscv(returns: pd.DataFrame, parts: int = 8) -> float | None:
@@ -341,19 +344,10 @@ def pbo_cscv(returns: pd.DataFrame, parts: int = 8) -> float | None:
     returns = returns.dropna()
     if returns.shape[1] < 2 or len(returns) < parts * 2:
         return None
-    chunks = np.array_split(np.arange(len(returns)), parts)
-    below = total = 0
-    for combo in itertools.combinations(range(parts), parts // 2):
-        is_idx = np.concatenate([chunks[i] for i in combo])
-        oos_idx = np.concatenate([chunks[i] for i in range(parts) if i not in combo])
-        is_s, oos_s = returns.iloc[is_idx], returns.iloc[oos_idx]
-        is_sh = is_s.mean() / is_s.std().replace(0, np.nan)
-        oos_sh = oos_s.mean() / oos_s.std().replace(0, np.nan)
-        best = is_sh.idxmax()
-        rank = (oos_sh.rank(pct=True))[best]
-        below += rank <= 0.5
-        total += 1
-    return float(below / total) if total else None
+    try:
+        return shared_cscv_pbo(returns, parts)["pbo"]
+    except ValueError:  # constant strategy returns have no defined Sharpe
+        return None
 
 
 def run_validation(payload: dict[str, Any], method: str = "walk_forward", folds: int = 5, embargo_days: int = 30) -> dict[str, Any]:
@@ -429,7 +423,7 @@ def literature_match(expr: str, payload: dict[str, Any] | None = None, limit: in
             corr = cand.rank(axis=1).corrwith(other.rank(axis=1), axis=1).mean()
             if np.isfinite(corr):
                 rows.append({"library_id": name, "name": name.replace("_", " ").title(), "corr": float(corr)})
-        except Exception:
+        except Exception:  # noqa: BLE001, S112
             continue
     rows.sort(key=lambda r: -abs(r["corr"]))
     return {"matches": rows[:limit], "available": True}
@@ -522,11 +516,11 @@ def report_pdf(job: dict[str, Any]) -> bytes:
     """PDF of the Markdown report via reportlab (raises ImportError if it is not installed)."""
 
     from io import BytesIO
+    from xml.sax.saxutils import escape
 
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-    from xml.sax.saxutils import escape
 
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=letter)
