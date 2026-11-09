@@ -1,5 +1,12 @@
-import { Bell, FlaskConical, Scale, SlidersHorizontal, Sigma, Table2, Trophy } from "lucide-react";
-import { API_BASE_URL } from "@/lib/apiBase";
+import dynamic from "next/dynamic";
+import { Bell, FlaskConical, Layers, Scale, SlidersHorizontal, Sigma, Table2, Trophy } from "lucide-react";
+import { createElement } from "react";
+import { SCREENER_BASE } from "./base";
+import { InFilter } from "./filters/InFilter";
+import { WatchlistFilter } from "./filters/WatchlistFilter";
+import { ComponentWeights } from "./rank/ComponentWeights";
+import { TemplatePicker } from "./rank/TemplatePicker";
+import { RowActions } from "./RowActions";
 import { isNum } from "@/modules/research/format";
 import { group, registerAlternates, registerViews } from "@/modules/research/outputs/registry";
 import type { FeatureMeta, LabConfig, Page } from "@/modules/research/lab";
@@ -24,6 +31,7 @@ const PAGES: Page[] = [
   { id: "rank", label: "Rank", icon: Trophy, question: CATALOG.sc03.question, features: ["sc03"] },
   { id: "test", label: "Test", icon: FlaskConical, question: CATALOG.sc05.question, features: ["sc05"] },
   { id: "monitor", label: "Monitor", icon: Bell, question: CATALOG.sc06.question, features: ["sc06", "sc08"] },
+  { id: "more", label: "More", icon: Layers, question: "Other markets, hourly bars, formulas, sharing and API keys.", features: [], slug: "more" },
 ];
 
 type RawFeature = { id: string; name: string; inputs: InputSpec[]; outputs: { key: string; title?: string; label?: string; render?: string }[] };
@@ -44,13 +52,15 @@ function headline(r: FeatureResult) {
   const meta = r.meta as Meta;
   const passed = r.summary_cards?.find((c) => c.label === "After filters")?.value;
   const mtimes = Object.values(meta.data_sources ?? {}).map((d) => d.modified_ns).filter(isNum);
+  const known = r.summary_cards?.find((c) => c.label === "Data coverage")?.value;
   const parts = [
     isNum(passed) && isNum(meta.universe_count) ? `${passed.toLocaleString()} of ${meta.universe_count.toLocaleString()} names pass` : null,
     meta.as_of_date ? `as of ${meta.as_of_date}` : null,
     mtimes.length ? `updated ${new Date(Math.max(...mtimes) / 1e6).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : null,
     meta.data_version ? `data ${meta.data_version}` : null,
+    isNum(known) ? `${known.toFixed(0)}% of key figures known` : null,
   ];
-  return { headline: parts.filter(Boolean).join(" · ") || null, tone: null };
+  return { headline: parts.filter(Boolean).join(" · ") || null, tone: isNum(known) && known < 60 ? ("warn" as const) : null };
 }
 
 /** The standing disclosure on a backtest: what the numbers cannot tell. */
@@ -60,35 +70,51 @@ function testBanner(r: FeatureResult) {
   return { headline: parts.filter(Boolean).join(" · "), tone: "warn" as const };
 }
 
-const RESULT_COLUMNS = ["rank", "ticker", "company_name", "sector", "exchange", "price", "market_cap", "core_quant_score", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile", "trailing_pe", "pb_ratio", "roe", "revenue_growth_yoy", "return_1d", "return_1m", "return_6m", "realized_vol_63d", "max_drawdown_252d", "piotroski_passed", "altman_z_score"];
+const rowActions = (row: Record<string, unknown>) => (typeof row.ticker === "string" ? createElement(RowActions, { ticker: row.ticker }) : null);
+const RESULT_COLUMNS = ["rank", "ticker", "company_name", "sector", "exchange", "country", "quote_currency", "data_coverage", "price", "trend_3m", "market_cap", "core_quant_score", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile", "trailing_pe", "pb_ratio", "roe", "revenue_growth_yoy", "return_1d", "return_1m", "return_6m", "qtr_sales_yoy", "qtr_profit_yoy", "realized_vol_63d", "max_drawdown_252d", "piotroski_passed", "altman_z_score"];
 /** Percentiles drawn as bars on a 0 to 100 scale. */
-const RESULT_BARS = ["sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile"];
+const RESULT_BARS = ["data_coverage", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile"];
 /** Provenance and always-empty fields, kept out of the columns. */
-const RESULT_HIDDEN = ["currency_units_unavailable_reason", "quote_currency", "financial_currency", "market_value_currency", "market_cap_statement_currency", "market_cap_observation_date", "market_cap_basis", "price_observation_date", "valuation_score_definition", "fundamental_basis", "enterprise_value_basis", "beta_effective_source", "beta_252_unavailable_reason", "float_percent", "forward_pe"];
+const RESULT_HIDDEN = ["currency_units_unavailable_reason", "financial_currency", "market_value_currency", "market_cap_statement_currency", "market_cap_observation_date", "market_cap_basis", "price_observation_date", "valuation_score_definition", "fundamental_basis", "enterprise_value_basis", "beta_effective_source", "beta_252_unavailable_reason", "float_percent", "forward_pe"];
 
+const MorePage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./extras/MorePage"), { ssr: false });
 const SV = group(() => import("./views") as Promise<Record<string, unknown>>);
-registerViews({ screenTreemap: SV.ScreenTreemap }, []);
+const ST = group(() => import("./test/ProofViews") as Promise<Record<string, unknown>>);
+const RV = group(() => import("./rank/RankViews") as Promise<Record<string, unknown>>);
+registerViews({ screenTreemap: SV.ScreenTreemap, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
 registerAlternates({ rankedTable: [{ label: "Sector treemap", view: "screenTreemap" }] });
 
 export const SCREENER_LAB: LabConfig = {
   id: "screener",
   title: "Screener",
   root: "/screener",
-  base: `${API_BASE_URL}/screener-v2`,
+  base: SCREENER_BASE,
   catalog: CATALOG,
   pages: PAGES,
   layouts: {
     sc01: {
       verdict: headline,
       sections: [
-        { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], span: 12, view: "rankedTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, bars: RESULT_BARS, hide: RESULT_HIDDEN } }] },
+        { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], span: 12, view: "rankedTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, bars: RESULT_BARS, hide: RESULT_HIDDEN, hatch: true, rowActions } }] },
         { id: "funnel", label: "Funnel", items: [{ keys: ["filter_funnel_waterfall"], span: 6 }, { keys: ["market_cap_bucket_distribution"], span: 6 }] },
         { id: "coverage", label: "Coverage", items: [{ keys: ["metric_coverage"], span: 12, view: "dataTable", opts: { max: 500, maxHeight: 640 } }] },
+      ],
+    },
+    sc03: {
+      sections: [
+        { id: "ranking", label: "Ranking", items: [
+          { keys: ["composite_score_universe_ranking"], span: 8, view: "rankedTable", opts: { max: 5000, maxHeight: 640, hatch: true, rowActions } },
+          { keys: ["per_stock_score_decomposition"], span: 4, view: "scoreWaterfall", title: "Why the top name ranks here" },
+        ] },
+        { id: "weights", label: "Weights", items: [{ keys: ["score_transparency_decomposition"], span: 6, view: "dataTable" }, { keys: ["factor_correlation_heatmap"], span: 6 }] },
+        { id: "ml", label: "Rules and ML", items: [{ keys: ["composite_score_universe_ranking"], span: 12, view: "rankVsMl", opts: { max: 5000, maxHeight: 480 } }] },
+        { id: "backtest", label: "Backtest", items: [{ keys: ["composite_vs_spy_backtest"], span: 12 }] },
       ],
     },
     sc05: {
       verdict: testBanner,
       sections: [
+        { id: "proof", label: "Proof", items: [{ keys: ["equity_curve", "cscv_pbo"], span: 12, view: "proofPanel" }] },
         { id: "performance", label: "Performance", items: [{ keys: ["equity_curve"], span: 8 }, { keys: ["full_performance_statistics"], span: 4 }, { keys: ["rolling_performance"], span: 12 }] },
         { id: "rebalancing", label: "Rebalancing", items: [{ keys: ["rebalancing_date_sensitivity"], span: 6 }, { keys: ["holding_period_sensitivity"], span: 6 }, { keys: ["turnover_report"], span: 12 }] },
       ],
@@ -97,9 +123,12 @@ export const SCREENER_LAB: LabConfig = {
   manifest: (raw) => (raw as { features: RawFeature[] }).features.filter((f) => ID(f.id) in CATALOG).map(toSpec),
   submit: (featureId, payload) => ({ path: `/feature/${RAW(featureId)}/jobs`, body: { payload } }),
   signal: false,
+  specials: { more: MorePage },
+  widgets: { sector: InFilter, industry: InFilter, exchange: InFilter, country: InFilter, currency: InFilter, ticker_in: WatchlistFilter, screen_template: TemplatePicker, components: ComponentWeights },
+  funnel: (result) => Object.fromEntries(((result?.charts?.filter_funnel_waterfall ?? []) as { key?: string; removed: number; remaining: number }[]).filter((s) => s.key).map((s) => [s.key as string, { removed: s.removed, remaining: s.remaining }])),
   defaultUniverse: "All names we hold",
   overview: {
     intro: "Screen, rank, test and monitor, with every limit printed on the result.",
-    stages: PAGES.map((p) => ({ id: p.id, label: p.label, intro: p.question, ids: p.features })),
+    stages: PAGES.filter((p) => p.features.length).map((p) => ({ id: p.id, label: p.label, intro: p.question, ids: p.features })),
   },
 };

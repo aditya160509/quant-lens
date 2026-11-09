@@ -69,12 +69,12 @@ Find any name and read it without leaving. E10 M11 H1
 - [x] `E` Fuzzy search library chosen after a spike, licence checked: uFuzzy (MIT)
 - [x] `E` Ticker, company name; confirm name coverage for all symbols
 - [x] `M` Large overlay from anywhere by keyboard
-- [ ] `M` Tabs: Symbols, Screens, Runs, Docs
+- [x] `M` Tabs: Symbols, Screens, Runs, Docs (untested)
 - [x] `E` Type chips only where we hold data
 - [x] `E` Rows: monogram, ticker, name, type, exchange
 - [x] `M` Hover and arrow actions: chart, overview, add to screen, run in a lab
 - [x] `E` Recent and popular before typing
-- [ ] `M` Universe selector rebuilt to the same standard
+- [x] `M` Universe selector rebuilt to the same standard (untested)
 - [x] `H` Quick-look drawer, shared with ML
 - [x] `M` Chart, key stats, percentile bars, score profile
 - [x] `E` Price chart with ranges 1M to 10Y (60)
@@ -147,13 +147,13 @@ One honest proof path. E4 M4 H3
 - [x] `M` Golden fixtures for validation statistics
 - [ ] `H` `services/shared/` with one PBO and one deflated Sharpe
 - [x] `H` Purged CV and Monte Carlo in ML Validate
-- [ ] `H` Trial ledger on the Research store; counter on screen (U5)
+- [x] `H` Trial ledger on the Research store; counter on screen (U5) (untested)
 - [ ] `E` Backtest a screen with rebalances (78)
 - [ ] `E` Compare with benchmark (79)
-- [ ] `M` Overfitting tests: deflated Sharpe, PBO, bootstrap, controls (80)
-- [ ] `M` One-click proof through ML Validate (U4)
-- [ ] `M` Rolling start dates (83)
-- [ ] `E` Data banner
+- [x] `M` Overfitting tests: deflated Sharpe, PBO, bootstrap, controls (80) (untested)
+- [x] `M` One-click proof through ML Validate (U4) (untested)
+- [x] `M` Rolling start dates (83) (untested)
+- [x] `E` Data banner (untested)
 - [ ] `E` Old S4 leaderboard, S2 factor zoo and S5 duplicates removed
 
 ## Batch 9: Monitor
@@ -183,12 +183,12 @@ E0 M0 H4
 
 E0 M4 H2
 
-- [ ] `M` Crypto, forex and futures, price-only (14)
-- [ ] `M` Hourly screens (26)
-- [ ] `M` Share links and public screens (45)
-- [ ] `M` API keys and limits (57)
-- [ ] `H` Plain English writes an editable formula (46)
-- [ ] `H` Chart patterns, labelled weak evidence, last (25)
+- [x] `M` Crypto, forex and futures, price-only (14) (untested)
+- [x] `M` Hourly screens (26) (untested)
+- [x] `M` Share links and public screens (45) (untested)
+- [x] `M` API keys and limits (57) (untested)
+- [x] `H` Plain English writes an editable formula (46) (untested)
+- [x] `H` Chart patterns, labelled weak evidence, last (25) (untested)
 
 ## Batch 12: Ship
 

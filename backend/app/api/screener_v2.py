@@ -10,7 +10,7 @@ import re
 import threading
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -397,6 +397,100 @@ class UniverseRequest(BaseModel):
 def trial_ledger() -> dict[str, Any]:
     from app.services.screener_v2.core.ledger_bridge import ledger
     return ledger()
+
+
+@router.get('/markets/{asset}')
+async def markets(asset: str) -> dict[str, Any]:
+    from app.services.screener_v2.core import nonequity
+    try:
+        rows = await asyncio.to_thread(nonequity.hourly if asset == 'hourly' else nonequity.screen, *([] if asset == 'hourly' else [asset]))
+    except (KeyError, FileNotFoundError) as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {'rows': rows}
+
+
+class TextRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
+@router.post('/nl-formula')
+def nl_formula(request: TextRequest) -> dict[str, Any]:
+    from app.services.screener_v2.core.nl_formula import to_formula
+    try:
+        return to_formula(request.text)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post('/screens/{screen_id}/share')
+def share_screen(screen_id: str) -> dict[str, Any]:
+    from app.services.screener_v2.core.shares import create_share
+    try:
+        return {'token': create_share(screen_id)}
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.get('/shares')
+def shares() -> dict[str, Any]:
+    from app.services.screener_v2.core.shares import list_shares
+    return {'shares': list_shares()}
+
+
+@router.delete('/shares/{token}')
+def unshare(token: str) -> dict[str, Any]:
+    from app.services.screener_v2.core.shares import revoke_share
+    revoke_share(token)
+    return {'revoked': token}
+
+
+@router.get('/shared/{token}')
+def shared(token: str) -> dict[str, Any]:
+    from app.services.screener_v2.core.shares import shared_screen
+    try:
+        return shared_screen(token)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+class KeyRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    daily_limit: int = Field(ge=1, le=1_000_000)
+
+
+@router.post('/api-keys')
+def new_api_key(request: KeyRequest) -> dict[str, Any]:
+    from app.services.screener_v2.core.shares import create_key
+    return {'key': create_key(request.name, request.daily_limit)}
+
+
+@router.get('/api-keys')
+def api_keys() -> dict[str, Any]:
+    from app.services.screener_v2.core.shares import list_keys
+    return {'keys': list_keys()}
+
+
+@router.delete('/api-keys/{key_id}')
+def drop_api_key(key_id: str) -> dict[str, Any]:
+    from app.services.screener_v2.core.shares import revoke_key
+    revoke_key(key_id)
+    return {'revoked': key_id}
+
+
+@router.get('/v1/screens/{screen_id}/latest')
+def keyed_latest_run(screen_id: str, x_api_key: Annotated[str, Header()]) -> dict[str, Any]:
+    from app.services.screener_v2.core.shares import spend
+    from app.services.screener_v2.core.state import run_history
+    try:
+        spend(x_api_key)
+    except PermissionError as exc:
+        raise HTTPException(401, str(exc)) from exc
+    except OverflowError as exc:
+        raise HTTPException(429, str(exc)) from exc
+    runs = run_history(screen_id, 1)
+    if not runs:
+        raise HTTPException(404, 'This screen has no stored run')
+    return runs[0]
 
 
 @router.get('/screens')
