@@ -50,6 +50,26 @@ About 900 Python lines, likely 2,000 to 3,000 lines of Rust. `pit_cache.py` (78)
 
 Lines per lab for reference: Screener 5,834; Factors 5,199; ML 5,176; PCA 5,736; Portfolio 6,891; Research 8,175; Volatility 10,100.
 
+## Rust at scale
+
+For when the product hosts many users. Ranked by expected gain for the work; estimates, each to be proven by a profile under real traffic. Same hash rule as the engine plan. Python stays for statistics and models.
+
+| Rank | Area | Why it pays at scale | Where now |
+|---|---|---|---|
+| 1 | Indicator and panel engine | Every screen, backtest and alert uses it | `screener_v2/core/estimators.py`, `panel.py`, `stats.py` |
+| 2 | Backtest and simulation kernel | Longest CPU jobs; each lab has its own cost loop | `screener_v2/core/backtest.py`, and the cost loops in the merge map |
+| 3 | Shared market data service | One in-memory Arrow store instead of a copy per process; seven lab loaders become one | `*/core/data_loader.py`, `services/shared/` |
+| 4 | Formula engine | User-written, so it cannot be precomputed; needs a sandboxed, fast evaluator | `screener_v2/core/formula.py`, `signal_lang` |
+| 5 | Screen and alert evaluator | Scheduled re-runs for every saved screen and user | `screener_v2/core/screener.py`, `alerts.py`, `scheduler.py` |
+| 6 | Validation statistics | PBO, bootstrap and Monte Carlo are parallel and repeated | `services/shared/stats.py`, `ml_v2/core/validate_engine.py` |
+| 7 | Covariance and risk kernels | Matrix work repeated across Portfolio, PCA, Factors and Volatility | merge map items |
+| 8 | API edge: job queue, cache, rate limits, streaming | Cuts idle memory per user; a Rust gateway in front of Python workers | `backend/app/api/` |
+| 9 | Live price and websocket fan-out | Many connections, low memory per connection | `backend/app/api` websocket routes |
+
+Keep in Python: model fitting and libraries with no equal Rust version (`arch`, `statsmodels`, `hmmlearn`, scikit-learn), reports, feature definitions and product logic.
+
+Order: finish the engine plan on the Screener first, then 3, then 4 and 5. Reconsider 8 and 9 when real traffic exists.
+
 ## Code to clean up
 
 - [ ] `core/pit_cache.py` rebinds names in `estimators` and `fundamentals` at import; move into those modules
