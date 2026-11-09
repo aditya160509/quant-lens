@@ -181,7 +181,7 @@ def chart(symbol: str) -> dict[str, list[dict[str, Any]]]:
 
 
 def statements(symbol: str, period: str = "annual", all_lines: bool = False) -> dict[str, Any]:
-    hist = fundamental_history(symbol)
+    hist = fundamental_history(symbol, all_columns=all_lines)
     if hist.empty:
         return {"periods": [], "lines": []}
     if "periodType" in hist:
