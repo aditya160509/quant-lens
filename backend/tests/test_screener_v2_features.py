@@ -11,6 +11,59 @@ def store(tmp_path, monkeypatch):
     return state
 
 
+def test_technical_features_invariant_to_universe_order_and_appended_rows(local_data):
+    import pandas as pd
+
+    from app.services.screener_v2.core import performance
+    from app.services.screener_v2.core.data_loader import as_of_context
+    from app.services.screener_v2.core.estimators import (
+        latest_technical_features as technicals,
+    )
+
+    cross_sectional = {'bollinger_width_percentile', 'amihud_percentile', 'technical_percentile', 'short_term_reversal_flag'}
+    base = local_data['market']
+    dates = pd.DatetimeIndex(base.Date.sort_values().unique())
+    aaa = base[base.Ticker == 'AAA']
+    holiday = dates[:600] + pd.Timedelta(days=5)
+    extra = [aaa.assign(Ticker='LATE')[aaa.Date >= dates[400]], aaa.assign(Ticker='SPARSE').iloc[::3],
+             pd.concat([aaa.assign(Ticker='OFFCAL'), aaa.iloc[:600].assign(Ticker='OFFCAL', Date=holiday[:600])]).drop_duplicates(['Ticker', 'Date']),
+             pd.concat([aaa.assign(Ticker='BTC'), aaa.assign(Ticker='BTC', Date=aaa.Date + pd.Timedelta(days=5))]).drop_duplicates(['Ticker', 'Date'])]
+    # SPY misses one session; everyone is on the same grid regardless of who else is requested.
+    local_data['market'] = pd.concat([base[~((base.Ticker == 'SPY') & (base.Date == dates[600]))], *extra], ignore_index=True)
+    performance.clear_performance_caches()
+    names = ['AAA', 'LATE', 'SPARSE', 'OFFCAL']
+    def run(symbols, periods=None):
+        out = technicals(symbols, 300, periods).set_index('ticker').loc[names]
+        return out[[c for c in out.columns if c not in cross_sectional]].astype(str).replace({'None': '', 'nan': '', 'NaT': '', '<NA>': ''})
+    alone = run(names)
+    assert alone.loc[names, 'ema_200'].ne('').any()
+    pd.testing.assert_frame_equal(alone, run([*names, 'BBB', 'CCC', 'BTC']))
+    pd.testing.assert_frame_equal(alone, run(names[::-1]))
+    cutoff = pd.Timestamp(dates[-60])
+    with as_of_context(cutoff):
+        before = run(names, {'as_of_date': str(cutoff.date())})
+    local_data['market'] = local_data['market'][local_data['market'].Date <= cutoff + pd.Timedelta(days=30)]
+    performance.clear_performance_caches()
+    with as_of_context(cutoff):
+        pd.testing.assert_frame_equal(before, run(names, {'as_of_date': str(cutoff.date())}))
+
+
+def test_backtest_market_rows_stop_at_each_as_of(local_data):
+    import pandas as pd
+
+    from app.services.screener_v2.core import performance
+    from app.services.screener_v2.core.pit_cache import pit_scope
+
+    dates = local_data['market'].Date.sort_values().unique()
+    early, late = pd.Timestamp(dates[300]), pd.Timestamp(dates[500])
+    plain = performance._subset_frame(('AAA', 'SPY'), None, None, early)
+    with pit_scope({}):
+        assert performance._subset_frame(('AAA', 'SPY'), None, None, late)['Date'].max() == late
+        sliced = performance._subset_frame(('AAA', 'SPY'), None, None, early)
+    assert sliced.equals(plain)
+    assert sliced['Date'].max() == early
+
+
 def test_price_window_does_not_depend_on_other_requested_symbols(monkeypatch):
     import pandas as pd
     import polars as pl
