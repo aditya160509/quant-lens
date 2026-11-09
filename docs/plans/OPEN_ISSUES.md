@@ -50,6 +50,29 @@ About 900 Python lines, likely 2,000 to 3,000 lines of Rust. `pit_cache.py` (78)
 
 Lines per lab for reference: Screener 5,834; Factors 5,199; ML 5,176; PCA 5,736; Portfolio 6,891; Research 8,175; Volatility 10,100.
 
+## Ready for many users
+
+Do this before most of the Rust list; the job store is the first thing that will break. Reasoned from how the code is built, not load-tested. Rewriting in Rust would not fix any of these.
+
+| Now | Why it breaks | Fix |
+|---|---|---|
+| [ ] Jobs in a JSON file, rewritten on every update (`services/studio/jobs.py`) | Slows and locks as jobs grow; cannot span servers | Postgres and a real queue |
+| [ ] Jobs run in a 2-thread pool inside the API process | A few backtests make everyone wait; a restart kills running jobs | Separate worker processes |
+| [ ] Each process loads its own data | Memory multiplies with workers | Precomputed store, shared data service |
+| [ ] Results and caches on local disk | Does not work on more than one server | Object storage and Redis |
+| [ ] Every screen recalculates indicators | Cost grows with each user | Precompute daily; users read the same numbers |
+| [ ] Limits, auth and share links unreviewed | Abuse; one user can hog the machine | Per-user quotas and a security review |
+
+Memory per job is the server bill: 3 GB to under 1 GB is about three times the jobs per server.
+
+Order: finish the Python fixes and precompute; Postgres, queue and workers before launch; load test; then Rust on what the test shows. Rust earns its place where work cannot be shared: user formulas, backtests, scheduled alerts across saved screens, one shared in-memory data service.
+
+Rust decision for the Screener: paused. Both reviews say profile and fix Python first. If the backtest reaches about 10 s and memory is near target, Rust waits for scale. Otherwise port only what is still heavy, as Polars plugins, likely a few hundred lines.
+
+Reviews: [hard review](../reviews/SCREENER_V2_HARD_REVIEW.md), [second review](../reviews/SCREENER_V2_REVIEW_2.md).
+
+Findings that change results, to confirm and approve (second review numbers): SPY inside percentile ranks (E10), rank and sort disagree on ties (E11), stale growth metrics (E15), rebalance stats on fixed blocks (E16), risk-free rate missing near the latest date (E17).
+
 ## Rust at scale
 
 For when the product hosts many users. Ranked by expected gain for the work; estimates, each to be proven by a profile under real traffic. Same hash rule as the engine plan. Python stays for statistics and models.
