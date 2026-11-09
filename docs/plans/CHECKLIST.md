@@ -56,7 +56,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [x] Cross-module merge map
 - [ ] PCA product review
 - [x] Portfolio product review
-- [ ] Studio product review
+- [x] Studio product review
 - [ ] Widget workspace plan
 - [x] Decide PBO convention
 - [x] Decide HRP linkage
