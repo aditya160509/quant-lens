@@ -15,6 +15,7 @@ from .data_loader import (
     load_factor_returns,
     ohlcv_for_symbols,
 )
+from .pit_cache import pit_scope
 from .stats import TRADING_DAYS
 
 
@@ -161,7 +162,7 @@ def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cach
     def panel_at(date):
         key = ("panel", pd.Timestamp(date))
         if key not in panels:
-            with as_of_context(date):
+            with as_of_context(date), pit_scope(panels):
                 frame = metric_panel({**payload, "as_of_date": str(pd.Timestamp(date).date())}, symbols)
                 frame, _ = apply_filters(frame, payload)
                 panels[key] = frame
@@ -169,7 +170,7 @@ def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cach
     def score_at(date):
         key = pd.Timestamp(date)
         if key not in cache:
-            with as_of_context(key):
+            with as_of_context(key), pit_scope(panels):
                 panel = panel_at(key)
                 if kind == "formula":
                     panel["formation_score"] = evaluate_formula(panel, payload.get("formula") or "core_quant_score").values
