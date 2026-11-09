@@ -128,10 +128,13 @@ def _matrix(symbols: tuple[str, ...], lookback: int, field: str) -> pd.DataFrame
     raw = _subset_frame(symbols, max(lookback + 260, lookback), ("Ticker", "Date", field), None)
     if not raw.height:
         return pd.DataFrame()
-    wide = raw.pivot(on="Ticker", index="Date", values=field).sort("Date")
-    out = wide.drop("Date").to_pandas()
-    out.index = pd.DatetimeIndex(wide["Date"].to_numpy(), name="Date")
-    out.columns = pd.Index(out.columns.tolist(), dtype=object, name="Ticker")
+    # raw is sorted by Ticker and Date; filling an array directly avoids Polars pivot, which took 12 s per full-universe field.
+    runs = raw["Ticker"].cast(pl.String).rle().struct.unnest()
+    stamps = raw["Date"].to_numpy()
+    dates = np.unique(stamps)
+    values = np.full((len(dates), runs.height), np.nan)
+    values[np.searchsorted(dates, stamps), np.repeat(np.arange(runs.height), runs["len"].to_numpy())] = raw[field].cast(pl.Float64).to_numpy()
+    out = pd.DataFrame(values, index=pd.DatetimeIndex(dates, name="Date"), columns=pd.Index(runs["value"].to_list(), dtype=object, name="Ticker"))
     return out.reindex(columns=sorted(out.columns)).dropna(axis=1, how="all")
 
 
