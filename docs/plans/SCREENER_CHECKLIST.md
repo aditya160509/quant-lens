@@ -69,12 +69,12 @@ Find any name and read it without leaving. E10 M11 H1
 - [x] `E` Fuzzy search library chosen after a spike, licence checked: uFuzzy (MIT)
 - [x] `E` Ticker, company name; confirm name coverage for all symbols
 - [x] `M` Large overlay from anywhere by keyboard
-- [x] `M` Tabs: Symbols, Screens, Runs, Docs
+- [ ] `M` Tabs: Symbols, Screens, Runs, Docs
 - [x] `E` Type chips only where we hold data
 - [x] `E` Rows: monogram, ticker, name, type, exchange
 - [x] `M` Hover and arrow actions: chart, overview, add to screen, run in a lab
 - [x] `E` Recent and popular before typing
-- [x] `M` Universe selector rebuilt to the same standard
+- [ ] `M` Universe selector rebuilt to the same standard
 - [x] `H` Quick-look drawer, shared with ML
 - [x] `M` Chart, key stats, percentile bars, score profile
 - [x] `E` Price chart with ranges 1M to 10Y (60)
@@ -195,8 +195,8 @@ E0 M4 H2
 E2 M3 H0
 
 - [ ] `M` Verified pages and palette actions
-- [x] `M` Phone layout
-- [x] `M` Accessibility pass
+- [ ] `M` Phone layout
+- [ ] `M` Accessibility pass
 - [ ] `E` Visual baselines
 - [ ] `E` Tag `screener-v1`
 
