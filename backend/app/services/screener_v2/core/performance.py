@@ -76,29 +76,42 @@ def _market_ohlcv_by_ticker(version: int) -> dict[str, pd.DataFrame]:
     return {str(tickers[a]): df.iloc[a:b] for a, b in zip(starts, stops)}
 
 
-def _ohlcv_subset(symbols: tuple[str, ...], lookback_days: int | None = None, version: int | None = None, columns: tuple[str, ...] | None = None) -> pd.DataFrame:
+def pivot_last(raw: pd.DataFrame, field: str) -> pd.DataFrame:
+    """Date-by-ticker matrix; the loader guarantees one row per ticker and date."""
+    if raw.empty:
+        return raw.pivot_table(index="Date", columns="Ticker", values=field, aggfunc="last").sort_index()
+    return raw.pivot(index="Date", columns="Ticker", values=field).dropna(how="all").dropna(axis=1, how="all").sort_index()
+
+
+def _ohlcv_subset(symbols: tuple[str, ...], lookback_days: int | None = None, version: int | None = None, columns: tuple[str, ...] | None = None, as_of=None) -> pd.DataFrame:
     if not symbols:
         return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
     grouped = _market_ohlcv_by_ticker(version if version is not None else _market_version())
     frames = [grouped[symbol] for symbol in symbols if symbol in grouped]
+    if as_of is not None:  # each ticker is date-sorted, so slice views instead of filtering a full copy
+        stamp = pd.Timestamp(as_of)
+        frames = [f.iloc[:f["Date"].searchsorted(stamp, side="right")] for f in frames]
+        frames = [f for f in frames if not f.empty]
+        if not frames:
+            return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
     if not frames:
         return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
     if lookback_days:
         # Trim each ticker before joining so the full history is never copied.
         cutoff = max(f["Date"].max() for f in frames) - pd.Timedelta(days=int(lookback_days) * 2)
-        frames = [f[f["Date"] >= cutoff] for f in frames]
+        frames = [f.iloc[f["Date"].searchsorted(cutoff, side="left"):] for f in frames]
     if columns:
         frames = [f[list(columns)] for f in frames]
-    return pd.concat(frames, ignore_index=True).sort_values(["Ticker", "Date"])
+    return pd.concat(frames, ignore_index=True)  # symbols are sorted and each slice is date-sorted
 
 
-@lru_cache(maxsize=12)
+@lru_cache(maxsize=6)
 def _cached_close_matrix_versioned(symbols: tuple[str, ...], lookback_days: int = 756, version: int = 0) -> pd.DataFrame:
     lookback = _lookback_key(lookback_days)
     raw = _ohlcv_subset(symbols, lookback_days=max(lookback + 260, lookback), version=version, columns=("Ticker", "Date", "Close"))
     if raw.empty:
         return pd.DataFrame()
-    return raw.pivot(index="Date", columns="Ticker", values="Close").dropna(axis=1, how="all").sort_index().tail(lookback)
+    return raw.pivot(index="Date", columns="Ticker", values="Close").dropna(axis=1, how="all").sort_index().tail(lookback).copy()  # drop the longer fetch window
 
 
 def cached_close_matrix(symbols: tuple[str, ...], lookback_days: int = 756) -> pd.DataFrame:
@@ -111,7 +124,7 @@ def _cached_volume_matrix_versioned(symbols: tuple[str, ...], lookback_days: int
     raw = _ohlcv_subset(symbols, lookback_days=max(lookback + 260, lookback), version=version, columns=("Ticker", "Date", "Volume"))
     if raw.empty:
         return pd.DataFrame()
-    return raw.pivot(index="Date", columns="Ticker", values="Volume").dropna(axis=1, how="all").sort_index().tail(lookback)
+    return raw.pivot(index="Date", columns="Ticker", values="Volume").dropna(axis=1, how="all").sort_index().tail(lookback).copy()  # drop the longer fetch window
 
 
 def cached_volume_matrix(symbols: tuple[str, ...], lookback_days: int = 756) -> pd.DataFrame:
@@ -142,13 +155,18 @@ def _fundamentals_frame(version: int) -> pd.DataFrame:
     return data_loader.load_fundamentals()
 
 
+@lru_cache(maxsize=1)
+def _fundamentals_positions(version: int) -> dict[str, np.ndarray]:
+    return _fundamentals_frame(version).groupby("ticker", sort=False).indices
+
+
 @lru_cache(maxsize=512)
 def _cached_fundamental_history_versioned(symbol: str, version: int = 0) -> pd.DataFrame:
     normalized = str(symbol).strip().upper().replace(".", "_").replace("-", "_")
     df = _fundamentals_frame(version)
     if df.empty:
         return pd.DataFrame()
-    out = df[df["ticker"].eq(normalized)].copy()
+    out = df.iloc[_fundamentals_positions(version).get(normalized, np.empty(0, dtype=np.intp))]
     if "reportDate" in out.columns:
         out = out.sort_values("reportDate")
     return out
@@ -165,6 +183,7 @@ def clear_performance_caches() -> None:
     _cached_volume_matrix_versioned.cache_clear()
     _cached_returns_matrix_versioned.cache_clear()
     _fundamentals_frame.cache_clear()
+    _fundamentals_positions.cache_clear()
     _cached_fundamental_history_versioned.cache_clear()
 
 

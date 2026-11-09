@@ -1,10 +1,20 @@
 """Screener V2 estimators computations."""
 from __future__ import annotations
+
 import math
 from typing import Any
+
 import numpy as np
 import pandas as pd
-from .data_loader import close_matrix, load_factor_returns, ohlcv_for_symbols, volume_matrix, normalize_symbol
+
+from .data_loader import (
+    close_matrix,
+    load_factor_returns,
+    normalize_symbol,
+    ohlcv_for_symbols,
+    volume_matrix,
+)
+from .performance import pivot_last
 from .stats import TRADING_DAYS, _safe_div, _wilder_smooth, rank_pct
 
 
@@ -37,8 +47,8 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     as_of_date = pd.to_datetime(periods.get("as_of_date"), errors="coerce") if periods.get("as_of_date") else None
     if as_of_date is not None and pd.notna(as_of_date) and not raw_ohlcv.empty:
         raw_ohlcv = raw_ohlcv[raw_ohlcv["Date"] <= as_of_date]
-        prices = raw_ohlcv.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index().tail(max(lookback_days, 260))
-        volumes = raw_ohlcv.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index().reindex(prices.index).tail(max(lookback_days, 260))
+        prices = pivot_last(raw_ohlcv, "Close").tail(max(lookback_days, 260))
+        volumes = pivot_last(raw_ohlcv, "Volume").reindex(prices.index).tail(max(lookback_days, 260))
     from .currency import CONFIG
     config = CONFIG.get()
     calendar_symbol = config.get("calendar_ticker", "SPY")
@@ -56,6 +66,7 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     highs = _pivot_ohlc_field(raw_ohlcv, "High", prices.index) if not raw_ohlcv.empty else pd.DataFrame(np.nan, index=prices.index, columns=prices.columns)
     lows = _pivot_ohlc_field(raw_ohlcv, "Low", prices.index) if not raw_ohlcv.empty else pd.DataFrame(np.nan, index=prices.index, columns=prices.columns)
     opens = _pivot_ohlc_field(raw_ohlcv, "Open", prices.index) if not raw_ohlcv.empty else pd.DataFrame(np.nan, index=prices.index, columns=prices.columns)
+    del raw_ohlcv
     rets = prices.pct_change(fill_method=None)
     latest = prices.iloc[-1]
     out = pd.DataFrame(index=prices.columns)
@@ -244,7 +255,7 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
 def _pivot_ohlc_field(raw_ohlcv: pd.DataFrame, field: str, index_like: pd.Index) -> pd.DataFrame:
     if raw_ohlcv.empty:
         return pd.DataFrame(index=index_like)
-    return raw_ohlcv.pivot_table(index="Date", columns="Ticker", values=field, aggfunc="last").sort_index().reindex(index_like)
+    return pivot_last(raw_ohlcv, field).reindex(index_like)
 
 
 def _last_sign_cross_age(series: pd.Series) -> float | None:

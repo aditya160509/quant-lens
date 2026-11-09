@@ -42,14 +42,15 @@ def _company_names() -> dict[str, str]:
 def statement_snapshots(symbols):
     """One stock/flow-consistent row per report date; four complete quarters for flows."""
     source = load_fundamentals()
-    frame = source[source.ticker.isin(symbols)].copy()
+    frame = source[source.ticker.isin(symbols)]
     if frame.empty or "periodType" not in frame:
         return frame
     flow_fields = ["Total Revenue", "Gross Profit", "EBIT", "Operating Income", "EBITDA", "Net Income", "Operating Cash Flow", "Free Cash Flow", "Interest Expense", "Interest Expense Non Operating", "Cash Dividends Paid", "Common Stock Dividend Paid", "Repurchase Of Capital Stock", "Issuance Of Capital Stock", "Tax Provision", "Pretax Income"]
-    annual = frame[frame.periodType.eq("annual")].sort_values(["ticker", "reportDate"]).drop_duplicates(["ticker", "reportDate"], keep="last").set_index(["ticker", "reportDate"])
-    quarters = frame[frame.periodType.eq("quarterly")].sort_values(["ticker", "reportDate"]).drop_duplicates(["ticker", "reportDate"], keep="last")
+    fields = [field for field in flow_fields if field in frame]
+    flows = ["ticker", "reportDate", *fields]  # only flow columns are read from these two; base keeps all 364
+    annual = frame.loc[frame.periodType.eq("annual"), flows].sort_values(["ticker", "reportDate"]).drop_duplicates(["ticker", "reportDate"], keep="last").set_index(["ticker", "reportDate"])
+    quarters = frame.loc[frame.periodType.eq("quarterly"), flows].sort_values(["ticker", "reportDate"]).drop_duplicates(["ticker", "reportDate"], keep="last")
     base = frame.sort_values(["ticker", "reportDate", "periodType"]).drop_duplicates(["ticker", "reportDate"], keep="last").set_index(["ticker", "reportDate"])
-    fields = [field for field in flow_fields if field in quarters]
     if not quarters.empty:
         rolling = quarters.groupby("ticker")[fields].rolling(4, min_periods=4).sum().reset_index(level=0, drop=True).reindex(quarters.index)
         gaps = quarters.groupby("ticker").reportDate.diff().dt.days
@@ -77,7 +78,7 @@ def enterprise_claims(frame):
 def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = None) -> pd.DataFrame:
     cutoff = pd.Timestamp(as_of_date) if as_of_date else AS_OF.get()
     if cutoff is None:
-        market = ohlcv_for_symbols(symbols)
+        market = ohlcv_for_symbols(symbols, 1)  # only the latest date is read
         cutoff = market.Date.max() if not market.empty else pd.Timestamp.today().normalize()
     eligible = eligible_reports(statement_snapshots(symbols), cutoff)
     base = eligible.sort_values(["ticker", "reportDate"]).groupby("ticker").tail(1).set_index("ticker", drop=False) if not eligible.empty else eligible
@@ -89,7 +90,7 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
             base[field] = np.nan
     if base.empty:
         base = pd.DataFrame(index=pd.Index([], name="ticker"))
-    df = base.reindex(symbols).copy()
+    df = base.reindex(symbols)
     df["ticker"] = df.index
     out = pd.DataFrame(index=df.index)
     out["ticker"] = df["ticker"]

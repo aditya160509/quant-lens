@@ -23,6 +23,7 @@ from .performance import (
     cached_fundamental_history,
     cached_returns_matrix,
     cached_volume_matrix,
+    pivot_last,
     symbol_key,
 )
 
@@ -82,7 +83,10 @@ def _read_parquet(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
         return pd.DataFrame(columns=columns or [])
     if pl is not None:
         scan = pl.scan_parquet(str(path))
-        return (scan.select(columns) if columns else scan).collect().to_pandas()
+        scan = scan.select(columns) if columns else scan
+        if "Ticker" in scan.collect_schema().names():  # 10M Python strings otherwise; replaced by shared objects on load
+            scan = scan.with_columns(pl.col("Ticker").cast(pl.Categorical))
+        return scan.collect().to_pandas()
     return pd.read_parquet(path, columns=columns, engine="pyarrow")
 
 
@@ -90,6 +94,7 @@ def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
     out = df.rename(columns={c: str(c).strip().title() for c in df.columns})
+    del df  # release the source columns as they are replaced
     if "Datetime" in out.columns and "Date" not in out.columns:
         out = out.rename(columns={"Datetime": "Date"})
     if not {"Ticker", "Date", "Close"}.issubset(out.columns):
@@ -113,8 +118,11 @@ def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     distinct = sorted(set(names))  # aliases such as BRK.B and BRK-B share one rank
     position = {name: i for i, name in enumerate(distinct)}
     rank = np.array([position[name] for name in names], dtype=np.int64)
-    order = np.lexsort((out["Date"].to_numpy(), rank[codes]))
-    code_sorted, date_sorted = rank[codes][order], out["Date"].to_numpy()[order]
+    ranked = rank[codes]
+    del codes
+    order = np.lexsort((out["Date"].to_numpy(), ranked))
+    code_sorted, date_sorted = ranked[order], out["Date"].to_numpy()[order]
+    del ranked
     same = np.zeros(len(out), dtype=bool)
     same[1:] = (code_sorted[1:] == code_sorted[:-1]) & (date_sorted[1:] == date_sorted[:-1])
     del code_sorted, date_sorted
@@ -135,7 +143,8 @@ def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
         "unsupported_quote_symbols": sorted(out.loc[unsupported, "Ticker"].unique().tolist()),
         "policy": "Identical aliases deduplicated; conflicting aliases rejected. Nonpositive/nonfinite closes are unavailable for percentage-return analytics; no replacement prices.",
     }
-    out.loc[unsupported, ["Open", "High", "Low", "Close", "Volume"]] = np.nan
+    if unsupported.any():
+        out.loc[unsupported, ["Open", "High", "Low", "Close", "Volume"]] = np.nan
     result = out[columns]
     result.attrs["source_integrity"] = source_integrity
     return result
@@ -231,14 +240,7 @@ def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: i
 def ohlcv_for_symbols(symbols: Iterable[str], lookback_days: int | None = None) -> pd.DataFrame:
     normalized = {normalize_symbol(s) for s in symbols if str(s).strip()}
     from .performance import _ohlcv_subset
-    out = _ohlcv_subset(tuple(sorted(normalized)))
-    cutoff_date = AS_OF.get()
-    if cutoff_date is not None:
-        out = out[out["Date"] <= cutoff_date]
-    if lookback_days and not out.empty:
-        cutoff = out["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)
-        out = out[out["Date"] >= cutoff]
-    return out.sort_values(["Ticker", "Date"])
+    return _ohlcv_subset(tuple(sorted(normalized)), lookback_days=lookback_days, as_of=AS_OF.get())
 
 
 def default_as_of(payload):
@@ -261,16 +263,16 @@ def _session_matrix(frame, lookback_days):
 
 def close_matrix(symbols: Iterable[str], lookback_days: int = 756) -> pd.DataFrame:
     if AS_OF.get() is not None:
-        raw = ohlcv_for_symbols(symbols)
-        return _session_matrix(raw.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index(), lookback_days)
-    return _session_matrix(cached_close_matrix(symbol_key(symbols), int(lookback_days)).copy(), lookback_days)
+        raw = ohlcv_for_symbols(symbols, int(lookback_days))
+        return _session_matrix(pivot_last(raw, "Close"), lookback_days)
+    return _session_matrix(cached_close_matrix(symbol_key(symbols), int(lookback_days)).copy(deep=False), lookback_days)
 
 
 def volume_matrix(symbols: Iterable[str], lookback_days: int = 756) -> pd.DataFrame:
     if AS_OF.get() is not None:
-        raw = ohlcv_for_symbols(symbols)
-        return _session_matrix(raw.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index(), lookback_days)
-    return _session_matrix(cached_volume_matrix(symbol_key(symbols), int(lookback_days)).copy(), lookback_days)
+        raw = ohlcv_for_symbols(symbols, int(lookback_days))
+        return _session_matrix(pivot_last(raw, "Volume"), lookback_days)
+    return _session_matrix(cached_volume_matrix(symbol_key(symbols), int(lookback_days)).copy(deep=False), lookback_days)
 
 
 def returns_matrix(symbols: Iterable[str], lookback_days: int = 756, min_coverage: float = 0.55) -> pd.DataFrame:
@@ -279,7 +281,7 @@ def returns_matrix(symbols: Iterable[str], lookback_days: int = 756, min_coverag
         rets = np.log(prices / prices.shift(1)).replace([np.inf, -np.inf], np.nan).dropna(how="all")
         return rets.dropna(axis=1, thresh=max(20, int(len(rets) * min_coverage)))
     min_coverage_bps = int(max(0.0, min(1.0, float(min_coverage))) * 10000)
-    return cached_returns_matrix(symbol_key(symbols), int(lookback_days), min_coverage_bps).copy()
+    return cached_returns_matrix(symbol_key(symbols), int(lookback_days), min_coverage_bps).copy(deep=False)
 
 
 @lru_cache(maxsize=1)
@@ -289,7 +291,7 @@ def _load_fundamentals_versioned(version: int) -> pd.DataFrame:
     df = pd.read_parquet(MASTER_FUNDAMENTALS, engine="pyarrow")
     if "ticker" not in df.columns:
         return pd.DataFrame(columns=["ticker"])
-    out = df.copy()
+    out = df
     out["ticker"] = out["ticker"].map(normalize_symbol)
     if "reportDate" in out.columns:
         out["reportDate"] = pd.to_datetime(out["reportDate"], errors="coerce")
@@ -311,7 +313,7 @@ def latest_fundamentals() -> pd.DataFrame:
 
 
 def fundamental_history(symbol: str) -> pd.DataFrame:
-    frame = cached_fundamental_history(normalize_symbol(symbol)).copy()
+    frame = cached_fundamental_history(normalize_symbol(symbol)).copy(deep=False)
     cutoff = AS_OF.get()
     if cutoff is not None and not frame.empty:
         frame = frame[pd.to_datetime(frame.reportDate) + pd.Timedelta(days=90) <= cutoff]
@@ -331,7 +333,7 @@ def _load_macro_versioned(version: int) -> pd.DataFrame:
 def load_macro() -> pd.DataFrame:
     frame = _load_macro_versioned(_path_version(CATEGORY7_MACRO))
     cutoff = AS_OF.get()
-    return frame.loc[frame.date <= cutoff].copy() if cutoff is not None else frame.copy()
+    return frame.loc[frame.date <= cutoff] if cutoff is not None else frame.copy(deep=False)
 
 
 @lru_cache(maxsize=1)
@@ -345,7 +347,7 @@ def load_fx() -> pd.DataFrame:
     """Observed canonical FX quotes, bounded by the active research date."""
     frame = _load_fx_versioned(_path_version(FX_DAILY))
     cutoff = AS_OF.get()
-    return frame.loc[frame.Date <= cutoff].copy() if cutoff is not None else frame.copy()
+    return frame.loc[frame.Date <= cutoff] if cutoff is not None else frame.copy(deep=False)
 
 
 def _parse_ken_french_csv(path: Path) -> pd.DataFrame:
