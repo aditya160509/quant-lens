@@ -9,6 +9,7 @@ process.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 
@@ -80,13 +81,30 @@ def pivot_last(raw: pd.DataFrame, field: str) -> pd.DataFrame:
 
 
 _OHLCV = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
+_PIT_MEMO = ContextVar("screener_pit_memo", default=None)
+
+
+def _market_rows(symbols: tuple[str, ...], as_of) -> pl.LazyFrame:
+    """Requested rows of the market file; within a backtest the file is read once and sliced per date."""
+    from . import data_loader
+
+    memo = _PIT_MEMO.get()
+    scan = data_loader.load_market_frame().lazy()
+    if memo is None or as_of is None:
+        return scan.filter(data_loader.NORMALIZED_TICKER.is_in(list(symbols)))
+    loaded, rows = memo.get("market_rows", (set(), None))
+    if missing := set(symbols) - loaded:
+        fresh = scan.filter(data_loader.NORMALIZED_TICKER.is_in(list(missing))).collect()
+        rows = fresh if rows is None else pl.concat([rows, fresh])
+        memo["market_rows"] = (loaded | missing, rows)
+    return rows.lazy().filter(data_loader.NORMALIZED_TICKER.is_in(list(symbols)))
 
 
 def _subset_frame(symbols: tuple[str, ...], lookback_days: int | None, columns: tuple[str, ...] | None, as_of) -> pl.DataFrame:
     from . import data_loader
 
     data_loader.market_source_integrity()  # a corrupt file must fail even when the requested symbols are clean
-    query = data_loader.load_market_frame().lazy().filter(data_loader.NORMALIZED_TICKER.is_in(list(symbols)))
+    query = _market_rows(symbols, as_of)
     if as_of is not None:
         query = query.filter(pl.col("Date") <= pd.Timestamp(as_of))
     if lookback_days:

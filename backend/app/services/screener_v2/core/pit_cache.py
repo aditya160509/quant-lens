@@ -6,17 +6,14 @@ so one whole-history pass would change them. Only repeated work is removed here.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from contextvars import ContextVar
 
 import numpy as np
 import pandas as pd
 
 from . import estimators, fundamentals
+from .performance import _PIT_MEMO as _MEMO
 from .stats import TRADING_DAYS
 
-_MEMO = ContextVar("screener_pit_memo", default=None)
-_close_matrix = estimators.close_matrix
-_volume_matrix = estimators.volume_matrix
 _idiosyncratic_vol = estimators._idiosyncratic_vol
 _statement_snapshots = fundamentals.statement_snapshots
 
@@ -28,15 +25,6 @@ def pit_scope(memo: dict):
         yield
     finally:
         _MEMO.reset(token)
-
-
-def _skip_close_matrix(symbols, lookback_days=756):
-    # Dated panels rebuild both matrices from raw_ohlcv, so these results were always discarded.
-    return pd.DataFrame() if _MEMO.get() is not None else _close_matrix(symbols, lookback_days)
-
-
-def _skip_volume_matrix(symbols, lookback_days=756):
-    return pd.DataFrame() if _MEMO.get() is not None else _volume_matrix(symbols, lookback_days)
 
 
 def _shared_statements(symbols):
@@ -72,7 +60,5 @@ def _dispatch_idiosyncratic_vol(returns, factors):
 
 
 # shortcut: rebinds names inside estimators and fundamentals, which this work could not edit; move into them when free.
-estimators.close_matrix = _skip_close_matrix
-estimators.volume_matrix = _skip_volume_matrix
 estimators._idiosyncratic_vol = _dispatch_idiosyncratic_vol
 fundamentals.statement_snapshots = _shared_statements

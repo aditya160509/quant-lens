@@ -42,10 +42,11 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     requested_symbols = [normalize_symbol(s) for s in symbols]
     fetch_symbols = list(dict.fromkeys(requested_symbols + ["SPY"]))
     raw_ohlcv = ohlcv_for_symbols(fetch_symbols, lookback_days=max(lookback_days, 300))
-    prices = close_matrix(fetch_symbols, lookback_days=max(lookback_days, 260))
-    volumes = volume_matrix(fetch_symbols, lookback_days=max(lookback_days, 260))
     as_of_date = pd.to_datetime(periods.get("as_of_date"), errors="coerce") if periods.get("as_of_date") else None
-    if as_of_date is not None and pd.notna(as_of_date) and not raw_ohlcv.empty:
+    if as_of_date is None or pd.isna(as_of_date) or raw_ohlcv.empty:
+        prices = close_matrix(fetch_symbols, lookback_days=max(lookback_days, 260))
+        volumes = volume_matrix(fetch_symbols, lookback_days=max(lookback_days, 260))
+    else:
         raw_ohlcv = raw_ohlcv[raw_ohlcv["Date"] <= as_of_date]
         prices = pivot_last(raw_ohlcv, "Close")
         volumes = pivot_last(raw_ohlcv, "Volume").reindex(prices.index)
