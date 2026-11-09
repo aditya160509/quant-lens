@@ -6,6 +6,8 @@ append-only operator helpers for datasets that are not present locally.
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from collections.abc import Iterable
 from contextlib import contextmanager
@@ -40,6 +42,7 @@ CATEGORY7_MACRO = FACTORS_DATA / "processed" / "category7_macro_regime.parquet"
 FX_DAILY = BACKEND_DATA / "canonical" / "fx_daily.parquet"
 FF5_DAILY = BACKEND_DATA / "factors_us" / "ff5_daily.csv"
 MOM_DAILY = BACKEND_DATA / "factors_us" / "momentum_daily.csv"
+MARKET_CACHE_DIR = BACKEND_DATA / "screener_v2" / "market_cache"
 
 
 
@@ -135,6 +138,23 @@ def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def _market_derived(name: str, version: int, compute):
+    """A JSON result of a whole-file pass, kept on disk per market-file version so normal runs skip the pass."""
+    path = MARKET_CACHE_DIR / f"{name}_{version}.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    value = compute()
+    if version == _path_version(MARKET_UNIVERSE):  # never persist results for other sources
+        MARKET_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(f".{os.getpid()}.tmp")
+        temporary.write_text(json.dumps(value))
+        os.replace(temporary, path)
+        for stale in MARKET_CACHE_DIR.glob(f"{name}_*.json"):
+            if stale != path:
+                stale.unlink(missing_ok=True)
+    return value
+
+
 def load_market_frame() -> pl.LazyFrame:
     """A lazy scan of the raw market file; callers filter it, then standardize what they collect."""
     if not MARKET_UNIVERSE.exists():
@@ -142,11 +162,7 @@ def load_market_frame() -> pl.LazyFrame:
     return pl.scan_parquet(str(MARKET_UNIVERSE)).select(OHLCV_COLUMNS)
 
 
-@lru_cache(maxsize=1)
-def _market_anomalies_versioned(version: int) -> tuple[pl.DataFrame, dict[str, Any]]:
-    """Standardized rows of tickers with aliases or unusable closes, so the clean majority never needs a full load."""
-    if not MARKET_UNIVERSE.exists():
-        raise FileNotFoundError(f"Required market dataset is missing: {MARKET_UNIVERSE}")
+def _flagged_market_tickers() -> list[str]:
     # One row group at a time with dictionary tickers: only integer keys outlive each group.
     source = pq.ParquetFile(MARKET_UNIVERSE, read_dictionary=["Ticker"])
     codes: dict[str, int] = {}
@@ -171,8 +187,17 @@ def _market_anomalies_versioned(version: int) -> tuple[pl.DataFrame, dict[str, A
     repeated = {int(code) for code in np.unique(keys[1:][keys[1:] == keys[:-1]] // 100_000)}
     del keys
     flagged.update(name for name, code in codes.items() if code in repeated or name == "")
+    return sorted(flagged)
+
+
+@lru_cache(maxsize=1)
+def _market_anomalies_versioned(version: int) -> tuple[pl.DataFrame, dict[str, Any]]:
+    """Standardized rows of tickers with aliases or unusable closes, so the clean majority never needs a full load."""
+    if not MARKET_UNIVERSE.exists():
+        raise FileNotFoundError(f"Required market dataset is missing: {MARKET_UNIVERSE}")
+    flagged = _market_derived("flagged_tickers", version, _flagged_market_tickers)
     scan = pl.scan_parquet(str(MARKET_UNIVERSE)).select(OHLCV_COLUMNS)
-    return _standardize_frame(scan.filter(NORMALIZED_TICKER.is_in(sorted(flagged))).collect())
+    return _standardize_frame(scan.filter(NORMALIZED_TICKER.is_in(flagged)).collect())
 
 
 def market_source_integrity() -> dict[str, Any]:
@@ -203,10 +228,11 @@ def _available_symbols_versioned(version: int, fundamentals_version: int) -> tup
     equities = set(fundamentals.ticker)
     anomalies = _market_anomalies_versioned(_path_version(MARKET_UNIVERSE))[0]
     usable = (pl.col("Close").is_not_null() & pl.col("Close").is_not_nan()).sum().alias("n")
-    # Group on raw names first: a few thousand strings get normalized instead of ten million.
-    by_name = load_market_frame().lazy().group_by("Ticker").agg(usable).with_columns(NORMALIZED_TICKER).collect()
+    counts = _market_derived("close_counts", version, lambda: dict(load_market_frame().lazy().group_by("Ticker").agg(usable).collect().iter_rows()))
+    # Normalize after counting: a few thousand strings instead of ten million.
+    by_name = pl.DataFrame({"Ticker": list(counts), "n": list(counts.values())}, schema={"Ticker": pl.String, "n": pl.Int64}).with_columns(NORMALIZED_TICKER)
     clean = by_name.filter(~pl.col("Ticker").is_in(anomalies["Ticker"].unique().to_list())).group_by("Ticker").agg(pl.col("n").sum())
-    observed = pl.concat([clean, anomalies.group_by("Ticker").agg(usable)])
+    observed = pl.concat([clean, anomalies.group_by("Ticker").agg(usable).cast({"n": pl.Int64})])
     pairs = sorted((t, int(n)) for t, n in observed.iter_rows() if t in equities)
     counts = pd.Series(dict(pairs), dtype="int64").sort_values(ascending=False)
     return tuple(str(x) for x in counts[counts > 0].index)
