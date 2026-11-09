@@ -2,8 +2,9 @@
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from app.services.screener_v2.core import data_loader
+
 from app.api import screener_v2
+from app.services.screener_v2.core import data_loader
 
 
 def test_explicit_universe_rejects_partial_unknowns(monkeypatch):
@@ -60,11 +61,12 @@ def test_missing_dataset_and_missing_job_result_are_explicit(monkeypatch, tmp_pa
 
 def test_upload_is_sandboxed_and_invalid_symbols_do_not_write(monkeypatch, tmp_path):
     import json
+
     from app.services.screener_v2.core import state
     monkeypatch.setattr(data_loader, 'UPLOADS_DIR', tmp_path / 'screener_v2' / 'uploads')
     monkeypatch.setattr(state, 'STATE_PATH', tmp_path / 'state.sqlite3')
     monkeypatch.setattr(data_loader, 'available_symbols', lambda: ('AAPL', 'MSFT'))
-    saved = data_loader.store_universe_upload(b'ticker\nAAPL\nMSFT\n', '../../outside.csv')
+    data_loader.store_universe_upload(b'ticker\nAAPL\nMSFT\n', '../../outside.csv')
     files = list((tmp_path / 'screener_v2' / 'uploads').glob('*.json'))
     assert len(files) == 1
     assert json.loads(files[0].read_text())['symbols'] == ['AAPL', 'MSFT']
@@ -74,8 +76,8 @@ def test_upload_is_sandboxed_and_invalid_symbols_do_not_write(monkeypatch, tmp_p
 
 
 def test_manifest_constraints_and_indicator_inputs_are_enforced():
-    from app.services.screener_v2.registry import get_feature
     from app.services.screener_v2.features.inputs import normalize_payload
+    from app.services.screener_v2.registry import get_feature
     for value in [0, -1, 1.5]:
         with pytest.raises(ValueError):
             normalize_payload(get_feature('05').inputs, {'top_n': value})
@@ -139,3 +141,16 @@ def test_invalid_instrument_metadata_is_rejected_before_job_creation(monkeypatch
     response = client.post('/api/screener-v2/feature/01/jobs', json={'payload': {'tickers': ['AAPL'], 'instrument_metadata': {'AAPL': {'quoted_units_per_ordinary_share': 0}}}})
     assert response.status_code == 422
     assert 'positive' in response.json()['detail']
+
+
+def test_lookup_routes_map_errors(monkeypatch):
+    app = FastAPI()
+    app.include_router(screener_v2.router, prefix='/api')
+    client = TestClient(app)
+    monkeypatch.setattr(screener_v2.lookup, 'lookup', lambda t: {'ticker': t})
+    assert client.get('/api/screener-v2/lookup/AAPL').json() == {'ticker': 'AAPL'}
+    def absent(t):
+        raise KeyError(f'{t} is not in the universe we hold')
+    monkeypatch.setattr(screener_v2.lookup, 'lookup', absent)
+    assert client.get('/api/screener-v2/lookup/ZZZ').status_code == 404
+    assert client.get('/api/screener-v2/lookup/compare?tickers=AAPL').status_code == 422

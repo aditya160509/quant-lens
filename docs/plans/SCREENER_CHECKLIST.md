@@ -67,27 +67,27 @@ A usable screener: every filter, live counts, real table. E18 M8 H1
 Find any name and read it without leaving. E10 M11 H1
 
 - [x] `E` Fuzzy search library chosen after a spike, licence checked: uFuzzy (MIT)
-- [ ] `E` Ticker, company name; confirm name coverage for all symbols
-- [ ] `M` Large overlay from anywhere by keyboard
-- [ ] `M` Tabs: Symbols, Screens, Runs, Docs
-- [ ] `E` Type chips only where we hold data
-- [ ] `E` Rows: monogram, ticker, name, type, exchange
-- [ ] `M` Hover and arrow actions: chart, overview, add to screen, run in a lab
-- [ ] `E` Recent and popular before typing
-- [ ] `M` Universe selector rebuilt to the same standard
-- [ ] `H` Quick-look drawer, shared with ML
-- [ ] `M` Chart, key stats, percentile bars, score profile
-- [ ] `E` Price chart with ranges 1M to 10Y (60)
-- [ ] `E` Ratios with sector percentile and own-history percentile (61)
-- [ ] `E` Score summary: valuation, quality, momentum, low vol, thesis line (62)
-- [ ] `E` Peer comparison table (64)
-- [ ] `E` Piotroski 9-check grid, Altman zone (66)
-- [ ] `M` Piotroski and Altman, peers, statements with drill-down (63)
-- [ ] `M` Pros, cons and red flags from rules on our metrics (65)
-- [ ] `M` One-page PDF with Typst (67)
-- [ ] `M` Compare up to 6 to 25 names side by side (55)
-- [ ] `M` Compare basket: pick names from any table and open them side by side
-- [ ] `M` Peer mode: from any name, open its sector path, peers and a median row
+- [x] `E` Ticker, company name; confirm name coverage for all symbols
+- [x] `M` Large overlay from anywhere by keyboard
+- [x] `M` Tabs: Symbols, Screens, Runs, Docs
+- [x] `E` Type chips only where we hold data
+- [x] `E` Rows: monogram, ticker, name, type, exchange
+- [x] `M` Hover and arrow actions: chart, overview, add to screen, run in a lab
+- [x] `E` Recent and popular before typing
+- [x] `M` Universe selector rebuilt to the same standard
+- [x] `H` Quick-look drawer, shared with ML
+- [x] `M` Chart, key stats, percentile bars, score profile
+- [x] `E` Price chart with ranges 1M to 10Y (60)
+- [x] `E` Ratios with sector percentile and own-history percentile (61)
+- [x] `E` Score summary: valuation, quality, momentum, low vol, thesis line (62)
+- [x] `E` Peer comparison table (64)
+- [x] `E` Piotroski 9-check grid, Altman zone (66)
+- [x] `M` Piotroski and Altman, peers, statements with drill-down (63)
+- [x] `M` Pros, cons and red flags from rules on our metrics (65)
+- [x] `M` One-page PDF with Typst (67)
+- [x] `M` Compare up to 6 to 25 names side by side (55)
+- [x] `M` Compare basket: pick names from any table and open them side by side
+- [x] `M` Peer mode: from any name, open its sector path, peers and a median row
 
 ## Batch 4: Formula
 
@@ -195,8 +195,8 @@ E0 M4 H2
 E2 M3 H0
 
 - [ ] `M` Verified pages and palette actions
-- [ ] `M` Phone layout
-- [ ] `M` Accessibility pass
+- [x] `M` Phone layout
+- [x] `M` Accessibility pass
 - [ ] `E` Visual baselines
 - [ ] `E` Tag `screener-v1`
 

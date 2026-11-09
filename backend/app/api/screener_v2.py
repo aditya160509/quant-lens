@@ -6,18 +6,21 @@ import asyncio
 import csv
 import io
 import json
+import threading
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from app.services.screener_v2.core import lookup
 from app.services.screener_v2.core.data_loader import (
     BACKEND_DATA,
     available_symbols,
     parse_symbols,
 )
 from app.services.screener_v2.core.exports import build_xlsx
+from app.services.screener_v2.core.lookup import EXCHANGES
 from app.services.screener_v2.registry import feature_manifest, get_feature, run_feature
 from app.services.studio.jobs import JobStore
 
@@ -122,7 +125,7 @@ async def export_rows_xlsx(request: RowsRequest) -> Response:
 
 
 @router.get("/symbols")
-def search_symbols(q: str = Query("", max_length=40), limit: int = Query(25, ge=1, le=100)) -> dict[str, Any]:
+def search_symbols(q: str = Query("", max_length=40), limit: int = Query(25, ge=1, le=100), exchange: str | None = Query(None, max_length=40)) -> dict[str, Any]:
     from app.services.screener_v2.core.fundamentals import _company_names
 
     text = q.strip().upper()
@@ -134,12 +137,54 @@ def search_symbols(q: str = Query("", max_length=40), limit: int = Query(25, ge=
         raise HTTPException(503, str(exc)) from exc
     hits = []
     for s in symbols:
+        if exchange and EXCHANGES.get(s.rsplit("_", 1)[1] if "_" in s else "", "Unknown") != exchange:
+            continue
         name = names.get(s) or names.get(s.replace("_", "-")) or names.get(s.replace("_", "."))
         in_name = bool(text) and name is not None and text in name.upper()
         if ticker_q in s or in_name:
             hits.append((not s.startswith(ticker_q), not (name or "").upper().startswith(text), s, name))
     hits.sort()
-    return {"total": len(hits), "results": [{"ticker": s, "company_name": name} for _, _, s, name in hits[:limit]]}
+    return {"total": len(hits), "results": [{"ticker": s, "company_name": name, "type": "Stock", "exchange": EXCHANGES.get(s.rsplit("_", 1)[1] if "_" in s else "", "Unknown")} for _, _, s, name in hits[:limit]]}
+
+
+def _lookup_call(fn, *args):
+    try:
+        return fn(*args)
+    except KeyError as exc:
+        raise HTTPException(404, exc.args[0]) from exc
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@router.get("/lookup/popular")
+async def lookup_popular() -> dict[str, Any]:
+    return await asyncio.to_thread(_lookup_call, lookup.popular)
+
+
+@router.get("/lookup/compare")
+async def lookup_compare(tickers: str = Query(..., max_length=400)) -> dict[str, Any]:
+    names = [t for t in tickers.replace(",", " ").split() if t]
+    if not 2 <= len(names) <= 25:
+        raise HTTPException(422, "Compare 2 to 25 names")
+    return await asyncio.to_thread(_lookup_call, lookup.compare, names)
+
+
+@router.get("/lookup/{ticker}")
+async def lookup_ticker(ticker: str) -> dict[str, Any]:
+    return await asyncio.to_thread(_lookup_call, lookup.lookup, ticker)
+
+
+@router.get("/lookup/{ticker}/statements")
+async def lookup_statements(ticker: str, period: str = Query("annual", pattern="^(annual|quarterly)$"), all_lines: bool = False) -> dict[str, Any]:
+    return await asyncio.to_thread(_lookup_call, lookup.statements, ticker, period, all_lines)
+
+
+@router.get("/lookup/{ticker}/pdf")
+async def lookup_pdf(ticker: str) -> Response:
+    body = await asyncio.to_thread(_lookup_call, lookup.pdf, ticker)
+    return Response(body, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{ticker}-one-page.pdf"'})
 
 
 def _execute(job_id: str, feature_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -349,6 +394,7 @@ SCHEDULER = ScreenScheduler(_submit_feature)
 @router.on_event('startup')
 def start_scheduler():
     SCHEDULER.start()
+    threading.Thread(target=lookup.panel, daemon=True).start()  # first quick look would otherwise wait ~30 s
 
 
 @router.on_event('shutdown')

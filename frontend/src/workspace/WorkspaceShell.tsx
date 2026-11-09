@@ -3,13 +3,14 @@
 import "./workspace.css";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Command } from "cmdk";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   Activity, BrainCircuit, ChartNetwork, Command as CommandIcon, FlaskConical, Home, ListFilter, Moon, Orbit, PanelBottom, PanelLeft, PanelRight,
   PieChart, Search, Settings2, SlidersHorizontal, Sun, type LucideIcon,
 } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
+import { QuickLook } from "@/kit/QuickLook";
+import { SearchOverlay } from "@/modules/screener/search/SearchOverlay";
 import { SHORTCUTS, useLayout, type Region } from "./layout";
 import { prefClasses, usePrefs, type Accent, type Density, type LineWeight, type Palette } from "./prefs";
 import { Segmented, Tooltip } from "./ui";
@@ -90,6 +91,8 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !t?.closest("input, textarea, select, [contenteditable]")) { e.preventDefault(); setPaletteOpen(true); return; }
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
       const key = e.key.toLowerCase();
       if (key === "k") { e.preventDefault(); setPaletteOpen((o) => !o); return; }
@@ -114,8 +117,6 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
   ], [router, theme, toggleTheme, open, toggleRegion]);
 
   const allItems = [...Object.values(sources).flat(), ...builtIn];
-  const groups: Record<string, PaletteItem[]> = {};
-  for (const it of allItems) (groups[it.group] ??= []).push(it);
   const prefs = usePrefs();
   const themeClass = (theme === "light" ? " is-light" : "") + prefClasses(prefs);
 
@@ -137,7 +138,7 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
           </nav>
           <button className="ws-search" onClick={() => setPaletteOpen(true)} aria-label="Open command palette">
             <Search size={14} strokeWidth={1.75} />
-            <span className="label">Search features, runs, actions</span>
+            <span className="label">Search names, screens, runs, actions</span>
             <span className="kbd">⌘K</span>
           </button>
           <div className="ws-layout-toggles" role="group" aria-label="Layout">
@@ -181,32 +182,8 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
           <div className="ws-panels">{children}</div>
         </div>
 
-        <Command.Dialog
-          open={paletteOpen}
-          onOpenChange={setPaletteOpen}
-          label="Command palette"
-          overlayClassName={`cmdk-overlay${themeClass}`}
-          contentClassName={`cmdk ws-tokens${themeClass} ${className}`}
-        >
-          <Command.Input placeholder="Jump to a feature, a past run, or an action" />
-          <Command.List>
-            <Command.Empty>No matches</Command.Empty>
-            {Object.entries(groups).map(([group, items]) => (
-              <Command.Group key={group} heading={group}>
-                {items.map((it) => {
-                  const Icon = it.icon;
-                  return (
-                    <Command.Item key={it.id} value={`${it.label} ${(it.keywords ?? []).join(" ")} ${it.id}`} onSelect={() => { setPaletteOpen(false); it.run(); }}>
-                      {Icon ? <Icon size={15} strokeWidth={1.6} /> : null}
-                      {it.label}
-                      {it.meta ? <span className="meta">{it.meta}</span> : null}
-                    </Command.Item>
-                  );
-                })}
-              </Command.Group>
-            ))}
-          </Command.List>
-        </Command.Dialog>
+        <SearchOverlay open={paletteOpen} onOpenChange={setPaletteOpen} items={allItems} themeClass={themeClass} className={className} />
+        <QuickLook />
       </div>
     </Ctx.Provider>
   );

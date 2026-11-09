@@ -23,6 +23,7 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test"
   },
   "dependencies": {
+    "@leeoniya/ufuzzy": "^1.0.19",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-popover": "^1.1.23",
     "@radix-ui/react-tooltip": "^1.2.16",

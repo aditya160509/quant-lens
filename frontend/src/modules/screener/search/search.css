@@ -1,0 +1,28 @@
+.cmdk.so { top: 9vh; width: min(900px, calc(100vw - 24px)); }
+.so-input { display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid var(--line); color: var(--text-3); }
+.so-input [cmdk-input] { border: 0; flex: 1; }
+.so-tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.so-tabs button { height: 36px; padding: 0 12px; color: var(--text-3); font-size: 12.5px; font-weight: 500; border-bottom: 2px solid transparent; white-space: nowrap; }
+.so-tabs button:hover { color: var(--text); }
+.so-tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.so-chips { display: flex; gap: 6px; padding: 10px 14px 2px; overflow-x: auto; scrollbar-width: none; }
+.so-chips .pill { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+.so-chips .pill .num { font-size: 10.5px; opacity: 0.7; }
+.cmdk.so [cmdk-list] { max-height: min(62vh, 560px); }
+.cmdk.so [cmdk-item].so-item { height: 46px; gap: 12px; }
+.so-item .ql-mono { width: 28px; height: 28px; border-radius: 8px; font-size: 11px; }
+.so-tk { width: 78px; flex: none; color: var(--text); font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+.so-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.so-ex { flex: none; color: var(--text-3); font-size: 12px; }
+.so-item[data-selected="true"] .so-ex { display: none; }
+.so-acts { display: none; margin-left: auto; gap: 2px; }
+.so-item[data-selected="true"] .so-acts, .so-item:hover .so-acts { display: flex; }
+.so-item:hover .so-ex { display: none; }
+.so-acts button { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 6px; border-radius: 6px; color: var(--text-3); font-size: 11.5px; font-weight: 500; }
+.so-acts button:hover { background: var(--hover); color: var(--text); }
+.so-state { padding: 12px 14px; color: var(--text-3); font-size: 12.5px; }
+.so-state.err { color: var(--down); }
+@media (max-width: 760px) { .cmdk.so { top: 0; width: 100vw; border-radius: 0; } .cmdk.so [cmdk-list] { max-height: calc(100dvh - 150px); } .so-ex, .so-item .chip { display: none; } }
+.so-menu button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+.so-menu button[aria-selected="true"] { background: var(--raise); }
+.so-menu .so-tk { width: 64px; }

@@ -6,6 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import * as Popover from "@radix-ui/react-popover";
 import { ArrowDown, ArrowUp, ChevronRight, Columns3, Pin, X } from "lucide-react";
 import { Spark } from "@/charts/RankList";
+import { openQuickLook } from "./QuickLook";
 import { columns, fmtKey, isNum, isPKey, isTKey, label, pTone, toneVar } from "@/modules/research/format";
 import type { Row } from "@/modules/research/types";
 import "@/modules/research/outputs/tables.css";
@@ -197,7 +198,7 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
     const v = r[c];
     const d = flash[`${i}:${c}`];
     const content = bars?.includes(c) && isNum(v) ? <span className="pbar"><i style={{ width: `${Math.max(0, Math.min(100, v))}%` }} />{fmtKey(c, v)}</span> : Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : fmtKey(c, v);
-    return <>{content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
+    return <>{c === "ticker" && typeof v === "string" ? <button type="button" className="tk-link" onClick={() => openQuickLook(v)}>{content}</button> : content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (sel === null) return;

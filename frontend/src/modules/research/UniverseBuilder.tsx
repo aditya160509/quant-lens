@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ClipboardPaste, Search, X } from "lucide-react";
+import { ClipboardPaste, X } from "lucide-react";
 import { Segmented } from "@/workspace/ui";
 import { lab } from "./lab";
 import { useUniverse } from "./api";
+import { SymbolPick } from "@/modules/screener/search/SymbolPick";
 
 type Mode = "all" | "sectors" | "custom";
 
@@ -24,7 +25,6 @@ export function UniverseBuilder({ value, onChange, maxSymbols, onMaxSymbols }: {
   const initial: Mode = tokens.length === 0 || (tokens.length === 1 && NAMED.has(tokens[0])) ? "all" : "custom";
   const [mode, setMode] = useState<Mode>(initial);
   const [sectors, setSectors] = useState<string[]>([]);
-  const [q, setQ] = useState("");
   const [paste, setPaste] = useState(false);
   const [pasted, setPasted] = useState("");
   const universe = useUniverse(true);
@@ -35,12 +35,6 @@ export function UniverseBuilder({ value, onChange, maxSymbols, onMaxSymbols }: {
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [all]);
   const known = useMemo(() => new Map(all.map((s) => [s.ticker, s])), [all]);
-  const hits = useMemo(() => {
-    const k = q.trim().toUpperCase();
-    if (!k) return [];
-    return all.filter((s) => s.ticker.startsWith(k)).slice(0, 8).concat(all.filter((s) => !s.ticker.startsWith(k) && s.ticker.includes(k)).slice(0, 4));
-  }, [q, all]);
-
   const setSectorList = (next: string[]) => {
     setSectors(next);
     const list = all.filter((s) => s.sector && next.includes(s.sector)).map((s) => s.ticker);
@@ -90,25 +84,9 @@ export function UniverseBuilder({ value, onChange, maxSymbols, onMaxSymbols }: {
 
       {mode === "custom" ? (
         <div style={{ display: "grid", gap: 8 }}>
-          <div style={{ position: "relative" }}>
-            <div className="tokens">
-              <Search size={13} style={{ color: "var(--text-3)", marginLeft: 4 }} />
-              <input value={q} placeholder="Search and add tickers" aria-label="Search tickers" onChange={(e) => setQ(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && q.trim()) { e.preventDefault(); addTickers([hits[0]?.ticker ?? q.trim()]); setQ(""); }
-                  if (e.key === "Escape") setQ("");
-                }} />
-              <button type="button" className="btn sm ghost" onClick={() => setPaste((p) => !p)} title="Paste a list"><ClipboardPaste size={12} />Paste</button>
-            </div>
-            {hits.length ? (
-              <div className="menu" role="listbox">
-                {hits.map((h) => (
-                  <button key={h.ticker} type="button" role="option" aria-selected={false} onClick={() => { addTickers([h.ticker]); setQ(""); }}>
-                    <b>{h.ticker}</b><span>{h.sector ?? ""}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
+          <div style={{ display: "flex", gap: 6 }}>
+            <div style={{ flex: 1 }}><SymbolPick exclude={custom} onPick={(t) => addTickers([t])} /></div>
+            <button type="button" className="btn sm ghost" onClick={() => setPaste((p) => !p)} title="Paste a list"><ClipboardPaste size={12} />Paste</button>
           </div>
           {paste ? (
             <div style={{ display: "grid", gap: 6 }}>
