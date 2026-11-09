@@ -106,11 +106,11 @@ def _ohlcv_subset(symbols: tuple[str, ...], lookback_days: int | None = None, ve
 
 
 def _matrix(symbols: tuple[str, ...], lookback: int, field: str) -> pd.DataFrame:
-    """Date-by-ticker matrix built in Polars, so no long pandas frame exists."""
+    """Date-by-ticker matrix built in Polars, unwindowed: a union-calendar tail would make windows depend on the requested set."""
     raw = _subset_frame(symbols, max(lookback + 260, lookback), ("Ticker", "Date", field), None)
     if not raw.height:
         return pd.DataFrame()
-    wide = raw.pivot(on="Ticker", index="Date", values=field).sort("Date").tail(lookback)
+    wide = raw.pivot(on="Ticker", index="Date", values=field).sort("Date")
     out = wide.drop("Date").to_pandas()
     out.index = pd.DatetimeIndex(wide["Date"].to_numpy(), name="Date")
     out.columns = pd.Index(out.columns.tolist(), dtype=object, name="Ticker")
@@ -139,7 +139,7 @@ def cached_volume_matrix(symbols: tuple[str, ...], lookback_days: int = 756) -> 
 def _cached_returns_matrix_versioned(symbols: tuple[str, ...], lookback_days: int = 756, min_coverage_bps: int = 5500, version: int = 0) -> pd.DataFrame:
     lookback = _lookback_key(lookback_days)
     min_coverage = max(0.0, min(1.0, float(min_coverage_bps) / 10000.0))
-    prices = _cached_close_matrix_versioned(symbols, lookback, version)
+    prices = _cached_close_matrix_versioned(symbols, lookback, version).tail(lookback)
     if prices.empty:
         return pd.DataFrame()
     prices = prices.dropna(axis=1, thresh=max(20, int(len(prices) * min_coverage)))

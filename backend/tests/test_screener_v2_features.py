@@ -11,6 +11,30 @@ def store(tmp_path, monkeypatch):
     return state
 
 
+def test_price_window_does_not_depend_on_other_requested_symbols(monkeypatch):
+    import pandas as pd
+    import polars as pl
+
+    from app.services.screener_v2.core import currency, data_loader, performance
+
+    sessions = pd.bdate_range("2025-01-01", periods=30)
+    weekends = pd.date_range("2025-01-01", sessions[-1], freq="W-SAT")
+    bar = lambda ticker, dates: pl.DataFrame({"Ticker": [ticker] * len(dates), "Date": list(dates), "Close": [100.0 + i for i in range(len(dates))]})
+    spy, aaa, crypto = bar("SPY", sessions), bar("AAA", sessions), bar("BTC", sessions.union(weekends))
+    monkeypatch.setattr(data_loader, "ohlcv_for_symbols", lambda *_a, **_k: pd.DataFrame({"Date": sessions}))
+    def window(frames, config):
+        monkeypatch.setattr(performance, "_subset_frame", lambda *_a, **_k: pl.concat(frames))
+        token = currency.CONFIG.set(config)
+        try:
+            return data_loader._session_matrix(performance._matrix(("x",), 20, "Close"), 20)["AAA"]
+        finally:
+            currency.CONFIG.reset(token)
+    for config in ({"calendar_ticker": "SPY"}, {}):
+        alone, wider = window([aaa, spy], config), window([aaa, spy, crypto], config)
+        assert alone.notna().sum() == 20
+        pd.testing.assert_series_equal(alone.dropna(), wider.dropna())
+
+
 def test_first_screen_is_baseline_and_later_membership_is_real(store):
     assert store.compare_and_store('screen', [{'ticker': 'A'}], '2025-01-01') == []
     events = store.compare_and_store('screen', [{'ticker': 'B'}], '2025-01-02')

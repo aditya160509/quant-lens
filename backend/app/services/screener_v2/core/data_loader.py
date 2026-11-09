@@ -309,8 +309,9 @@ def _session_matrix(frame, lookback_days):
     calendar = CONFIG.get().get('calendar_ticker')
     if calendar:
         dates = ohlcv_for_symbols([calendar]).Date.drop_duplicates().sort_values().tail(int(lookback_days))
-        return frame.reindex(pd.DatetimeIndex(dates))
-    return frame.tail(int(lookback_days))
+        return frame.reindex(pd.DatetimeIndex(dates)).dropna(axis=1, how="all")
+    # Per ticker, never the union calendar: another symbol's extra dates must not shorten this window.
+    return frame.where(frame.notna().iloc[::-1].cumsum().iloc[::-1] <= int(lookback_days)).dropna(how="all")
 
 
 def close_matrix(symbols: Iterable[str], lookback_days: int = 756) -> pd.DataFrame:

@@ -47,8 +47,8 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     as_of_date = pd.to_datetime(periods.get("as_of_date"), errors="coerce") if periods.get("as_of_date") else None
     if as_of_date is not None and pd.notna(as_of_date) and not raw_ohlcv.empty:
         raw_ohlcv = raw_ohlcv[raw_ohlcv["Date"] <= as_of_date]
-        prices = pivot_last(raw_ohlcv, "Close").tail(max(lookback_days, 260))
-        volumes = pivot_last(raw_ohlcv, "Volume").reindex(prices.index).tail(max(lookback_days, 260))
+        prices = pivot_last(raw_ohlcv, "Close")
+        volumes = pivot_last(raw_ohlcv, "Volume").reindex(prices.index)
     from .currency import CONFIG
     config = CONFIG.get()
     calendar_symbol = config.get("calendar_ticker", "SPY")
