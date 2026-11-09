@@ -22,10 +22,16 @@ Tags: `E` easy, up to a few hours. `M` medium, about a session. `H` hard, severa
 
 Correctness and honest labels before any page. E4 M1 H0
 
+- [ ] `E` F05 half-life formulas: exponential `ln2/b`, hyperbolic `1/b` (code adds 1 and 2); add one assert-based check on a known curve
+- [ ] `E` Rename the F06 registry title (`core/contracts.py:60`, "Factor Crowding Monitor") and labels to "concentration and liquidity"; rename F14 "Crowding Disclosure" and drop "crowding controls"
+- [ ] `E` F01 alert text: say "70th percentile", not "upper historical tail"
+- [ ] `E` Remove dead `_ALMGREN_ETA`, `_SQRT_MODEL_THRESHOLD_USD`, `_empty_quintile_rows`, `_rolling_premium_spread` (grep: defined, never called); smoke-test before deleting, per AGENTS
+- [ ] `E` F11: remove the `locals().get(...)` pattern; name the default exposures (1/N) and shocks (-2 sigma) in `meta`
 - [ ] `E` Remove the sine sparkline (`customPagePrimitives.jsx`; carried from the prior review, not re-read, and the file may be gone after the frontend removal)
 - [ ] `E` Per-field help written in `features/inputs.py`, replacing the shared sentence (idea 3)
 - [ ] `E` F06 output labels renamed "concentration and liquidity"; F11 `hedging_recommendation` label renamed to what the code does
-- [ ] `E` Look-ahead audit (PLAN 3.1; not in the review's checklist)
+- [ ] `E` Look-ahead audit (PLAN 3.1; not in the review's checklist); include F04 conditional returns, where the regime label uses the same-day return (verify with a one-day lag first)
+- [ ] `E` F08: label the EWMA DCC as not the Volatility DCC (`core/dcc.py`)
 - [ ] `M` Data banner on every result and in the PDF: survivorship, 90-day lag, 2021+ statements (idea 6)
 
 ## Batch 2: Workspace
@@ -60,7 +66,8 @@ F07 and F09. E0 M2 H0
 
 F08, F10 and F11 as lenses on shared engines. E0 M0 H1
 
-- [ ] `H` Risk and construction page (F08, F10, F11) on the shared covariance and construction engines (Portfolio owns covariance, decision 3; DCC is Volatility's, decision 14; merge map steps 6 and 8). One engine serves Factors and Portfolio
+- [ ] `M` F10: expected returns explicit or shrunk by default (today the in-sample factor mean, `feature_10.py`); print the default used; one out-of-sample check on weights
+- [ ] `H` Risk and construction page (F08, F10, F11) on the shared covariance and construction engines (Portfolio owns covariance, decision 3; DCC is Volatility's, decision 14; merge map steps 6 and 8). One engine serves Factors and Portfolio. Drop the empty `hedging_recommendation` table until an instrument map exists
 
 ## Batch 7: Monitor
 
