@@ -26,9 +26,10 @@ Measured with `ru_maxrss` on a full Screen run (3,831 names).
 
 Python keeps the API, jobs and orchestration. Heavy work moves to precomputed data, then one Rust module called through PyO3. Prove it on the Screener, then replicate for the other labs. No lab is rewritten whole.
 
-Rule for every stage: the same inputs give the same output hash on a clean worktree, on 50 names and the full universe, before and after. If a hash differs, stop and fix it. Latest measured peak: 1.98 GB on 50 names, 3.79 GB on the full universe (`fdcee5b`).
+Rule for every stage: the same inputs give the same output hash on a clean worktree, on 50 names and the full universe, before and after. If a hash differs, stop and fix it. Latest measured peak: 0.95 GB on 50 names, 2.97 GB on the full universe (`194ca5a`).
 
-1. [ ] Finish the cheap wins, keeping only what measures better: `POLARS_MAX_THREADS=2`, Polars streaming, cached integrity pass, DuckDB scans, mimalloc
+1. [x] Cheap wins measured. Kept `POLARS_MAX_THREADS=2` and the cached integrity pass. Rejected as no gain: Polars streaming, DuckDB scans, jemalloc (mimalloc has no dylib here)
+1a. [ ] Bug blocking stage 2: a stock's EMA seed depends on the universe it is screened with. On 50 names against the full universe, 14 of 100 technical columns differ, `ema_200` by up to 2.2%. Cause inferred, not traced: `_matrix` takes the last N dates of the requested set's union calendar before reindexing to SPY sessions. Fix with one fixed window per ticker; this changes today's values, so the hash baseline is reset once, on purpose
 2. [ ] Precompute daily indicators to parquet, with point-in-time window seeding; a screen reads finished numbers. Target: full run under 1 GB
 3. [ ] Measure what is still slow or heavy. Build stage 4 only for what stage 3 proves, which is expected to be backtests and custom formulas
 4. [ ] One Rust crate with PyO3 and maturin, using Polars or Arrow, replacing exactly these Python files:
