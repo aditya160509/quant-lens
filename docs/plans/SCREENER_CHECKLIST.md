@@ -144,8 +144,8 @@ E2 M2 H1
 
 One honest proof path. E4 M4 H3
 
-- [ ] `M` Golden fixtures for validation statistics
-- [ ] `H` `services/shared/` with one PBO and one deflated Sharpe
+- [x] `M` Golden fixtures for validation statistics
+- [x] `H` `services/shared/` with one PBO and one deflated Sharpe
 - [ ] `H` Purged CV and Monte Carlo in ML Validate
 - [ ] `H` Trial ledger on the Research store; counter on screen (U5)
 - [ ] `E` Backtest a screen with rebalances (78)
