@@ -6,10 +6,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from .common import clean_json, number_like, records
+from .common import number_like, records
 from .data_loader import fundamental_history
 from .stats import _pick, rank_pct
-from .validation import point_in_time_scorer, score_backtest
 
 
 def greenblatt_roic(panel: pd.DataFrame, symbols: list[str]) -> pd.Series:
@@ -149,67 +148,3 @@ def altman_history(symbol: str, quarters: int = 8) -> list[dict[str, Any]]:
         rows.append({"ticker": symbol, "available_date": date, "altman_z_score": altman_z_score(panel).iloc[0],
                      "altman_z_double_prime": altman_z_double_prime(panel).iloc[0]})
     return records(pd.DataFrame(rows))
-
-
-def strategy_leaderboard(strategy_df: pd.DataFrame) -> pd.DataFrame:
-    numeric_cols = _strategy_score_columns(strategy_df)
-    rows = []
-    for col in numeric_cols:
-        values = pd.to_numeric(strategy_df[col], errors="coerce")
-        rows.append(
-            {
-                "strategy": col,
-                "avg_score": float(values.mean()),
-                "top_decile_count": int((values >= values.quantile(0.9)).sum()) if values.notna().sum() else 0,
-                "coverage": float(values.notna().mean()),
-            }
-        )
-    return pd.DataFrame(rows).sort_values("avg_score", ascending=False)
-
-
-def _strategy_score_columns(strategy_df: pd.DataFrame) -> list[str]:
-    return [name for name in ACADEMIC_STRATEGIES if name in strategy_df]
-
-
-def _select_strategies_for_backtest(strategy_df: pd.DataFrame, max_strategies: int = 24) -> tuple[list[str], list[str]]:
-    eligible = _strategy_score_columns(strategy_df)
-    limit = max(1, int(max_strategies or 1))
-    selected = eligible[:limit]
-    return selected, eligible
-
-
-def full_strategy_performance_metadata(strategy_df: pd.DataFrame, max_strategies: int = 24) -> dict[str, Any]:
-    selected, eligible = _select_strategies_for_backtest(strategy_df, max_strategies)
-    return {
-        "eligible_strategy_count": len(eligible),
-        "evaluated_strategy_count": len(selected),
-        "evaluated_strategies": selected,
-        "excluded_due_to_limit": eligible[len(selected) :],
-        "excluded_helper_patterns": ["f*_criteria", "piotroski_*", "*_proxy", "*_spec", "altman_z_score", "best_strategy_score"],
-    }
-
-
-def full_strategy_performance_table(
-    strategy_df: pd.DataFrame,
-    lookback_days: int = 756,
-    top_n: int = 50,
-    max_strategies: int = 24,
-    payload: dict | None = None,
-    shared_cache=None,
-    symbols=None,
-) -> list[dict[str, Any]]:
-    if strategy_df.empty or "ticker" not in strategy_df:
-        return []
-    numeric_cols, _eligible = _select_strategies_for_backtest(strategy_df, max_strategies)
-    symbols = symbols if symbols is not None else list(strategy_df["ticker"].dropna().astype(str))
-    strategy_by_ticker = strategy_df.set_index("ticker", drop=False)
-    rows = []
-    shared_cache = shared_cache if shared_cache is not None else {}
-    for col in numeric_cols:
-        scores = pd.to_numeric(strategy_by_ticker[col], errors="coerce").dropna()
-        if scores.empty:
-            continue
-        stats = score_backtest(symbols, scores, lookback_days=int(lookback_days), top_n=int(top_n), score_at=point_in_time_scorer(symbols, payload or {}, "academic", col, shared_cache)).get("stats", {})
-        rows.append({"strategy": col, **stats})
-    return clean_json(rows)
-

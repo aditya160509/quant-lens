@@ -218,7 +218,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
     const f = view.fmt[c];
     const width = f?.mode === "bar" && isNum(v) && range[c] ? (range[c][1] > range[c][0] ? ((v - range[c][0]) / (range[c][1] - range[c][0])) * 100 : 50) : (view.pct[c] || bars?.includes(c)) && isNum(v) ? v : null;
     const content = width !== null && isNum(v) ? <span className="pbar"><i style={{ width: `${Math.max(0, Math.min(100, width))}%` }} />{view.pct[c] ? Math.round(v) : fmtKey(c, v)}</span> : Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : fmtKey(c, v);
-    return <>{c === "ticker" && typeof v === "string" ? <button type="button" className="tk-link" onClick={() => openQuickLook(v)}>{content}</button> : content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
+    return <>{c === "ticker" && typeof v === "string" ? <button type="button" className="tk-link" onClick={(e) => { e.stopPropagation(); openQuickLook(v); }}>{content}</button> : content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (sel === null) return;

@@ -79,7 +79,7 @@ Order: finish the engine plan on the Screener first, then 3, then 4 and 5. Recon
 - [ ] `noqa` added over old lint errors in `research_v2/reports.py` and the six lab loaders
 - [ ] Five style-only uncommitted edits in `screener_v2/core`: `backtest.py`, `composite.py`, `gics.py`, `scheduler.py`, `valuation.py`
 - [ ] `screener/base.ts` was overwritten and recreated by another worker; confirm it matches its users
-- [ ] Old S4, S2 and S5 code still there
+- [ ] Old S5 PBO duplicate still in `core/backtest.py`; S4 and S2 removed
 
 ## Not proven
 

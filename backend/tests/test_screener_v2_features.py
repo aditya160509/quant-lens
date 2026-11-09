@@ -199,7 +199,7 @@ def test_alert_precision_uses_persisted_matured_observations(store, monkeypatch)
     assert result['realized_precision'] == 1.
 
 
-@pytest.mark.parametrize('feature_id', ['02', '03', '04'])
+@pytest.mark.parametrize('feature_id', ['02', '03'])
 def test_current_filters_do_not_shrink_historical_universe(local_data, monkeypatch, feature_id):
     from importlib import import_module
 
@@ -211,7 +211,7 @@ def test_current_filters_do_not_shrink_historical_universe(local_data, monkeypat
         universes.append(symbols)
         return original(symbols, *args, **kwargs)
     monkeypatch.setattr(module, 'score_backtest', observe)
-    run_feature(feature_id, {'tickers': ['AAA', 'BBB', 'CCC'], 'price_min': 130, 'lookback_days': 60, 'top_n': 1, 'strategy_perf_limit': 1})
+    run_feature(feature_id, {'tickers': ['AAA', 'BBB', 'CCC'], 'price_min': 130, 'lookback_days': 60, 'top_n': 1})
     assert universes[0] == ['AAA', 'BBB', 'CCC']
 
 

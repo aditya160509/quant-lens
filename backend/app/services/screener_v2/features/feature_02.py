@@ -3,24 +3,24 @@
 from __future__ import annotations
 
 from typing import Any
-from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
-import pandas as pd
-
-from ..core.formula import FormulaError, evaluate_formula, formula_templates, historical_ic_comparison
 from ..core.common import access_meta, records, response
+from ..core.data_loader import parse_symbols
+from ..core.formula import (
+    evaluate_formula,
+    formula_templates,
+)
 from ..core.panel import metric_panel
 from ..core.screener import apply_filters
 from ..core.validation import point_in_time_scorer, score_backtest
-from ..core.data_loader import parse_symbols
-
+from .inputs import enrich, filter_inputs, merge_inputs, shared_inputs
 
 FEATURE_ID = "02"
 FEATURE_NAME = "Formula Builder and Custom Expression Screener"
 
 INPUTS = merge_inputs(shared_inputs() + filter_inputs(), enrich([{'key': 'universe', 'type': 'ticker_list', 'default': 'master'}, {'key': 'formula', 'type': 'text', 'default': '0.4*rank(net_income_yield)+0.3*rank(momentum_jt)+0.3*rank(roe)'}, {'key': 'lookback_days', 'type': 'number', 'default': 756}, {'key': 'top_n', 'type': 'number', 'default': 50}, {'key': 'as_of_date', 'type': 'date', 'default': None}]))
 
-OUTPUTS = [{'key': 'historical_formula_backtest', 'source': 'charts', 'render': 'lineChart', 'primary': True, 'label': 'Historical Formula Backtest'}, {'key': 'historical_local_signal_ic', 'source': 'charts', 'render': 'table', 'primary': False, 'label': 'Historical Local Signal IC'}, {'key': 'formula_result_table', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Result Table'}, {'key': 'formula_validation_panel', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Validation Panel'}, {'key': 'formula_template_library', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Template Library'}]
+OUTPUTS = [{'key': 'historical_formula_backtest', 'source': 'charts', 'render': 'lineChart', 'primary': True, 'label': 'Historical Formula Backtest'}, {'key': 'formula_result_table', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Result Table'}, {'key': 'formula_validation_panel', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Validation Panel'}, {'key': 'formula_template_library', 'source': 'tables', 'render': 'table', 'primary': False, 'label': 'Formula Template Library'}]
 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -30,7 +30,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     panel, _ = apply_filters(panel, payload)
     formula = payload.get("formula") or "0.4*rank(net_income_yield)+0.3*rank(momentum_jt)+0.3*rank(roe)"
     payload = {**payload, "formula": formula}
-    issues: list[str] = ["IC comparison covers declared local signals, not unavailable cross-module factor-zoo exports. Labels use next-session entry and mature by the run date."]
+    issues: list[str] = ["Labels use next-session entry and mature by the run date."]
     result = evaluate_formula(panel, formula)
     panel["formula_score"] = result.values
     diagnostics = result.diagnostics
@@ -38,7 +38,6 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     ranked = panel.sort_values("formula_score", ascending=False)
     provider = point_in_time_scorer(symbols, payload, "formula")
     backtest = score_backtest(symbols, ranked.set_index("ticker")["formula_score"], int(payload.get("lookback_days") or 756), int(payload.get("top_n") or 50), score_at=provider)
-    zoo = historical_ic_comparison(symbols, payload, provider)
     return response(
         FEATURE_ID,
         summary_cards=[
@@ -48,7 +47,6 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         ],
         charts={
             "historical_formula_backtest": backtest.get("equity_curve", []),
-            "historical_local_signal_ic": zoo,
         },
         tables={
             "formula_result_table": records(ranked[["formula_rank", "ticker", "sector", "formula_score", "core_quant_score", "valuation_percentile", "quality_percentile", "momentum_percentile"]].head(int(payload.get("top_n") or 50))),

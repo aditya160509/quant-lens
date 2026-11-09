@@ -324,7 +324,7 @@ function useFeatureRun(feature: FeatureSpec) {
     if (record?.payload) setForm(() => ({ ...defaults, ...record.payload }));
   }, [record, setForm, defaults]);
 
-  const stale = Boolean(record?.payload) && (() => { try { return JSON.stringify(studyPart(toPayload(feature, form))) !== JSON.stringify(studyPart(record?.payload)); } catch { return true; } })();
+  const stale = Boolean(record?.payload) && (() => { try { return JSON.stringify(studyPart(toPayload(feature, form))) !== JSON.stringify(studyPart(toPayload(feature, { ...defaults, ...record?.payload }))); } catch { return true; } })();
   const status = submit.isPending ? "submitting" : job.data?.status ?? (jobId && job.isLoading ? "loading" : "idle");
   return {
     form, setForm, errors, run, stale, cancel, status, record, restore, jobId, progress: job.data?.progress,

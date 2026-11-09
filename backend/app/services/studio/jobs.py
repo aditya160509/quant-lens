@@ -8,17 +8,17 @@ best-effort and prevents a normal `completed` after `cancelled` wins.
 
 from __future__ import annotations
 
-import hashlib
 import fcntl
+import hashlib
 import json
 import os
 import threading
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal
 
 JobStatus = Literal["queued", "running", "completed", "failed", "cancelling", "cancelled", "partial"]
 
@@ -41,15 +41,27 @@ def _process_lock(path: Path):
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def _alive(pid: int | None) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
+
+
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _job_id() -> str:
     return uuid.uuid4().hex
 
 
-def _input_hash(payload: Dict[str, Any]) -> str:
+def _input_hash(payload: dict[str, Any]) -> str:
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
@@ -57,12 +69,12 @@ def _input_hash(payload: Dict[str, Any]) -> str:
 class JobStore:
     def __init__(self, path: Path = _STORE_PATH) -> None:
         self.path = path
-        self._jobs: Dict[str, Dict[str, Any]] = {}
-        self._idem: Dict[str, str] = {}
-        self._audits: Dict[str, list[Dict[str, Any]]] = {}
+        self._jobs: dict[str, dict[str, Any]] = {}
+        self._idem: dict[str, str] = {}
+        self._audits: dict[str, list[dict[str, Any]]] = {}
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="studio-job")
-        self._futures: Dict[str, Future[Any]] = {}
-        self._cancel_events: Dict[str, threading.Event] = {}
+        self._futures: dict[str, Future[Any]] = {}
+        self._cancel_events: dict[str, threading.Event] = {}
         self._load()
 
     def _load(self) -> None:
@@ -75,6 +87,9 @@ class JobStore:
             self._audits = data.get("audits", {})
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
             raise RuntimeError(f"Studio job store is unreadable: {self.path}") from exc
+        for job in self._jobs.values():
+            if job["status"] not in TERMINAL and not _alive(job.get("pid")):
+                job.update(status="failed", error="Interrupted by a server restart", progress={"percent": 100, "message": "failed"})
 
     def _persist(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -88,12 +103,12 @@ class JobStore:
         self,
         *,
         job_type: str,
-        params: Dict[str, Any],
-        idempotency_key: Optional[str] = None,
-        request_id: Optional[str] = None,
-        estimate: Optional[Dict[str, Any]] = None,
-        owner_hash: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        params: dict[str, Any],
+        idempotency_key: str | None = None,
+        request_id: str | None = None,
+        estimate: dict[str, Any] | None = None,
+        owner_hash: str | None = None,
+    ) -> dict[str, Any]:
         with _LOCK, _process_lock(self.path):
             self._load()
             input_hash = _input_hash({"type": job_type, "params": params})
@@ -105,10 +120,11 @@ class JobStore:
                     return self._copy(existing)
             jid = _job_id()
             now = _now_iso()
-            job: Dict[str, Any] = {
+            job: dict[str, Any] = {
                 "job_id": jid,
                 "type": job_type,
                 "status": "queued",
+                "pid": os.getpid(),
                 "created_at": now,
                 "updated_at": now,
                 "input_hash": input_hash,
@@ -129,16 +145,16 @@ class JobStore:
             return self._copy(job)
 
     @staticmethod
-    def _copy(job: Dict[str, Any]) -> Dict[str, Any]:
+    def _copy(job: dict[str, Any]) -> dict[str, Any]:
         return json.loads(json.dumps(job))
 
-    def get(self, job_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, job_id: str) -> dict[str, Any] | None:
         with _LOCK, _process_lock(self.path):
             self._load()
             job = self._jobs.get(job_id)
             return self._copy(job) if job else None
 
-    def append_audit(self, job_id: str, record: Dict[str, Any]) -> Dict[str, Any]:
+    def append_audit(self, job_id: str, record: dict[str, Any]) -> dict[str, Any]:
         """Append a tamper-evident immutable decision record to a terminal job."""
         with _LOCK, _process_lock(self.path):
             self._load()
@@ -163,14 +179,14 @@ class JobStore:
             self._persist()
             return self._copy(entry)
 
-    def get_audit(self, job_id: str) -> list[Dict[str, Any]]:
+    def get_audit(self, job_id: str) -> list[dict[str, Any]]:
         with _LOCK, _process_lock(self.path):
             self._load()
             if job_id not in self._jobs:
                 raise KeyError(job_id)
             return self._copy(self._audits.get(job_id, []))
 
-    def update(self, job_id: str, **patch: Any) -> Optional[Dict[str, Any]]:
+    def update(self, job_id: str, **patch: Any) -> dict[str, Any] | None:
         with _LOCK, _process_lock(self.path):
             self._load()
             job = self._jobs.get(job_id)
@@ -185,7 +201,7 @@ class JobStore:
             self._persist()
             return self._copy(job)
 
-    def cancel(self, job_id: str) -> Optional[Dict[str, Any]]:
+    def cancel(self, job_id: str) -> dict[str, Any] | None:
         with _LOCK, _process_lock(self.path):
             self._load()
             job = self._jobs.get(job_id)
@@ -221,7 +237,7 @@ class JobStore:
             self._futures.pop(job_id, None)
             self._cancel_events.pop(job_id, None)
 
-    def run_sync(self, job_id: str, fn, *args, **kwargs) -> Dict[str, Any]:
+    def run_sync(self, job_id: str, fn, *args, **kwargs) -> dict[str, Any]:
         with _LOCK, _process_lock(self.path):
             self._load()
             current = self._jobs.get(job_id)
@@ -247,7 +263,7 @@ class JobStore:
                 if current and current["status"] == "cancelled":
                     return self._copy(current)
             return self.update(job_id, status="completed", result=result)  # type: ignore[return-value]
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             return self.update(job_id, status="failed", error=str(exc)[:500])  # type: ignore[return-value]
 
     def shutdown(self, wait: bool = True) -> None:

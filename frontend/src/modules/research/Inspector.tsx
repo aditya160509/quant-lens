@@ -13,7 +13,7 @@ import { DataWindow } from "./DataWindow";
 import { cardId, useCardPrefs, useFeaturePrefs } from "./cardPrefs";
 import type { FeatureRun } from "./ResearchApp";
 import { useSelection } from "./selection";
-import { StudyForm, toPayload } from "./StudyForm";
+import { defaultsFor, StudyForm, toPayload } from "./StudyForm";
 import type { FeatureSpec, RunRecord } from "./types";
 
 type View = "study" | "inspect";
@@ -25,9 +25,7 @@ export function Inspector({ feature, run }: { feature: FeatureSpec; run: Feature
   const select = useSelection((s) => s.select);
   const running = ["submitting", "queued", "running"].includes(run.status);
   const view: View = picked ?? (run.result ? "inspect" : "study");
-  const changedFromRun = !running && run.record?.payload !== undefined && (() => {
-    try { return JSON.stringify(studyPart(toPayload(feature, run.form))) !== JSON.stringify(studyPart(run.record?.payload)); } catch { return true; }
-  })();
+  const changedFromRun = !running && run.stale;
 
   useEffect(() => () => select(null), [feature.id, select]);
   useEffect(() => {
@@ -50,7 +48,7 @@ export function Inspector({ feature, run }: { feature: FeatureSpec; run: Feature
                 <History size={13} style={{ color: "var(--accent)", flex: "none" }} />
                 <span style={{ flex: 1 }}>
                   {(() => {
-                    const a = studyPart(toPayload(feature, run.form)) ?? {}, b = studyPart(run.record?.payload) ?? {};
+                    const a = studyPart(toPayload(feature, run.form)) ?? {}, b = studyPart(toPayload(feature, { ...defaultsFor(feature), ...run.record?.payload })) ?? {};
                     const keys = Object.keys({ ...a, ...b }).filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
                     const name = (k: string) => feature.inputs.find((f) => f.key === k)?.label ?? k;
                     return keys.length ? <>{keys.length} setting{keys.length > 1 ? "s" : ""} changed since the run on screen: {keys.slice(0, 4).map(name).join(", ")}{keys.length > 4 ? "…" : ""}</> : "Settings differ from the run on screen.";

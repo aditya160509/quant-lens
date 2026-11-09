@@ -14,7 +14,6 @@ import pandas as pd
 from .common import number_like
 from .data_loader import (
     AS_OF,
-    as_of_context,
     close_matrix,
     load_factor_returns,
     ohlcv_for_symbols,
@@ -388,30 +387,3 @@ def formula_templates() -> list[dict[str, str]]:
 
 
 
-def historical_ic_comparison(symbols, payload, provider):
-    """Cross-sectional Spearman IC over disjoint, matured forward-return intervals."""
-    prices = close_matrix(symbols, int(payload.get('lookback_days', 756)) + 252)
-    fields = ['formula_score', 'valuation_percentile', 'quality_percentile', 'momentum_percentile', 'low_vol_percentile', 'liquidity_percentile', 'core_quant_score']
-    results = []
-    for horizon in [1, 5, 21, 63, 126, 252]:
-        estimates = {field: [] for field in fields}
-        last_label = None
-        for index in range(251, len(prices) - horizon - 1, max(21, horizon + 1)):
-            date = prices.index[index]
-            with as_of_context(date):
-                panel = provider.panel_at(date)
-                panel['formula_score'] = provider(date).reindex(panel.ticker).to_numpy()
-            forward = prices.iloc[index + 1 + horizon] / prices.iloc[index + 1] - 1
-            for field in fields:
-                frame = pd.DataFrame({'signal': panel.set_index('ticker')[field], 'forward': forward}).replace([np.inf, -np.inf], np.nan).dropna()
-                if len(frame) >= 3 and frame.signal.nunique() > 1 and frame.forward.nunique() > 1:
-                    estimates[field].append(float(frame.signal.corr(frame.forward, method='spearman')))
-                    last_label = prices.index[index + 1 + horizon]
-        for field, values in estimates.items():
-            deviation = np.std(values, ddof=1) if len(values) > 1 else np.nan
-            results.append({'factor': field, 'forward_horizon_sessions': horizon, 'formation_count': len(values),
-                            'mean_ic': float(np.mean(values)) if values else None,
-                            'ic_ir': float(np.mean(values) / deviation) if np.isfinite(deviation) and deviation > 0 else None,
-                            'last_label_end': str(last_label.date()) if values and last_label is not None else None,
-                            'method': 'walk-forward Spearman; disjoint forward-label intervals; close t+1 execution'})
-    return results
