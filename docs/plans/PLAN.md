@@ -62,9 +62,9 @@ One search everywhere, at the level of TradingView's. It replaces the current we
 | Screener | Done | Removed; rebuild | `../reviews/product/SCREENER_V2_PRODUCT_REVIEW.md` |
 | Factors | Done | Removed; rebuild | `../reviews/product/FACTORS_V2_PRODUCT_REVIEW.md` |
 | Volatility | Done | Removed; rebuild | `../reviews/product/VOLATILITY_V2_PRODUCT_REVIEW.md` |
-| PCA | Done | Removed; rebuild | Product review missing |
-| Portfolio | Done | Removed; rebuild | Product review missing |
-| Studio | Working | Working | Product review missing |
+| PCA | Done | Removed; rebuild | `../reviews/product/PCA_V2_PRODUCT_REVIEW.md` |
+| Portfolio | Done | Removed; rebuild | `../reviews/product/PORTFOLIO_V2_PRODUCT_REVIEW.md` |
+| Studio | Working | Working | `../reviews/product/STUDIO_V2_PRODUCT_REVIEW.md` |
 | Chart | On legacy data files | Working; moving into Studio | Part of the Studio review |
 | Widget workspace | None | Removed with Sovereign | Plan missing |
 | Auth, payments, docs pages | Removed | Removed | Rebuild last |
@@ -264,6 +264,15 @@ Spec: `../reviews/product/FACTORS_V2_PRODUCT_REVIEW.md`. About 4 to 6 sessions. 
 | 3.8 Validate | F07 hand-off with trial count | Already built for Screener | One click reaches Validate |
 | 3.9 Ship | Recipe stage 6; PDF and CSV report | Shared loader for this module (step 11) | Tag `factors-v1` |
 
+#### 3a. Factors checklist and order
+
+Build list: [FACTORS_CHECKLIST.md](FACTORS_CHECKLIST.md), 10 batches, 28 items. Order: Clean, Workspace, Value and exposure, Regime and timing, Test and capacity, Risk and construction, Monitor, Validate, Freedom, Ship. Later items wait for data.
+
+- **Needs Screener:** the kit, universe picker and search (Batches 1 to 3 there), the scheduler and alerts for Monitor (Screener Batch 9), shared validation for the Validate hand-off (Screener Batch 8).
+- **Needs Volatility:** Batch 4 uses the regime kernel Volatility owns (decision 7), so Volatility Batch 4 comes first or the kernel is built once in `services/shared/` by whichever module reaches it first.
+- **Needs Portfolio:** Batch 6 uses the covariance and construction engines Portfolio owns (decision 3), so Portfolio Batch 3 comes first.
+- **Feeds:** the execution kernel built in Batch 5 serves Volatility and Portfolio Test.
+
 ### Step 4: Volatility
 
 Spec: `../reviews/product/VOLATILITY_V2_PRODUCT_REVIEW.md`. About 5 to 7 sessions. Lead with V03 HAR, V01 estimators and V06 connectedness.
@@ -281,9 +290,18 @@ Spec: `../reviews/product/VOLATILITY_V2_PRODUCT_REVIEW.md`. About 5 to 7 session
 | 4.9 New | Data gap ledger on every page; pre-registered vol target | None | Saved targets are scored after the fact |
 | 4.10 Ship | Recipe stage 6 | Shared loader for this module | Tag `volatility-v1` |
 
+#### 4a. Volatility checklist and order
+
+Build list: [VOLATILITY_CHECKLIST.md](VOLATILITY_CHECKLIST.md), 10 batches, 23 items. Its review is due to be redone against the feature rule, so the list is provisional. Order: Clean, Workspace, Estimators and Forecast, Regime, Cross-asset and stress, Risk premium, Budget, Trust, Consolidate, Ship.
+
+- **Needs Screener:** the kit and universe picker.
+- **Owns:** the regime kernel (Batch 4) and the DCC. Factors Batch 4 and PCA contagion reuse them.
+- **Needs Portfolio:** Batch 5 uses Portfolio's covariance engine and the stress engine shared with Factors F11 and Portfolio F04; Batch 7 uses Portfolio's Kelly (F10). Portfolio Batches 3 and 5 come first.
+- **Needs Research and ML:** the Validate hand-off in Batch 7 uses the shared validation statistics and the Research trial ledger.
+
 ### Step 5: PCA
 
-Write `../reviews/product/PCA_V2_PRODUCT_REVIEW.md` first; page cuts below are provisional. Lead with F04 residual stat-arb, F03 risk decomposition and F08 contagion.
+Spec: `../reviews/product/PCA_V2_PRODUCT_REVIEW.md` (written 2026-11-09); page cuts below are provisional. Lead with F04 residual stat-arb, F03 risk decomposition and F08 contagion.
 
 | Stage | Build | Merge | Done when |
 |---|---|---|---|
@@ -295,9 +313,18 @@ Write `../reviews/product/PCA_V2_PRODUCT_REVIEW.md` first; page cuts below are p
 | 5.6 Monitor | Contagion alerts | Scheduler and alerts | Alerts show precision |
 | 5.7 Ship | Recipe stage 6 | Shared loader | Tag `pca-v1` |
 
+#### 5a. PCA checklist and order
+
+Build list: [PCA_CHECKLIST.md](PCA_CHECKLIST.md), 8 batches, 71 items. Batches 1 and 2 are the 33 correctness fixes; no page is built before they land. Batch 2 holds three owner decisions (H1, H2, H3) that block the spectrum and contagion pages. Order: Correctness (two batches), Data path, Workspace, Pages, Freedom, Validate and monitor, Ship.
+
+- **Needs Screener:** global search, kit, saved universes, and for Batch 7 the scheduler and alerts (Screener Batch 9).
+- **Needs Volatility:** the event ledger and regime and covariance work stay consistent with Volatility's kernels (decisions 7 and 14).
+- **Needs Research and ML:** the Validate hand-off and the trial ledger (decision 4).
+- **Shares with Portfolio:** HRP (PCA Later, via skfolio) is one spike for both modules.
+
 ### Step 6: Portfolio
 
-Write `../reviews/product/PORTFOLIO_V2_PRODUCT_REVIEW.md` first; 13 engines become fewer pages. Lead with F08 contagion, F04 reverse stress and F02 honest backtest.
+Spec: `../reviews/product/PORTFOLIO_V2_PRODUCT_REVIEW.md` (written 2026-11-09); 13 engines become fewer pages. Lead with F08 contagion, F04 reverse stress and F02 honest backtest.
 
 | Stage | Build | Merge | Done when |
 |---|---|---|---|
@@ -309,9 +336,18 @@ Write `../reviews/product/PORTFOLIO_V2_PRODUCT_REVIEW.md` first; 13 engines beco
 | 6.6 Backtest | Honest backtest through Validate | Reuse | DSR uses the true trial count |
 | 6.7 Ship | Recipe stage 6 | Shared loader, uploads, universes (steps 11 to 13) | Tag `portfolio-v1` |
 
+#### 6a. Portfolio checklist and order
+
+Build list: [PORTFOLIO_CHECKLIST.md](PORTFOLIO_CHECKLIST.md), 7 batches, 42 items. Order: Clean the backend, Workspace, Construct, Test, Stress, Freedom and export, Ship. Later items need user data or a data purchase.
+
+- **Needs Screener:** the kit, universe picker, search and, for Batch 4, shared validation (Screener Batch 8).
+- **Owns:** covariance (decision 3), construction, Kelly sizing and reverse stress. Factors Batch 6, Volatility Batches 5 and 7 and Studio Batch 7 reuse them, so Construct (Batch 3) and Stress (Batch 5) are built before those.
+- **Needs Research:** the trial counter in Batch 4 feeds the Research ledger (decision 4).
+- **Feeds Studio:** Studio drops its Portfolio tab and links to `/portfolio`, so Portfolio ships first.
+
 ### Step 7: Studio with Chart inside
 
-Write `../reviews/product/STUDIO_PRODUCT_REVIEW.md` first. Sell Results and Validate first. Proposal: Chart becomes a tab in Studio and `/trade` redirects there, because it is not sold alone and Studio needs it for replay and results.
+Spec: `../reviews/product/STUDIO_V2_PRODUCT_REVIEW.md` (written 2026-11-09). Sell Results and Validate first. Proposal: Chart becomes a tab in Studio and `/trade` redirects there, because it is not sold alone and Studio needs it for replay and results.
 
 | Stage | Build | Done when |
 |---|---|---|
@@ -322,6 +358,15 @@ Write `../reviews/product/STUDIO_PRODUCT_REVIEW.md` first. Sell Results and Vali
 | 7.5 Results and Validate | Same exhibits and Validate as the labs | No second report style |
 | 7.6 Compose | One-click report with Typst | Certified run becomes a PDF |
 | 7.7 Ship | Remove the rest of `studio_v2`; fix its manifest and tests | Tag `studio-v1` |
+
+#### 7a. Studio checklist and order
+
+Build list: [STUDIO_CHECKLIST.md](STUDIO_CHECKLIST.md), 9 batches, 40 items. Order: Decisions, Fix what is wrong, Trust features, Data and the end of `studio_v2`, Develop, Chart as a tab, Merge and present, Freedom, Ship. Chart is Batch 6; it waits for the parquet-first loader in Batch 4.
+
+- **Needs Screener:** the kit and exhibits, the Typst report, the universe picker, and later Apprise delivery.
+- **Needs Research:** the trial counter and deflated Sharpe in Batch 3 use the Research ledger and the shared validation statistics.
+- **Needs Portfolio:** Batch 7 removes the Portfolio tab, so `/portfolio` exists first.
+- **Needs the merge map:** Batch 4 moves persistence to `services/shared/` (decision 2) and adds the per-ticker store (decision 16). Nothing in `studio_v2` is deleted before the graph and smoke checks.
 
 ### Step 8: Widget workspace
 

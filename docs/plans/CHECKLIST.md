@@ -79,60 +79,28 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [ ] Build: see [SCREENER_CHECKLIST.md](SCREENER_CHECKLIST.md); ship and tag `screener-v1`
 
 ## Step 3: Factors
-- [ ] Remove sine sparkline, duplicate keys
-- [ ] Look-ahead audit and data banner
-- [ ] `/factors` from the manifest
-- [ ] Value and exposure page
-- [ ] Regime kernel; Regime and timing page
-- [ ] Execution kernel; Test and capacity page
-- [ ] Covariance and construction engines; Risk page
-- [ ] Monitor page with alert precision
-- [ ] Validate hand-off
-- [ ] PDF and CSV report
-- [ ] Shared loader for Factors
-- [ ] Ship, tag `factors-v1`
+- [ ] Build: see [FACTORS_CHECKLIST.md](FACTORS_CHECKLIST.md); ship and tag `factors-v1`
 
 ## Step 4: Volatility
-- [ ] Remove hero literals, fallbacks, synthetic surface request
-- [ ] `/volatility` from the manifest, inputs pruned
-- [ ] Estimators page with estimator choice
-- [ ] Forecast page with confidence set
-- [ ] Regime page on shared kernel
-- [ ] Risk premium page, gated
-- [ ] Cross-asset page, one DCC
-- [ ] Budget page, shared Kelly, Validate hand-off
-- [ ] Data gap ledger
-- [ ] Pre-registered vol target
-- [ ] Ship, tag `volatility-v1`
+- [ ] Redo product review against the feature rule (listed under Planning)
+- [ ] Build: see [VOLATILITY_CHECKLIST.md](VOLATILITY_CHECKLIST.md); ship and tag `volatility-v1`
 
 ## Step 5: PCA
-- [ ] Product review
-- [ ] Remove filler; show fallback flags
-- [ ] `/pca` from the manifest
-- [ ] Biplot, MP overlay, loading heatmap, rolling loadings
-- [ ] Stat-arb trade list with Validate
-- [ ] Contagion alerts
-- [ ] Ship, tag `pca-v1`
+- [ ] Product review (written 2026-11-09)
+- [ ] Remove preview filler; show fallback flags (PLAN 5.2; not in the review)
+- [ ] Rolling loadings (PLAN 5.4; not in the review)
+- [ ] Build: see [PCA_CHECKLIST.md](PCA_CHECKLIST.md); 33 correctness fixes first; ship and tag `pca-v1`
 
 ## Step 6: Portfolio
-- [ ] Product review
-- [ ] One NAV key; no fake sparklines
-- [ ] `/portfolio` from the manifest, uploads
-- [ ] Construction engines with golden tests
-- [ ] Risk kernel, reverse stress, contagion
-- [ ] Honest backtest through Validate
-- [ ] Shared loader, uploads, universes
-- [ ] Ship, tag `portfolio-v1`
+- [ ] Product review (written 2026-11-09)
+- [ ] One NAV key; no fake sparklines (PLAN 6.2; not in the review)
+- [ ] Build: see [PORTFOLIO_CHECKLIST.md](PORTFOLIO_CHECKLIST.md); ship and tag `portfolio-v1`
 
 ## Step 7: Studio and Chart
-- [ ] Product review; decide Paper
-- [ ] Decide Chart as a Studio tab
-- [ ] Parquet-first data; delete old data files
-- [ ] Custom chart with drawings, indicators, layouts, replay
-- [ ] T3 Code shell, diffs, file tree
-- [ ] Shared exhibits in Results and Validate
-- [ ] Typst one-click report
-- [ ] Remove rest of `studio_v2`; tag `studio-v1`
+- [ ] Product review (written 2026-11-09); decide Paper
+- [ ] Decide Chart as a Studio tab (first batch of the checklist)
+- [ ] Custom chart with drawings, indicators, layouts, replay (PLAN 7.3; the review lists only the data and alert fixes)
+- [ ] Build: see [STUDIO_CHECKLIST.md](STUDIO_CHECKLIST.md); Chart is built inside Studio; tag `studio-v1`
 
 ## Step 8: Widget workspace
 - [ ] Plan and research
