@@ -337,11 +337,29 @@ def returns_matrix(symbols: Iterable[str], lookback_days: int = 756, min_coverag
     return cached_returns_matrix(symbol_key(symbols), int(lookback_days), min_coverage_bps).copy(deep=False)
 
 
+# Every fundamentals column a Screener module reads by name; the other 311 stay on disk.
+FUNDAMENTAL_COLUMNS = (
+    "ticker", "reportDate", "periodType", "sector", "industry", "currency", "marketCap", "trailingPE", "forwardPE",
+    "priceToBook", "dividendYield", "debtToEquity", "returnOnEquity", "grossMargins", "currentRatio", "EBITDA", "EBIT",
+    "Interest Expense", "Interest Expense Non Operating", "Diluted Average Shares", "Basic Average Shares", "Diluted EPS",
+    "Basic EPS", "Net Income", "Pretax Income", "Operating Income", "Gross Profit", "Total Revenue", "Ordinary Shares Number",
+    "Total Debt", "Common Stock Equity", "Total Equity Gross Minority Interest", "Minority Interest", "Stockholders Equity",
+    "Retained Earnings", "Total Liabilities Net Minority Interest", "Long Term Debt", "Current Liabilities", "Total Assets",
+    "Net PPE", "Current Assets", "Cash And Cash Equivalents", "Free Cash Flow", "Repurchase Of Capital Stock",
+    "Issuance Of Capital Stock", "Cash Dividends Paid", "Common Stock Dividend Paid", "Dividend Paid Cfo",
+    "Operating Cash Flow", "Inventory", "Tax Provision", "Preferred Stock", "Preferred Stock Equity",
+)
+
+
 @lru_cache(maxsize=1)
 def _load_fundamentals_versioned(version: int) -> pd.DataFrame:
     if not MASTER_FUNDAMENTALS.exists():
         return pd.DataFrame(columns=["ticker"])
-    df = pd.read_parquet(MASTER_FUNDAMENTALS, engine="pyarrow")
+    columns = [c for c in FUNDAMENTAL_COLUMNS if c in pq.read_schema(MASTER_FUNDAMENTALS).names]
+    return _normalize_fundamentals(pd.read_parquet(MASTER_FUNDAMENTALS, columns=columns, engine="pyarrow"))
+
+
+def _normalize_fundamentals(df: pd.DataFrame) -> pd.DataFrame:
     if "ticker" not in df.columns:
         return pd.DataFrame(columns=["ticker"])
     out = df
@@ -365,8 +383,12 @@ def latest_fundamentals() -> pd.DataFrame:
     return df.groupby("ticker", as_index=False).tail(1).set_index("ticker", drop=False)
 
 
-def fundamental_history(symbol: str) -> pd.DataFrame:
-    frame = cached_fundamental_history(normalize_symbol(symbol)).copy(deep=False)
+def fundamental_history(symbol: str, all_columns: bool = False) -> pd.DataFrame:
+    if all_columns:  # the statements page lists every reported line, so it alone reads the whole file
+        full = _normalize_fundamentals(pd.read_parquet(MASTER_FUNDAMENTALS, engine="pyarrow")) if MASTER_FUNDAMENTALS.exists() else pd.DataFrame(columns=["ticker"])
+        frame = full[full.ticker.eq(normalize_symbol(symbol))].sort_values("reportDate")
+    else:
+        frame = cached_fundamental_history(normalize_symbol(symbol)).copy(deep=False)
     cutoff = AS_OF.get()
     if cutoff is not None and not frame.empty:
         frame = frame[pd.to_datetime(frame.reportDate) + pd.Timedelta(days=90) <= cutoff]
