@@ -22,6 +22,33 @@ Measured with `ru_maxrss` on a full Screen run (3,831 names).
 - [ ] Hot-loop pass with numba or Polars; numba is only in `screener_v2/core/stats.py`
 - [ ] DuckDB against Polars, not measured
 
+## Screener engine plan
+
+Python keeps the API, jobs and orchestration. Heavy work moves to precomputed data, then one Rust module called through PyO3. Prove it on the Screener, then replicate for the other labs. No lab is rewritten whole.
+
+Rule for every stage: the same inputs give the same output hash on a clean worktree, on 50 names and the full universe, before and after. If a hash differs, stop and fix it. Latest measured peak: 1.98 GB on 50 names, 3.79 GB on the full universe (`fdcee5b`).
+
+1. [ ] Finish the cheap wins, keeping only what measures better: `POLARS_MAX_THREADS=2`, Polars streaming, cached integrity pass, DuckDB scans, mimalloc
+2. [ ] Precompute daily indicators to parquet, with point-in-time window seeding; a screen reads finished numbers. Target: full run under 1 GB
+3. [ ] Measure what is still slow or heavy. Build stage 4 only for what stage 3 proves, which is expected to be backtests and custom formulas
+4. [ ] One Rust crate with PyO3 and maturin, using Polars or Arrow, replacing exactly these Python files:
+
+| File in `screener_v2/core/` | Lines | What moves |
+|---|---|---|
+| `estimators.py` | 313 | All indicators: warmup, Wilder seeding and null handling must match |
+| `panel.py` | 84 | Panel assembly and ranks |
+| `stats.py` | 100 | Rank, z-score, winsorise, smoothing |
+| `backtest.py` | 174 | Simulation loop and CSCV |
+| `validation.py` | part of 201 | Point-in-time scoring loop only |
+
+About 900 Python lines, likely 2,000 to 3,000 lines of Rust. `pit_cache.py` (78) is deleted once this lands.
+
+5. [ ] Only if profiling still demands it: `data_loader.py` (494), `performance.py` (200) and the numeric parts of `fundamentals.py` (278)
+6. [ ] Not rewritten: API routes, features, `screener.py`, `formula.py`, `composite.py`, `valuation.py`, currency, jobs and persistence
+7. [ ] Once the Screener passes stages 1 to 4, replicate the same pattern lab by lab, starting from each lab's own profile
+
+Lines per lab for reference: Screener 5,834; Factors 5,199; ML 5,176; PCA 5,736; Portfolio 6,891; Research 8,175; Volatility 10,100.
+
 ## Code to clean up
 
 - [ ] `core/pit_cache.py` rebinds names in `estimators` and `fundamentals` at import; move into those modules
