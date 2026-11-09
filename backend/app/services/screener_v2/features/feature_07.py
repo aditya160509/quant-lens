@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from typing import Any
-from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
-from ..core.common import access_meta, records, response
+from ..core.common import access_meta, response
+from ..core.data_loader import parse_symbols
 from ..core.panel import metric_panel
 from ..core.screener import apply_filters
 from ..core.valuation import relative_valuation
-from ..core.data_loader import parse_symbols
-
+from .inputs import enrich, filter_inputs, merge_inputs, shared_inputs
 
 FEATURE_ID = "07"
 FEATURE_NAME = "Comparative Relative Valuation Screener"
@@ -22,7 +21,7 @@ OUTPUTS = [{'key': 'four_dimension_valuation_card', 'source': 'charts', 'render'
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
-    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=5000)
+    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=1000)
     panel = metric_panel(payload, symbols=symbols)
     panel, _ = apply_filters(panel, payload)
     rel = relative_valuation(panel, payload.get("focus_ticker"), payload)

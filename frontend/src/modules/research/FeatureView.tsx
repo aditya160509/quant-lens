@@ -3,7 +3,7 @@
 import { ChartScope } from "@/charts/ChartScope";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, FileText, Loader2, Play, Square } from "lucide-react";
 import { DUR } from "@/workspace/prefs";
 import { PopMenu, Tabs, type MenuAt } from "@/workspace/ui";
@@ -151,12 +151,12 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
           <div className="ov-icon" style={{ width: 40, height: 40, borderRadius: 11 }}><Icon size={19} strokeWidth={1.6} /></div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{meta.name}</h1>
-            {lab().id !== "ml" ? <><p style={{ marginTop: 4, color: "var(--text-2)", fontSize: 13.5 }}>{meta.question}</p><p style={{ marginTop: 6, color: "var(--text-3)", fontSize: 12.5, maxWidth: 860, lineHeight: 1.55 }}>{feature.description !== meta.question ? feature.description : null}</p></> : null}
+            {lab().id !== "ml" && lab().id !== "screener" ? <><p style={{ marginTop: 4, color: "var(--text-2)", fontSize: 13.5 }}>{meta.question}</p><p style={{ marginTop: 6, color: "var(--text-3)", fontSize: 12.5, maxWidth: 860, lineHeight: 1.55 }}>{feature.description !== meta.question ? feature.description : null}</p></> : null}
           </div>
           {runButton}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <RunContext feature={feature} run={run} />
+          {lab().contextBar ? createElement(lab().contextBar!, { feature, run }) : <RunContext feature={feature} run={run} />}
           {lab().signal ? <><ActiveSignalChip /><LedgerChip /></> : null}
         </div>
         <AnimatePresence initial={false}>

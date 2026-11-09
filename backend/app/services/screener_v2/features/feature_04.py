@@ -24,7 +24,7 @@ OUTPUTS = [{'key': 'per_strategy_stock_list', 'source': 'tables', 'render': 'tab
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
-    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=5000)
+    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=1000)
     panel = metric_panel(payload, symbols=symbols)
     panel, _ = apply_filters(panel, payload)
     strategies = academic_strategy_scores(panel)

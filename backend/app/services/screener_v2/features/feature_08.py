@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from typing import Any
-from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
 from ..core.common import access_meta, records, response
+from ..core.data_loader import parse_symbols
 from ..core.exports import build_export_payload
 from ..core.panel import metric_panel
 from ..core.screener import apply_filters, top_table
-from ..core.data_loader import parse_symbols
-
+from .inputs import enrich, filter_inputs, merge_inputs, shared_inputs
 
 FEATURE_ID = "08"
 FEATURE_NAME = "Screener Result Export and Integration Layer"
@@ -22,13 +21,13 @@ OUTPUTS = [{'key': 'change_report', 'source': 'charts', 'render': 'table', 'prim
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
-    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=5000)
+    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=1000)
     panel = metric_panel(payload, symbols=symbols)
     panel, _ = apply_filters(panel, payload)
     rows = records(top_table(panel, int(payload.get("top_n") or 100)))
     export_payload = build_export_payload(FEATURE_ID, payload, rows)
-    from ..core.state import compare_and_store
     from ..core.data_loader import ohlcv_for_symbols
+    from ..core.state import compare_and_store
     change_report = compare_and_store(str(payload["screen_id"]), rows, str(ohlcv_for_symbols(symbols).Date.max().date()), int(payload.get("rank_shift", 10))) if payload.get("screen_id") else []
     return response(
         FEATURE_ID,

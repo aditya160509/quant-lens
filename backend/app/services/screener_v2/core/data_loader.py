@@ -250,7 +250,42 @@ class UnknownSymbolsError(ValueError):
         super().__init__(f"Unknown or unsupported tickers (not in the local equity universe): {', '.join(missing)}")
 
 
-def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: int = 5000) -> list[str]:
+_ALL_SYMBOLS: ContextVar[tuple[str, ...]] = ContextVar("screener_all_symbols", default=())
+
+
+@lru_cache(maxsize=8)
+def _liquidity_rank(version: int, as_of) -> dict[str, int]:
+    from .currency import instrument_specs, usd_rates
+    frame = load_market_frame()
+    if as_of is not None:
+        frame = frame.filter(pl.col("Date") <= pd.Timestamp(as_of))
+    last = frame.select(pl.col("Date").max()).collect().item()
+    if last is None:
+        return {}
+    rows = (frame.filter(pl.col("Date") >= pd.Timestamp(last) - pd.Timedelta(days=45)).with_columns(NORMALIZED_TICKER.alias("_t"))
+            .group_by("_t").agg((pl.col("Close") * pl.col("Volume")).median().alias("_dv")).collect())
+    traded = dict(zip(rows["_t"].to_list(), rows["_dv"].to_list(), strict=True))
+    known = [t for t in traded if t in set(_ALL_SYMBOLS.get())]
+    specs = instrument_specs(known)
+    currencies = sorted({specs[t].get("quote_currency") for t in known if specs[t].get("quote_currency")})
+    # Ranking only: the latest FX within two weeks, so a holiday does not push a whole market last.
+    dates = pd.date_range(pd.Timestamp(last) - pd.Timedelta(days=14), pd.Timestamp(last))
+    rates = usd_rates(currencies, dates)
+    latest = {c: rates[c].dropna().iloc[-1] for c in currencies if c in rates and rates[c].notna().any()}
+    usd = {t: float(traded[t] or 0) * latest.get(specs[t].get("quote_currency"), 0.0) for t in known}
+    return {t: i for i, t in enumerate(sorted(usd, key=lambda t: (-usd[t], t)))}
+
+
+def _by_liquidity(universe: list[str]) -> list[str]:
+    token = _ALL_SYMBOLS.set(tuple(universe))
+    try:
+        rank = _liquidity_rank(_path_version(MARKET_UNIVERSE), AS_OF.get())
+    finally:
+        _ALL_SYMBOLS.reset(token)
+    return sorted(universe, key=lambda s: (rank.get(s, len(rank)), s))
+
+
+def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: int = 1000) -> list[str]:
     payload = payload or {}
     raw = next((payload[key] for key in ["tickers", "symbols", "universe"] if key in payload and payload[key] is not None), None)
     if isinstance(raw, dict):
@@ -269,7 +304,7 @@ def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: i
     if raw is None or label in {"", "default"}:
         requested = universe[:default_limit]
     elif label in {"all", "full", "master", "master_universe", "market_universe", "whole"}:
-        requested = universe
+        requested = _by_liquidity(universe)
     elif isinstance(raw, str):
         requested = [normalize_symbol(x) for x in re.split(r"[,;\s]+", raw) if x.strip()]
     elif isinstance(raw, Iterable):

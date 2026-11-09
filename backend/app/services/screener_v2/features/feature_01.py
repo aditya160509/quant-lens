@@ -33,7 +33,7 @@ OUTPUTS = [{'key': 'run_changes', 'source': 'charts', 'render': 'table', 'primar
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
-    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=5000)
+    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=1000)
     panel = metric_panel(payload, symbols=symbols)
     dropped = panel.attrs.get("dropped_symbols", [])
     scores = academic_strategy_scores(panel)[["ticker", "piotroski_passed", "piotroski_available_criteria", "altman_z_score"]]

@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import type { FeatureLayout } from "./layouts";
+import type { FeatureRun } from "./ResearchApp";
 import type { FeatureResult, FeatureSpec, InputSpec, RunRecord } from "./types";
 
 /**
@@ -29,6 +30,8 @@ export type LabConfig = {
   /** Request that starts a job for a feature. */
   submit: (featureId: string, payload: Record<string, unknown>) => { path: string; body: unknown };
   /** Overview intro and the ordered stages its feature cards are grouped into. */
+  /** Replaces the run-context chips above the results. */
+  contextBar?: ComponentType<{ feature: FeatureSpec; run: FeatureRun }>;
   overview?: {
     /** Replaces the whole overview page. */
     home?: ComponentType<{ features: FeatureSpec[]; runs: RunRecord[] }>;

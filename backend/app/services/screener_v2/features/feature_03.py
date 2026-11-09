@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 from typing import Any
-from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
 from ..core.common import access_meta, matrix_records, records, response
-from ..core.composite import composite_config, component_scores, effective_num_factors, score_decomposition_for_ticker
+from ..core.composite import (
+    component_scores,
+    composite_config,
+    effective_num_factors,
+    score_decomposition_for_ticker,
+)
+from ..core.data_loader import parse_symbols
+from ..core.macro import macro_regime_attribution
 from ..core.panel import metric_panel
 from ..core.screener import apply_filters
 from ..core.validation import point_in_time_scorer, score_backtest
-from ..core.data_loader import parse_symbols
-from ..core.macro import macro_regime_attribution
-
+from .inputs import enrich, filter_inputs, merge_inputs, shared_inputs
 
 FEATURE_ID = "03"
 FEATURE_NAME = "Composite Quant Score Engine"
@@ -26,7 +30,7 @@ OUTPUTS.append({'key': 'macro_regime_attribution', 'source': 'tables', 'render':
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
-    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=5000)
+    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=1000)
     panel = metric_panel(payload, symbols=symbols)
     panel, _ = apply_filters(panel, payload)
     scored = component_scores(panel, composite_config(payload))

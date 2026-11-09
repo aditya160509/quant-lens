@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 from typing import Any
-from .inputs import shared_inputs, filter_inputs, enrich, merge_inputs
 
 import pandas as pd
 
-from ..core.common import access_meta, records, response
+from ..core.common import access_meta, response
+from ..core.data_loader import parse_symbols
 from ..core.panel import metric_panel
-from ..core.validation import point_in_time_scorer, score_backtest, score_backtest_by_weekday
-from ..core.data_loader import close_matrix, parse_symbols
-
+from ..core.validation import (
+    point_in_time_scorer,
+    score_backtest,
+    score_backtest_by_weekday,
+)
+from .inputs import enrich, filter_inputs, merge_inputs, shared_inputs
 
 FEATURE_ID = "05"
 FEATURE_NAME = "Screener Backtester with Point-in-Time Validation"
@@ -30,14 +33,14 @@ OUTPUTS = [{"key": "holding_period_sensitivity", "source": "tables", "render": "
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
-    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=5000)
+    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=1000)
     panel = metric_panel(payload, symbols=symbols)
     score_field = payload.get("score_field") or "core_quant_score"
     if score_field not in panel:
         raise ValueError(f"Unknown score field: {score_field}")
     score = panel.set_index("ticker")[score_field]
     provider = point_in_time_scorer(symbols, payload, field=score_field)
-    kwargs = dict(lookback_days=int(payload.get("lookback_days", 756)), top_n=int(payload.get("top_n", 50)),
+    kwargs = dict(lookback_days=int(payload.get("lookback_days", 756)), top_n=int(payload.get("top_n", 50)),  # noqa: C408
                   cost_bps=float(payload.get("transaction_cost_bps", 10)),
                   long_short=bool(payload.get("long_short")), score_weighted=bool(payload.get("score_weighted")),
                   rebalance_days=_rebalance_days(payload), sector_neutral=bool(payload.get("sector_neutral")),

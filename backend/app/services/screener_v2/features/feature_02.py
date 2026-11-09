@@ -25,7 +25,7 @@ OUTPUTS = [{'key': 'historical_formula_backtest', 'source': 'charts', 'render': 
 
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
-    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=5000)
+    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=1000)
     panel = metric_panel(payload, symbols=symbols)
     panel, _ = apply_filters(panel, payload)
     formula = payload.get("formula") or "0.4*rank(net_income_yield)+0.3*rank(momentum_jt)+0.3*rank(roe)"

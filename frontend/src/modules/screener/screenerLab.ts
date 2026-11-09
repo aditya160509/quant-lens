@@ -9,6 +9,7 @@ import { WatchlistFilter } from "./filters/WatchlistFilter";
 import { ComponentWeights } from "./rank/ComponentWeights";
 import { TemplatePicker } from "./rank/TemplatePicker";
 import { RowActions } from "./RowActions";
+import { UniverseBar } from "./filters/UniverseBar";
 import { ScreenerHome } from "./home/ScreenerHome";
 import { isNum } from "@/modules/research/format";
 import { group, registerAlternates, registerViews } from "@/modules/research/outputs/registry";
@@ -139,6 +140,7 @@ export const SCREENER_LAB: LabConfig = {
   widgets: { formula: FormulaControl, sector: InFilter, industry: InFilter, exchange: InFilter, country: InFilter, currency: InFilter, ticker_in: WatchlistFilter, filter_tree: FilterTree, screen_template: TemplatePicker, components: ComponentWeights },
   funnel: (result) => Object.fromEntries(((result?.charts?.filter_funnel_waterfall ?? []) as { key?: string; removed: number; remaining: number; bottleneck?: string | null }[]).filter((s) => s.key).map((s) => [s.key as string, { removed: s.removed, remaining: s.remaining, bottleneck: Boolean(s.bottleneck) }])),
   defaultUniverse: "All names we hold",
+  contextBar: UniverseBar,
   overview: {
     home: ScreenerHome,
     intro: "Screen, rank, test and monitor, with every limit printed on the result.",
