@@ -50,6 +50,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 ## Planning
 - [ ] Agree the product position
 - [ ] Redo ML, Research, Factors and Volatility reviews against the feature rule
+  - Factors review redone 2026-11-09 (ML, Research and Volatility still open)
 - [x] Factors product review
 - [x] Volatility product review
 - [x] Cross-module merge map
