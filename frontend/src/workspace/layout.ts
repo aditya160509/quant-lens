@@ -22,7 +22,7 @@ export const useLayout = create<LayoutStore>()(
       toggle: (r) => set((s) => ({ open: { ...s.open, [r]: !s.open[r] }, animate: true })),
       set: (r, open, animate = false) => set((s) => (s.open[r] === open ? s : { open: { ...s.open, [r]: open }, animate })),
     }),
-    { name: "ws-layout", storage: createJSONStorage(() => localStorage), partialize: (s) => ({ open: s.open }), version: 1 },
+    { name: "ws-layout", storage: createJSONStorage(() => localStorage), partialize: (s) => ({ open: s.open }), version: 2, migrate: (p) => { const o = p as { open: LayoutStore["open"] }; return { ...o, open: { ...o.open, left: true } }; } },
   ),
 );
 

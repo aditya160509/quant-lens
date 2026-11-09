@@ -1,0 +1,41 @@
+.sh { overflow-y: auto; }
+.sh-in { width: 100%; max-width: 1400px; margin: 0 auto; padding: 22px 26px 40px; }
+.sh-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.sh-head h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.03em; }
+.sh-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.sh-stat { display: flex; flex-direction: column; min-height: 150px; padding: 18px 20px; border-radius: 16px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-2); }
+.sh-l { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-2); }
+.sh-l em { font: 500 11px var(--mono); color: var(--text-3); }
+.sh-v { margin-top: 12px; font-size: 40px; font-weight: 600; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; color: var(--text); }
+.sh-g { margin-top: auto; padding-top: 14px; }
+.sh-bar { height: 8px; border-radius: 4px; background: var(--raise); overflow: hidden; }
+.sh-bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.sh-bar.g i { background: var(--up); }
+.sh-mini { display: flex; align-items: flex-end; gap: 4px; height: 30px; }
+.sh-mini i { flex: 1; border-radius: 2px 2px 0 0; background: oklch(0.72 0.17 300); }
+.sh-pills { display: flex; gap: 6px; }
+.sh-pill { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11px; font-style: normal; font-weight: 500; text-transform: capitalize; color: var(--text-2); background: var(--raise); }
+.sh-pill.green { color: var(--up); background: var(--up-soft); }
+.sh-pill.red { color: var(--down); background: var(--down-soft); }
+.sh-pill.amber { color: var(--warn); background: var(--warn-soft); }
+.sh-work { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
+.sh-ic { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 9px; color: oklch(0.82 0.15 var(--h)); background: oklch(0.62 0.17 var(--h) / 0.2); }
+.sh-tile { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); text-decoration: none; transition: box-shadow 0.14s, background 0.14s; }
+.sh-tile b { font-weight: 550; font-size: 14px; }
+.sh-tile > svg:last-child { margin-left: auto; color: var(--text-3); }
+.sh-tile:hover { background: var(--panel-2); box-shadow: inset 0 0 0 1px oklch(0.7 0.15 var(--h) / 0.6); }
+.sh-h { margin: 28px 0 12px; font-size: 16px; font-weight: 600; letter-spacing: -0.015em; }
+.sh-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; align-items: start; }
+.sh-theme { padding: 8px; border-radius: 16px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-2); }
+.sh-theme-h { display: flex; align-items: center; gap: 10px; padding: 6px 8px 10px; }
+.sh-theme-h b { font-size: 14px; font-weight: 600; }
+.sh-theme-h em { margin-left: auto; font: 500 11px var(--mono); color: var(--text-3); }
+.sh-screen { display: grid; gap: 3px; width: 100%; padding: 9px 10px; border-radius: 9px; text-align: left; color: var(--text); transition: background 0.12s; }
+.sh-screen:hover { background: oklch(0.62 0.17 var(--h) / 0.14); }
+.sh-screen span { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 500; }
+.sh-screen small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 11px var(--mono); color: var(--text-3); }
+.sh-sectors { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.sh-sector { position: relative; display: flex; justify-content: space-between; padding: 10px 12px; overflow: hidden; border-radius: 10px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); font-size: 13px; }
+.sh-sector i { position: absolute; inset: 0 auto 0 0; background: var(--accent-soft); }
+.sh-sector span, .sh-sector b { position: relative; font-weight: 500; }
+.sh-sector:hover { box-shadow: inset 0 0 0 1px var(--accent-line); }

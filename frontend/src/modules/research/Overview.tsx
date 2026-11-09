@@ -37,6 +37,7 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
   const count = (t: RunRecord["tone"]) => last.filter((r) => r.tone === t).length;
   const byId = new Map(features.map((f) => [f.id, f]));
   const L = lab();
+  if (L.overview?.home) return <L.overview.home features={features} runs={runs} />;
   const stages = (L.overview?.stages ?? STAGES).filter((s) => s.ids.some((id) => byId.has(id)));
   const W = L.overview?.words ?? { tests: "Tests", pass: "Pass", mixed: "Mixed", fail: "Fail" };
   const stats: [string, string | number, string?][] = [

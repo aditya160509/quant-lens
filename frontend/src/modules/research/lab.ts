@@ -30,6 +30,8 @@ export type LabConfig = {
   submit: (featureId: string, payload: Record<string, unknown>) => { path: string; body: unknown };
   /** Overview intro and the ordered stages its feature cards are grouped into. */
   overview?: {
+    /** Replaces the whole overview page. */
+    home?: ComponentType<{ features: FeatureSpec[]; runs: RunRecord[] }>;
     intro: string;
     stages: { id: string; label: string; intro: string; ids: string[] }[];
     /** Large "start here" tiles above the stages; each shows its feature's latest verdict once it has run. */

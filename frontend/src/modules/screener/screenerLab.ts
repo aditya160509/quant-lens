@@ -9,6 +9,7 @@ import { WatchlistFilter } from "./filters/WatchlistFilter";
 import { ComponentWeights } from "./rank/ComponentWeights";
 import { TemplatePicker } from "./rank/TemplatePicker";
 import { RowActions } from "./RowActions";
+import { ScreenerHome } from "./home/ScreenerHome";
 import { isNum } from "@/modules/research/format";
 import { group, registerAlternates, registerViews } from "@/modules/research/outputs/registry";
 import type { FeatureMeta, LabConfig, Page } from "@/modules/research/lab";
@@ -139,6 +140,7 @@ export const SCREENER_LAB: LabConfig = {
   funnel: (result) => Object.fromEntries(((result?.charts?.filter_funnel_waterfall ?? []) as { key?: string; removed: number; remaining: number; bottleneck?: string | null }[]).filter((s) => s.key).map((s) => [s.key as string, { removed: s.removed, remaining: s.remaining, bottleneck: Boolean(s.bottleneck) }])),
   defaultUniverse: "All names we hold",
   overview: {
+    home: ScreenerHome,
     intro: "Screen, rank, test and monitor, with every limit printed on the result.",
     stages: PAGES.filter((p) => p.features.length).map((p) => ({ id: p.id, label: p.label, intro: p.question, ids: p.features })),
   },
