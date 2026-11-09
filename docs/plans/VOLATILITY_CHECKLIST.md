@@ -1,6 +1,6 @@
 # Volatility checklist
 
-Review due to be redone: the Volatility review dates from 2026-11-06 and is on the CHECKLIST Planning list to be redone against the feature rule (PLAN section 1b). Treat this list as provisional until then, and re-check it against the new review before building.
+Checked against the redone review (2026-11-09, feature rule in PLAN section 1b). Code checks: hero literals and the stale output keys are gone from `backend/app`; `connectedness_at_risk` duplicate, `regime_probability_input` and the bootstrap RNG issue are still open. Frontend controls were not read in that pass.
 
 Open-source picks for every batch: [Open source stack](../references/2026-11-open-source.md).
 
@@ -24,9 +24,11 @@ Tags: `E` easy, the review's size S. `M` medium, size M. `H` hard, size L. Items
 Steps 1 to 3. E3 M1 H0
 
 - [ ] `E` Step 1: fix the test environment: pin Starlette and httpx so the two API tests run; confirm on Python 3.11 (the 88-passing result is unverified)
-- [ ] `E` Step 2: remove the hero literals (V01 18.4%, V04, V06 72), the cross-type fallback keys, the synthetic-surface request and the stale output keys (`vol_calendar`, `vol_ridge`, `volatility_cone`, `vol_signature`); remove the dead `SurfaceGrid`
-- [ ] `E` Step 3: fix duplicate manifest keys: `connectedness_at_risk` in feature 06, and the duplicates in review section 6.1
+- [ ] `E` Step 2: remove the hero literals (V01 18.4%, V04, V06 72), the cross-type fallback keys, the synthetic-surface request and the stale output keys (`vol_calendar`, `vol_ridge`, `volatility_cone`, `vol_signature`); remove the dead `SurfaceGrid`. Checked 2026-11-09: done in code; left: the `asset` alias and the display-only controls (verify in frontend first)
+- [ ] `E` Step 3: fix duplicate manifest keys: `connectedness_at_risk` in feature 06 (`feature_06.py` lines 144, 156, 235, 307), and the duplicates in review section 6.1
 - [ ] `M` Merge duplicate outputs per review section 6.1 (V01 opening gap, momentum and multi-window; V02 PIT; V04 transition heatmap; V08 contagion IRF; V09 backtest and Kelly), and confirm `regime_probability_input` in `feature_09.py` before cutting it
+- [ ] `E` Fix the bootstrap RNG: `stationary_bootstrap_jit` (`core/performance.py`) seeds the global RNG and draws inside `prange`, so results depend on thread count. Use one seed per replicate; add a check that two thread counts give the same draws
+- [ ] `E` Label connectedness IRFs and the VAR simulation (`core/connectedness.py`) as model-implied, not observed, on every output that shows them
 
 ## Batch 2: Workspace
 
