@@ -2,6 +2,7 @@
 import json
 import sqlite3
 from contextlib import contextmanager
+
 from .data_loader import BACKEND_DATA
 
 STATE_PATH = BACKEND_DATA / 'screener_v2' / 'screens.sqlite3'
@@ -172,3 +173,26 @@ def schedule_result(screen_id, job_id=None, error=None):
     with _connection() as conn:
         _schedule_schema(conn)
         conn.execute('UPDATE schedules SET last_job_id=?, error=? WHERE screen_id=?', (job_id, error, screen_id))
+
+
+def _metric_schema(conn):
+    conn.execute('CREATE TABLE IF NOT EXISTS metrics (name TEXT PRIMARY KEY, expression TEXT NOT NULL, show INTEGER NOT NULL)')
+
+
+def save_metric(name: str, expression: str, show: bool = False) -> dict:
+    with _connection() as conn:
+        _metric_schema(conn)
+        conn.execute('INSERT OR REPLACE INTO metrics VALUES (?, ?, ?)', (name, expression, int(show)))
+    return {'name': name, 'expression': expression, 'show': show}
+
+
+def list_metrics() -> list[dict]:
+    with _connection() as conn:
+        _metric_schema(conn)
+        return [{'name': r[0], 'expression': r[1], 'show': bool(r[2])} for r in conn.execute('SELECT name, expression, show FROM metrics ORDER BY name')]
+
+
+def delete_metric(name: str) -> None:
+    with _connection() as conn:
+        _metric_schema(conn)
+        conn.execute('DELETE FROM metrics WHERE name=?', (name,))

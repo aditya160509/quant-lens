@@ -6,6 +6,7 @@ import asyncio
 import csv
 import io
 import json
+import re
 import threading
 from typing import Annotated, Any
 
@@ -13,7 +14,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from app.services.screener_v2.core import lookup
+from app.services.screener_v2.core import explain, formula, lookup
 from app.services.screener_v2.core.data_loader import (
     BACKEND_DATA,
     available_symbols,
@@ -124,6 +125,28 @@ async def export_rows_xlsx(request: RowsRequest) -> Response:
     )
 
 
+@router.get("/facets")
+async def facets() -> dict[str, Any]:
+    """Every value a filter can take, with how many names hold it."""
+    from app.services.screener_v2.core.screener import country_of
+
+    def build():
+        p = lookup.panel()
+        columns = {"sector": p.sector, "industry": p.industry, "exchange": p.exchange, "country": p.ticker.map(country_of), "currency": p.quote_currency.fillna("Unknown")}
+        return {k: [{"name": str(n), "count": int(c)} for n, c in col.value_counts().items()] for k, col in columns.items()}
+    return await asyncio.to_thread(_lookup_call, build)
+
+
+@router.get("/templates")
+async def templates() -> dict[str, Any]:
+    from app.services.screener_v2.core.screener import (
+        SCREEN_TEMPLATES,
+        WEAK_EVIDENCE,
+        template_formula,
+    )
+    return {"templates": [{"key": k, "formula": template_formula(v), "weak_evidence": k in WEAK_EVIDENCE} for k, v in SCREEN_TEMPLATES.items()]}
+
+
 @router.get("/symbols")
 def search_symbols(q: str = Query("", max_length=40), limit: int = Query(25, ge=1, le=100), exchange: str | None = Query(None, max_length=40)) -> dict[str, Any]:
     from app.services.screener_v2.core.fundamentals import _company_names
@@ -188,7 +211,16 @@ async def lookup_pdf(ticker: str) -> Response:
 
 
 def _execute(job_id: str, feature_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    result = run_feature(feature_id, payload)
+    token = explain.RUN_ID.set(job_id)
+    try:
+        result = run_feature(feature_id, payload)
+    finally:
+        explain.RUN_ID.reset(token)
+    from app.services.screener_v2.core.state import list_metrics
+    # Everything needed to rerun this result exactly.
+    result.setdefault("meta", {})["run"] = {"id": job_id, "feature_id": feature_id, "payload": payload, "metrics": list_metrics()}
+    from app.services.screener_v2.core.ledger_bridge import record_trial
+    record_trial(feature_id, payload, result)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     path = RESULTS_DIR / f"{job_id}.json"
     tmp = path.with_suffix(".tmp")
@@ -234,6 +266,13 @@ def create_job(feature_id: str, request: FeatureRequest) -> dict[str, Any]:
         raise HTTPException(503, str(exc)) from exc
 
 
+def _job_result(job: dict[str, Any]) -> dict[str, Any]:
+    path = RESULTS_DIR / job["result"]["result_file"]
+    if not path.is_file():
+        raise HTTPException(503, "Completed job result is missing from storage")
+    return json.loads(path.read_text())
+
+
 @router.get("/jobs/{job_id}")
 def job_status(job_id: str) -> dict[str, Any]:
     job = JOBS.get(job_id)
@@ -241,10 +280,7 @@ def job_status(job_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Unknown job")
     out = {k: job[k] for k in ("job_id", "status", "progress", "error")}
     if job["status"] == "completed" and job.get("result"):
-        path = RESULTS_DIR / job["result"]["result_file"]
-        if not path.is_file():
-            raise HTTPException(503, "Completed job result is missing from storage")
-        out["result"] = json.loads(path.read_text())
+        out["result"] = _job_result(job)
     return out
 
 
@@ -256,6 +292,96 @@ def cancel_job(job_id: str) -> dict[str, Any]:
     return {"job_id": job_id, "status": job["status"], "note": "Running computation finishes; cancellation suppresses publication."}
 
 
+class ExplainRequest(BaseModel):
+    run_id: str
+    symbol: str | None = None
+    other: str | None = None
+
+
+def _explained(request: ExplainRequest, fn):
+    job = JOBS.get(request.run_id)
+    if not job or job["status"] != "completed":
+        raise HTTPException(404, "Unknown or unfinished run")
+    payload = job["params"]["payload"]
+    try:
+        panel = explain.panel_for(request.run_id, payload)
+        return fn(panel, payload)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/explain/why")
+async def explain_why(request: ExplainRequest) -> dict[str, Any]:
+    return {"checks": await asyncio.to_thread(_explained, request, lambda p, f: explain.why_here(p, f, request.symbol or ""))}
+
+
+@router.post("/explain/near-miss")
+async def explain_near_miss(request: ExplainRequest) -> dict[str, Any]:
+    return {"near_misses": await asyncio.to_thread(_explained, request, lambda p, f: explain.near_misses(explain.eligible(p, f), f))}
+
+
+@router.post("/explain/difference")
+async def explain_difference(request: ExplainRequest) -> dict[str, Any]:
+    return {"filters": await asyncio.to_thread(_explained, request, lambda p, f: explain.explain_difference(p, f, request.symbol or "", request.other or ""))}
+
+
+class DiffRequest(BaseModel):
+    before: str
+    after: str
+
+
+@router.post("/explain/diff")
+def explain_diff(request: DiffRequest) -> dict[str, Any]:
+    runs = []
+    for run_id in (request.before, request.after):
+        job = JOBS.get(run_id)
+        if not job or job["status"] != "completed":
+            raise HTTPException(404, f"Unknown or unfinished run {run_id}")
+        runs.append(_job_result(job))
+    names = [[r["ticker"] for r in run["tables"].get("ranked_screener_table", [])] for run in runs]
+    settings = [run["meta"].get("run", {}).get("payload", {}) for run in runs]
+    changed = sorted(k for k in settings[0].keys() | settings[1].keys() if settings[0].get(k) != settings[1].get(k))
+    return {**explain.screen_diff(*names), "as_of": [run["meta"].get("as_of_date") for run in runs], "changed_settings": changed, "counts": [len(n) for n in names]}
+
+
+class MetricRequest(BaseModel):
+    expression: str = Field(min_length=1, max_length=2000)
+    show: bool = False
+
+
+@router.get("/formula/catalogue")
+async def formula_catalogue() -> dict[str, Any]:
+    return await asyncio.to_thread(lambda: formula.catalogue(lookup.panel()))
+
+
+@router.post("/formula/preview")
+async def formula_preview(request: FeatureRequest) -> dict[str, Any]:
+    try:
+        return await asyncio.to_thread(lambda: formula.preview(lookup.panel(), str(request.payload.get("formula") or "")))
+    except formula.FormulaError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.put("/metrics/{name}")
+async def put_metric(name: str, request: MetricRequest) -> dict[str, Any]:
+    from app.services.screener_v2.core.state import save_metric
+    panel = await asyncio.to_thread(lookup.panel)
+    if not re.fullmatch(r"[a-z_][a-z0-9_]{0,40}", name) or name in panel.columns or name in formula.FUNCTIONS:
+        raise HTTPException(422, "A metric name is lower-case letters, digits and underscores, and not an existing field or function")
+    try:
+        await asyncio.to_thread(formula.preview, panel, request.expression)
+    except formula.FormulaError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return save_metric(name, request.expression, request.show)
+
+
+@router.delete("/metrics/{name}")
+def remove_metric(name: str) -> dict[str, str]:
+    from app.services.screener_v2.core.state import delete_metric
+    delete_metric(name)
+    return {"deleted": name}
+
+
 class SavedScreenRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     feature_id: str = '01'
@@ -265,6 +391,12 @@ class SavedScreenRequest(BaseModel):
 class UniverseRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     symbols: list[str] = Field(min_length=1, max_length=5000)
+
+
+@router.get('/ledger')
+def trial_ledger() -> dict[str, Any]:
+    from app.services.screener_v2.core.ledger_bridge import ledger
+    return ledger()
 
 
 @router.get('/screens')

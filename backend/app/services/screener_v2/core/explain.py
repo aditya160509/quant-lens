@@ -2,14 +2,56 @@
 from __future__ import annotations
 
 import math
+import threading
+from collections import OrderedDict
+from contextvars import ContextVar
 from typing import Any
 
 import pandas as pd
 
-# payload key stem -> panel column, where the stem is not the column name itself
-ALIASES = {"pe": "trailing_pe", "pb": "pb_ratio", "price": "price_usd", "dollar_volume": "dollar_volume_20d", "score": "core_quant_score",
-           "rsi": "rsi_14", "adx": "adx_14", "momentum": "momentum_jt", "atr_pct": "atr_pct_price", "drawdown": "max_drawdown_252d",
-           "ps": "ps_ratio", "altman": "altman_z_score", "ivol": "ivol_ff3_63d", "high_proximity": "pct_from_52w_high"}
+from .screener import apply_filters, effective_payload, range_filters
+
+# The unfiltered panel behind a finished run, kept for its last few runs so explaining a row does not rebuild it.
+RUN_ID: ContextVar[str | None] = ContextVar("screener_run_id", default=None)
+_PANELS: OrderedDict[str, pd.DataFrame] = OrderedDict()
+_LOCK = threading.Lock()
+
+
+def remember(panel: pd.DataFrame) -> None:
+    run_id = RUN_ID.get()
+    if run_id:
+        with _LOCK:
+            _PANELS[run_id] = panel
+            _PANELS.move_to_end(run_id)
+            while len(_PANELS) > 3:
+                _PANELS.popitem(last=False)
+
+
+def panel_for(run_id: str, payload: dict) -> pd.DataFrame:
+    """The panel run `run_id` filtered, rebuilt from its stored settings when the server no longer holds it."""
+    if run_id not in _PANELS:
+        from ..registry import run_feature
+        token = RUN_ID.set(run_id)
+        try:
+            run_feature("01", payload)
+        finally:
+            RUN_ID.reset(token)
+    return _PANELS[run_id].set_index("ticker", drop=False)
+
+# Published support for a panel column. A column with no entry is a rule of thumb, shown as uncited.
+EVIDENCE = {
+    "momentum_jt": "Jegadeesh and Titman (1993), Journal of Finance", "return_12m": "Jegadeesh and Titman (1993), Journal of Finance",
+    "return_1m": "Jegadeesh (1990), Journal of Finance", "piotroski_passed": "Piotroski (2000), Journal of Accounting Research",
+    "altman_z_score": "Altman (1968), Journal of Finance", "ivol_ff3_63d": "Ang, Hodrick, Xing and Zhang (2006), Journal of Finance",
+    "max_1d_return_21d": "Bali, Cakici and Whitelaw (2011), Journal of Financial Economics", "prox52": "George and Hwang (2004), Journal of Finance",
+    "pct_from_52w_high": "George and Hwang (2004), Journal of Finance", "gpa": "Novy-Marx (2013), Journal of Financial Economics",
+    "amihud_percentile": "Amihud (2002), Journal of Financial Markets", "beta_252": "Frazzini and Pedersen (2014), Journal of Financial Economics",
+    "trailing_pe": "Basu (1977), Journal of Finance", "pb_ratio": "Fama and French (1992), Journal of Finance", "market_cap": "Banz (1981), Journal of Financial Economics",
+    "roe": "Fama and French (2015), Journal of Financial Economics", "operating_margin": "Fama and French (2015), Journal of Financial Economics",
+    "dividend_yield": "Fama and French (1988), Journal of Financial Economics", "fcf_yield": "Lakonishok, Shleifer and Vishny (1994), Journal of Finance",
+    "ev_ebitda": "Loughran and Wellman (2011), Journal of Financial and Quantitative Analysis", "debt_equity": "Bhandari (1988), Journal of Finance",
+    "dist_sma_50": "Brock, Lakonishok and LeBaron (1992), Journal of Finance", "dist_sma_200": "Brock, Lakonishok and LeBaron (1992), Journal of Finance",
+}
 
 
 def _num(v: Any) -> float | None:
@@ -21,16 +63,14 @@ def _num(v: Any) -> float | None:
 
 
 def bounds(panel: pd.DataFrame, payload: dict | None) -> list[dict[str, Any]]:
+    """Every range filter the run applied, whatever its payload key, with its label and published support."""
+    payload = effective_payload(payload)
     out = []
-    for key, raw in (payload or {}).items():
-        side = "min" if key.endswith("_min") else "max" if key.endswith("_max") else None
-        thr = _num(raw)
-        if side is None or thr is None or isinstance(raw, bool):
-            continue
-        stem = key[:-4]
-        col = stem if stem in panel.columns else ALIASES.get(stem)
-        if col in panel.columns:
-            out.append({"filter": key, "column": col, "side": side, "threshold": thr})
+    for column, lo, hi, label in range_filters(panel):
+        for side, key in (("min", lo), ("max", hi)):
+            thr = _num(payload.get(key))
+            if thr is not None and not isinstance(payload.get(key), bool) and column in panel.columns:
+                out.append({"filter": key, "label": label, "column": column, "side": side, "threshold": thr, "evidence": EVIDENCE.get(column)})
     return out
 
 
@@ -58,14 +98,22 @@ def why_here(panel: pd.DataFrame, payload: dict | None, symbol: str) -> list[dic
     return [{**_check(row, b), "sector_percentile": _sector_pct(panel, symbol, b["column"])} for b in bounds(panel, payload)]
 
 
+def eligible(panel: pd.DataFrame, payload: dict | None) -> pd.DataFrame:
+    """The names that clear every filter except the range filters, which `near_misses` and `explain_difference` then judge."""
+    spent = {k for _, lo, hi, _ in range_filters(panel) for k in (lo, hi, lo[:-4] + "_top")} | {"screen_template", "dollar_volume_preset"}
+    base, _ = apply_filters(panel, {k: v for k, v in effective_payload(payload).items() if k not in spent})
+    return base.set_index("ticker", drop=False)
+
+
 def near_misses(panel: pd.DataFrame, payload: dict | None) -> list[dict[str, Any]]:
+    """Names that miss exactly one range filter, nearest first."""
     bs = bounds(panel, payload)
     out = []
     for symbol, row in panel.iterrows():
         fails = [c for c in (_check(row, b) for b in bs) if not c["passes"]]
         if len(fails) == 1:
             f = fails[0]
-            out.append({"symbol": symbol, "filter": f["filter"], "value": f["value"], "threshold": f["threshold"],
+            out.append({"symbol": symbol, "filter": f["filter"], "label": f["label"], "value": f["value"], "threshold": f["threshold"],
                         "relax_by": None if f["unknown"] else -f["margin"], "unknown": f["unknown"]})
     return sorted(out, key=lambda r: (r["relax_by"] is None, r["relax_by"] or 0))
 
@@ -75,7 +123,7 @@ def explain_difference(panel: pd.DataFrame, payload: dict | None, passed: str, f
     if passed not in panel.index or failed not in panel.index:
         return []
     a, b = panel.loc[passed], panel.loc[failed]
-    return [{"filter": x["filter"], "passed_value": x["value"], "failed_value": y["value"], "threshold": x["threshold"], "failed_unknown": y["unknown"]}
+    return [{"filter": x["filter"], "label": x["label"], "passed_value": x["value"], "failed_value": y["value"], "threshold": x["threshold"], "failed_unknown": y["unknown"]}
             for bd in bounds(panel, payload) for x, y in [(_check(a, bd), _check(b, bd))] if not y["passes"]]
 
 

@@ -1,16 +1,25 @@
 """Screener V2 formula computations."""
 from __future__ import annotations
+
 import ast
 import math
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from .data_loader import AS_OF, as_of_context, close_matrix, fundamental_history, load_factor_returns, ohlcv_for_symbols
-from .common import number_like
-from .stats import _pick, _safe_div, rank_pct, zscore
 
+from .common import number_like
+from .data_loader import (
+    AS_OF,
+    as_of_context,
+    close_matrix,
+    load_factor_returns,
+    ohlcv_for_symbols,
+)
+from .stats import _pick, _safe_div, rank_pct, zscore
 
 RETURN_HORIZON_FIELDS = {
     "return_1d": 1,
@@ -31,6 +40,10 @@ RETURN_HORIZON_FIELDS = {
 
 
 PIT_FUNDAMENTAL_FORMULA_FIELDS = {"roa", "roe", "current_ratio", "debt_equity", "gross_margin", "operating_margin", "mcap"}
+
+
+HISTORICAL = {"lag", "change", "rolling_rank", "rolling_mean", "rolling_std", "rolling_max", "rolling_min"}
+FUNCTIONS = ["rank", "zscore", "abs", "log", "sqrt", "min", "max", "if", "sector_rank", "sector_zscore", *sorted(HISTORICAL)]
 
 
 class FormulaError(ValueError):
@@ -127,14 +140,16 @@ class FormulaEngine:
                 left = right
             return result.astype(float).where(known)
         if isinstance(node, ast.BoolOp):
-            vals = [self._node(v).astype(bool) for v in node.values]
+            parts = [self._as_series(self._node(v)) for v in node.values]
+            known = pd.concat([p.notna() for p in parts], axis=1).all(axis=1)
+            vals = [p.fillna(0).astype(bool) for p in parts]
             result = vals[0]
             for val in vals[1:]:
                 result = result & val if isinstance(node.op, ast.And) else result | val
             return result.astype(float).where(known)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             name = node.func.id.lower()
-            if name in {"lag", "rolling_mean", "rolling_std", "rolling_max", "rolling_min"}:
+            if name in HISTORICAL:
                 field_name = node.args[0].id if node.args and isinstance(node.args[0], ast.Name) else None
                 if field_name is None:
                     raise FormulaError(f"{name}() requires a field name as its first argument")
@@ -258,7 +273,6 @@ class FormulaEngine:
         return pd.Series(merged.value.to_numpy(), index=prices.index)
 
     def _time_series_call(self, name: str, field_name: str | None, args: list[Any]) -> pd.Series:
-        current = self._as_series(args[0])
         requested = number_like(args[1]) if len(args) > 1 else 1
         if requested is None or requested < 1 or requested != int(requested):
             raise FormulaError("Historical period must be a positive integer")
@@ -272,19 +286,17 @@ class FormulaEngine:
                 if series.empty:
                     values[ticker] = np.nan
                     continue
-                if name == "lag":
-                    idx = len(series) - 1 - periods
-                    values[ticker] = float(series.iloc[idx]) if 0 <= idx < len(series) else np.nan
-                else:
-                    window = series.tail(max(1, periods))
-                    method = {"rolling_mean": "mean", "rolling_std": "std", "rolling_max": "max", "rolling_min": "min"}[name]
-                    values[ticker] = float(getattr(window, method)()) if len(window) == periods and window.notna().all() else np.nan
+                values[ticker] = _history_value(series, name, periods)
             self.diagnostics.append({"level": "ok", "message": f"{name}() evaluated on true PIT fundamental history for '{field_name}' using trading sessions and a conservative 90-day availability lag."})
             return pd.Series(values).reindex(tickers).reset_index(drop=True).set_axis(self.panel.index)
         matrix = self._field_time_matrix(field_name, tickers, periods)
         if matrix is not None and not matrix.empty:
             if name == "lag":
                 values = matrix.shift(periods).iloc[-1]
+            elif name == "change":
+                values = matrix.iloc[-1] / matrix.shift(periods).iloc[-1] - 1
+            elif name == "rolling_rank":
+                values = matrix.rolling(periods, min_periods=periods).rank(pct=True).iloc[-1]
             else:
                 method = {"rolling_mean": "mean", "rolling_std": "std", "rolling_max": "max", "rolling_min": "min"}[name]
                 values = getattr(matrix.rolling(periods, min_periods=periods), method)().iloc[-1]
@@ -293,8 +305,67 @@ class FormulaEngine:
         raise FormulaError(f"{name}() requires a true historical series; '{field_name}' is unsupported")
 
 
+def _history_value(series: pd.Series, name: str, periods: int) -> float:
+    """One name's lag, change, rolling rank or rolling statistic at the latest session; NaN while the window is short."""
+    if name in {"lag", "change"}:
+        idx = len(series) - 1 - periods
+        past = float(series.iloc[idx]) if 0 <= idx < len(series) else np.nan
+        return past if name == "lag" else float(series.iloc[-1]) / past - 1
+    window = series.tail(max(1, periods))
+    if len(window) != periods or window.isna().any():
+        return np.nan
+    if name == "rolling_rank":
+        return float((window <= window.iloc[-1]).mean())
+    return float(getattr(window, {"rolling_mean": "mean", "rolling_std": "std", "rolling_max": "max", "rolling_min": "min"}[name])())
+
+
+def expand_metrics(expression: str) -> str:
+    """Named metrics are written into the formula as their own expressions, up to five levels deep."""
+    from .state import list_metrics
+    metrics = {m["name"]: m["expression"] for m in list_metrics()}
+    for _ in range(5):
+        hit = [n for n in metrics if re.search(rf"\b{n}\b", expression)]
+        if not hit:
+            return expression
+        for n in hit:
+            expression = re.sub(rf"\b{n}\b", f"({metrics[n]})", expression)
+    raise FormulaError("Named metrics nest more than five levels or refer to themselves")
+
+
 def evaluate_formula(panel: pd.DataFrame, expression: str) -> FormulaResult:
-    return FormulaEngine(panel).eval(expression)
+    return FormulaEngine(panel).eval(expand_metrics(expression or ""))
+
+
+def add_metric_columns(panel: pd.DataFrame) -> pd.DataFrame:
+    """Every saved metric marked as a column becomes one, so it can be filtered, sorted, ranked and charted like any other."""
+    from .state import list_metrics
+    shown = [m for m in list_metrics() if m["show"] and m["name"] not in panel.columns]
+    for m in shown:
+        panel[m["name"]] = evaluate_formula(panel, m["expression"]).values
+    panel.attrs["metric_columns"] = [m["name"] for m in shown]
+    return panel
+
+
+def catalogue(panel: pd.DataFrame) -> dict[str, Any]:
+    from .state import list_metrics
+    return {"fields": sorted(c for c in panel.select_dtypes("number").columns), "functions": FUNCTIONS, "metrics": list_metrics(), "templates": formula_templates()}
+
+
+def preview(panel: pd.DataFrame, expression: str, sample: int = 300) -> dict[str, Any]:
+    """The formula on every name, or on the largest `sample` when it reads price history, with the count stated."""
+    sized = panel.sort_values("market_cap", ascending=False).head(sample).reset_index(drop=True) if "market_cap" in panel and HISTORICAL_RE.search(expression) else panel.reset_index(drop=True)
+    values = evaluate_formula(sized, expression).values
+    known = values.dropna()
+    top = sized.assign(value=values).dropna(subset=["value"]).nlargest(5, "value")
+    return {"names": len(sized), "of": len(panel), "known": len(known), "min": _num(known.min()), "median": _num(known.median()), "max": _num(known.max()),
+            "top": [{"ticker": t, "value": float(v)} for t, v in zip(top["ticker"], top["value"])]}
+
+
+HISTORICAL_RE = re.compile(rf"\b({'|'.join(sorted(HISTORICAL))})\s*\(")
+
+
+def _num(v: Any) -> float | None:
+    return None if v is None or pd.isna(v) else float(v)
 
 
 def formula_templates() -> list[dict[str, str]]:
