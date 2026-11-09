@@ -38,19 +38,24 @@ def panel_for(run_id: str, payload: dict) -> pd.DataFrame:
             RUN_ID.reset(token)
     return _PANELS[run_id].set_index("ticker", drop=False)
 
-# Published support for a panel column. A column with no entry is a rule of thumb, shown as uncited.
-EVIDENCE = {
-    "momentum_jt": "Jegadeesh and Titman (1993), Journal of Finance", "return_12m": "Jegadeesh and Titman (1993), Journal of Finance",
-    "return_1m": "Jegadeesh (1990), Journal of Finance", "piotroski_passed": "Piotroski (2000), Journal of Accounting Research",
-    "altman_z_score": "Altman (1968), Journal of Finance", "ivol_ff3_63d": "Ang, Hodrick, Xing and Zhang (2006), Journal of Finance",
-    "max_1d_return_21d": "Bali, Cakici and Whitelaw (2011), Journal of Financial Economics", "prox52": "George and Hwang (2004), Journal of Finance",
-    "pct_from_52w_high": "George and Hwang (2004), Journal of Finance", "gpa": "Novy-Marx (2013), Journal of Financial Economics",
-    "amihud_percentile": "Amihud (2002), Journal of Financial Markets", "beta_252": "Frazzini and Pedersen (2014), Journal of Financial Economics",
-    "trailing_pe": "Basu (1977), Journal of Finance", "pb_ratio": "Fama and French (1992), Journal of Finance", "market_cap": "Banz (1981), Journal of Financial Economics",
-    "roe": "Fama and French (2015), Journal of Financial Economics", "operating_margin": "Fama and French (2015), Journal of Financial Economics",
-    "dividend_yield": "Fama and French (1988), Journal of Financial Economics", "fcf_yield": "Lakonishok, Shleifer and Vishny (1994), Journal of Finance",
-    "ev_ebitda": "Loughran and Wellman (2011), Journal of Financial and Quantitative Analysis", "debt_equity": "Bhandari (1988), Journal of Finance",
-    "dist_sma_50": "Brock, Lakonishok and LeBaron (1992), Journal of Finance", "dist_sma_200": "Brock, Lakonishok and LeBaron (1992), Journal of Finance",
+# Out-of-sample grade from the product review (section 11): 4 to 5 robust, 3 mixed, 1 to 2 weak. A column with no entry is shown without a badge.
+FF92 = ("robust", "Fama and French (1992), Journal of Finance")
+JT93 = ("robust", "Jegadeesh and Titman (1993), Journal of Finance")
+GH04 = ("robust", "George and Hwang (2004), Journal of Finance")
+TECHNICAL = ("weak", "Sullivan, Timmermann and White (1999), Journal of Finance")
+EVIDENCE: dict[str, tuple[str, str]] = {
+    "trailing_pe": FF92, "pb_ratio": FF92, "ev_ebit": FF92, "earnings_yield": FF92,
+    "gpa": ("robust", "Novy-Marx (2013), Journal of Financial Economics"),
+    "piotroski_passed": ("robust", "Piotroski (2000), Journal of Accounting Research"),
+    "altman_z_score": ("mixed", "Altman (1968), Journal of Finance"),
+    "momentum_jt": JT93, "return_12m": JT93, "momentum_percentile": JT93,
+    "prox52": GH04, "pct_from_52w_high": GH04, "prox52_percentile": GH04,
+    "return_1m": ("mixed", "Jegadeesh (1990), Journal of Finance"),
+    "realized_vol_252d": ("robust", "Ang, Hodrick, Xing and Zhang (2006), Journal of Finance"),
+    "ivol_ff3_63d": ("weak", "Ang, Hodrick, Xing and Zhang (2006), Journal of Finance"),
+    "max_1d_return_21d": ("weak", "Bali, Cakici and Whitelaw (2011), Journal of Financial Economics"),
+    "amihud_percentile": ("weak", "Amihud (2002), Journal of Financial Markets"),
+    **{c: TECHNICAL for c in ("rsi_14", "macd_histogram", "adx_14", "stochastic_k", "williams_r", "bollinger_pct_b", "obv_20d_slope")},
 }
 
 
@@ -70,7 +75,7 @@ def bounds(panel: pd.DataFrame, payload: dict | None) -> list[dict[str, Any]]:
         for side, key in (("min", lo), ("max", hi)):
             thr = _num(payload.get(key))
             if thr is not None and not isinstance(payload.get(key), bool) and column in panel.columns:
-                out.append({"filter": key, "label": label, "column": column, "side": side, "threshold": thr, "evidence": EVIDENCE.get(column)})
+                out.append({"filter": key, "label": label, "column": column, "side": side, "threshold": thr, "evidence": dict(zip(("grade", "cite"), EVIDENCE[column])) if column in EVIDENCE else None})
     return out
 
 
@@ -113,7 +118,7 @@ def near_misses(panel: pd.DataFrame, payload: dict | None) -> list[dict[str, Any
         fails = [c for c in (_check(row, b) for b in bs) if not c["passes"]]
         if len(fails) == 1:
             f = fails[0]
-            out.append({"symbol": symbol, "filter": f["filter"], "label": f["label"], "value": f["value"], "threshold": f["threshold"],
+            out.append({"symbol": symbol, "filter": f["filter"], "label": f["label"], "side": f["side"], "value": f["value"], "threshold": f["threshold"],
                         "relax_by": None if f["unknown"] else -f["margin"], "unknown": f["unknown"]})
     return sorted(out, key=lambda r: (r["relax_by"] is None, r["relax_by"] or 0))
 
@@ -131,3 +136,28 @@ def screen_diff(before: list[str], after: list[str]) -> dict[str, Any]:
     pb, pa = {s: i for i, s in enumerate(before)}, {s: i for i, s in enumerate(after)}
     return {"entered": [s for s in after if s not in pb], "left": [s for s in before if s not in pa],
             "moved": [{"symbol": s, "from": pb[s], "to": pa[s]} for s in after if s in pb and pb[s] != pa[s]]}
+
+
+SHIFTS = (-0.1, -0.05, 0.05, 0.1)
+
+
+def sensitivity(panel: pd.DataFrame, payload: dict | None) -> dict[str, Any]:
+    """How many names pass if one threshold moves by a share of its column's interquartile range, the others held."""
+    base = eligible(panel, payload)
+    bs = bounds(base, payload)
+    values = {b["column"]: pd.to_numeric(base[b["column"]], errors="coerce") for b in bs}
+
+    def passes(b: dict, threshold: float) -> pd.Series:
+        v = values[b["column"]]
+        return (v >= threshold) if b["side"] == "min" else (v <= threshold)
+
+    masks = [passes(b, b["threshold"]) for b in bs]
+    count = lambda ms: int(pd.concat(ms, axis=1).all(axis=1).sum()) if ms else len(base)
+    now = count(masks)
+    rows = []
+    for i, b in enumerate(bs):
+        v = values[b["column"]].dropna()
+        iqr = float(v.quantile(0.75) - v.quantile(0.25)) if len(v) else 0.0
+        counts = [count([*masks[:i], passes(b, b["threshold"] + s * iqr), *masks[i + 1:]]) for s in SHIFTS]
+        rows.append({"filter": b["filter"], "label": b["label"], "side": b["side"], "threshold": b["threshold"], "iqr": iqr, "counts": counts})
+    return {"count": now, "shifts": list(SHIFTS), "filters": rows}

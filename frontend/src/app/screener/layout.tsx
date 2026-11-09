@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { WorkspaceShell } from "@/workspace/WorkspaceShell";
 import { ScreenerApp } from "@/modules/screener/ScreenerApp";
 
@@ -10,10 +11,12 @@ export const metadata = { title: "Screener · ATLAS" };
 export default function ScreenerLayout({ children }: { children: ReactNode }) {
   return (
     <WorkspaceShell module="screener" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <Suspense>
-        <ScreenerApp />
-      </Suspense>
-      {children}
+      <NuqsAdapter>
+        <Suspense>
+          <ScreenerApp />
+        </Suspense>
+        {children}
+      </NuqsAdapter>
     </WorkspaceShell>
   );
 }

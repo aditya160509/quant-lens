@@ -253,8 +253,6 @@ function HelpTip({ text }: { text: string }) {
 }
 
 export function Control({ field: f, value, onChange }: { field: InputSpec; value: unknown; onChange: (v: unknown) => void }) {
-  const Own = f.type === "text" ? lab().controls?.[f.key] : undefined;
-  if (Own) return <Own value={String(value ?? "")} onChange={onChange} />;
   switch (f.type) {
     case "select": {
       const opts = f.options ?? [];

@@ -11,7 +11,8 @@ type Catalogue = { fields: string[]; functions: string[]; metrics: { name: strin
 type Preview = { names: number; of: number; known: number; min: number | null; median: number | null; max: number | null; top: { ticker: string; value: number }[] };
 
 /** The formula field: highlighted, completes fields and functions, shows what the formula gives today, and saves named metrics. */
-export function FormulaControl({ value, onChange }: { value: string; onChange: (v: unknown) => void }) {
+export function FormulaControl({ value: raw, onChange }: { value: unknown; onChange: (v: unknown) => void }) {
+  const value = String(raw ?? "");
   const qc = useQueryClient();
   const catalogue = useQuery({ queryKey: ["screener", "catalogue"], queryFn: () => send<Catalogue>("GET", "/formula/catalogue"), staleTime: Infinity });
   const [settled, setSettled] = useState(value);

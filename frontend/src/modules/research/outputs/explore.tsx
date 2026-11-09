@@ -8,10 +8,13 @@ import { parseDate } from "@/charts/core";
 import { Distribution } from "@/charts/Distribution";
 import { Diverging } from "@/charts/Diverging";
 import { Heatmap } from "@/charts/Heatmap";
+import { RankList } from "@/charts/RankList";
+import { Treemap } from "@/charts/Treemap";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { XYPlot } from "@/charts/XYPlot";
 import { label } from "../format";
 import { DataTable } from "@/kit/DataTable";
+import { reduce, type Fn } from "@/kit/tableView";
 
 /**
  * "View as": any output can be re-drawn as any chart its columns support, with the
@@ -20,7 +23,7 @@ import { DataTable } from "@/kit/DataTable";
 
 type Row = Record<string, unknown>;
 type ColKind = "number" | "date" | "text" | "bool";
-export type ViewKind = "line" | "area" | "step" | "bars" | "hbars" | "scatter" | "histogram" | "heatmap" | "table";
+export type ViewKind = "line" | "area" | "step" | "bars" | "hbars" | "scatter" | "histogram" | "heatmap" | "rank" | "treemap" | "pivot" | "table";
 export type ExploreConfig = {
   kind: ViewKind;
   x?: string;
@@ -33,7 +36,12 @@ export type ExploreConfig = {
   /** One small chart per value of this column. */
   facet?: string;
   /** Group rows by a column and reduce numbers before drawing. */
-  agg?: { by: string; fn: "mean" | "median" | "sum" | "count" };
+  agg?: { by: string; fn: Fn };
+  /** Scatter: the column that sizes each point. */
+  size?: string;
+  /** Treemap: the column that colours each rectangle. Pivot: how cells reduce. */
+  color?: string;
+  fn?: Fn;
   /** Chart and table side by side. */
   split?: boolean;
 };
@@ -51,7 +59,7 @@ function bandFor(cols: string[], y: string): { lo: string; hi: string } | undefi
 
 export const VIEW_LABEL: Record<ViewKind, string> = {
   line: "Line", area: "Area", step: "Step", bars: "Columns", hbars: "Bars (diverging)",
-  scatter: "Scatter", histogram: "Histogram", heatmap: "Heatmap", table: "Table",
+  scatter: "Scatter", histogram: "Histogram", heatmap: "Heatmap", rank: "Ranked list", treemap: "Treemap", pivot: "Pivot", table: "Table",
 };
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -85,6 +93,8 @@ export function viewsFor(rows: Row[]): ViewKind[] {
   if (nums.length >= 2) v.push("scatter");
   if (rows.length >= 8) v.push("histogram");
   if (cats.length >= 2 || (cats.length >= 1 && nums.length >= 2)) v.push("heatmap");
+  if (cats.length && nums.length) v.push("rank", "treemap");
+  if (cats.length >= 2 && nums.length) v.push("pivot");
   v.push("table");
   return v;
 }
@@ -105,6 +115,12 @@ export function defaults(rows: Row[], kind: ViewKind): ExploreConfig {
       return { kind, x: nums[0], ys: [nums[1] ?? nums[0]], group: cats[0] };
     case "histogram":
       return { kind, ys: [nums[0]] };
+    case "rank":
+      return { kind, x: cats[0], ys: [nums[0]], sort: "desc", limit: 20 };
+    case "treemap":
+      return { kind, x: cats[0], group: cats[1] ?? cats[0], ys: [nums[0]], color: nums[1] };
+    case "pivot":
+      return { kind, group: cats[0], x: cats[1], ys: [nums[0]], fn: "median" };
     case "heatmap":
       return { kind, x: cats[1] ?? undefined, group: cats[0], ys: cats[1] ? [nums[0]] : nums.slice(0, 8) };
     default:
@@ -178,15 +194,21 @@ export function Explore({ rows, config }: { rows: Row[]; config: ExploreConfig }
 function aggregate(rows: Row[], agg: NonNullable<ExploreConfig["agg"]>, ys: string[]): Row[] {
   const by = new Map<string, Row[]>();
   for (const r of rows) { const k = text(r[agg.by]); by.set(k, [...(by.get(k) ?? []), r]); }
-  const nums = ys.length ? ys : Object.keys(profile(rows)).filter((c) => profile(rows)[c] === "number");
+  const p = profile(rows);
+  const nums = ys.length ? ys : Object.keys(p).filter((c) => p[c] === "number");
   return [...by.entries()].map(([k, rs]) => {
     const out: Row = { [agg.by]: k, count: rs.length };
-    for (const y of nums) {
-      const v = rs.map((r) => r[y]).filter(isNum).sort((a, b) => a - b);
-      out[y] = !v.length ? null : agg.fn === "sum" ? v.reduce((a, b) => a + b, 0) : agg.fn === "median" ? v[Math.floor(v.length / 2)] : agg.fn === "count" ? v.length : v.reduce((a, b) => a + b, 0) / v.length;
-    }
+    for (const y of nums) out[y] = reduce(rs.map((r) => r[y]).filter(isNum), agg.fn);
     return out;
   });
+}
+
+/** Rows by columns of one reduced value, with a total column and a total row. */
+function pivot(rows: Row[], rowKey: string, colKey: string, y: string, fn: Fn): Row[] {
+  const cols = [...new Set(rows.map((r) => text(r[colKey])))];
+  const cell = (keep: (r: Row) => boolean) => reduce(rows.filter(keep).map((r) => r[y]).filter(isNum), fn);
+  const line = (name: string, keep: (r: Row) => boolean): Row => ({ [rowKey]: name, ...Object.fromEntries(cols.map((c) => [c, cell((r) => keep(r) && text(r[colKey]) === c)])), Total: cell(keep) });
+  return [...[...new Set(rows.map((r) => text(r[rowKey])))].map((a) => line(a, (r) => text(r[rowKey]) === a)), line("Total", () => true)];
 }
 
 function ExploreOne({ rows, config }: { rows: Row[]; config: ExploreConfig }) {
@@ -224,7 +246,13 @@ function ExploreOne({ rows, config }: { rows: Row[]; config: ExploreConfig }) {
 
   if (kind === "scatter") {
     const xKey = x as string, y = ys[0];
-    const pts = data.filter((r) => isNum(r[xKey]) && isNum(r[y])).map((r) => ({ x: r[xKey] as number, y: r[y] as number, group: group ? text(r[group]) : undefined }));
+    const sizes = config.size ? data.map((r) => r[config.size!]).filter(isNum) : [];
+    const [lo, hi] = [Math.min(...sizes), Math.max(...sizes)];
+    const label0 = Object.keys(profile(rows)).find((c) => profile(rows)[c] === "text");
+    const pts = data.filter((r) => isNum(r[xKey]) && isNum(r[y])).map((r) => ({
+      x: r[xKey] as number, y: r[y] as number, group: group ? text(r[group]) : undefined, label: label0 ? text(r[label0]) : undefined,
+      size: config.size && isNum(r[config.size]) ? 3 + 9 * Math.sqrt(hi > lo ? ((r[config.size] as number) - lo) / (hi - lo) : 0.5) : undefined,
+    }));
     return <XYPlot points={pts} xLabel={label(xKey)} yLabel={label(y)} height={300} robust />;
   }
 
@@ -232,6 +260,20 @@ function ExploreOne({ rows, config }: { rows: Row[]; config: ExploreConfig }) {
     const y = ys[0];
     return <Distribution values={data.map((r) => r[y]).filter(isNum)} xLabel={label(y)} observed={null} format={(v) => Number(v.toPrecision(3)).toString()} />;
   }
+
+  if (kind === "rank") {
+    const y = ys[0];
+    const items = data.filter((r) => isNum(r[y])).map((r) => ({ label: text(r[x as string]), value: r[y] as number })).sort((a, b) => (sort === "asc" ? a.value - b.value : b.value - a.value));
+    return <RankList items={items} title={label(y)} top={limit ?? 12} format={(v) => Number(v.toPrecision(4)).toString()} />;
+  }
+
+  if (kind === "treemap") {
+    const y = ys[0];
+    const items = data.filter((r) => isNum(r[y]) && (r[y] as number) > 0).map((r) => ({ label: text(r[x as string]), group: text(r[(group ?? x) as string]), size: r[y] as number, colorValue: config.color && isNum(r[config.color]) ? (r[config.color] as number) : undefined }));
+    return <Treemap title={label(y)} sizeLabel={label(y)} colorLabel={config.color ? label(config.color) : ""} colorAggregate="mean" items={items} />;
+  }
+
+  if (kind === "pivot") return group && x && ys[0] ? <DataTable rows={pivot(data, group, x, ys[0], config.fn ?? "median")} /> : null;
 
   // Heatmap: either long form (row cat × col cat → value) or wide form (row cat × numeric columns).
   const rowKey = group as string;
@@ -267,31 +309,33 @@ export function ExploreControls({ rows, config, onChange }: { rows: Row[]; confi
     const multi = k === "line" || k === "area" || k === "step" || (k === "heatmap" && !config.x);
     onChange({ ...config, ys: multi ? (cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c]) : [c] });
   };
-  if (k === "table") return null;
   const summary = [config.x && k !== "histogram" ? `${label(config.x)} →` : "", (config.ys ?? []).map(label).join(", "), config.transform && config.transform !== "none" ? `· ${config.transform}` : "", config.facet ? `· by ${label(config.facet)}` : "", config.agg ? `· ${config.agg.fn} by ${label(config.agg.by)}` : ""].filter(Boolean).join(" ");
   if (!open) return <button type="button" className="xsum" onClick={() => setOpen(true)}><span>{summary || "Choose columns"}</span><span className="act">Customize</span></button>;
   return (
     <div className="xctl">
       <button type="button" className="btn sm ghost" style={{ order: 99, marginLeft: "auto" }} onClick={() => setOpen(false)}>Done</button>
-      {cats.length ? sel("Small multiples", config.facet, cats, (v) => onChange({ ...config, facet: v }), true) : null}
-      {cats.length ? sel("Group by", config.agg?.by, cats, (v) => onChange({ ...config, agg: v ? { by: v, fn: config.agg?.fn ?? "mean" } : undefined }), true) : null}
-      {config.agg ? sel("Reduce", config.agg.fn, ["mean", "median", "sum", "count"], (v) => onChange({ ...config, agg: { by: config.agg!.by, fn: (v ?? "mean") as "mean" } })) : null}
-      <label className="xc"><span>Layout</span><button type="button" className="pill" aria-pressed={Boolean(config.split)} onClick={() => onChange({ ...config, split: !config.split })}>Chart + table</button></label>
-      {k !== "histogram" && !(k === "heatmap" && !config.x) ? sel(k === "heatmap" ? "Columns" : "X", config.x, k === "scatter" ? nums : k === "heatmap" ? cats : cols, (v) => onChange({ ...config, x: v }), k === "heatmap") : null}
-      {k === "scatter" || k === "heatmap" ? sel(k === "heatmap" ? "Rows" : "Colour", config.group, cats, (v) => onChange({ ...config, group: v }), k === "scatter") : null}
-      <div className="xc ys">
+      {cats.length && k !== "table" && k !== "pivot" ? sel("Small multiples", config.facet, cats, (v) => onChange({ ...config, facet: v }), true) : null}
+      {cats.length && k !== "pivot" ? sel("Group by", config.agg?.by, cats, (v) => onChange({ ...config, agg: v ? { by: v, fn: config.agg?.fn ?? "median" } : undefined }), true) : null}
+      {config.agg ? sel("Reduce", config.agg.fn, ["mean", "median", "sum", "count"], (v) => onChange({ ...config, agg: { by: config.agg!.by, fn: (v ?? "mean") as Fn } })) : null}
+      {k === "pivot" ? sel("Reduce", config.fn ?? "median", ["mean", "median", "sum", "count"], (v) => onChange({ ...config, fn: (v ?? "median") as Fn })) : null}
+      {k !== "table" && k !== "pivot" ? <label className="xc"><span>Layout</span><button type="button" className="pill" aria-pressed={Boolean(config.split)} onClick={() => onChange({ ...config, split: !config.split })}>Chart + table</button></label> : null}
+      {k !== "table" && k !== "histogram" && !(k === "heatmap" && !config.x) ? sel(k === "heatmap" || k === "pivot" ? "Columns" : k === "rank" || k === "treemap" ? "Label" : "X", config.x, k === "scatter" ? nums : k === "heatmap" || k === "pivot" || k === "rank" || k === "treemap" ? cats : cols, (v) => onChange({ ...config, x: v }), k === "heatmap") : null}
+      {k === "scatter" || k === "heatmap" || k === "treemap" || k === "pivot" ? sel(k === "heatmap" || k === "pivot" ? "Rows" : k === "treemap" ? "Group" : "Colour", config.group, cats, (v) => onChange({ ...config, group: v }), k === "scatter") : null}
+      {k === "scatter" ? sel("Size", config.size, nums, (v) => onChange({ ...config, size: v }), true) : null}
+      {k === "treemap" ? sel("Colour", config.color, nums, (v) => onChange({ ...config, color: v }), true) : null}
+      {k === "table" ? null : <div className="xc ys">
         <span>{k === "line" || k === "area" || k === "step" || (k === "heatmap" && !config.x) ? "Series" : "Value"}</span>
         <div className="xpills">
           {nums.slice(0, 16).map((c) => (
             <button key={c} type="button" className="pill" aria-pressed={(config.ys ?? []).includes(c)} onClick={() => toggleY(c)}>{label(c)}</button>
           ))}
         </div>
-      </div>
+      </div>}
       {k === "line" || k === "area" || k === "step" ? sel("Transform", config.transform ?? "none", ["none", "cumulative", "rebase", "zscore", "rank", "log"], (v) => onChange({ ...config, transform: (v ?? "none") as ExploreConfig["transform"] })) : null}
       {k === "area" ? (
         <label className="xc"><span>Fill</span><button type="button" className="pill" aria-pressed={Boolean(config.zeroFill)} onClick={() => onChange({ ...config, zeroFill: !config.zeroFill })}>Green / red at zero</button></label>
       ) : null}
-      {k === "bars" || k === "hbars" ? (
+      {k === "bars" || k === "hbars" || k === "rank" ? (
         <>
           {sel("Sort", config.sort ?? "none", ["none", "desc", "asc"], (v) => onChange({ ...config, sort: (v ?? "none") as ExploreConfig["sort"] }))}
           {sel("Show", String(config.limit ?? 40), ["10", "20", "40", "100", "1000"], (v) => onChange({ ...config, limit: Number(v) }))}

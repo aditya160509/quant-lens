@@ -331,6 +331,17 @@ async def explain_difference(request: ExplainRequest) -> dict[str, Any]:
     return {"filters": await asyncio.to_thread(_explained, request, lambda p, f: explain.explain_difference(p, f, request.symbol or "", request.other or ""))}
 
 
+@router.post("/explain/sensitivity")
+async def explain_sensitivity(request: ExplainRequest) -> dict[str, Any]:
+    return await asyncio.to_thread(_explained, request, explain.sensitivity)
+
+
+@router.get("/filters/keys")
+def filter_keys() -> dict[str, list[str]]:
+    from app.services.screener_v2.core.screener import RANGE_FILTERS
+    return {column: [lo, hi] for column, lo, hi, _ in RANGE_FILTERS}
+
+
 class DiffRequest(BaseModel):
     before: str
     after: str

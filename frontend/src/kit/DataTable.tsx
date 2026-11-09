@@ -4,9 +4,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as Popover from "@radix-ui/react-popover";
-import { ArrowDown, ArrowUp, ChevronRight, Columns3, Pin, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronRight, Columns3, Download, Link2, Pin, RotateCcw, X } from "lucide-react";
 import { Spark } from "@/charts/RankList";
+import { downloadCsv, downloadXlsx } from "@/charts/export";
 import { openQuickLook } from "./QuickLook";
+import { EMPTY_VIEW, reduce, useSavedViews, useTableView, withPercentiles, type Fmt, type TableView } from "./tableView";
 import { columns, fmtKey, isNum, isPKey, isTKey, label, pTone, toneVar } from "@/modules/research/format";
 import type { Row } from "@/modules/research/types";
 import "@/modules/research/outputs/tables.css";
@@ -48,8 +50,6 @@ export function TBar({ t, width = 92 }: { t: number; width?: number }) {
 
 // ---------------------------------------------------------------- data table
 
-type SortState = { key: string; dir: 1 | -1 } | null;
-
 /** Column groups from shared prefixes ("income_revenue", "income_ebit" -> "Income"). */
 function groupCols(cols: string[]): { head: string | null; span: number; cols: string[] }[] {
   const pre = (c: string) => (c.includes("_") ? c.split("_")[0] : null);
@@ -73,10 +73,21 @@ export function toMarkdown(cols: string[], rows: Row[]): string {
   return [`| ${cols.map((c) => cell(label(c))).join(" | ")} |`, `|${cols.map(() => " --- ").join("|")}|`, ...rows.map((r) => `| ${cols.map((c) => cell(r[c])).join(" | ")} |`)].join("\n");
 }
 
-export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, unknown> }) {
+const FORMATS: { value: Fmt["mode"] | ""; label: string }[] = [{ value: "", label: "Plain" }, { value: "bar", label: "Bars" }, { value: "heat", label: "Heat" }, { value: "sign", label: "Signed" }, { value: "rule", label: "Rule" }];
+
+/** Table of rows. With `opts.viewKey` the arrangement (columns, sort, formats, grouping) is shared with the URL and can be saved; `opts.detail` fills the row drawer. */
+export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<string, unknown> }) {
+  const viewKey = opts?.viewKey as string | undefined;
+  const [view, update] = useTableView(viewKey, { tint: opts?.tint === true });
+  const { order: colOrder, hidden, pinned, widths, sort, density, tint } = view;
+  const patch = (p: Partial<TableView>) => update((v) => ({ ...v, ...p }));
+  const rows = useMemo(() => withPercentiles(source, view.pct), [source, view.pct]);
+  const saved = useSavedViews();
+  const [viewName, setViewName] = useState("");
+  const [everywhere, setEverywhere] = useState(false);
   const hideOpt = opts?.hide as string[] | undefined;
   const order = opts?.columns as string[] | undefined;
-  const groupKey = opts?.groupKey as string | undefined;
+  const groupKey = view.groupBy ?? (opts?.groupKey as string | undefined);
   const bars = opts?.bars as string[] | undefined;
   const rowActions = opts?.rowActions as ((row: Row) => ReactNode) | undefined;
   const hatch = opts?.hatch === true;
@@ -84,19 +95,12 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
     const all = columns(rows).filter((c) => !(hideOpt ?? []).includes(c));
     return order ? [...order.filter((c) => all.includes(c)), ...all.filter((c) => !order.includes(c))] : all;
   }, [rows, hideOpt, order]);
-  const [colOrder, setColOrder] = useState<string[] | null>(null);
-  const [hidden, setHidden] = useState<string[]>([]);
-  const [pinned, setPinned] = useState<string[]>([]);
-  const [widths, setWidths] = useState<Record<string, number>>({});
   const [lefts, setLefts] = useState<Record<string, number>>({});
   const cols = useMemo(() => {
     const o = colOrder ? [...colOrder.filter((c) => base.includes(c)), ...base.filter((c) => !colOrder.includes(c))] : base;
     const shown = o.filter((c) => !hidden.includes(c));
     return [...shown.filter((c) => pinned.includes(c)), ...shown.filter((c) => !pinned.includes(c))];
   }, [base, colOrder, hidden, pinned]);
-  const [sort, setSort] = useState<SortState>(null);
-  const [tint, setTint] = useState(opts?.tint === true);
-  const [density, setDensity] = useState<"compact" | "comfortable">("comfortable");
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [sel, setSel] = useState<number | null>(null);
   const [prev, setPrev] = useState<Row[]>(rows);
@@ -125,6 +129,7 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
     getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel(),
   });
   const order2 = table.getRowModel().rows.map((row) => row.index);
+  const shownRows = () => order2.map((i) => Object.fromEntries(cols.map((c) => [c, rows[i][c]])));
   const max = Math.max(1, Math.floor(Number(opts?.max) || 400));
   const [page, setPage] = useState(0);
   const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / max) - 1));
@@ -160,7 +165,7 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
     e.preventDefault();
     const th = e.currentTarget.parentElement as HTMLElement;
     const x0 = e.clientX, w0 = th.getBoundingClientRect().width;
-    const move = (m: globalThis.PointerEvent) => setWidths((w) => ({ ...w, [c]: Math.max(48, Math.round(w0 + m.clientX - x0)) }));
+    const move = (m: globalThis.PointerEvent) => update((v) => ({ ...v, widths: { ...v.widths, [c]: Math.max(48, Math.round(w0 + m.clientX - x0)) } }));
     const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -171,9 +176,20 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
     const o = [...cols]; const i = o.indexOf(c); const j = i + d;
     if (j < 0 || j >= o.length) return;
     [o[i], o[j]] = [o[j], o[i]];
-    setColOrder([...o, ...hidden]);
+    patch({ order: [...o, ...hidden] });
   };
+  const range = useMemo(() => {
+    const m: Record<string, [number, number]> = {};
+    Object.keys(view.fmt).forEach((c) => { const v = rows.map((r) => r[c]).filter(isNum); if (v.length) m[c] = [Math.min(...v), Math.max(...v)]; });
+    return m;
+  }, [rows, view.fmt]);
   const cellStyle = (c: string, v: unknown) => {
+    const f = view.fmt[c];
+    if (f && isNum(v) && range[c]) {
+      if (f.mode === "heat") return { background: `color-mix(in oklch, var(--accent) ${(range[c][1] > range[c][0] ? ((v - range[c][0]) / (range[c][1] - range[c][0])) * 40 : 20).toFixed(0)}%, transparent)` };
+      if (f.mode === "sign") return { color: v > 0 ? "var(--up)" : v < 0 ? "var(--down)" : undefined };
+      if (f.mode === "rule" && f.value !== undefined && (f.op === "<" ? v < f.value : v > f.value)) return { background: "color-mix(in oklch, var(--warn) 24%, transparent)" };
+    }
     if (isPKey(c)) return { color: toneVar(pTone(v)) };
     if (tint && isNum(v) && bound[c]) {
       const a = Math.min(1, Math.abs(v) / bound[c]) * 0.28;
@@ -181,11 +197,11 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
     }
     return undefined;
   };
-  const items: ({ kind: "group"; g: string; n: number } | { kind: "row"; i: number; sub: boolean })[] = [];
+  const items: ({ kind: "group"; g: string; n: number; ix: number[] } | { kind: "row"; i: number; sub: boolean })[] = [];
   if (groupKey) {
     const seen = new Map<string, number[]>();
     shown.forEach((i) => { const g = String(rows[i][groupKey] ?? "Other"); seen.set(g, [...(seen.get(g) ?? []), i]); });
-    seen.forEach((ix, g) => { items.push({ kind: "group", g, n: ix.length }); if (!collapsed.includes(g)) ix.forEach((i) => items.push({ kind: "row", i, sub: true })); });
+    seen.forEach((ix, g) => { items.push({ kind: "group", g, n: ix.length, ix }); if (!collapsed.includes(g)) ix.forEach((i) => items.push({ kind: "row", i, sub: true })); });
   } else shown.forEach((i) => items.push({ kind: "row", i, sub: false }));
   const virtual = items.length > 200;
   const virtualizer = useVirtualizer({ count: virtual ? items.length : 0,
@@ -199,7 +215,9 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
   const render = (r: Row, i: number, c: string) => {
     const v = r[c];
     const d = flash[`${i}:${c}`];
-    const content = bars?.includes(c) && isNum(v) ? <span className="pbar"><i style={{ width: `${Math.max(0, Math.min(100, v))}%` }} />{fmtKey(c, v)}</span> : Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : fmtKey(c, v);
+    const f = view.fmt[c];
+    const width = f?.mode === "bar" && isNum(v) && range[c] ? (range[c][1] > range[c][0] ? ((v - range[c][0]) / (range[c][1] - range[c][0])) * 100 : 50) : (view.pct[c] || bars?.includes(c)) && isNum(v) ? v : null;
+    const content = width !== null && isNum(v) ? <span className="pbar"><i style={{ width: `${Math.max(0, Math.min(100, width))}%` }} />{view.pct[c] ? Math.round(v) : fmtKey(c, v)}</span> : Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : fmtKey(c, v);
     return <>{c === "ticker" && typeof v === "string" ? <button type="button" className="tk-link" onClick={() => openQuickLook(v)}>{content}</button> : content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -215,8 +233,8 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
   const sortTh = (c: string, text: string) => (
     <th key={c} data-col={c} style={colStyle(c, true)} className={`sortable${numeric.has(c) ? " r" : ""}`} aria-sort={sort?.key === c ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
       >
-      <button className="dt-sort" onClick={() => { setPage(0); setSort((s) => (s?.key === c ? (s.dir === 1 ? { key: c, dir: -1 } : null) : { key: c, dir: 1 })); }}>
-      {text}
+      <button className="dt-sort" onClick={() => { setPage(0); patch({ sort: sort?.key === c ? (sort.dir === 1 ? { key: c, dir: -1 } : null) : { key: c, dir: 1 } }); }}>
+      {text}{view.pct[c] ? (view.pct[c] === "sector" ? " %ile of sector" : " %ile of shown") : ""}
       {sort?.key === c ? (sort.dir === 1 ? <ArrowUp size={10} style={{ marginLeft: 4, verticalAlign: -1 }} /> : <ArrowDown size={10} style={{ marginLeft: 4, verticalAlign: -1 }} />) : null}
       </button>
       <span className="dt-grip" role="separator" aria-label={`Resize ${text}`} onPointerDown={(e) => startResize(c, e)} />
@@ -230,21 +248,67 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
           <Popover.Portal container={typeof document === "undefined" ? undefined : document.querySelector<HTMLElement>(".ws")}>
             <Popover.Content className="tbl-pop" align="end" sideOffset={6} collisionPadding={12}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 2, paddingBottom: 6 }}>
-        <button className="btn sm ghost" aria-pressed={tint} onClick={() => setTint(!tint)}>Heat tint</button>
-                <button className="btn sm ghost" onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}>{density === "compact" ? "Comfortable" : "Compact"}</button>
-                <button className="btn sm ghost" onClick={() => void navigator.clipboard?.writeText(toMarkdown(cols, order2.map((i) => rows[i])))}>Copy as Markdown</button>
+                <button className="btn sm ghost" aria-pressed={tint} onClick={() => patch({ tint: !tint })}>Heat tint</button>
+                <button className="btn sm ghost" onClick={() => patch({ density: density === "compact" ? "comfortable" : "compact" })}>{density === "compact" ? "Comfortable" : "Compact"}</button>
+                <button className="btn sm ghost" onClick={() => void navigator.clipboard?.writeText(toMarkdown(cols, order2.map((i) => rows[i])))}>Markdown</button>
+                <button className="btn sm ghost" onClick={() => downloadCsv(shownRows(), "table")}><Download size={11} />CSV</button>
+                {opts?.xlsx ? <button className="btn sm ghost" onClick={() => void downloadXlsx(shownRows(), "table", opts.xlsx as string)}><Download size={11} />Excel</button> : null}
+                <button className="btn sm ghost" onClick={() => void navigator.clipboard?.writeText(window.location.href)}><Link2 size={11} />Link</button>
+                <button className="btn sm ghost" onClick={() => update(() => ({ ...EMPTY_VIEW, tint: opts?.tint === true }))}><RotateCcw size={11} />Reset</button>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingBottom: 6 }}>
+                <label className="xc"><span>Group by</span>
+                  <select value={view.groupBy ?? ""} onChange={(e) => patch({ groupBy: e.target.value || null })}>
+                    <option value="">None</option>
+                    {base.filter((c) => !numeric.has(c)).map((c) => <option key={c} value={c}>{label(c)}</option>)}
+                  </select>
+                </label>
+                {view.groupBy ? <label className="xc"><span>Summary</span>
+                  <select value={view.summary} onChange={(e) => patch({ summary: e.target.value as TableView["summary"] })}>{["median", "mean", "sum"].map((f) => <option key={f} value={f}>{label(f)}</option>)}</select>
+                </label> : null}
               </div>
               <div className="tp-list">
                 {[...cols, ...hidden].map((c) => (
                   <div key={c} className="tp-term">
-                    <input type="checkbox" checked={!hidden.includes(c)} aria-label={`Show ${c}`} onChange={() => setHidden(hidden.includes(c) ? hidden.filter((x) => x !== c) : [...hidden, c])} />
+                    <input type="checkbox" checked={!hidden.includes(c)} aria-label={`Show ${c}`} onChange={() => patch({ hidden: hidden.includes(c) ? hidden.filter((x) => x !== c) : [...hidden, c] })} />
                     <span style={{ flex: 1 }}>{label(c)}</span>
-                    <button className="btn sm ghost" aria-pressed={pinned.includes(c)} aria-label={`Pin ${label(c)}`} onClick={() => setPinned(pinned.includes(c) ? pinned.filter((x) => x !== c) : [...pinned, c])}><Pin size={11} /></button>
+                    {numeric.has(c) ? (
+                      <>
+                        <select aria-label={`${label(c)} scale`} value={view.pct[c] ?? ""} onChange={(e) => { const { [c]: _, ...rest } = view.pct; void _; patch({ pct: e.target.value ? { ...rest, [c]: e.target.value as "all" | "sector" } : rest }); }}>
+                          <option value="">Value</option><option value="all">%ile of shown</option>{base.includes("sector") ? <option value="sector">%ile of sector</option> : null}
+                        </select>
+                        <select aria-label={`${label(c)} format`} value={view.fmt[c]?.mode ?? ""} onChange={(e) => { const { [c]: _, ...rest } = view.fmt; void _; patch({ fmt: e.target.value ? { ...rest, [c]: { mode: e.target.value as Fmt["mode"], op: ">", value: view.fmt[c]?.value ?? 0 } } : rest }); }}>
+                          {FORMATS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                        </select>
+                        {view.fmt[c]?.mode === "rule" ? (
+                          <>
+                            <select aria-label="Rule" value={view.fmt[c].op} onChange={(e) => patch({ fmt: { ...view.fmt, [c]: { ...view.fmt[c], op: e.target.value as ">" | "<" } } })}><option value=">">&gt;</option><option value="<">&lt;</option></select>
+                            <input className="input num" style={{ width: 64, height: 24 }} type="number" aria-label="Rule value" value={view.fmt[c].value ?? 0} onChange={(e) => patch({ fmt: { ...view.fmt, [c]: { ...view.fmt[c], value: Number(e.target.value) } } })} />
+                          </>
+                        ) : null}
+                      </>
+                    ) : null}
+                    <button className="btn sm ghost" aria-pressed={pinned.includes(c)} aria-label={`Pin ${label(c)}`} onClick={() => patch({ pinned: pinned.includes(c) ? pinned.filter((x) => x !== c) : [...pinned, c] })}><Pin size={11} /></button>
                     <button className="btn sm ghost" aria-label="Move left" onClick={() => move(c, -1)}><ArrowUp size={11} /></button>
                     <button className="btn sm ghost" aria-label="Move right" onClick={() => move(c, 1)}><ArrowDown size={11} /></button>
                   </div>
                 ))}
               </div>
+              {viewKey ? (
+                <div style={{ display: "grid", gap: 4, paddingTop: 8 }}>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <input className="input" style={{ flex: 1, height: 26 }} placeholder="View name" aria-label="View name" value={viewName} onChange={(e) => setViewName(e.target.value)} />
+                    <button type="button" className="pill" aria-pressed={everywhere} onClick={() => setEverywhere(!everywhere)}>All tables</button>
+                    <button type="button" className="btn sm" disabled={!viewName.trim()} onClick={() => { saved.save({ name: viewName.trim(), scope: everywhere ? "all" : "here", key: viewKey, view }); setViewName(""); }}>Save</button>
+                  </div>
+                  {saved.views.filter((v) => v.scope === "all" || v.key === viewKey).map((v) => (
+                    <div key={v.id} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      <button type="button" className="btn sm ghost" style={{ flex: 1, justifyContent: "flex-start" }} onClick={() => update(() => ({ ...EMPTY_VIEW, ...v.view }))}>{v.name}{v.scope === "all" ? " · all tables" : ""}</button>
+                      <button type="button" className="btn sm ghost" aria-label={`Delete ${v.name}`} onClick={() => saved.remove(v.id)}><X size={11} /></button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
@@ -262,7 +326,10 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
                 const closed = collapsed.includes(it.g);
                 return (
                   <tr key={`g${k}`} className="gr">
-                    <td colSpan={cols.length + (rowActions ? 1 : 0)}><button className="dt-sort" aria-expanded={!closed} onClick={() => setCollapsed(closed ? collapsed.filter((x) => x !== it.g) : [...collapsed, it.g])}><ChevronRight size={12} style={{ marginRight: 6, verticalAlign: -2, transform: closed ? "none" : "rotate(90deg)", transition: "transform .15s" }} />{it.g}<span className="stat-s" style={{ marginLeft: 8 }}>{it.n}</span></button></td>
+                    {cols.map((c, j) => j === 0 ? (
+                      <td key={c}><button className="dt-sort" aria-expanded={!closed} onClick={() => setCollapsed(closed ? collapsed.filter((x) => x !== it.g) : [...collapsed, it.g])}><ChevronRight size={12} style={{ marginRight: 6, verticalAlign: -2, transform: closed ? "none" : "rotate(90deg)", transition: "transform .15s" }} />{it.g}<span className="stat-s" style={{ marginLeft: 8 }}>{it.n}</span></button></td>
+                    ) : <td key={c} className={numeric.has(c) ? "r num" : undefined}>{numeric.has(c) ? fmtKey(c, reduce(it.ix.map((i) => rows[i][c]).filter(isNum), view.summary)) : ""}</td>)}
+                    {rowActions ? <td /> : null}
                   </tr>
                 );
               }
@@ -292,6 +359,7 @@ export function DataTable({ rows, opts }: { rows: Row[]; opts?: Record<string, u
         <aside className="dt-drawer" aria-label="Row details">
           <h4><span>Row {sel + 1}</span><button className="btn sm ghost" aria-label="Close" onClick={() => setSel(null)}><X size={13} /></button></h4>
           <dl className="kv">{base.map((c) => <div key={c}><dt>{label(c)}</dt><dd className={isNum(rows[sel][c]) ? "num" : undefined}>{fmtKey(c, rows[sel][c])}</dd></div>)}</dl>
+          {typeof opts?.detail === "function" ? (opts.detail as (row: Row) => ReactNode)(source[sel]) : null}
         </aside>
       ) : null}
     </div>

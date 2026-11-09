@@ -93,42 +93,42 @@ Find any name and read it without leaving. E10 M11 H1
 
 One language, usable as filter, column and rank. E1 M2 H3
 
-- [ ] `H` CodeMirror formula bar on `signal_lang`, with autocomplete and preview
+- [x] `H` CodeMirror formula bar on `signal_lang`, with autocomplete and preview (untested)
 - [ ] `H` `core/formula.py` reduced to a thin adapter
-- [ ] `E` Query or formula language with custom ratios (39)
+- [x] `E` Query or formula language with custom ratios (39) (untested)
 - [ ] `M` Historical functions (lag, change, rolling rank, cross above) (41)
-- [ ] `M` Named custom metrics (40)
-- [ ] `H` Type a formula as a new column; it can then be filtered, sorted, ranked and charted (40)
+- [x] `M` Named custom metrics (40) (untested)
+- [x] `H` Type a formula as a new column; it can then be filtered, sorted, ranked and charted (40) (untested)
 
 ## Batch 5: Freedom
 
 Any output, any way. E2 M8 H4
 
-- [ ] `H` Every output opens as table, bars, scatter, heatmap, treemap, ranked list, distribution or mini-chart grid, where the data fits (extend `Explore`)
-- [ ] `M` Any column can be the x, y, size, colour, group or facet
+- [x] `H` Every output opens as table, bars, scatter, heatmap, treemap, ranked list, distribution or mini-chart grid, where the data fits (extend `Explore`) (untested)
+- [x] `M` Any column can be the x, y, size, colour, group or facet (untested)
 - [ ] `M` Add any metric to the table by typing its name, from any row or header (49)
 - [ ] `M` Absolute or percentile per column: within universe, sector or own history (50)
-- [ ] `H` Group by and pivot on any column, with count, median, mean and sum rows
-- [ ] `M` Conditional formats per column: bars, heat, signed colour, rules
+- [x] `H` Group by and pivot on any column, with count, median, mean and sum rows (untested)
+- [x] `M` Conditional formats per column: bars, heat, signed colour, rules (untested)
 - [x] `E` Density, column order, width, pinning and hiding
 - [ ] `M` Exhibits can be resized, reordered, hidden, expanded or sent to the workspace
-- [ ] `H` Save any arrangement as a view: for this screen or all screens; share it; reset to our default (49)
-- [ ] `H` The whole state lives in the URL, so any view can be linked
+- [x] `H` Save any arrangement as a view: for this screen or all screens; share it; reset to our default (49) (untested)
+- [x] `H` The whole state lives in the URL, so any view can be linked (untested)
 - [ ] `M` Export any view as CSV, Excel, Markdown, SVG, PNG or PDF
 - [ ] `M` Every action has a keyboard path and a palette entry
-- [ ] `M` Scatter lens (53) and mini-chart grid (54)
+- [x] `M` Scatter lens (53) and mini-chart grid (54) (untested)
 - [x] `E` Treemap and heatmap lens (52)
 
 ## Batch 6: Trust
 
 Why people stay. E0 M6 H0
 
-- [ ] `M` Why-here expander: filter, value, threshold, margin, sector percentile (U2)
-- [ ] `M` Near-miss explorer with "relax this filter" (U3)
-- [ ] `M` Evidence badge per filter, with citation (U8)
-- [ ] `M` Reproducible run: id, as-of, data hash, formula (U9)
-- [ ] `M` Screen diff: compare two screens, two dates or two runs; see who entered, left or moved (U9)
-- [ ] `M` Explain the difference: why did name A pass and name B fail?
+- [x] `M` Why-here expander: filter, value, threshold, margin, sector percentile (U2) (untested)
+- [x] `M` Near-miss explorer with "relax this filter" (U3) (untested)
+- [x] `M` Evidence badge per filter, with citation (U8) (untested)
+- [x] `M` Reproducible run: id, as-of, data hash, formula (U9) (untested)
+- [x] `M` Screen diff: compare two screens, two dates or two runs; see who entered, left or moved (U9) (untested)
+- [x] `M` Explain the difference: why did name A pass and name B fail? (untested)
 
 ## Batch 7: Rank
 
@@ -174,9 +174,9 @@ E3 M5 H1
 
 E0 M0 H4
 
-- [ ] `H` Filter from a chart: brush a scatter, click a treemap sector or drag a histogram to create a chip
+- [x] `H` Filter from a chart: brush a scatter, click a treemap sector or drag a histogram to create a chip (untested)
 - [ ] `H` Live funnel: move a threshold and see counts and names change, with the bottleneck filter marked
-- [ ] `H` Sensitivity strip: how much the result set and its return change if each threshold moves
+- [x] `H` Sensitivity strip: how much the result set and its return change if each threshold moves (untested)
 - [ ] `H` Time machine: drag an as-of date to see what the screen would have shown then (fundamentals 2021+)
 
 ## Batch 11: Extras

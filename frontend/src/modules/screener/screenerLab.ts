@@ -2,6 +2,7 @@ import dynamic from "next/dynamic";
 import { Bell, Bookmark, FlaskConical, Layers, Scale, SlidersHorizontal, Sigma, Table2, Trophy } from "lucide-react";
 import { createElement } from "react";
 import { SCREENER_BASE } from "./base";
+import { FormulaControl } from "./formula/FormulaControl";
 import { FilterTree } from "./filters/FilterTree";
 import { InFilter } from "./filters/InFilter";
 import { WatchlistFilter } from "./filters/WatchlistFilter";
@@ -84,8 +85,8 @@ const MorePage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import(
 const SV = group(() => import("./views") as Promise<Record<string, unknown>>);
 const ST = group(() => import("./test/ProofViews") as Promise<Record<string, unknown>>);
 const RV = group(() => import("./rank/RankViews") as Promise<Record<string, unknown>>);
-registerViews({ screenTreemap: SV.ScreenTreemap, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
-registerAlternates({ rankedTable: [{ label: "Sector treemap", view: "screenTreemap" }] });
+registerViews({ screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, sensitivity: SV.SensitivityView, runInfo: SV.RunView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
+registerAlternates({ rankedTable: [{ label: "Sector treemap", view: "screenTreemap" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }] });
 
 export const SCREENER_LAB: LabConfig = {
   id: "screener",
@@ -98,7 +99,14 @@ export const SCREENER_LAB: LabConfig = {
     sc01: {
       verdict: headline,
       sections: [
-        { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], span: 12, view: "rankedTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, bars: RESULT_BARS, hide: RESULT_HIDDEN, hatch: true, rowActions } }] },
+        { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], span: 12, view: "screenTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, bars: RESULT_BARS, hide: RESULT_HIDDEN, hatch: true, rowActions } }] },
+        { id: "trust", label: "Trust", items: [
+          { keys: ["ranked_screener_table"], span: 12, view: "nearMisses", title: "Near misses" },
+          { keys: ["ranked_screener_table"], span: 12, view: "sensitivity", title: "Sensitivity" },
+          { keys: ["ranked_screener_table"], span: 12, view: "screenScatter", title: "Scatter" },
+          { keys: ["ranked_screener_table"], span: 6, view: "screenDiff", title: "Compare runs" },
+          { keys: ["ranked_screener_table"], span: 6, view: "runInfo", title: "Run" },
+        ] },
         { id: "funnel", label: "Funnel", items: [{ keys: ["filter_funnel_waterfall"], span: 6 }, { keys: ["market_cap_bucket_distribution"], span: 6 }] },
         { id: "coverage", label: "Coverage", items: [{ keys: ["metric_coverage"], span: 12, view: "dataTable", opts: { max: 500, maxHeight: 640 } }] },
       ],
@@ -127,7 +135,7 @@ export const SCREENER_LAB: LabConfig = {
   submit: (featureId, payload) => ({ path: `/feature/${RAW(featureId)}/jobs`, body: { payload } }),
   signal: false,
   specials: { saved: SavedPage, more: MorePage },
-  widgets: { sector: InFilter, industry: InFilter, exchange: InFilter, country: InFilter, currency: InFilter, ticker_in: WatchlistFilter, filter_tree: FilterTree, screen_template: TemplatePicker, components: ComponentWeights },
+  widgets: { formula: FormulaControl, sector: InFilter, industry: InFilter, exchange: InFilter, country: InFilter, currency: InFilter, ticker_in: WatchlistFilter, filter_tree: FilterTree, screen_template: TemplatePicker, components: ComponentWeights },
   funnel: (result) => Object.fromEntries(((result?.charts?.filter_funnel_waterfall ?? []) as { key?: string; removed: number; remaining: number; bottleneck?: string | null }[]).filter((s) => s.key).map((s) => [s.key as string, { removed: s.removed, remaining: s.remaining, bottleneck: Boolean(s.bottleneck) }])),
   defaultUniverse: "All names we hold",
   overview: {
