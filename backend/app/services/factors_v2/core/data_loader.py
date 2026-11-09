@@ -6,13 +6,13 @@ path handling and metadata-row CSV parsing in one place.
 
 from __future__ import annotations
 
-from functools import lru_cache, wraps
-from contextvars import ContextVar
-from contextlib import contextmanager
 import re
-from pathlib import Path
-from typing import Iterable, Optional
 import warnings
+from collections.abc import Iterable
+from contextlib import contextmanager
+from contextvars import ContextVar
+from functools import lru_cache, wraps
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -28,7 +28,7 @@ except ImportError:  # pragma: no cover
     pl = None
 
 
-def _read_parquet_mmap(path: Path, columns: Optional[list[str]] = None) -> pd.DataFrame:
+def _read_parquet_mmap(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
     """Read parquet through Arrow memory mapping when available.
 
     This is the realtime path for Factors V2: it avoids the pandas parquet
@@ -45,7 +45,7 @@ def _read_parquet_mmap(path: Path, columns: Optional[list[str]] = None) -> pd.Da
 def _attach_ticker_ids(df: pd.DataFrame) -> pd.DataFrame:
     if "Ticker" not in df.columns or "ticker_id" in df.columns:
         return df
-    out = df.copy()
+    out = df.copy(deep=False)
     codes, uniques = pd.factorize(out["Ticker"], sort=True)
     out["ticker_id"] = codes.astype("int32")
     out.attrs["ticker_map"] = {str(t): int(i) for i, t in enumerate(uniques)}
@@ -57,7 +57,7 @@ BACKEND_DATA = ROOT / "backend" / "data"
 FACTORS_DATA = ROOT / "factors" / "data"
 
 
-_REQUEST = ContextVar("factors_v2_request", default={})
+_REQUEST = ContextVar("factors_v2_request", default={})  # noqa: B039
 
 
 @contextmanager
@@ -157,7 +157,7 @@ def parse_symbols(raw=None):
 
 
 def _safe_date_index(df: pd.DataFrame, column: str = "Date") -> pd.DataFrame:
-    out = df.copy()
+    out = df.copy(deep=False)
     if column not in out.columns:
         out = out.rename(columns={out.columns[0]: column})
     out[column] = pd.to_datetime(out[column], format="%Y%m%d", errors="coerce")
@@ -215,7 +215,7 @@ def load_symbol_directory() -> pd.DataFrame:
     """
     market = load_market_universe()
     latest_idx = market.groupby("Ticker", sort=False)["Date"].idxmax()
-    latest = market.loc[latest_idx, ["Ticker", "Date", "Close", "Volume"]].copy()
+    latest = market.loc[latest_idx, ["Ticker", "Date", "Close", "Volume"]].copy(deep=False)
     latest = latest.rename(
         columns={
             "Ticker": "symbol",
@@ -237,7 +237,7 @@ def load_symbol_directory() -> pd.DataFrame:
         col for col in ["ticker", "sector", "industry"] if col in fundamentals.columns
     ]
     if "ticker" in cols:
-        meta = fundamentals[cols].dropna(subset=["ticker"]).copy()
+        meta = fundamentals[cols].dropna(subset=["ticker"]).copy(deep=False)
         meta["symbol"] = meta["ticker"].astype(str).str.upper()
         meta = meta.drop(columns=["ticker"]).drop_duplicates("symbol", keep="last")
         latest = latest.merge(meta, on="symbol", how="left")
@@ -258,7 +258,7 @@ def load_symbol_directory() -> pd.DataFrame:
 
 
 def search_symbol_directory(
-    query: str, limit: int = 25, asset_type: Optional[str] = None
+    query: str, limit: int = 25, asset_type: str | None = None
 ) -> list[dict]:
     directory = load_symbol_directory()
     q = str(query or "").strip().upper()
@@ -285,16 +285,16 @@ def search_symbol_directory(
                 "asset_type": str(getattr(row, "asset_type", "equity") or "equity"),
                 "sector": None
                 if pd.isna(getattr(row, "sector", None))
-                else str(getattr(row, "sector")),
+                else str(row.sector),
                 "industry": None
                 if pd.isna(getattr(row, "industry", None))
-                else str(getattr(row, "industry")),
+                else str(row.industry),
                 "last_price": None
                 if pd.isna(getattr(row, "last_price", None))
-                else float(getattr(row, "last_price")),
+                else float(row.last_price),
                 "volume": None
                 if pd.isna(getattr(row, "volume", None))
-                else float(getattr(row, "volume")),
+                else float(row.volume),
             }
         )
     return records
@@ -396,7 +396,7 @@ _AQR_COLUMN_ALIASES = {
 }
 
 
-def _parse_aqr_csv(path: Path, region: str) -> Optional[pd.DataFrame]:
+def _parse_aqr_csv(path: Path, region: str) -> pd.DataFrame | None:
     try:
         raw = pd.read_csv(path, header=None, nrows=20, dtype=str)
     except (pd.errors.ParserError, UnicodeDecodeError) as exc:
@@ -452,7 +452,7 @@ def _parse_aqr_csv(path: Path, region: str) -> Optional[pd.DataFrame]:
         )
     if not selected_cols:
         return None
-    out = df[selected_cols].copy()
+    out = df[selected_cols].copy(deep=False)
     base_name = path.stem.replace("-", " ").replace("_", " ")
     rename = {}
     for col in out.columns:
@@ -465,7 +465,7 @@ def _parse_aqr_csv(path: Path, region: str) -> Optional[pd.DataFrame]:
         rename[col] = canonical or str(col).strip()
     out = out.rename(columns=rename)
     for col in out.columns:
-        values = out[col].dropna()
+        values = out[col].dropna()  # noqa: F841
         # AQR processed files contain decimal returns; never infer units from realized magnitudes.
         out[col] = out[col]
     return out

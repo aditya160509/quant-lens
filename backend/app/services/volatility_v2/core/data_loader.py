@@ -6,15 +6,16 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[5]
 BACKEND_DATA = ROOT / "backend/data"
 FACTORS_DATA = ROOT / "factors/data"
 MARKET_UNIVERSE = BACKEND_DATA / "market_universe.parquet"
 CATEGORY7_MACRO = FACTORS_DATA / "processed/category7_macro_regime.parquet"
-_REQUEST = ContextVar("volatility_v2_request", default={})
+_REQUEST = ContextVar("volatility_v2_request", default={})  # noqa: B039
 COLUMNS = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
 
 
@@ -134,7 +135,7 @@ def load_market_ohlcv():
     end = cutoff()
     return _prices(
         file_version(MARKET_UNIVERSE), (), end.isoformat() if end is not None else None
-    ).copy()
+    ).copy(deep=False)
 
 
 def ohlcv_for_symbols(symbols, lookback_days=None):
@@ -144,7 +145,7 @@ def ohlcv_for_symbols(symbols, lookback_days=None):
         file_version(MARKET_UNIVERSE),
         tuple(sorted(symbols)),
         end.isoformat() if end is not None else None,
-    ).copy()
+    ).copy(deep=False)
     missing = sorted(set(symbols) - set(data.Ticker))
     if missing:
         raise ValueError(
@@ -169,6 +170,6 @@ def _macro(version):
 
 
 def load_category7_macro():
-    frame = _macro(file_version(CATEGORY7_MACRO)).copy()
+    frame = _macro(file_version(CATEGORY7_MACRO)).copy(deep=False)
     end = cutoff()
-    return frame.loc[frame.date <= end].copy() if end is not None else frame
+    return frame.loc[frame.date <= end].copy(deep=False) if end is not None else frame

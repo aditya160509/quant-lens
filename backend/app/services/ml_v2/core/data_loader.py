@@ -6,23 +6,23 @@ missing FRED/yfinance/Ken-French artifacts but is not invoked by feature runs.
 
 from __future__ import annotations
 
-from functools import lru_cache
+from collections.abc import Iterable
 from contextvars import ContextVar
+from functools import lru_cache
 from pathlib import Path
-from typing import Iterable, Any
+from typing import Any
 
 import numpy as np
 import pandas as pd
-
 import polars as pl
-
+import pyarrow.parquet as pq
 
 AS_OF_DATE = ContextVar("ml_v2_as_of_date", default=None)
 
 
 def dated(frame, column):
     cutoff = AS_OF_DATE.get()
-    return frame.loc[frame[column] <= cutoff].copy() if cutoff is not None else frame
+    return frame.loc[frame[column] <= cutoff].copy(deep=False) if cutoff is not None else frame
 
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -52,7 +52,7 @@ def annualization_factor(frequency: Any = "daily") -> float:
     return 252.0
 
 
-def lookback_rows(lookback_days: int | float) -> int:
+def lookback_rows(lookback_days: float) -> int:
     return max(30, int(max(float(lookback_days or 1), 1.0)))
 
 
@@ -216,11 +216,12 @@ def close_matrix(symbols: Iterable[str], lookback_days: int = 504, frequency: st
 def load_fundamentals_metadata() -> pd.DataFrame:
     if not MASTER_FUNDAMENTALS.exists():
         return pd.DataFrame(columns=["ticker", "sector", "industry", "marketCap", "currency"])
-    df = pd.read_parquet(MASTER_FUNDAMENTALS)
+    names = pq.read_schema(MASTER_FUNDAMENTALS).names
+    df = pd.read_parquet(MASTER_FUNDAMENTALS, columns=[c for c in ["ticker", "sector", "industry", "marketCap", "currency", "exchange"] if c in names])
     if "ticker" not in df.columns:
         return pd.DataFrame(columns=["ticker", "sector", "industry", "marketCap", "currency"])
     keep = [c for c in ["ticker", "sector", "industry", "marketCap", "currency", "exchange"] if c in df.columns]
-    out = df[keep].copy()
+    out = df[keep].copy(deep=False)
     out["ticker"] = out["ticker"].map(normalize_symbol)
     return out.drop_duplicates("ticker", keep="last")
 
@@ -352,9 +353,9 @@ def data_inventory() -> dict[str, Any]:
         "market_universe_parquet": str(MARKET_UNIVERSE),
         "market_universe_exists": MARKET_UNIVERSE.exists(),
         "daily_tickers": len(_symbol_counts(None)),
-        "macro_rows": int(len(macro)),
+        "macro_rows": len(macro),
         "macro_columns": [str(c) for c in macro.columns[:50]],
-        "fama_french_rows": int(len(ff)),
+        "fama_french_rows": len(ff),
         "fama_french_columns": [str(c) for c in ff.columns[:30]],
         "fundamentals_exists": MASTER_FUNDAMENTALS.exists(),
     }

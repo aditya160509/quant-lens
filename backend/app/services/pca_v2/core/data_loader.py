@@ -6,17 +6,18 @@ data_pooling.py.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable
-import math
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 
 try:
     import polars as pl
-except Exception:  # pragma: no cover
+except Exception:  # pragma: no cover  # noqa: BLE001
     pl = None
 
 
@@ -106,14 +107,14 @@ def annualization_factor(frequency: object = "daily", asset_class: str | None = 
     return 252.0
 
 
-def lookback_rows(lookback_days: int | float, frequency: object = "daily", asset_class: str | None = None) -> int:
+def lookback_rows(lookback_days: float, frequency: object = "daily", asset_class: str | None = None) -> int:
     days = max(float(lookback_days or 0), 1.0)
     freq = normalize_frequency(frequency)
     if freq == "weekly":
-        return max(8, int(math.ceil(days / 5.0)))
+        return max(8, int(math.ceil(days / 5.0)))  # noqa: RUF046
     if freq == "monthly":
-        return max(6, int(math.ceil(days / 21.0)))
-    return max(30, int(math.ceil(days * bars_per_day(freq, asset_class))))
+        return max(6, int(math.ceil(days / 21.0)))  # noqa: RUF046
+    return max(30, int(math.ceil(days * bars_per_day(freq, asset_class))))  # noqa: RUF046
 
 
 def price_file_candidates(symbol: object) -> list[Path]:
@@ -142,7 +143,7 @@ def load_market_ohlcv() -> pd.DataFrame:
     if pl is not None:
         try:
             df = pl.scan_parquet(str(MARKET_UNIVERSE)).select(columns).collect().to_pandas()
-        except Exception:
+        except Exception:  # noqa: BLE001
             df = pd.read_parquet(MARKET_UNIVERSE, columns=columns)
     else:
         df = pd.read_parquet(MARKET_UNIVERSE, columns=columns)
@@ -157,9 +158,9 @@ def load_hourly_ohlcv() -> pd.DataFrame:
     path = RESEARCH_HOURLY if RESEARCH_HOURLY.exists() else MARKET_UNIVERSE_HOURLY
     if not path.exists():
         return pd.DataFrame(columns=["Ticker", "Datetime", "Open", "High", "Low", "Close", "Volume"])
-    df = pd.read_parquet(path)
-    keep = [c for c in ["Market", "Ticker", "Datetime", "Open", "High", "Low", "Close", "Volume"] if c in df.columns]
-    out = df[keep].copy()
+    names = pq.read_schema(path).names
+    keep = [c for c in ["Market", "Ticker", "Datetime", "Open", "High", "Low", "Close", "Volume"] if c in names]
+    out = pd.read_parquet(path, columns=keep)
     out["Datetime"] = pd.to_datetime(out["Datetime"], errors="coerce")
     out["Ticker"] = out["Ticker"].astype(str)
     return out.dropna(subset=["Ticker", "Datetime", "Close"]).sort_values(["Ticker", "Datetime"])
@@ -184,7 +185,7 @@ def read_local_price_ohlcv(symbol: object) -> pd.DataFrame:
     for col in ["Open", "High", "Low", "Close", "Volume"]:
         if col not in df.columns:
             df[col] = pd.NA
-    out = df[[date_col, "Open", "High", "Low", "Close", "Volume"]].rename(columns={date_col: "Date"}).copy()
+    out = df[[date_col, "Open", "High", "Low", "Close", "Volume"]].rename(columns={date_col: "Date"}).copy(deep=False)
     out["Ticker"] = normalize_symbol(symbol)
     out["Date"] = pd.to_datetime(out["Date"], errors="coerce", utc=True).dt.tz_convert(None)
     for col in ["Open", "High", "Low", "Close", "Volume"]:
@@ -202,7 +203,7 @@ def load_cross_asset_ohlcv(symbols: Iterable[str], lookback_days: int | None = N
     requested_raw = [str(s).strip() for s in symbols if str(s).strip()]
     requested_norm = {normalize_symbol(s) for s in requested_raw}
     master = load_market_ohlcv()
-    out = master[master["Ticker"].map(normalize_symbol).isin(requested_norm)].copy()
+    out = master[master["Ticker"].map(normalize_symbol).isin(requested_norm)].copy(deep=False)
     found = set(out["Ticker"].map(normalize_symbol).unique()) if not out.empty else set()
     frames = [out] if not out.empty else []
     if not master_only:
@@ -237,15 +238,15 @@ def load_fundamentals_metadata() -> pd.DataFrame:
         return pd.DataFrame(columns=["ticker", "sector", "industry", "marketCap", "currency"])
     cols = None
     try:
-        all_cols = pd.read_parquet(MASTER_FUNDAMENTALS).columns
+        all_cols = pq.read_schema(MASTER_FUNDAMENTALS).names
         cols = [c for c in ["ticker", "sector", "industry", "marketCap", "currency"] if c in all_cols]
-    except Exception:
+    except Exception:  # noqa: BLE001
         cols = None
     df = pd.read_parquet(MASTER_FUNDAMENTALS, columns=cols) if cols else pd.read_parquet(MASTER_FUNDAMENTALS)
     if "ticker" not in df.columns:
         return pd.DataFrame(columns=["ticker", "sector", "industry", "marketCap", "currency"])
     keep = [c for c in ["ticker", "sector", "industry", "marketCap", "currency"] if c in df.columns]
-    out = df[keep].dropna(subset=["ticker"]).copy()
+    out = df[keep].dropna(subset=["ticker"]).copy(deep=False)
     out["ticker"] = out["ticker"].map(normalize_symbol)
     return out.drop_duplicates("ticker", keep="last")
 
@@ -307,7 +308,7 @@ def parse_symbols(payload: dict | None, default_limit: int = 80, max_symbols: in
 def ohlcv_for_symbols(symbols: list[str] | tuple[str, ...], lookback_days: int | None = None) -> pd.DataFrame:
     normalized = {normalize_symbol(s) for s in symbols if str(s).strip()}
     df = load_market_ohlcv()
-    out = df[df["Ticker"].map(normalize_symbol).isin(normalized)].copy()
+    out = df[df["Ticker"].map(normalize_symbol).isin(normalized)].copy(deep=False)
     out["Ticker"] = out["Ticker"].map(normalize_symbol)
     if lookback_days and not out.empty:
         cutoff = out["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)
@@ -322,7 +323,7 @@ def returns_matrix(symbols: list[str], lookback_days: int = 504, frequency: str 
         ohlcv = load_hourly_ohlcv()
         if ohlcv.empty:
             raise ValueError("frequency='hourly' requested but no hourly parquet is available")
-        ohlcv = ohlcv[ohlcv["Ticker"].map(normalize_symbol).isin(normalized)].copy()
+        ohlcv = ohlcv[ohlcv["Ticker"].map(normalize_symbol).isin(normalized)].copy(deep=False)
         if end_date:
             ohlcv = ohlcv[ohlcv["Datetime"] <= pd.Timestamp(end_date)]
         prices = ohlcv.pivot_table(index="Datetime", columns="Ticker", values="Close", aggfunc="last").sort_index()
@@ -344,7 +345,7 @@ def returns_matrix(symbols: list[str], lookback_days: int = 504, frequency: str 
 
 def dollar_volume_matrix(symbols: list[str], lookback_days: int = 504) -> pd.DataFrame:
     ohlcv = ohlcv_for_symbols(symbols, lookback_days=max(lookback_days + 80, lookback_days))
-    ohlcv = ohlcv.copy()
+    ohlcv = ohlcv.copy(deep=False)
     ohlcv["DollarVolume"] = pd.to_numeric(ohlcv["Close"], errors="coerce") * pd.to_numeric(ohlcv["Volume"], errors="coerce")
     dv = ohlcv.pivot_table(index="Date", columns="Ticker", values="DollarVolume", aggfunc="last").sort_index()
     return dv.tail(int(lookback_days))

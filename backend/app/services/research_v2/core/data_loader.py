@@ -7,17 +7,18 @@ source, matching the rest of the V2 modules.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable
-import re
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
 try:
     import polars as pl
-except Exception:  # pragma: no cover
+except Exception:  # pragma: no cover  # noqa: BLE001
     pl = None
 
 
@@ -47,11 +48,11 @@ def _read_parquet(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
             lf = pl.scan_parquet(str(path)).select(columns)
             lf = lf.with_columns(pl.col(pl.Utf8).cast(pl.Categorical), pl.col(pl.Float64).cast(pl.Float32))
             return lf.collect().to_pandas()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
     try:
         return pd.read_parquet(path, columns=columns, engine="pyarrow")
-    except Exception:
+    except Exception:  # noqa: BLE001
         return pd.read_parquet(path, engine="pyarrow")
 
 
@@ -102,7 +103,7 @@ def load_market_ohlcv() -> pd.DataFrame:
             )
             out["Ticker"] = out["Ticker"].astype("category")
             return out
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
     return _standardize_ohlcv(_read_parquet(source, cols))
 
@@ -125,13 +126,13 @@ def _market_summary() -> tuple[tuple[str, ...], int]:
                     counts[k] = counts.get(k, 0) + int(n)
             order = sorted(counts, key=lambda k: (-counts[k], k))
             return tuple(order), int(sum(counts.values()))
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
     df = load_market_ohlcv()
     if df.empty:
         return (), 0
     counts = df.groupby("Ticker", observed=True)["Close"].count().sort_values(ascending=False)
-    return tuple(str(x) for x in counts.index), int(len(df))
+    return tuple(str(x) for x in counts.index), len(df)
 
 
 def available_symbols() -> tuple[str, ...]:
@@ -220,7 +221,7 @@ def ohlcv_for_symbols(symbols: Iterable[str], lookback_days: int | None = None) 
                     lf = lf.filter(pl.col("Date") >= pl.lit(latest) - pl.duration(days=int(lookback_days) * 2))
             out = lf.with_columns(pl.col(["Open", "High", "Low", "Close", "Volume"]).cast(pl.Float32)).collect().to_pandas()
             out["Ticker"] = out["Ticker"].map(normalize_symbol).astype("category")
-        except Exception:
+        except Exception:  # noqa: BLE001
             out = None
     if out is None:
         df = load_market_ohlcv()
@@ -316,7 +317,7 @@ def load_event_upload(path_value: Any) -> pd.DataFrame:
     date_col = lower.get("treatment_date") or lower.get("event_date") or lower.get("date")
     if not ticker_col or not date_col:
         return pd.DataFrame(columns=["ticker", "treatment_date"])
-    out = df.rename(columns={ticker_col: "ticker", date_col: "treatment_date"}).copy()
+    out = df.rename(columns={ticker_col: "ticker", date_col: "treatment_date"}).copy(deep=False)
     out["ticker"] = out["ticker"].map(normalize_symbol)
     out["treatment_date"] = pd.to_datetime(out["treatment_date"], errors="coerce").dt.tz_localize(None)
     keep = ["ticker", "treatment_date", *[c for c in out.columns if c not in {"ticker", "treatment_date"}]]
@@ -354,7 +355,7 @@ def load_fundamentals() -> pd.DataFrame:
     df = pd.read_parquet(MASTER_FUNDAMENTALS, engine="pyarrow")
     if "ticker" not in df.columns:
         return pd.DataFrame(columns=["ticker"])
-    out = df.copy()
+    out = df.copy(deep=False)
     out["ticker"] = out["ticker"].map(normalize_symbol)
     if "reportDate" in out.columns:
         out["reportDate"] = pd.to_datetime(out["reportDate"], errors="coerce")
@@ -380,7 +381,7 @@ def _fundamentals_cols(columns: list[str], symbols: Iterable[str] | None = None)
             if "reportDate" in out.columns:
                 out["reportDate"] = pd.to_datetime(out["reportDate"], errors="coerce")
             return out
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
     df = load_fundamentals()
     df = df[[c for c in columns if c in df.columns]]
@@ -536,7 +537,7 @@ def load_macro() -> pd.DataFrame:
     for path in sorted(PARQUET_CACHE.glob("macro_*.parquet")):
         try:
             df = pd.read_parquet(path, engine="pyarrow")
-        except Exception:
+        except Exception:  # noqa: BLE001, S112
             continue
         date_col = "date" if "date" in df.columns else ("Date" if "Date" in df.columns else None)
         if not date_col:

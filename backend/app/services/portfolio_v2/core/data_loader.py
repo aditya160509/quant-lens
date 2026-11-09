@@ -6,15 +6,17 @@ operators for missing datasets and are not invoked by analytics runs.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Iterable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable
-import math
+from typing import Any
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 
 try:
     import polars as pl
@@ -72,17 +74,17 @@ def annualization_factor(
 
 
 def lookback_rows(
-    lookback_days: int | float, frequency: Any = "daily", asset_class: str | None = None
+    lookback_days: float, frequency: Any = "daily", asset_class: str | None = None
 ) -> int:
     days = max(float(lookback_days or 1), 1.0)
     freq = normalize_frequency(frequency)
     if freq == "hourly":
         bars = 24.0 if str(asset_class or "").lower() == "crypto" else 6.5
-        return max(100, int(math.ceil(days * bars)))
+        return max(100, int(math.ceil(days * bars)))  # noqa: RUF046
     if freq == "weekly":
-        return max(12, int(math.ceil(days / 5.0)))
+        return max(12, int(math.ceil(days / 5.0)))  # noqa: RUF046
     if freq == "monthly":
-        return max(6, int(math.ceil(days / 21.0)))
+        return max(6, int(math.ceil(days / 21.0)))  # noqa: RUF046
     return max(30, int(days))
 
 
@@ -115,7 +117,7 @@ def source_version():
     )
 
 
-_SCOPE = ContextVar("portfolio_request", default={})
+_SCOPE = ContextVar("portfolio_request", default={})  # noqa: B039
 
 
 @contextmanager
@@ -137,7 +139,7 @@ def cutoff():
     return date.normalize() + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
 
 
-@lru_cache(maxsize=12)
+@lru_cache(maxsize=4)
 def _read_versioned(path, version, columns):
     return pd.read_parquet(path, columns=list(columns) if columns else None)
 
@@ -145,7 +147,7 @@ def _read_versioned(path, version, columns):
 def _read_parquet(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=columns or [])
-    return _read_versioned(str(path), file_version(path), tuple(columns or ())).copy()
+    return _read_versioned(str(path), file_version(path), tuple(columns or ())).copy(deep=False)
 
 
 def _standardize_ohlcv(df: pd.DataFrame, asset_class: str = "equity") -> pd.DataFrame:
@@ -163,7 +165,7 @@ def _standardize_ohlcv(df: pd.DataFrame, asset_class: str = "equity") -> pd.Data
             ]
         )
     rename = {c: str(c).strip().title() for c in df.columns}
-    out = df.rename(columns=rename).copy()
+    out = df.rename(columns=rename).copy(deep=False)
     if "Datetime" in out.columns and "Date" not in out.columns:
         out = out.rename(columns={"Datetime": "Date"})
     if "Ticker" not in out.columns:
@@ -348,7 +350,7 @@ def ohlcv_for_symbols(symbols, lookback_days=None, frequency="daily"):
     normalized = tuple(sorted(normalize_symbol(s) for s in symbols))
     out = _selected_ohlcv(
         normalized, "hourly" if freq == "hourly" else "daily", source_version()
-    ).copy()
+    ).copy(deep=False)
     if cutoff() is not None:
         out = out.loc[out.Date <= cutoff()]
     if lookback_days:
@@ -385,7 +387,7 @@ def close_matrix(symbols, lookback_days=504, frequency="daily"):
 
 
 def dollar_volume_matrix(symbols, lookback_days=504, frequency="daily"):
-    raw = ohlcv_for_symbols(symbols, lookback_days=None, frequency=frequency).copy()
+    raw = ohlcv_for_symbols(symbols, lookback_days=None, frequency=frequency).copy(deep=False)
     raw["DollarVolume"] = raw.Close * raw.Volume
     return (
         raw.pivot(index="Date", columns="Ticker", values="DollarVolume")
@@ -399,7 +401,8 @@ def load_fundamentals_metadata() -> pd.DataFrame:
         return pd.DataFrame(
             columns=["ticker", "sector", "industry", "marketCap", "currency"]
         )
-    df = _read_parquet(MASTER_FUNDAMENTALS)
+    names = pq.read_schema(MASTER_FUNDAMENTALS).names
+    df = _read_parquet(MASTER_FUNDAMENTALS, [c for c in ["ticker", "sector", "industry", "marketCap", "currency", "exchange"] if c in names])
     if "ticker" not in df.columns:
         return pd.DataFrame(
             columns=["ticker", "sector", "industry", "marketCap", "currency"]
@@ -409,7 +412,7 @@ def load_fundamentals_metadata() -> pd.DataFrame:
         for c in ["ticker", "sector", "industry", "marketCap", "currency", "exchange"]
         if c in df.columns
     ]
-    out = df[keep].dropna(subset=["ticker"]).copy()
+    out = df[keep].dropna(subset=["ticker"]).copy(deep=False)
     out["ticker"] = out["ticker"].map(normalize_symbol)
     return out.drop_duplicates("ticker", keep="last")
 
