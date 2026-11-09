@@ -1,3 +1,4 @@
+import { setLab, type LabConfig } from "../lab";
 import { describe, it, expect } from "vitest";
 import { CalendarHeatmap } from "@/charts/CalendarHeatmap";
 import { Dumbbell } from "@/charts/Dumbbell";
@@ -179,6 +180,7 @@ describe("heat table ordering", () => {
 
 describe("study feedback", () => {
   it("validates edits before submission and clears corrected errors", () => {
+    setLab({ catalog: {} } as unknown as LabConfig);
     const spec = { ...feature, inputs: [{ key: "horizon", type: "number" as const, default: 21, min: 1, max: 63, group: "Model", label: "Horizon", help: "Number of sessions ahead to predict." }] };
     const { rerender } = render(<StudyForm feature={spec} form={{ horizon: 0 }} setForm={() => {}} errors={{}} />);
     expect(screen.getByRole("alert")).toHaveTextContent("Minimum 1");
