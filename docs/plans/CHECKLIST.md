@@ -55,7 +55,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [x] Volatility product review
 - [x] Cross-module merge map
 - [ ] PCA product review
-- [ ] Portfolio product review
+- [x] Portfolio product review
 - [ ] Studio product review
 - [ ] Widget workspace plan
 - [x] Decide PBO convention
