@@ -1,9 +1,9 @@
 """Screener V2 stats computations."""
 from __future__ import annotations
-import math
+
+import numba
 import numpy as np
 import pandas as pd
-
 
 TRADING_DAYS = 252
 
@@ -74,6 +74,13 @@ def _safe_div(a: pd.Series | float, b: pd.Series | float) -> pd.Series:
     return out.replace([np.inf, -np.inf], np.nan)
 
 
+@numba.njit(cache=True)
+def _wilder_tail(out, values, seed, period):
+    for idx in range(seed + 1, len(values)):
+        prev, val = out[idx - 1], values[idx]
+        out[idx] = ((period - 1) * prev + val) / period if np.isfinite(prev) and np.isfinite(val) else np.nan
+
+
 def _wilder_smooth(series: pd.Series, period: int, min_seed_coverage: float = 1.0) -> pd.Series:
     values = pd.to_numeric(series, errors="coerce").to_numpy(dtype=float)
     out = np.full(len(values), np.nan, dtype=float)
@@ -88,8 +95,6 @@ def _wilder_smooth(series: pd.Series, period: int, min_seed_coverage: float = 1.
     if np.isfinite(seed_window).mean() < min_seed_coverage:
         return pd.Series(out, index=series.index)
     out[seed] = np.mean(seed_window)
-    for idx in range(seed + 1, len(values)):
-        prev, val = out[idx - 1], values[idx]
-        out[idx] = ((period - 1) * prev + val) / period if np.isfinite(prev) and np.isfinite(val) else np.nan
+    _wilder_tail(out, values, seed, period)
     return pd.Series(out, index=series.index)
 

@@ -1,11 +1,21 @@
 """Screener V2 panel computations."""
 from __future__ import annotations
+
 import pandas as pd
+
 from .data_loader import AS_OF, load_factor_returns, ohlcv_for_symbols, parse_symbols
-from .gics import add_industry_group
-from .stats import rank_pct
 from .estimators import latest_technical_features
 from .fundamentals import latest_fundamental_features
+from .gics import add_industry_group
+from .stats import rank_pct
+
+
+def _group_rank_pct(panel: pd.DataFrame, column: str, key: str) -> pd.Series:
+    """Per-group rank_pct without a Python call per group."""
+    group = panel.groupby(key)[column]
+    n = group.transform("count")
+    pct = ((group.rank(method="average") - 1) / (n - 1) * 100).clip(0, 100)
+    return pct.mask(n <= 1, 50.0).where(panel[column].notna())
 
 
 def metric_panel(payload: dict | None, symbols: list[str] | None = None) -> pd.DataFrame:
@@ -55,9 +65,9 @@ def metric_panel(payload: dict | None, symbols: list[str] | None = None) -> pd.D
         + panel["low_vol_percentile"] * 0.15
         + panel["liquidity_percentile"] * 0.10
     )
-    panel["sector_relative_score"] = panel.groupby("sector")["core_quant_score"].transform(lambda s: rank_pct(s)) if "sector" in panel.columns else rank_pct(panel["core_quant_score"])
-    panel["industry_group_relative_score"] = panel.groupby("industry_group")["core_quant_score"].transform(lambda s: rank_pct(s)) if "industry_group" in panel.columns else rank_pct(panel["core_quant_score"])
-    panel["industry_relative_score"] = panel.groupby("industry")["core_quant_score"].transform(lambda s: rank_pct(s)) if "industry" in panel.columns else rank_pct(panel["core_quant_score"])
+    panel["sector_relative_score"] = _group_rank_pct(panel, "core_quant_score", "sector") if "sector" in panel.columns else rank_pct(panel["core_quant_score"])
+    panel["industry_group_relative_score"] = _group_rank_pct(panel, "core_quant_score", "industry_group") if "industry_group" in panel.columns else rank_pct(panel["core_quant_score"])
+    panel["industry_relative_score"] = _group_rank_pct(panel, "core_quant_score", "industry") if "industry" in panel.columns else rank_pct(panel["core_quant_score"])
     for col in [
         "valuation_percentile",
         "quality_percentile",
@@ -66,9 +76,9 @@ def metric_panel(payload: dict | None, symbols: list[str] | None = None) -> pd.D
         "liquidity_percentile",
     ]:
         if col in panel.columns:
-            panel[f"sector_relative_{col}"] = panel.groupby("sector")[col].transform(lambda s: rank_pct(s)) if "sector" in panel.columns else rank_pct(panel[col])
-            panel[f"industry_group_relative_{col}"] = panel.groupby("industry_group")[col].transform(lambda s: rank_pct(s)) if "industry_group" in panel.columns else rank_pct(panel[col])
-            panel[f"industry_relative_{col}"] = panel.groupby("industry")[col].transform(lambda s: rank_pct(s)) if "industry" in panel.columns else rank_pct(panel[col])
+            panel[f"sector_relative_{col}"] = _group_rank_pct(panel, col, "sector") if "sector" in panel.columns else rank_pct(panel[col])
+            panel[f"industry_group_relative_{col}"] = _group_rank_pct(panel, col, "industry_group") if "industry_group" in panel.columns else rank_pct(panel[col])
+            panel[f"industry_relative_{col}"] = _group_rank_pct(panel, col, "industry") if "industry" in panel.columns else rank_pct(panel[col])
     panel["rank"] = panel["core_quant_score"].rank(ascending=False, method="first").astype("Int64")
     return panel.sort_values(["core_quant_score", "dollar_volume_20d"], ascending=False).reset_index(drop=True)
 

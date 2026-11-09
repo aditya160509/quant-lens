@@ -18,6 +18,16 @@ from .data_loader import (
 )
 from .stats import _pick, _safe_div, rank_pct
 
+# Yahoo suffix to venue. Bare US tickers stay Unknown: NYSE versus Nasdaq is not in the local data.
+_VENUES = {"NS": "NSE", "BO": "BSE", "KS": "KRX", "AX": "ASX", "SR": "Tadawul", "TW": "TWSE", "TA": "TASE", "JK": "IDX", "T": "TSE",
+           "HK": "HKEX", "DE": "XETRA", "TO": "TSX", "BK": "SET", "L": "LSE", "SI": "SGX", "ST": "Nasdaq Stockholm", "SA": "B3",
+           "NZ": "NZX", "PA": "Euronext Paris", "HE": "Nasdaq Helsinki", "KL": "Bursa Malaysia", "MI": "Borsa Italiana", "SS": "SSE",
+           "MX": "BMV", "SW": "SIX", "SZ": "SZSE", "JO": "JSE"}
+
+
+def _venue(ticker: str) -> str:
+    return _VENUES.get(ticker.rsplit("_", 1)[1], "") if "_" in ticker else ""
+
 
 @lru_cache(maxsize=1)
 def _company_names() -> dict[str, str]:
@@ -85,6 +95,7 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
     out["ticker"] = df["ticker"]
     out["company_name"] = out["ticker"].map(_company_names()).fillna("Unknown")
     out["exchange"] = _pick(df, ["exchange", "fullExchangeName"], "").fillna("").astype(str)
+    out["exchange"] = out["exchange"].where(out["exchange"] != "", out["ticker"].astype(str).map(_venue)).replace("", "Unknown")
     out["sector"] = _pick(df, ["sector"], "Unknown").fillna("Unknown").astype(str)
     out["industry"] = _pick(df, ["industry"], "Unknown").fillna("Unknown").astype(str)
     out["market_cap"] = pd.to_numeric(_pick(df, ["marketCap", "market_cap", "Market Cap"]), errors="coerce")

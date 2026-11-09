@@ -6,20 +6,25 @@ append-only operator helpers for datasets that are not present locally.
 
 from __future__ import annotations
 
-from functools import lru_cache
+import re
+from collections.abc import Iterable
 from contextlib import contextmanager
 from contextvars import ContextVar
+from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable
-import math
-import re
-import zipfile
-from io import BytesIO
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from .performance import cached_close_matrix, cached_fundamental_history, cached_returns_matrix, cached_volume_matrix, symbol_key, _path_version
+from .performance import (
+    _path_version,
+    cached_close_matrix,
+    cached_fundamental_history,
+    cached_returns_matrix,
+    cached_volume_matrix,
+    symbol_key,
+)
 
 try:
     import polars as pl
@@ -84,29 +89,45 @@ def _read_parquet(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
 def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
-    rename = {c: str(c).strip().title() for c in df.columns}
-    out = df.rename(columns=rename).copy()
+    out = df.rename(columns={c: str(c).strip().title() for c in df.columns})
     if "Datetime" in out.columns and "Date" not in out.columns:
         out = out.rename(columns={"Datetime": "Date"})
     if not {"Ticker", "Date", "Close"}.issubset(out.columns):
         raise ValueError("Market data requires Ticker, Date and source Close columns")
-    for col in ["Open", "High", "Low", "Close", "Volume"]:
+    prices = ["Open", "High", "Low", "Close", "Volume"]
+    for col in prices:
         if col not in out.columns:
             out[col] = np.nan
-    out[["Open", "High", "Low", "Close", "Volume"]] = out[["Open", "High", "Low", "Close", "Volume"]].apply(pd.to_numeric, errors="coerce")
+        elif not pd.api.types.is_float_dtype(out[col]):
+            out[col] = pd.to_numeric(out[col], errors="coerce")
     out["Date"] = pd.to_datetime(out["Date"], errors="coerce").dt.tz_localize(None)
     if out["Date"].isna().any() or out["Ticker"].isna().any():
         raise ValueError("Market data contains missing/invalid dates or tickers")
-    out["Ticker"] = out["Ticker"].map(normalize_symbol)
-    if out["Ticker"].eq("").any():
+    # Normalise each distinct ticker once, not every row.
+    codes, uniques = pd.factorize(out["Ticker"])
+    names = [normalize_symbol(x) for x in uniques]
+    if "" in names:
         raise ValueError("Market data requires nonempty tickers")
+    out["Ticker"] = pd.Index(names, dtype=object).take(codes)
     columns = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
-    duplicated = out.duplicated(["Ticker", "Date"], keep=False)
-    aliases = out.loc[duplicated, columns].drop_duplicates()
-    if aliases.duplicated(["Ticker", "Date"]).any():
-        raise ValueError("Conflicting observed quotes after ticker normalization")
-    alias_count = int(out.duplicated(["Ticker", "Date"]).sum())
-    out = out.drop_duplicates(["Ticker", "Date"])
+    distinct = sorted(set(names))  # aliases such as BRK.B and BRK-B share one rank
+    position = {name: i for i, name in enumerate(distinct)}
+    rank = np.array([position[name] for name in names], dtype=np.int64)
+    order = np.lexsort((out["Date"].to_numpy(), rank[codes]))
+    code_sorted, date_sorted = rank[codes][order], out["Date"].to_numpy()[order]
+    same = np.zeros(len(out), dtype=bool)
+    same[1:] = (code_sorted[1:] == code_sorted[:-1]) & (date_sorted[1:] == date_sorted[:-1])
+    del code_sorted, date_sorted
+    alias_count = int(same.sum())
+    if alias_count:
+        either = same.copy()
+        either[:-1] |= same[1:]
+        aliases = out.iloc[order[either]][columns].drop_duplicates()
+        if aliases.duplicated(["Ticker", "Date"]).any():
+            raise ValueError("Conflicting observed quotes after ticker normalization")
+        order = order[~same]
+    if len(order) != len(out) or not (order == np.arange(len(out))).all():
+        out = out.iloc[order]  # one copy: sorted and de-duplicated together
     unsupported = out["Close"].notna() & ((out["Close"] <= 0) | ~np.isfinite(out["Close"]))
     source_integrity = {
         "identical_alias_rows_removed": alias_count,
@@ -115,7 +136,7 @@ def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
         "policy": "Identical aliases deduplicated; conflicting aliases rejected. Nonpositive/nonfinite closes are unavailable for percentage-return analytics; no replacement prices.",
     }
     out.loc[unsupported, ["Open", "High", "Low", "Close", "Volume"]] = np.nan
-    result = out[columns].sort_values(["Ticker", "Date"])
+    result = out[columns]
     result.attrs["source_integrity"] = source_integrity
     return result
 
@@ -150,7 +171,9 @@ def _available_symbols_versioned(version: int, fundamentals_version: int) -> tup
     if "ticker" not in fundamentals:
         raise FileNotFoundError("Equity universe requires a local fundamentals ticker inventory")
     equities = set(fundamentals.ticker)
-    counts = df.loc[df.Ticker.isin(equities)].groupby("Ticker")["Close"].count().sort_values(ascending=False)
+    from .performance import _market_ohlcv_by_ticker
+    by_ticker = _market_ohlcv_by_ticker(_path_version(MARKET_UNIVERSE))  # per-ticker views; no 10M-row hash join
+    counts = pd.Series({t: int(f["Close"].count()) for t, f in sorted(by_ticker.items()) if t in equities}, dtype="int64").sort_values(ascending=False)
     return tuple(str(x) for x in counts[counts > 0].index)
 
 
@@ -170,7 +193,7 @@ def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: i
     payload = payload or {}
     raw = next((payload[key] for key in ["tickers", "symbols", "universe"] if key in payload and payload[key] is not None), None)
     if isinstance(raw, dict):
-        raise ValueError("Tickers must be a string or list, not an object")
+        raise ValueError("Tickers must be a string or list, not an object")  # noqa: TRY004
     if isinstance(raw, (list, tuple)) and not raw:
         raise ValueError("Explicit ticker list is empty")
     if payload.get("universe_id"):
@@ -376,11 +399,11 @@ def load_factor_returns() -> pd.DataFrame:
 def data_inventory() -> dict[str, Any]:
     return {
         "market_universe": {"exists": MARKET_UNIVERSE.exists(), "symbols": len(available_symbols())},
-        "hourly_universe": {"exists": MARKET_UNIVERSE_HOURLY.exists(), "rows": int(len(load_hourly_ohlcv())) if MARKET_UNIVERSE_HOURLY.exists() else 0},
-        "master_fundamentals": {"exists": MASTER_FUNDAMENTALS.exists(), "rows": int(len(load_fundamentals()))},
-        "macro": {"exists": CATEGORY7_MACRO.exists(), "rows": int(len(load_macro()))},
-        "fx_daily": {"exists": FX_DAILY.exists(), "rows": int(len(load_fx())) if FX_DAILY.exists() else 0},
-        "ff5_daily": {"exists": FF5_DAILY.exists(), "rows": int(len(load_factor_returns()))},
+        "hourly_universe": {"exists": MARKET_UNIVERSE_HOURLY.exists(), "rows": len(load_hourly_ohlcv()) if MARKET_UNIVERSE_HOURLY.exists() else 0},
+        "master_fundamentals": {"exists": MASTER_FUNDAMENTALS.exists(), "rows": len(load_fundamentals())},
+        "macro": {"exists": CATEGORY7_MACRO.exists(), "rows": len(load_macro())},
+        "fx_daily": {"exists": FX_DAILY.exists(), "rows": len(load_fx()) if FX_DAILY.exists() else 0},
+        "ff5_daily": {"exists": FF5_DAILY.exists(), "rows": len(load_factor_returns())},
         "momentum_daily": {"exists": MOM_DAILY.exists()},
     }
 
@@ -394,6 +417,7 @@ def store_universe_upload(raw: bytes, filename: str | None = None) -> dict:
     import json
     from io import StringIO
     from uuid import uuid4
+
     from .state import save_universe
     if len(raw) > 2_000_000:
         raise ValueError('Universe CSV exceeds 2 MB')

@@ -8,9 +8,9 @@ process.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -69,50 +69,56 @@ def _market_ohlcv_by_ticker(version: int) -> dict[str, pd.DataFrame]:
     df = data_loader.load_market_ohlcv()
     if df.empty or "Ticker" not in df.columns:
         return {}
-    return {str(ticker): group.copy() for ticker, group in df.groupby("Ticker", sort=False)}
+    # The loader returns rows sorted by ticker, so each ticker is one contiguous slice (a view, no copy).
+    tickers = df["Ticker"].to_numpy()
+    starts = np.flatnonzero(np.r_[True, tickers[1:] != tickers[:-1]])
+    stops = np.r_[starts[1:], len(df)]
+    return {str(tickers[a]): df.iloc[a:b] for a, b in zip(starts, stops)}
 
 
-def _ohlcv_subset(symbols: tuple[str, ...], lookback_days: int | None = None, version: int | None = None) -> pd.DataFrame:
+def _ohlcv_subset(symbols: tuple[str, ...], lookback_days: int | None = None, version: int | None = None, columns: tuple[str, ...] | None = None) -> pd.DataFrame:
     if not symbols:
         return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
     grouped = _market_ohlcv_by_ticker(version if version is not None else _market_version())
     frames = [grouped[symbol] for symbol in symbols if symbol in grouped]
     if not frames:
         return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
-    out = pd.concat(frames, ignore_index=True)
-    if lookback_days and not out.empty:
-        cutoff = out["Date"].max() - pd.Timedelta(days=int(lookback_days) * 2)
-        out = out[out["Date"] >= cutoff]
-    return out.sort_values(["Ticker", "Date"])
+    if lookback_days:
+        # Trim each ticker before joining so the full history is never copied.
+        cutoff = max(f["Date"].max() for f in frames) - pd.Timedelta(days=int(lookback_days) * 2)
+        frames = [f[f["Date"] >= cutoff] for f in frames]
+    if columns:
+        frames = [f[list(columns)] for f in frames]
+    return pd.concat(frames, ignore_index=True).sort_values(["Ticker", "Date"])
 
 
-@lru_cache(maxsize=384)
+@lru_cache(maxsize=12)
 def _cached_close_matrix_versioned(symbols: tuple[str, ...], lookback_days: int = 756, version: int = 0) -> pd.DataFrame:
     lookback = _lookback_key(lookback_days)
-    raw = _ohlcv_subset(symbols, lookback_days=max(lookback + 260, lookback), version=version)
+    raw = _ohlcv_subset(symbols, lookback_days=max(lookback + 260, lookback), version=version, columns=("Ticker", "Date", "Close"))
     if raw.empty:
         return pd.DataFrame()
-    return raw.pivot_table(index="Date", columns="Ticker", values="Close", aggfunc="last").sort_index().tail(lookback)
+    return raw.pivot(index="Date", columns="Ticker", values="Close").dropna(axis=1, how="all").sort_index().tail(lookback)
 
 
 def cached_close_matrix(symbols: tuple[str, ...], lookback_days: int = 756) -> pd.DataFrame:
     return _cached_close_matrix_versioned(symbols, _lookback_key(lookback_days), _market_version())
 
 
-@lru_cache(maxsize=256)
+@lru_cache(maxsize=6)
 def _cached_volume_matrix_versioned(symbols: tuple[str, ...], lookback_days: int = 756, version: int = 0) -> pd.DataFrame:
     lookback = _lookback_key(lookback_days)
-    raw = _ohlcv_subset(symbols, lookback_days=max(lookback + 260, lookback), version=version)
+    raw = _ohlcv_subset(symbols, lookback_days=max(lookback + 260, lookback), version=version, columns=("Ticker", "Date", "Volume"))
     if raw.empty:
         return pd.DataFrame()
-    return raw.pivot_table(index="Date", columns="Ticker", values="Volume", aggfunc="last").sort_index().tail(lookback)
+    return raw.pivot(index="Date", columns="Ticker", values="Volume").dropna(axis=1, how="all").sort_index().tail(lookback)
 
 
 def cached_volume_matrix(symbols: tuple[str, ...], lookback_days: int = 756) -> pd.DataFrame:
     return _cached_volume_matrix_versioned(symbols, _lookback_key(lookback_days), _market_version())
 
 
-@lru_cache(maxsize=256)
+@lru_cache(maxsize=6)
 def _cached_returns_matrix_versioned(symbols: tuple[str, ...], lookback_days: int = 756, min_coverage_bps: int = 5500, version: int = 0) -> pd.DataFrame:
     lookback = _lookback_key(lookback_days)
     min_coverage = max(0.0, min(1.0, float(min_coverage_bps) / 10000.0))
@@ -136,7 +142,7 @@ def _fundamentals_frame(version: int) -> pd.DataFrame:
     return data_loader.load_fundamentals()
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=512)
 def _cached_fundamental_history_versioned(symbol: str, version: int = 0) -> pd.DataFrame:
     normalized = str(symbol).strip().upper().replace(".", "_").replace("-", "_")
     df = _fundamentals_frame(version)
