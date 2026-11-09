@@ -294,7 +294,7 @@ def _load_fundamentals_versioned(version: int) -> pd.DataFrame:
     out = df
     out["ticker"] = out["ticker"].map(normalize_symbol)
     if "reportDate" in out.columns:
-        out["reportDate"] = pd.to_datetime(out["reportDate"], errors="coerce")
+        out["reportDate"] = pd.to_datetime(out["reportDate"], errors="coerce").astype("datetime64[us]")  # merge_asof needs one resolution
     return out.dropna(subset=["ticker"])
 
 
