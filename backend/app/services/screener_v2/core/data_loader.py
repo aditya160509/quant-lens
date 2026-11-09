@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import polars as pl
 
 from .performance import (
     _path_version,
@@ -23,15 +24,10 @@ from .performance import (
     cached_fundamental_history,
     cached_returns_matrix,
     cached_volume_matrix,
+    frame_to_pandas,
     pivot_last,
     symbol_key,
 )
-
-try:
-    import polars as pl
-except ImportError:  # pragma: no cover
-    pl = None
-
 
 ROOT = Path(__file__).resolve().parents[5]
 BACKEND_DATA = ROOT / "backend" / "data"
@@ -81,89 +77,92 @@ def normalize_symbol(symbol: Any) -> str:
 def _read_parquet(path: Path, columns: list[str] | None = None) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=columns or [])
-    if pl is not None:
-        scan = pl.scan_parquet(str(path))
-        scan = scan.select(columns) if columns else scan
-        if "Ticker" in scan.collect_schema().names():  # 10M Python strings otherwise; replaced by shared objects on load
-            scan = scan.with_columns(pl.col("Ticker").cast(pl.Categorical))
-        return scan.collect().to_pandas()
-    return pd.read_parquet(path, columns=columns, engine="pyarrow")
+    scan = pl.scan_parquet(str(path))
+    return (scan.select(columns) if columns else scan).collect().to_pandas()
+
+
+OHLCV_COLUMNS = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
+
+
+def _standardize_frame(frame: pl.DataFrame) -> tuple[pl.DataFrame, dict[str, Any]]:
+    """Sort by ticker and date, resolve aliases and blank unusable closes; expects typed columns."""
+    if frame["Date"].null_count() or frame["Ticker"].null_count():
+        raise ValueError("Market data contains missing/invalid dates or tickers")
+    frame = frame.with_columns(pl.col("Ticker").str.strip_chars().str.to_uppercase().str.replace_all(r"[.\-]", "_")).sort(["Ticker", "Date"], maintain_order=True)
+    if frame["Ticker"].eq("").any():
+        raise ValueError("Market data requires nonempty tickers")
+    duplicated = frame.select(pl.struct("Ticker", "Date").is_duplicated().alias("dup"))["dup"]
+    alias_count = 0
+    if duplicated.any():
+        # pandas treats NaN as equal to NaN, which is the rule identical aliases must follow.
+        aliases = frame.filter(duplicated).to_pandas()[OHLCV_COLUMNS].drop_duplicates()
+        if aliases.duplicated(["Ticker", "Date"]).any():
+            raise ValueError("Conflicting observed quotes after ticker normalization")
+        before = frame.height
+        frame = frame.unique(["Ticker", "Date"], keep="first", maintain_order=True)
+        alias_count = before - frame.height
+    close = pl.col("Close")
+    bad = close.is_not_null() & close.is_not_nan() & ((close <= 0) | close.is_infinite())
+    unsupported = frame.filter(bad)
+    if unsupported.height:
+        frame = frame.with_columns(pl.when(bad).then(None).otherwise(pl.col(c)).alias(c) for c in OHLCV_COLUMNS[2:])
+    return frame, {
+        "identical_alias_rows_removed": alias_count,
+        "unsupported_nonpositive_or_nonfinite_close_rows": unsupported.height,
+        "unsupported_quote_symbols": sorted(unsupported["Ticker"].unique().to_list()),
+        "policy": "Identical aliases deduplicated; conflicting aliases rejected. Nonpositive/nonfinite closes are unavailable for percentage-return analytics; no replacement prices.",
+    }
 
 
 def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
-        return pd.DataFrame(columns=["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"])
+        return pd.DataFrame(columns=OHLCV_COLUMNS)
     out = df.rename(columns={c: str(c).strip().title() for c in df.columns})
-    del df  # release the source columns as they are replaced
+    del df
     if "Datetime" in out.columns and "Date" not in out.columns:
         out = out.rename(columns={"Datetime": "Date"})
     if not {"Ticker", "Date", "Close"}.issubset(out.columns):
         raise ValueError("Market data requires Ticker, Date and source Close columns")
-    prices = ["Open", "High", "Low", "Close", "Volume"]
-    for col in prices:
-        if col not in out.columns:
-            out[col] = np.nan
-        elif not pd.api.types.is_float_dtype(out[col]):
-            out[col] = pd.to_numeric(out[col], errors="coerce")
+    for col in OHLCV_COLUMNS[2:]:
+        out[col] = pd.to_numeric(out[col], errors="coerce").astype(float) if col in out.columns else np.nan
     out["Date"] = pd.to_datetime(out["Date"], errors="coerce").dt.tz_localize(None)
-    if out["Date"].isna().any() or out["Ticker"].isna().any():
-        raise ValueError("Market data contains missing/invalid dates or tickers")
-    # Normalise each distinct ticker once, not every row.
-    codes, uniques = pd.factorize(out["Ticker"])
-    names = [normalize_symbol(x) for x in uniques]
-    if "" in names:
-        raise ValueError("Market data requires nonempty tickers")
-    out["Ticker"] = pd.Index(names, dtype=object).take(codes)
-    columns = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
-    distinct = sorted(set(names))  # aliases such as BRK.B and BRK-B share one rank
-    position = {name: i for i, name in enumerate(distinct)}
-    rank = np.array([position[name] for name in names], dtype=np.int64)
-    ranked = rank[codes]
-    del codes
-    order = np.lexsort((out["Date"].to_numpy(), ranked))
-    code_sorted, date_sorted = ranked[order], out["Date"].to_numpy()[order]
-    del ranked
-    same = np.zeros(len(out), dtype=bool)
-    same[1:] = (code_sorted[1:] == code_sorted[:-1]) & (date_sorted[1:] == date_sorted[:-1])
-    del code_sorted, date_sorted
-    alias_count = int(same.sum())
-    if alias_count:
-        either = same.copy()
-        either[:-1] |= same[1:]
-        aliases = out.iloc[order[either]][columns].drop_duplicates()
-        if aliases.duplicated(["Ticker", "Date"]).any():
-            raise ValueError("Conflicting observed quotes after ticker normalization")
-        order = order[~same]
-    if len(order) != len(out) or not (order == np.arange(len(out))).all():
-        out = out.iloc[order]  # one copy: sorted and de-duplicated together
-    unsupported = out["Close"].notna() & ((out["Close"] <= 0) | ~np.isfinite(out["Close"]))
-    source_integrity = {
-        "identical_alias_rows_removed": alias_count,
-        "unsupported_nonpositive_or_nonfinite_close_rows": int(unsupported.sum()),
-        "unsupported_quote_symbols": sorted(out.loc[unsupported, "Ticker"].unique().tolist()),
-        "policy": "Identical aliases deduplicated; conflicting aliases rejected. Nonpositive/nonfinite closes are unavailable for percentage-return analytics; no replacement prices.",
-    }
-    if unsupported.any():
-        out.loc[unsupported, ["Open", "High", "Low", "Close", "Volume"]] = np.nan
-    result = out[columns]
-    result.attrs["source_integrity"] = source_integrity
+    tickers = out["Ticker"].astype(object).where(out["Ticker"].isna(), out["Ticker"].astype(str))
+    frame, integrity = _standardize_frame(pl.from_pandas(out[OHLCV_COLUMNS].assign(Ticker=tickers)))
+    result = frame_to_pandas(frame)
+    result.attrs["source_integrity"] = integrity
     return result
 
 
-
 @lru_cache(maxsize=1)
-def _load_market_ohlcv_versioned(version: int) -> pd.DataFrame:
+def _load_market_frame_versioned(version: int) -> tuple[pl.DataFrame, dict[str, Any]]:
+    frame, integrity = _standardize_frame(pl.scan_parquet(str(MARKET_UNIVERSE)).select(OHLCV_COLUMNS).collect())
+    names = frame["Ticker"].unique(maintain_order=True).to_list()
+    return frame.with_columns(pl.col("Ticker").cast(pl.Enum(names))), integrity
+
+
+def _market_frame_and_integrity() -> tuple[pl.DataFrame, dict[str, Any]]:
     if not MARKET_UNIVERSE.exists():
         raise FileNotFoundError(f"Required market dataset is missing: {MARKET_UNIVERSE}")
-    source = MARKET_UNIVERSE
-    cols = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
-    return _standardize_ohlcv(_read_parquet(source, cols))
+    return _load_market_frame_versioned(_path_version(MARKET_UNIVERSE))
+
+
+def load_market_frame() -> pl.DataFrame:
+    """The whole market as Polars; convert only subsets to pandas."""
+    return _market_frame_and_integrity()[0]
+
+
+def market_source_integrity() -> dict[str, Any]:
+    return _market_frame_and_integrity()[1]
+
+
+def latest_market_date():
+    return pd.Timestamp(load_market_frame()["Date"].max())
 
 
 def load_market_ohlcv() -> pd.DataFrame:
-    if not MARKET_UNIVERSE.exists():
-        raise FileNotFoundError(f"Required market dataset is missing: {MARKET_UNIVERSE}")
-    return _load_market_ohlcv_versioned(_path_version(MARKET_UNIVERSE))
+    result = frame_to_pandas(load_market_frame())
+    result.attrs["source_integrity"] = market_source_integrity()
+    return result
 
 
 @lru_cache(maxsize=1)
@@ -173,16 +172,17 @@ def load_hourly_ohlcv() -> pd.DataFrame:
 
 @lru_cache(maxsize=1)
 def _available_symbols_versioned(version: int, fundamentals_version: int) -> tuple[str, ...]:
-    df = load_market_ohlcv()
-    if df.empty:
+    frame = load_market_frame()
+    if frame.is_empty():
         return ()
     fundamentals = load_fundamentals()
     if "ticker" not in fundamentals:
         raise FileNotFoundError("Equity universe requires a local fundamentals ticker inventory")
     equities = set(fundamentals.ticker)
-    from .performance import _market_ohlcv_by_ticker
-    by_ticker = _market_ohlcv_by_ticker(_path_version(MARKET_UNIVERSE))  # per-ticker views; no 10M-row hash join
-    counts = pd.Series({t: int(f["Close"].count()) for t, f in sorted(by_ticker.items()) if t in equities}, dtype="int64").sort_values(ascending=False)
+    close = pl.col("Close")
+    observed = frame.group_by(pl.col("Ticker").cast(pl.String)).agg((close.is_not_null() & close.is_not_nan()).sum().alias("n"))
+    pairs = sorted((t, int(n)) for t, n in observed.iter_rows() if t in equities)
+    counts = pd.Series(dict(pairs), dtype="int64").sort_values(ascending=False)
     return tuple(str(x) for x in counts[counts > 0].index)
 
 

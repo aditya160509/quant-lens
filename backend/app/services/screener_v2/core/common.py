@@ -111,7 +111,7 @@ def access_meta(payload: dict | None = None, issues: list[str] | None = None) ->
         MASTER_FUNDAMENTALS,
         MOM_DAILY,
         available_symbols,
-        load_market_ohlcv,
+        market_source_integrity,
         parse_symbols,
     )
     payload = payload or {}
@@ -123,7 +123,7 @@ def access_meta(payload: dict | None = None, issues: list[str] | None = None) ->
     cap = int(payload.get("max_symbols") or payload.get("max_tickers") or 5000)
     return {"compute_mode": "local", "data_policy": "observed prices; no filling; conservative statement availability", "return_basis": "source Close returns; source manifest describes an adjusted-close proxy without a corporate-action guarantee; total-return status is unverified",
             "as_of_date": str((AS_OF.get() or pd.Timestamp(payload.get("as_of_date"))).date()),
-            "source_integrity": load_market_ohlcv().attrs.get("source_integrity", {}),
+            "source_integrity": market_source_integrity(),
             "instrument_metadata": CONFIG.get().get("instruments", {}),
             "instrument_metadata_policy": "Explicit caller declarations or dated source fields; US bare-symbol USD quote denomination rule does not infer financial currency or ADR/share units",
             "indicator_session_basis": CONFIG.get().get("calendar_ticker", "SPY") + " observed session grid; missing venue quotes remain unavailable",

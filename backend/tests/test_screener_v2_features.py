@@ -1,4 +1,5 @@
 """Acceptance tests for persistent feature state and deterministic exports."""
+import polars
 import pytest
 
 from app.services.screener_v2.core import state
@@ -66,7 +67,7 @@ def local_data(tmp_path, monkeypatch):
                             'Retained Earnings': 300., 'Total Liabilities Net Minority Interest': 600., 'Tax Provision': 25., 'Pretax Income': 100.,
                             'Interest Expense': 10., 'Inventory': 50., 'Cash Dividends Paid': -20., 'Repurchase Of Capital Stock': -10., 'Issuance Of Capital Stock': 0.})
     source = {'market': pd.concat(frames, ignore_index=True), 'fund': pd.DataFrame(reports)}
-    monkeypatch.setattr(data_loader, 'load_market_ohlcv', lambda: source['market'])
+    monkeypatch.setattr(data_loader, 'load_market_frame', lambda: polars.from_pandas(source['market']))
     monkeypatch.setattr(data_loader, 'available_symbols', lambda: ('AAA', 'BBB', 'CCC', 'SPY'))
     monkeypatch.setattr(data_loader, 'load_fundamentals', lambda: source['fund'])
     monkeypatch.setattr(fundamentals, 'load_fundamentals', lambda: source['fund'])

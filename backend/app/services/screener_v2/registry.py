@@ -65,11 +65,11 @@ def run_feature(feature_id: int | str, payload: dict[str, Any] | None = None) ->
     module = _load(feature.module)
     runner: Callable[[dict[str, Any] | None], dict[str, Any]] = module.run
     from .core.currency import instrument_context
-    from .core.data_loader import as_of_context, default_as_of, load_market_ohlcv
+    from .core.data_loader import as_of_context, default_as_of, latest_market_date
     from .features.inputs import normalize_payload
     payload = normalize_payload(feature.inputs, payload or {})
     import pandas as pd
-    latest = load_market_ohlcv().Date.max()
+    latest = latest_market_date()
     if pd.isna(latest):
         raise ValueError("Market dataset has no observed dates")
     cutoff = payload.get("as_of_date") or default_as_of(payload)

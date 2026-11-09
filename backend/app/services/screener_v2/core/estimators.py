@@ -149,7 +149,11 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["bollinger_pct_b"] = (prices.iloc[-1] - bb_lower.iloc[-1]) / (bb_upper.iloc[-1] - bb_lower.iloc[-1]).replace(0, np.nan)
     out["bollinger_band_width"] = (bb_upper.iloc[-1] - bb_lower.iloc[-1]) / bb_mid.iloc[-1].replace(0, np.nan)
     out["bollinger_width_percentile"] = rank_pct(out["bollinger_band_width"])
-    tr = pd.concat([(highs - lows).stack(), (highs - prices.shift(1)).abs().stack(), (lows - prices.shift(1)).abs().stack()], axis=1).max(axis=1).unstack()
+    ranges = [highs - lows, (highs - prices.shift(1)).abs(), (lows - prices.shift(1)).abs()]
+    tr_columns = ranges[0].columns.union(ranges[1].columns).union(ranges[2].columns)
+    a, b, c = (x.reindex(columns=tr_columns).to_numpy() for x in ranges)
+    tr = pd.DataFrame(np.fmax(np.fmax(a, b), c), index=ranges[0].index, columns=tr_columns).dropna(how="all").dropna(axis=1, how="all")
+    del ranges, a, b, c
     atr = tr.apply(lambda col: _wilder_smooth(col, atr_period))
     out["atr_14"] = atr.iloc[-1]
     out["atr_pct_price"] = out["atr_14"] / out["price"].replace(0, np.nan)

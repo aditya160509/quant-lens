@@ -1,4 +1,5 @@
 """Strict universe and HTTP connection regression checks."""
+import polars
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -102,7 +103,7 @@ def test_market_source_deduplicates_only_identical_quotes_and_discloses_unusable
 
 def test_equity_inventory_does_not_confuse_reporting_and_trading_currency(monkeypatch):
     import pandas as pd
-    monkeypatch.setattr(data_loader, 'load_market_ohlcv', lambda: pd.DataFrame({'Ticker': ['AAA', 'BBB', 'CCC'], 'Close': [10., 20., 30.]}))
+    monkeypatch.setattr(data_loader, 'load_market_frame', lambda: polars.DataFrame({'Ticker': ['AAA', 'BBB', 'CCC'], 'Close': [10., 20., 30.]}))
     monkeypatch.setattr(data_loader, 'load_fundamentals', lambda: pd.DataFrame({'ticker': ['AAA', 'BBB'], 'currency': ['USD', 'EUR']}))
     data_loader._available_symbols_versioned.cache_clear()
     try:

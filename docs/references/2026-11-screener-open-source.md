@@ -280,3 +280,13 @@ Fetched 2026-11-08 unless noted.
 - Read with TinyFish: https://github.com/TA-Lib/ta-lib, https://github.com/dgunning/edgartools, https://github.com/openbq-org/OpenBB, https://codemirror.net/, https://duckdb.org/docs/current/core_extensions/excel, https://duckdb.org/docs/current/sql/statements/pivot, https://hikmahtechnologies.com/blog/nse-bhavcopy-python/
 - Search results used for discovery: https://github.com/topics/stock-screener, https://react-querybuilder.js.org/docs/tips/comparison, https://idl.uw.edu/mosaic/core/, https://perspective-dev.github.io/, https://platform.kanaries.net/graphic-walker/client-side/use-duckdb-wasm-as-computation, https://www.pkgpulse.com/guides/fusejs-vs-flexsearch-vs-orama-client-side-search-2026, https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv, https://github.com/satwikbasu/indian-market-data-endpoints
 - npm and PyPI registries: registry.npmjs.org and pypi.org/pypi for versions and licences; bundlephobia.com/api/size for gzip sizes.
+
+## Measured outcomes (2026-11-09)
+
+Run on macOS arm64 against real tickers (AAPL, MSFT, JPM, XOM, TSLA, KO; 800 sessions).
+
+- **TA-Lib 0.8.3: rejected for the listed indicators.** It installs. RSI, stochastic and Bollinger match ours. MACD (seed and 8 fewer warm-up rows), ADX (up to 1.1 early) and ATR (up to 0.25 early, first true range excluded) differ, and it carries on through a NaN gap where ours is unavailable.
+- **skfolio 1.12.8: not added.** CVaR matches `solve_portfolio` to 5e-8, so it replaces nothing. HRP differs by up to 3.4 weight points from our Lopez de Prado bisection, so it is not identical.
+- **Polars: adopted** for the market frame, subsets and matrices.
+- **edgartools, nselib:** not added; no fetcher uses them.
+- **DuckDB, Apprise, uPlot, Lezer:** not measured in this pass.
