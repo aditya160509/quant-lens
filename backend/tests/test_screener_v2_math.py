@@ -200,3 +200,23 @@ def test_top_table_exposes_rsi_14():
     from app.services.screener_v2.core.screener import top_table
     out = top_table(pd.DataFrame({"ticker": ["A"], "rsi_14": [61.5], "core_quant_score": [1.0]}), 5)
     assert out.loc[0, "rsi_14"] == 61.5
+
+
+def test_grouped_growth_respects_annual_gaps_and_column_order(monkeypatch):
+    import pandas as pd
+
+    from app.services.screener_v2.core import fundamentals
+    dates = pd.to_datetime(["2020-12-31", "2021-12-31", "2022-12-31", "2023-12-31"])
+    rows = pd.DataFrame({
+        "ticker": ["AAA"] * 4 + ["BBB"] * 2 + ["CCC"],
+        "reportDate": [*dates, dates[0], dates[2]] + [dates[3]],  # BBB skips a year: no growth
+        "periodType": "annual",
+        "Total Revenue": [100.0, 110.0, 121.0, 133.1, 50.0, 60.0, 9.0],
+        "Diluted EPS": [1.0, -1.0, 2.0, 3.0, 1.0, 1.0, 1.0],
+    })
+    monkeypatch.setattr(fundamentals, "load_fundamentals", lambda: rows)
+    out = fundamentals._fundamental_growth_metrics(["BBB", "CCC", "AAA"])
+    assert list(out.columns) == ["revenue_growth_yoy", "eps_growth_yoy", "revenue_growth_3y_cagr"]
+    assert out.loc["AAA"].round(6).tolist() == [0.1, 0.5, 0.1]
+    assert out.loc[["BBB", "CCC"]].isna().all().all()
+    assert fundamentals._fundamental_growth_metrics(["BBB"]).columns.empty

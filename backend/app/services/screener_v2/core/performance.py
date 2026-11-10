@@ -196,8 +196,8 @@ def _fundamentals_positions(version: int) -> dict[str, np.ndarray]:
     return _fundamentals_frame(version).groupby("ticker", sort=False).indices
 
 
-@lru_cache(maxsize=512)
-def _cached_fundamental_history_versioned(symbol: str, version: int = 0) -> pd.DataFrame:
+def _fundamental_history_versioned(symbol: str, version: int = 0) -> pd.DataFrame:
+    """One ticker's rows, sliced on demand: holding 512 per-ticker frames cost more than the slice."""
     normalized = str(symbol).strip().upper().replace(".", "_").replace("-", "_")
     df = _fundamentals_frame(version)
     if df.empty:
@@ -210,7 +210,7 @@ def _cached_fundamental_history_versioned(symbol: str, version: int = 0) -> pd.D
 
 def cached_fundamental_history(symbol: str) -> pd.DataFrame:
     normalized = str(symbol).strip().upper().replace(".", "_").replace("-", "_")
-    return _cached_fundamental_history_versioned(normalized, _fundamentals_version())
+    return _fundamental_history_versioned(normalized, _fundamentals_version())
 
 
 def clear_performance_caches() -> None:
@@ -219,7 +219,6 @@ def clear_performance_caches() -> None:
     _cached_returns_matrix_versioned.cache_clear()
     _fundamentals_frame.cache_clear()
     _fundamentals_positions.cache_clear()
-    _cached_fundamental_history_versioned.cache_clear()
 
 
 def performance_cache_info() -> dict[str, object]:
@@ -228,5 +227,4 @@ def performance_cache_info() -> dict[str, object]:
         "volume_matrix": _cached_volume_matrix_versioned.cache_info()._asdict(),
         "returns_matrix": _cached_returns_matrix_versioned.cache_info()._asdict(),
         "fundamentals_frame": _fundamentals_frame.cache_info()._asdict(),
-        "fundamental_history": _cached_fundamental_history_versioned.cache_info()._asdict(),
     }

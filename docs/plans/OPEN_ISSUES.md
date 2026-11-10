@@ -19,6 +19,7 @@ Memory plan run (`SCREENER_V2_MAXIMUM_MEMORY_REDUCTION_V2.md`). Each case in a f
 | Baseline `567f204` | 2,331 MB, 14.7 s, `9194d4c2` | 694 MB, 2.5 s, `62364695` | 658 MB, 1.7 s, `cd927b91` | 860 MB, 43.4 s, `3b390b85` | 790 MB, 55.5 s, `da4f7ef0` |
 | 2. Panel cache bounded by bytes (256 MB) | same code path | same | same | same | same hash; one run never fills the cache |
 | 3. D05 batched FF3 OLS, `pit_cache.py` removed | 2,259–2,600 MB (3 runs; baseline 2,331–2,382), 12.3–12.9 s, `eaaff879` (ivol only, max rel diff 4.6e-16 on 1,404 names; all other columns identical) | 688 MB, 1.6 s, same | 622 MB, 1.4 s, same | 819 MB, 41.6 s, same | 750 MB, 56.0 s, same |
+| 4. D06 growth in one grouped pass, no per-ticker history cache (columns were already projected in `c6d3a97`) | 2,280–2,583 MB, 10.2–10.4 s, `eaaff879` same | 671 MB, 1.5 s, same | 591 MB, 1.4 s, same | 832 MB, 37.0 s, same | 744 MB, 52.6 s, same |
 
 - [ ] Full Screen run under 2 GB
 - [ ] Run reads only requested stocks, columns and dates; a 50-name screen costs a few hundred MB

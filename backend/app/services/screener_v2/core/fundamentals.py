@@ -12,7 +12,6 @@ from .data_loader import (
     MASTER_FUNDAMENTALS,
     close_matrix,
     eligible_reports,
-    fundamental_history,
     load_fundamentals,
     ohlcv_for_symbols,
 )
@@ -259,34 +258,41 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
 
 
 def _fundamental_growth_metrics(symbols: list[str], as_of_date: Any | None = None) -> pd.DataFrame:
-    rows = []
-    for symbol in symbols:
-        hist = fundamental_history(symbol)
-        if "periodType" in hist:
-            hist = hist[hist.periodType == "annual"]
-        if as_of_date and not hist.empty and "reportDate" in hist:
-            cutoff = pd.to_datetime(as_of_date, errors="coerce")
-            if pd.notna(cutoff):
-                hist = hist[pd.to_datetime(hist.reportDate) + pd.Timedelta(days=90) <= cutoff]
-        if hist.empty:
-            rows.append({"ticker": symbol})
-            continue
-        revenue = pd.to_numeric(_pick(hist, ["Total Revenue", "totalRevenue", "revenue"]), errors="coerce")
-        eps = pd.to_numeric(_pick(hist, ["Diluted EPS", "Basic EPS"]), errors="coerce")
-        row = {"ticker": symbol}
-        gaps = pd.to_datetime(hist.reportDate).diff().dt.days
-        if len(hist) >= 2 and 320 <= gaps.iloc[-1] <= 410:
-            if revenue.iloc[-2] > 0 and pd.notna(revenue.iloc[-1]):
-                row["revenue_growth_yoy"] = revenue.iloc[-1] / revenue.iloc[-2] - 1
-            if pd.notna(eps.iloc[-1]) and pd.notna(eps.iloc[-2]) and eps.iloc[-2] != 0:
-                row["eps_growth_yoy"] = (eps.iloc[-1] - eps.iloc[-2]) / abs(eps.iloc[-2])
-        if len(hist) >= 4 and gaps.tail(3).between(320, 410).all():
-            start, end = revenue.iloc[-4], revenue.iloc[-1]
-            row["revenue_growth_3y_cagr"] = (end / start) ** (1 / 3) - 1 if start > 0 and end > 0 else np.nan
-        rows.append(row)
-    if not rows:
-        return pd.DataFrame()
-    out = pd.DataFrame(rows).set_index("ticker")
-    out.index = out.index.map(str)
-    return out
-
+    """Annual revenue/EPS growth for every symbol in one grouped pass over the annual reports."""
+    source = load_fundamentals()
+    hist = source[source.ticker.isin(symbols)]
+    if "periodType" in hist:
+        hist = hist[hist.periodType == "annual"]
+    for cutoff in [AS_OF.get(), pd.to_datetime(as_of_date, errors="coerce") if as_of_date else None]:
+        if cutoff is not None and pd.notna(cutoff) and not hist.empty and "reportDate" in hist:
+            hist = hist[pd.to_datetime(hist.reportDate) + pd.Timedelta(days=90) <= cutoff]
+    hist = hist.sort_values(["ticker", "reportDate"], kind="stable")
+    group = hist.groupby("ticker", sort=False)
+    revenue = pd.to_numeric(_pick(hist, ["Total Revenue", "totalRevenue", "revenue"]), errors="coerce")
+    eps = pd.to_numeric(_pick(hist, ["Diluted EPS", "Basic EPS"]), errors="coerce")
+    gap = pd.to_datetime(hist.reportDate).groupby(hist.ticker, sort=False).diff().dt.days
+    annual_gap = gap.between(320, 410)
+    lag = lambda series, n: series.groupby(hist.ticker, sort=False).shift(n)
+    last = ~hist.ticker.duplicated(keep="last")
+    count = group.ticker.transform("size")
+    one_year = (count >= 2) & annual_gap
+    three_year = (count >= 4) & annual_gap & lag(annual_gap, 1).eq(True) & lag(annual_gap, 2).eq(True)
+    prior_revenue, prior_eps, start = lag(revenue, 1), lag(eps, 1), lag(revenue, 3)
+    columns = {
+        "revenue_growth_yoy": (one_year & (prior_revenue > 0) & revenue.notna(), revenue / prior_revenue - 1),
+        "eps_growth_yoy": (one_year & eps.notna() & prior_eps.notna() & prior_eps.ne(0), (eps - prior_eps) / prior_eps.abs()),
+        "revenue_growth_3y_cagr": (three_year, ((revenue / start) ** (1 / 3) - 1).where((start > 0) & (revenue > 0))),
+    }
+    order = pd.Index(symbols, dtype=object).map(str)
+    out = pd.DataFrame(index=order)
+    out.index.name = "ticker"
+    first_seen = {}
+    for name, (mask, value) in columns.items():
+        keep = (mask & last).to_numpy()
+        if keep.any():
+            values = pd.Series(value.to_numpy()[keep], index=hist.ticker.to_numpy()[keep])
+            out[name] = values.reindex(order).to_numpy(dtype=float)
+            first_seen[name] = int(order.get_indexer(values.index).min())
+    # Same column order the old row-dict frame produced: first symbol that set each key.
+    names = list(columns)
+    return out[sorted(first_seen, key=lambda n: (first_seen[n], names.index(n)))]
