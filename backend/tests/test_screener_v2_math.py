@@ -220,3 +220,39 @@ def test_grouped_growth_respects_annual_gaps_and_column_order(monkeypatch):
     assert out.loc["AAA"].round(6).tolist() == [0.1, 0.5, 0.1]
     assert out.loc[["BBB", "CCC"]].isna().all().all()
     assert fundamentals._fundamental_growth_metrics(["BBB"]).columns.empty
+
+
+def test_average_rank_matches_pandas_with_ties_nans_and_groups():
+    import numpy as np
+    import pandas as pd
+
+    from app.services.screener_v2.core.stats import average_rank
+    rng = np.random.default_rng(5)
+    for size in [0, 1, 2, 7, 200]:
+        values = rng.integers(0, 6, size).astype(float)
+        values[rng.random(size) < .2] = np.nan
+        groups = pd.Series(rng.choice(["a", "b", None], size), dtype=object)
+        codes = pd.factorize(groups)[0]
+        expected = pd.Series(values).groupby(groups).rank(method="average").to_numpy()
+        np.testing.assert_array_equal(average_rank(values, codes), expected)
+        np.testing.assert_array_equal(average_rank(values), pd.Series(values).rank(method="average").to_numpy())
+
+
+def test_simulate_array_loop_matches_pandas_loop_golden():
+    """Digests recorded from the pandas Series implementation; the NumPy loop must reproduce every number."""
+    import hashlib
+
+    import numpy as np
+    import pandas as pd
+
+    from app.services.screener_v2.core import backtest
+    expected = {0: "933c3c6f1c58d770", 1: "f335756f4e7fe2f7", 2: "f42b557c2e98263b"}
+    cases = [{"top_n": 3}, {"top_n": 2, "long_short": True, "cost_bps": 25, "rebalance_days": 5}, {"top_n": 4, "score_weighted": True, "weekday": 2, "offset": 3}]
+    for number, kwargs in enumerate(cases):
+        rng = np.random.default_rng(11)
+        dates = pd.bdate_range("2022-01-03", periods=400)
+        prices = pd.DataFrame(100 * np.exp(rng.normal(0, .02, (400, 9)).cumsum(0)), index=dates, columns=[f"T{i}" for i in range(9)])
+        scores = {day: pd.Series(rng.normal(size=9), index=prices.columns) for day in dates}
+        result = backtest.simulate(prices, scores.__getitem__, **kwargs)
+        text = "".join(result[k].to_csv() for k in ["curve", "trades", "attribution", "positions"]) + str(result["selected"] + result["short_selected"])
+        assert hashlib.sha256(text.encode()).hexdigest()[:16] == expected[number]

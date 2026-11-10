@@ -199,16 +199,15 @@ def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cach
     shape = json.dumps({k: v for k, v in payload.items() if k not in _SCORE_ONLY_KEYS}, sort_keys=True, default=str)
     run_key = (_path_version(MARKET_UNIVERSE), _path_version(MASTER_FUNDAMENTALS), tuple(symbols), shape)
     def panel_at(date):
-        key = ("panel", pd.Timestamp(date))
-        if key not in panels:
-            hit = _panel_cache_get((*run_key, key[1]))
-            if hit is None:
-                with as_of_context(date), pit_scope(panels):
-                    hit = metric_panel({**payload, "as_of_date": str(pd.Timestamp(date).date())}, symbols)
-                    hit, _ = apply_filters(hit, payload)
-                _panel_cache_put((*run_key, key[1]), hit)
-            panels[key] = hit
-        return panels[key].copy()
+        # Not kept in the run dict: score_at keeps one score vector per date, the byte-bounded cache the panel.
+        date = pd.Timestamp(date)
+        hit = _panel_cache_get((*run_key, date))
+        if hit is None:
+            with as_of_context(date), pit_scope(panels):
+                hit = metric_panel({**payload, "as_of_date": str(date.date())}, symbols)
+                hit, _ = apply_filters(hit, payload)
+            _panel_cache_put((*run_key, date), hit)
+        return hit.copy()
     def score_at(date):
         key = pd.Timestamp(date)
         if key not in cache:
@@ -225,10 +224,7 @@ def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cach
                         panel = panel[["ticker"]].assign(composite_score=np.nan)
                     selected_field = "composite_score"
                 elif kind == "academic":
-                    academic_key = ("academic", key)
-                    if academic_key not in panels:
-                        panels[academic_key] = academic_strategy_scores(panel)
-                    panel = panels[academic_key]
+                    panel = academic_strategy_scores(panel)
                     selected_field = field
                 else:
                     selected_field = field or payload.get("score_field") or "core_quant_score"

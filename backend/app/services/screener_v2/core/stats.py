@@ -8,11 +8,35 @@ import pandas as pd
 TRADING_DAYS = 252
 
 
+def average_rank(values: np.ndarray, groups: np.ndarray | None = None) -> np.ndarray:
+    """pandas rank(method="average") within groups, NaN values or groups (code -1) stay NaN.
+
+    One lexsort instead of a pandas groupby: panels of a few names were dominated by pandas overhead.
+    """
+    values = np.asarray(values, dtype=float)
+    groups = np.zeros(len(values), dtype=np.int64) if groups is None else np.asarray(groups, dtype=np.int64)
+    out = np.full(len(values), np.nan)
+    keep = np.flatnonzero(~np.isnan(values) & (groups >= 0))
+    if not len(keep):
+        return out
+    order = keep[np.lexsort((values[keep], groups[keep]))]
+    v, g = values[order], groups[order]
+    new_group = np.r_[True, g[1:] != g[:-1]]
+    new_tie = new_group | np.r_[True, v[1:] != v[:-1]]
+    group_start = np.maximum.accumulate(np.where(new_group, np.arange(len(v)), 0))
+    tie_start = np.flatnonzero(new_tie)
+    tie_end = np.r_[tie_start[1:], len(v)]
+    first, last = tie_start - group_start[tie_start], tie_end - 1 - group_start[tie_start]
+    out[order] = np.repeat((first + last) / 2 + 1, tie_end - tie_start)
+    return out
+
+
 def rank_pct(series: pd.Series, higher_better: bool = True) -> pd.Series:
     numeric = pd.to_numeric(series, errors="coerce")
     if numeric.notna().sum() <= 1:
         return pd.Series(50.0, index=series.index).where(numeric.notna())
-    pct = (numeric.rank(method="average") - 1) / (numeric.notna().sum() - 1) * 100
+    ranks = pd.Series(average_rank(numeric.to_numpy(dtype=float, na_value=np.nan)), index=series.index)
+    pct = (ranks - 1) / (numeric.notna().sum() - 1) * 100
     if not higher_better:
         pct = 100.0 - pct
     return pct.clip(0, 100)

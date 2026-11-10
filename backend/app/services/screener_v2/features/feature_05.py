@@ -67,7 +67,8 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     if payload.get("run_holding_sensitivity", True):
         for holding in [5, 21, 63, 126]:
             holding_kwargs = {**kwargs, "rebalance_days": holding}
-            result = score_backtest(symbols, score, **holding_kwargs)
+            # Same inputs as the base run when the holding equals its rebalance period: reuse it.
+            result = backtest if holding == kwargs["rebalance_days"] else score_backtest(symbols, score, **holding_kwargs)
             holding_sensitivity.append({"holding_days": holding, **result["stats"]})
     stock_attr = backtest.get("attribution", [])
     return response(

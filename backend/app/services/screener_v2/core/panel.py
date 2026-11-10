@@ -1,6 +1,7 @@
 """Screener V2 panel computations."""
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from . import snapshots
@@ -8,14 +9,16 @@ from .data_loader import AS_OF, load_factor_returns, normalize_symbol, parse_sym
 from .estimators import finish_technical
 from .fundamentals import fundamental_ranks
 from .gics import add_industry_group
-from .stats import rank_pct
+from .stats import average_rank, rank_pct
 
 
 def _group_rank_pct(panel: pd.DataFrame, column: str, key: str) -> pd.Series:
     """Per-group rank_pct without a Python call per group."""
-    group = panel.groupby(key)[column]
-    n = group.transform("count")
-    pct = ((group.rank(method="average") - 1) / (n - 1) * 100).clip(0, 100)
+    codes = pd.factorize(panel[key])[0]
+    values = pd.to_numeric(panel[column], errors="coerce").to_numpy(dtype=float, na_value=np.nan)
+    counts = np.bincount(codes[(codes >= 0) & ~np.isnan(values)], minlength=len(codes) + 1)  # extra slot: code -1 reads it, then is masked
+    n = pd.Series(np.where(codes >= 0, counts[codes], np.nan), index=panel.index)
+    pct = ((pd.Series(average_rank(values, codes), index=panel.index) - 1) / (n - 1) * 100).clip(0, 100)
     return pct.mask(n <= 1, 50.0).where(panel[column].notna())
 
 
