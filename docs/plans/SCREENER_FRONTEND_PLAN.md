@@ -1,5 +1,7 @@
 # Screener frontend plan
 
+Size tags: `E` easy (under an hour), `M` medium (a few hours), `H` hard (a day or more, or needs backend or data work).
+
 Date: 2026-11-09. Scope: every Screener page, component and output. Status is tracked by the boxes. A box is ticked only after it is seen working on the page with real results.
 
 ## 1. What we want
@@ -36,120 +38,120 @@ Our own advantage, shown everywhere: why a stock passed or failed, near misses, 
 
 ## 3. Shell
 
-- [x] Near-black palette, blue primary, KPI cards
-- [x] Left nav open by default with Overview, Screen, Rank, Test, Monitor, Saved, More
-- [x] Coloured icon tile per section; active item with accent bar; run status dot
-- [ ] Collapsible to icons, with tooltips; width remembered
-- [ ] One-row page header: icon, title, sub-tabs, Save, Share, Export, Run
-- [ ] Inspector closed by default on Screen; opens for advanced settings only
-- [ ] Runs dock collapsed to a status pill until opened
-- [ ] Command palette: run, add filter, open any screen or stock, change theme
-- [ ] Keyboard: Cmd+Enter run, Shift+F filter, F column, `/` search, `[ ]` pages, Esc close
-- [ ] Skeletons matching final layout; no layout shift; no page-wide dim on navigation
-- [x] Toasts for saved, failed, copied
-- [ ] Phone layout: bottom nav, filter sheet, card rows
-- [ ] Light theme kept working, dark the default
+- [x] `E` Near-black palette, blue primary, KPI cards
+- [x] `E` Left nav open by default with Overview, Screen, Rank, Test, Monitor, Saved, More
+- [x] `E` Coloured icon tile per section; active item with accent bar; run status dot
+- [ ] `E` Collapsible to icons, with tooltips; width remembered
+- [ ] `M` One-row page header: icon, title, sub-tabs, Save, Share, Export, Run
+- [ ] `E` Inspector closed by default on Screen; opens for advanced settings only
+- [ ] `E` Runs dock collapsed to a status pill until opened
+- [ ] `M` Command palette: run, add filter, open any screen or stock, change theme
+- [ ] `E` Keyboard: Cmd+Enter run, Shift+F filter, F column, `/` search, `[ ]` pages, Esc close
+- [ ] `M` Skeletons matching final layout; no layout shift; no page-wide dim on navigation
+- [x] `E` Toasts for saved, failed, copied
+- [ ] `H` Phone layout: bottom nav, filter sheet, card rows
+- [ ] `E` Light theme kept working, dark the default
 
 ## 4. Overview page
 
-- [x] Stat cards with real graphics: last screen, valuation ready, stocks covered, runs
-- [x] Screens gallery by theme with colour per theme
-- [x] Sector tiles with counts
-- [ ] Check gallery and sector clicks end to end, and run on arrival
-- [ ] Each gallery row shows live match count and top three names after first load
-- [x] Search box as the page's main element
-- [ ] Recent screens and saved screens with last result and change since last run
-- [x] Market breadth strip: advancers, new highs, sector returns
-- [ ] Sector treemap by market cap coloured by return
-- [ ] Biggest entrants and exits across saved screens
-- [ ] Pinned board of outputs, in cards
+- [x] `E` Stat cards with real graphics: last screen, valuation ready, stocks covered, runs
+- [x] `E` Screens gallery by theme with colour per theme
+- [x] `E` Sector tiles with counts
+- [ ] `E` Check gallery and sector clicks end to end, and run on arrival
+- [ ] `H` Each gallery row shows live match count and top three names after first load
+- [x] `E` Search box as the page's main element
+- [ ] `M` Recent screens and saved screens with last result and change since last run
+- [x] `M` Market breadth strip: advancers, new highs, sector returns
+- [ ] `M` Sector treemap by market cap coloured by return
+- [ ] `H` Biggest entrants and exits across saved screens
+- [ ] `H` Pinned board of outputs, in cards
 
 ## 5. Control bar, every study page
 
 ### Universe picker
-- [x] Clickable universe title opening a large search overlay
-- [x] Search and add stocks, size 25 to 1,000, saved universes, watchlists, paste, save
-- [x] Top N ranked by USD liquidity
-- [ ] Rank basis: liquidity, market cap, or data coverage
-- [ ] Presets: country, exchange, sector, industry, currency, market cap band
-- [ ] Multi-select markets; primary listing only toggle
-- [ ] CSV upload, exclude list, rename and delete saved universes
-- [ ] Live name count and estimated run time before running
-- [x] Sector and country mix of the chosen universe as a small bar
-- [ ] Share a universe by link; a screen's result becomes a universe
-- [ ] Clear disabled state at the cap, with count
+- [x] `E` Clickable universe title opening a large search overlay
+- [x] `E` Search and add stocks, size 25 to 1,000, saved universes, watchlists, paste, save
+- [x] `E` Top N ranked by USD liquidity
+- [ ] `M` Rank basis: liquidity, market cap, or data coverage
+- [ ] `M` Presets: country, exchange, sector, industry, currency, market cap band
+- [ ] `M` Multi-select markets; primary listing only toggle
+- [ ] `E` CSV upload, exclude list, rename and delete saved universes
+- [ ] `M` Live name count and estimated run time before running
+- [x] `E` Sector and country mix of the chosen universe as a small bar
+- [ ] `E` Share a universe by link; a screen's result becomes a universe
+- [ ] `E` Clear disabled state at the cap, with count
 
 Index membership stays out until we have data for it; it must not be faked.
 
 ### Period
-- [x] 6M to 10Y presets and as-of date
-- [ ] Max and custom start and end with date picker
-- [ ] Data availability shown on the range
-- [x] Rebalance frequency and holding period as segmented controls on Test
-- [ ] Compare as-of dates
+- [x] `E` 6M to 10Y presets and as-of date
+- [ ] `M` Max and custom start and end with date picker
+- [ ] `M` Data availability shown on the range
+- [x] `E` Rebalance frequency and holding period as segmented controls on Test
+- [ ] `H` Compare as-of dates
 
 ### Filters
-- [x] Pill row with min and max and `+ Filter`
-- [x] Add-filter overlay with groups, search, recently used and favourites: Identity, Market, Technical, Valuation, Profitability, Growth, Health, Dividends, Score
-- [x] Pill editor: slider over the real distribution histogram, percentile mode, greater, less, between, in, top N
-- [x] Live pass count and removed count on each pill; bottleneck marked
-- [ ] Toggle, remove, reorder, duplicate; undo and redo
-- [x] Category filters as searchable checklists: sector, industry, country, exchange, currency
-- [ ] AND/OR groups, editable as tree and as formula
-- [ ] Compare to another field: P/E below sector median, price above SMA 200
-- [ ] Historical conditions: 5-year average, change over N periods
-- [ ] Filter from a chart: brush a scatter, click a treemap sector, drag a histogram
-- [ ] Natural language box producing editable filters
-- [ ] Hide or show filters; save as a screen; preset chips
+- [x] `E` Pill row with min and max and `+ Filter`
+- [x] `M` Add-filter overlay with groups, search, recently used and favourites: Identity, Market, Technical, Valuation, Profitability, Growth, Health, Dividends, Score
+- [x] `M` Pill editor: slider over the real distribution histogram, percentile mode, greater, less, between, in, top N
+- [x] `M` Live pass count and removed count on each pill; bottleneck marked
+- [ ] `M` Toggle, remove, reorder, duplicate; undo and redo
+- [x] `E` Category filters as searchable checklists: sector, industry, country, exchange, currency
+- [ ] `H` AND/OR groups, editable as tree and as formula
+- [ ] `H` Compare to another field: P/E below sector median, price above SMA 200
+- [ ] `H` Historical conditions: 5-year average, change over N periods
+- [ ] `M` Filter from a chart: brush a scatter, click a treemap sector, drag a histogram
+- [ ] `H` Natural language box producing editable filters
+- [ ] `E` Hide or show filters; save as a screen; preset chips
 
 ### Run
-- [x] One blue Run; auto-run option when a filter changes, debounced, on universes up to 250
-- [ ] Progress by stage, cancel, stale marker
-- [x] Failure card with the reason and one-click fix
+- [x] `E` One blue Run; auto-run option when a filter changes, debounced, on universes up to 250
+- [ ] `H` Progress by stage, cancel, stale marker
+- [x] `E` Failure card with the reason and one-click fix
 
 ## 6. Table, used by every tabular output
 
-- [x] Column sets as tabs: Overview, Performance, Valuation, Profitability, Growth, Health, Dividends, Technical, Scores, Trust, Custom; add own
-- [ ] Column picker with search, groups and drag order; per-column interval where data supports it
-- [ ] Frozen rank, ticker and company; sticky header; resize; reorder by drag; auto-fit
-- [x] Multi-sort; sort by distance from a value
-- [x] Monogram tile, ticker badge, company, sector pill
-- [ ] Number format per column: compact, percent, decimals, currency; base currency switch
-- [ ] Conditional formats per column: heat, bars, signed colour, rule, top and bottom N
-- [ ] Sparkline columns with range choice
-- [x] Muted missing values; auto-hide wholly empty columns; coverage in header
-- [ ] Group by and pivot on any column, with count, median, mean, sum rows
-- [x] Footer: median and universe median, sector median toggle
-- [x] Bulk select: add to watchlist, compare, alert, send to Rank, Test, ML, export
-- [x] Row hover actions; row expand shows why it passed (built, not checked on page)
-- [x] Density, rows per page, infinite or paged; virtual scroll to 1,000 rows without lag (built, not checked on page)
-- [x] Search within results; column quick filter from the header adds a pill
-- [x] Chart-grid view of mini price charts
-- [ ] CSV, Excel, TSV, tickers, copy, Markdown, PDF
-- [x] Save view for this screen or all; share by link; reset (built, not checked on page)
+- [x] `M` Column sets as tabs: Overview, Performance, Valuation, Profitability, Growth, Health, Dividends, Technical, Scores, Trust, Custom; add own
+- [ ] `H` Column picker with search, groups and drag order; per-column interval where data supports it
+- [ ] `M` Frozen rank, ticker and company; sticky header; resize; reorder by drag; auto-fit
+- [x] `M` Multi-sort; sort by distance from a value
+- [x] `E` Monogram tile, ticker badge, company, sector pill
+- [ ] `M` Number format per column: compact, percent, decimals, currency; base currency switch
+- [ ] `M` Conditional formats per column: heat, bars, signed colour, rule, top and bottom N
+- [ ] `M` Sparkline columns with range choice
+- [x] `E` Muted missing values; auto-hide wholly empty columns; coverage in header
+- [ ] `H` Group by and pivot on any column, with count, median, mean, sum rows
+- [x] `E` Footer: median and universe median, sector median toggle
+- [x] `M` Bulk select: add to watchlist, compare, alert, send to Rank, Test, ML, export
+- [x] `E` Row hover actions; row expand shows why it passed (built, not checked on page)
+- [x] `E` Density, rows per page, infinite or paged; virtual scroll to 1,000 rows without lag (built, not checked on page)
+- [x] `E` Search within results; column quick filter from the header adds a pill
+- [x] `E` Chart-grid view of mini price charts
+- [ ] `E` CSV, Excel, TSV, tickers, copy, Markdown, PDF
+- [x] `E` Save view for this screen or all; share by link; reset (built, not checked on page)
 
 ## 7. Output card, every output
 
-- [ ] Title, as-of and coverage in one row, status pill
-- [x] View menu with the alternatives below; choice remembered (built, not checked on page)
-- [ ] Settings: scale, range, colours, labels, benchmark, annotations
-- [ ] Maximise, pin to board, change width, reorder, hide, duplicate
-- [x] Copy image, download PNG, SVG, CSV (built, not checked on page)
-- [ ] Hover crosshair; click drills into rows; brush filters
-- [ ] Footnote naming the method, only where it matters
-- [ ] Empty, partial and failed states with the reason
+- [ ] `E` Title, as-of and coverage in one row, status pill
+- [x] `E` View menu with the alternatives below; choice remembered (built, not checked on page)
+- [ ] `H` Settings: scale, range, colours, labels, benchmark, annotations
+- [ ] `H` Maximise, pin to board, change width, reorder, hide, duplicate
+- [x] `E` Copy image, download PNG, SVG, CSV (built, not checked on page)
+- [ ] `H` Hover crosshair; click drills into rows; brush filters
+- [ ] `E` Footnote naming the method, only where it matters
+- [ ] `E` Empty, partial and failed states with the reason
 
 ## 8. Stock drawer and compare
 
-- [ ] Header: monogram, price, change, exchange, follow, alert, compare, add to screen
-- [ ] Ratio grid with add ratio and edit ratios, percentile tick against sector
-- [ ] Price chart with range tabs, Price and P/E modes, volume, moving averages, entry and exit marks
-- [x] Strength profile: quality, value, momentum, health, growth as a radar we compute, with filter by shape
-- [x] Why here: filter, value, threshold, margin, sector percentile (built, not checked on page)
-- [x] Peers, quarters, profit and loss, balance sheet, cash flow, ratios as tabs (built, not checked on page)
-- [x] Statement rows with sparklines, YoY, common-size toggle
-- [ ] Compare up to 8 names: overlaid chart, side-by-side table, differences highlighted
-- [ ] Full page with its own URL; PDF
+- [ ] `M` Header: monogram, price, change, exchange, follow, alert, compare, add to screen
+- [ ] `M` Ratio grid with add ratio and edit ratios, percentile tick against sector
+- [ ] `H` Price chart with range tabs, Price and P/E modes, volume, moving averages, entry and exit marks
+- [x] `M` Strength profile: quality, value, momentum, health, growth as a radar we compute, with filter by shape
+- [x] `E` Why here: filter, value, threshold, margin, sector percentile (built, not checked on page)
+- [x] `E` Peers, quarters, profit and loss, balance sheet, cash flow, ratios as tabs (built, not checked on page)
+- [x] `M` Statement rows with sparklines, YoY, common-size toggle
+- [ ] `H` Compare up to 8 names: overlaid chart, side-by-side table, differences highlighted
+- [ ] `H` Full page with its own URL; PDF
 
 ## 9. Screen group
 
@@ -218,7 +220,7 @@ Composite
 
 Weights: sliders that sum to 100, lock, equal, IC, ridge, presets, live re-rank without a full run.
 
-- [x] Add Strategies (sc04): it runs in the backend but has no page in the catalog today
+- [x] `E` Add Strategies (sc04): it runs in the backend but has no page in the catalog today
 
 | Output | Default | Alternatives |
 |---|---|---|
@@ -269,10 +271,10 @@ Alert builder: condition from any filter or formula, frequency, channel with App
 
 ## 13. Saved and More
 
-- [ ] Saved: cards with mini result, last run, change, schedule pill; rename, duplicate, tag, folder, search, sort, archive
-- [ ] Schedule picker and history timeline
-- [ ] More: Markets tabs with the table of section 6, hourly, plain English, share links, API keys; patterns labelled weak evidence
-- [ ] Share page and embed use the same design
+- [ ] `H` Saved: cards with mini result, last run, change, schedule pill; rename, duplicate, tag, folder, search, sort, archive
+- [ ] `M` Schedule picker and history timeline
+- [ ] `H` More: Markets tabs with the table of section 6, hourly, plain English, share links, API keys; patterns labelled weak evidence
+- [ ] `H` Share page and embed use the same design
 
 ## 14. Full customisation list
 
@@ -294,15 +296,15 @@ Alert builder: condition from any filter or formula, frequency, channel with App
 
 ## 15. Backend needed by this plan
 
-- [x] 500 default, 1,000 cap, USD liquidity ranking
-- [x] Composite runs on default settings
-- [ ] Composite under 2 s on 50 names (now 8 s on 26)
-- [x] Distribution endpoint for filter sliders
-- [x] Live filter counts without a full run, from a cached panel
-- [ ] Rank basis choices; market, industry and market cap presets
-- [x] Mount sc04 in the Screener catalog
-- [ ] Exchange labels for US names, which show Unknown today
-- [x] Faster job polling and smaller result payloads (built, not checked on page)
+- [x] `E` 500 default, 1,000 cap, USD liquidity ranking
+- [x] `E` Composite runs on default settings
+- [ ] `H` Composite under 2 s on 50 names (now 8 s on 26)
+- [x] `E` Distribution endpoint for filter sliders
+- [x] `E` Live filter counts without a full run, from a cached panel
+- [ ] `M` Rank basis choices; market, industry and market cap presets
+- [x] `E` Mount sc04 in the Screener catalog
+- [ ] `H` Exchange labels for US names, which show Unknown today
+- [x] `E` Faster job polling and smaller result payloads (built, not checked on page)
 
 Result-changing fixes wait for approval: SPY inside percentiles, rebalance stats, risk-free handling.
 
