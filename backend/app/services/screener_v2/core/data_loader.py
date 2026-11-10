@@ -542,7 +542,7 @@ def store_universe_upload(raw: bytes, filename: str | None = None) -> dict:
         raise ValueError('Invalid UTF-8 universe CSV') from exc
     if not symbols or len(symbols) > 5000:
         raise ValueError('Universe CSV must contain 1-5000 ticker rows')
-    symbols = parse_symbols({'tickers': symbols, 'max_symbols': 5000})
+    symbols = parse_symbols({'tickers': symbols})
     upload_id = uuid4().hex
     name = Path(filename or 'Uploaded universe').name[:200] or 'Uploaded universe'
     # Only a generated UUID can determine a write path.
