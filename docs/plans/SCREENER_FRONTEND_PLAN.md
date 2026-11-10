@@ -41,23 +41,23 @@ Our own advantage, shown everywhere: why a stock passed or failed, near misses, 
 - [x] `E` Near-black palette, blue primary, KPI cards
 - [x] `E` Left nav open by default with Overview, Screen, Rank, Test, Monitor, Saved, More
 - [x] `E` Coloured icon tile per section; active item with accent bar; run status dot
-- [ ] `E` Collapsible to icons, with tooltips; width remembered
+- [x] `E` Collapsible to icons, with tooltips; width remembered (needs check)
 - [ ] `M` One-row page header: icon, title, sub-tabs, Save, Share, Export, Run
-- [ ] `E` Inspector closed by default on Screen; opens for advanced settings only
-- [ ] `E` Runs dock collapsed to a status pill until opened
+- [x] `E` Inspector closed by default on Screen; opens for advanced settings only (needs check)
+- [x] `E` Runs dock collapsed to a status pill until opened (needs check)
 - [ ] `M` Command palette: run, add filter, open any screen or stock, change theme
-- [ ] `E` Keyboard: Cmd+Enter run, Shift+F filter, F column, `/` search, `[ ]` pages, Esc close
+- [x] `E` Keyboard: Cmd+Enter run, Shift+F filter, F column, `/` search, `[ ]` pages, Esc close (needs check)
 - [ ] `M` Skeletons matching final layout; no layout shift; no page-wide dim on navigation
 - [x] `E` Toasts for saved, failed, copied
 - [ ] `H` Phone layout: bottom nav, filter sheet, card rows
-- [ ] `E` Light theme kept working, dark the default
+- [x] `E` Light theme kept working, dark the default (needs check)
 
 ## 4. Overview page
 
 - [x] `E` Stat cards with real graphics: last screen, valuation ready, stocks covered, runs
 - [x] `E` Screens gallery by theme with colour per theme
 - [x] `E` Sector tiles with counts
-- [ ] `E` Check gallery and sector clicks end to end, and run on arrival
+- [x] `E` Check gallery and sector clicks end to end, and run on arrival (needs check)
 - [ ] `H` Each gallery row shows live match count and top three names after first load
 - [x] `E` Search box as the page's main element
 - [ ] `M` Recent screens and saved screens with last result and change since last run
@@ -75,11 +75,11 @@ Our own advantage, shown everywhere: why a stock passed or failed, near misses, 
 - [ ] `M` Rank basis: liquidity, market cap, or data coverage
 - [ ] `M` Presets: country, exchange, sector, industry, currency, market cap band
 - [ ] `M` Multi-select markets; primary listing only toggle
-- [ ] `E` CSV upload, exclude list, rename and delete saved universes
+- [x] `E` CSV upload, exclude list, rename and delete saved universes (needs check)
 - [ ] `M` Live name count and estimated run time before running
 - [x] `E` Sector and country mix of the chosen universe as a small bar
-- [ ] `E` Share a universe by link; a screen's result becomes a universe
-- [ ] `E` Clear disabled state at the cap, with count
+- [x] `E` Share a universe by link; a screen's result becomes a universe (needs check)
+- [x] `E` Clear disabled state at the cap, with count (needs check)
 
 Index membership stays out until we have data for it; it must not be faked.
 
@@ -102,7 +102,7 @@ Index membership stays out until we have data for it; it must not be faked.
 - [ ] `H` Historical conditions: 5-year average, change over N periods
 - [ ] `M` Filter from a chart: brush a scatter, click a treemap sector, drag a histogram
 - [ ] `H` Natural language box producing editable filters
-- [ ] `E` Hide or show filters; save as a screen; preset chips
+- [x] `E` Hide or show filters; save as a screen; preset chips (needs check)
 
 ### Run
 - [x] `E` One blue Run; auto-run option when a filter changes, debounced, on universes up to 250
@@ -127,19 +127,19 @@ Index membership stays out until we have data for it; it must not be faked.
 - [x] `E` Density, rows per page, infinite or paged; virtual scroll to 1,000 rows without lag (built, not checked on page)
 - [x] `E` Search within results; column quick filter from the header adds a pill
 - [x] `E` Chart-grid view of mini price charts
-- [ ] `E` CSV, Excel, TSV, tickers, copy, Markdown, PDF
+- [x] `E` CSV, Excel, TSV, tickers, copy, Markdown, PDF (needs check)
 - [x] `E` Save view for this screen or all; share by link; reset (built, not checked on page)
 
 ## 7. Output card, every output
 
-- [ ] `E` Title, as-of and coverage in one row, status pill
+- [x] `E` Title, as-of and coverage in one row, status pill (needs check)
 - [x] `E` View menu with the alternatives below; choice remembered (built, not checked on page)
 - [ ] `H` Settings: scale, range, colours, labels, benchmark, annotations
 - [ ] `H` Maximise, pin to board, change width, reorder, hide, duplicate
 - [x] `E` Copy image, download PNG, SVG, CSV (built, not checked on page)
 - [ ] `H` Hover crosshair; click drills into rows; brush filters
-- [ ] `E` Footnote naming the method, only where it matters
-- [ ] `E` Empty, partial and failed states with the reason
+- [x] `E` Footnote naming the method, only where it matters (needs check)
+- [x] `E` Empty, partial and failed states with the reason (needs check)
 
 ## 8. Stock drawer and compare
 
@@ -339,5 +339,5 @@ Keep: TanStack Table and Virtual, Query, Zustand, d3 maths, Radix, cmdk, CodeMir
 - [ ] `M` Breadth history: advance and decline and new highs and lows over time with SPY overlay (StockBee style)
 - [ ] `M` Test tear sheet sections from OpenStatz/QuantStats: return and risk by horizon (1Y, 3Y, 5Y, all), worst drawdown episodes, losing streaks, weekly heatmap, yearly against benchmark
 - [ ] `H` Pivot: FINOS Perspective (WebAssembly grid, pivot and charts, Apache-2.0) for a power-user pivot view, loaded only on that view
-- [ ] `E` Remove unused Plotly and Monaco from package.json
+- [x] `E` Remove unused Plotly and Monaco from package.json — not unused: Plotly runs the security page panels and Monaco the Studio editor, so both stay
 - [ ] `H` Only if the table lags at 1,000 rows: benchmark against React Data Grid (best overall in a 50,000-row benchmark) or Glide (canvas). TanStack plus Virtual had high heap growth in that benchmark

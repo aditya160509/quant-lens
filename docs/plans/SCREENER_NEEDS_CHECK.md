@@ -64,3 +64,15 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Bulk action Universe: selected names become the Screen universe | `RowActions.tsx` | universe-2 |
 | [ ] | Context bar: Rebalance (weekly, monthly, quarterly) and Top N (10, 20, 50, 100) segments where the study has them | `UniverseBar.tsx` | period-1 |
 | [ ] | Overview sector treemap: size is name count (not market cap yet), colour is median 1M return; opening a sector offers Filter to it | `ScreenerHome.tsx` | overview-3 |
+| [ ] | Nav collapses to a 52px icon rail with tooltips; ⌘B still toggles; width remembered | `ResearchApp.tsx`, `panels.ts`, `workspace.css` | shell-1 |
+| [ ] | Screen page opens with the inspector shut | `ResearchApp.tsx`, `screenerLab.ts` | shell-2 |
+| [ ] | Runs pill bottom-right while the dock is shut; click opens the dock | `ResearchApp.tsx` | shell-3 |
+| [ ] | Keys: `[ ]` change page, Esc closes dock then inspector (a maximised card wins Esc), Shift+F filters, F opens table columns | `ResearchApp.tsx`, `FeatureView.tsx`, `UniverseBar.tsx`, `DataTable.tsx` | shell-4 |
+| [ ] | Light theme: home icon tiles, filter pill values, universe monograms readable | `home.css`, `universe.css` | shell-5 |
+| [ ] | Overview gallery, sector and saved-screen clicks run on arrival (`?go=1` dropped after) | `ScreenerHome.tsx`, `ResearchApp.tsx` | gallery-1 |
+| [ ] | Universe picker: rename and delete saved universes, exclude box, Share link, "full" at 1,000 | `UniverseBar.tsx`, `api/screener_v2.py` | universe-3 |
+| [ ] | Filter bar: hide/show toggle, Save as screen, preset chips from saved screens | `UniverseBar.tsx` | filters-1 |
+| [ ] | Card menu: Copy as Markdown, Export TSV; PDF via Report | `OutputCard.tsx` | export-1 |
+| [ ] | Status pill, as-of date and name count beside the page title | `FeatureView.tsx` | header-1 |
+| [ ] | Method footnotes on Piotroski, Altman and Proof cards | `screenerLab.ts`, `Exhibit.tsx` | note-1 |
+| [ ] | An output returned empty shows "No rows for …" | `OutputCard.tsx` | empty-1 |

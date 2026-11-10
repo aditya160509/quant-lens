@@ -139,9 +139,9 @@ export const SCREENER_LAB: LabConfig = {
     sc04: {
       sections: [
         { id: "picks", label: "Picks", items: [{ keys: ["per_strategy_stock_list"], span: 12, view: "rankedTable", opts: { max: 1000, maxHeight: 560, hatch: true, rowActions, bulk } }] },
-        { id: "piotroski", label: "Piotroski", items: [{ keys: ["piotroski_breakdown"], span: 12, view: "piotroskiMatrix", title: "Piotroski F-score" }] },
+        { id: "piotroski", label: "Piotroski", items: [{ keys: ["piotroski_breakdown"], span: 12, view: "piotroskiMatrix", title: "Piotroski F-score", note: "Piotroski (2000): nine binary checks on the latest annual statements against the year before." }] },
         { id: "altman", label: "Altman Z", items: [
-          { keys: ["altman_z_score_status"], span: 7, view: "altmanZones", title: "Altman zones" },
+          { keys: ["altman_z_score_status"], span: 7, view: "altmanZones", title: "Altman zones", note: "Altman (1968) Z for manufacturers; cut lines 1.81 and 2.99." },
           { keys: ["altman_z_score_8q_trend"], span: 5, view: "lineChart", title: "Altman Z, last 8 quarters" },
         ] },
       ],
@@ -185,7 +185,7 @@ export const SCREENER_LAB: LabConfig = {
     sc05: {
       verdict: testBanner,
       sections: [
-        { id: "proof", label: "Proof", items: [{ keys: ["equity_curve", "cscv_pbo"], span: 12, view: "proofPanel" }] },
+        { id: "proof", label: "Proof", items: [{ keys: ["equity_curve", "cscv_pbo"], span: 12, view: "proofPanel", note: "Probability of backtest overfitting from combinatorially symmetric cross-validation (Bailey et al., 2017)." }] },
         { id: "performance", label: "Performance", items: [{ keys: ["equity_curve"], span: 8 }, { keys: ["full_performance_statistics"], span: 4 }, { keys: ["equity_curve"], span: 12, view: "underwater", title: "Drawdown" }, { keys: ["rolling_performance"], span: 12 }] },
         { id: "returns", label: "Returns", items: [{ keys: ["equity_curve"], span: 8, view: "monthlyHeatmap", title: "Monthly returns" }, { keys: ["equity_curve"], span: 4, view: "returnHistogram", title: "Daily returns" }] },
         { id: "rebalancing", label: "Rebalancing", items: [{ keys: ["rebalancing_date_sensitivity"], span: 6 }, { keys: ["holding_period_sensitivity"], span: 6 }, { keys: ["rebalancing_date_sensitivity_by_weekday"], span: 6 }, { keys: ["turnover_report"], span: 6 }] },
