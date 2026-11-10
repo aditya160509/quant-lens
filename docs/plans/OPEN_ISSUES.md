@@ -183,3 +183,13 @@ Beyond bug fixes. Order: 1, then approve or reject 2, then 3; 5 before launch.
    - [ ] Alert builder rules and channels
 4. Data gaps: US exchange labels (no local source), company names about 90%, Piotroski debt check, Altman Z 32%, Indian composite blank, RSI and beta about 1,400 names, the 12 later-data items in SCREENER_CHECKLIST
 5. Ready for many users: see the section above (Postgres and queue, workers, shared data, object storage, quotas, security review)
+
+## Screener: precompute past data (planned, 2026-11-10)
+
+Fill the dated snapshot store (`core/snapshots.py`) ahead of time instead of on first request, so screens and backtests on past dates never run cold (today: 11 s / 2.1 GB first full screen, 57 s first backtest).
+
+- **Store:** raw per-stock features per date (indicators, returns, vol, fundamentals, FF3 residuals) as Parquet, one file per date, keyed by source version. Already the format `snapshots.py` writes.
+- **Never stored:** percentiles, ranks, scores (depend on the chosen universe; milliseconds at query time). Non-default lookbacks or periods and custom formulas compute once, then cache.
+- **Backfill tiers (estimates):** month-ends 3y = 36 dates, ~50 MB, ~7 min (covers monthly backtests); weekly 3y ~200 MB, ~30 min; daily 3y ~750 dates, ~1–2 GB, ~2–3 h overnight.
+- **Order:** month-ends first, then daily for the latest year; add cleanup of files from old versions (store has no cleanup today, 61 MB after the memory-plan runs).
+- **Paid source later:** no lock-in. Files are keyed by source version; on switch, wipe and rerun the same backfill. Daily feeds then only need a nightly one-date job. Treat files as derived data: never hand-edit.
