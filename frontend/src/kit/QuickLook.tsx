@@ -128,8 +128,11 @@ function Overview({ d }: { d: Lookup }) {
         {change !== null ? <span className={`ql-change num ${change >= 0 ? "up" : "down"}`}>{change >= 0 ? "+" : ""}{(change * 100).toFixed(1)}% over the range</span> : null}
       </div>
       <h3 className="ql-h">Score profile</h3>
-      <div className="ql-scores">
-        {d.scores.map((s) => <Bar key={s.key} label={s.label} value={s.value} />)}
+      <div className="ql-profile">
+        <Radar scores={d.scores} />
+        <div className="ql-scores">
+          {d.scores.map((s) => <Bar key={s.key} label={s.label} value={s.value} />)}
+        </div>
       </div>
       <p className="ql-thesis">{d.thesis}</p>
       <div className="ql-notes">
@@ -141,6 +144,21 @@ function Overview({ d }: { d: Lookup }) {
         ))}
       </div>
     </>
+  );
+}
+
+/** Score profile as a shape: each axis 0 to 100; an unknown score sits at the centre, dashed. */
+function Radar({ scores }: { scores: Lookup["scores"] }) {
+  if (scores.length < 3) return null;
+  const R = 62, c = 80;
+  const pt = (i: number, v: number) => { const a = (Math.PI * 2 * i) / scores.length - Math.PI / 2; return [c + Math.cos(a) * R * v, c + Math.sin(a) * R * v]; };
+  const poly = scores.map((s, i) => pt(i, isNum(s.value) ? Math.max(0, Math.min(100, s.value)) / 100 : 0).join(",")).join(" ");
+  return (
+    <svg className="ql-radar" viewBox="0 0 160 160" role="img" aria-label={`Score profile: ${scores.map((s) => `${s.label} ${isNum(s.value) ? s.value.toFixed(0) : "unknown"}`).join(", ")}`}>
+      {[0.25, 0.5, 0.75, 1].map((k) => <polygon key={k} points={scores.map((_, i) => pt(i, k).join(",")).join(" ")} fill="none" stroke="var(--line)" />)}
+      {scores.map((s, i) => { const [x, y] = pt(i, 1); const [lx, ly] = pt(i, 1.2); return <g key={s.key}><line x1={c} y1={c} x2={x} y2={y} stroke="var(--line)" strokeDasharray={isNum(s.value) ? undefined : "2 2"} /><text x={lx} y={ly} fontSize="8.5" textAnchor="middle" dominantBaseline="middle" fill={isNum(s.value) ? "var(--text-3)" : "var(--text-4)"}>{s.label}</text></g>; })}
+      <polygon points={poly} fill="color-mix(in oklch, var(--accent) 28%, transparent)" stroke="var(--accent)" strokeWidth={1.5} strokeLinejoin="round" />
+    </svg>
   );
 }
 

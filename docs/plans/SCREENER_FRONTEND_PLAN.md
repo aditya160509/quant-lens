@@ -144,7 +144,7 @@ Index membership stays out until we have data for it; it must not be faked.
 - [ ] Header: monogram, price, change, exchange, follow, alert, compare, add to screen
 - [ ] Ratio grid with add ratio and edit ratios, percentile tick against sector
 - [ ] Price chart with range tabs, Price and P/E modes, volume, moving averages, entry and exit marks
-- [ ] Strength profile: quality, value, momentum, health, growth as a radar we compute, with filter by shape
+- [x] Strength profile: quality, value, momentum, health, growth as a radar we compute, with filter by shape
 - [ ] Why here: filter, value, threshold, margin, sector percentile
 - [ ] Peers, quarters, profit and loss, balance sheet, cash flow, ratios as tabs
 - [ ] Statement rows with sparklines, YoY, common-size toggle

@@ -29,3 +29,4 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Category pills in the bar: Sector, Industry, Country, Exchange, Currency with searchable checklist and counts; live pass count updates | `UniverseBar.tsx`, `InFilter.tsx` | filters-3 |
 | [ ] | Pill editor footer: removed and left counts, Clear | `UniverseBar.tsx` | funnel |
 | [ ] | Funnel: shrinking bars per filter, removed count, bottleneck in amber | `views.tsx`, `screen.css` | funnel |
+| [ ] | Drawer: strength radar beside score bars; unknown axes dashed | `kit/QuickLook.tsx`, `quicklook.css` | drawer-1 |
