@@ -165,13 +165,13 @@ Order: finish the engine plan on the Screener first, then 3, then 4 and 5. Recon
 Beyond bug fixes. Order: 1, then approve or reject 2, then 3; 5 before launch.
 
 1. Speed and memory (background agent working from `~/Downloads/SCREENER_V2_MAXIMUM_MEMORY_REDUCTION_V2.md`; notes in `MEMORY_HOTSPOTS_V2.txt`)
-   - [ ] Backtest under 15 s on 12 names (61 s; 405 dated panels across 14 sensitivity runs)
-   - [ ] Full screen under 1 GB (2.97 GB, about 32 s; prices read three times)
-   - [ ] Composite first run under 2 s on 50 names (about 10 s; repeat 1 s)
-   - [ ] Byte-bounded panel caches (`validation._PANEL_CACHE` holds 400 by count; `explain._PREVIEW` 4)
-   - [ ] Batched idiosyncratic-vol OLS in the normal path; delete `pit_cache.py`
-   - [ ] Fundamental growth in one grouped pass, used columns only
-   - [ ] Dated raw-feature snapshot store; ranks stay universe-relative; seeding policy kept as bounded window
+   - [x] Backtest under 15 s on 12 names (now 13.4 s warm, 57 s cold; was 61 s; 405 dated panels across 14 sensitivity runs)
+   - [x] Full screen under 1 GB (now 489 MB, 0.8 s warm; cold 2.1 GB; was 2.97 GB, about 32 s; prices read three times)
+   - [ ] Composite first run under 2 s on 50 names (now 7.7 s; was about 10 s; repeat 1 s)
+   - [x] Byte-bounded panel caches (`validation._PANEL_CACHE` holds 400 by count; `explain._PREVIEW` 4)
+   - [x] Batched idiosyncratic-vol OLS in the normal path; delete `pit_cache.py`
+   - [x] Fundamental growth in one grouped pass, used columns only
+   - [x] Dated raw-feature snapshot store; ranks stay universe-relative; seeding policy kept as bounded window
    - [ ] Sensitivity runs (offsets, weekdays, holding periods) as an optional second job
 2. Result-changing fixes, need approval: E10 SPY in percentiles, E11 rank and sort ties, E15 stale growth, E16 rebalance stats on fixed blocks, E17 risk-free near the latest date
 3. Backend for frontend plan items
