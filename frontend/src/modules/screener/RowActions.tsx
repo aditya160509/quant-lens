@@ -1,7 +1,7 @@
 "use client";
 
 import toast from "react-hot-toast";
-import { BookOpen, Bell, Copy, FlaskConical, LineChart, Sigma, Star } from "lucide-react";
+import { BookOpen, Bell, Copy, Globe2, FlaskConical, LineChart, Sigma, Star } from "lucide-react";
 import { downloadCsv, downloadJson, downloadTickers } from "@/charts/export";
 import type { Row } from "@/modules/research/types";
 import { useRouter } from "next/navigation";
@@ -47,6 +47,7 @@ export function BulkActions({ rows, clear }: { rows: Row[]; clear: () => void })
     <>
       <button type="button" className="btn sm ghost" onClick={() => { star(); clear(); toast.success(`${tickers.length} added to watchlist`); }}><Star size={11} />Watchlist</button>
       <button type="button" className="btn sm ghost" onClick={() => { set("sc06", "watchlist", true); clear(); toast.success(`Alerts on for ${tickers.length}`); }}><Bell size={11} />Alert</button>
+      <button type="button" className="btn sm ghost" title="Screen only these names from now on" onClick={() => { useStudies.setState((st) => ({ forms: { ...st.forms, sc01: { ...st.forms.sc01, universe: tickers.join(","), max_symbols: Math.max(tickers.length, 25) } } })); clear(); toast.success(`Universe set to ${tickers.length} names`); }}><Globe2 size={11} />Universe</button>
       <button type="button" className="btn sm ghost" onClick={() => { set("sc03", "universe"); router.push(featureHref("sc03")); }}><Sigma size={11} />Rank</button>
       <button type="button" className="btn sm ghost" onClick={() => { set("sc05", "universe"); router.push(featureHref("sc05")); }}><LineChart size={11} />Test</button>
       <button type="button" className="btn sm ghost" onClick={() => { set("ml02", "universe"); router.push("/ml/alpha"); }}><FlaskConical size={11} />ML</button>

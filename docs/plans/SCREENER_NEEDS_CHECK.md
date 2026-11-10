@@ -61,3 +61,4 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Universe sector mix as a thin stacked bar beside the pass count (from preview mix) | `filters/Preview.tsx`, `core/explain.py` | universe-1 |
 | [ ] | Treemap: open a sector, "Filter to {sector}" sets the Sector filter (live count updates, Run or Auto applies) | `charts/Treemap.tsx`, `screener/views.tsx` | chart-filter-1 |
 | [ ] | Phone: filter bar scrolls sideways with a fade cue instead of wrapping | `universe.css` | phone-1 |
+| [ ] | Bulk action Universe: selected names become the Screen universe | `RowActions.tsx` | universe-2 |
