@@ -15,10 +15,12 @@ import { send } from "../api";
 import { useWatchlists } from "../watchlists";
 import { toPayload } from "@/modules/research/StudyForm";
 import { AddFilter } from "./AddFilter";
+import { InFilter, picked } from "./InFilter";
 import { HistogramRange, stageFor, useFilterColumns, useFilterPreview } from "./Preview";
 import "./universe.css";
 
 const CAP = 1000;
+const CATS = ["sector", "industry", "country", "exchange", "currency"];
 const SIZES = [25, 50, 100, 250, 500, 1000];
 const PERIODS: [string, number][] = [["6M", 182], ["1Y", 365], ["2Y", 756], ["3Y", 1095], ["5Y", 1825], ["10Y", 3650]];
 const QUICK = ["market_cap", "pe", "roe", "revenue_growth_yoy", "dividend_yield", "return_12m", "rsi", "beta"];
@@ -45,7 +47,13 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
   const at = (e: React.MouseEvent, key: string) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ key, at: { x: r.left, y: r.bottom + 6 } }); };
   const columnOf = useFilterColumns();
   const shownMetrics = [...metrics, ...added];
-  const preview = useFilterPreview(toPayload(feature, run.form), [...shownMetrics, ...(menu && menu.key !== "+" ? [menu.key] : [])].map((m) => columnOf[m]).filter(Boolean)).data;
+  const preview = useFilterPreview(toPayload(feature, run.form), [...shownMetrics, ...(menu && menu.key !== "+" && !menu.key.startsWith("cat:") ? [menu.key] : [])].map((m) => columnOf[m]).filter(Boolean)).data;
+  const cats = feature.inputs.filter((f) => CATS.includes(f.key));
+  const catPill = (f: (typeof cats)[number]) => {
+    const n = picked(run.form[f.key]).length;
+    return <button key={f.key} type="button" className={`ub-pill${n ? " on" : ""}`} onClick={(e) => at(e, `cat:${f.key}`)}>{f.label}{n ? <b>{n === 1 ? picked(run.form[f.key])[0] : `${n} chosen`}</b> : null}<ChevronDown size={12} /></button>;
+  };
+  const catMenu = menu?.key.startsWith("cat:") ? cats.find((f) => f.key === menu.key.slice(4)) : undefined;
   const pill = (m: string) => {
     const lo = run.form[`${m}_min`], hi = run.form[`${m}_max`];
     const on = Boolean(lo || hi);
@@ -71,13 +79,15 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
       </div>
       {range.length ? (
         <div className="ub-row">
-          {metrics.map(pill)}{added.map(pill)}
+          {cats.map(catPill)}{metrics.map(pill)}{added.map(pill)}
           <button type="button" className="ub-pill add" aria-label="All filters" onClick={(e) => at(e, "+")}><Plus size={13} />Filter</button>
           {preview ? <span className="ub-pass num" role="status"><b>{preview.passed.toLocaleString()}</b> of {preview.universe.toLocaleString()} pass</span> : null}
         </div>
       ) : null}
       <PopMenu at={menu?.at ?? null} onClose={() => setMenu(null)} width={menu?.key === "+" ? 440 : 300} sticky>
-        {menu?.key === "+" ? (
+        {catMenu ? (
+          <div style={{ padding: 10 }}><InFilter field={catMenu} value={run.form[catMenu.key]} onChange={(v) => set(catMenu.key, v)} /></div>
+        ) : menu?.key === "+" ? (
           <><AddFilter fields={range} active={new Set(shownMetrics.filter((m) => run.form[`${m}_min`] || run.form[`${m}_max`]))} name={name} onPick={(m) => setMenu((cur) => (cur ? { key: m, at: cur.at } : cur))} />
           <details className="af-exact"><summary>Exact values and top N</summary><div style={{ padding: 8, maxHeight: 360, overflowY: "auto" }}><FilterChips scope={feature.id} fields={range} form={run.form} setForm={run.setForm} /></div></details></>
         ) : menu ? (

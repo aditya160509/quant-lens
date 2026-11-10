@@ -94,7 +94,7 @@ Index membership stays out until we have data for it; it must not be faked.
 - [x] Pill editor: slider over the real distribution histogram, percentile mode, greater, less, between, in, top N
 - [x] Live pass count and removed count on each pill; bottleneck marked
 - [ ] Toggle, remove, reorder, duplicate; undo and redo
-- [ ] Category filters as searchable checklists: sector, industry, country, exchange, currency
+- [x] Category filters as searchable checklists: sector, industry, country, exchange, currency
 - [ ] AND/OR groups, editable as tree and as formula
 - [ ] Compare to another field: P/E below sector median, price above SMA 200
 - [ ] Historical conditions: 5-year average, change over N periods

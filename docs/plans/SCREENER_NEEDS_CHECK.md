@@ -26,3 +26,4 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Preview panel cache: first edit about 3 s on 200 names, later edits instant | `core/explain.py` | filters-1 |
 | [ ] | Add-filter overlay: search, groups (Market, Valuation, Profitability, Growth, Health, Dividends, Performance, Technical, Score), recent, starred; pick opens the histogram editor | `filters/AddFilter.tsx` | filters-2 |
 | [ ] | Exact values and top N still reachable under the overlay | `UniverseBar.tsx` | filters-2 |
+| [ ] | Category pills in the bar: Sector, Industry, Country, Exchange, Currency with searchable checklist and counts; live pass count updates | `UniverseBar.tsx`, `InFilter.tsx` | filters-3 |
