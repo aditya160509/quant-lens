@@ -327,7 +327,9 @@ Each step ends with screenshots on real results and a commit.
 
 ## 17. Data we cannot show yet
 
-Analyst estimates, shareholding, index membership, company logos, extended hours and real-time quotes. These are marked "needs data" and are not faked.
+Analyst estimates and forward P/E, shareholding and float, short interest, earnings and ex-dividend calendar, index membership, company logos, extended hours and real-time quotes. These are marked "needs data" and are not faked.
+
+- [ ] `E` Hide filters with no data in the picker (Forward P/E and Float % have zero coverage today), using the preview's known count
 
 ## 18. Open-source check (2026-11-10)
 
