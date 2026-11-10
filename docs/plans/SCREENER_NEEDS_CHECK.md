@@ -36,3 +36,5 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Monitor: hit-rate scorecards per alert type at 1d, 5d, 21d with 50% mark and n | `monitor/MonitorViews.tsx` | monitor-1 |
 | [ ] | Monitor layout: Alerts and Track record tabs; watchlist table tinted with row actions | `screenerLab.ts` | monitor-1 |
 | [ ] | Saved: card grid, search, sort, schedule pill (manual, interval, error), settings as pills; open card spans full width | `saved/SavedPage.tsx`, `saved.css` | saved-1 |
+| [ ] | Chart grid view (View menu on results and rankings): card per name with 3M trend, 1M move, price, score; opens drawer; first 120 | `views.tsx`, `screen.css` | grid-1 |
+| [ ] | Open: Backtest 61 s on 12 names (405 point-in-time panels across 14 sensitivity runs); needs a vectorised multi-date panel | backend | — |

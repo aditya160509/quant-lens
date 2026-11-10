@@ -124,7 +124,7 @@ Index membership stays out until we have data for it; it must not be faked.
 - [ ] Row hover actions; row expand shows why it passed
 - [ ] Density, rows per page, infinite or paged; virtual scroll to 1,000 rows without lag
 - [x] Search within results; column quick filter from the header adds a pill
-- [ ] Chart-grid view of mini price charts
+- [x] Chart-grid view of mini price charts
 - [ ] CSV, Excel, TSV, tickers, copy, Markdown, PDF
 - [ ] Save view for this screen or all; share by link; reset
 

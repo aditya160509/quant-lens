@@ -3,6 +3,8 @@
 import { createElement } from "react";
 import { Treemap } from "@/charts/Treemap";
 import { DataTable } from "@/kit/DataTable";
+import { openQuickLook } from "@/kit/QuickLook";
+import { Spark } from "@/charts/RankList";
 import { isNum, label, out, pct } from "@/modules/research/format";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import { ScreenScatter, SensitivityStrip } from "./trust/Charts";
@@ -66,5 +68,28 @@ export function FunnelView({ rows }: ViewProps) {
         );
       })}
     </ol>
+  );
+}
+
+/** Each passing name as a small card with its 3-month trend, price and 1-month move; a card opens the drawer. */
+export function ChartGrid({ rows }: ViewProps) {
+  const shown = rows.slice(0, 120);
+  return (
+    <div className="cg">
+      {shown.map((r) => {
+        const t = String(r.ticker ?? "");
+        const trend = Array.isArray(r.trend_3m) ? (r.trend_3m as unknown[]).filter(isNum) : [];
+        const m = isNum(r.return_1m) ? r.return_1m : null;
+        return (
+          <button type="button" key={t} className="cg-card" onClick={() => openQuickLook(t)}>
+            <span className="cg-top"><b>{t}</b><em className={m === null ? "" : m >= 0 ? "up" : "down"}>{m === null ? "" : pct(m, 1)}</em></span>
+            <span className="cg-name">{String(r.company_name ?? r.sector ?? "")}</span>
+            {trend.length > 1 ? <Spark values={trend} width={180} height={44} color={trend[trend.length - 1] >= trend[0] ? "var(--up)" : "var(--down)"} className="cg-spark" /> : <span className="cg-none">No trend</span>}
+            <span className="cg-foot num">{isNum(r.price) ? r.price.toLocaleString("en-US", { maximumFractionDigits: 2 }) : ""}{isNum(r.core_quant_score) ? <i>Score {r.core_quant_score.toFixed(0)}</i> : null}</span>
+          </button>
+        );
+      })}
+      {rows.length > shown.length ? <p className="cg-more">{rows.length - shown.length} more in the table</p> : null}
+    </div>
   );
 }
