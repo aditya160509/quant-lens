@@ -630,5 +630,5 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 div:nth-of-type(7n+1) > .nav-item { --h: 258; } div:nth-of-type(7n+2) > .nav-item { --h: 157; } div:nth-of-type(7n+3) > .nav-item { --h: 75; }
 div:nth-of-type(7n+4) > .nav-item { --h: 300; } div:nth-of-type(7n+5) > .nav-item { --h: 30; } div:nth-of-type(7n+6) > .nav-item { --h: 195; } div:nth-of-type(7n) > .nav-item { --h: 350; }
 .nav-item[aria-current="page"]:not(.sub) svg:first-child { color: oklch(0.95 0.05 var(--h, 258)); background: oklch(0.55 0.15 var(--h, 258)); }
-.nav-item[aria-current="page"]::before { content: ""; position: absolute; left: -8px; top: 7px; bottom: 7px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.nav-item[aria-current="page"]::before { content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
 .ws-tokens.is-light .nav-item:not(.sub) svg:first-child { color: oklch(0.45 0.13 var(--h, 258)); background: oklch(0.92 0.04 var(--h, 258)); }
