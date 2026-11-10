@@ -3,7 +3,8 @@
 import { createElement, useState, useRef } from "react";
 import { ArrowDown, ArrowUp, BookOpen, Pin, Check, ChevronDown, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
 import { Exhibit } from "@/kit/Exhibit";
-import { downloadCsv, downloadJson, downloadPng, downloadSvg, downloadTickers, downloadXlsx } from "@/charts/export";
+import { download, downloadCsv, downloadJson, downloadPng, downloadSvg, downloadTickers, downloadXlsx } from "@/charts/export";
+import { Empty } from "@/kit/DataTable";
 import { useLayout } from "@/workspace/layout";
 import { MenuItem, PopMenu, Tooltip, type MenuAt } from "@/workspace/ui";
 import { label, out } from "./format";
@@ -76,16 +77,19 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const svg = () => body.current?.querySelector("svg[role='img'], svg[role='group']") as SVGSVGElement | null;
 
   const canTable = isChart && rows.length > 0;
-  const copy = () => {
-    const cols = Object.keys(rows[0] ?? {});
-    const tsv = [cols.join("\t"), ...rows.map((r) => cols.map((c) => String(r[c] ?? "")).join("\t"))].join("\n");
-    void navigator.clipboard?.writeText(tsv);
-  };
+  const cols = Object.keys(rows[0] ?? {});
+  const cell = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+  const tsv = () => [cols.join("\t"), ...rows.map((r) => cols.map((c) => cell(r[c]).replace(/[\t\n]/g, " ")).join("\t"))].join("\n");
+  const markdown = () => [`| ${cols.join(" | ")} |`, `|${cols.map(() => " --- ").join("|")}|`, ...rows.map((r) => `| ${cols.map((c) => cell(r[c]).replace(/\|/g, "\\|")).join(" | ")} |`)].join("\n");
+  const copy = () => void navigator.clipboard?.writeText(tsv());
+  // An output the run returned as an empty list: say so instead of drawing an empty frame.
+  const raw = result.tables?.[key] ?? result.charts?.[key] ?? result.sections?.[key];
+  const empty = Array.isArray(raw) && raw.length === 0;
   const exportable = rows.length > 0 && !["latex", "csv", "pdf"].includes(viewName);
   const openSettings = () => { useLayout.getState().set("right", true, true); };
 
   return (
-    <Exhibit id={key} name={title} finding={finding} hint={hint} flush={item.flush} bodyRef={body}
+    <Exhibit id={key} name={title} finding={finding} hint={hint} note={item.note} flush={item.flush} bodyRef={body}
       style={maximized ? { minHeight: "100%" } : undefined} onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
       tools={<>
           {(kinds.length > 1 || alts.length > 0) && viewName !== "latex" ? (
@@ -124,6 +128,7 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
       </PopMenu>
       <PopMenu at={menu} onClose={() => setMenu(null)}>
         {rows.length ? <MenuItem icon={<Copy size={13} />} onClick={copy}>Copy data</MenuItem> : null}
+        {rows.length ? <MenuItem icon={<Copy size={13} />} onClick={() => void navigator.clipboard?.writeText(markdown())}>Copy as Markdown</MenuItem> : null}
         {currentJob && currentJob !== "draft" ? <MenuItem icon={<Pin size={13} />} onClick={() => togglePin({ featureId: feature.id, card: cardId(item), jobId: currentJob })}>{pinned ? "Unpin from board" : "Pin to board"}</MenuItem> : null}
         {onHide ? <MenuItem icon={<EyeOff size={13} />} onClick={onHide}>Hide</MenuItem> : null}
         <MenuItem icon={maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />} onClick={onToggleMax} hint={maximized ? "Esc" : undefined}>{maximized ? "Restore" : "Expand"}</MenuItem>
@@ -132,6 +137,7 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
           <MenuItem icon={<Download size={13} />} onClick={() => { const sv = svg(); if (sv) downloadSvg(sv, name); }}>Export SVG</MenuItem>
           <MenuItem icon={<Download size={13} />} onClick={() => { const sv = svg(); if (sv) void downloadPng(sv, name); }}>Export PNG</MenuItem></> : null}
         {exportable ? <MenuItem icon={<Download size={13} />} onClick={() => downloadCsv(rows, name)}>Export CSV</MenuItem> : null}
+        {exportable ? <MenuItem icon={<Download size={13} />} onClick={() => download(`${name}.tsv`, new Blob([tsv()], { type: "text/tab-separated-values" }))}>Export TSV</MenuItem> : null}
         {exportable && lab().id === "screener" ? <MenuItem icon={<Download size={13} />} onClick={() => downloadJson(rows, name, (result.meta as { limitations?: string[] }).limitations)}>Export JSON</MenuItem> : null}
         {exportable && lab().id === "screener" ? <MenuItem icon={<Download size={13} />} onClick={() => void downloadXlsx(rows, name, `${lab().base}/export/xlsx`)}>Export Excel</MenuItem> : null}
         {exportable && lab().id === "screener" && "ticker" in rows[0] ? <MenuItem icon={<Download size={13} />} onClick={() => downloadTickers(rows, name)}>Export tickers</MenuItem> : null}
@@ -148,7 +154,7 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
       </PopMenu>
       {about ? <MethodDrawer title={title} hint={hint} feature={feature} result={result} onClose={() => setAbout(false)} /> : null}
       </>}>
-        {overlayId ? (
+        {empty && !custom && !overlayId ? <Empty text={`No rows for ${title.toLowerCase()} with these settings.`} /> : overlayId ? (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: 12, color: "var(--text-3)" }}>
               <span>Overlay: <b style={{ color: "var(--text)", fontWeight: 500 }}>B</b> = run from {new Date(others.find((r) => r.jobId === overlayId)?.startedAt ?? 0).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>

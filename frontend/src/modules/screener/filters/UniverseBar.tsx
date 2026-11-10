@@ -1,7 +1,10 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, Globe2, Plus, Search, X } from "lucide-react";
+import { Bookmark, Check, ChevronDown, Eye, EyeOff, Globe2, Link2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import toast from "react-hot-toast";
+import { featureHref } from "@/modules/research/catalog";
+import { encodeSettings } from "@/modules/research/StudyForm";
 import { useEffect, useMemo, useState } from "react";
 import { get } from "@/modules/research/api";
 import { FilterChips, isRangeField } from "@/modules/research/FilterChips";
@@ -47,12 +50,13 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
   const added = [...new Set(range.map((f) => f.key.replace(/_(min|max|top)$/, "")))].filter((m) => !QUICK.includes(m) && (run.form[`${m}_min`] || run.form[`${m}_max`]));
   const name = (m: string) => range.find((f) => f.key === `${m}_min`)?.label.replace(/ (Min|Max)$/, "") ?? fmtLabel(m);
   const at = (e: React.MouseEvent, key: string) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ key, at: { x: r.left, y: r.bottom + 6 } }); };
-  // F opens the filter picker; never while typing.
+  // Shift+F opens the filter picker, F the first table's columns; never while typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (e.metaKey || e.ctrlKey || e.altKey || t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
-      if (e.key === "f") { e.preventDefault(); document.querySelector<HTMLButtonElement>("[data-hotkey='f']")?.click(); }
+      const hot = e.key === "F" ? "f" : e.key === "f" ? "col" : null;
+      if (hot) { e.preventDefault(); document.querySelector<HTMLButtonElement>(`[data-hotkey='${hot}']`)?.click(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -67,6 +71,15 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
     const id = setTimeout(() => { setSeenKey(formKey); run.run(); }, 900);
     return () => clearTimeout(id);
   }, [auto, small, formKey, seenKey, run]);
+  const [hidden, setHidden] = useState(() => { try { return localStorage.getItem("screener-filters-hidden") === "1"; } catch { return false; } });
+  const toggleHidden = () => { const next = !hidden; setHidden(next); try { localStorage.setItem("screener-filters-hidden", next ? "1" : "0"); } catch { /* storage blocked */ } };
+  const qc = useQueryClient();
+  const fid = feature.id.replace(/^sc/, "");
+  const presets = (useQuery({ queryKey: ["screener", "screens"], queryFn: () => get<{ screens: { screen_id: string; name: string; feature_id: string; payload: Record<string, unknown> }[] }>("/screens"), retry: false }).data?.screens ?? []).filter((x) => x.feature_id === fid);
+  const saveScreen = () => {
+    const name = window.prompt("Save screen as")?.trim();
+    if (name) void send("PUT", `/screens/s${Date.now().toString(36)}`, { name, feature_id: fid, payload: toPayload(feature, run.form) }).then(() => { toast.success(`Saved ${name}`); return qc.invalidateQueries({ queryKey: ["screener", "screens"] }); }).catch((e: Error) => toast.error(e.message));
+  };
   const columnOf = useFilterColumns();
   const shownMetrics = [...metrics, ...added];
   const preview = useFilterPreview(toPayload(feature, run.form), [...shownMetrics, ...(menu && menu.key !== "+" && !menu.key.startsWith("cat:") ? [menu.key] : [])].map((m) => columnOf[m]).filter(Boolean)).data;
@@ -108,12 +121,19 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
         ) : null}
         {keys.has("as_of_date") ? <input className="ub-date" type="date" aria-label="As of date" value={String(run.form.as_of_date ?? "")} onChange={(e) => set("as_of_date", e.target.value)} /> : null}
         {run.stale ? <span className="sh-pill amber">Changed</span> : null}
+        {range.length ? <button type="button" className="btn sm icon ghost ub-hide" aria-pressed={hidden} aria-label={hidden ? "Show filters" : "Hide filters"} title={hidden ? "Show filters" : "Hide filters"} onClick={toggleHidden}>{hidden ? <Eye size={14} /> : <EyeOff size={14} />}</button> : null}
       </div>
-      {range.length ? (
+      {presets.length ? (
+        <div className="ub-row ub-presets">
+          {presets.slice(-8).map((x) => <button key={x.screen_id} type="button" className="ub-chip" onClick={() => run.setForm((c) => ({ ...c, ...x.payload }))}>{x.name}</button>)}
+        </div>
+      ) : null}
+      {range.length && !hidden ? (
         <div className="ub-row">
           {cats.map(catPill)}{metrics.map(pill)}{added.map(pill)}
-          <button type="button" className="ub-pill add" data-hotkey="f" aria-keyshortcuts="F" aria-label="All filters" onClick={(e) => at(e, "+")}><Plus size={13} />Filter</button>
+          <button type="button" className="ub-pill add" data-hotkey="f" aria-keyshortcuts="Shift+F" aria-label="All filters" onClick={(e) => at(e, "+")}><Plus size={13} />Filter</button>
           <button type="button" className={`ub-pill${auto && small ? " on" : ""}`} aria-pressed={auto} disabled={!small} title={small ? "Re-run after each change" : "Auto run needs 250 names or fewer"} onClick={() => { const next = !auto; setAuto(next); try { localStorage.setItem("screener-auto-run", next ? "1" : "0"); } catch { /* storage blocked */ } }}>Auto</button>
+          <button type="button" className="ub-pill" onClick={saveScreen}><Bookmark size={12} />Save</button>
           {preview ? <span className="ub-pass num" role="status"><MixBar mix={preview.mix?.sector} /><b>{preview.passed.toLocaleString()}</b> of {preview.universe.toLocaleString()} pass</span> : null}
         </div>
       ) : null}
@@ -165,7 +185,12 @@ function Picker({ tickers, size, onApply, onClose }: { tickers: string[]; size: 
   const full = list.length >= CAP;
   const toggle = (t: string) => setList((c) => (c.includes(t) ? c.filter((x) => x !== t) : c.length >= CAP ? c : [...c, t]));
   const merge = (more: string[]) => setList((c) => [...new Set([...c, ...more])].slice(0, CAP));
-  const save = () => { const name = saving.trim(); if (name && list.length) void send("PUT", `/universes/u${Date.now().toString(36)}`, { name, symbols: list }).then(() => { setSaving(""); return qc.invalidateQueries({ queryKey: ["screener", "universes"] }); }); };
+  const refresh = () => qc.invalidateQueries({ queryKey: ["screener", "universes"] });
+  const save = () => { const name = saving.trim(); if (name && list.length) void send("PUT", `/universes/u${Date.now().toString(36)}`, { name, symbols: list }).then(() => { setSaving(""); toast.success(`Saved ${name}`); return refresh(); }); };
+  const rename = (u: Saved) => { const name = window.prompt("Rename universe", u.name)?.trim(); if (name && name !== u.name) void send("PUT", `/universes/${u.universe_id}`, { name, symbols: u.symbols }).then(refresh); };
+  const remove = (u: Saved) => { if (window.confirm(`Delete ${u.name}?`)) void send("DELETE", `/universes/${u.universe_id}`).then(() => { toast.success(`Deleted ${u.name}`); return refresh(); }); };
+  const exclude = (more: string[]) => setList((c) => c.filter((t) => !more.includes(t)));
+  const share = () => { const u = new URL(featureHref("sc01"), location.origin); u.searchParams.set("s", encodeSettings({ universe: list.join(","), max_symbols: Math.max(list.length, 25) })); void navigator.clipboard?.writeText(u.toString()).then(() => toast.success("Link copied")); };
 
   return (
     <div className="ub-over" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -190,7 +215,13 @@ function Picker({ tickers, size, onApply, onClose }: { tickers: string[]; size: 
             <div className="ub-sizes">{SIZES.map((s) => <button key={s} type="button" aria-pressed={!list.length && n === s} onClick={() => { setList([]); setN(s); }}>{s.toLocaleString()}</button>)}</div>
             <h4>Saved</h4>
             <div className="ub-saved">
-              {(saved.data?.universes ?? []).map((u) => <button key={u.universe_id} type="button" onClick={() => merge(u.symbols)}>{u.name}<em>{u.count}</em></button>)}
+              {(saved.data?.universes ?? []).map((u) => (
+                <div key={u.universe_id} className="ub-saved-row">
+                  <button type="button" onClick={() => merge(u.symbols)}>{u.name}<em>{u.count}</em></button>
+                  <button type="button" className="ub-ic" aria-label={`Rename ${u.name}`} onClick={() => rename(u)}><Pencil size={12} /></button>
+                  <button type="button" className="ub-ic" aria-label={`Delete ${u.name}`} onClick={() => remove(u)}><Trash2 size={12} /></button>
+                </div>
+              ))}
               {Object.entries(lists).filter(([, l]) => l.length).map(([id, l]) => <button key={id} type="button" onClick={() => merge(l)}>{id}<em>{l.length}</em></button>)}
             </div>
             <h4>Paste</h4>
@@ -199,7 +230,9 @@ function Picker({ tickers, size, onApply, onClose }: { tickers: string[]; size: 
             <textarea className="input" rows={2} placeholder="AAPL, MSFT" onBlur={(e) => { const v = e.target.value.toUpperCase().split(/[,;\s]+/).filter(Boolean); if (v.length) { merge(v); e.target.value = ""; } }} />
             {list.length ? (
               <>
-                <h4>Chosen <em>{list.length}/{CAP}</em></h4>
+                <h4>Exclude</h4>
+                <textarea className="input" rows={1} placeholder="TSLA" aria-label="Exclude tickers" onBlur={(e) => { const v = e.target.value.toUpperCase().split(/[,;\s]+/).filter(Boolean); if (v.length) { exclude(v); e.target.value = ""; } }} />
+                <h4>Chosen <em className={full ? "ub-full" : undefined}>{list.length.toLocaleString()}/{CAP.toLocaleString()}{full ? " · full" : ""}</em></h4>
                 <div className="ub-chips">{list.slice(0, 80).map((t) => <button key={t} type="button" onClick={() => toggle(t)}>{t}<X size={11} /></button>)}</div>
                 <div className="ub-save"><input className="input" placeholder="Name" value={saving} onChange={(e) => setSaving(e.target.value)} /><button type="button" className="btn sm" disabled={!saving.trim()} onClick={save}>Save</button></div>
               </>
@@ -208,6 +241,7 @@ function Picker({ tickers, size, onApply, onClose }: { tickers: string[]; size: 
         </div>
         <footer className="ub-foot">
           <span>{list.length ? `${list.length} stocks` : `Top ${n.toLocaleString()} by liquidity`}</span>
+          {list.length ? <button type="button" className="btn ghost" onClick={share}><Link2 size={13} />Share</button> : null}
           {list.length ? <button type="button" className="btn ghost" onClick={() => setList([])}>Clear</button> : null}
           <button type="button" className="btn primary" onClick={() => onApply(list, n)}>Use universe</button>
         </footer>

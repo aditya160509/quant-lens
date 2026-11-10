@@ -100,6 +100,11 @@ def list_universes() -> list[dict]:
                 for r in conn.execute('SELECT universe_id, name, symbols FROM universes ORDER BY universe_id')]
 
 
+def delete_universe(universe_id: str) -> None:
+    with _connection() as conn:
+        conn.execute('DELETE FROM universes WHERE universe_id=?', (universe_id,))
+
+
 def get_universe(universe_id: str) -> list[str]:
     with _connection() as conn:
         row = conn.execute('SELECT symbols FROM universes WHERE universe_id=?', (universe_id,)).fetchone()

@@ -589,6 +589,13 @@ def put_universe(universe_id: str, request: UniverseRequest) -> dict[str, Any]:
         raise HTTPException(503, str(exc)) from exc
 
 
+@router.delete('/universes/{universe_id}')
+def remove_universe(universe_id: str) -> dict[str, str]:
+    from app.services.screener_v2.core.state import delete_universe
+    delete_universe(universe_id)
+    return {'deleted': universe_id}
+
+
 @router.post('/uploads')
 async def upload_universe(file: Annotated[UploadFile, File()], kind: str = Query('universe')) -> dict[str, Any]:
     from app.services.screener_v2.core.data_loader import store_universe_upload

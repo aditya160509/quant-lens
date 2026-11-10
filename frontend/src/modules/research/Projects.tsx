@@ -27,7 +27,7 @@ export function ProjectSwitcher() {
     active.set({ projectId: p.id });
   };
   return (
-    <div style={{ padding: "0 10px 6px" }}>
+    <div className="nav-proj" style={{ padding: "0 10px 6px" }}>
       {naming !== null ? (
         <input className="input" autoFocus value={naming} placeholder="Project name, then Enter" aria-label="Project name" style={{ height: 30 }}
           onChange={(e) => setNaming(e.target.value)} onBlur={() => void create()} onKeyDown={(e) => { if (e.key === "Enter") void create(); if (e.key === "Escape") setNaming(null); }} />

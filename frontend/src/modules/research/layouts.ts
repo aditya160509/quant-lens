@@ -6,7 +6,7 @@ export type Tone = "up" | "down" | "warn";
 export type Verdict = { headline: string | null; tone: Tone | null };
 
 /** One card. `keys` lets a single card combine several outputs (e.g. three event-study estimators). */
-export type Item = { keys: string[]; view?: string; span: number; title?: string; hint?: string; opts?: Record<string, unknown>; flush?: boolean };
+export type Item = { keys: string[]; view?: string; span: number; title?: string; hint?: string; opts?: Record<string, unknown>; flush?: boolean; /** Method footnote, only where the method changes how to read the card. */ note?: string };
 export type Section = { id: string; label: string; intro?: string; items: Item[] };
 export type FeatureLayout = { sections: Section[]; verdict?: (r: FeatureResult) => Verdict };
 

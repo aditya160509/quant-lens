@@ -278,7 +278,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
         <label className="dt-q"><Search size={12} aria-hidden /><input type="search" placeholder="Search" aria-label="Search rows" value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} /></label>
         <span className="dt-n num">{rows.length === source.length ? rows.length : `${rows.length} of ${source.length}`}</span>
         <Popover.Root>
-          <Popover.Trigger asChild><button className="btn sm ghost" aria-label="Table options"><Columns3 size={13} />Table</button></Popover.Trigger>
+          <Popover.Trigger asChild><button className="btn sm ghost" aria-label="Table options" data-hotkey="col" aria-keyshortcuts="F"><Columns3 size={13} />Table</button></Popover.Trigger>
           <Popover.Portal container={typeof document === "undefined" ? undefined : document.querySelector<HTMLElement>(".ws")}>
             <Popover.Content className="tbl-pop" align="end" sideOffset={6} collisionPadding={12}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 2, paddingBottom: 6 }}>

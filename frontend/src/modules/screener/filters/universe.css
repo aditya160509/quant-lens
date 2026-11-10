@@ -88,3 +88,16 @@
   .ub-row > * { flex: none; scroll-snap-align: start; }
   .ub-pass { margin-left: 0; }
 }
+.ub-saved-row { display: flex; align-items: center; gap: 2px; }
+.ub-saved-row > button:first-child { flex: 1; min-width: 0; }
+.ub-saved .ub-ic { padding: 6px; color: var(--text-4); opacity: 0; }
+.ub-saved-row:hover .ub-ic, .ub-saved .ub-ic:focus-visible { opacity: 1; }
+.ub-saved .ub-ic:hover { color: var(--text); }
+.ub-full { color: var(--warn); }
+@media (hover: none) { .ub-saved .ub-ic { opacity: 1; } }
+.ub-hide { margin-left: auto; }
+.ub-presets { gap: 6px; }
+.ub-chip { height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid var(--line); font-size: 12px; color: var(--text-2); background: var(--panel); white-space: nowrap; }
+.ub-chip:hover { color: var(--text); border-color: var(--line-3, var(--line)); }
+.ws-tokens.is-light .ub-pill.on b { color: oklch(0.45 0.14 258); }
+.ws-tokens.is-light .ub-mono { color: oklch(0.42 0.14 258); background: oklch(0.92 0.05 258); }

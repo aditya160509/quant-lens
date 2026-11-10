@@ -68,10 +68,11 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   }, []);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMaxKey(null); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+    // A restored card claims Esc, so the workspace does not also close a panel.
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && maxKey) { e.preventDefault(); setMaxKey(null); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [maxKey]);
 
   useEffect(() => {
     const onJump = (e: Event) => {
@@ -150,7 +151,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         <div className="fv-head">
           <div className="ov-icon" style={{ width: 40, height: 40, borderRadius: 11 }}><Icon size={19} strokeWidth={1.6} /></div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{meta.name}</h1>
+            <div className="fv-title"><h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{meta.name}</h1><RunStamp status={run.status} result={result} /></div>
             {lab().id !== "ml" && lab().id !== "screener" ? <><p style={{ marginTop: 4, color: "var(--text-2)", fontSize: 13.5 }}>{meta.question}</p><p style={{ marginTop: 6, color: "var(--text-3)", fontSize: 12.5, maxWidth: 860, lineHeight: 1.55 }}>{feature.description !== meta.question ? feature.description : null}</p></> : null}
           </div>
           {runButton}
@@ -403,6 +404,21 @@ function Skipped({ result }: { result: FeatureResult }) {
         </div>
       </div>
     </div>
+  );
+}
+
+const PILL: Record<string, string> = { completed: "green", failed: "red", cancelled: "red", running: "amber", queued: "amber", submitting: "amber" };
+
+/** Status, as-of date and coverage beside the page title. */
+function RunStamp({ status, result }: { status: string; result: FeatureResult | null }) {
+  const asOf = result?.meta.as_of_date;
+  const n = result?.meta.universe_count;
+  return (
+    <span className="fv-stamp">
+      {PILL[status] ? <span className={`st-pill ${PILL[status]}`}>{status}</span> : null}
+      {typeof asOf === "string" ? <span className="num">as of {asOf}</span> : null}
+      {isNum(n) && n > 0 ? <span className="num">{n.toLocaleString()} names</span> : null}
+    </span>
   );
 }
 

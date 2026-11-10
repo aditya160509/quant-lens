@@ -201,6 +201,7 @@ export const SCREENER_LAB: LabConfig = {
   submit: (featureId, payload) => ({ path: `/feature/${RAW(featureId)}/jobs`, body: { payload } }),
   signal: false,
   specials: { saved: SavedPage, more: MorePage },
+  inspectorClosed: ["sc01"],
   fixes: (message, feature, form) => {
     const out: { label: string; patch: Record<string, unknown> }[] = [];
     const unavailable = message.match(/Requested filter (.+?) is unavailable/);

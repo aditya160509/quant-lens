@@ -73,6 +73,9 @@ function ResearchPanels() {
   useBackgroundRuns(manifest.data, shownJob, verdictFor);
   useDoneInTitle(runs);
 
+  // Some pages start with the inspector shut; it opens on demand for advanced settings.
+  useEffect(() => { if (featureId && L.inspectorClosed?.includes(featureId)) useLayout.getState().set("right", false); }, [featureId, L.inspectorClosed]);
+
   useEffect(() => setCrumb(verifiedId ? "Verified result" : special ? special.label : sharedToken ? "Shared run" : feature ? metaFor(feature.id, feature.name).name : "Overview"), [feature, special, sharedToken, verifiedId, setCrumb]);
 
   useEffect(() => {
@@ -177,14 +180,14 @@ function ResearchPanels() {
 
   return (
     <Group orientation="horizontal" id={`${L.id}-columns-v2`} className={animate ? "ws-animate" : undefined} defaultLayout={outer.defaultLayout} onLayoutChanged={outer.onLayoutChanged} style={{ height: "100%" }}>
-      <Panel id="nav" panelRef={left.panelRef} onResize={left.onResize} defaultSize={left.defaultOpen ? 236 : 0} minSize={196} maxSize={340} collapsible collapsedSize={0}>
+      <Panel id="nav" panelRef={left.panelRef} onResize={left.onResize} defaultSize={left.defaultOpen ? 236 : 0} minSize={196} maxSize={340} collapsible collapsedSize={52}>
         <FeatureNav features={manifest.data ?? []} loading={manifest.isLoading} activeId={featureId} activePage={special?.id ?? pageOf(featureId)?.id ?? null} runs={runs} />
       </Panel>
       <Separator className="ws-sep" />
       <Panel id="center" minSize={460}>
         <Group orientation="vertical" id={`${L.id}-rows-v2`} className={animate ? "ws-animate" : undefined} defaultLayout={inner.defaultLayout} onLayoutChanged={inner.onLayoutChanged}>
           <Panel id="results" minSize={260}>
-            {center}
+            <div style={{ position: "relative", height: "100%", display: "flex" }}>{center}<RunsPill runs={runs} /></div>
           </Panel>
           <Separator className="ws-sep h" />
           <Panel id="dock" panelRef={bottom.panelRef} onResize={bottom.onResize} defaultSize={bottom.defaultOpen ? 220 : 0} minSize={120} maxSize="85%" collapsible collapsedSize={0}>
@@ -208,7 +211,7 @@ function FeatureNav({ features, loading, activeId, activePage, runs }: { feature
       <div className="nav-h"><span>{L.title}</span></div>
       {L.signal ? <ProjectSwitcher /> : null}
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
-        <Link href={L.root} className="nav-item" aria-current={activeId === null && activePage === null ? "page" : undefined}>
+        <Link href={L.root} className="nav-item" title="Overview" aria-current={activeId === null && activePage === null ? "page" : undefined}>
           <LayoutGrid size={15} strokeWidth={1.7} />
           <span className="label">Overview</span>
         </Link>
@@ -224,7 +227,7 @@ function FeatureNav({ features, loading, activeId, activePage, runs }: { feature
           const open = activePage === p.id;
           return (
             <div key={p.id}>
-              <Link href={pageHref(p)} className="nav-item" aria-current={open && (p.slug || ids.length < 2) ? "page" : undefined} title={p.question}>
+              <Link href={pageHref(p)} className="nav-item" aria-current={open && (p.slug || ids.length < 2) ? "page" : undefined} title={p.label}>
                 <Icon size={15} strokeWidth={1.7} />
                 <span className="label">{p.label}</span>
                 <Dot live={live} tone={tone as RunRecord["tone"] ?? null} />
@@ -346,15 +349,53 @@ function FeatureWorkspace({ feature }: { feature: FeatureSpec }) {
   useEffect(() => { publish(run); }, [run, publish]);
   useEffect(() => () => publish(null), [publish]);
 
+  const router = useRouter();
+  const go = useSearchParams()?.get("go") === "1";
+  const fired = useRef(false);
+  // Links from the overview arrive with ?go=1: run once with the settings they set, then drop the flag.
+  useEffect(() => {
+    if (!go || fired.current) return;
+    fired.current = true;
+    run.run();
+    const u = new URL(window.location.href); u.searchParams.delete("go"); router.replace(u.pathname + u.search, { scroll: false });
+  }, [go, run, router]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); run.run(); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); run.run(); return; }
+      const t = e.target as HTMLElement;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented || t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || document.querySelector("[role='dialog'], [role='menu']")) return;
+      if (e.key === "[" || e.key === "]") {
+        const pages = lab().pages;
+        const i = pages.findIndex((p) => p.id === pageOf(feature.id)?.id);
+        const next = pages[(i + (e.key === "]" ? 1 : -1) + pages.length) % pages.length];
+        if (next) { e.preventDefault(); router.push(pageHref(next)); }
+      } else if (e.key === "Escape") {
+        const l = useLayout.getState();
+        if (l.open.bottom) l.set("bottom", false, true);
+        else if (l.open.right) l.set("right", false, true);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [run]);
+  }, [run, router, feature.id]);
 
   return <FeatureView feature={feature} run={run} />;
+}
+
+/** The runs dock while it is shut: one pill with what is running or failed; a click opens the dock. */
+function RunsPill({ runs }: { runs: RunRecord[] }) {
+  const open = useLayout((s) => s.open.bottom);
+  if (open || !runs.length) return null;
+  const live = runs.filter((r) => r.status === "queued" || r.status === "running").length;
+  const failed = runs.filter((r) => r.status === "failed").length;
+  return (
+    <button type="button" className="runs-pill" aria-keyshortcuts="Meta+J" onClick={() => useLayout.getState().set("bottom", true, true)}>
+      <Dot live={live > 0} tone={failed ? "down" : live ? null : "up"} />
+      <span>{live ? `${live} running` : `${runs.length} runs`}</span>
+      {failed ? <b>{failed} failed</b> : null}
+    </button>
+  );
 }
 
 function InspectorHost({ feature }: { feature: FeatureSpec }) {

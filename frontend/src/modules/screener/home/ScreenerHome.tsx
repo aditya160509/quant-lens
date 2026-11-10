@@ -59,7 +59,7 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
     const f = features.find((x) => x.id === id);
     if (!f) return;
     useStudies.getState().setForm(id, (cur) => ({ ...cur, ...patch }), defaultsFor(f));
-    router.push(featureHref(id));
+    router.push(`${featureHref(id)}?go=1`);
   };
 
   return (

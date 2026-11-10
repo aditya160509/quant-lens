@@ -112,6 +112,9 @@ def test_saved_universe_membership_is_exact(store):
     assert store.list_universes()[0]['count'] == 2
     with pytest.raises(ValueError, match='immutable'):
         store.save_universe('u', 'My universe', ['A'])
+    assert store.save_universe('u', 'Renamed', ['A', 'B'])['name'] == 'Renamed'
+    store.delete_universe('u')
+    assert store.list_universes() == []
 
 
 @pytest.fixture

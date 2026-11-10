@@ -23,7 +23,8 @@ export function useRegionPanel(region: Region) {
   // The first resize is the initial layout, not a user action, so it must not flip the toggle.
   const onResize = useCallback((size: PanelSize, _id: string | number | undefined, prev: PanelSize | undefined) => {
     if (prev === undefined) return;
-    set(region, size.inPixels > 1);
+    // The nav collapses to a 52px icon rail, which still counts as shut.
+    set(region, size.inPixels > 60);
   }, [region, set]);
 
   return { panelRef, onResize, defaultOpen: open };
