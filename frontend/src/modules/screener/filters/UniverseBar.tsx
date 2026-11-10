@@ -14,6 +14,7 @@ import { PopMenu, type MenuAt } from "@/workspace/ui";
 import { send } from "../api";
 import { useWatchlists } from "../watchlists";
 import { toPayload } from "@/modules/research/StudyForm";
+import { AddFilter } from "./AddFilter";
 import { HistogramRange, stageFor, useFilterColumns, useFilterPreview } from "./Preview";
 import "./universe.css";
 
@@ -44,7 +45,7 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
   const at = (e: React.MouseEvent, key: string) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ key, at: { x: r.left, y: r.bottom + 6 } }); };
   const columnOf = useFilterColumns();
   const shownMetrics = [...metrics, ...added];
-  const preview = useFilterPreview(toPayload(feature, run.form), shownMetrics.map((m) => columnOf[m]).filter(Boolean)).data;
+  const preview = useFilterPreview(toPayload(feature, run.form), [...shownMetrics, ...(menu && menu.key !== "+" ? [menu.key] : [])].map((m) => columnOf[m]).filter(Boolean)).data;
   const pill = (m: string) => {
     const lo = run.form[`${m}_min`], hi = run.form[`${m}_max`];
     const on = Boolean(lo || hi);
@@ -77,7 +78,8 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
       ) : null}
       <PopMenu at={menu?.at ?? null} onClose={() => setMenu(null)} width={menu?.key === "+" ? 440 : 300} sticky>
         {menu?.key === "+" ? (
-          <div style={{ padding: 8, maxHeight: 460, overflowY: "auto" }}><FilterChips scope={feature.id} fields={range} form={run.form} setForm={run.setForm} /></div>
+          <><AddFilter fields={range} active={new Set(shownMetrics.filter((m) => run.form[`${m}_min`] || run.form[`${m}_max`]))} name={name} onPick={(m) => setMenu((cur) => (cur ? { key: m, at: cur.at } : cur))} />
+          <details className="af-exact"><summary>Exact values and top N</summary><div style={{ padding: 8, maxHeight: 360, overflowY: "auto" }}><FilterChips scope={feature.id} fields={range} form={run.form} setForm={run.setForm} /></div></details></>
         ) : menu ? (
           <div className="ub-range">
             <b>{name(menu.key)}</b>

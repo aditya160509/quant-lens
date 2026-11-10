@@ -90,7 +90,7 @@ Index membership stays out until we have data for it; it must not be faked.
 
 ### Filters
 - [x] Pill row with min and max and `+ Filter`
-- [ ] Add-filter overlay with groups, search, recently used and favourites: Identity, Market, Technical, Valuation, Profitability, Growth, Health, Dividends, Score
+- [x] Add-filter overlay with groups, search, recently used and favourites: Identity, Market, Technical, Valuation, Profitability, Growth, Health, Dividends, Score
 - [x] Pill editor: slider over the real distribution histogram, percentile mode, greater, less, between, in, top N
 - [x] Live pass count and removed count on each pill; bottleneck marked
 - [ ] Toggle, remove, reorder, duplicate; undo and redo

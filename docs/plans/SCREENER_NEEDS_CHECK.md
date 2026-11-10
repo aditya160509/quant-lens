@@ -24,3 +24,5 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Removed count on each active pill | `UniverseBar.tsx` | filters-1 |
 | [ ] | Pill editor: real distribution histogram, kept names in blue, two-handle slider, median, known count | `filters/Preview.tsx` | filters-1 |
 | [ ] | Preview panel cache: first edit about 3 s on 200 names, later edits instant | `core/explain.py` | filters-1 |
+| [ ] | Add-filter overlay: search, groups (Market, Valuation, Profitability, Growth, Health, Dividends, Performance, Technical, Score), recent, starred; pick opens the histogram editor | `filters/AddFilter.tsx` | filters-2 |
+| [ ] | Exact values and top N still reachable under the overlay | `UniverseBar.tsx` | filters-2 |
