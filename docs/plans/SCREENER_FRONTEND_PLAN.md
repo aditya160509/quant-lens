@@ -294,6 +294,12 @@ Alert builder: condition from any filter or formula, frequency, channel with App
 | Alerts | Rule, frequency, channel, digest, snooze |
 | Export | Format, columns, limits header, API |
 
+Every control follows one rule: works with defaults untouched; any change offers "Make default" (this card, every card like it, or everywhere) and "Reset".
+
+- [ ] `M` "Make default" and "Reset" on every setting at three levels: this output, every output of its type, everywhere (cards already do the first two)
+- [ ] `M` Preferences sync to the account instead of this browser only, with export and import as JSON
+- [ ] `E` One "Customised" marker on any page or card that differs from default, opening a list of what changed
+
 ## 15. Backend needed by this plan
 
 - [x] `E` 500 default, 1,000 cap, USD liquidity ranking
