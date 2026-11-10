@@ -45,6 +45,16 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
   const added = [...new Set(range.map((f) => f.key.replace(/_(min|max|top)$/, "")))].filter((m) => !QUICK.includes(m) && (run.form[`${m}_min`] || run.form[`${m}_max`]));
   const name = (m: string) => range.find((f) => f.key === `${m}_min`)?.label.replace(/ (Min|Max)$/, "") ?? fmtLabel(m);
   const at = (e: React.MouseEvent, key: string) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ key, at: { x: r.left, y: r.bottom + 6 } }); };
+  // F opens the filter picker; never while typing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (e.metaKey || e.ctrlKey || e.altKey || t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+      if (e.key === "f") { e.preventDefault(); document.querySelector<HTMLButtonElement>("[data-hotkey='f']")?.click(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const columnOf = useFilterColumns();
   const shownMetrics = [...metrics, ...added];
   const preview = useFilterPreview(toPayload(feature, run.form), [...shownMetrics, ...(menu && menu.key !== "+" && !menu.key.startsWith("cat:") ? [menu.key] : [])].map((m) => columnOf[m]).filter(Boolean)).data;
@@ -80,7 +90,7 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
       {range.length ? (
         <div className="ub-row">
           {cats.map(catPill)}{metrics.map(pill)}{added.map(pill)}
-          <button type="button" className="ub-pill add" aria-label="All filters" onClick={(e) => at(e, "+")}><Plus size={13} />Filter</button>
+          <button type="button" className="ub-pill add" data-hotkey="f" aria-keyshortcuts="F" aria-label="All filters" onClick={(e) => at(e, "+")}><Plus size={13} />Filter</button>
           {preview ? <span className="ub-pass num" role="status"><b>{preview.passed.toLocaleString()}</b> of {preview.universe.toLocaleString()} pass</span> : null}
         </div>
       ) : null}
