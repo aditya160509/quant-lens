@@ -55,6 +55,16 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  // Auto re-runs after a pause in editing, only on small universes so a run stays a few seconds.
+  const small = (tickers.length || size) <= 250;
+  const [auto, setAuto] = useState(() => { try { return localStorage.getItem("screener-auto-run") === "1"; } catch { return false; } });
+  const formKey = JSON.stringify(run.form);
+  const [seenKey, setSeenKey] = useState(formKey);
+  useEffect(() => {
+    if (!auto || !small || formKey === seenKey || run.status === "running" || run.status === "queued") return;
+    const id = setTimeout(() => { setSeenKey(formKey); run.run(); }, 900);
+    return () => clearTimeout(id);
+  }, [auto, small, formKey, seenKey, run]);
   const columnOf = useFilterColumns();
   const shownMetrics = [...metrics, ...added];
   const preview = useFilterPreview(toPayload(feature, run.form), [...shownMetrics, ...(menu && menu.key !== "+" && !menu.key.startsWith("cat:") ? [menu.key] : [])].map((m) => columnOf[m]).filter(Boolean)).data;
@@ -91,6 +101,7 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
         <div className="ub-row">
           {cats.map(catPill)}{metrics.map(pill)}{added.map(pill)}
           <button type="button" className="ub-pill add" data-hotkey="f" aria-keyshortcuts="F" aria-label="All filters" onClick={(e) => at(e, "+")}><Plus size={13} />Filter</button>
+          <button type="button" className={`ub-pill${auto && small ? " on" : ""}`} aria-pressed={auto} disabled={!small} title={small ? "Re-run after each change" : "Auto run needs 250 names or fewer"} onClick={() => { const next = !auto; setAuto(next); try { localStorage.setItem("screener-auto-run", next ? "1" : "0"); } catch { /* storage blocked */ } }}>Auto</button>
           {preview ? <span className="ub-pass num" role="status"><b>{preview.passed.toLocaleString()}</b> of {preview.universe.toLocaleString()} pass</span> : null}
         </div>
       ) : null}

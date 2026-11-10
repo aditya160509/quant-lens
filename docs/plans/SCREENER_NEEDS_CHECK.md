@@ -56,3 +56,4 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Overview: Your screens (last 6 saved) load into their page | `home/ScreenerHome.tsx` | overview-2 |
 | [ ] | Shell nav: coloured icon tile per section, accent bar on active, light theme variant | `workspace/workspace.css` | shell-1 |
 | [ ] | Toasts: saved, failed (replaces alert), copied tickers, Markdown, link, view saved, watchlist and alert adds, template used | `SavedPage`, `RowActions`, `DataTable`, `FormulaViews` | shell-2 |
+| [ ] | Auto run toggle: re-runs 0.9 s after edits stop, only at 250 names or fewer, remembered on device; disabled above 250 | `UniverseBar.tsx` | run-1 |

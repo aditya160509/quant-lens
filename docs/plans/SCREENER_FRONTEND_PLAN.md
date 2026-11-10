@@ -103,7 +103,7 @@ Index membership stays out until we have data for it; it must not be faked.
 - [ ] Hide or show filters; save as a screen; preset chips
 
 ### Run
-- [ ] One blue Run; auto-run option when a filter changes, debounced, on universes up to 250
+- [x] One blue Run; auto-run option when a filter changes, debounced, on universes up to 250
 - [ ] Progress by stage, cancel, stale marker
 - [ ] Failure card with the reason and one-click fix
 
