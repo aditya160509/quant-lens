@@ -23,6 +23,8 @@ Memory plan run (`SCREENER_V2_MAXIMUM_MEMORY_REDUCTION_V2.md`). Each case in a f
 | 5. D03 dated raw-feature snapshots (`core/snapshots.py`, `ALGORITHM_VERSION=bounded-window-v1`); cold = first run writes, warm = reads one date | cold 2,111 MB, 15.4 s; **warm 492–502 MB, 0.8–0.9 s**, `eaaff879` same | cold 838 MB, 1.8 s; **warm 409 MB, 0.6 s**; read from full-run rows 423 MB, 0.6 s; all same hash | warm 419 MB, 0.6 s, same | cold 927 MB, 58.3 s; **warm 730 MB, 8.8 s**, same | cold 766 MB, 56.9 s; **warm 650 MB, 19.5 s**, same |
 | 6. D07: backtests score from snapshots and keep one score vector per date (run-local panel copies dropped); NumPy daily simulator (golden parity test); NumPy average rank; Feature 05 reuses the base run when holding = rebalance period | warm 489 MB, 0.8 s, same | warm 414 MB, 0.6 s, same | warm 414 MB, 0.6 s, same | warm 711 MB, 7.7 s, same | **warm 687 MB, 13.4 s**, same (cold ~57 s: 405 dates still built once) |
 
+7. Compiled kernels not built: after steps 1–6 no warm path runs indicator code (profile: snapshot reads, ranks and the simulator). Indicators only run on a cold store (full screen ~11 s, 2.1 GB peak; 12-name backtest ~57 s). Revisit Numba/Cython for the cold backfill only if that matters. Also not done: shared USD price/FX context across sensitivity runs (about 4% of the warm backtest profile), canonical ingest (D01, M02), content-hash versions (keys use file mtimes).
+
 - [x] Full Screen run under 2 GB (warm, from snapshots: 0.5 GB)
 - [ ] Run reads only requested stocks, columns and dates; a 50-name screen costs a few hundred MB
 - [ ] Indicators off wide pandas frames in `latest_technical_features`
@@ -30,7 +32,7 @@ Memory plan run (`SCREENER_V2_MAXIMUM_MEMORY_REDUCTION_V2.md`). Each case in a f
 - [x] Decide on precomputed daily indicators in parquet, with point-in-time window rules: bounded-window policy kept (`ALGORITHM_VERSION`), raw per-ticker rows per date, ranks per request
 - [x] Backtest speed: 12 US names 55.5 s to 13.4 s warm (snapshots), about 57 s on a cold store. 100 names not re-measured
 - [ ] Bottlenecks named, unmeasured: `instrument_specs` scan per date, `_fundamental_growth_metrics` per symbol
-- [ ] Hot-loop pass with numba or Polars; numba is only in `screener_v2/core/stats.py`
+- [x] Hot-loop pass: daily simulator and ranks moved to NumPy; numba not needed once warm paths stopped computing indicators
 - [ ] DuckDB against Polars, not measured
 
 ## Screener engine plan
