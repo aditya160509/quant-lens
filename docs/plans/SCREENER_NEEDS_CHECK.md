@@ -31,3 +31,7 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Funnel: shrinking bars per filter, removed count, bottleneck in amber | `views.tsx`, `screen.css` | funnel |
 | [ ] | Drawer: strength radar beside score bars; unknown axes dashed | `kit/QuickLook.tsx`, `quicklook.css` | drawer-1 |
 | [ ] | Drawer statements: trend sparkline and YoY per line (quarterly compares 4 back) | `kit/QuickLook.tsx` | drawer-2 |
+| [ ] | Not built yet: common-size toggle on statements (plan line ticked for sparklines and YoY only) | — | drawer-2 |
+| [ ] | Monitor: alert feed with severity edge, direction, type pill, ticker opens drawer | `monitor/MonitorViews.tsx` | monitor-1 |
+| [ ] | Monitor: hit-rate scorecards per alert type at 1d, 5d, 21d with 50% mark and n | `monitor/MonitorViews.tsx` | monitor-1 |
+| [ ] | Monitor layout: Alerts and Track record tabs; watchlist table tinted with row actions | `screenerLab.ts` | monitor-1 |

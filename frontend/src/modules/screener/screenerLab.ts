@@ -90,9 +90,10 @@ const SV = group(() => import("./views") as Promise<Record<string, unknown>>);
 const ST = group(() => import("./test/ProofViews") as Promise<Record<string, unknown>>);
 const RV = group(() => import("./rank/RankViews") as Promise<Record<string, unknown>>);
 const RS = group(() => import("./rank/StrategyViews") as Promise<Record<string, unknown>>);
+const MV = group(() => import("./monitor/MonitorViews") as Promise<Record<string, unknown>>);
 const TS = group(() => import("./test/TearSheet") as Promise<Record<string, unknown>>);
-registerViews({ funnel: SV.FunnelView, monthlyHeatmap: TS.MonthlyHeatmap, returnHistogram: TS.ReturnHistogram, underwater: TS.Underwater, piotroskiMatrix: RS.PiotroskiMatrix, altmanZones: RS.AltmanZones, screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, sensitivity: SV.SensitivityView, runInfo: SV.RunView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
-registerAlternates({ funnel: [{ label: "Table", view: "dataTable" }], piotroskiMatrix: [{ label: "Table", view: "dataTable" }], altmanZones: [{ label: "Table", view: "dataTable" }], rankedTable: [{ label: "Sector treemap", view: "screenTreemap" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }] });
+registerViews({ alertFeed: MV.AlertFeed, hitRates: MV.HitRates, funnel: SV.FunnelView, monthlyHeatmap: TS.MonthlyHeatmap, returnHistogram: TS.ReturnHistogram, underwater: TS.Underwater, piotroskiMatrix: RS.PiotroskiMatrix, altmanZones: RS.AltmanZones, screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, sensitivity: SV.SensitivityView, runInfo: SV.RunView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
+registerAlternates({ alertFeed: [{ label: "Table", view: "dataTable" }], hitRates: [{ label: "Table", view: "dataTable" }], funnel: [{ label: "Table", view: "dataTable" }], piotroskiMatrix: [{ label: "Table", view: "dataTable" }], altmanZones: [{ label: "Table", view: "dataTable" }], rankedTable: [{ label: "Sector treemap", view: "screenTreemap" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }] });
 
 export const SCREENER_LAB: LabConfig = {
   id: "screener",
@@ -135,6 +136,19 @@ export const SCREENER_LAB: LabConfig = {
         { id: "altman", label: "Altman Z", items: [
           { keys: ["altman_z_score_status"], span: 7, view: "altmanZones", title: "Altman zones" },
           { keys: ["altman_z_score_8q_trend"], span: 5, view: "lineChart", title: "Altman Z, last 8 quarters" },
+        ] },
+      ],
+    },
+    sc06: {
+      sections: [
+        { id: "alerts", label: "Alerts", items: [
+          { keys: ["alert_feed"], span: 7, view: "alertFeed", title: "Alerts" },
+          { keys: ["watchlist_live_monitoring_dashboard"], span: 5, view: "dataTable", title: "Watchlist", opts: { tint: true, rowActions } },
+        ] },
+        { id: "record", label: "Track record", items: [
+          { keys: ["alert_performance_tracker_historical"], span: 12, view: "hitRates", title: "Hit rate by alert type" },
+          { keys: ["alert_performance_tracker"], span: 6 },
+          { keys: ["screen_entry_exit_log"], span: 6 },
         ] },
       ],
     },
