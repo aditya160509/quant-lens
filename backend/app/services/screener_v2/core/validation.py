@@ -1,7 +1,9 @@
 """Screener V2 validation computations."""
 from __future__ import annotations
 
+import json
 import math
+from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
 
@@ -146,6 +148,12 @@ def score_backtest_by_weekday(symbols, scores, lookback_days=756, top_n=50, cost
             for day, label in enumerate(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])]
 
 
+# Panels across runs, so changing weights or top N re-scores without rebuilding history.
+_PANEL_CACHE: OrderedDict = OrderedDict()
+# Keys read only after the panel is built; they never change a dated panel.
+_SCORE_ONLY_KEYS = {"components", "weights", "top_n", "long_short", "score_weighted", "focus_ticker", "formula", "cost_bps", "score_field"}
+
+
 def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cache=None):
     for key in ["sector", "sectors", "industry", "industries", "industry_group", "industry_groups", "exchange", "exchanges"]:
         if payload.get(key) and str(payload[key]).lower() not in {"all", "any"}:
@@ -159,13 +167,23 @@ def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cach
     from .screener import apply_filters
     panels = shared_cache if shared_cache is not None else {}
     cache, unavailable_dates = {}, {}
+    from .data_loader import MARKET_UNIVERSE, MASTER_FUNDAMENTALS, _path_version
+    shape = json.dumps({k: v for k, v in payload.items() if k not in _SCORE_ONLY_KEYS}, sort_keys=True, default=str)
+    run_key = (_path_version(MARKET_UNIVERSE), _path_version(MASTER_FUNDAMENTALS), tuple(symbols), shape)
     def panel_at(date):
         key = ("panel", pd.Timestamp(date))
         if key not in panels:
-            with as_of_context(date), pit_scope(panels):
-                frame = metric_panel({**payload, "as_of_date": str(pd.Timestamp(date).date())}, symbols)
-                frame, _ = apply_filters(frame, payload)
-                panels[key] = frame
+            hit = _PANEL_CACHE.get((*run_key, key[1]))
+            if hit is None:
+                with as_of_context(date), pit_scope(panels):
+                    hit = metric_panel({**payload, "as_of_date": str(pd.Timestamp(date).date())}, symbols)
+                    hit, _ = apply_filters(hit, payload)
+                _PANEL_CACHE[(*run_key, key[1])] = hit
+                while len(_PANEL_CACHE) > 400:
+                    _PANEL_CACHE.popitem(last=False)
+            else:
+                _PANEL_CACHE.move_to_end((*run_key, key[1]))
+            panels[key] = hit
         return panels[key].copy()
     def score_at(date):
         key = pd.Timestamp(date)

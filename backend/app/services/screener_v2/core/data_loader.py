@@ -262,7 +262,9 @@ def _liquidity_rank(version: int, as_of) -> dict[str, int]:
     last = frame.select(pl.col("Date").max()).collect().item()
     if last is None:
         return {}
-    rows = (frame.filter(pl.col("Date") >= pd.Timestamp(last) - pd.Timedelta(days=45)).with_columns(NORMALIZED_TICKER.alias("_t"))
+    # Per-ticker window: one stray late-dated ticker must not empty everyone else's window.
+    rows = (frame.with_columns(NORMALIZED_TICKER.alias("_t"))
+            .filter(pl.col("Date") >= pl.col("Date").max().over("_t") - pl.duration(days=45))
             .group_by("_t").agg((pl.col("Close") * pl.col("Volume")).median().alias("_dv")).collect())
     traded = dict(zip(rows["_t"].to_list(), rows["_dv"].to_list(), strict=True))
     known = [t for t in traded if t in set(_ALL_SYMBOLS.get())]
