@@ -86,11 +86,38 @@ def enterprise_claims(frame):
     return debt + preferred.fillna(0) + minority.fillna(0)
 
 
-def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = None) -> pd.DataFrame:
+def fundamental_ranks(out: pd.DataFrame) -> pd.DataFrame:
+    """Universe-relative scores over exactly the rows given (plan D04); inputs are finite ratios."""
+    out["valuation_percentile"] = (
+        rank_pct(out["net_income_yield"]) * 0.35
+        + rank_pct(out["fcf_yield"]) * 0.25
+        + rank_pct(out["pb_ratio"], higher_better=False) * 0.2
+        + rank_pct(out["ps_ratio"], higher_better=False) * 0.2
+    )
+    out["quality_percentile"] = (
+        rank_pct(out["roe"]) * 0.3
+        + rank_pct(out["gpa"]) * 0.25
+        + rank_pct(out["debt_assets"], higher_better=False) * 0.2
+        + rank_pct(out["ocf_net_income"]) * 0.15
+        + rank_pct(out["gross_margin"].fillna(out["gross_margin_calc"])) * 0.1
+    )
+    return out
+
+
+def fundamental_cutoff(symbols: list[str], as_of_date: Any | None = None):
     cutoff = pd.Timestamp(as_of_date) if as_of_date else AS_OF.get()
     if cutoff is None:
         market = ohlcv_for_symbols(symbols, 1)  # only the latest date is read
         cutoff = market.Date.max() if not market.empty else pd.Timestamp.today().normalize()
+    return cutoff
+
+
+def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = None) -> pd.DataFrame:
+    return fundamental_ranks(raw_fundamental_features(symbols, as_of_date, fundamental_cutoff(symbols, as_of_date)))
+
+
+def raw_fundamental_features(symbols: list[str], as_of_date: Any, cutoff) -> pd.DataFrame:
+    """Ticker-local fundamentals at one cutoff; the two percentile columns are left empty."""
     eligible = eligible_reports(statement_snapshots(symbols), cutoff)
     base = eligible.sort_values(["ticker", "reportDate"]).groupby("ticker").tail(1).set_index("ticker", drop=False) if not eligible.empty else eligible
     # Vendor .info ratios are current snapshots repeated across historical rows.
@@ -238,19 +265,8 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
     if not growth.empty:
         out = out.join(growth.reindex(out.index), how="left")
     out["valuation_score_definition"] = "35% net-income yield + 25% free-cash-flow yield + 20% inverse P/B + 20% inverse P/S cross-sectional percentiles; all inputs required"
-    out["valuation_percentile"] = (
-        rank_pct(out["net_income_yield"]) * 0.35
-        + rank_pct(out["fcf_yield"]) * 0.25
-        + rank_pct(out["pb_ratio"], higher_better=False) * 0.2
-        + rank_pct(out["ps_ratio"], higher_better=False) * 0.2
-    )
-    out["quality_percentile"] = (
-        rank_pct(out["roe"]) * 0.3
-        + rank_pct(out["gpa"]) * 0.25
-        + rank_pct(out["debt_assets"], higher_better=False) * 0.2
-        + rank_pct(out["ocf_net_income"]) * 0.15
-        + rank_pct(out["gross_margin"].fillna(out["gross_margin_calc"])) * 0.1
-    )
+    out["valuation_percentile"] = np.nan
+    out["quality_percentile"] = np.nan
     out['market_cap'] = cap_usd
     out['enterprise_value'] = out['enterprise_value'] * financial_fx
     out['market_value_currency'] = 'USD'

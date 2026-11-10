@@ -545,3 +545,63 @@ def test_market_cap_uses_each_names_own_last_close(local_data):
     rows = latest_fundamental_features(['AAA', 'BBB']).set_index('ticker')
     assert rows.market_cap.notna().all()
     assert rows.loc['BBB', 'market_cap_observation_date'] < rows.loc['AAA', 'market_cap_observation_date']
+
+
+def test_snapshot_store_matches_computed_panel_and_serves_subsets_without_market_reads(local_data, tmp_path, monkeypatch):
+    import pandas as pd
+
+    from app.services.screener_v2.core import estimators, fundamentals, snapshots
+    from app.services.screener_v2.core.data_loader import as_of_context
+    from app.services.screener_v2.core.panel import metric_panel
+
+    cutoff = pd.Timestamp(local_data['market'].Date.sort_values().unique()[-40])
+    payload = {'as_of_date': str(cutoff.date())}
+    def panel(names):
+        with as_of_context(cutoff):
+            return metric_panel(payload, names)
+    computed = {names: panel(list(names)) for names in [('AAA', 'BBB', 'CCC'), ('BBB', 'CCC')]}
+    monkeypatch.setattr(snapshots, 'STORE', tmp_path / 'features')
+    cold = panel(['AAA', 'BBB', 'CCC'])
+    assert cold.attrs['feature_source'].startswith('computed for 4 names')
+    pd.testing.assert_frame_equal(cold, computed[('AAA', 'BBB', 'CCC')])
+    def forbidden(*_a, **_k):
+        raise AssertionError('warm screen touched market or feature code')
+    for module, name in [(estimators, 'raw_technical_features'), (fundamentals, 'raw_fundamental_features'), (snapshots, 'raw_technical_features'),
+                         (snapshots, 'last_observation_dates'), (estimators, 'ohlcv_for_symbols'), (fundamentals, 'ohlcv_for_symbols')]:
+        monkeypatch.setattr(module, name, forbidden, raising=False)
+    warm = panel(['BBB', 'CCC'])  # ranks recomputed over the subset, raw rows read from the 3-name snapshot
+    assert warm.attrs['feature_source'] == 'snapshot'
+    pd.testing.assert_frame_equal(warm, computed[('BBB', 'CCC')])
+    assert not computed[('BBB', 'CCC')].core_quant_score.equals(cold.set_index('ticker').loc[computed[('BBB', 'CCC')].ticker].core_quant_score.reset_index(drop=True))
+
+
+def test_snapshot_key_covers_sources_algorithm_calendar_and_periods(monkeypatch):
+    from app.services.screener_v2.core import currency, data_loader, snapshots
+
+    base = snapshots.store_key('technical', 756, {})
+    assert base == snapshots.store_key('technical', 756, {'sector': 'Energy'})  # filters do not change raw rows
+    assert base != snapshots.store_key('technical', 504, {})
+    assert base != snapshots.store_key('technical', 756, {'rsi_period': 21})
+    assert base != snapshots.store_key('fundamental')
+    token = currency.CONFIG.set({'calendar_ticker': 'QQQ'})
+    try:
+        assert base != snapshots.store_key('technical', 756, {})
+    finally:
+        currency.CONFIG.reset(token)
+    monkeypatch.setattr(snapshots, 'ALGORITHM_VERSION', 'other')
+    assert base != snapshots.store_key('technical', 756, {})
+    monkeypatch.setattr(snapshots, 'ALGORITHM_VERSION', 'bounded-window-v1')
+    monkeypatch.setattr(snapshots, '_path_version', lambda path: 1 if path == data_loader.MARKET_UNIVERSE else 0)
+    assert base != snapshots.store_key('technical', 756, {})
+
+
+def test_snapshot_write_merges_rows_atomically(tmp_path, monkeypatch):
+    import pandas as pd
+
+    from app.services.screener_v2.core import snapshots
+    monkeypatch.setattr(snapshots, 'STORE', tmp_path)
+    snapshots.write('k', 'd', pd.DataFrame({'ticker': ['A', 'B'], 'x': [1, 2]}))
+    snapshots.write('k', 'd', pd.DataFrame({'ticker': ['B', 'C'], 'x': [5, 3]}))
+    assert snapshots.read('k', 'd', ['A', 'B', 'C']).sort_values('ticker').x.tolist() == [1, 5, 3]
+    assert snapshots.read('k', 'd', ['C']).ticker.tolist() == ['C']
+    assert not list(tmp_path.glob('k/*.tmp'))

@@ -20,12 +20,13 @@ Memory plan run (`SCREENER_V2_MAXIMUM_MEMORY_REDUCTION_V2.md`). Each case in a f
 | 2. Panel cache bounded by bytes (256 MB) | same code path | same | same | same | same hash; one run never fills the cache |
 | 3. D05 batched FF3 OLS, `pit_cache.py` removed | 2,259–2,600 MB (3 runs; baseline 2,331–2,382), 12.3–12.9 s, `eaaff879` (ivol only, max rel diff 4.6e-16 on 1,404 names; all other columns identical) | 688 MB, 1.6 s, same | 622 MB, 1.4 s, same | 819 MB, 41.6 s, same | 750 MB, 56.0 s, same |
 | 4. D06 growth in one grouped pass, no per-ticker history cache (columns were already projected in `c6d3a97`) | 2,280–2,583 MB, 10.2–10.4 s, `eaaff879` same | 671 MB, 1.5 s, same | 591 MB, 1.4 s, same | 832 MB, 37.0 s, same | 744 MB, 52.6 s, same |
+| 5. D03 dated raw-feature snapshots (`core/snapshots.py`, `ALGORITHM_VERSION=bounded-window-v1`); cold = first run writes, warm = reads one date | cold 2,111 MB, 15.4 s; **warm 492–502 MB, 0.8–0.9 s**, `eaaff879` same | cold 838 MB, 1.8 s; **warm 409 MB, 0.6 s**; read from full-run rows 423 MB, 0.6 s; all same hash | warm 419 MB, 0.6 s, same | cold 927 MB, 58.3 s; **warm 730 MB, 8.8 s**, same | cold 766 MB, 56.9 s; **warm 650 MB, 19.5 s**, same |
 
-- [ ] Full Screen run under 2 GB
+- [x] Full Screen run under 2 GB (warm, from snapshots: 0.5 GB)
 - [ ] Run reads only requested stocks, columns and dates; a 50-name screen costs a few hundred MB
 - [ ] Indicators off wide pandas frames in `latest_technical_features`
 - [ ] Find what holds RSS at about 2.6 GB when live data is under 1 GB (allocator retention suspected, unproven)
-- [ ] Decide on precomputed daily indicators in parquet, with point-in-time window rules
+- [x] Decide on precomputed daily indicators in parquet, with point-in-time window rules: bounded-window policy kept (`ALGORITHM_VERSION`), raw per-ticker rows per date, ranks per request
 - [ ] Backtest speed: 172 s to 135 s on 20 names, before `pit_cache`; over 6 minutes on 100. Re-measure
 - [ ] Bottlenecks named, unmeasured: `instrument_specs` scan per date, `_fundamental_growth_metrics` per symbol
 - [ ] Hot-loop pass with numba or Polars; numba is only in `screener_v2/core/stats.py`

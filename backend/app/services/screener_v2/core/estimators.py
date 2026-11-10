@@ -26,7 +26,45 @@ def sma_cross_event(short: pd.DataFrame, long: pd.DataFrame) -> pd.DataFrame:
     return above.diff()
 
 
+# Universe-relative columns: ranked over the requested names plus SPY, never stored (plan D04).
+TECHNICAL_RANK_COLUMNS = ["bollinger_width_percentile", "short_term_reversal_flag", "amihud_percentile", "technical_percentile"]
+
+
+def technical_ranks(out: pd.DataFrame) -> pd.DataFrame:
+    """Fill the universe-relative columns in place, over exactly the rows given."""
+    out["bollinger_width_percentile"] = rank_pct(out["bollinger_band_width"])
+    out["short_term_reversal_flag"] = ((rank_pct(out["return_1w"], higher_better=False) >= 90) | (rank_pct(out["return_1m"], higher_better=False) >= 90)).astype(float)
+    out["amihud_percentile"] = rank_pct(out["amihud_20d"], higher_better=False)
+    out["technical_percentile"] = (
+        rank_pct(out["momentum_jt"]) * 0.35
+        + rank_pct(out["return_6m"]) * 0.2
+        + rank_pct(out["dist_sma_200"]) * 0.15
+        + rank_pct(out["realized_vol_63d"], higher_better=False) * 0.15
+        + rank_pct(out["dollar_volume_20d"]) * 0.15
+    )
+    return out
+
+
+def finish_technical(out: pd.DataFrame, requested_symbols: list[str]) -> pd.DataFrame:
+    """Rank over the computed rows (requested names plus SPY), then keep the requested names in order."""
+    if out.empty:
+        return out
+    technical_ranks(out)
+    dropped_symbols = sorted(set(requested_symbols) - set(out.index))
+    out = out.reindex([s for s in requested_symbols if s in out.index])
+    out["beta_spy"] = out["beta_252"]
+    out = out.reset_index(drop=True).replace([np.inf, -np.inf], np.nan)
+    out.attrs["dropped_symbols"] = dropped_symbols
+    out.attrs["dropped_symbol_count"] = len(dropped_symbols)
+    return out
+
+
 def latest_technical_features(symbols: list[str], lookback_days: int = 756, periods: dict[str, Any] | None = None) -> pd.DataFrame:
+    return finish_technical(raw_technical_features(symbols, lookback_days, periods), [normalize_symbol(s) for s in symbols])
+
+
+def raw_technical_features(symbols: list[str], lookback_days: int = 756, periods: dict[str, Any] | None = None) -> pd.DataFrame:
+    """Ticker-local features, one row per requested name or SPY with prices; rank columns left empty."""
     periods = periods or {}
     rsi_period = max(2, int(periods.get("rsi_period", 14)))
     stochastic_period = max(2, int(periods.get("stochastic_period", 14)))
@@ -152,7 +190,7 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     out["bollinger_lower"] = bb_lower.iloc[-1]
     out["bollinger_pct_b"] = (prices.iloc[-1] - bb_lower.iloc[-1]) / (bb_upper.iloc[-1] - bb_lower.iloc[-1]).replace(0, np.nan)
     out["bollinger_band_width"] = (bb_upper.iloc[-1] - bb_lower.iloc[-1]) / bb_mid.iloc[-1].replace(0, np.nan)
-    out["bollinger_width_percentile"] = rank_pct(out["bollinger_band_width"])
+    out["bollinger_width_percentile"] = np.nan
     del bb_mid, bb_std, bb_upper, bb_lower
     ranges = [highs - lows, (highs - prices.shift(1)).abs(), (lows - prices.shift(1)).abs()]
     tr_columns = ranges[0].columns.union(ranges[1].columns).union(ranges[2].columns)
@@ -205,7 +243,7 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     down = rets.lt(0)
     out["consecutive_up_days"] = up.apply(_trailing_true_count)
     out["consecutive_down_days"] = down.apply(_trailing_true_count)
-    out["short_term_reversal_flag"] = ((rank_pct(out["return_1w"], higher_better=False) >= 90) | (rank_pct(out["return_1m"], higher_better=False) >= 90)).astype(float)
+    out["short_term_reversal_flag"] = np.nan
     usd_returns = usd_prices.pct_change(fill_method=None)
     out["beta_return_currency"] = "USD"
     spy_available = "SPY" in usd_returns.columns
@@ -226,7 +264,7 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
         out["relative_return_3m_spy"] = (usd_prices.iloc[-1] / usd_prices.shift(63).iloc[-1] - 1) - spy_return
     amihud_observations = rets.abs().tail(20) / (volumes.tail(20) * usd_prices.tail(20)).replace(0, np.nan)
     out["amihud_20d"] = amihud_observations.mean().where(amihud_observations.count().eq(20))
-    out["amihud_percentile"] = rank_pct(out["amihud_20d"], higher_better=False)
+    out["amihud_percentile"] = np.nan
     ff = load_factor_returns()
     out["ivol_ff3_63d"] = _idiosyncratic_vol(usd_returns.tail(63), ff)
     yz_window = 63
@@ -247,21 +285,9 @@ def latest_technical_features(symbols: list[str], lookback_days: int = 756, peri
     yz_complete = pd.concat([log_overnight.tail(63).count(), log_open_close.tail(63).count(), rs_daily.tail(63).count()], axis=1).min(axis=1).eq(63)
     out["yang_zhang_vol_21d_estimate"] = np.sqrt(yz_daily_variance * 21.0).where(yz_complete)
     out["vol_estimate_method"] = "yang_zhang_63d_scaled_21d"
-    out["technical_percentile"] = (
-        rank_pct(out["momentum_jt"]) * 0.35
-        + rank_pct(out["return_6m"]) * 0.2
-        + rank_pct(out["dist_sma_200"]) * 0.15
-        + rank_pct(out["realized_vol_63d"], higher_better=False) * 0.15
-        + rank_pct(out["dollar_volume_20d"]) * 0.15
-    )
+    out["technical_percentile"] = np.nan
     out["beta_effective"] = out["beta_252"]
     out["beta_effective_source"] = np.where(out["beta_252"].notna(), "spy_true_beta", "unavailable")
-    dropped_symbols = sorted(set(requested_symbols) - set(out.index))
-    out = out.reindex([s for s in requested_symbols if s in out.index])
-    out["beta_spy"] = out["beta_252"]
-    out = out.reset_index(drop=True).replace([np.inf, -np.inf], np.nan)
-    out.attrs["dropped_symbols"] = dropped_symbols
-    out.attrs["dropped_symbol_count"] = len(dropped_symbols)
     return out
 
 

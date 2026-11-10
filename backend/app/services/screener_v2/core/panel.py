@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .data_loader import AS_OF, load_factor_returns, ohlcv_for_symbols, parse_symbols
-from .estimators import latest_technical_features
-from .fundamentals import latest_fundamental_features
+from . import snapshots
+from .data_loader import AS_OF, load_factor_returns, normalize_symbol, parse_symbols
+from .estimators import finish_technical
+from .fundamentals import fundamental_ranks
 from .gics import add_industry_group
 from .stats import rank_pct
 
@@ -22,9 +23,10 @@ def metric_panel(payload: dict | None, symbols: list[str] | None = None) -> pd.D
     payload = payload or {}
     symbols = symbols or parse_symbols(payload, default_limit=int(payload.get("default_limit") or 500))
     lookback = int(payload.get("lookback_days") or 756)
-    tech = latest_technical_features(symbols, lookback_days=lookback, periods=payload)
+    tech, fund, latest_price_date, feature_source = snapshots.raw_panel_inputs(symbols, lookback, payload)
+    tech = finish_technical(tech, [normalize_symbol(s) for s in symbols])
     dropped = tech.attrs.get("dropped_symbols", [])
-    fund = latest_fundamental_features(symbols, payload.get("as_of_date"))
+    fund = fundamental_ranks(fund)
     if tech.empty:
         panel = fund
     else:
@@ -35,14 +37,13 @@ def metric_panel(payload: dict | None, symbols: list[str] | None = None) -> pd.D
     panel.attrs["as_of_date"] = payload.get("as_of_date") or AS_OF.get()
     panel.attrs["dropped_symbols"] = dropped
     panel.attrs["dropped_symbol_count"] = len(dropped)
+    panel.attrs["feature_source"] = feature_source
     if panel.empty:
         return panel
     panel["industry_group"] = add_industry_group(panel, industry_col="industry") if "industry" in panel.columns else "Unclassified"
     ff = load_factor_returns()
     if payload.get("as_of_date") or AS_OF.get() is not None:
         ff = ff[ff.date <= pd.Timestamp(payload.get("as_of_date") or AS_OF.get())]
-    observed = ohlcv_for_symbols(list(dict.fromkeys(symbols + ["SPY"])), 1)
-    latest_price_date = observed.Date.max() if not observed.empty else None
     if not ff.empty and ff.date.iloc[-1] == latest_price_date:
         latest_factors = ff.tail(1).iloc[0].to_dict()
         panel["factor_observation_date"] = latest_factors["date"]
