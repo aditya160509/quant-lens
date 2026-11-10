@@ -39,3 +39,7 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Chart grid view (View menu on results and rankings): card per name with 3M trend, 1M move, price, score; opens drawer; first 120 | `views.tsx`, `screen.css` | grid-1 |
 | [ ] | Open: Backtest 61 s on 12 names (405 point-in-time panels across 14 sensitivity runs); needs a vectorised multi-date panel | backend | — |
 | [ ] | F opens the filter picker (not while typing) | `UniverseBar.tsx` | keys-1 |
+| [ ] | Valuation: four gauges (history, sector, peers, universe), multiples grid, re-rating pill | `valuation/ValuationViews.tsx` | valuation-1 |
+| [ ] | Valuation: card grid for every name, sortable by each frame | `valuation/ValuationViews.tsx` | valuation-1 |
+| [ ] | Valuation layout: Focus, Universe, Peers tabs | `screenerLab.ts` | valuation-1 |
+| [ ] | Gauge direction: confirm whether a high percentile means cheap or expensive and label it | `valuation/ValuationViews.tsx` | valuation-1 |
