@@ -62,3 +62,4 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Treemap: open a sector, "Filter to {sector}" sets the Sector filter (live count updates, Run or Auto applies) | `charts/Treemap.tsx`, `screener/views.tsx` | chart-filter-1 |
 | [ ] | Phone: filter bar scrolls sideways with a fade cue instead of wrapping | `universe.css` | phone-1 |
 | [ ] | Bulk action Universe: selected names become the Screen universe | `RowActions.tsx` | universe-2 |
+| [ ] | Context bar: Rebalance (weekly, monthly, quarterly) and Top N (10, 20, 50, 100) segments where the study has them | `UniverseBar.tsx` | period-1 |

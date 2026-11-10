@@ -85,7 +85,7 @@ Index membership stays out until we have data for it; it must not be faked.
 - [x] 6M to 10Y presets and as-of date
 - [ ] Max and custom start and end with date picker
 - [ ] Data availability shown on the range
-- [ ] Rebalance frequency and holding period as segmented controls on Test
+- [x] Rebalance frequency and holding period as segmented controls on Test
 - [ ] Compare as-of dates
 
 ### Filters

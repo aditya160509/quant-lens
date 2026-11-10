@@ -20,6 +20,8 @@ import { HistogramRange, MixBar, stageFor, useFilterColumns, useFilterPreview } 
 import "./universe.css";
 
 const CAP = 1000;
+const REBAL: [string, string, number][] = [["Weekly", "weekly", 5], ["Monthly", "monthly", 21], ["Quarterly", "quarterly", 63]];
+const TOPN = [10, 20, 50, 100];
 const CATS = ["sector", "industry", "country", "exchange", "currency"];
 const SIZES = [25, 50, 100, 250, 500, 1000];
 const PERIODS: [string, number][] = [["6M", 182], ["1Y", 365], ["2Y", 756], ["3Y", 1095], ["5Y", 1825], ["10Y", 3650]];
@@ -92,6 +94,16 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
         {keys.has("lookback_days") ? (
           <div className="ub-seg" role="radiogroup" aria-label="Period">
             {PERIODS.map(([l, d]) => <button key={l} type="button" role="radio" aria-checked={days === d} onClick={() => set("lookback_days", d)}>{l}</button>)}
+          </div>
+        ) : null}
+        {keys.has("rebalance_frequency") ? (
+          <div className="ub-seg" role="radiogroup" aria-label="Rebalance">
+            {REBAL.map(([l, f, d]) => <button key={f} type="button" role="radio" aria-checked={(run.form.rebalance_frequency ?? "monthly") === f} onClick={() => run.setForm((c) => ({ ...c, rebalance_frequency: f, rebalance_days: d }))}>{l}</button>)}
+          </div>
+        ) : null}
+        {keys.has("top_n") ? (
+          <div className="ub-seg" role="radiogroup" aria-label="Names held">
+            {TOPN.map((n) => <button key={n} type="button" role="radio" aria-checked={Number(run.form.top_n ?? 50) === n} onClick={() => set("top_n", n)}>Top {n}</button>)}
           </div>
         ) : null}
         {keys.has("as_of_date") ? <input className="ub-date" type="date" aria-label="As of date" value={String(run.form.as_of_date ?? "")} onChange={(e) => set("as_of_date", e.target.value)} /> : null}
