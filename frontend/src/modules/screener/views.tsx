@@ -8,6 +8,7 @@ import type { ViewProps } from "@/modules/research/outputs/types";
 import { ScreenScatter, SensitivityStrip } from "./trust/Charts";
 import { NearMisses, RunInfo, runOf, ScreenDiff, WhyHere } from "./trust/Explain";
 import { SCREENER_BASE } from "./base";
+import "./screen.css";
 
 /** Every passing name as a rectangle: area is market cap, colour is the 1-month return, grouped by sector. */
 export function ScreenTreemap({ result }: ViewProps) {
@@ -43,3 +44,27 @@ export const RunView = ({ result }: ViewProps) => <RunInfo result={result} />;
 export const DiffView = ({ result, feature }: ViewProps) => <ScreenDiff result={result} featureId={feature.id} />;
 export const ScatterView = ({ rows, feature }: ViewProps) => <ScreenScatter rows={rows} feature={feature} />;
 export const SensitivityView = ({ result }: ViewProps) => <SensitivityStrip result={result} />;
+
+/** Names left after each filter as a shrinking bar; the step that removed the most is the bottleneck. */
+export function FunnelView({ rows }: ViewProps) {
+  const steps = rows.filter((r) => isNum(r.remaining));
+  if (!steps.length) return null;
+  const top = Math.max(1, ...steps.map((r) => r.remaining as number));
+  const worst = Math.max(0, ...steps.map((r) => (isNum(r.removed) ? r.removed : 0)));
+  return (
+    <ol className="fn">
+      {steps.map((r, i) => {
+        const removed = isNum(r.removed) ? r.removed : 0;
+        const neck = removed > 0 && (r.bottleneck === true || removed === worst);
+        return (
+          <li key={i} data-neck={neck}>
+            <span className="fn-name">{String(r.stage ?? r.key ?? `Step ${i + 1}`)}</span>
+            <span className="fn-bar"><i style={{ width: `${((r.remaining as number) / top) * 100}%` }} /></span>
+            <span className="fn-left num">{(r.remaining as number).toLocaleString()}</span>
+            <span className="fn-cut num">{removed ? `−${removed.toLocaleString()}` : ""}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}

@@ -98,6 +98,10 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
               <input className="input num" inputMode="decimal" placeholder="Min" aria-label="Minimum" value={String(run.form[`${menu.key}_min`] ?? "")} onChange={(e) => set(`${menu.key}_min`, e.target.value)} />
               <input className="input num" inputMode="decimal" placeholder="Max" aria-label="Maximum" value={String(run.form[`${menu.key}_max`] ?? "")} onChange={(e) => set(`${menu.key}_max`, e.target.value)} />
             </div>
+            <div className="ub-range-foot">
+              {stageFor(preview, menu.key) ? <span className="num">−{stageFor(preview, menu.key)?.removed} · {stageFor(preview, menu.key)?.remaining} left</span> : <span />}
+              <button type="button" className="btn sm ghost" disabled={!run.form[`${menu.key}_min`] && !run.form[`${menu.key}_max`]} onClick={() => run.setForm((c) => ({ ...c, [`${menu.key}_min`]: "", [`${menu.key}_max`]: "" }))}>Clear</button>
+            </div>
           </div>
         ) : null}
       </PopMenu>

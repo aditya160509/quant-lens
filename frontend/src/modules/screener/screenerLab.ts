@@ -91,8 +91,8 @@ const ST = group(() => import("./test/ProofViews") as Promise<Record<string, unk
 const RV = group(() => import("./rank/RankViews") as Promise<Record<string, unknown>>);
 const RS = group(() => import("./rank/StrategyViews") as Promise<Record<string, unknown>>);
 const TS = group(() => import("./test/TearSheet") as Promise<Record<string, unknown>>);
-registerViews({ monthlyHeatmap: TS.MonthlyHeatmap, returnHistogram: TS.ReturnHistogram, underwater: TS.Underwater, piotroskiMatrix: RS.PiotroskiMatrix, altmanZones: RS.AltmanZones, screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, sensitivity: SV.SensitivityView, runInfo: SV.RunView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
-registerAlternates({ piotroskiMatrix: [{ label: "Table", view: "dataTable" }], altmanZones: [{ label: "Table", view: "dataTable" }], rankedTable: [{ label: "Sector treemap", view: "screenTreemap" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }] });
+registerViews({ funnel: SV.FunnelView, monthlyHeatmap: TS.MonthlyHeatmap, returnHistogram: TS.ReturnHistogram, underwater: TS.Underwater, piotroskiMatrix: RS.PiotroskiMatrix, altmanZones: RS.AltmanZones, screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, sensitivity: SV.SensitivityView, runInfo: SV.RunView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
+registerAlternates({ funnel: [{ label: "Table", view: "dataTable" }], piotroskiMatrix: [{ label: "Table", view: "dataTable" }], altmanZones: [{ label: "Table", view: "dataTable" }], rankedTable: [{ label: "Sector treemap", view: "screenTreemap" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }] });
 
 export const SCREENER_LAB: LabConfig = {
   id: "screener",
@@ -113,7 +113,7 @@ export const SCREENER_LAB: LabConfig = {
           { keys: ["ranked_screener_table"], span: 6, view: "screenDiff", title: "Compare runs" },
           { keys: ["ranked_screener_table"], span: 6, view: "runInfo", title: "Run" },
         ] },
-        { id: "funnel", label: "Funnel", items: [{ keys: ["filter_funnel_waterfall"], span: 6 }, { keys: ["market_cap_bucket_distribution"], span: 6 }] },
+        { id: "funnel", label: "Funnel", items: [{ keys: ["filter_funnel_waterfall"], span: 6, view: "funnel", title: "Funnel" }, { keys: ["market_cap_bucket_distribution"], span: 6 }] },
         { id: "coverage", label: "Coverage", items: [{ keys: ["metric_coverage"], span: 12, view: "dataTable", opts: { max: 500, maxHeight: 640 } }] },
       ],
     },
