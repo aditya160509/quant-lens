@@ -147,7 +147,7 @@ Index membership stays out until we have data for it; it must not be faked.
 - [x] Strength profile: quality, value, momentum, health, growth as a radar we compute, with filter by shape
 - [ ] Why here: filter, value, threshold, margin, sector percentile
 - [ ] Peers, quarters, profit and loss, balance sheet, cash flow, ratios as tabs
-- [ ] Statement rows with sparklines, YoY, common-size toggle
+- [x] Statement rows with sparklines, YoY, common-size toggle
 - [ ] Compare up to 8 names: overlaid chart, side-by-side table, differences highlighted
 - [ ] Full page with its own URL; PDF
 

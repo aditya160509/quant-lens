@@ -3,6 +3,7 @@
 import { Check, Download, GitCompareArrows, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
+import { Spark } from "@/charts/RankList";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { isNum } from "@/modules/research/format";
 import { Chip, Segmented } from "@/workspace/ui";
@@ -269,8 +270,16 @@ function Financials({ d }: { d: Lookup }) {
         : st && st.periods.length ? (
           <div className="ql-scroll">
             <table className="ql-table">
-              <thead><tr><th>Line</th>{st.periods.map((p) => <th key={p} className="r">{p}</th>)}</tr></thead>
-              <tbody>{st.lines.map((l) => <tr key={l.key}><td>{l.label}</td>{l.values.map((v, i) => <td key={i} className="r num">{fmtLine(l.key, v)}</td>)}</tr>)}</tbody>
+              <thead><tr><th>Line</th><th>Trend</th><th className="r">YoY</th>{st.periods.map((p) => <th key={p} className="r">{p}</th>)}</tr></thead>
+              <tbody>{st.lines.map((l) => {
+                // Periods may arrive newest first; the sparkline and YoY read oldest to newest.
+                const desc = st.periods.length > 1 && st.periods[0] > st.periods[st.periods.length - 1];
+                const chron = desc ? [...l.values].reverse() : l.values;
+                const back = period === "quarterly" ? 4 : 1;
+                const now = chron[chron.length - 1], then = chron[chron.length - 1 - back];
+                const yoy = isNum(now) && isNum(then) && then !== 0 ? now / Math.abs(then) - Math.sign(then) : null;
+                return <tr key={l.key}><td>{l.label}</td><td>{chron.filter(isNum).length > 1 ? <Spark values={chron.map((v) => (isNum(v) ? v : Number.NaN))} width={64} height={16} /> : null}</td><td className={`r num ${isNum(yoy) ? (yoy >= 0 ? "up" : "down") : ""}`}>{isNum(yoy) ? `${yoy >= 0 ? "+" : ""}${(yoy * 100).toFixed(0)}%` : ""}</td>{l.values.map((v, i) => <td key={i} className="r num">{fmtLine(l.key, v)}</td>)}</tr>;
+              })}</tbody>
             </table>
           </div>
         ) : <p className="ql-none">No statements held for {d.ticker}</p>}

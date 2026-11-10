@@ -30,3 +30,4 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Pill editor footer: removed and left counts, Clear | `UniverseBar.tsx` | funnel |
 | [ ] | Funnel: shrinking bars per filter, removed count, bottleneck in amber | `views.tsx`, `screen.css` | funnel |
 | [ ] | Drawer: strength radar beside score bars; unknown axes dashed | `kit/QuickLook.tsx`, `quicklook.css` | drawer-1 |
+| [ ] | Drawer statements: trend sparkline and YoY per line (quarterly compares 4 back) | `kit/QuickLook.tsx` | drawer-2 |
