@@ -57,9 +57,9 @@ Our own advantage, shown everywhere: why a stock passed or failed, near misses, 
 - [x] Sector tiles with counts
 - [ ] Check gallery and sector clicks end to end, and run on arrival
 - [ ] Each gallery row shows live match count and top three names after first load
-- [ ] Search box as the page's main element
+- [x] Search box as the page's main element
 - [ ] Recent screens and saved screens with last result and change since last run
-- [ ] Market breadth strip: advancers, new highs, sector returns
+- [x] Market breadth strip: advancers, new highs, sector returns
 - [ ] Sector treemap by market cap coloured by return
 - [ ] Biggest entrants and exits across saved screens
 - [ ] Pinned board of outputs, in cards

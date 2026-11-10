@@ -50,3 +50,6 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Formula: status list (ok, warn, error) above results; Backtest tab with drawdown; table with bulk actions | `screenerLab.ts` | formula-1 |
 | [ ] | Test Holdings tab: attribution diverging bars (best and worst 12), holdings Gantt (open ones marked), trade log | `test/TearSheet.tsx`, `screenerLab.ts` | test-2 |
 | [ ] | Test Rebalancing tab now includes weekday sensitivity | `screenerLab.ts` | test-2 |
+| [ ] | Overview: search box opens the shell search | `home/ScreenerHome.tsx` | overview-1 |
+| [ ] | Overview: breadth strip (advancers/decliners bar, near 52w high and low, sector 1M chips that open Screen filtered) from `GET /breadth` | `ScreenerHome.tsx`, `core/explain.py` | overview-1 |
+| [ ] | Data: market cap filled for only 125 of the top 500 liquid names | backend | overview-1 |

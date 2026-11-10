@@ -39,3 +39,20 @@
 .sh-sector i { position: absolute; inset: 0 auto 0 0; background: var(--accent-soft); }
 .sh-sector span, .sh-sector b { position: relative; font-weight: 500; }
 .sh-sector:hover { box-shadow: inset 0 0 0 1px var(--accent-line); }
+.sh-search { display: flex; align-items: center; gap: 12px; width: 100%; height: 48px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-3); font: inherit; font-size: 14px; cursor: text; text-align: left; transition: box-shadow .15s; }
+.sh-search:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+.sh-search span { flex: 1; }
+.sh-breadth { display: grid; grid-template-columns: 1.4fr .6fr .6fr 2.4fr; gap: 10px; }
+.sh-breadth > div { padding: 12px 14px; border-radius: 12px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 8px; align-content: start; }
+.sh-ad-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 1px; background: var(--line); }
+.sh-ad-bar i { background: var(--text-4); } .sh-ad-bar i.up { background: var(--up); } .sh-ad-bar i.down { background: var(--down); }
+.sh-ad-n { display: flex; justify-content: space-between; align-items: baseline; font-size: 11.5px; color: var(--text-3); }
+.sh-ad-n b { font-size: 16px; }
+.sh-breadth b.up, .sh-ad-n b.up { color: var(--up); } .sh-breadth b.down, .sh-ad-n b.down { color: var(--down); }
+.sh-hl b { font-size: 24px; font-weight: 650; }
+.sh-sr { display: flex; flex-wrap: wrap; gap: 4px; }
+.sh-sr button { display: inline-flex; gap: 6px; align-items: baseline; padding: 3px 8px; border: 0; border-radius: 6px; font: inherit; font-size: 11.5px; cursor: pointer; color: var(--text); }
+.sh-sr button.up { background: color-mix(in oklch, var(--up) var(--a), var(--panel-2)); }
+.sh-sr button.down { background: color-mix(in oklch, var(--down) var(--a), var(--panel-2)); }
+.sh-sr button b { font-weight: 600; }
+@media (max-width: 900px) { .sh-breadth { grid-template-columns: 1fr 1fr; } .sh-adv, .sh-secret { grid-column: 1 / -1; } }

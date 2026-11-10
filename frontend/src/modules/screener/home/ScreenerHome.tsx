@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Bell, FlaskConical, Gem, HeartPulse, Rocket, ShieldCheck, Sparkles, Trophy, Wallet, type LucideIcon } from "lucide-react";
+import { ArrowUpRight, Search, Bell, FlaskConical, Gem, HeartPulse, Rocket, ShieldCheck, Sparkles, Trophy, Wallet, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { get, latestRun } from "@/modules/research/api";
@@ -13,6 +13,10 @@ import "./home.css";
 
 type Template = { key: string; formula: string; weak_evidence: boolean };
 type Facet = { name: string; count: number };
+type Breadth = { universe: number; advancers: number; decliners: number; unchanged: number; near_high: number; near_low: number; median_1d: number | null; sectors: { sector: string; median_1m: number; count: number }[] };
+// The shell opens its search on "/"; a synthetic key on the body reuses that one entry point.
+const openSearch = () => document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "/", bubbles: true }));
+const sgn = (v: number, d = 1) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(d)}%`;
 
 const THEMES: { label: string; hue: number; icon: LucideIcon; keys: string[] }[] = [
   { label: "Value", hue: 258, icon: Gem, keys: ["deep_value", "cheap_high_fscore", "below_book_liquid", "large_cap_value", "low_pe_growth", "cheap_and_improving"] },
@@ -37,6 +41,7 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
   const router = useRouter();
   const templates = useQuery({ queryKey: ["screener", "templates"], queryFn: () => get<{ templates: Template[] }>("/templates"), staleTime: Infinity, retry: false });
   const facets = useQuery({ queryKey: ["screener", "facets"], queryFn: () => get<{ sector: Facet[] }>("/facets"), staleTime: 600_000, retry: false });
+  const breadth = useQuery({ queryKey: ["screener", "breadth"], queryFn: () => get<Breadth>("/breadth"), staleTime: 600_000, retry: false }).data;
   const byKey = new Map((templates.data?.templates ?? []).map((t) => [t.key, t]));
   const sectors = (facets.data?.sector ?? []).filter((s) => s.name && s.name !== "Unknown");
   const names = sectors.reduce((n, s) => n + s.count, 0);
@@ -62,6 +67,24 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
           <h1>Screener</h1>
           <Link href={featureHref("sc01")} className="btn primary">New screen</Link>
         </header>
+
+        <button type="button" className="sh-search" onClick={openSearch}><Search size={16} aria-hidden /><span>Search any stock, screen or formula</span><kbd className="kbd">/</kbd></button>
+
+        {breadth ? (
+          <section className="sh-breadth" aria-label="Market breadth">
+            <div className="sh-adv">
+              <div className="sh-l"><span>Advancers</span><em>{breadth.universe} names</em></div>
+              <div className="sh-ad-bar"><i className="up" style={{ flex: breadth.advancers }} /><i style={{ flex: breadth.unchanged }} /><i className="down" style={{ flex: breadth.decliners }} /></div>
+              <div className="sh-ad-n num"><b className="up">{breadth.advancers}</b><span>{breadth.median_1d !== null ? `median ${sgn(breadth.median_1d, 2)}` : ""}</span><b className="down">{breadth.decliners}</b></div>
+            </div>
+            <div className="sh-hl"><div className="sh-l"><span>Near 52-week high</span></div><b className="num up">{breadth.near_high}</b></div>
+            <div className="sh-hl"><div className="sh-l"><span>Near 52-week low</span></div><b className="num down">{breadth.near_low}</b></div>
+            <div className="sh-secret">
+              <div className="sh-l"><span>Sectors, 1 month</span></div>
+              <div className="sh-sr">{breadth.sectors.map((x) => <button key={x.sector} type="button" title={`${x.sector}: ${sgn(x.median_1m)} median, ${x.count} names`} className={x.median_1m >= 0 ? "up" : "down"} style={{ ["--a" as string]: `${Math.min(60, Math.abs(x.median_1m) * 400)}%` }} onClick={() => open("sc01", { sector: x.sector })}><span>{x.sector}</span><b className="num">{sgn(x.median_1m)}</b></button>)}</div>
+            </div>
+          </section>
+        ) : null}
 
         <section className="sh-stats">
           <Stat label="Last screen" value={passed !== undefined ? passed.toLocaleString() : "–"} tag={screen ? ago(screen.startedAt) : undefined}>

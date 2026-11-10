@@ -210,3 +210,20 @@ def preview(payload: dict, fields: list[str], bins: int = 32) -> dict[str, Any]:
         dist[field] = {"lo": lo, "hi": hi, "bins": counts.tolist(), "kept": kept_counts.tolist(), "known": len(values), "total": len(panel),
                        "median": float(values.median()), "min": float(values.min()), "max": float(values.max())}
     return {"universe": len(panel), "passed": len(filtered), "stages": stages, "dist": dist}
+
+
+def breadth(payload: dict) -> dict[str, Any]:
+    """Market breadth over the universe: advancers and decliners, names at 52-week highs and lows, median 1-month return by sector."""
+    panel = _preview_panel(payload)
+    day = pd.to_numeric(panel.get("return_1d"), errors="coerce")
+    prox = pd.to_numeric(panel.get("prox52"), errors="coerce")
+    month = pd.to_numeric(panel.get("return_1m"), errors="coerce")
+    sectors = (pd.DataFrame({"sector": panel["sector"], "r": month}).dropna().query("sector not in ['', 'Unknown']")
+               .groupby("sector")["r"].agg(["median", "count"]).sort_values("median", ascending=False))
+    return {
+        "universe": len(panel), "advancers": int((day > 0).sum()), "decliners": int((day < 0).sum()), "unchanged": int((day == 0).sum()),
+        # Within 2% of the 52-week high, or in the bottom 5% of the 52-week range.
+        "near_high": int((prox >= 0.98).sum()), "near_low": int((prox <= prox.quantile(0.05)).sum()) if prox.notna().any() else 0,
+        "median_1d": float(day.median()) if day.notna().any() else None,
+        "sectors": [{"sector": s, "median_1m": float(r["median"]), "count": int(r["count"])} for s, r in sectors.iterrows()],
+    }
