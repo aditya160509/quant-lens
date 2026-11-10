@@ -141,3 +141,8 @@ Order: finish the engine plan on the Screener first, then 3, then 4 and 5. Recon
 - [ ] ML, Research and Volatility reviews to redo
 - [ ] Factors review is a first pass: mostly headers and docstrings
 - [ ] PCA, Portfolio and Studio reviews not checked against the code by a second reader
+
+- [x] Market cap blank for 375 of the top 500: the latest close was read from the last shared row, so ragged final dates blanked names; now each name's own last close and date. Coverage 125 to 499 of 500.
+- [x] sector_composite_breakdown: count now counts scored names, with `unscored` beside it; a null average means every name in the sector lacks a factor.
+- [ ] US exchange labels "Unknown": no local exchange source exists (company_names.parquet has ticker, name, source only). Needs the SEC company_tickers_exchange file, not fetched.
+- [x] /jobs/{id} already returns only status and progress until completed.

@@ -140,22 +140,24 @@ def latest_fundamental_features(symbols: list[str], as_of_date: Any | None = Non
     equity_book = pd.to_numeric(_pick(df, ["Stockholders Equity", "Common Stock Equity"]), errors="coerce")
     shares = pd.to_numeric(_pick(df, ["Ordinary Shares Number"]), errors="coerce")
     prices_at_date = close_matrix(symbols, 1)
-    last_prices = prices_at_date.iloc[-1].reindex(out.index) if not prices_at_date.empty else pd.Series(np.nan, index=out.index)
+    # Each name's own last observed close: a ragged final row (other names trading a later day) must not blank its price.
+    last_prices = prices_at_date.apply(lambda c: c.dropna().iloc[-1] if c.notna().any() else np.nan).reindex(out.index) if not prices_at_date.empty else pd.Series(np.nan, index=out.index)
+    price_dates = prices_at_date.apply(lambda c: c.last_valid_index()).reindex(out.index) if not prices_at_date.empty else pd.Series(pd.NaT, index=out.index)
     # Recent Indian quarterlies omit the period-end count; the diluted average is the closest reported figure.
     shares = shares.fillna(avg_shares)
     out["shares_outstanding"] = shares
     from .currency import instrument_specs, usd_rates
     specs = instrument_specs(symbols)
-    price_date = prices_at_date.index[-1] if not prices_at_date.empty else cutoff
-    rates = usd_rates([spec.get(key) for spec in specs.values() for key in ['quote_currency', 'financial_currency']], [price_date])
+    obs_dates = price_dates.dropna().unique().tolist() or [cutoff]
+    rates = usd_rates([spec.get(key) for spec in specs.values() for key in ['quote_currency', 'financial_currency']], obs_dates)
     def rate_for(symbol, key):
-        currency = specs[symbol].get(key)
-        return rates[currency].iloc[0] if currency in rates else np.nan
+        currency, day = specs[symbol].get(key), price_dates.get(symbol)
+        return rates[currency].get(pd.Timestamp(day), np.nan) if currency in rates and pd.notna(day) else np.nan
     quote_fx = pd.Series({symbol: rate_for(symbol, 'quote_currency') for symbol in symbols})
     financial_fx = pd.Series({symbol: rate_for(symbol, 'financial_currency') for symbol in symbols})
     quote_units = pd.Series({symbol: specs[symbol].get('quoted_units_per_ordinary_share') for symbol in symbols}, dtype=float)
     cap_usd = last_prices * shares * quote_units * quote_fx
-    out['market_cap_observation_date'] = pd.Series(price_date, index=out.index).where(last_prices.notna())
+    out['market_cap_observation_date'] = price_dates.where(last_prices.notna())
     out['market_cap_basis'] = 'observed quote times lagged statement ordinary shares times declared quote-unit multiplier, converted using observed FX; not a current vendor capitalization snapshot'
     out['market_cap'] = cap_usd / financial_fx
     out['market_cap_statement_currency'] = out['market_cap']
