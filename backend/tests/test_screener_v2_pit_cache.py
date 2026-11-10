@@ -30,3 +30,21 @@ def test_pit_scope_matches_per_date_technical_panel(monkeypatch):
             fast = estimators.latest_technical_features(["AAA", "BBB"], 260, periods)
     pd.testing.assert_frame_equal(old, fast, check_exact=False, rtol=1e-9)
     assert (old.price_observation_date == as_of).all()
+
+
+def test_panel_cache_is_bounded_by_bytes(monkeypatch):
+    from app.services.screener_v2.core import validation
+    monkeypatch.setattr(validation, "_PANEL_CACHE", validation.OrderedDict())
+    monkeypatch.setattr(validation, "_panel_cache_bytes", 0)
+    panel = pd.DataFrame({"ticker": [f"T{i}" for i in range(100)], "score": np.arange(100.0)})
+    size = int(panel.memory_usage(deep=True, index=True).sum())
+    monkeypatch.setattr(validation, "_PANEL_CACHE_MAX_BYTES", size * 3)
+    for key in range(5):
+        validation._panel_cache_put(key, panel)
+    assert list(validation._PANEL_CACHE) == [2, 3, 4]
+    assert validation._panel_cache_bytes == size * 3
+    assert validation._panel_cache_get(2) is panel  # a hit becomes most recent
+    validation._panel_cache_put(5, panel)
+    assert list(validation._PANEL_CACHE) == [4, 2, 5]
+    validation._panel_cache_put(6, pd.concat([panel] * 4))  # larger than the whole budget: never stored
+    assert 6 not in validation._PANEL_CACHE and validation._panel_cache_bytes == size * 3

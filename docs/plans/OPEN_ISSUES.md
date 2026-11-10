@@ -12,6 +12,13 @@ Measured with `ru_maxrss` on a full Screen run (3,831 names).
 | `1281f1e` | 4.13 GB | 34.2 s | identical hash |
 | `8379929` (Polars) | 4.17 GB | 31.3 s | identical hash |
 
+Memory plan run (`SCREENER_V2_MAXIMUM_MEMORY_REDUCTION_V2.md`). Each case in a fresh child, `POLARS_MAX_THREADS=2`, peak by `ru_maxrss`, hash is sha256 of the panel CSV or response JSON. Cases: full = `metric_panel` on 3,831 names; 50 = first 50; PIT 50 = as of 2025-06-02; Composite = feature 03 on 50 US names (IC-IR); Backtest = feature 05 on 12 US names.
+
+| Step | Full | 50 | PIT 50 | Composite 50 | Backtest 12 |
+|---|---|---|---|---|---|
+| Baseline `567f204` | 2,331 MB, 14.7 s, `9194d4c2` | 694 MB, 2.5 s, `62364695` | 658 MB, 1.7 s, `cd927b91` | 860 MB, 43.4 s, `3b390b85` | 790 MB, 55.5 s, `da4f7ef0` |
+| 2. Panel cache bounded by bytes (256 MB) | same code path | same | same | same | same hash; one run never fills the cache |
+
 - [ ] Full Screen run under 2 GB
 - [ ] Run reads only requested stocks, columns and dates; a 50-name screen costs a few hundred MB
 - [ ] Indicators off wide pandas frames in `latest_technical_features`

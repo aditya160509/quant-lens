@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import threading
 from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any
@@ -149,7 +150,34 @@ def score_backtest_by_weekday(symbols, scores, lookback_days=756, top_n=50, cost
 
 
 # Panels across runs, so changing weights or top N re-scores without rebuilding history.
+# Bounded by bytes: one 1,000-name panel is ~2 MB, a 12-name one ~40 kB, so a count cap means nothing.
 _PANEL_CACHE: OrderedDict = OrderedDict()
+_PANEL_CACHE_MAX_BYTES = 256 * 2**20
+_panel_cache_bytes = 0
+_PANEL_CACHE_LOCK = threading.Lock()  # jobs run on a thread pool
+
+
+def _panel_cache_put(key, panel: pd.DataFrame) -> None:
+    global _panel_cache_bytes
+    size = int(panel.memory_usage(deep=True, index=True).sum())
+    if size > _PANEL_CACHE_MAX_BYTES:
+        return
+    with _PANEL_CACHE_LOCK:
+        if key in _PANEL_CACHE:
+            _panel_cache_bytes -= _PANEL_CACHE.pop(key)[1]
+        _PANEL_CACHE[key] = (panel, size)
+        _panel_cache_bytes += size
+        while _panel_cache_bytes > _PANEL_CACHE_MAX_BYTES:
+            _panel_cache_bytes -= _PANEL_CACHE.popitem(last=False)[1][1]
+
+
+def _panel_cache_get(key) -> pd.DataFrame | None:
+    with _PANEL_CACHE_LOCK:
+        entry = _PANEL_CACHE.get(key)
+        if entry is None:
+            return None
+        _PANEL_CACHE.move_to_end(key)
+        return entry[0]
 # Keys read only after the panel is built; they never change a dated panel.
 _SCORE_ONLY_KEYS = {"components", "weights", "top_n", "long_short", "score_weighted", "focus_ticker", "formula", "cost_bps", "score_field"}
 
@@ -173,16 +201,12 @@ def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cach
     def panel_at(date):
         key = ("panel", pd.Timestamp(date))
         if key not in panels:
-            hit = _PANEL_CACHE.get((*run_key, key[1]))
+            hit = _panel_cache_get((*run_key, key[1]))
             if hit is None:
                 with as_of_context(date), pit_scope(panels):
                     hit = metric_panel({**payload, "as_of_date": str(pd.Timestamp(date).date())}, symbols)
                     hit, _ = apply_filters(hit, payload)
-                _PANEL_CACHE[(*run_key, key[1])] = hit
-                while len(_PANEL_CACHE) > 400:
-                    _PANEL_CACHE.popitem(last=False)
-            else:
-                _PANEL_CACHE.move_to_end((*run_key, key[1]))
+                _panel_cache_put((*run_key, key[1]), hit)
             panels[key] = hit
         return panels[key].copy()
     def score_at(date):
