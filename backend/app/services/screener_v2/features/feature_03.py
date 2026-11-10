@@ -45,7 +45,7 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         score_weighted=bool(payload.get("score_weighted")),
         score_at=point_in_time_scorer(symbols, payload, "composite"),
     )
-    regime_breakdown = scored.merge(panel[["ticker", "sector"]], on="ticker", validate="one_to_one").groupby("sector").agg(avg_composite=("composite_score", "mean"), count=("ticker", "count")).reset_index()
+    regime_breakdown = scored.merge(panel[["ticker", "sector"]], on="ticker", validate="one_to_one").groupby("sector").agg(avg_composite=("composite_score", "mean"), count=("composite_score", "count"), unscored=("composite_score", lambda s: int(s.isna().sum()))).reset_index()
     redundancy = []
     for row in matrix_records(corr):
         if row["row"] != row["col"] and abs(row["value"]) > 0.6:
