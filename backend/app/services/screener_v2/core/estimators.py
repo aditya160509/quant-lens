@@ -298,17 +298,35 @@ def _trailing_true_count(series: pd.Series) -> int:
 
 
 def _idiosyncratic_vol(returns: pd.DataFrame, factors: pd.DataFrame) -> pd.Series:
-    import statsmodels.api as sm
+    """FF3 residual vol for every ticker in one least-squares projection.
+
+    A ticker needs all 63 rows of returns and factors observed, so eligible tickers share one X.
+    Same pseudo-inverse as statsmodels OLS; results match it to floating-point rounding (rtol 1e-9).
+    """
     required = ["mkt_rf", "smb", "hml", "rf"]
     out = pd.Series(np.nan, index=returns.columns, dtype=float)
-    if returns.empty or not set(required).issubset(factors.columns):
+    if len(returns) < 63 or not set(required).issubset(factors.columns):
         return out
-    aligned = factors.set_index("date")[required].reindex(returns.index)
-    for ticker in returns:
-        frame = pd.concat([returns[ticker].rename("y"), aligned], axis=1).dropna()
-        if len(frame) < 63:
-            continue
-        fit = sm.OLS(frame.y - frame.rf, sm.add_constant(frame[["mkt_rf", "smb", "hml"]])).fit()
-        out[ticker] = float(np.sqrt(np.mean(fit.resid ** 2) * TRADING_DAYS))
+    aligned = factors.set_index("date")[required].reindex(returns.index).to_numpy(dtype=float)
+    values = returns.to_numpy(dtype=float)
+    if np.isnan(aligned).any():
+        return out
+    eligible = ~np.isnan(values).any(axis=0)
+    if not eligible.any():
+        return out
+    y = values[:, eligible] - aligned[:, 3:]
+    x = np.column_stack([np.ones(len(returns)), aligned[:, :3]])
+    # Row-by-row accumulation, not matmul: BLAS/SIMD blocking changes low bits with the batch
+    # width, and a ticker's value must not depend on which other tickers were requested.
+    projector = np.linalg.pinv(x)
+    coef = np.zeros((x.shape[1], y.shape[1]))
+    for j in range(len(y)):
+        coef += projector[:, j:j + 1] * y[j]
+    residuals = y.copy()
+    for i in range(x.shape[1]):
+        residuals -= x[:, i:i + 1] * coef[i]
+    squares = np.zeros(y.shape[1])
+    for row in residuals:
+        squares += row * row
+    out.iloc[np.flatnonzero(eligible)] = np.sqrt(squares / len(y) * TRADING_DAYS)
     return out
-

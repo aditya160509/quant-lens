@@ -9,6 +9,7 @@ process.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
@@ -82,6 +83,16 @@ def pivot_last(raw: pd.DataFrame, field: str) -> pd.DataFrame:
 
 _OHLCV = ["Ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
 _PIT_MEMO = ContextVar("screener_pit_memo", default=None)
+
+
+@contextmanager
+def pit_scope(memo: dict):
+    """Share market rows and statement snapshots across the dates of one backtest run."""
+    token = _PIT_MEMO.set(memo)
+    try:
+        yield
+    finally:
+        _PIT_MEMO.reset(token)
 
 
 def _market_rows(symbols: tuple[str, ...], as_of) -> pl.LazyFrame:

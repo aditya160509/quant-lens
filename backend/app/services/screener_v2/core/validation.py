@@ -18,7 +18,7 @@ from .data_loader import (
     load_factor_returns,
     ohlcv_for_symbols,
 )
-from .pit_cache import pit_scope
+from .performance import pit_scope
 from .stats import TRADING_DAYS
 
 

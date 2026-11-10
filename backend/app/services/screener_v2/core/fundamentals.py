@@ -41,6 +41,18 @@ def _company_names() -> dict[str, str]:
 
 def statement_snapshots(symbols):
     """One stock/flow-consistent row per report date; four complete quarters for flows."""
+    from .performance import _PIT_MEMO
+    memo = _PIT_MEMO.get()
+    if memo is None:
+        return _statement_snapshots(symbols)
+    # Date-independent: callers apply the 90-day lag afterwards through eligible_reports.
+    key = ("statements", tuple(symbols))
+    if key not in memo:
+        memo[key] = _statement_snapshots(symbols)
+    return memo[key]
+
+
+def _statement_snapshots(symbols):
     source = load_fundamentals()
     frame = source[source.ticker.isin(symbols)]
     if frame.empty or "periodType" not in frame:

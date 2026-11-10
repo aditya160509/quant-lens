@@ -52,7 +52,7 @@ def test_backtest_market_rows_stop_at_each_as_of(local_data):
     import pandas as pd
 
     from app.services.screener_v2.core import performance
-    from app.services.screener_v2.core.pit_cache import pit_scope
+    from app.services.screener_v2.core.performance import pit_scope
 
     dates = local_data['market'].Date.sort_values().unique()
     early, late = pd.Timestamp(dates[300]), pd.Timestamp(dates[500])
