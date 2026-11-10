@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { get, latestRun } from "@/modules/research/api";
 import { featureHref, metaFor } from "@/modules/research/catalog";
 import { useStudies } from "@/modules/research/store";
+import { Treemap } from "@/charts/Treemap";
 import { defaultsFor } from "@/modules/research/StudyForm";
 import type { FeatureSpec, RunRecord } from "@/modules/research/types";
 import "./home.css";
@@ -84,6 +85,13 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
               <div className="sh-l"><span>Sectors, 1 month</span></div>
               <div className="sh-sr">{breadth.sectors.map((x) => <button key={x.sector} type="button" title={`${x.sector}: ${sgn(x.median_1m)} median, ${x.count} names`} className={x.median_1m >= 0 ? "up" : "down"} style={{ ["--a" as string]: `${Math.min(60, Math.abs(x.median_1m) * 400)}%` }} onClick={() => open("sc01", { sector: x.sector })}><span>{x.sector}</span><b className="num">{sgn(x.median_1m)}</b></button>)}</div>
             </div>
+          </section>
+        ) : null}
+
+        {breadth?.sectors.length ? (
+          <section className="sh-tree">
+            <Treemap title="Sectors by names, coloured by 1-month median return" sizeLabel="Names" colorLabel="Median 1M return" colorAggregate="mean" format={(v) => v.toFixed(0)} colorFormat={(v) => sgn(v)}
+              items={breadth.sectors.map((x) => ({ label: x.sector, group: x.sector, size: x.count, colorValue: x.median_1m }))} onFilterGroup={(g) => open("sc01", { sector: g })} />
           </section>
         ) : null}
 

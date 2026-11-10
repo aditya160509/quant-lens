@@ -58,3 +58,4 @@
 @media (max-width: 900px) { .sh-breadth { grid-template-columns: 1fr 1fr; } .sh-adv, .sh-secret { grid-column: 1 / -1; } }
 .sh-saved { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .sh-more { margin-left: 8px; font-size: 12px; font-weight: 500; color: var(--accent); }
+.sh-tree { padding: 12px 14px; border-radius: 12px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); }
