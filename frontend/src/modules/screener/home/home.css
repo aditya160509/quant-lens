@@ -56,3 +56,5 @@
 .sh-sr button.down { background: color-mix(in oklch, var(--down) var(--a), var(--panel-2)); }
 .sh-sr button b { font-weight: 600; }
 @media (max-width: 900px) { .sh-breadth { grid-template-columns: 1fr 1fr; } .sh-adv, .sh-secret { grid-column: 1 / -1; } }
+.sh-saved { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.sh-more { margin-left: 8px; font-size: 12px; font-weight: 500; color: var(--accent); }

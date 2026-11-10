@@ -42,6 +42,7 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
   const templates = useQuery({ queryKey: ["screener", "templates"], queryFn: () => get<{ templates: Template[] }>("/templates"), staleTime: Infinity, retry: false });
   const facets = useQuery({ queryKey: ["screener", "facets"], queryFn: () => get<{ sector: Facet[] }>("/facets"), staleTime: 600_000, retry: false });
   const breadth = useQuery({ queryKey: ["screener", "breadth"], queryFn: () => get<Breadth>("/breadth"), staleTime: 600_000, retry: false }).data;
+  const saved = useQuery({ queryKey: ["screener", "screens"], queryFn: () => get<{ screens: { screen_id: string; name: string; feature_id: string; payload: Record<string, unknown> }[] }>("/screens"), retry: false }).data?.screens ?? [];
   const byKey = new Map((templates.data?.templates ?? []).map((t) => [t.key, t]));
   const sectors = (facets.data?.sector ?? []).filter((s) => s.name && s.name !== "Unknown");
   const names = sectors.reduce((n, s) => n + s.count, 0);
@@ -115,6 +116,20 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
             );
           })}
         </section>
+
+        {saved.length ? (
+          <>
+            <h2 className="sh-h">Your screens <Link href="/screener/saved" className="sh-more">All</Link></h2>
+            <section className="sh-saved">
+              {saved.slice(-6).reverse().map((x) => (
+                <button key={x.screen_id} type="button" className="sh-screen" onClick={() => open(`sc${x.feature_id}`, x.payload)}>
+                  <span>{x.name}</span>
+                  <small>{metaFor(`sc${x.feature_id}`).name}</small>
+                </button>
+              ))}
+            </section>
+          </>
+        ) : null}
 
         <h2 className="sh-h">Screens</h2>
         <section className="sh-themes">
