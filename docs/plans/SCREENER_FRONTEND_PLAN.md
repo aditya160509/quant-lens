@@ -38,7 +38,7 @@ Our own advantage, shown everywhere: why a stock passed or failed, near misses, 
 
 - [x] Near-black palette, blue primary, KPI cards
 - [x] Left nav open by default with Overview, Screen, Rank, Test, Monitor, Saved, More
-- [ ] Coloured icon tile per section; active item with accent bar; run status dot
+- [x] Coloured icon tile per section; active item with accent bar; run status dot
 - [ ] Collapsible to icons, with tooltips; width remembered
 - [ ] One-row page header: icon, title, sub-tabs, Save, Share, Export, Run
 - [ ] Inspector closed by default on Screen; opens for advanced settings only

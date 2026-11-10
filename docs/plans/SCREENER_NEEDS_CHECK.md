@@ -54,3 +54,4 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Overview: breadth strip (advancers/decliners bar, near 52w high and low, sector 1M chips that open Screen filtered) from `GET /breadth` | `ScreenerHome.tsx`, `core/explain.py` | overview-1 |
 | [ ] | Data: market cap filled for only 125 of the top 500 liquid names | backend | overview-1 |
 | [ ] | Overview: Your screens (last 6 saved) load into their page | `home/ScreenerHome.tsx` | overview-2 |
+| [ ] | Shell nav: coloured icon tile per section, accent bar on active, light theme variant | `workspace/workspace.css` | shell-1 |
