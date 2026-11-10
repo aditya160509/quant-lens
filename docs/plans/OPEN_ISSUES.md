@@ -153,3 +153,27 @@ Order: finish the engine plan on the Screener first, then 3, then 4 and 5. Recon
 - [x] sector_composite_breakdown: count now counts scored names, with `unscored` beside it; a null average means every name in the sector lacks a factor.
 - [ ] US exchange labels "Unknown": no local exchange source exists (company_names.parquet has ticker, name, source only). Needs the SEC company_tickers_exchange file, not fetched.
 - [x] /jobs/{id} already returns only status and progress until completed.
+
+## Screener backend work left (2026-11-10)
+
+Beyond bug fixes. Order: 1, then approve or reject 2, then 3; 5 before launch.
+
+1. Speed and memory (background agent working from `~/Downloads/SCREENER_V2_MAXIMUM_MEMORY_REDUCTION_V2.md`; notes in `MEMORY_HOTSPOTS_V2.txt`)
+   - [ ] Backtest under 15 s on 12 names (61 s; 405 dated panels across 14 sensitivity runs)
+   - [ ] Full screen under 1 GB (2.97 GB, about 32 s; prices read three times)
+   - [ ] Composite first run under 2 s on 50 names (about 10 s; repeat 1 s)
+   - [ ] Byte-bounded panel caches (`validation._PANEL_CACHE` holds 400 by count; `explain._PREVIEW` 4)
+   - [ ] Batched idiosyncratic-vol OLS in the normal path; delete `pit_cache.py`
+   - [ ] Fundamental growth in one grouped pass, used columns only
+   - [ ] Dated raw-feature snapshot store; ranks stay universe-relative; seeding policy kept as bounded window
+   - [ ] Sensitivity runs (offsets, weekdays, holding periods) as an optional second job
+2. Result-changing fixes, need approval: E10 SPY in percentiles, E11 rank and sort ties, E15 stale growth, E16 rebalance stats on fixed blocks, E17 risk-free near the latest date
+3. Backend for frontend plan items
+   - [ ] Compare a field to another or to its sector median (P/E below sector median, price above SMA 200)
+   - [ ] Historical conditions: 5-year average, change over N periods
+   - [ ] Rank basis by market cap or coverage; country, exchange, sector, currency and cap-band presets
+   - [ ] Natural-language filters into editable filters (build on `/nl-formula`)
+   - [ ] Time machine and live funnel with passing names
+   - [ ] Alert builder rules and channels
+4. Data gaps: US exchange labels (no local source), company names about 90%, Piotroski debt check, Altman Z 32%, Indian composite blank, RSI and beta about 1,400 names, the 12 later-data items in SCREENER_CHECKLIST
+5. Ready for many users: see the section above (Postgres and queue, workers, shared data, object storage, quotas, security review)
