@@ -1,6 +1,6 @@
 # Screener frontend plan
 
-Size tags: `E` easy (under an hour), `M` medium (a few hours), `H` hard (a day or more, or needs backend or data work).
+Size tags (Claude build time, measured: the 16 easy items took about 6 min each): `E` easy (under 10 min), `M` medium (15–30 min), `H` hard (1–2 h, or needs backend or data work first).
 
 Date: 2026-11-09. Scope: every Screener page, component and output. Status is tracked by the boxes. A box is ticked only after it is seen working on the page with real results.
 
