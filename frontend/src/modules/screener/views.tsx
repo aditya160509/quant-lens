@@ -3,6 +3,7 @@
 import { createElement } from "react";
 import { Treemap } from "@/charts/Treemap";
 import { DataTable } from "@/kit/DataTable";
+import { useStudies } from "@/modules/research/store";
 import { openQuickLook } from "@/kit/QuickLook";
 import { Spark } from "@/charts/RankList";
 import { isNum, label, out, pct } from "@/modules/research/format";
@@ -18,7 +19,8 @@ export function ScreenTreemap({ result }: ViewProps) {
     label: String(r.ticker), group: typeof r.sector === "string" && r.sector ? r.sector : "Unknown sector",
     size: r.market_cap as number, colorValue: isNum(r.return_1m) ? r.return_1m : undefined,
   }));
-  return <Treemap title="Passing names by sector" sizeLabel="Market cap" colorLabel={`Mean ${label("return_1m").toLowerCase()}`} colorAggregate="mean" format={(v) => `$${(v / 1e9).toLocaleString("en-US", { maximumFractionDigits: 0 })}B`} colorFormat={(v) => pct(v, 1)} items={items} />;
+  const filterTo = (sector: string) => useStudies.setState((st) => ({ forms: { ...st.forms, sc01: { ...st.forms.sc01, sector } } }));
+  return <Treemap onFilterGroup={filterTo} title="Passing names by sector" sizeLabel="Market cap" colorLabel={`Mean ${label("return_1m").toLowerCase()}`} colorAggregate="mean" format={(v) => `$${(v / 1e9).toLocaleString("en-US", { maximumFractionDigits: 0 })}B`} colorFormat={(v) => pct(v, 1)} items={items} />;
 }
 
 const SCREEN_LEAD = ["rank", "ticker", "company_name"];

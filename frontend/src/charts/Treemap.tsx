@@ -9,7 +9,9 @@ type Node = { label: string; children?: Node[]; size?: number; colorValue?: numb
 type ColorMode = { key: string; label: string };
 
 /** Zoom from families/sectors into their members. Rectangles and labels encode magnitude; signed colour retains its sign. */
-export function Treemap({ items, title, sizeLabel, alternativeSizeLabel, colorLabel, colorModes, colorScale = "diverging", colorAggregate = "sum", format = fmtTick, colorFormat = fmtTick }: {
+export function Treemap({ items, title, sizeLabel, alternativeSizeLabel, colorLabel, colorModes, colorScale = "diverging", colorAggregate = "sum", format = fmtTick, colorFormat = fmtTick, onFilterGroup }: {
+  /** Offered once a group is open: narrow the study to that group. */
+  onFilterGroup?: (group: string) => void;
   items: Item[]; title: string; sizeLabel: string; alternativeSizeLabel?: string; colorLabel?: string; colorModes?: ColorMode[]; /** Sequential for magnitudes that cannot be negative (importance); diverging for signed measures. */ colorScale?: "diverging" | "sequential"; /** A group takes the sum of its members' colour values (weights) or their mean (returns, ratios). */ colorAggregate?: "sum" | "mean"; format?: (v: number) => string; colorFormat?: (v: number) => string;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
@@ -39,7 +41,7 @@ export function Treemap({ items, title, sizeLabel, alternativeSizeLabel, colorLa
     : diverging(v / max);
   const description = (n: (typeof nodes)[number]) => `${n.data.label}: ${alternate ? alternativeSizeLabel : sizeLabel} ${format(n.value ?? 0)}${activeColorLabel ? `; ${activeColorLabel} ${n.data.colorValue === undefined ? "unavailable" : colorFormat(n.data.colorValue)}` : ""}`;
   return <div ref={ref} className="treemap-chart" onKeyDown={(e) => { if (e.key === "Escape") { setGroup(null); setInspect(null); } }} onContextMenu={(e) => { if (group) { e.preventDefault(); setGroup(null); setInspect(null); } }}>
-    <nav aria-label={`${title} breadcrumb`} className="chart-mode-tabs"><button onClick={() => { setGroup(null); setInspect(null); }} aria-current={group === null ? "page" : undefined}>All groups</button>{group ? <span> / {group}</span> : null}</nav>
+    <nav aria-label={`${title} breadcrumb`} className="chart-mode-tabs"><button onClick={() => { setGroup(null); setInspect(null); }} aria-current={group === null ? "page" : undefined}>All groups</button>{group ? <span> / {group}</span> : null}{group && onFilterGroup ? <button style={{ marginLeft: 8 }} onClick={() => onFilterGroup(group)}>Filter to {group}</button> : null}</nav>
     {alternativeSizeLabel ? <div className="chart-mode-tabs" role="group" aria-label="Rectangle area"><button aria-pressed={!alternate} onClick={() => setAlternate(false)}>{sizeLabel}</button><button aria-pressed={alternate} onClick={() => setAlternate(true)}>{alternativeSizeLabel}</button></div> : null}
     {colorModes && colorModes.length > 1 ? <div className="chart-mode-tabs" role="group" aria-label="Rectangle colour"><span style={{ color: "var(--text-4)", alignSelf: "center" }}>Colour</span>{colorModes.map((m) => <button key={m.key} aria-pressed={m.key === colorMode} aria-label={`Colour ${m.label}`} onClick={() => { setColorMode(m.key); setInspect(null); }}>{m.label}</button>)}</div> : null}
     {nodes.length ? <Svg width={width} height={height} label={title} role="group">{nodes.map((n, i) => {

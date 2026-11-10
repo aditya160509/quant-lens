@@ -59,3 +59,4 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Auto run toggle: re-runs 0.9 s after edits stop, only at 250 names or fewer, remembered on device; disabled above 250 | `UniverseBar.tsx` | run-1 |
 | [ ] | Failure card: one-click fixes (remove unavailable filter, raise cap, drop historical sector filter, liquidity universe); then Run | `FeatureView.tsx`, `lab.ts`, `screenerLab.ts` | run-2 |
 | [ ] | Universe sector mix as a thin stacked bar beside the pass count (from preview mix) | `filters/Preview.tsx`, `core/explain.py` | universe-1 |
+| [ ] | Treemap: open a sector, "Filter to {sector}" sets the Sector filter (live count updates, Run or Auto applies) | `charts/Treemap.tsx`, `screener/views.tsx` | chart-filter-1 |
