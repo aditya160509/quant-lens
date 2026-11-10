@@ -20,3 +20,7 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Test: daily return histogram vs SPY, median and 5% worst day | `test/TearSheet.tsx` | tearsheet |
 | [ ] | Test: underwater drawdown strip, worst and current | `test/TearSheet.tsx` | tearsheet |
 | [ ] | Same output key used by several cards on one page renders each | `screenerLab.ts` | tearsheet |
+| [ ] | Live pass count "N of M pass" in the filter bar, debounced 350 ms | `filters/Preview.tsx`, `UniverseBar.tsx`, `POST /filters/preview` | filters-1 |
+| [ ] | Removed count on each active pill | `UniverseBar.tsx` | filters-1 |
+| [ ] | Pill editor: real distribution histogram, kept names in blue, two-handle slider, median, known count | `filters/Preview.tsx` | filters-1 |
+| [ ] | Preview panel cache: first edit about 3 s on 200 names, later edits instant | `core/explain.py` | filters-1 |

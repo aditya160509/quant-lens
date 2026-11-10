@@ -161,3 +161,52 @@ def sensitivity(panel: pd.DataFrame, payload: dict | None) -> dict[str, Any]:
         counts = [count([*masks[:i], passes(b, b["threshold"] + s * iqr), *masks[i + 1:]]) for s in SHIFTS]
         rows.append({"filter": b["filter"], "label": b["label"], "side": b["side"], "threshold": b["threshold"], "iqr": iqr, "counts": counts})
     return {"count": now, "shifts": list(SHIFTS), "filters": rows}
+
+
+_PREVIEW: OrderedDict[tuple, pd.DataFrame] = OrderedDict()
+
+
+def _preview_panel(payload: dict) -> pd.DataFrame:
+    """Unfiltered panel for the payload's universe, cached so each filter edit costs only the filter pass."""
+    from .data_loader import (
+        MARKET_UNIVERSE,
+        MASTER_FUNDAMENTALS,
+        _path_version,
+        parse_symbols,
+    )
+    from .panel import metric_panel
+    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=1000)
+    # shortcut: custom indicator periods are ignored here, so a preview uses default windows; pass them through if users tune periods often.
+    base = {k: payload[k] for k in ("lookback_days", "as_of_date") if payload.get(k)}
+    key = (_path_version(MARKET_UNIVERSE), _path_version(MASTER_FUNDAMENTALS), tuple(symbols), tuple(sorted(base.items())))
+    with _LOCK:
+        hit = _PREVIEW.get(key)
+    if hit is None:
+        hit = metric_panel(base, symbols=symbols)
+        with _LOCK:
+            _PREVIEW[key] = hit
+            while len(_PREVIEW) > 4:
+                _PREVIEW.popitem(last=False)
+    return hit
+
+
+def preview(payload: dict, fields: list[str], bins: int = 32) -> dict[str, Any]:
+    """Live counts and real distributions for the filter editor, without a full run."""
+    panel = _preview_panel(payload)
+    filtered, stages = apply_filters(panel, payload)
+    dist: dict[str, Any] = {}
+    for field in fields:
+        if field not in panel:
+            continue
+        values = pd.to_numeric(panel[field], errors="coerce").dropna()
+        if values.empty:
+            dist[field] = {"known": 0, "total": len(panel)}
+            continue
+        lo, hi = float(values.quantile(0.01)), float(values.quantile(0.99))
+        width = (hi - lo) / bins or 1.0
+        counts = ((values.clip(lo, hi) - lo) / width).astype(int).clip(0, bins - 1).value_counts().reindex(range(bins), fill_value=0)
+        kept = pd.to_numeric(filtered[field], errors="coerce").dropna() if field in filtered else values.iloc[:0]
+        kept_counts = ((kept.clip(lo, hi) - lo) / width).astype(int).clip(0, bins - 1).value_counts().reindex(range(bins), fill_value=0)
+        dist[field] = {"lo": lo, "hi": hi, "bins": counts.tolist(), "kept": kept_counts.tolist(), "known": len(values), "total": len(panel),
+                       "median": float(values.median()), "min": float(values.min()), "max": float(values.max())}
+    return {"universe": len(panel), "passed": len(filtered), "stages": stages, "dist": dist}

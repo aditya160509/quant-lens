@@ -13,6 +13,8 @@ import { searchSymbols, usePopular, type SymbolHit } from "@/kit/QuickLookData";
 import { PopMenu, type MenuAt } from "@/workspace/ui";
 import { send } from "../api";
 import { useWatchlists } from "../watchlists";
+import { toPayload } from "@/modules/research/StudyForm";
+import { HistogramRange, stageFor, useFilterColumns, useFilterPreview } from "./Preview";
 import "./universe.css";
 
 const CAP = 1000;
@@ -40,10 +42,14 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
   const added = [...new Set(range.map((f) => f.key.replace(/_(min|max|top)$/, "")))].filter((m) => !QUICK.includes(m) && (run.form[`${m}_min`] || run.form[`${m}_max`]));
   const name = (m: string) => range.find((f) => f.key === `${m}_min`)?.label.replace(/ (Min|Max)$/, "") ?? fmtLabel(m);
   const at = (e: React.MouseEvent, key: string) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ key, at: { x: r.left, y: r.bottom + 6 } }); };
+  const columnOf = useFilterColumns();
+  const shownMetrics = [...metrics, ...added];
+  const preview = useFilterPreview(toPayload(feature, run.form), shownMetrics.map((m) => columnOf[m]).filter(Boolean)).data;
   const pill = (m: string) => {
     const lo = run.form[`${m}_min`], hi = run.form[`${m}_max`];
     const on = Boolean(lo || hi);
-    return <button key={m} type="button" className={`ub-pill${on ? " on" : ""}`} onClick={(e) => at(e, m)}>{name(m)}{on ? <b>{String(lo || "…")}–{String(hi || "…")}</b> : null}<ChevronDown size={12} /></button>;
+    const st = on ? stageFor(preview, m) : undefined;
+    return <button key={m} type="button" className={`ub-pill${on ? " on" : ""}`} onClick={(e) => at(e, m)}>{name(m)}{on ? <b>{String(lo || "…")}–{String(hi || "…")}</b> : null}{st ? <em className="ub-cut num" title={`${st.removed} removed, ${st.remaining} left`}>−{st.removed}</em> : null}<ChevronDown size={12} /></button>;
   };
 
   return (
@@ -66,14 +72,16 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
         <div className="ub-row">
           {metrics.map(pill)}{added.map(pill)}
           <button type="button" className="ub-pill add" aria-label="All filters" onClick={(e) => at(e, "+")}><Plus size={13} />Filter</button>
+          {preview ? <span className="ub-pass num" role="status"><b>{preview.passed.toLocaleString()}</b> of {preview.universe.toLocaleString()} pass</span> : null}
         </div>
       ) : null}
-      <PopMenu at={menu?.at ?? null} onClose={() => setMenu(null)} width={menu?.key === "+" ? 440 : 250} sticky>
+      <PopMenu at={menu?.at ?? null} onClose={() => setMenu(null)} width={menu?.key === "+" ? 440 : 300} sticky>
         {menu?.key === "+" ? (
           <div style={{ padding: 8, maxHeight: 460, overflowY: "auto" }}><FilterChips scope={feature.id} fields={range} form={run.form} setForm={run.setForm} /></div>
         ) : menu ? (
           <div className="ub-range">
             <b>{name(menu.key)}</b>
+            {columnOf[menu.key] ? <HistogramRange column={columnOf[menu.key]} dist={preview?.dist[columnOf[menu.key]]} min={run.form[`${menu.key}_min`]} max={run.form[`${menu.key}_max`]} onChange={(lo, hi) => run.setForm((c) => ({ ...c, [`${menu.key}_min`]: lo, [`${menu.key}_max`]: hi }))} /> : null}
             <div>
               <input className="input num" inputMode="decimal" placeholder="Min" aria-label="Minimum" value={String(run.form[`${menu.key}_min`] ?? "")} onChange={(e) => set(`${menu.key}_min`, e.target.value)} />
               <input className="input num" inputMode="decimal" placeholder="Max" aria-label="Maximum" value={String(run.form[`${menu.key}_max`] ?? "")} onChange={(e) => set(`${menu.key}_max`, e.target.value)} />

@@ -336,6 +336,19 @@ async def explain_sensitivity(request: ExplainRequest) -> dict[str, Any]:
     return await asyncio.to_thread(_explained, request, explain.sensitivity)
 
 
+class PreviewRequest(BaseModel):
+    payload: dict[str, Any] = Field(default_factory=dict)
+    fields: list[str] = Field(default_factory=list, max_length=40)
+
+
+@router.post("/filters/preview")
+async def filters_preview(request: PreviewRequest) -> dict[str, Any]:
+    try:
+        return await asyncio.to_thread(explain.preview, request.payload, request.fields)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.get("/filters/keys")
 def filter_keys() -> dict[str, list[str]]:
     from app.services.screener_v2.core.screener import RANGE_FILTERS

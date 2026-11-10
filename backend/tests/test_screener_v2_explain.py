@@ -19,3 +19,13 @@ def test_explain():
     assert abs(nm["B"]["relax_by"] - 0.1) < 1e-9 and nm["C"]["unknown"] and nm["C"]["value"] is None
     assert explain_difference(P, F, "A", "B")[0]["filter"] == "roe_min"
     assert screen_diff(["A", "B"], ["B", "C"]) == {"entered": ["C"], "left": ["A"], "moved": [{"symbol": "B", "from": 1, "to": 0}]}
+
+
+def test_preview_counts_and_kept_histogram(monkeypatch):
+    from app.services.screener_v2.core import explain
+    panel = pd.DataFrame({"ticker": list("ABCD"), "sector": ["T"] * 4, "trailing_pe": [5.0, 10.0, 20.0, np.nan], "price_usd": [10.0] * 4})
+    monkeypatch.setattr(explain, "_preview_panel", lambda payload: panel)
+    out = explain.preview({"pe_max": 12}, ["trailing_pe", "missing"], bins=4)
+    assert (out["universe"], out["passed"]) == (4, 2)
+    d = out["dist"]["trailing_pe"]
+    assert d["known"] == 3 and sum(d["bins"]) == 3 and sum(d["kept"]) == 2 and "missing" not in out["dist"]

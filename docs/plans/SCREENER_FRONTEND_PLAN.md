@@ -91,8 +91,8 @@ Index membership stays out until we have data for it; it must not be faked.
 ### Filters
 - [x] Pill row with min and max and `+ Filter`
 - [ ] Add-filter overlay with groups, search, recently used and favourites: Identity, Market, Technical, Valuation, Profitability, Growth, Health, Dividends, Score
-- [ ] Pill editor: slider over the real distribution histogram, percentile mode, greater, less, between, in, top N
-- [ ] Live pass count and removed count on each pill; bottleneck marked
+- [x] Pill editor: slider over the real distribution histogram, percentile mode, greater, less, between, in, top N
+- [x] Live pass count and removed count on each pill; bottleneck marked
 - [ ] Toggle, remove, reorder, duplicate; undo and redo
 - [ ] Category filters as searchable checklists: sector, industry, country, exchange, currency
 - [ ] AND/OR groups, editable as tree and as formula
@@ -285,10 +285,10 @@ Alert builder: condition from any filter or formula, frequency, channel with App
 - [x] 500 default, 1,000 cap, USD liquidity ranking
 - [x] Composite runs on default settings
 - [ ] Composite under 2 s on 50 names (now 8 s on 26)
-- [ ] Distribution endpoint for filter sliders
-- [ ] Live filter counts without a full run, from a cached panel
+- [x] Distribution endpoint for filter sliders
+- [x] Live filter counts without a full run, from a cached panel
 - [ ] Rank basis choices; market, industry and market cap presets
-- [ ] Mount sc04 in the Screener catalog
+- [x] Mount sc04 in the Screener catalog
 - [ ] Exchange labels for US names, which show Unknown today
 - [ ] Faster job polling and smaller result payloads
 
