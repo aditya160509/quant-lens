@@ -90,11 +90,12 @@ const SV = group(() => import("./views") as Promise<Record<string, unknown>>);
 const ST = group(() => import("./test/ProofViews") as Promise<Record<string, unknown>>);
 const RV = group(() => import("./rank/RankViews") as Promise<Record<string, unknown>>);
 const RS = group(() => import("./rank/StrategyViews") as Promise<Record<string, unknown>>);
+const FS = group(() => import("./rank/FactorStack") as Promise<Record<string, unknown>>);
 const VV = group(() => import("./valuation/ValuationViews") as Promise<Record<string, unknown>>);
 const MV = group(() => import("./monitor/MonitorViews") as Promise<Record<string, unknown>>);
 const TS = group(() => import("./test/TearSheet") as Promise<Record<string, unknown>>);
-registerViews({ fourGauges: VV.FourGauges, valuationCards: VV.ValuationCards, chartGrid: SV.ChartGrid, alertFeed: MV.AlertFeed, hitRates: MV.HitRates, funnel: SV.FunnelView, monthlyHeatmap: TS.MonthlyHeatmap, returnHistogram: TS.ReturnHistogram, underwater: TS.Underwater, piotroskiMatrix: RS.PiotroskiMatrix, altmanZones: RS.AltmanZones, screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, sensitivity: SV.SensitivityView, runInfo: SV.RunView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
-registerAlternates({ fourGauges: [{ label: "Key values", view: "keyValue" }], valuationCards: [{ label: "Table", view: "dataTable" }], alertFeed: [{ label: "Table", view: "dataTable" }], hitRates: [{ label: "Table", view: "dataTable" }], funnel: [{ label: "Table", view: "dataTable" }], piotroskiMatrix: [{ label: "Table", view: "dataTable" }], altmanZones: [{ label: "Table", view: "dataTable" }], rankedTable: [{ label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }] });
+registerViews({ factorStack: FS.FactorStack, fourGauges: VV.FourGauges, valuationCards: VV.ValuationCards, chartGrid: SV.ChartGrid, alertFeed: MV.AlertFeed, hitRates: MV.HitRates, funnel: SV.FunnelView, monthlyHeatmap: TS.MonthlyHeatmap, returnHistogram: TS.ReturnHistogram, underwater: TS.Underwater, piotroskiMatrix: RS.PiotroskiMatrix, altmanZones: RS.AltmanZones, screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, sensitivity: SV.SensitivityView, runInfo: SV.RunView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
+registerAlternates({ fourGauges: [{ label: "Key values", view: "keyValue" }], valuationCards: [{ label: "Table", view: "dataTable" }], alertFeed: [{ label: "Table", view: "dataTable" }], hitRates: [{ label: "Table", view: "dataTable" }], funnel: [{ label: "Table", view: "dataTable" }], piotroskiMatrix: [{ label: "Table", view: "dataTable" }], altmanZones: [{ label: "Table", view: "dataTable" }], rankedTable: [{ label: "Factor bars", view: "factorStack" }, { label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }] });
 
 export const SCREENER_LAB: LabConfig = {
   id: "screener",
@@ -122,10 +123,14 @@ export const SCREENER_LAB: LabConfig = {
     sc03: {
       sections: [
         { id: "ranking", label: "Ranking", items: [
-          { keys: ["composite_score_universe_ranking"], span: 8, view: "rankedTable", opts: { max: 5000, maxHeight: 640, hatch: true, rowActions, bulk } },
+          { keys: ["composite_score_universe_ranking"], span: 8, view: "factorStack", title: "Ranking" },
           { keys: ["per_stock_score_decomposition"], span: 4, view: "scoreWaterfall", title: "Why the top name ranks here" },
         ] },
-        { id: "weights", label: "Weights", items: [{ keys: ["score_transparency_decomposition"], span: 6, view: "dataTable" }, { keys: ["factor_correlation_heatmap"], span: 6 }] },
+        { id: "table", label: "Table", items: [
+          { keys: ["composite_score_universe_ranking"], span: 12, view: "rankedTable", opts: { max: 5000, maxHeight: 640, hatch: true, rowActions, bulk } },
+        ] },
+        { id: "weights", label: "Weights", items: [{ keys: ["score_transparency_decomposition"], span: 6, view: "dataTable" }, { keys: ["factor_correlation_heatmap"], span: 6 }, { keys: ["factor_correlation_redundancy_alerts"], span: 6 }, { keys: ["historical_weight_training"], span: 6 }] },
+        { id: "breakdown", label: "Breakdown", items: [{ keys: ["sector_composite_breakdown"], span: 6, view: "dataTable", opts: { bars: ["avg_composite"] } }, { keys: ["macro_regime_attribution"], span: 6 }] },
         { id: "ml", label: "Rules and ML", items: [{ keys: ["composite_score_universe_ranking"], span: 12, view: "rankVsMl", opts: { max: 5000, maxHeight: 480 } }] },
         { id: "backtest", label: "Backtest", items: [{ keys: ["composite_vs_spy_backtest"], span: 12 }] },
       ],

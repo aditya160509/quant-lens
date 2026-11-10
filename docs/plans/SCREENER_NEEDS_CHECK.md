@@ -43,3 +43,6 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Valuation: card grid for every name, sortable by each frame | `valuation/ValuationViews.tsx` | valuation-1 |
 | [ ] | Valuation layout: Focus, Universe, Peers tabs | `screenerLab.ts` | valuation-1 |
 | [ ] | Gauge direction: confirm whether a high percentile means cheap or expensive and label it | `valuation/ValuationViews.tsx` | valuation-1 |
+| [ ] | Composite: ranking as stacked factor bars (weight × score), legend with weights, effective factors | `rank/FactorStack.tsx` | composite-1 |
+| [ ] | Composite: Table tab, redundancy alerts and weight training on Weights, new Breakdown tab (sector, regime) | `screenerLab.ts` | composite-1 |
+| [ ] | Sector composite average is null for some sectors (seen on Communication Services, 26 names): check backend | backend | composite-1 |

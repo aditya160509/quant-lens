@@ -30,3 +30,16 @@
 .alt-axis { position: relative; height: 14px; font-size: 10.5px; color: var(--text-3); }
 .alt-axis span { position: absolute; transform: translateX(-50%); }
 .alt-axis span:first-child { left: 0; transform: none; } .alt-axis span:last-child { right: 0; transform: none; }
+.fs { display: grid; gap: 10px; }
+.fs-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-3); align-items: center; }
+.fs-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.fs-legend b { color: var(--text); font-weight: 600; }
+.fs-neff { margin-left: auto; }
+.fs-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 600px; overflow-y: auto; }
+.fs-list li { display: grid; grid-template-columns: 28px 70px 1fr 34px; gap: 10px; align-items: center; padding: 3px 6px; border-radius: 6px; font-size: 12.5px; }
+.fs-list li:hover { background: var(--panel-2); }
+.fs-rank { color: var(--text-4); text-align: right; font-size: 11.5px; }
+.fs-tk { font-weight: 600; }
+.fs-bar { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--panel-2); }
+.fs-bar i { display: block; height: 100%; box-shadow: inset -1px 0 0 var(--panel); }
+.fs-score { text-align: right; }
