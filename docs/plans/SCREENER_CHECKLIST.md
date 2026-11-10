@@ -114,7 +114,7 @@ Any output, any way. E2 M8 H4
 - [ ] `M` Exhibits can be resized, reordered, hidden, expanded or sent to the workspace
 - [x] `H` Save any arrangement as a view: for this screen or all screens; share it; reset to our default (49) (untested)
 - [x] `H` The whole state lives in the URL, so any view can be linked (untested)
-- [ ] `M` Export any view as CSV, Excel, Markdown, SVG, PNG or PDF
+- [x] `M` Export any view as CSV, Excel, Markdown, SVG, PNG or PDF (built, not checked on page)
 - [ ] `M` Every action has a keyboard path and a palette entry
 - [x] `M` Scatter lens (53) and mini-chart grid (54) (untested)
 - [x] `E` Treemap and heatmap lens (52)
@@ -149,12 +149,12 @@ One honest proof path. E4 M4 H3
 - [x] `H` Purged CV and Monte Carlo in ML Validate
 - [x] `H` Trial ledger on the Research store; counter on screen (U5) (untested)
 - [ ] `E` Backtest a screen with rebalances (78)
-- [ ] `E` Compare with benchmark (79)
+- [x] `E` Compare with benchmark (79) (built, not checked on page)
 - [x] `M` Overfitting tests: deflated Sharpe, PBO, bootstrap, controls (80) (untested)
 - [x] `M` One-click proof through ML Validate (U4) (untested)
 - [x] `M` Rolling start dates (83) (untested)
 - [x] `E` Data banner (untested)
-- [ ] `E` Old S4 leaderboard, S2 factor zoo and S5 duplicates removed
+- [x] `E` Old S4 leaderboard, S2 factor zoo and S5 duplicates removed (built, not checked on page)
 
 ## Batch 9: Monitor
 

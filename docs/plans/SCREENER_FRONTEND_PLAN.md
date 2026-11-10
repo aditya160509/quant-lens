@@ -121,20 +121,20 @@ Index membership stays out until we have data for it; it must not be faked.
 - [ ] Group by and pivot on any column, with count, median, mean, sum rows
 - [x] Footer: median and universe median, sector median toggle
 - [x] Bulk select: add to watchlist, compare, alert, send to Rank, Test, ML, export
-- [ ] Row hover actions; row expand shows why it passed
-- [ ] Density, rows per page, infinite or paged; virtual scroll to 1,000 rows without lag
+- [x] Row hover actions; row expand shows why it passed (built, not checked on page)
+- [x] Density, rows per page, infinite or paged; virtual scroll to 1,000 rows without lag (built, not checked on page)
 - [x] Search within results; column quick filter from the header adds a pill
 - [x] Chart-grid view of mini price charts
 - [ ] CSV, Excel, TSV, tickers, copy, Markdown, PDF
-- [ ] Save view for this screen or all; share by link; reset
+- [x] Save view for this screen or all; share by link; reset (built, not checked on page)
 
 ## 7. Output card, every output
 
 - [ ] Title, as-of and coverage in one row, status pill
-- [ ] View menu with the alternatives below; choice remembered
+- [x] View menu with the alternatives below; choice remembered (built, not checked on page)
 - [ ] Settings: scale, range, colours, labels, benchmark, annotations
 - [ ] Maximise, pin to board, change width, reorder, hide, duplicate
-- [ ] Copy image, download PNG, SVG, CSV
+- [x] Copy image, download PNG, SVG, CSV (built, not checked on page)
 - [ ] Hover crosshair; click drills into rows; brush filters
 - [ ] Footnote naming the method, only where it matters
 - [ ] Empty, partial and failed states with the reason
@@ -145,8 +145,8 @@ Index membership stays out until we have data for it; it must not be faked.
 - [ ] Ratio grid with add ratio and edit ratios, percentile tick against sector
 - [ ] Price chart with range tabs, Price and P/E modes, volume, moving averages, entry and exit marks
 - [x] Strength profile: quality, value, momentum, health, growth as a radar we compute, with filter by shape
-- [ ] Why here: filter, value, threshold, margin, sector percentile
-- [ ] Peers, quarters, profit and loss, balance sheet, cash flow, ratios as tabs
+- [x] Why here: filter, value, threshold, margin, sector percentile (built, not checked on page)
+- [x] Peers, quarters, profit and loss, balance sheet, cash flow, ratios as tabs (built, not checked on page)
 - [x] Statement rows with sparklines, YoY, common-size toggle
 - [ ] Compare up to 8 names: overlaid chart, side-by-side table, differences highlighted
 - [ ] Full page with its own URL; PDF
@@ -154,6 +154,8 @@ Index membership stays out until we have data for it; it must not be faked.
 ## 9. Screen group
 
 ### Screen (sc01)
+
+Built, not checked on page: section 6 table with sets and bulk actions, chart grid, treemap with filter to sector, funnel with bottleneck. Not built: run changes pills, coverage bars, percentile strip, sector heatmap.
 
 | Output | Default | Alternatives | Must have |
 |---|---|---|---|
@@ -171,6 +173,8 @@ Added on the Results tab: scatter lens with x, y, size, colour; sector treemap; 
 
 ### Formula (sc02)
 
+Built, not checked on page: results table, status list, backtest with drawdown, template gallery. Not built: CodeMirror editor upgrades.
+
 | Output | Default | Alternatives | Must have |
 |---|---|---|---|
 | formula_result_table | Section 6 table with score bar | Scatter, histogram | Formula as a new column |
@@ -182,6 +186,8 @@ Editor: CodeMirror with autocomplete, field docs on hover, live preview count, n
 
 ### Valuation (sc07)
 
+Built, not checked on page: four gauges with multiples, universe card grid, Focus, Universe and Peers tabs. Not built: percentile bands on the history line, outlined sector in the heatmap.
+
 | Output | Default | Alternatives | Must have |
 |---|---|---|---|
 | four_dimension_valuation_card | Four gauges: vs history, sector, peers, universe | Key values | Hero, stock selector |
@@ -192,6 +198,8 @@ Editor: CodeMirror with autocomplete, field docs on hover, live preview count, n
 | universe_wide_four_dimension_cards | Small card grid, sortable | Table | Cheapest first |
 
 ## 10. Rank (sc03 and Strategies)
+
+Built, not checked on page: stacked factor ranking, waterfall, Breakdown tab, redundancy and weight training on Weights, Strategies page with Piotroski matrix and Altman zones. Not built: weight sliders with live re-rank, Altman bands on the 8Q line.
 
 Composite
 
@@ -221,6 +229,8 @@ Weights: sliders that sum to 100, lock, equal, IC, ridge, presets, live re-rank 
 
 ## 11. Test (sc05)
 
+Built, not checked on page: monthly heatmap with year and SPY, return histogram, drawdown strip, attribution bars, holdings timeline, weekday sensitivity, rebalance and top N buttons. Not built: KPI cards against benchmark, PBO gauge, run compare, sweeps.
+
 A tear sheet in the order an investor asks: did it make money, how bad did it get, is it real, what did it hold.
 
 | Output | Default | Alternatives | Must have |
@@ -241,6 +251,8 @@ A tear sheet in the order an investor asks: did it make money, how bad did it ge
 Also: side-by-side compare of runs, cost and top-N sweeps, trial ledger counter, proof through ML Validate, data limits shown once in a compact banner, and the count of names dropped from mixed-currency universes.
 
 ## 12. Monitor (sc06, sc08)
+
+Built, not checked on page: alert feed, hit-rate cards, tinted watchlist table. Not built: alert builder, entry and exit timeline, change report picker.
 
 | Output | Default | Alternatives | Must have |
 |---|---|---|---|
@@ -290,7 +302,7 @@ Alert builder: condition from any filter or formula, frequency, channel with App
 - [ ] Rank basis choices; market, industry and market cap presets
 - [x] Mount sc04 in the Screener catalog
 - [ ] Exchange labels for US names, which show Unknown today
-- [ ] Faster job polling and smaller result payloads
+- [x] Faster job polling and smaller result payloads (built, not checked on page)
 
 Result-changing fixes wait for approval: SPY inside percentiles, rebalance stats, risk-free handling.
 
