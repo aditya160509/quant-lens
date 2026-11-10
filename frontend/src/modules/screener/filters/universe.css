@@ -83,3 +83,8 @@
 .af-exact summary { cursor: pointer; padding: 8px 0 0; }
 .ub-range-foot { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-3); }
 .ub-mix { display: inline-flex; width: 64px; height: 6px; border-radius: 3px; overflow: hidden; gap: 1px; margin-right: 8px; vertical-align: middle; } .ub-mix i { display: block; height: 100%; }
+@media (max-width: 640px) {
+  .ub-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  .ub-row > * { flex: none; scroll-snap-align: start; }
+  .ub-pass { margin-left: 0; }
+}
