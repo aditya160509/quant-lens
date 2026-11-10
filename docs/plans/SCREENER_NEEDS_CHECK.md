@@ -48,3 +48,5 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Sector composite average is null for some sectors (seen on Communication Services, 26 names): check backend | backend | composite-1 |
 | [ ] | Formula: template gallery cards, Use puts the expression in the formula box, current marked | `formula/FormulaViews.tsx` | formula-1 |
 | [ ] | Formula: status list (ok, warn, error) above results; Backtest tab with drawdown; table with bulk actions | `screenerLab.ts` | formula-1 |
+| [ ] | Test Holdings tab: attribution diverging bars (best and worst 12), holdings Gantt (open ones marked), trade log | `test/TearSheet.tsx`, `screenerLab.ts` | test-2 |
+| [ ] | Test Rebalancing tab now includes weekday sensitivity | `screenerLab.ts` | test-2 |

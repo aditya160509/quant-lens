@@ -2,6 +2,7 @@
 
 import { useMemo, type CSSProperties } from "react";
 import { Empty } from "@/kit/DataTable";
+import { openQuickLook } from "@/kit/QuickLook";
 import { isNum, pct } from "@/modules/research/format";
 import type { Row } from "@/modules/research/types";
 import type { ViewProps } from "@/modules/research/outputs/types";
@@ -104,6 +105,57 @@ export function Underwater({ rows }: ViewProps) {
         <path d={`M0,0 L${path} L100,0 Z`} fill="color-mix(in oklch, var(--down) 30%, transparent)" stroke="var(--down)" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
       </svg>
       <div className="ts-legend"><span>Worst <b className="num" style={{ color: "var(--down)" }}>{pct(worst.drawdown, 1)}</b> on {String(worst.date).slice(0, 10)}</span><span>Now <b className="num">{pct(pts[pts.length - 1].drawdown, 1)}</b></span></div>
+    </div>
+  );
+}
+
+/** Net contribution per name, best and worst 12, as bars either side of zero; a name opens the drawer. */
+export function AttributionBars({ rows }: ViewProps) {
+  const vals = rows.filter((r) => isNum(r.net_pnl_contribution)) as (Row & { net_pnl_contribution: number })[];
+  if (!vals.length) return <Empty />;
+  const sorted = [...vals].sort((a, b) => b.net_pnl_contribution - a.net_pnl_contribution);
+  const shown = sorted.length > 24 ? [...sorted.slice(0, 12), ...sorted.slice(-12)] : sorted;
+  const lim = Math.max(...shown.map((r) => Math.abs(r.net_pnl_contribution))) || 1;
+  return (
+    <ol className="ts-attr">
+      {shown.map((r, i) => {
+        const v = r.net_pnl_contribution, w = (Math.abs(v) / lim) * 50;
+        return (
+          <li key={`${String(r.ticker)}${i}`} data-gap={sorted.length > 24 && i === 12}>
+            <button type="button" className="tk-link" onClick={() => openQuickLook(String(r.ticker))}>{String(r.ticker)}</button>
+            <span className="ts-attr-bar"><i className={v >= 0 ? "up" : "down"} style={v >= 0 ? { left: "50%", width: `${w}%` } : { left: `${50 - w}%`, width: `${w}%` }} /></span>
+            <b className={`num ${v >= 0 ? "up" : "down"}`}>{pct(v, 2)}</b>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Every holding as a bar from entry to exit (open ones run to the end), coloured by its net result. */
+export function HoldingsGantt({ rows }: ViewProps) {
+  const eps = rows.filter((r) => r.entry_date);
+  if (!eps.length) return <Empty />;
+  const t = (d: unknown) => new Date(String(d)).getTime();
+  // shortcut: open holdings end at the last date seen in the log, not the curve end; pass the curve end if bars look short.
+  const start = Math.min(...eps.map((r) => t(r.entry_date))), end = Math.max(...eps.map((r) => t(r.exit_date ?? r.last_mark_date ?? r.entry_date)));
+  const span = end - start || 1;
+  const names = [...new Set(eps.map((r) => String(r.ticker)))].slice(0, 60);
+  return (
+    <div className="ts-gantt">
+      {names.map((n) => (
+        <div key={n} className="ts-g-row">
+          <button type="button" className="tk-link" onClick={() => openQuickLook(n)}>{n}</button>
+          <span className="ts-g-track">
+            {eps.filter((r) => String(r.ticker) === n).map((r, i) => {
+              const a = (t(r.entry_date) - start) / span, b = ((r.exit_date ? t(r.exit_date) : end) - start) / span;
+              const v = isNum(r.net_pnl_contribution) ? r.net_pnl_contribution : isNum(r.price_return) ? r.price_return : 0;
+              return <i key={i} className={v >= 0 ? "up" : "down"} data-open={!r.exit_date} style={{ left: `${a * 100}%`, width: `${Math.max(0.4, (b - a) * 100)}%` }} title={`${String(r.entry_date).slice(0, 10)} → ${r.exit_date ? String(r.exit_date).slice(0, 10) : "open"} · ${pct(v, 2)}`} />;
+            })}
+          </span>
+        </div>
+      ))}
+      <div className="ts-g-axis num"><span>{new Date(start).toISOString().slice(0, 10)}</span><span>{new Date(end).toISOString().slice(0, 10)}</span></div>
     </div>
   );
 }

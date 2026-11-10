@@ -96,7 +96,7 @@ const VV = group(() => import("./valuation/ValuationViews") as Promise<Record<st
 const MV = group(() => import("./monitor/MonitorViews") as Promise<Record<string, unknown>>);
 const TS = group(() => import("./test/TearSheet") as Promise<Record<string, unknown>>);
 registerViews({ templateGallery: FV.TemplateGallery, formulaStatus: FV.FormulaStatus, factorStack: FS.FactorStack, fourGauges: VV.FourGauges, valuationCards: VV.ValuationCards, chartGrid: SV.ChartGrid, alertFeed: MV.AlertFeed, hitRates: MV.HitRates, funnel: SV.FunnelView, monthlyHeatmap: TS.MonthlyHeatmap, returnHistogram: TS.ReturnHistogram, underwater: TS.Underwater, piotroskiMatrix: RS.PiotroskiMatrix, altmanZones: RS.AltmanZones, screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, sensitivity: SV.SensitivityView, runInfo: SV.RunView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
-registerAlternates({ templateGallery: [{ label: "Table", view: "dataTable" }], fourGauges: [{ label: "Key values", view: "keyValue" }], valuationCards: [{ label: "Table", view: "dataTable" }], alertFeed: [{ label: "Table", view: "dataTable" }], hitRates: [{ label: "Table", view: "dataTable" }], funnel: [{ label: "Table", view: "dataTable" }], piotroskiMatrix: [{ label: "Table", view: "dataTable" }], altmanZones: [{ label: "Table", view: "dataTable" }], rankedTable: [{ label: "Factor bars", view: "factorStack" }, { label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }] });
+registerAlternates({ attributionBars: [{ label: "Table", view: "dataTable" }], holdingsGantt: [{ label: "Table", view: "dataTable" }], templateGallery: [{ label: "Table", view: "dataTable" }], fourGauges: [{ label: "Key values", view: "keyValue" }], valuationCards: [{ label: "Table", view: "dataTable" }], alertFeed: [{ label: "Table", view: "dataTable" }], hitRates: [{ label: "Table", view: "dataTable" }], funnel: [{ label: "Table", view: "dataTable" }], piotroskiMatrix: [{ label: "Table", view: "dataTable" }], altmanZones: [{ label: "Table", view: "dataTable" }], rankedTable: [{ label: "Factor bars", view: "factorStack" }, { label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }] });
 
 export const SCREENER_LAB: LabConfig = {
   id: "screener",
@@ -188,7 +188,12 @@ export const SCREENER_LAB: LabConfig = {
         { id: "proof", label: "Proof", items: [{ keys: ["equity_curve", "cscv_pbo"], span: 12, view: "proofPanel" }] },
         { id: "performance", label: "Performance", items: [{ keys: ["equity_curve"], span: 8 }, { keys: ["full_performance_statistics"], span: 4 }, { keys: ["equity_curve"], span: 12, view: "underwater", title: "Drawdown" }, { keys: ["rolling_performance"], span: 12 }] },
         { id: "returns", label: "Returns", items: [{ keys: ["equity_curve"], span: 8, view: "monthlyHeatmap", title: "Monthly returns" }, { keys: ["equity_curve"], span: 4, view: "returnHistogram", title: "Daily returns" }] },
-        { id: "rebalancing", label: "Rebalancing", items: [{ keys: ["rebalancing_date_sensitivity"], span: 6 }, { keys: ["holding_period_sensitivity"], span: 6 }, { keys: ["turnover_report"], span: 12 }] },
+        { id: "rebalancing", label: "Rebalancing", items: [{ keys: ["rebalancing_date_sensitivity"], span: 6 }, { keys: ["holding_period_sensitivity"], span: 6 }, { keys: ["rebalancing_date_sensitivity_by_weekday"], span: 6 }, { keys: ["turnover_report"], span: 6 }] },
+        { id: "holdings", label: "Holdings", items: [
+          { keys: ["stock_level_attribution"], span: 5, view: "attributionBars", title: "Who made and lost money" },
+          { keys: ["position_entry_exit_log"], span: 7, view: "holdingsGantt", title: "What it held, when" },
+          { keys: ["position_trade_log"], span: 12, view: "dataTable", opts: { max: 2000, maxHeight: 480 } },
+        ] },
       ],
     },
   },
