@@ -8,14 +8,14 @@ import type { InputSpec } from "@/modules/research/types";
 
 /** Metric prefix to the group it is listed under, in the order screeners show them. */
 const GROUPS: [string, RegExp][] = [
-  ["Market", /^(market_cap|price|dollar_volume|shares_outstanding|float_percent|amihud)/],
+  ["Market", /^(market_cap|price|dollar_volume|shares_outstanding|float_percent|amihud|enterprise_value)/],
   ["Valuation", /^(pe|forward_pe|pb|ps|p_cf|ev_|earnings_yield|fcf_yield|valuation)/],
-  ["Profitability", /^(roe|roa|roic|gpa|gross_margin|operating_margin|net_margin|quality)/],
+  ["Profitability", /^(roe|roa|roic|gpa|gross_margin|operating_margin|net_margin|ebitda_margin|asset_turnover|quality)/],
   ["Growth", /^(revenue_growth|eps_growth|qtr_)/],
-  ["Health", /^(interest_coverage|debt_|current_ratio|altman|piotroski)/],
+  ["Health", /^(interest_coverage|debt_|current_ratio|quick_ratio|cash_debt|accruals|ocf_net_income|altman|piotroski)/],
   ["Dividends", /^(dividend|payout)/],
-  ["Performance", /^(return_|momentum|drawdown|high_proximity|prox52|max_factor)/],
-  ["Technical", /^(rsi|macd|bollinger|adx|atr|stochastic|williams|obv|dist_sma|vratio|beta|ivol|realized_vol|yang_zhang)/],
+  ["Performance", /^(return_|momentum|drawdown|high_proximity|prox52|max_factor|rel_return|worst_day|gap|up_days|down_days|above_52w_low)/],
+  ["Technical", /^(rsi|macd|bollinger|adx|atr|stochastic|williams|obv|dist_sma|dist_ema|vratio|relative_volume|beta|ivol|realized_vol|yang_zhang)/],
   ["Score", /^(score|sector_score|.*_percentile)/],
 ];
 const groupOf = (m: string) => GROUPS.find(([, re]) => re.test(m))?.[0] ?? "Other";
