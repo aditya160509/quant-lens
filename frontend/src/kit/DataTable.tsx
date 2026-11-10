@@ -65,6 +65,9 @@ function groupCols(cols: string[]): { head: string | null; span: number; cols: s
   return out;
 }
 
+/** Stable hue per name, so a ticker or sector keeps its colour everywhere. */
+const hue = (s: string) => Array.from({ length: s.length }, (_, i) => s.charCodeAt(i)).reduce((h, c) => (h * 31 + c) % 360, 7);
+
 const shortName = (c: string, head: string | null) => label(head && c.startsWith(`${head}_`) ? c.slice(head.length + 1) : c);
 
 /** GitHub-style table text; pipes are escaped so a cell cannot add a column. */
@@ -99,6 +102,10 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const bars = opts?.bars as string[] | undefined;
   const rowActions = opts?.rowActions as ((row: Row) => ReactNode) | undefined;
   const hatch = opts?.hatch === true;
+  const bulk = opts?.bulk as ((rows: Row[], clear: () => void) => ReactNode) | undefined;
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [pickedFor, setPickedFor] = useState<Row[]>(source);
+  if (pickedFor !== source) { setPickedFor(source); setPicked(new Set()); }
   const base = useMemo(() => {
     const all = columns(source).filter((c) => !(hideOpt ?? []).includes(c) && source.some((r) => r[c] !== null && r[c] !== undefined && r[c] !== ""))
       .filter((c) => !activeSet || lead.includes(c) || activeSet.includes(c));
@@ -133,10 +140,11 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
       return isNum(x) && isNum(y) ? x - y : String(x ?? "").localeCompare(String(y ?? ""));
     },
   })), [base]);
-  const sorting = useMemo(() => sort ? [{ id: sort.key, desc: sort.dir === -1 }] : [], [sort]);
+  const sort2 = view.sort2;
+  const sorting = useMemo(() => [sort, sort2].filter((x): x is { key: string; dir: 1 | -1 } => !!x).map((x) => ({ id: x.key, desc: x.dir === -1 })), [sort, sort2]);
   const table = useReactTable({ data: rows, columns: definitions, autoResetPageIndex: false,
     state: { sorting },
-    getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel(),
+    getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel(), enableMultiSort: true, isMultiSortEvent: () => true,
   });
   const order2 = table.getRowModel().rows.map((row) => row.index);
   const shownRows = () => order2.map((i) => Object.fromEntries(cols.map((c) => [c, rows[i][c]])));
@@ -228,7 +236,9 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
     const f = view.fmt[c];
     const width = f?.mode === "bar" && isNum(v) && range[c] ? (range[c][1] > range[c][0] ? ((v - range[c][0]) / (range[c][1] - range[c][0])) * 100 : 50) : (view.pct[c] || bars?.includes(c)) && isNum(v) ? v : null;
     const content = width !== null && isNum(v) ? <span className="pbar"><i style={{ width: `${Math.max(0, Math.min(100, width))}%` }} />{view.pct[c] ? Math.round(v) : fmtKey(c, v)}</span> : Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : v === null || v === undefined || v === "" ? <span className="miss">—</span> : fmtKey(c, v);
-    return <>{c === "ticker" && typeof v === "string" ? <button type="button" className="tk-link" onClick={(e) => { e.stopPropagation(); openQuickLook(v); }}>{content}</button> : content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
+    if (c === "sector" && typeof v === "string" && v) return <span className="sec-pill" style={{ "--h": hue(v) } as CSSProperties}>{v}</span>;
+    if (c === "company_name" && typeof v === "string") return <span className="co-name" title={v}>{v}</span>;
+    return <>{c === "ticker" && typeof v === "string" ? <button type="button" className="tk-link" onClick={(e) => { e.stopPropagation(); openQuickLook(v); }}><span className="mono-tile" aria-hidden style={{ "--h": hue(v) } as CSSProperties}>{v.replace(/[^A-Z0-9]/gi, "").slice(0, 2)}</span>{content}</button> : content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (sel === null) return;
@@ -243,15 +253,21 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const sortTh = (c: string, text: string) => (
     <th key={c} data-col={c} style={colStyle(c, true)} className={`sortable${numeric.has(c) ? " r" : ""}`} aria-sort={sort?.key === c ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
       >
-      <button className="dt-sort" onClick={() => { setPage(0); patch({ sort: sort?.key === c ? (sort.dir === 1 ? { key: c, dir: -1 } : null) : { key: c, dir: 1 } }); }}>
+      <button className="dt-sort" title="Shift-click to sort by a second column" onClick={(e) => {
+        setPage(0);
+        const next = (cur: { key: string; dir: 1 | -1 } | null | undefined) => (cur?.key === c ? (cur.dir === 1 ? { key: c, dir: -1 as const } : null) : { key: c, dir: 1 as const });
+        if (e.shiftKey && sort && sort.key !== c) patch({ sort2: next(sort2) });
+        else patch({ sort: next(sort), sort2: sort?.key === c ? sort2 : null });
+      }}>
       {text}{view.pct[c] ? (view.pct[c] === "sector" ? " %ile of sector" : " %ile of shown") : ""}
       {sort?.key === c ? (sort.dir === 1 ? <ArrowUp size={10} style={{ marginLeft: 4, verticalAlign: -1 }} /> : <ArrowDown size={10} style={{ marginLeft: 4, verticalAlign: -1 }} />) : null}
+      {sort2?.key === c ? <span className="sort2">{sort2.dir === 1 ? "↑" : "↓"}2</span> : null}
       </button>
       <span className="dt-grip" role="separator" aria-label={`Resize ${text}`} onPointerDown={(e) => startResize(c, e)} />
     </th>
   );
   return (
-    <div className="dt" data-virtual={virtual} data-density={density} onKeyDown={onKey}>
+    <div className="dt" data-virtual={virtual} data-density={density} data-bulk={!!bulk} onKeyDown={onKey}>
       <div className="dt-bar">
         {sets ? (
           <div className="dt-sets" role="tablist" aria-label="Column sets">
@@ -330,19 +346,27 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
           </Popover.Portal>
         </Popover.Root>
       </div>
+      {bulk && picked.size ? (
+        <div className="dt-bulk" role="toolbar" aria-label="Selected rows">
+          <strong className="num">{picked.size}</strong> selected
+          {bulk([...picked].map((i) => rows[i]).filter(Boolean), () => setPicked(new Set()))}
+          <button className="btn sm ghost" onClick={() => setPicked(new Set())}><X size={11} />Clear</button>
+        </div>
+      ) : null}
       <div ref={scrollRef} className="tbl-wrap" style={{ maxHeight: (opts?.maxHeight as number | undefined) ?? 440 }}>
         <table className="tbl">
           <thead>
             {twoLevel ? <tr>{groups.map((g, k) => (g.head ? <th key={k} colSpan={g.span} className="grp">{label(g.head)}</th> : <th key={k} />))}</tr> : null}
-            <tr ref={headRow}>{groups.flatMap((g) => g.cols.map((c) => sortTh(c, shortName(c, g.head))))}{rowActions ? <th aria-label="Actions" /> : null}</tr>
+            <tr ref={headRow}>{bulk ? <th className="dt-chk"><input type="checkbox" aria-label="Select all shown" checked={shown.length > 0 && shown.every((i) => picked.has(i))} onChange={(e) => setPicked(e.target.checked ? new Set(shown) : new Set())} /></th> : null}{groups.flatMap((g) => g.cols.map((c) => sortTh(c, shortName(c, g.head))))}{rowActions ? <th aria-label="Actions" /> : null}</tr>
           </thead>
           <tbody>
-            {virtual && windowRows[0]?.start > 0 ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0)} style={{ height: windowRows[0].start, padding: 0, border: 0 }} /></tr> : null}
+            {virtual && windowRows[0]?.start > 0 ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0) + (bulk ? 1 : 0)} style={{ height: windowRows[0].start, padding: 0, border: 0 }} /></tr> : null}
             {visibleItems.map(({ item: it, index: k }) => {
               if (it.kind === "group") {
                 const closed = collapsed.includes(it.g);
                 return (
                   <tr key={`g${k}`} className="gr">
+                    {bulk ? <td /> : null}
                     {cols.map((c, j) => j === 0 ? (
                       <td key={c}><button className="dt-sort" aria-expanded={!closed} onClick={() => setCollapsed(closed ? collapsed.filter((x) => x !== it.g) : [...collapsed, it.g])}><ChevronRight size={12} style={{ marginRight: 6, verticalAlign: -2, transform: closed ? "none" : "rotate(90deg)", transition: "transform .15s" }} />{it.g}<span className="stat-s" style={{ marginLeft: 8 }}>{it.n}</span></button></td>
                     ) : <td key={c} className={numeric.has(c) ? "r num" : undefined}>{numeric.has(c) ? fmtKey(c, reduce(it.ix.map((i) => rows[i][c]).filter(isNum), view.summary)) : ""}</td>)}
@@ -353,6 +377,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
               const r = rows[it.i];
               return (
                 <tr key={`r${it.i}`} className={`clickable${it.sub ? " sub" : ""}`} data-sel={sel === it.i} tabIndex={0} onClick={() => setSel(it.i)} onKeyDown={(e) => { if (e.key === "Enter") setSel(it.i); }}>
+                  {bulk ? <td className="dt-chk" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${String(r.ticker ?? it.i + 1)}`} checked={picked.has(it.i)} onChange={() => setPicked((p) => { const n = new Set(p); if (n.has(it.i)) n.delete(it.i); else n.add(it.i); return n; })} /></td> : null}
                   {cols.map((c, j) => (
                     <td key={c} className={`${numeric.has(c) ? "r num" : ""}${j === 0 ? " strong" : ""}${flash[`${it.i}:${c}`] !== undefined ? " flash" : ""}${hatch && (r[c] === null || r[c] === undefined || r[c] === "Unknown") ? " unk" : ""}`} style={{ ...cellStyle(c, r[c]), ...colStyle(c) }}>{render(r, it.i, c)}</td>
                   ))}
@@ -360,11 +385,12 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
                 </tr>
               );
             })}
-            {virtual && windowRows.length ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0)} style={{ height: Math.max(0, virtualizer.getTotalSize() - windowRows[windowRows.length - 1].end), padding: 0, border: 0 }} /></tr> : null}
+            {virtual && windowRows.length ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0) + (bulk ? 1 : 0)} style={{ height: Math.max(0, virtualizer.getTotalSize() - windowRows[windowRows.length - 1].end), padding: 0, border: 0 }} /></tr> : null}
           </tbody>
           {rows.length > 3 && numeric.size ? (
             <tfoot>
               <tr className="dt-foot">
+                {bulk ? <td /> : null}
                 {cols.map((c, j) => <td key={c} className={numeric.has(c) ? "r num" : undefined} style={colStyle(c)}>{j === 0 ? "Median" : numeric.has(c) && !isPKey(c) ? fmtKey(c, reduce(rows.map((r) => r[c]).filter(isNum), "median")) : ""}</td>)}
                 {rowActions ? <td /> : null}
               </tr>

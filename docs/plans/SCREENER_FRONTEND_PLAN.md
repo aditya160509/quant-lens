@@ -112,15 +112,15 @@ Index membership stays out until we have data for it; it must not be faked.
 - [x] Column sets as tabs: Overview, Performance, Valuation, Profitability, Growth, Health, Dividends, Technical, Scores, Trust, Custom; add own
 - [ ] Column picker with search, groups and drag order; per-column interval where data supports it
 - [ ] Frozen rank, ticker and company; sticky header; resize; reorder by drag; auto-fit
-- [ ] Multi-sort; sort by distance from a value
-- [ ] Monogram tile, ticker badge, company, sector pill
+- [x] Multi-sort; sort by distance from a value
+- [x] Monogram tile, ticker badge, company, sector pill
 - [ ] Number format per column: compact, percent, decimals, currency; base currency switch
 - [ ] Conditional formats per column: heat, bars, signed colour, rule, top and bottom N
 - [ ] Sparkline columns with range choice
 - [x] Muted missing values; auto-hide wholly empty columns; coverage in header
 - [ ] Group by and pivot on any column, with count, median, mean, sum rows
 - [x] Footer: median and universe median, sector median toggle
-- [ ] Bulk select: add to watchlist, compare, alert, send to Rank, Test, ML, export
+- [x] Bulk select: add to watchlist, compare, alert, send to Rank, Test, ML, export
 - [ ] Row hover actions; row expand shows why it passed
 - [ ] Density, rows per page, infinite or paged; virtual scroll to 1,000 rows without lag
 - [x] Search within results; column quick filter from the header adds a pill

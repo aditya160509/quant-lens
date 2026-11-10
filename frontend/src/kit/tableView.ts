@@ -13,6 +13,8 @@ export type TableView = {
   pinned: string[];
   widths: Record<string, number>;
   sort: { key: string; dir: 1 | -1 } | null;
+  /** Second sort key, set with shift-click. */
+  sort2?: { key: string; dir: 1 | -1 } | null;
   density: "compact" | "comfortable";
   tint: boolean;
   fmt: Record<string, Fmt>;

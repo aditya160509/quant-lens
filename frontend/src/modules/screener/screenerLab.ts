@@ -8,7 +8,7 @@ import { InFilter } from "./filters/InFilter";
 import { WatchlistFilter } from "./filters/WatchlistFilter";
 import { ComponentWeights } from "./rank/ComponentWeights";
 import { TemplatePicker } from "./rank/TemplatePicker";
-import { RowActions } from "./RowActions";
+import { BulkActions, RowActions } from "./RowActions";
 import { UniverseBar } from "./filters/UniverseBar";
 import { ScreenerHome } from "./home/ScreenerHome";
 import { isNum } from "@/modules/research/format";
@@ -76,6 +76,7 @@ function testBanner(r: FeatureResult) {
 }
 
 const rowActions = (row: Record<string, unknown>) => (typeof row.ticker === "string" ? createElement(RowActions, { ticker: row.ticker }) : null);
+const bulk = (rows: Record<string, unknown>[], clear: () => void) => createElement(BulkActions, { rows, clear });
 const RESULT_COLUMNS = ["rank", "ticker", "company_name", "sector", "exchange", "country", "quote_currency", "data_coverage", "statement_age_days", "price", "trend_3m", "market_cap", "core_quant_score", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile", "trailing_pe", "pb_ratio", "roe", "revenue_growth_yoy", "return_1d", "return_1m", "return_6m", "qtr_sales_yoy", "qtr_profit_yoy", "realized_vol_63d", "max_drawdown_252d", "piotroski_passed", "altman_z_score"];
 /** Percentiles drawn as bars on a 0 to 100 scale. */
 const RESULT_BARS = ["data_coverage", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile"];
@@ -101,7 +102,7 @@ export const SCREENER_LAB: LabConfig = {
     sc01: {
       verdict: headline,
       sections: [
-        { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], span: 12, view: "screenTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, bars: RESULT_BARS, hide: RESULT_HIDDEN, hatch: true, rowActions } }] },
+        { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], span: 12, view: "screenTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, bars: RESULT_BARS, hide: RESULT_HIDDEN, hatch: true, rowActions, bulk } }] },
         { id: "trust", label: "Trust", items: [
           { keys: ["ranked_screener_table"], span: 12, view: "nearMisses", title: "Near misses" },
           { keys: ["ranked_screener_table"], span: 12, view: "sensitivity", title: "Sensitivity" },
@@ -116,7 +117,7 @@ export const SCREENER_LAB: LabConfig = {
     sc03: {
       sections: [
         { id: "ranking", label: "Ranking", items: [
-          { keys: ["composite_score_universe_ranking"], span: 8, view: "rankedTable", opts: { max: 5000, maxHeight: 640, hatch: true, rowActions } },
+          { keys: ["composite_score_universe_ranking"], span: 8, view: "rankedTable", opts: { max: 5000, maxHeight: 640, hatch: true, rowActions, bulk } },
           { keys: ["per_stock_score_decomposition"], span: 4, view: "scoreWaterfall", title: "Why the top name ranks here" },
         ] },
         { id: "weights", label: "Weights", items: [{ keys: ["score_transparency_decomposition"], span: 6, view: "dataTable" }, { keys: ["factor_correlation_heatmap"], span: 6 }] },
