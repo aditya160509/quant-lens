@@ -57,3 +57,4 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Shell nav: coloured icon tile per section, accent bar on active, light theme variant | `workspace/workspace.css` | shell-1 |
 | [ ] | Toasts: saved, failed (replaces alert), copied tickers, Markdown, link, view saved, watchlist and alert adds, template used | `SavedPage`, `RowActions`, `DataTable`, `FormulaViews` | shell-2 |
 | [ ] | Auto run toggle: re-runs 0.9 s after edits stop, only at 250 names or fewer, remembered on device; disabled above 250 | `UniverseBar.tsx` | run-1 |
+| [ ] | Failure card: one-click fixes (remove unavailable filter, raise cap, drop historical sector filter, liquidity universe); then Run | `FeatureView.tsx`, `lab.ts`, `screenerLab.ts` | run-2 |

@@ -201,6 +201,20 @@ export const SCREENER_LAB: LabConfig = {
   submit: (featureId, payload) => ({ path: `/feature/${RAW(featureId)}/jobs`, body: { payload } }),
   signal: false,
   specials: { saved: SavedPage, more: MorePage },
+  fixes: (message, feature, form) => {
+    const out: { label: string; patch: Record<string, unknown> }[] = [];
+    const unavailable = message.match(/Requested filter (.+?) is unavailable/);
+    if (unavailable) {
+      const name = unavailable[1].toLowerCase();
+      const keys = feature.inputs.filter((i) => (i.label.toLowerCase().startsWith(name) || i.key.startsWith(name.replace(/\s+/g, "_"))) && form[i.key] !== undefined && form[i.key] !== "").map((i) => i.key);
+      if (keys.length) out.push({ label: `Remove the ${unavailable[1]} filter`, patch: Object.fromEntries(keys.map((k) => [k, ""])) });
+    }
+    if (/exceeds max_symbols/.test(message)) out.push({ label: "Raise the cap to 1,000", patch: { max_symbols: 1000 } });
+    const historical = message.match(/Historical (\w+) (filters|neutralization)/);
+    if (historical) out.push({ label: `Drop the ${historical[1]} filter`, patch: { [historical[1]]: "all", sector_neutral: false } });
+    if (/Non-USD portfolios/.test(message)) out.push({ label: "Use the top names by liquidity", patch: { universe: "master" } });
+    return out;
+  },
   widgets: { formula: FormulaControl, sector: InFilter, industry: InFilter, exchange: InFilter, country: InFilter, currency: InFilter, ticker_in: WatchlistFilter, filter_tree: FilterTree, screen_template: TemplatePicker, components: ComponentWeights },
   funnel: (result) => Object.fromEntries(((result?.charts?.filter_funnel_waterfall ?? []) as { key?: string; removed: number; remaining: number; bottleneck?: string | null }[]).filter((s) => s.key).map((s) => [s.key as string, { removed: s.removed, remaining: s.remaining, bottleneck: Boolean(s.bottleneck) }])),
   defaultUniverse: "All names we hold",

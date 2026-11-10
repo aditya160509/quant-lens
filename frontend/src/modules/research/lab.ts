@@ -32,6 +32,8 @@ export type LabConfig = {
   /** Overview intro and the ordered stages its feature cards are grouped into. */
   /** Replaces the run-context chips above the results. */
   contextBar?: ComponentType<{ feature: FeatureSpec; run: FeatureRun }>;
+  /** One-click fixes for a failed run: a label and the form change that addresses the message. */
+  fixes?: (message: string, feature: FeatureSpec, form: Record<string, unknown>) => { label: string; patch: Record<string, unknown> }[];
   overview?: {
     /** Replaces the whole overview page. */
     home?: ComponentType<{ features: FeatureSpec[]; runs: RunRecord[] }>;

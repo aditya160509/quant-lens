@@ -105,7 +105,7 @@ Index membership stays out until we have data for it; it must not be faked.
 ### Run
 - [x] One blue Run; auto-run option when a filter changes, debounced, on universes up to 250
 - [ ] Progress by stage, cancel, stale marker
-- [ ] Failure card with the reason and one-click fix
+- [x] Failure card with the reason and one-click fix
 
 ## 6. Table, used by every tabular output
 

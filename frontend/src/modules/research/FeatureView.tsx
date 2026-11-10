@@ -178,7 +178,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
       </div>
 
       <div style={{ padding: "6px 18px 22px" }}>
-        {run.error && !running ? <RunError message={run.error} /> : null}
+        {run.error && !running ? <RunError message={run.error} fixes={lab().fixes?.(run.error, feature, run.form) ?? []} onFix={(patch) => run.setForm((c) => ({ ...c, ...patch }))} /> : null}
         {result && !running ? <Skipped result={result} /> : null}
         {result && printing ? (
           <div className="report">
@@ -406,7 +406,7 @@ function Skipped({ result }: { result: FeatureResult }) {
   );
 }
 
-function RunError({ message }: { message: string }) {
+function RunError({ message, fixes, onFix }: { message: string; fixes: { label: string; patch: Record<string, unknown> }[]; onFix: (patch: Record<string, unknown>) => void }) {
   return (
     <div className="card" style={{ height: "auto", marginBottom: 12, background: "var(--down-soft)", boxShadow: "inset 0 0 0 1px color-mix(in oklch, var(--down) 30%, transparent)" }}>
       <div className="card-b" style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
@@ -414,6 +414,7 @@ function RunError({ message }: { message: string }) {
         <div>
           <div style={{ fontWeight: 600, marginBottom: 2 }}>The study could not run</div>
           <div style={{ color: "var(--text-2)", fontSize: 12.5 }}>{message}</div>
+          {fixes.length ? <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>{fixes.map((f) => <button key={f.label} type="button" className="btn sm" onClick={() => onFix(f.patch)}>{f.label}</button>)}</div> : null}
         </div>
       </div>
     </div>
