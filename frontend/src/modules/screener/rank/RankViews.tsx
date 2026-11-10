@@ -35,7 +35,6 @@ export function RankVsMl({ result, opts }: ViewProps) {
     enabled: Boolean(run), staleTime: Infinity, retry: false,
   });
   const learned = new Map(out(ml.data?.result ?? ({} as FeatureResult), "prediction_rank_table").map((r) => [String(r.ticker), r.rank]));
-  if (!run) return <Empty text="Unknown" />;
   const rows = rules.map((r) => {
     const m = learned.get(String(r.ticker));
     return { ticker: r.ticker, rules_rank: r.rank, ml_rank: isNum(m) ? m : null, rank_gap: isNum(m) && isNum(r.rank) ? m - r.rank : null };

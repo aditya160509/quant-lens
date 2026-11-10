@@ -1,7 +1,7 @@
 "use client";
 
 import { BookOpen, Bell, Copy, FlaskConical, LineChart, Sigma, Star } from "lucide-react";
-import { downloadCsv } from "@/charts/export";
+import { downloadCsv, downloadJson, downloadTickers } from "@/charts/export";
 import type { Row } from "@/modules/research/types";
 import { useRouter } from "next/navigation";
 import { openQuickLook } from "@/kit/QuickLook";
@@ -51,6 +51,8 @@ export function BulkActions({ rows, clear }: { rows: Row[]; clear: () => void })
       <button type="button" className="btn sm ghost" onClick={() => { set("ml02", "universe"); router.push("/ml/alpha"); }}><FlaskConical size={11} />ML</button>
       <button type="button" className="btn sm ghost" onClick={() => void navigator.clipboard?.writeText(tickers.join(", "))}><Copy size={11} />Tickers</button>
       <button type="button" className="btn sm ghost" onClick={() => downloadCsv(rows, "selected")}>CSV</button>
+      <button type="button" className="btn sm ghost" onClick={() => downloadJson(rows, "selected")}>JSON</button>
+      <button type="button" className="btn sm ghost" onClick={() => downloadTickers(rows, "selected")}>List</button>
     </>
   );
 }

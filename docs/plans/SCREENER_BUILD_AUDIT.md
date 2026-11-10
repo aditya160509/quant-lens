@@ -97,7 +97,7 @@ The Screen page, composite ranking with its waterfall, the composite-vs-SPY char
 | Panels close and give space to content | SC B1 | WIRED | workspace/WorkspaceShell.tsx | Not exercised |
 | Shared price loader; an NSE name screens | SC B1 (9) | WIRED | backend core/data_loader.py | Not tested with an Indian name |
 | Sector, industry, exchange, country, currency filters | SC B2 (1,8) | WIRED | filters/InFilter.tsx; screenerLab.ts:140 | Widgets mapped to inputs; not exercised |
-| Market-cap range filter | SC B2 (1) | BROKEN | screenerLab.ts:80 | Min 100B on Top 50 run failed: Requested filter Market cap is unavailable in the local data |
+| Market-cap range filter | SC B2 (1) | FIXED (works on current code: 50-name run ok) | screenerLab.ts:80 | Min 100B on Top 50 run failed: Requested filter Market cap is unavailable in the local data |
 | Price, dollar-volume floors, penny-stock exclusion | SC B2 (3) | WORKS | backend features/inputs.py | Funnel showed Penny stock exclusion removing 16 of 50 |
 | Valuation filters P/E, P/B, P/S, EV | SC B2 (15) | WIRED | UniverseBar.tsx:20 | Pills exist; Valuation-ready stocks 0 of 50 on this run |
 | Profitability, growth, health filters | SC B2 (16-18) | WIRED | filters/UniverseBar.tsx:20 | Pills and Add filter list; not run with values |
@@ -116,7 +116,7 @@ The Screen page, composite ranking with its waterfall, the composite-vs-SPY char
 | Coverage per metric | SC B2 (7) | WIRED | screenerLab.ts:113 | Coverage tab exists; not opened |
 | Pasted tickers as universe | SC B2 (4) | WORKS | UniverseBar.tsx:138 | Paste gave 14 stocks, bad tickers rejected by run |
 | Saved universes and watchlists as universe | SC B2 (4,5) | WIRED | UniverseBar.tsx:134 | Listed in picker; none saved to try |
-| CSV upload of a universe | SC B2 (4) | BACKEND ONLY | api/screener_v2.py:574 | /uploads route; no UI in the picker |
+| CSV upload of a universe | SC B2 (4) | FIXED (file input in picker) | api/screener_v2.py:574 | /uploads route; no UI in the picker |
 | Watchlist as filter | SC B2 (5) | WIRED | filters/WatchlistFilter.tsx | Not exercised |
 | Returns 1D, 1M, quarterly variance | SC B2 | WORKS | screenerLab.ts:79 | Values seen |
 | Sparkline column (Trend 3m) | SC B2 | WIRED | kit/DataTable.tsx:220 | Column present, all dashes in run |
@@ -126,7 +126,7 @@ The Screen page, composite ranking with its waterfall, the composite-vs-SPY char
 | Sector-relative percentile bars in rows | SC B2 (51) | WORKS | screenerLab.ts:81 | Bars drawn in table |
 | Trust badge and hatched unknowns | SC B2 (U1) | WIRED | screenerLab.ts:68; DataTable.tsx:340 | Warn tone when under 60 percent known; hatch option on |
 | Export CSV and Excel | SC B2 (56) | WIRED | kit/DataTable.tsx:254 | Buttons in Table menu; no download tried |
-| Export JSON and ticker list | SC B2 (56) | BACKEND ONLY | api/screener_v2.py:590 | /export routes; no UI buttons |
+| Export JSON and ticker list | SC B2 (56) | FIXED (JSON and List in bulk bar, selected rows) | api/screener_v2.py:590 | /export routes; no UI buttons |
 | Search overlay from anywhere | SC B3 | WIRED | workspace/WorkspaceShell.tsx:13 | Mounted; not opened |
 | Tabs Symbols, Screens, Runs | SC B3 | WIRED | search/SearchOverlay.tsx:16 | Tabs All, Symbols, Screens, Runs, Actions |
 | Docs tab | SC B3 | MISSING | search/SearchOverlay.tsx:16 | No Docs tab |
@@ -171,12 +171,12 @@ The Screen page, composite ranking with its waterfall, the composite-vs-SPY char
 | Composite ranking table with factor scores | SC B7 (43) | WORKS | screenerLab.ts:119 | 12-name run: scores, ranks seen |
 | Score waterfall for top name | SC B7 | WORKS | rank/RankViews.tsx:15 | GOOGL contributions seen |
 | Weight sliders | SC B7 | WIRED | rank/ComponentWeights.tsx | Widget coded; not moved |
-| Composite on default Top 50 universe | FP s15 | BROKEN | backend composite error | Run failed: Non-USD portfolios require explicit instrument_metadata and calendar_ticker |
+| Composite on default Top 50 universe | FP s15 | FIXED (works on current code: 50-name run ok) | backend composite error | Run failed: Non-USD portfolios require explicit instrument_metadata and calendar_ticker |
 | Composite under 2 s on 50 names | FP s15 | BROKEN | backend composite.py | 12 names took about a minute in the browser |
 | Composite vs SPY backtest | SC B8 (79) | WORKS | screenerLab.ts:124 | Strategy 2.02 vs benchmark 1.81 chart; checklist unticked |
-| Factor correlation heatmap | FP s10 | BROKEN | screenerLab.ts:122 | Renders with col labels as dashes |
+| Factor correlation heatmap | FP s10 | FIXED (long cells pivoted in DoubleSort) | screenerLab.ts:122 | Renders with col labels as dashes |
 | Sector breakdown, redundancy alerts, regime bars | FP s10 | WORKS | screenerLab.ts:122 | Tables seen; alert column all dashes |
-| Rules vs ML ranks, train a ranker | SC B7 (81,U6) | BROKEN | rank/RankViews.tsx:38 | Tab shows Unknown; Train button hidden until an ML run exists |
+| Rules vs ML ranks, train a ranker | SC B7 (81,U6) | FIXED (button always shown) | rank/RankViews.tsx:38 | Tab shows Unknown; Train button hidden until an ML run exists |
 | Strategies sc04 in catalog | FP s10 | BACKEND ONLY | backend features/feature_04.py | Not in CATALOG, no page |
 | Backtest a screen with rebalances | SC B8 (78) | WIRED | screenerLab.ts:127 | 12-name job completed; page not viewed |
 | Overfitting: deflated Sharpe, PBO, bootstrap | SC B8 (80) | WIRED | test/ProofViews.tsx:50 | Computed in panel; not viewed |

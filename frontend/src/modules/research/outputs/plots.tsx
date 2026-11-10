@@ -540,11 +540,21 @@ export function SpanningBetas({ rows }: ViewProps) {
 
 // ---------------------------------------------------------------- heatmaps
 
-export function DoubleSort({ rows }: ViewProps) {
+/** Long {row, col, value} cells (the Screener correlation chart) to one wide row per `row`. */
+function widen(rows: ViewProps["rows"]) {
+  if (!rows.length || !("col" in rows[0] && "value" in rows[0])) return rows;
+  const wide = new Map<string, Record<string, unknown>>();
+  for (const r of rows) wide.set(String(r.row), { ...(wide.get(String(r.row)) ?? { row: r.row }), [String(r.col)]: r.value });
+  return [...wide.values()] as ViewProps["rows"];
+}
+
+export function DoubleSort({ rows: cells }: ViewProps) {
+  const rows = widen(cells);
+  const long = rows !== cells;
   if (!rows.length) return <Empty />;
   const lab = Object.keys(rows[0])[0];
   const cols = Object.keys(rows[0]).filter((k) => k !== lab && k !== "row_spread");
-  return <Heatmap rows={rows.map((r) => String(r[lab]).replace("S1_", "Signal "))} cols={cols.map((c) => c.replace("S2_", ""))} values={rows.map((r) => cols.map((c) => n(r[c])))} format={(v) => pct(v, 2)} rowTitle="Signal bucket" colTitle="Second sort" margin={rows.some((r) => "row_spread" in r) ? { label: "Spread", values: rows.map((r) => n(r.row_spread)) } : undefined} />;
+  return <Heatmap rows={rows.map((r) => String(r[lab]).replace("S1_", "Signal "))} cols={cols.map((c) => c.replace("S2_", ""))} values={rows.map((r) => cols.map((c) => n(r[c])))} format={(v) => (long ? v.toFixed(2) : pct(v, 2))} rowTitle={long ? "Factor" : "Signal bucket"} colTitle={long ? "Factor" : "Second sort"} margin={rows.some((r) => "row_spread" in r) ? { label: "Spread", values: rows.map((r) => n(r.row_spread)) } : undefined} />;
 }
 
 export function CorrelationMap({ rows }: ViewProps) {

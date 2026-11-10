@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { get } from "@/modules/research/api";
 import { FilterChips, isRangeField } from "@/modules/research/FilterChips";
 import type { FeatureRun } from "@/modules/research/ResearchApp";
+import { lab } from "@/modules/research/lab";
 import { label as fmtLabel } from "@/modules/research/format";
 import type { FeatureSpec } from "@/modules/research/types";
 import { searchSymbols, usePopular, type SymbolHit } from "@/kit/QuickLookData";
@@ -92,6 +93,7 @@ function Picker({ tickers, size, onApply, onClose }: { tickers: string[]; size: 
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<SymbolHit[]>([]);
   const [saving, setSaving] = useState("");
+  const [err, setErr] = useState("");
   const popular = usePopular();
   const saved = useQuery({ queryKey: ["screener", "universes"], queryFn: () => get<{ universes: Saved[] }>("/universes"), retry: false });
   const lists = useWatchlists((s) => s.lists);
@@ -135,6 +137,8 @@ function Picker({ tickers, size, onApply, onClose }: { tickers: string[]; size: 
               {Object.entries(lists).filter(([, l]) => l.length).map(([id, l]) => <button key={id} type="button" onClick={() => merge(l)}>{id}<em>{l.length}</em></button>)}
             </div>
             <h4>Paste</h4>
+            <input type="file" accept=".csv,text/csv" aria-label="Upload CSV" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const body = new FormData(); body.append("file", f); void fetch(`${lab().base}/uploads`, { method: "POST", body }).then((r) => r.json()).then((j: { symbols?: string[]; detail?: string }) => { if (j.symbols) merge(j.symbols); else setErr(typeof j.detail === "string" ? j.detail : "Upload failed"); }).catch(() => setErr("Upload failed")); e.target.value = ""; }} />
+            {err ? <small role="alert">{err}</small> : null}
             <textarea className="input" rows={2} placeholder="AAPL, MSFT" onBlur={(e) => { const v = e.target.value.toUpperCase().split(/[,;\s]+/).filter(Boolean); if (v.length) { merge(v); e.target.value = ""; } }} />
             {list.length ? (
               <>
