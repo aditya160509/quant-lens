@@ -52,3 +52,15 @@
 /* Unknown values are hatched, never blank or zero. */
 .tbl td.unk { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--line) 3px 4px); }
 .tbl td.ra { white-space: nowrap; width: 1%; }
+
+.dt-sets { display: flex; gap: 2px; margin-right: auto; overflow-x: auto; scrollbar-width: none; padding: 2px; border-radius: 8px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); }
+.dt-sets button { border: 0; background: none; color: var(--text-3); font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.dt-sets button:hover { color: var(--text); }
+.dt-sets button[aria-selected="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px oklch(0 0 0 / 0.3), inset 0 0 0 1px var(--line); }
+.dt-q { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 7px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-3); }
+.dt-q:focus-within { box-shadow: inset 0 0 0 1px var(--accent); }
+.dt-q input { border: 0; background: none; color: var(--text); font: inherit; font-size: 12px; width: 120px; outline: none; }
+.dt-n { color: var(--text-3); font-size: 12px; }
+.dt .miss { color: var(--text-4); }
+.dt .tbl tfoot td { position: sticky; bottom: 0; background: var(--panel-2); border-top: 1px solid var(--line-2, var(--line)); color: var(--text-2); font-size: 12px; z-index: 1; }
+.dt .tbl tfoot td:first-child { z-index: 2; font-weight: 600; color: var(--text-3); }

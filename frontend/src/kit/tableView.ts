@@ -20,9 +20,11 @@ export type TableView = {
   pct: Record<string, "all" | "sector">;
   groupBy: string | null;
   summary: Exclude<Fn, "count">;
+  /** Named column set shown as a tab; null shows every column. */
+  set: string | null;
 };
 
-export const EMPTY_VIEW: TableView = { order: null, hidden: [], pinned: [], widths: {}, sort: null, density: "comfortable", tint: false, fmt: {}, pct: {}, groupBy: null, summary: "median" };
+export const EMPTY_VIEW: TableView = { order: null, hidden: [], pinned: [], widths: {}, sort: null, density: "comfortable", tint: false, fmt: {}, pct: {}, groupBy: null, summary: "median", set: null };
 
 export function reduce(values: number[], fn: Fn): number | null {
   if (fn === "count") return values.length;

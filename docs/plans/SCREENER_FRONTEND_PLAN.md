@@ -109,7 +109,7 @@ Index membership stays out until we have data for it; it must not be faked.
 
 ## 6. Table, used by every tabular output
 
-- [ ] Column sets as tabs: Overview, Performance, Valuation, Profitability, Growth, Health, Dividends, Technical, Scores, Trust, Custom; add own
+- [x] Column sets as tabs: Overview, Performance, Valuation, Profitability, Growth, Health, Dividends, Technical, Scores, Trust, Custom; add own
 - [ ] Column picker with search, groups and drag order; per-column interval where data supports it
 - [ ] Frozen rank, ticker and company; sticky header; resize; reorder by drag; auto-fit
 - [ ] Multi-sort; sort by distance from a value
@@ -117,13 +117,13 @@ Index membership stays out until we have data for it; it must not be faked.
 - [ ] Number format per column: compact, percent, decimals, currency; base currency switch
 - [ ] Conditional formats per column: heat, bars, signed colour, rule, top and bottom N
 - [ ] Sparkline columns with range choice
-- [ ] Muted missing values; auto-hide wholly empty columns; coverage in header
+- [x] Muted missing values; auto-hide wholly empty columns; coverage in header
 - [ ] Group by and pivot on any column, with count, median, mean, sum rows
-- [ ] Footer: median and universe median, sector median toggle
+- [x] Footer: median and universe median, sector median toggle
 - [ ] Bulk select: add to watchlist, compare, alert, send to Rank, Test, ML, export
 - [ ] Row hover actions; row expand shows why it passed
 - [ ] Density, rows per page, infinite or paged; virtual scroll to 1,000 rows without lag
-- [ ] Search within results; column quick filter from the header adds a pill
+- [x] Search within results; column quick filter from the header adds a pill
 - [ ] Chart-grid view of mini price charts
 - [ ] CSV, Excel, TSV, tickers, copy, Markdown, PDF
 - [ ] Save view for this screen or all; share by link; reset

@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as Popover from "@radix-ui/react-popover";
-import { ArrowDown, ArrowUp, ChevronRight, Columns3, Download, Link2, Pin, RotateCcw, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronRight, Columns3, Download, Link2, Pin, RotateCcw, Search, X } from "lucide-react";
 import { Spark } from "@/charts/RankList";
 import { downloadCsv, downloadXlsx } from "@/charts/export";
 import { openQuickLook } from "./QuickLook";
@@ -81,7 +81,15 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const [view, update] = useTableView(viewKey, { tint: opts?.tint === true });
   const { order: colOrder, hidden, pinned, widths, sort, density, tint } = view;
   const patch = (p: Partial<TableView>) => update((v) => ({ ...v, ...p }));
-  const rows = useMemo(() => withPercentiles(source, view.pct), [source, view.pct]);
+  const [query, setQuery] = useState("");
+  const rows = useMemo(() => {
+    const all = withPercentiles(source, view.pct);
+    const q = query.trim().toLowerCase();
+    return q ? all.filter((r) => Object.values(r).some((v) => typeof v === "string" && v.toLowerCase().includes(q))) : all;
+  }, [source, view.pct, query]);
+  const sets = opts?.sets as Record<string, string[]> | undefined;
+  const lead = (opts?.lead as string[] | undefined) ?? [];
+  const activeSet = sets && view.set && sets[view.set] ? sets[view.set] : null;
   const saved = useSavedViews();
   const [viewName, setViewName] = useState("");
   const [everywhere, setEverywhere] = useState(false);
@@ -92,9 +100,11 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const rowActions = opts?.rowActions as ((row: Row) => ReactNode) | undefined;
   const hatch = opts?.hatch === true;
   const base = useMemo(() => {
-    const all = columns(rows).filter((c) => !(hideOpt ?? []).includes(c));
+    const all = columns(source).filter((c) => !(hideOpt ?? []).includes(c) && source.some((r) => r[c] !== null && r[c] !== undefined && r[c] !== ""))
+      .filter((c) => !activeSet || lead.includes(c) || activeSet.includes(c));
     return order ? [...order.filter((c) => all.includes(c)), ...all.filter((c) => !order.includes(c))] : all;
-  }, [rows, hideOpt, order]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, hideOpt, order, activeSet]);
   const [lefts, setLefts] = useState<Record<string, number>>({});
   const cols = useMemo(() => {
     const o = colOrder ? [...colOrder.filter((c) => base.includes(c)), ...base.filter((c) => !colOrder.includes(c))] : base;
@@ -211,13 +221,13 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const windowRows = virtual ? virtualizer.getVirtualItems() : [];
   const visibleItems = virtual ? windowRows.map((row) => ({ item: items[row.index], index: row.index })) : items.map((item, index) => ({ item, index }));
   const changePage = (next: number) => { setPage(next); setSel(null); if (scrollRef.current) scrollRef.current.scrollTop = 0; };
-  if (!rows.length) return <Empty />;
+  if (!source.length) return <Empty />;
   const render = (r: Row, i: number, c: string) => {
     const v = r[c];
     const d = flash[`${i}:${c}`];
     const f = view.fmt[c];
     const width = f?.mode === "bar" && isNum(v) && range[c] ? (range[c][1] > range[c][0] ? ((v - range[c][0]) / (range[c][1] - range[c][0])) * 100 : 50) : (view.pct[c] || bars?.includes(c)) && isNum(v) ? v : null;
-    const content = width !== null && isNum(v) ? <span className="pbar"><i style={{ width: `${Math.max(0, Math.min(100, width))}%` }} />{view.pct[c] ? Math.round(v) : fmtKey(c, v)}</span> : Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : fmtKey(c, v);
+    const content = width !== null && isNum(v) ? <span className="pbar"><i style={{ width: `${Math.max(0, Math.min(100, width))}%` }} />{view.pct[c] ? Math.round(v) : fmtKey(c, v)}</span> : Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : v === null || v === undefined || v === "" ? <span className="miss">—</span> : fmtKey(c, v);
     return <>{c === "ticker" && typeof v === "string" ? <button type="button" className="tk-link" onClick={(e) => { e.stopPropagation(); openQuickLook(v); }}>{content}</button> : content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -243,6 +253,13 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   return (
     <div className="dt" data-virtual={virtual} data-density={density} onKeyDown={onKey}>
       <div className="dt-bar">
+        {sets ? (
+          <div className="dt-sets" role="tablist" aria-label="Column sets">
+            {[null, ...Object.keys(sets)].map((k) => <button key={k ?? "all"} role="tab" aria-selected={(view.set ?? null) === k} onClick={() => patch({ set: k })}>{k ?? "All"}</button>)}
+          </div>
+        ) : null}
+        <label className="dt-q"><Search size={12} aria-hidden /><input type="search" placeholder="Search" aria-label="Search rows" value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} /></label>
+        <span className="dt-n num">{rows.length === source.length ? rows.length : `${rows.length} of ${source.length}`}</span>
         <Popover.Root>
           <Popover.Trigger asChild><button className="btn sm ghost" aria-label="Table options"><Columns3 size={13} />Table</button></Popover.Trigger>
           <Popover.Portal container={typeof document === "undefined" ? undefined : document.querySelector<HTMLElement>(".ws")}>
@@ -345,6 +362,14 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
             })}
             {virtual && windowRows.length ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0)} style={{ height: Math.max(0, virtualizer.getTotalSize() - windowRows[windowRows.length - 1].end), padding: 0, border: 0 }} /></tr> : null}
           </tbody>
+          {rows.length > 3 && numeric.size ? (
+            <tfoot>
+              <tr className="dt-foot">
+                {cols.map((c, j) => <td key={c} className={numeric.has(c) ? "r num" : undefined} style={colStyle(c)}>{j === 0 ? "Median" : numeric.has(c) && !isPKey(c) ? fmtKey(c, reduce(rows.map((r) => r[c]).filter(isNum), "median")) : ""}</td>)}
+                {rowActions ? <td /> : null}
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
       {rows.length > max ? <nav className="dt-pages" aria-label="Table pages"><span role="status">Rows {currentPage * max + 1}–{Math.min((currentPage + 1) * max, rows.length)} of {rows.length}</span><button className="btn sm ghost" disabled={currentPage === 0} onClick={() => changePage(currentPage - 1)}>Previous</button><button className="btn sm ghost" disabled={(currentPage + 1) * max >= rows.length} onClick={() => changePage(currentPage + 1)}>Next</button></nav> : null}
@@ -359,7 +384,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
         <aside className="dt-drawer" aria-label="Row details">
           <h4><span>Row {sel + 1}</span><button className="btn sm ghost" aria-label="Close" onClick={() => setSel(null)}><X size={13} /></button></h4>
           <dl className="kv">{base.map((c) => <div key={c}><dt>{label(c)}</dt><dd className={isNum(rows[sel][c]) ? "num" : undefined}>{fmtKey(c, rows[sel][c])}</dd></div>)}</dl>
-          {typeof opts?.detail === "function" ? (opts.detail as (row: Row) => ReactNode)(source[sel]) : null}
+          {typeof opts?.detail === "function" ? (opts.detail as (row: Row) => ReactNode)(rows[sel]) : null}
         </aside>
       ) : null}
     </div>

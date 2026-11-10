@@ -18,11 +18,24 @@ export function ScreenTreemap({ result }: ViewProps) {
   return <Treemap title="Passing names by sector" sizeLabel="Market cap" colorLabel={`Mean ${label("return_1m").toLowerCase()}`} colorAggregate="mean" format={(v) => `$${(v / 1e9).toLocaleString("en-US", { maximumFractionDigits: 0 })}B`} colorFormat={(v) => pct(v, 1)} items={items} />;
 }
 
+const SCREEN_LEAD = ["rank", "ticker", "company_name"];
+/** Column sets as tabs, in the order screeners use them. */
+const SCREEN_SETS: Record<string, string[]> = {
+  Overview: ["sector", "industry", "country", "market_cap", "price_usd", "return_1d", "return_1m", "trend_3m", "core_quant_score"],
+  Performance: ["return_1d", "return_1m", "return_6m", "trend_3m", "prox52", "max_drawdown_252d", "realized_vol_63d", "momentum_percentile"],
+  Valuation: ["market_cap", "trailing_pe", "forward_pe", "pb_ratio", "ps_ratio", "p_cf", "ev_ebit", "ev_ebitda", "valuation_percentile"],
+  Growth: ["revenue_growth_yoy", "eps_growth_yoy", "qtr_sales_yoy", "qtr_profit_yoy"],
+  Health: ["roe", "interest_coverage", "altman_z_score", "piotroski_passed", "piotroski_available_criteria", "quality_percentile"],
+  Technical: ["price", "adx_14", "macd_histogram", "bollinger_pct_b", "atr_pct_price", "beta_252", "vratio", "dollar_volume_20d"],
+  Scores: ["core_quant_score", "sector_relative_score", "quality_percentile", "valuation_percentile", "momentum_percentile", "low_vol_percentile"],
+  Trust: ["data_coverage", "statement_age_days", "price_observation_date", "market_cap_basis", "fundamental_basis", "quote_currency"],
+};
+
 /** The results table: its arrangement lives in the URL and in saved views, and a row opens its reasons. */
 export function ScreenTable({ rows, result, opts }: ViewProps) {
   const runId = runOf(result)?.id;
   const detail = runId ? (row: Record<string, unknown>) => (typeof row.ticker === "string" ? createElement(WhyHere, { ticker: row.ticker, runId }) : null) : undefined;
-  return <DataTable rows={rows} opts={{ ...opts, viewKey: "screener:results", xlsx: `${SCREENER_BASE}/export/xlsx`, detail }} />;
+  return <DataTable rows={rows} opts={{ ...opts, viewKey: "screener:results", xlsx: `${SCREENER_BASE}/export/xlsx`, detail, lead: SCREEN_LEAD, sets: SCREEN_SETS }} />;
 }
 
 export const NearMissView = ({ result }: ViewProps) => <NearMisses result={result} />;
