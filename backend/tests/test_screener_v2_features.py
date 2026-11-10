@@ -533,3 +533,12 @@ def test_issued_shares_are_not_a_proxy_for_outstanding_ordinary_shares(local_dat
         row = latest_fundamental_features(['AAA']).iloc[0]
     assert pd.isna(row.market_cap)
     assert pd.isna(row.trailing_pe)
+
+
+def test_market_cap_uses_each_names_own_last_close(local_data):
+    from app.services.screener_v2.core.fundamentals import latest_fundamental_features
+    market = local_data['market']
+    local_data['market'] = market[~((market.Ticker == 'BBB') & (market.Date == market.Date.max()))]
+    rows = latest_fundamental_features(['AAA', 'BBB']).set_index('ticker')
+    assert rows.market_cap.notna().all()
+    assert rows.loc['BBB', 'market_cap_observation_date'] < rows.loc['AAA', 'market_cap_observation_date']
