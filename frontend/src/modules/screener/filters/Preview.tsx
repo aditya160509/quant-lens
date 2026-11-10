@@ -7,7 +7,7 @@ import { fmtKey } from "@/modules/research/format";
 import { send } from "../api";
 
 export type Dist = { lo?: number; hi?: number; bins?: number[]; kept?: number[]; known: number; total: number; median?: number; min?: number; max?: number };
-export type Preview = { universe: number; passed: number; stages: { stage: string; key?: string | null; remaining: number; removed: number }[]; dist: Record<string, Dist> };
+export type Preview = { universe: number; passed: number; stages: { stage: string; key?: string | null; remaining: number; removed: number }[]; dist: Record<string, Dist>; mix?: Record<string, Record<string, number>> };
 
 /** Filter prefix ("pe") to its column ("trailing_pe"), from the server's own filter list. */
 export function useFilterColumns() {
@@ -55,5 +55,17 @@ export function HistogramRange({ column, dist, min, max, onChange }: { column: s
       <div className="hr-axis num"><span>{fmtKey(column, lo)}</span><span>median {fmtKey(column, dist.median)}</span><span>{fmtKey(column, hi)}</span></div>
       <div className="hr-known">{dist.known} of {dist.total} known</div>
     </div>
+  );
+}
+
+/** Sector make-up of the universe as one thin stacked bar; hover a segment for its name and count. */
+export function MixBar({ mix }: { mix?: Record<string, number> }) {
+  const parts = Object.entries(mix ?? {}).filter(([k]) => k !== "Unknown");
+  const total = parts.reduce((n, [, v]) => n + v, 0);
+  if (!total) return null;
+  return (
+    <span className="ub-mix" role="img" aria-label={`Sector mix: ${parts.map(([k, v]) => `${k} ${v}`).join(", ")}`}>
+      {parts.map(([k, v], i) => <i key={k} title={`${k}: ${v}`} style={{ flex: v, background: `oklch(0.64 0.12 ${(i * 47 + 258) % 360})` }} />)}
+    </span>
   );
 }

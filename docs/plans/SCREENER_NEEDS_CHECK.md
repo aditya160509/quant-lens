@@ -52,9 +52,10 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Test Rebalancing tab now includes weekday sensitivity | `screenerLab.ts` | test-2 |
 | [ ] | Overview: search box opens the shell search | `home/ScreenerHome.tsx` | overview-1 |
 | [ ] | Overview: breadth strip (advancers/decliners bar, near 52w high and low, sector 1M chips that open Screen filtered) from `GET /breadth` | `ScreenerHome.tsx`, `core/explain.py` | overview-1 |
-| [ ] | Data: market cap filled for only 125 of the top 500 liquid names | backend | overview-1 |
+| [x] | Data: market cap filled for only 125 of the top 500 liquid names; fixed to 499 in 4c7539a | backend | overview-1 |
 | [ ] | Overview: Your screens (last 6 saved) load into their page | `home/ScreenerHome.tsx` | overview-2 |
 | [ ] | Shell nav: coloured icon tile per section, accent bar on active, light theme variant | `workspace/workspace.css` | shell-1 |
 | [ ] | Toasts: saved, failed (replaces alert), copied tickers, Markdown, link, view saved, watchlist and alert adds, template used | `SavedPage`, `RowActions`, `DataTable`, `FormulaViews` | shell-2 |
 | [ ] | Auto run toggle: re-runs 0.9 s after edits stop, only at 250 names or fewer, remembered on device; disabled above 250 | `UniverseBar.tsx` | run-1 |
 | [ ] | Failure card: one-click fixes (remove unavailable filter, raise cap, drop historical sector filter, liquidity universe); then Run | `FeatureView.tsx`, `lab.ts`, `screenerLab.ts` | run-2 |
+| [ ] | Universe sector mix as a thin stacked bar beside the pass count (from preview mix) | `filters/Preview.tsx`, `core/explain.py` | universe-1 |

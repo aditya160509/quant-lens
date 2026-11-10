@@ -75,7 +75,7 @@ Our own advantage, shown everywhere: why a stock passed or failed, near misses, 
 - [ ] Multi-select markets; primary listing only toggle
 - [ ] CSV upload, exclude list, rename and delete saved universes
 - [ ] Live name count and estimated run time before running
-- [ ] Sector and country mix of the chosen universe as a small bar
+- [x] Sector and country mix of the chosen universe as a small bar
 - [ ] Share a universe by link; a screen's result becomes a universe
 - [ ] Clear disabled state at the cap, with count
 

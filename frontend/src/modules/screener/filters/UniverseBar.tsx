@@ -16,7 +16,7 @@ import { useWatchlists } from "../watchlists";
 import { toPayload } from "@/modules/research/StudyForm";
 import { AddFilter } from "./AddFilter";
 import { InFilter, picked } from "./InFilter";
-import { HistogramRange, stageFor, useFilterColumns, useFilterPreview } from "./Preview";
+import { HistogramRange, MixBar, stageFor, useFilterColumns, useFilterPreview } from "./Preview";
 import "./universe.css";
 
 const CAP = 1000;
@@ -102,7 +102,7 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
           {cats.map(catPill)}{metrics.map(pill)}{added.map(pill)}
           <button type="button" className="ub-pill add" data-hotkey="f" aria-keyshortcuts="F" aria-label="All filters" onClick={(e) => at(e, "+")}><Plus size={13} />Filter</button>
           <button type="button" className={`ub-pill${auto && small ? " on" : ""}`} aria-pressed={auto} disabled={!small} title={small ? "Re-run after each change" : "Auto run needs 250 names or fewer"} onClick={() => { const next = !auto; setAuto(next); try { localStorage.setItem("screener-auto-run", next ? "1" : "0"); } catch { /* storage blocked */ } }}>Auto</button>
-          {preview ? <span className="ub-pass num" role="status"><b>{preview.passed.toLocaleString()}</b> of {preview.universe.toLocaleString()} pass</span> : null}
+          {preview ? <span className="ub-pass num" role="status"><MixBar mix={preview.mix?.sector} /><b>{preview.passed.toLocaleString()}</b> of {preview.universe.toLocaleString()} pass</span> : null}
         </div>
       ) : null}
       <PopMenu at={menu?.at ?? null} onClose={() => setMenu(null)} width={menu?.key === "+" ? 440 : 300} sticky>

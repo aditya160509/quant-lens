@@ -209,7 +209,8 @@ def preview(payload: dict, fields: list[str], bins: int = 32) -> dict[str, Any]:
         kept_counts = ((kept.clip(lo, hi) - lo) / width).astype(int).clip(0, bins - 1).value_counts().reindex(range(bins), fill_value=0)
         dist[field] = {"lo": lo, "hi": hi, "bins": counts.tolist(), "kept": kept_counts.tolist(), "known": len(values), "total": len(panel),
                        "median": float(values.median()), "min": float(values.min()), "max": float(values.max())}
-    return {"universe": len(panel), "passed": len(filtered), "stages": stages, "dist": dist}
+    mix = {k: panel[k].replace("", "Unknown").fillna("Unknown").value_counts().head(12).to_dict() for k in ("sector", "country") if k in panel}
+    return {"universe": len(panel), "passed": len(filtered), "stages": stages, "dist": dist, "mix": mix}
 
 
 def breadth(payload: dict) -> dict[str, Any]:
