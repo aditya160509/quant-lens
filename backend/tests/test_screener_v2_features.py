@@ -357,7 +357,7 @@ def test_zero_variance_pbo_is_disclosed_without_fabricating_a_probability(local_
     local_data['market'][['Open', 'High', 'Low', 'Close']] = 100.
     result = run_feature('05', {'tickers': ['AAA', 'BBB', 'CCC'], 'lookback_days': 60, 'top_n': 1, 'transaction_cost_bps': 0, 'run_full_pbo': True, 'pbo_partitions': 4, 'run_holding_sensitivity': False})
     assert result['tables']['cscv_pbo'] == []
-    assert 'zero return variance' in result['meta']['pbo_status']
+    assert 'constant strategy returns' in result['meta']['pbo_status']
 
 
 def test_valuation_cards_contain_four_real_dimensions_and_honor_window(local_data):

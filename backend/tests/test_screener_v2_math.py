@@ -4,7 +4,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.services.screener_v2.core import estimators, formula, stats, screener, validation
+from app.services.screener_v2.core import (
+    estimators,
+    formula,
+    screener,
+    stats,
+    validation,
+)
 
 
 def test_gap_uses_open_against_prior_close(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -66,12 +72,11 @@ def test_static_score_backfill_is_rejected():
 
 
 def test_cscv_partitions_and_rank():
-    from app.services.screener_v2.core.backtest import cscv_pbo
+    from app.services.shared.stats import cscv_pbo
     returns = pd.DataFrame({'good': np.tile([.01, .02, .03, .04], 4), 'bad': np.tile([-.04, -.03, -.02, -.01], 4)})
     result = cscv_pbo(returns, 4)
-    assert result['split_count'] == 6
+    assert result['combinations'] == 6
     assert result['pbo'] == 0
-    assert all(row['winner'] == 'good' for row in result['splits'])
 
 
 def test_execution_price_gaps_are_rejected():
@@ -123,7 +128,10 @@ def test_piotroski_original_criteria_and_missing_inputs(monkeypatch):
 
 
 def test_altman_golden_numbers_use_distinct_equity_measures():
-    from app.services.screener_v2.core.academic import altman_z_score, altman_z_double_prime
+    from app.services.screener_v2.core.academic import (
+        altman_z_double_prime,
+        altman_z_score,
+    )
     panel = pd.DataFrame({'working_capital_assets': [.2], 'retained_earnings_assets': [.3], 'ebit_assets': [.1], 'market_value_liabilities': [2.], 'book_value_liabilities': [.5], 'sales_assets': [1.5]})
     assert altman_z_score(panel).iloc[0] == pytest.approx(3.69)
     assert altman_z_double_prime(panel).iloc[0] == pytest.approx(3.487)
@@ -159,6 +167,7 @@ def test_historical_current_classification_filters_are_rejected():
 
 def test_macro_attribution_uses_only_prior_observations_and_expires(monkeypatch):
     import pandas as pd
+
     from app.services.screener_v2.core import macro
     frame = pd.DataFrame({'date': pd.to_datetime(['2025-01-01', '2025-01-02']), 'vixcls': [15., 40.]})
     monkeypatch.setattr(macro, 'load_macro', lambda: frame)
@@ -172,14 +181,22 @@ def test_macro_attribution_uses_only_prior_observations_and_expires(monkeypatch)
 
 def test_fx_direct_inverse_minor_units_and_no_filling(monkeypatch):
     import pandas as pd
+
     from app.services.screener_v2.core import data_loader
-    from app.services.screener_v2.core.currency import usd_rates, instrument_context
+    from app.services.screener_v2.core.currency import instrument_context, usd_rates
     dates = pd.to_datetime(['2025-01-01', '2025-01-02'])
     fx = pd.DataFrame({'Ticker': ['EURUSD=X', 'USDINR=X', 'GBPUSD=X'], 'Date': [dates[0]] * 3, 'Close': [1.2, 80., 1.25]})
     monkeypatch.setattr(data_loader, 'load_fx', lambda: fx)
     rates = usd_rates(['USD', 'EUR', 'INR', 'GBp', 'SAR', None], dates)
     assert rates.iloc[0][['USD', 'EUR', 'INR', 'GBp']].tolist() == pytest.approx([1., 1.2, 1 / 80, .0125])
     assert rates.iloc[1][['EUR', 'INR', 'GBp', 'SAR']].isna().all()
-    with pytest.raises(ValueError, match='positive'):
-        with instrument_context({'instrument_metadata': {'AAA': {'quoted_units_per_ordinary_share': 0}}}):
-            pass
+    with pytest.raises(ValueError, match='positive'), instrument_context({'instrument_metadata': {'AAA': {'quoted_units_per_ordinary_share': 0}}}):
+        pass
+
+
+def test_top_table_exposes_rsi_14():
+    import pandas as pd
+
+    from app.services.screener_v2.core.screener import top_table
+    out = top_table(pd.DataFrame({"ticker": ["A"], "rsi_14": [61.5], "core_quant_score": [1.0]}), 5)
+    assert out.loc[0, "rsi_14"] == 61.5

@@ -104,7 +104,7 @@ The Screen page, composite ranking with its waterfall, the composite-vs-SPY char
 | Piotroski F-score column | SC B2 (19) | WORKS | screenerLab.ts:79 | Passed counts 1 to 8 seen per row |
 | Altman Z | SC B2 (19) | WIRED | screenerLab.ts:79 | Column present, unknown for all 34 rows |
 | Momentum, 52w proximity | SC B2 (20) | WORKS | screenerLab.ts:79 | Prox52 values seen |
-| Technicals RSI, MACD, ADX, Bollinger | SC B2 (21) | WIRED | screenerLab.ts:79 | Columns exist, dashes in this run |
+| Technicals RSI, MACD, ADX, Bollinger | SC B2 (21) | WIRED (rsi_14 now in result table) | screenerLab.ts:79 | Columns exist, dashes in this run |
 | Risk: volatility, drawdown, beta | SC B2 (22) | WORKS | screenerLab.ts:79 | Realized vol and drawdown values seen |
 | Liquidity: Amihud, volume ratio | SC B2 (23) | WIRED | backend core/panel.py | Amihud percentile dash in run |
 | Percentile versus sector or universe as filter | SC B2 (24) | WIRED | modules/research/FilterChips.tsx | Percentile columns show; filter not exercised |
@@ -185,7 +185,7 @@ The Screen page, composite ranking with its waterfall, the composite-vs-SPY char
 | Rolling start dates | SC B8 (83) | WIRED | test/ProofViews.tsx:76 | One start per year, in browser |
 | Data banner | SC B8 | WIRED | screenerLab.ts:72 | Not viewed |
 | Services/shared single PBO and DSR | SC B8 | MISSING | OPEN_ISSUES.md | PBO copies remain |
-| Remove old S4 leaderboard, S2 zoo, S5 duplicates | SC B8 | MISSING | OPEN_ISSUES.md | S5 PBO duplicate remains |
+| Remove old S4 leaderboard, S2 zoo, S5 duplicates | SC B8 | FIXED (S5 PBO duplicate removed) | OPEN_ISSUES.md | S5 PBO duplicate remains |
 | Saved screens, rename, duplicate | SC B9 (70) | WIRED | saved/SavedPage.tsx:20 | Not opened |
 | Scheduled re-runs | SC B9 (72) | WIRED | SavedPage.tsx:76 | Select coded |
 | Run history entries, exits | SC B9 (71) | WIRED | SavedPage.tsx:88 | Not opened |

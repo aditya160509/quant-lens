@@ -391,6 +391,7 @@ def top_table(panel: pd.DataFrame, n: int = DEFAULT_TOP_N) -> pd.DataFrame:
         "beta_252_unavailable_reason",
         "realized_vol_63d",
         "atr_pct_price",
+        "rsi_14",
         "adx_14",
         "macd_histogram",
         "bollinger_pct_b",

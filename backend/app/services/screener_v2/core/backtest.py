@@ -3,12 +3,10 @@
 Signals at close t are executed at close t+1. Returns earned on the execution
 session belong to the old holdings. Costs are proportional to traded notional.
 """
-from itertools import combinations
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
-from scipy.stats import rankdata
 
 
 def simulate(prices: pd.DataFrame, score_at: Callable, top_n: int = 50,
@@ -138,37 +136,3 @@ def simulate(prices: pd.DataFrame, score_at: Callable, top_n: int = 50,
     return {'curve': frame, 'trades': pd.DataFrame(trades), 'attribution': pd.DataFrame(list(attribution.values())), 'positions': pd.DataFrame(positions),
             'selected': weights.index[weights > 0].tolist(), 'short_selected': weights.index[weights < 0].tolist()}
 
-
-class PBOUnavailable(ValueError):
-    """Valid experiment has insufficient variable returns to estimate PBO."""
-
-
-def cscv_pbo(returns: pd.DataFrame, partitions: int = 8) -> dict:
-    """Bailey et al. CSCV, all half-partition training/test combinations.
-
-    https://www.davidhbailey.com/dhbpapers/backtest-prob.pdf
-    Relative OOS rank is rank/(N+1); nonpositive logits count as overfit.
-    """
-    values = returns.to_numpy(dtype=float)
-    if partitions < 4 or partitions > 12 or partitions % 2:
-        raise ValueError('CSCV partitions must be even, between 4 and 12')
-    if values.shape[1] < 2 or values.shape[0] < partitions * 2 or not np.isfinite(values).all():
-        raise ValueError('CSCV requires >=2 candidates, >=2 rows per partition and aligned finite returns')
-    blocks = np.array_split(np.arange(len(values)), partitions)
-    rows = []
-    def sharpe(x):
-        mean, std = x.mean(axis=0), x.std(axis=0, ddof=1)
-        if (std <= 0).any():
-            raise PBOUnavailable('CSCV candidate has zero return variance in a split')
-        return mean / std
-    for selected in combinations(range(partitions), partitions // 2):
-        train = np.concatenate([blocks[j] for j in selected])
-        test = np.concatenate([blocks[j] for j in range(partitions) if j not in selected])
-        ins, outs = sharpe(values[train]), sharpe(values[test])
-        winner = int(np.argmax(ins))
-        rank = float(rankdata(outs, method='average')[winner]) / (values.shape[1] + 1)
-        logit = float(np.log(rank / (1 - rank)))
-        rows.append({'training_partitions': list(selected), 'winner': str(returns.columns[winner]),
-                     'is_sharpe': float(ins[winner]), 'oos_sharpe': float(outs[winner]), 'logit': logit})
-    return {'pbo': float(np.mean([r['logit'] <= 0 for r in rows])), 'method': 'CSCV',
-            'partitions': partitions, 'candidate_count': values.shape[1], 'split_count': len(rows), 'splits': rows}

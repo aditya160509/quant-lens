@@ -56,11 +56,12 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     pbo = None
     pbo_status = "disabled by run_full_pbo"
     if payload.get("run_full_pbo"):
-        from ..core.backtest import PBOUnavailable, cscv_pbo
+        from app.services.shared.stats import cscv_pbo
         try:
             pbo = cscv_pbo(pd.DataFrame(candidates).dropna(), int(payload.get("pbo_partitions", 8)))
+            pbo = {"pbo": pbo["pbo"], "method": "CSCV", "partitions": int(payload.get("pbo_partitions", 8)), "split_count": pbo["combinations"]}
             pbo_status = "computed"
-        except PBOUnavailable as exc:
+        except ValueError as exc:
             pbo_status = f"unavailable: {exc}"
     holding_sensitivity = []
     if payload.get("run_holding_sensitivity", True):
