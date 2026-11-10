@@ -1,5 +1,6 @@
 "use client";
 
+import toast from "react-hot-toast";
 import { Empty } from "@/kit/DataTable";
 import { useStudies } from "@/modules/research/store";
 import type { ViewProps } from "@/modules/research/outputs/types";
@@ -19,7 +20,7 @@ export function TemplateGallery({ rows }: ViewProps) {
           <article key={String(r.name)} className="fg-card" data-on={on}>
             <h4>{String(r.name)}</h4>
             <code>{expr}</code>
-            <button type="button" className={`btn sm${on ? "" : " primary"}`} disabled={on} onClick={() => use(expr)}>{on ? "In use" : "Use"}</button>
+            <button type="button" className={`btn sm${on ? "" : " primary"}`} disabled={on} onClick={() => { use(expr); toast.success(`${String(r.name)} in the formula box`); }}>{on ? "In use" : "Use"}</button>
           </article>
         );
       })}

@@ -1,5 +1,6 @@
 "use client";
 
+import toast from "react-hot-toast";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -283,10 +284,10 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
               <div style={{ display: "flex", flexWrap: "wrap", gap: 2, paddingBottom: 6 }}>
                 <button className="btn sm ghost" aria-pressed={tint} onClick={() => patch({ tint: !tint })}>Heat tint</button>
                 <button className="btn sm ghost" onClick={() => patch({ density: density === "compact" ? "comfortable" : "compact" })}>{density === "compact" ? "Comfortable" : "Compact"}</button>
-                <button className="btn sm ghost" onClick={() => void navigator.clipboard?.writeText(toMarkdown(cols, order2.map((i) => rows[i])))}>Markdown</button>
+                <button className="btn sm ghost" onClick={() => void navigator.clipboard?.writeText(toMarkdown(cols, order2.map((i) => rows[i]))).then(() => toast.success("Table copied as Markdown"))}>Markdown</button>
                 <button className="btn sm ghost" onClick={() => downloadCsv(shownRows(), "table")}><Download size={11} />CSV</button>
                 {opts?.xlsx ? <button className="btn sm ghost" onClick={() => void downloadXlsx(shownRows(), "table", opts.xlsx as string)}><Download size={11} />Excel</button> : null}
-                <button className="btn sm ghost" onClick={() => void navigator.clipboard?.writeText(window.location.href)}><Link2 size={11} />Link</button>
+                <button className="btn sm ghost" onClick={() => void navigator.clipboard?.writeText(window.location.href).then(() => toast.success("Link copied"))}><Link2 size={11} />Link</button>
                 <button className="btn sm ghost" onClick={() => update(() => ({ ...EMPTY_VIEW, tint: opts?.tint === true }))}><RotateCcw size={11} />Reset</button>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingBottom: 6 }}>
@@ -332,7 +333,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
                   <div style={{ display: "flex", gap: 4 }}>
                     <input className="input" style={{ flex: 1, height: 26 }} placeholder="View name" aria-label="View name" value={viewName} onChange={(e) => setViewName(e.target.value)} />
                     <button type="button" className="pill" aria-pressed={everywhere} onClick={() => setEverywhere(!everywhere)}>All tables</button>
-                    <button type="button" className="btn sm" disabled={!viewName.trim()} onClick={() => { saved.save({ name: viewName.trim(), scope: everywhere ? "all" : "here", key: viewKey, view }); setViewName(""); }}>Save</button>
+                    <button type="button" className="btn sm" disabled={!viewName.trim()} onClick={() => { saved.save({ name: viewName.trim(), scope: everywhere ? "all" : "here", key: viewKey, view }); toast.success(`View "${viewName.trim()}" saved`); setViewName(""); }}>Save</button>
                   </div>
                   {saved.views.filter((v) => v.scope === "all" || v.key === viewKey).map((v) => (
                     <div key={v.id} style={{ display: "flex", gap: 4, alignItems: "center" }}>

@@ -46,7 +46,7 @@ Our own advantage, shown everywhere: why a stock passed or failed, near misses, 
 - [ ] Command palette: run, add filter, open any screen or stock, change theme
 - [ ] Keyboard: Cmd+Enter run, Shift+F filter, F column, `/` search, `[ ]` pages, Esc close
 - [ ] Skeletons matching final layout; no layout shift; no page-wide dim on navigation
-- [ ] Toasts for saved, failed, copied
+- [x] Toasts for saved, failed, copied
 - [ ] Phone layout: bottom nav, filter sheet, card rows
 - [ ] Light theme kept working, dark the default
 

@@ -1,5 +1,6 @@
 "use client";
 
+import toast from "react-hot-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Play, Save, Search } from "lucide-react";
 import "./saved.css";
@@ -23,7 +24,7 @@ function summary(s: { feature_id: string; payload: Record<string, unknown> }): s
   const filters = Object.entries(p).filter(([k, v]) => /_(min|max|top)$/.test(k) && v !== "" && v !== null && v !== undefined).map(([k, v]) => `${k.replace(/_(min|max|top)$/, "").replace(/_/g, " ")} ${k.endsWith("_min") ? "≥" : k.endsWith("_max") ? "≤" : "top"} ${String(v)}`);
   return [KIND[s.feature_id] ?? s.feature_id, ["master", "all", ""].includes(uni.toLowerCase()) ? `Top ${String(p.max_symbols ?? 500)} by liquidity` : `${uni.split(/[,\s]+/).filter(Boolean).length} names`, ...(p.sector && p.sector !== "all" ? [String(p.sector)] : []), ...filters.slice(0, 5), ...(filters.length > 5 ? [`+${filters.length - 5} more`] : [])];
 }
-const fail = (e: unknown) => window.alert(e instanceof Error ? e.message : "Failed");
+const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : "Failed");
 
 /** Saved screens: rename, duplicate, re-run on a schedule, deliver changes and alerts, read the history and the alert scoreboard. */
 export default function SavedPage({ features }: { features: FeatureSpec[] }) {
@@ -34,7 +35,7 @@ export default function SavedPage({ features }: { features: FeatureSpec[] }) {
   const screens = useQuery({ queryKey: ["screener", "screens"], queryFn: () => get<{ screens: Screen[] }>("/screens"), retry: false });
   const schedules = useQuery({ queryKey: ["screener", "schedules"], queryFn: () => get<{ schedules: Schedule[] }>("/schedules"), retry: false });
   const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ["screener", "screens"] }), qc.invalidateQueries({ queryKey: ["screener", "schedules"] })]);
-  const run = (fn: () => Promise<unknown>) => fn().then(refresh).catch(fail);
+  const run = (fn: () => Promise<unknown>) => fn().then(refresh).then(() => toast.success("Saved")).catch(fail);
   const save = (fid: string) => {
     const spec = (manifest.data ?? features).find((f) => f.id === `sc${fid}`);
     const name = window.prompt("Name this screen")?.trim();
