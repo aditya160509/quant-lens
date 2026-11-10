@@ -328,3 +328,16 @@ Each step ends with screenshots on real results and a commit.
 ## 17. Data we cannot show yet
 
 Analyst estimates, shareholding, index membership, company logos, extended hours and real-time quotes. These are marked "needs data" and are not faked.
+
+## 18. Open-source check (2026-11-10)
+
+Keep: TanStack Table and Virtual, Query, Zustand, d3 maths, Radix, cmdk, CodeMirror, uFuzzy.
+
+- [ ] `M` Drawer price chart on TradingView Lightweight Charts v5 (already installed, about 45 KB): candles, volume pane, moving averages, entry and exit markers
+- [ ] `H` Relative Rotation Graph (RS-Ratio against RS-Momentum, weekly tails) for sectors and groups, as in xang1234/stock-screener and StockCharts
+- [ ] `M` Group matrix: sector rows, market-cap columns, stock tiles coloured by 1D, 1W or 1M change (xang1234/stock-screener)
+- [ ] `M` Breadth history: advance and decline and new highs and lows over time with SPY overlay (StockBee style)
+- [ ] `M` Test tear sheet sections from OpenStatz/QuantStats: return and risk by horizon (1Y, 3Y, 5Y, all), worst drawdown episodes, losing streaks, weekly heatmap, yearly against benchmark
+- [ ] `H` Pivot: FINOS Perspective (WebAssembly grid, pivot and charts, Apache-2.0) for a power-user pivot view, loaded only on that view
+- [ ] `E` Remove unused Plotly and Monaco from package.json
+- [ ] `H` Only if the table lags at 1,000 rows: benchmark against React Data Grid (best overall in a 50,000-row benchmark) or Glide (canvas). TanStack plus Virtual had high heap growth in that benchmark
