@@ -1,0 +1,12 @@
+.fg { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.fg-card { display: grid; gap: 8px; align-content: start; padding: 12px 14px; border-radius: 10px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); }
+.fg-card[data-on="true"] { box-shadow: inset 0 0 0 1px var(--accent); }
+.fg-card h4 { margin: 0; font-size: 13px; font-weight: 600; }
+.fg-card code { font-family: var(--mono); font-size: 11.5px; color: var(--text-2); background: var(--panel); padding: 6px 8px; border-radius: 6px; overflow-wrap: anywhere; }
+.fg-card .btn { justify-self: start; }
+.fstat { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12.5px; }
+.fstat li { display: flex; gap: 10px; align-items: baseline; padding: 6px 10px; border-radius: 8px; background: var(--panel-2); color: var(--text-2); }
+.fstat li span { font-size: 10px; font-weight: 700; letter-spacing: .05em; padding: 1px 6px; border-radius: 4px; }
+.fstat li[data-level="ok"] span { color: var(--up); background: color-mix(in oklch, var(--up) 14%, transparent); }
+.fstat li[data-level="error"] span { color: var(--down); background: color-mix(in oklch, var(--down) 14%, transparent); }
+.fstat li[data-level="warn"] span, .fstat li[data-level="warning"] span { color: var(--warn); background: color-mix(in oklch, var(--warn) 14%, transparent); }

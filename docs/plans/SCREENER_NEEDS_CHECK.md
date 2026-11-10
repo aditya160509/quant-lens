@@ -46,3 +46,5 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Composite: ranking as stacked factor bars (weight × score), legend with weights, effective factors | `rank/FactorStack.tsx` | composite-1 |
 | [ ] | Composite: Table tab, redundancy alerts and weight training on Weights, new Breakdown tab (sector, regime) | `screenerLab.ts` | composite-1 |
 | [ ] | Sector composite average is null for some sectors (seen on Communication Services, 26 names): check backend | backend | composite-1 |
+| [ ] | Formula: template gallery cards, Use puts the expression in the formula box, current marked | `formula/FormulaViews.tsx` | formula-1 |
+| [ ] | Formula: status list (ok, warn, error) above results; Backtest tab with drawdown; table with bulk actions | `screenerLab.ts` | formula-1 |
