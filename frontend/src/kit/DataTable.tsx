@@ -105,8 +105,8 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const hatch = opts?.hatch === true;
   const bulk = opts?.bulk as ((rows: Row[], clear: () => void) => ReactNode) | undefined;
   const [picked, setPicked] = useState<Set<number>>(new Set());
-  const [pickedFor, setPickedFor] = useState<Row[]>(source);
-  if (pickedFor !== source) { setPickedFor(source); setPicked(new Set()); }
+  const [pickedFor, setPickedFor] = useState<Row[]>(rows);
+  if (pickedFor !== rows) { setPickedFor(rows); setPicked(new Set()); }
   const base = useMemo(() => {
     const all = columns(source).filter((c) => !(hideOpt ?? []).includes(c) && source.some((r) => r[c] !== null && r[c] !== undefined && r[c] !== ""))
       .filter((c) => !activeSet || lead.includes(c) || activeSet.includes(c));
