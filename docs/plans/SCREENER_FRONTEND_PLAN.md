@@ -210,7 +210,7 @@ Composite
 
 Weights: sliders that sum to 100, lock, equal, IC, ridge, presets, live re-rank without a full run.
 
-- [ ] Add Strategies (sc04): it runs in the backend but has no page in the catalog today
+- [x] Add Strategies (sc04): it runs in the backend but has no page in the catalog today
 
 | Output | Default | Alternatives |
 |---|---|---|

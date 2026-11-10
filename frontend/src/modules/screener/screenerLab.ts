@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { Bell, Bookmark, FlaskConical, Layers, Scale, SlidersHorizontal, Sigma, Table2, Trophy } from "lucide-react";
+import { Bell, BookOpen, Bookmark, FlaskConical, Layers, Scale, SlidersHorizontal, Sigma, Table2, Trophy } from "lucide-react";
 import { createElement } from "react";
 import { SCREENER_BASE } from "./base";
 import { FormulaControl } from "./formula/FormulaControl";
@@ -25,6 +25,7 @@ const CATALOG: Record<string, FeatureMeta> = {
   sc02: { name: "Formula", slug: "formula", icon: Sigma, question: "Which names does my own expression rank highest?" },
   sc07: { name: "Valuation", slug: "valuation", icon: Scale, question: "How cheap is each name against its sector and its own history?" },
   sc03: { name: "Composite score", slug: "composite", icon: Trophy, question: "Who ranks highest once factors are combined?" },
+  sc04: { name: "Strategies", slug: "strategies", icon: BookOpen, question: "Which names pass the classic published strategies?" },
   sc05: { name: "Backtest", slug: "backtest", icon: FlaskConical, question: "Would this screen have made money after costs?" },
   sc06: { name: "Alerts", slug: "alerts", icon: Bell, question: "What changed on my watchlist?" },
   sc08: { name: "Changes and export", slug: "export", icon: Table2, question: "What entered or left the screen since the last run?" },
@@ -32,7 +33,7 @@ const CATALOG: Record<string, FeatureMeta> = {
 
 const PAGES: Page[] = [
   { id: "screen", label: "Screen", icon: SlidersHorizontal, question: CATALOG.sc01.question, features: ["sc01", "sc02", "sc07"] },
-  { id: "rank", label: "Rank", icon: Trophy, question: CATALOG.sc03.question, features: ["sc03"] },
+  { id: "rank", label: "Rank", icon: Trophy, question: CATALOG.sc03.question, features: ["sc03", "sc04"] },
   { id: "test", label: "Test", icon: FlaskConical, question: CATALOG.sc05.question, features: ["sc05"] },
   { id: "monitor", label: "Monitor", icon: Bell, question: CATALOG.sc06.question, features: ["sc06", "sc08"] },
   { id: "saved", label: "Saved", icon: Bookmark, question: "Screens you keep, when they re-run and who they alert.", features: [], slug: "saved" },
@@ -88,8 +89,10 @@ const MorePage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import(
 const SV = group(() => import("./views") as Promise<Record<string, unknown>>);
 const ST = group(() => import("./test/ProofViews") as Promise<Record<string, unknown>>);
 const RV = group(() => import("./rank/RankViews") as Promise<Record<string, unknown>>);
-registerViews({ screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, sensitivity: SV.SensitivityView, runInfo: SV.RunView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
-registerAlternates({ rankedTable: [{ label: "Sector treemap", view: "screenTreemap" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }] });
+const RS = group(() => import("./rank/StrategyViews") as Promise<Record<string, unknown>>);
+const TS = group(() => import("./test/TearSheet") as Promise<Record<string, unknown>>);
+registerViews({ monthlyHeatmap: TS.MonthlyHeatmap, returnHistogram: TS.ReturnHistogram, underwater: TS.Underwater, piotroskiMatrix: RS.PiotroskiMatrix, altmanZones: RS.AltmanZones, screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, sensitivity: SV.SensitivityView, runInfo: SV.RunView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
+registerAlternates({ piotroskiMatrix: [{ label: "Table", view: "dataTable" }], altmanZones: [{ label: "Table", view: "dataTable" }], rankedTable: [{ label: "Sector treemap", view: "screenTreemap" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }] });
 
 export const SCREENER_LAB: LabConfig = {
   id: "screener",
@@ -125,11 +128,22 @@ export const SCREENER_LAB: LabConfig = {
         { id: "backtest", label: "Backtest", items: [{ keys: ["composite_vs_spy_backtest"], span: 12 }] },
       ],
     },
+    sc04: {
+      sections: [
+        { id: "picks", label: "Picks", items: [{ keys: ["per_strategy_stock_list"], span: 12, view: "rankedTable", opts: { max: 1000, maxHeight: 560, hatch: true, rowActions, bulk } }] },
+        { id: "piotroski", label: "Piotroski", items: [{ keys: ["piotroski_breakdown"], span: 12, view: "piotroskiMatrix", title: "Piotroski F-score" }] },
+        { id: "altman", label: "Altman Z", items: [
+          { keys: ["altman_z_score_status"], span: 7, view: "altmanZones", title: "Altman zones" },
+          { keys: ["altman_z_score_8q_trend"], span: 5, view: "lineChart", title: "Altman Z, last 8 quarters" },
+        ] },
+      ],
+    },
     sc05: {
       verdict: testBanner,
       sections: [
         { id: "proof", label: "Proof", items: [{ keys: ["equity_curve", "cscv_pbo"], span: 12, view: "proofPanel" }] },
-        { id: "performance", label: "Performance", items: [{ keys: ["equity_curve"], span: 8 }, { keys: ["full_performance_statistics"], span: 4 }, { keys: ["rolling_performance"], span: 12 }] },
+        { id: "performance", label: "Performance", items: [{ keys: ["equity_curve"], span: 8 }, { keys: ["full_performance_statistics"], span: 4 }, { keys: ["equity_curve"], span: 12, view: "underwater", title: "Drawdown" }, { keys: ["rolling_performance"], span: 12 }] },
+        { id: "returns", label: "Returns", items: [{ keys: ["equity_curve"], span: 8, view: "monthlyHeatmap", title: "Monthly returns" }, { keys: ["equity_curve"], span: 4, view: "returnHistogram", title: "Daily returns" }] },
         { id: "rebalancing", label: "Rebalancing", items: [{ keys: ["rebalancing_date_sensitivity"], span: 6 }, { keys: ["holding_period_sensitivity"], span: 6 }, { keys: ["turnover_report"], span: 12 }] },
       ],
     },

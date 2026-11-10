@@ -1,0 +1,15 @@
+.ts-wrap { overflow-x: auto; }
+.ts-heat { width: 100%; border-collapse: separate; border-spacing: 2px; font-size: 11.5px; }
+.ts-heat th { color: var(--text-3); font-weight: 500; padding: 2px 4px; text-align: center; }
+.ts-heat tbody th { text-align: left; color: var(--text-2); }
+.ts-heat td { text-align: center; padding: 5px 2px; border-radius: 4px; min-width: 38px; color: var(--text); }
+.ts-heat .yr { font-weight: 600; min-width: 56px; }
+.ts-heat td.bench { color: var(--text-3); font-weight: 400; }
+.ts-heat td.bench[data-beat="true"]::after { content: " ▲"; color: var(--up); font-size: 8px; }
+.ts-heat td.bench[data-beat="false"]::after { content: " ▼"; color: var(--down); font-size: 8px; }
+.ts-hist svg, .ts-under svg { display: block; width: 100%; height: 180px; }
+.ts-under svg { height: 110px; }
+.ts-legend { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 8px; font-size: 12px; color: var(--text-3); }
+.ts-legend b { color: var(--text); font-weight: 600; }
+.ts-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.ts-legend .sw.strat { background: var(--up); opacity: .7; } .ts-legend .sw.bench { background: var(--text-3); height: 2px; vertical-align: 3px; }
