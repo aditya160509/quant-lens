@@ -1,5 +1,6 @@
 "use client";
 
+import { useScreenerPalette } from "../palette";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Check, ChevronDown, Eye, EyeOff, Globe2, Link2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
@@ -50,6 +51,7 @@ const parse = (v: unknown) => { const s = Array.isArray(v) ? v.join(",") : Strin
 
 export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: FeatureRun }) {
   const [open, setOpen] = useState(false);
+  useScreenerPalette();
   const [menu, setMenu] = useState<{ key: string; at: MenuAt } | null>(null);
   const keys = new Set(feature.inputs.map((f) => f.key));
   const tickers = parse(run.form.universe);

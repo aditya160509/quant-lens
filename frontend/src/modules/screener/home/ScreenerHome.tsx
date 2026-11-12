@@ -1,5 +1,6 @@
 "use client";
 
+import { useScreenerPalette } from "../palette";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Search, Bell, FlaskConical, Gem, HeartPulse, Rocket, ShieldCheck, Sparkles, Trophy, Wallet, type LucideIcon } from "lucide-react";
 import Link from "next/link";
@@ -42,6 +43,7 @@ const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); ret
 
 export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs: RunRecord[] }) {
   const router = useRouter();
+  useScreenerPalette();
   const [sizeBy, setSizeBy] = useState<"names" | "cap">("cap");
   const templates = useQuery({ queryKey: ["screener", "templates"], queryFn: () => get<{ templates: Template[] }>("/templates"), staleTime: Infinity, retry: false });
   const facets = useQuery({ queryKey: ["screener", "facets"], queryFn: () => get<{ sector: Facet[] }>("/facets"), staleTime: 600_000, retry: false });
