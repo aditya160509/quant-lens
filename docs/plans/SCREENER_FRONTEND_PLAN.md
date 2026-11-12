@@ -42,12 +42,12 @@ Our own advantage, shown everywhere: why a stock passed or failed, near misses, 
 - [x] `E` Left nav open by default with Overview, Screen, Rank, Test, Monitor, Saved, More
 - [x] `E` Coloured icon tile per section; active item with accent bar; run status dot
 - [x] `E` Collapsible to icons, with tooltips; width remembered (needs check)
-- [ ] `M` One-row page header: icon, title, sub-tabs, Save, Share, Export, Run
+- [x] `M` One-row page header: icon, title, sub-tabs, Save, Share, Export, Run (needs check)
 - [x] `E` Inspector closed by default on Screen; opens for advanced settings only (needs check)
 - [x] `E` Runs dock collapsed to a status pill until opened (needs check)
-- [ ] `M` Command palette: run, add filter, open any screen or stock, change theme
+- [x] `M` Command palette: run, add filter, open any screen or stock, change theme (needs check)
 - [x] `E` Keyboard: Cmd+Enter run, Shift+F filter, F column, `/` search, `[ ]` pages, Esc close (needs check)
-- [ ] `M` Skeletons matching final layout; no layout shift; no page-wide dim on navigation
+- [x] `M` Skeletons matching final layout; no layout shift; no page-wide dim on navigation (needs check)
 - [x] `E` Toasts for saved, failed, copied
 - [ ] `H` Phone layout: bottom nav, filter sheet, card rows
 - [x] `E` Light theme kept working, dark the default (needs check)
@@ -60,9 +60,9 @@ Our own advantage, shown everywhere: why a stock passed or failed, near misses, 
 - [x] `E` Check gallery and sector clicks end to end, and run on arrival (needs check)
 - [ ] `H` Each gallery row shows live match count and top three names after first load
 - [x] `E` Search box as the page's main element
-- [ ] `M` Recent screens and saved screens with last result and change since last run
+- [x] `M` Recent screens and saved screens with last result and change since last run (needs check)
 - [x] `M` Market breadth strip: advancers, new highs, sector returns
-- [ ] `M` Sector treemap by market cap coloured by return
+- [x] `M` Sector treemap by market cap coloured by return (needs check)
 - [ ] `H` Biggest entrants and exits across saved screens
 - [ ] `H` Pinned board of outputs, in cards
 
@@ -72,11 +72,11 @@ Our own advantage, shown everywhere: why a stock passed or failed, near misses, 
 - [x] `E` Clickable universe title opening a large search overlay
 - [x] `E` Search and add stocks, size 25 to 1,000, saved universes, watchlists, paste, save
 - [x] `E` Top N ranked by USD liquidity
-- [ ] `M` Rank basis: liquidity, market cap, or data coverage
-- [ ] `M` Presets: country, exchange, sector, industry, currency, market cap band
-- [ ] `M` Multi-select markets; primary listing only toggle
+- [x] `M` Rank basis: liquidity, market cap, or data coverage (needs check)
+- [x] `M` Presets: country, exchange, sector, industry, currency, market cap band (needs check)
+- [x] `M` Multi-select markets; primary listing only toggle (needs check; country picker was already multi-select; primary listing covers NSE over BSE only)
 - [x] `E` CSV upload, exclude list, rename and delete saved universes (needs check)
-- [ ] `M` Live name count and estimated run time before running
+- [x] `M` Live name count and estimated run time before running (needs check)
 - [x] `E` Sector and country mix of the chosen universe as a small bar
 - [x] `E` Share a universe by link; a screen's result becomes a universe (needs check)
 - [x] `E` Clear disabled state at the cap, with count (needs check)
@@ -85,8 +85,8 @@ Index membership stays out until we have data for it; it must not be faked.
 
 ### Period
 - [x] `E` 6M to 10Y presets and as-of date
-- [ ] `M` Max and custom start and end with date picker
-- [ ] `M` Data availability shown on the range
+- [x] `M` Max and custom start and end with date picker (needs check)
+- [x] `M` Data availability shown on the range (needs check)
 - [x] `E` Rebalance frequency and holding period as segmented controls on Test
 - [ ] `H` Compare as-of dates
 
@@ -95,12 +95,12 @@ Index membership stays out until we have data for it; it must not be faked.
 - [x] `M` Add-filter overlay with groups, search, recently used and favourites: Identity, Market, Technical, Valuation, Profitability, Growth, Health, Dividends, Score
 - [x] `M` Pill editor: slider over the real distribution histogram, percentile mode, greater, less, between, in, top N
 - [x] `M` Live pass count and removed count on each pill; bottleneck marked
-- [ ] `M` Toggle, remove, reorder, duplicate; undo and redo
+- [x] `M` Toggle, remove, reorder, duplicate; undo and redo (needs check; toggle, remove, undo and redo built; reorder and duplicate belong to the AND/OR tree item)
 - [x] `E` Category filters as searchable checklists: sector, industry, country, exchange, currency
 - [ ] `H` AND/OR groups, editable as tree and as formula
 - [ ] `H` Compare to another field: P/E below sector median, price above SMA 200
 - [ ] `H` Historical conditions: 5-year average, change over N periods
-- [ ] `M` Filter from a chart: brush a scatter, click a treemap sector, drag a histogram
+- [x] `M` Filter from a chart: brush a scatter, click a treemap sector, drag a histogram (already built: scatter lasso, treemap sector, histogram drag)
 - [ ] `H` Natural language box producing editable filters
 - [x] `E` Hide or show filters; save as a screen; preset chips (needs check)
 
@@ -113,12 +113,12 @@ Index membership stays out until we have data for it; it must not be faked.
 
 - [x] `M` Column sets as tabs: Overview, Performance, Valuation, Profitability, Growth, Health, Dividends, Technical, Scores, Trust, Custom; add own
 - [ ] `H` Column picker with search, groups and drag order; per-column interval where data supports it
-- [ ] `M` Frozen rank, ticker and company; sticky header; resize; reorder by drag; auto-fit
+- [x] `M` Frozen rank, ticker and company; sticky header; resize; reorder by drag; auto-fit (needs check)
 - [x] `M` Multi-sort; sort by distance from a value
 - [x] `E` Monogram tile, ticker badge, company, sector pill
-- [ ] `M` Number format per column: compact, percent, decimals, currency; base currency switch
-- [ ] `M` Conditional formats per column: heat, bars, signed colour, rule, top and bottom N
-- [ ] `M` Sparkline columns with range choice
+- [x] `M` Number format per column: compact, percent, decimals, currency; base currency switch (needs check; base currency switch not done: values are already USD and per-column FX needs backend)
+- [x] `M` Conditional formats per column: heat, bars, signed colour, rule, top and bottom N (needs check)
+- [x] `M` Sparkline columns with range choice (needs check)
 - [x] `E` Muted missing values; auto-hide wholly empty columns; coverage in header
 - [ ] `H` Group by and pivot on any column, with count, median, mean, sum rows
 - [x] `E` Footer: median and universe median, sector median toggle
@@ -143,8 +143,8 @@ Index membership stays out until we have data for it; it must not be faked.
 
 ## 8. Stock drawer and compare
 
-- [ ] `M` Header: monogram, price, change, exchange, follow, alert, compare, add to screen
-- [ ] `M` Ratio grid with add ratio and edit ratios, percentile tick against sector
+- [x] `M` Header: monogram, price, change, exchange, follow, alert, compare, add to screen (needs check)
+- [x] `M` Ratio grid with add ratio and edit ratios, percentile tick against sector (needs check)
 - [ ] `H` Price chart with range tabs, Price and P/E modes, volume, moving averages, entry and exit marks
 - [x] `M` Strength profile: quality, value, momentum, health, growth as a radar we compute, with filter by shape
 - [x] `E` Why here: filter, value, threshold, margin, sector percentile (built, not checked on page)
@@ -272,7 +272,7 @@ Alert builder: condition from any filter or formula, frequency, channel with App
 ## 13. Saved and More
 
 - [ ] `H` Saved: cards with mini result, last run, change, schedule pill; rename, duplicate, tag, folder, search, sort, archive
-- [ ] `M` Schedule picker and history timeline
+- [x] `M` Schedule picker and history timeline (needs check)
 - [ ] `H` More: Markets tabs with the table of section 6, hourly, plain English, share links, API keys; patterns labelled weak evidence
 - [ ] `H` Share page and embed use the same design
 
@@ -296,8 +296,8 @@ Alert builder: condition from any filter or formula, frequency, channel with App
 
 Every control follows one rule: works with defaults untouched; any change offers "Make default" (this card, every card like it, or everywhere) and "Reset".
 
-- [ ] `M` "Make default" and "Reset" on every setting at three levels: this output, every output of its type, everywhere (cards already do the first two)
-- [ ] `M` Preferences sync to the account instead of this browser only, with export and import as JSON
+- [x] `M` "Make default" and "Reset" on every setting at three levels: this output, every output of its type, everywhere (cards already do the first two) (needs check)
+- [x] `M` Preferences sync to the account instead of this browser only, with export and import as JSON (needs check; no accounts yet, so one server copy with save and load, plus JSON export and import)
 - [ ] `E` One "Customised" marker on any page or card that differs from default, opening a list of what changed
 
 ## 15. Backend needed by this plan
@@ -307,7 +307,7 @@ Every control follows one rule: works with defaults untouched; any change offers
 - [ ] `H` Composite under 2 s on 50 names (now 8 s on 26)
 - [x] `E` Distribution endpoint for filter sliders
 - [x] `E` Live filter counts without a full run, from a cached panel
-- [ ] `M` Rank basis choices; market, industry and market cap presets
+- [x] `M` Rank basis choices; market, industry and market cap presets (needs check)
 - [x] `E` Mount sc04 in the Screener catalog
 - [ ] `H` Exchange labels for US names, which show Unknown today
 - [x] `E` Faster job polling and smaller result payloads (built, not checked on page)
@@ -341,11 +341,11 @@ Analyst estimates and forward P/E, shareholding and float, short interest, earni
 
 Keep: TanStack Table and Virtual, Query, Zustand, d3 maths, Radix, cmdk, CodeMirror, uFuzzy.
 
-- [ ] `M` Drawer price chart on TradingView Lightweight Charts v5 (already installed, about 45 KB): candles, volume pane, moving averages, entry and exit markers
+- [x] `M` Drawer price chart on TradingView Lightweight Charts v5 (already installed, about 45 KB): candles, volume pane, moving averages, entry and exit markers (needs check)
 - [ ] `H` Relative Rotation Graph (RS-Ratio against RS-Momentum, weekly tails) for sectors and groups, as in xang1234/stock-screener and StockCharts
-- [ ] `M` Group matrix: sector rows, market-cap columns, stock tiles coloured by 1D, 1W or 1M change (xang1234/stock-screener)
-- [ ] `M` Breadth history: advance and decline and new highs and lows over time with SPY overlay (StockBee style)
-- [ ] `M` Test tear sheet sections from OpenStatz/QuantStats: return and risk by horizon (1Y, 3Y, 5Y, all), worst drawdown episodes, losing streaks, weekly heatmap, yearly against benchmark
+- [x] `M` Group matrix: sector rows, market-cap columns, stock tiles coloured by 1D, 1W or 1M change (xang1234/stock-screener) (needs check)
+- [x] `M` Breadth history: advance and decline and new highs and lows over time with SPY overlay (StockBee style) (needs check)
+- [x] `M` Test tear sheet sections from OpenStatz/QuantStats: return and risk by horizon (1Y, 3Y, 5Y, all), worst drawdown episodes, losing streaks, weekly heatmap, yearly against benchmark (needs check)
 - [ ] `H` Pivot: FINOS Perspective (WebAssembly grid, pivot and charts, Apache-2.0) for a power-user pivot view, loaded only on that view
 - [x] `E` Remove unused Plotly and Monaco from package.json — not unused: Plotly runs the security page panels and Monaco the Studio editor, so both stay
 - [ ] `H` Only if the table lags at 1,000 rows: benchmark against React Data Grid (best overall in a 50,000-row benchmark) or Glide (canvas). TanStack plus Virtual had high heap growth in that benchmark

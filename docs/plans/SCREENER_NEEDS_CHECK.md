@@ -76,3 +76,17 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Status pill, as-of date and name count beside the page title | `FeatureView.tsx` | header-1 |
 | [ ] | Method footnotes on Piotroski, Altman and Proof cards | `screenerLab.ts`, `Exhibit.tsx` | note-1 |
 | [ ] | An output returned empty shows "No rows for …" | `OutputCard.tsx` | empty-1 |
+| [ ] | Overview: treemap Market cap / Names toggle; Sectors by size matrix (1D/1W/1M); Breadth 1 year (SPY over net advancers and net highs); Recent runs with change | `home/ScreenerHome.tsx`, `home/OverviewCharts.tsx` | overview-4 |
+| [ ] | Universe picker: Rank by liquidity, market cap, coverage; Primary listing only; market and cap-band presets toggle; title says "by market cap" | `UniverseBar.tsx` | universe-4 |
+| [ ] | Run-time estimate "≈Ns" beside the pass count after one run | `UniverseBar.tsx` | universe-5 |
+| [ ] | Period: Max and Custom start and end, names-per-year strip lit for the range | `UniverseBar.tsx`, `/data-range` | period-2 |
+| [ ] | Filter popover: On switch keeps bounds (pill struck through), Remove; Cmd+Z and Shift+Cmd+Z undo and redo form edits | `UniverseBar.tsx`, `ResearchApp.tsx` | filters-2 |
+| [ ] | Table: number format per column (1.2B, %, 0.00, $) with decimals; Top / bottom N; drag headers to reorder; double-click grip to fit; ticker and company frozen | `DataTable.tsx` | table-2 |
+| [ ] | Screen results: Trend sparkline column with 1M/3M/1Y | `views.tsx`, `/sparklines` | table-3 |
+| [ ] | Drawer: candles, volume pane, SMA 50/200 (theme colours in light and dark); header price, change, follow, alert, add to screen; ratio cards with Edit ratios | `QuickLook.tsx`, `charts/PriceChart.tsx` | drawer-1 |
+| [ ] | Test: By horizon, Losing streaks, Worst drawdowns, Weekly returns, Each year against SPY | `test/TearSheet.tsx` | test-1 |
+| [ ] | Saved: schedule segments and every N hours, next run, failure pill; names-passing timeline | `saved/SavedPage.tsx` | saved-2 |
+| [ ] | Palette (⌘K): Add filter, saved screens, templates, popular stocks, preferences save/load/export/import | `palette.ts`, `WorkspaceShell.tsx` | palette-1 |
+| [ ] | Skeletons on Overview and Saved; no jump when data lands | `ScreenerHome.tsx`, `SavedPage.tsx` | skel-1 |
+| [ ] | One-row header: title, status, sub-tabs, Save, Share, Export, Run | `FeatureView.tsx` | header-2 |
+| [ ] | Defaults menu: Make these my defaults, Reset to my defaults, Reset to built-in; card menu: Reset this card, Reset every card | `StudyForm.tsx`, `OutputCard.tsx` | defaults-1 |
