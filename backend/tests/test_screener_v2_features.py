@@ -122,6 +122,12 @@ def test_saved_universe_membership_is_exact(store):
     assert store.list_universes() == []
 
 
+def test_preferences_round_trip(store):
+    assert store.load_preferences() == {'preferences': {}, 'saved': None}
+    store.save_preferences({'ws-prefs': '{"density":"compact"}'})
+    assert store.load_preferences()['preferences'] == {'ws-prefs': '{"density":"compact"}'}
+
+
 @pytest.fixture
 def local_data(tmp_path, monkeypatch):
     import numpy as np

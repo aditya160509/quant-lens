@@ -1,11 +1,12 @@
 "use client";
 
+import { exportPrefs, importPrefs, pullPrefs, pushPrefs } from "./prefsSync";
 import "./workspace.css";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
-  Activity, BrainCircuit, ChartNetwork, Command as CommandIcon, FlaskConical, Home, ListFilter, Moon, Orbit, PanelBottom, PanelLeft, PanelRight,
+  Activity, BrainCircuit, ChartNetwork, Command as CommandIcon, FlaskConical, Home, ListFilter, CloudDownload, CloudUpload, FileDown, FileUp, Moon, Orbit, PanelBottom, PanelLeft, PanelRight,
   PieChart, Search, Settings2, SlidersHorizontal, Sun, type LucideIcon,
 } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
@@ -114,6 +115,10 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
     ...MODULES.map((m) => ({ id: `module-${m.id}`, group: "Modules", label: m.label, icon: m.icon, run: () => router.push(m.href) })),
     ...REGION_UI.map((r) => ({ id: `toggle-${r.region}`, group: "Layout", label: `${open[r.region] ? "Hide" : "Show"} ${r.label.toLowerCase()}`, icon: r.icon, meta: SHORTCUTS[r.region].label, run: () => toggleRegion(r.region) })),
     { id: "theme", group: "Layout", label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme", icon: theme === "dark" ? Sun : Moon, run: toggleTheme },
+    { id: "prefs-push", group: "Preferences", label: "Save preferences to the server", icon: CloudUpload, run: () => void pushPrefs() },
+    { id: "prefs-pull", group: "Preferences", label: "Load preferences from the server", icon: CloudDownload, run: () => void pullPrefs() },
+    { id: "prefs-export", group: "Preferences", label: "Export preferences as JSON", icon: FileDown, run: exportPrefs },
+    { id: "prefs-import", group: "Preferences", label: "Import preferences from JSON", icon: FileUp, run: importPrefs },
   ], [router, theme, toggleTheme, open, toggleRegion]);
 
   const allItems = [...Object.values(sources).flat(), ...builtIn];

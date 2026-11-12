@@ -1,7 +1,7 @@
 "use client";
 
 import { createElement, useState, useRef } from "react";
-import { ArrowDown, ArrowUp, BookOpen, Pin, Check, ChevronDown, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, RotateCcw, Pin, Check, ChevronDown, Copy, Download, EyeOff, Maximize2, MoreHorizontal, Minimize2, Settings2, Table2, BarChart3, X } from "lucide-react";
 import { Exhibit } from "@/kit/Exhibit";
 import { download, downloadCsv, downloadJson, downloadPng, downloadSvg, downloadTickers, downloadXlsx } from "@/charts/export";
 import { Empty } from "@/kit/DataTable";
@@ -151,6 +151,8 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
         <div className="sep" />
         <MenuItem icon={<Settings2 size={13} />} onClick={openSettings}>Settings</MenuItem>
         <MenuItem icon={<BookOpen size={13} />} onClick={() => setAbout(true)}>About this method</MenuItem>
+        {custom || lens || overlayId ? <MenuItem icon={<RotateCcw size={13} />} onClick={() => { setCustom(cfgId, null); setLens(lensId, null); setOverlayId(null); }}>Reset this card</MenuItem> : null}
+        <MenuItem icon={<RotateCcw size={13} />} onClick={() => { useExplore.setState({ configs: {} }); useLens.setState({ lens: {} }); }}>Reset every card to its designed view</MenuItem>
       </PopMenu>
       {about ? <MethodDrawer title={title} hint={hint} feature={feature} result={result} onClose={() => setAbout(false)} /> : null}
       </>}>

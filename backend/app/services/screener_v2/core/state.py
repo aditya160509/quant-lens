@@ -100,6 +100,26 @@ def list_universes() -> list[dict]:
                 for r in conn.execute('SELECT universe_id, name, symbols FROM universes ORDER BY universe_id')]
 
 
+def save_preferences(blob: dict) -> dict:
+    """One preferences document for this install (no accounts yet): workspace layout, table views, defaults."""
+    import time
+    encoded = json.dumps(blob, allow_nan=False)
+    if len(encoded) > 2_000_000:
+        raise ValueError('Preferences exceed 2 MB')
+    saved = time.time()
+    with _connection() as conn:
+        conn.execute('CREATE TABLE IF NOT EXISTS preferences (id TEXT PRIMARY KEY, blob TEXT NOT NULL, saved REAL NOT NULL)')
+        conn.execute('INSERT OR REPLACE INTO preferences VALUES (?, ?, ?)', ('default', encoded, saved))
+    return {'saved': saved, 'keys': len(blob)}
+
+
+def load_preferences() -> dict:
+    with _connection() as conn:
+        conn.execute('CREATE TABLE IF NOT EXISTS preferences (id TEXT PRIMARY KEY, blob TEXT NOT NULL, saved REAL NOT NULL)')
+        row = conn.execute('SELECT blob, saved FROM preferences WHERE id=?', ('default',)).fetchone()
+    return {'preferences': json.loads(row[0]) if row else {}, 'saved': row[1] if row else None}
+
+
 def delete_universe(universe_id: str) -> None:
     with _connection() as conn:
         conn.execute('DELETE FROM universes WHERE universe_id=?', (universe_id,))

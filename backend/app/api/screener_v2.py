@@ -623,6 +623,21 @@ def remove_universe(universe_id: str) -> dict[str, str]:
     return {'deleted': universe_id}
 
 
+@router.get('/preferences')
+def get_preferences() -> dict[str, Any]:
+    from app.services.screener_v2.core.state import load_preferences
+    return load_preferences()
+
+
+@router.put('/preferences')
+def put_preferences(blob: dict[str, Any]) -> dict[str, Any]:
+    from app.services.screener_v2.core.state import save_preferences
+    try:
+        return save_preferences(blob)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.post('/uploads')
 async def upload_universe(file: Annotated[UploadFile, File()], kind: str = Query('universe')) -> dict[str, Any]:
     from app.services.screener_v2.core.data_loader import store_universe_upload

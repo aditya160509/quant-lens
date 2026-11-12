@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { AnimatePresence, motion } from "framer-motion";
 import { Children, createElement, useMemo, useRef, useState } from "react";
-import { BookOpen, ChevronDown, Link2, Info, Loader2, Repeat, RotateCcw, Save, Trash2, Upload, X } from "lucide-react";
+import { BookOpen, ChevronDown, Link2, Info, Loader2, Pin, Repeat, RotateCcw, Save, Trash2, Upload, X } from "lucide-react";
 import { MenuItem, PopMenu, Segmented, Tooltip, type MenuAt } from "@/workspace/ui";
 import { uploadFile, useUniverse, type UploadInfo } from "./api";
 import { label } from "./format";
@@ -30,8 +30,16 @@ const UPLOAD_FORMAT: Record<string, { label: string; about: string; template: st
   trial_matrix: { label: "Trial matrix", about: "One column per configuration you tried, so overfitting tests use the true trial count.", template: "date,trial_1,trial_2,trial_3\n2024-01-02,0.004,0.001,-0.002\n2024-01-03,-0.001,0.003,0.000\n" },
 };
 
+/** Settings a reader made their own default for a study, kept on this device; they replace the built-in defaults. */
+export const useUserDefaults = create<{ defaults: Record<string, FormState>; set: (id: string, form: FormState | null) => void }>()(
+  persist((set) => ({ defaults: {}, set: (id, form) => set((s) => { const d = { ...s.defaults }; if (form) d[id] = form; else delete d[id]; return { defaults: d }; }) }),
+    { name: "research-user-defaults", storage: createJSONStorage(() => localStorage), version: 1 }),
+);
+
+export const factoryDefaults = (feature: FeatureSpec): FormState => Object.fromEntries(feature.inputs.map((f) => [f.key, f.default ?? ""]));
+
 export function defaultsFor(feature: FeatureSpec): FormState {
-  return Object.fromEntries(feature.inputs.map((f) => [f.key, f.default ?? ""]));
+  return { ...factoryDefaults(feature), ...useUserDefaults.getState().defaults[feature.id] };
 }
 
 /** Form state to the payload the backend expects: numbers as numbers, JSON parsed, blanks dropped. */
@@ -172,6 +180,7 @@ const NO_SWEEP: Record<string, string> = {};
 
 function DefaultsBar({ feature, form, setForm }: { feature: FeatureSpec; form: FormState; setForm: (u: (cur: FormState) => FormState) => void }) {
   const [at, setAt] = useState<MenuAt | null>(null);
+  const userSet = useUserDefaults((st) => Boolean(st.defaults[feature.id]));
   const presets = usePresets((s) => s.presets[feature.id]) ?? NO_PRESETS;
   const save = usePresets((s) => s.save);
   const remove = usePresets((s) => s.remove);
@@ -189,7 +198,9 @@ function DefaultsBar({ feature, form, setForm }: { feature: FeatureSpec; form: F
         Defaults<ChevronDown size={12} />
       </button>
       <PopMenu at={at} onClose={close} width={240}>
-        <MenuItem icon={<RotateCcw size={13} />} onClick={() => setForm(() => defaultsFor(feature))}>Reset to defaults</MenuItem>
+        <MenuItem icon={<Pin size={13} />} onClick={() => { useUserDefaults.getState().set(feature.id, form); close(); }}>Make these my defaults</MenuItem>
+        <MenuItem icon={<RotateCcw size={13} />} onClick={() => setForm(() => defaultsFor(feature))}>Reset to {userSet ? "my defaults" : "defaults"}</MenuItem>
+        {userSet ? <MenuItem icon={<RotateCcw size={13} />} onClick={() => { useUserDefaults.getState().set(feature.id, null); setForm(() => factoryDefaults(feature)); }}>Reset to built-in defaults</MenuItem> : null}
         <MenuItem icon={<Link2 size={13} />} onClick={() => { const u = new URL(location.href); u.searchParams.set("s", encodeSettings(form)); u.searchParams.delete("run"); void navigator.clipboard?.writeText(u.toString()); }}>Copy link with these settings</MenuItem>
         <div className="sep" /><div className="hd">From the literature</div>
         {LIT_PRESETS.filter((p) => Object.keys(p.values).some((k) => feature.inputs.some((f) => f.key === k))).map((p) => (
