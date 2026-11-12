@@ -66,7 +66,16 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
   const custom = !PERIODS.some(([, d]) => d === days) && days !== maxDays;
   const range = useMemo(() => feature.inputs.filter(isRangeField), [feature]);
   const metrics = QUICK.filter((m) => keys.has(`${m}_min`));
-  const added = [...new Set(range.map((f) => f.key.replace(/_(min|max|top)$/, "")))].filter((m) => !QUICK.includes(m) && (run.form[`${m}_min`] || run.form[`${m}_max`]));
+  // A filter switched off keeps its bounds under "off:" so switching it on restores them; toPayload ignores the key.
+  const offOf = (m: string) => run.form[`off:${m}`] as [unknown, unknown] | undefined;
+  const toggle = (m: string) => run.setForm((c) => {
+    const off = c[`off:${m}`] as [unknown, unknown] | undefined;
+    const next = { ...c };
+    if (off) { next[`${m}_min`] = off[0]; next[`${m}_max`] = off[1]; delete next[`off:${m}`]; }
+    else { next[`off:${m}`] = [c[`${m}_min`] ?? "", c[`${m}_max`] ?? ""]; next[`${m}_min`] = ""; next[`${m}_max`] = ""; }
+    return next;
+  });
+  const added = [...new Set(range.map((f) => f.key.replace(/_(min|max|top)$/, "")))].filter((m) => !QUICK.includes(m) && (run.form[`${m}_min`] || run.form[`${m}_max`] || offOf(m)));
   const name = (m: string) => range.find((f) => f.key === `${m}_min`)?.label.replace(/ (Min|Max)$/, "") ?? fmtLabel(m);
   const at = (e: React.MouseEvent, key: string) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ key, at: { x: r.left, y: r.bottom + 6 } }); };
   // Shift+F opens the filter picker, F the first table's columns; never while typing.
@@ -115,10 +124,11 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
   };
   const catMenu = menu?.key.startsWith("cat:") ? cats.find((f) => f.key === menu.key.slice(4)) : undefined;
   const pill = (m: string) => {
-    const lo = run.form[`${m}_min`], hi = run.form[`${m}_max`];
-    const on = Boolean(lo || hi);
+    const off = offOf(m);
+    const lo = off ? off[0] : run.form[`${m}_min`], hi = off ? off[1] : run.form[`${m}_max`];
+    const on = Boolean(lo || hi) && !off;
     const st = on ? stageFor(preview, m) : undefined;
-    return <button key={m} type="button" className={`ub-pill${on ? " on" : ""}`} onClick={(e) => at(e, m)}>{name(m)}{on ? <b>{String(lo || "…")}–{String(hi || "…")}</b> : null}{st ? <em className="ub-cut num" title={`${st.removed} removed, ${st.remaining} left`}>−{st.removed}</em> : null}<ChevronDown size={12} /></button>;
+    return <button key={m} type="button" className={`ub-pill${on ? " on" : ""}${off ? " off" : ""}`} onClick={(e) => at(e, m)}>{name(m)}{lo || hi ? <b>{String(lo || "…")}–{String(hi || "…")}</b> : null}{st ? <em className="ub-cut num" title={`${st.removed} removed, ${st.remaining} left`}>−{st.removed}</em> : null}<ChevronDown size={12} /></button>;
   };
 
   return (
@@ -189,7 +199,8 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
             </div>
             <div className="ub-range-foot">
               {stageFor(preview, menu.key) ? <span className="num">−{stageFor(preview, menu.key)?.removed} · {stageFor(preview, menu.key)?.remaining} left</span> : <span />}
-              <button type="button" className="btn sm ghost" disabled={!run.form[`${menu.key}_min`] && !run.form[`${menu.key}_max`]} onClick={() => run.setForm((c) => ({ ...c, [`${menu.key}_min`]: "", [`${menu.key}_max`]: "" }))}>Clear</button>
+              <label className="ub-check" style={{ margin: 0 }}><input type="checkbox" checked={!offOf(menu.key)} disabled={!offOf(menu.key) && !run.form[`${menu.key}_min`] && !run.form[`${menu.key}_max`]} onChange={() => toggle(menu.key)} />On</label>
+              <button type="button" className="btn sm ghost" disabled={!offOf(menu.key) && !run.form[`${menu.key}_min`] && !run.form[`${menu.key}_max`]} onClick={() => run.setForm((c) => { const n = { ...c, [`${menu.key}_min`]: "", [`${menu.key}_max`]: "" }; delete n[`off:${menu.key}`]; return n; })}>Remove</button>
             </div>
           </div>
         ) : null}

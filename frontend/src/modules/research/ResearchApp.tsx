@@ -280,7 +280,27 @@ function useFeatureRun(feature: FeatureSpec) {
     }
   }, [job.data, jobId, feature, record, updateRun, logRun]);
 
-  const setForm = useCallback((updater: (cur: FormState) => FormState) => setFormStore(feature.id, updater, defaults), [feature.id, defaults, setFormStore]);
+  // Undo and redo over form edits; a burst of edits within 600 ms (typing, dragging) is one step.
+  const past = useRef<FormState[]>([]);
+  const future = useRef<FormState[]>([]);
+  const lastEdit = useRef(0);
+  const current = useCallback(() => useStudies.getState().forms[feature.id] ?? defaults, [feature.id, defaults]);
+  const setForm = useCallback((updater: (cur: FormState) => FormState) => {
+    const now = Date.now();
+    if (now - lastEdit.current > 600) { past.current = [...past.current.slice(-49), current()]; future.current = []; }
+    lastEdit.current = now;
+    setFormStore(feature.id, updater, defaults);
+  }, [feature.id, defaults, setFormStore, current]);
+  const step = useCallback((from: typeof past, to: typeof past) => {
+    const prev = from.current.at(-1);
+    if (!prev) return false;
+    from.current = from.current.slice(0, -1);
+    to.current = [...to.current, current()];
+    setFormStore(feature.id, () => prev, defaults);
+    return true;
+  }, [feature.id, defaults, setFormStore, current]);
+  const undo = useCallback(() => step(past, future), [step]);
+  const redo = useCallback(() => step(future, past), [step]);
 
   // A shared link carries its settings in ?s=; apply them once, then drop the parameter.
   const shared = search?.get("s");
@@ -330,7 +350,7 @@ function useFeatureRun(feature: FeatureSpec) {
   const stale = Boolean(record?.payload) && (() => { try { return JSON.stringify(studyPart(toPayload(feature, form))) !== JSON.stringify(studyPart(toPayload(feature, { ...defaults, ...record?.payload }))); } catch { return true; } })();
   const status = submit.isPending ? "submitting" : job.data?.status ?? (jobId && job.isLoading ? "loading" : "idle");
   return {
-    form, setForm, errors, run, stale, cancel, status, record, restore, jobId, progress: job.data?.progress,
+    form, setForm, undo, redo, errors, run, stale, cancel, status, record, restore, jobId, progress: job.data?.progress,
     reset: () => { resetForm(feature.id); setErrors({}); },
     result: job.data?.status === "completed" ? job.data.result ?? null : null,
     error: submit.error?.message ?? (job.error as Error | null)?.message ?? (job.data?.status === "failed" ? job.data.error ?? "The run failed." : null),
@@ -364,6 +384,11 @@ function FeatureWorkspace({ feature }: { feature: FeatureSpec }) {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); run.run(); return; }
       const t = e.target as HTMLElement;
+      // Form undo; a text field keeps its own.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !t.isContentEditable && !/^(INPUT|TEXTAREA)$/.test(t.tagName)) {
+        if (e.shiftKey ? run.redo() : run.undo()) e.preventDefault();
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented || t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || document.querySelector("[role='dialog'], [role='menu']")) return;
       if (e.key === "[" || e.key === "]") {
         const pages = lab().pages;
