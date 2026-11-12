@@ -65,6 +65,7 @@ export function BreadthHistory() {
     const avg = (i: number, f: (x: HistRow) => number) => { const w = r.slice(Math.max(0, i - 9), i + 1); return w.reduce((n, x) => n + f(x), 0) / w.length; };
     return r.map((x, i) => ({ date: x.date, spy: x.spy, net: avg(i, (y) => y.advancers - y.decliners), highs: avg(i, (y) => y.new_highs - y.new_lows) }));
   }, [q.data]);
+  if (q.isLoading) return <div className="skel-card" style={{ height: 302 }} aria-busy="true" aria-label="Loading breadth history" />;
   if (rows.length < 20) return null;
   return (
     <div className="bh">

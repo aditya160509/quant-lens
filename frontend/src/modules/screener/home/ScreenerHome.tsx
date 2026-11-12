@@ -47,7 +47,8 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
   const [sizeBy, setSizeBy] = useState<"names" | "cap">("cap");
   const templates = useQuery({ queryKey: ["screener", "templates"], queryFn: () => get<{ templates: Template[] }>("/templates"), staleTime: Infinity, retry: false });
   const facets = useQuery({ queryKey: ["screener", "facets"], queryFn: () => get<{ sector: Facet[] }>("/facets"), staleTime: 600_000, retry: false });
-  const breadth = useQuery({ queryKey: ["screener", "breadth"], queryFn: () => get<Breadth>("/breadth"), staleTime: 600_000, retry: false }).data;
+  const breadthQ = useQuery({ queryKey: ["screener", "breadth"], queryFn: () => get<Breadth>("/breadth"), staleTime: 600_000, retry: false });
+  const breadth = breadthQ.data;
   const saved = useQuery({ queryKey: ["screener", "screens"], queryFn: () => get<{ screens: { screen_id: string; name: string; feature_id: string; payload: Record<string, unknown> }[] }>("/screens"), retry: false }).data?.screens ?? [];
   const byKey = new Map((templates.data?.templates ?? []).map((t) => [t.key, t]));
   const sectors = (facets.data?.sector ?? []).filter((s) => s.name && s.name !== "Unknown");
@@ -76,6 +77,13 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
         </header>
 
         <button type="button" className="sh-search" onClick={openSearch}><Search size={16} aria-hidden /><span>Search any stock, screen or formula</span><kbd className="kbd">/</kbd></button>
+
+        {breadthQ.isLoading ? (
+          <div aria-busy="true" aria-label="Loading market breadth">
+            <div className="skel-card" style={{ height: 96 }} />
+            <div className="skel-card" style={{ height: 320, marginTop: 12 }} />
+          </div>
+        ) : null}
 
         {breadth ? (
           <section className="sh-breadth" aria-label="Market breadth">

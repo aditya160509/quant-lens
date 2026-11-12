@@ -56,6 +56,7 @@ export default function SavedPage({ features }: { features: FeatureSpec[] }) {
         <button type="button" className="btn sm primary" onClick={() => save("01")}><Save size={12} />Save current screen</button>
         <button type="button" className="btn sm" onClick={() => save("06")}><Save size={12} />Save current alerts</button>
       </div>
+      {screens.isLoading ? [0, 1, 2].map((i) => <div key={i} className="skel-card" style={{ height: 120 }} aria-busy="true" />) : null}
       {!list.length && !screens.isLoading ? <Empty text="No saved screens" /> : null}
       {list.map((s) => {
         const sch = schedules.data?.schedules.find((x) => x.screen_id === s.screen_id);
