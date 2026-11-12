@@ -349,6 +349,11 @@ async def filters_preview(request: PreviewRequest) -> dict[str, Any]:
         raise HTTPException(422, str(exc)) from exc
 
 
+@router.get("/data-range")
+async def data_range() -> dict[str, Any]:
+    return await asyncio.to_thread(explain.data_range)
+
+
 @router.get("/breadth")
 async def market_breadth(max_symbols: int = Query(500, ge=1, le=1000)) -> dict[str, Any]:
     return await asyncio.to_thread(explain.breadth, {"universe": "master", "max_symbols": max_symbols})

@@ -238,6 +238,33 @@ def breadth(payload: dict) -> dict[str, Any]:
     }
 
 
+_RANGE: dict[str, Any] = {}
+
+
+def data_range() -> dict[str, Any]:
+    """Calendar span from SPY and, per year, how many names have prices that year, so a range picker can show where data thins out."""
+    import polars as pl
+
+    from .data_loader import (
+        MARKET_UNIVERSE,
+        NORMALIZED_TICKER,
+        _path_version,
+        default_as_of,
+        load_market_frame,
+    )
+    key = _path_version(MARKET_UNIVERSE)
+    if _RANGE.get("key") == key:
+        return _RANGE["out"]
+    spans = (load_market_frame().with_columns(NORMALIZED_TICKER.alias("t")).group_by("t")
+             .agg(pl.col("Date").min().dt.year().alias("y0"), pl.col("Date").max().dt.year().alias("y1")).collect())
+    spy = spans.filter(pl.col("t") == "SPY")
+    first, last = (int(spy["y0"][0]), int(spy["y1"][0])) if len(spy) else (int(spans["y0"].min()), int(spans["y1"].max()))
+    years = [{"year": y, "names": int(((spans["y0"] <= y) & (spans["y1"] >= y)).sum())} for y in range(first, last + 1)]
+    out = {"first": f"{first}-01-01", "last": default_as_of({}), "names": len(spans), "years": years}
+    _RANGE.update(key=key, out=out)
+    return out
+
+
 CAP_BANDS = [("Mega", 200e9), ("Large", 10e9), ("Mid", 2e9), ("Small", 300e6), ("Micro", 0.0)]
 
 

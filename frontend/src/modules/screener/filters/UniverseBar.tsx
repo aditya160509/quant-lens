@@ -42,6 +42,9 @@ const PERIODS: [string, number][] = [["6M", 182], ["1Y", 365], ["2Y", 756], ["3Y
 const QUICK = ["market_cap", "pe", "roe", "revenue_growth_yoy", "dividend_yield", "return_12m", "rsi", "beta"];
 const ALL = new Set(["", "master", "all", "default"]);
 type Saved = { universe_id: string; name: string; symbols: string[]; count: number };
+type DataRange = { first: string; last: string; names: number; years: { year: number; names: number }[] };
+const DAY = 86_400_000;
+const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
 
 const parse = (v: unknown) => { const s = Array.isArray(v) ? v.join(",") : String(v ?? ""); return ALL.has(s.trim().toLowerCase()) ? [] : s.split(/[,;\s]+/).filter(Boolean); };
 
@@ -56,6 +59,11 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
   const over = Number(run.form.max_symbols ?? 0) > CAP;
   useEffect(() => { if (over) run.setForm((c) => ({ ...c, max_symbols: 500 })); }, [over, run.setForm]); // eslint-disable-line react-hooks/exhaustive-deps
   const days = Number(run.form.lookback_days ?? 756);
+  const span = useQuery({ queryKey: ["screener", "data-range"], queryFn: () => get<DataRange>("/data-range"), staleTime: Infinity, retry: false }).data;
+  const end = String(run.form.as_of_date || span?.last || "");
+  const start = end ? iso(Date.parse(end) - days * DAY) : "";
+  const maxDays = span && end ? Math.round((Date.parse(end) - Date.parse(span.first)) / DAY) : null;
+  const custom = !PERIODS.some(([, d]) => d === days) && days !== maxDays;
   const range = useMemo(() => feature.inputs.filter(isRangeField), [feature]);
   const metrics = QUICK.filter((m) => keys.has(`${m}_min`));
   const added = [...new Set(range.map((f) => f.key.replace(/_(min|max|top)$/, "")))].filter((m) => !QUICK.includes(m) && (run.form[`${m}_min`] || run.form[`${m}_max`]));
@@ -124,6 +132,8 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
         {keys.has("lookback_days") ? (
           <div className="ub-seg" role="radiogroup" aria-label="Period">
             {PERIODS.map(([l, d]) => <button key={l} type="button" role="radio" aria-checked={days === d} onClick={() => set("lookback_days", d)}>{l}</button>)}
+            {maxDays ? <button type="button" role="radio" aria-checked={days === maxDays} onClick={() => set("lookback_days", maxDays)}>Max</button> : null}
+            <button type="button" role="radio" aria-checked={custom} onClick={(e) => at(e, "period")}>{custom && start ? `${start} – ${end}` : "Custom"}</button>
           </div>
         ) : null}
         {keys.has("rebalance_frequency") ? (
@@ -155,7 +165,16 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
         </div>
       ) : null}
       <PopMenu at={menu?.at ?? null} onClose={() => setMenu(null)} width={menu?.key === "+" ? 440 : 300} sticky>
-        {catMenu ? (
+        {menu?.key === "period" ? (
+          <div className="ub-range">
+            <b>Period</b>
+            <div>
+              <input className="input num" type="date" aria-label="Start" min={span?.first} max={end} value={start} onChange={(e) => { if (e.target.value && end) set("lookback_days", Math.max(1, Math.round((Date.parse(end) - Date.parse(e.target.value)) / DAY))); }} />
+              <input className="input num" type="date" aria-label="End" min={span?.first} max={span?.last} value={end} onChange={(e) => { const v = e.target.value; if (v && start) run.setForm((c) => ({ ...c, as_of_date: v, lookback_days: Math.max(1, Math.round((Date.parse(v) - Date.parse(start)) / DAY)) })); }} />
+            </div>
+            {span ? <YearStrip years={span.years} from={Number(start.slice(0, 4))} to={Number(end.slice(0, 4))} /> : null}
+          </div>
+        ) : catMenu ? (
           <div style={{ padding: 10 }}><InFilter field={catMenu} value={run.form[catMenu.key]} onChange={(v) => set(catMenu.key, v)} /></div>
         ) : menu?.key === "+" ? (
           <><AddFilter fields={range} active={new Set(shownMetrics.filter((m) => run.form[`${m}_min`] || run.form[`${m}_max`]))} name={name} onPick={(m) => setMenu((cur) => (cur ? { key: m, at: cur.at } : cur))} />
@@ -176,6 +195,17 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
         ) : null}
       </PopMenu>
       {open ? <Picker tickers={tickers} size={size} basis={basis} primary={Boolean(run.form.primary_only)} active={(f) => PRESET_KEYS.every((k) => k in f ? JSON.stringify(run.form[k] ?? "") === JSON.stringify(f[k]) : true)} onPatch={(patch) => run.setForm((c) => ({ ...c, ...patch }))} onClose={() => setOpen(false)} onApply={(list, n) => { run.setForm((c) => ({ ...c, universe: list.length ? list.join(",") : "master", max_symbols: list.length ? Math.max(list.length, n) : n })); setOpen(false); }} /> : null}
+    </div>
+  );
+}
+
+/** Names with prices in each year; the chosen range is lit. */
+function YearStrip({ years, from, to }: { years: DataRange["years"]; from: number; to: number }) {
+  const top = Math.max(1, ...years.map((y) => y.names));
+  return (
+    <div className="ub-years" role="img" aria-label={`Names with prices per year, ${years[0]?.year} to ${years.at(-1)?.year}`}>
+      {years.map((y) => <i key={y.year} title={`${y.year}: ${y.names.toLocaleString()} names`} className={y.year >= from && y.year <= to ? "on" : undefined} style={{ height: `${Math.max(8, (y.names / top) * 100)}%` }} />)}
+      <span className="num">{years[0]?.year}</span><span className="num">{years.at(-1)?.year}</span>
     </div>
   );
 }
