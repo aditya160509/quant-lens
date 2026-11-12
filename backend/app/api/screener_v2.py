@@ -354,6 +354,11 @@ async def market_breadth(max_symbols: int = Query(500, ge=1, le=1000)) -> dict[s
     return await asyncio.to_thread(explain.breadth, {"universe": "master", "max_symbols": max_symbols})
 
 
+@router.get("/breadth/history")
+async def market_breadth_history(max_symbols: int = Query(500, ge=1, le=1000), days: int = Query(252, ge=20, le=1260)) -> dict[str, Any]:
+    return await asyncio.to_thread(explain.breadth_history, {"universe": "master", "max_symbols": max_symbols}, days)
+
+
 @router.get("/filters/keys")
 def filter_keys() -> dict[str, list[str]]:
     from app.services.screener_v2.core.screener import RANGE_FILTERS

@@ -7,6 +7,7 @@ from collections import OrderedDict
 from contextvars import ContextVar
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from .screener import apply_filters, effective_payload, range_filters
@@ -221,10 +222,44 @@ def breadth(payload: dict) -> dict[str, Any]:
     month = pd.to_numeric(panel.get("return_1m"), errors="coerce")
     sectors = (pd.DataFrame({"sector": panel["sector"], "r": month}).dropna().query("sector not in ['', 'Unknown']")
                .groupby("sector")["r"].agg(["median", "count"]).sort_values("median", ascending=False))
+    cap = pd.to_numeric(panel.get("market_cap"), errors="coerce")
+    caps = cap.groupby(panel["sector"]).sum(min_count=1).dropna()
+    week = pd.to_numeric(panel.get("return_1w"), errors="coerce")
+    tiles = [{"ticker": str(t), "sector": str(sc), "band": _band(float(c)), "market_cap": None if pd.isna(c) else float(c),
+              "r1d": None if pd.isna(d) else float(d), "r1w": None if pd.isna(w) else float(w), "r1m": None if pd.isna(m) else float(m)}
+             for t, sc, c, d, w, m in zip(panel["ticker"], panel["sector"], cap, day, week, month, strict=True) if sc and sc != "Unknown"]
     return {
         "universe": len(panel), "advancers": int((day > 0).sum()), "decliners": int((day < 0).sum()), "unchanged": int((day == 0).sum()),
         # Within 2% of the 52-week high, or in the bottom 5% of the 52-week range.
         "near_high": int((prox >= 0.98).sum()), "near_low": int((prox <= prox.quantile(0.05)).sum()) if prox.notna().any() else 0,
         "median_1d": float(day.median()) if day.notna().any() else None,
-        "sectors": [{"sector": s, "median_1m": float(r["median"]), "count": int(r["count"])} for s, r in sectors.iterrows()],
+        "sectors": [{"sector": s, "median_1m": float(r["median"]), "count": int(r["count"]), "market_cap": float(caps.get(s, 0.0))} for s, r in sectors.iterrows()],
+        "tiles": tiles,
     }
+
+
+CAP_BANDS = [("Mega", 200e9), ("Large", 10e9), ("Mid", 2e9), ("Small", 300e6), ("Micro", 0.0)]
+
+
+def _band(cap: float) -> str | None:
+    return next((name for name, floor in CAP_BANDS if cap >= floor), None) if np.isfinite(cap) else None
+
+
+def breadth_history(payload: dict, days: int = 252) -> dict[str, Any]:
+    """Daily advancers, decliners, new 52-week highs and lows across the universe, with SPY's close; observed closes only."""
+    import polars as pl
+
+    from .data_loader import NORMALIZED_TICKER, load_market_frame, parse_symbols
+    symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=1000)
+    wide = (load_market_frame().with_columns(NORMALIZED_TICKER.alias("t")).filter(pl.col("t").is_in([*symbols, "SPY"]))
+            .select("Date", "t", "Close").collect().to_pandas().pivot_table(index="Date", columns="t", values="Close").sort_index())
+    spy = wide.pop("SPY") if "SPY" in wide else pd.Series(dtype=float)
+    # Sessions where most names have a close; a few stray late or holiday quotes would read as a collapse in breadth.
+    seen = wide.notna().sum(axis=1)
+    wide = wide[seen >= 0.6 * seen.max()].iloc[-(days + 252):]
+    move = wide.pct_change(fill_method=None)
+    hi, lo = wide.rolling(252, min_periods=200).max(), wide.rolling(252, min_periods=200).min()
+    out = pd.DataFrame({"advancers": (move > 0).sum(axis=1), "decliners": (move < 0).sum(axis=1),
+                        "new_highs": (wide >= hi).sum(axis=1), "new_lows": (wide <= lo).sum(axis=1)}).iloc[-days:]
+    out["spy"] = spy.reindex(out.index)
+    return {"universe": len(symbols), "rows": [{"date": d.strftime("%Y-%m-%d"), **{k: (None if pd.isna(v) else float(v)) for k, v in r.items()}} for d, r in out.iterrows()]}

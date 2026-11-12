@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Search, Bell, FlaskConical, Gem, HeartPulse, Rocket, ShieldCheck, Sparkles, Trophy, Wallet, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { BreadthHistory, GroupMatrix, RecentRuns, type Tile } from "./OverviewCharts";
 import { get, latestRun } from "@/modules/research/api";
 import { featureHref, metaFor } from "@/modules/research/catalog";
 import { useStudies } from "@/modules/research/store";
@@ -14,7 +16,7 @@ import "./home.css";
 
 type Template = { key: string; formula: string; weak_evidence: boolean };
 type Facet = { name: string; count: number };
-type Breadth = { universe: number; advancers: number; decliners: number; unchanged: number; near_high: number; near_low: number; median_1d: number | null; sectors: { sector: string; median_1m: number; count: number }[] };
+type Breadth = { universe: number; advancers: number; decliners: number; unchanged: number; near_high: number; near_low: number; median_1d: number | null; sectors: { sector: string; median_1m: number; count: number; market_cap?: number }[]; tiles?: Tile[] };
 // The shell opens its search on "/"; a synthetic key on the body reuses that one entry point.
 const openSearch = () => document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "/", bubbles: true }));
 const sgn = (v: number, d = 1) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(d)}%`;
@@ -40,6 +42,7 @@ const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); ret
 
 export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs: RunRecord[] }) {
   const router = useRouter();
+  const [sizeBy, setSizeBy] = useState<"names" | "cap">("cap");
   const templates = useQuery({ queryKey: ["screener", "templates"], queryFn: () => get<{ templates: Template[] }>("/templates"), staleTime: Infinity, retry: false });
   const facets = useQuery({ queryKey: ["screener", "facets"], queryFn: () => get<{ sector: Facet[] }>("/facets"), staleTime: 600_000, retry: false });
   const breadth = useQuery({ queryKey: ["screener", "breadth"], queryFn: () => get<Breadth>("/breadth"), staleTime: 600_000, retry: false }).data;
@@ -90,9 +93,27 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
 
         {breadth?.sectors.length ? (
           <section className="sh-tree">
-            <Treemap title="Sectors by names, coloured by 1-month median return" sizeLabel="Names" colorLabel="Median 1M return" colorAggregate="mean" format={(v) => v.toFixed(0)} colorFormat={(v) => sgn(v)}
-              items={breadth.sectors.map((x) => ({ label: x.sector, group: x.sector, size: x.count, colorValue: x.median_1m }))} onFilterGroup={(g) => open("sc01", { sector: g })} />
+            <div className="ub-seg sh-size" role="radiogroup" aria-label="Size by">
+              {([["cap", "Market cap"], ["names", "Names"]] as const).map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={sizeBy === k} onClick={() => setSizeBy(k)}>{l}</button>)}
+            </div>
+            <Treemap title={`Sectors by ${sizeBy === "cap" ? "market cap" : "names"}, coloured by 1-month median return`} sizeLabel={sizeBy === "cap" ? "Market cap" : "Names"} colorLabel="Median 1M return" colorAggregate="mean"
+              format={(v) => (sizeBy === "cap" ? `$${(v / 1e12).toFixed(2)}T` : v.toFixed(0))} colorFormat={(v) => sgn(v)}
+              items={breadth.sectors.map((x) => ({ label: x.sector, group: x.sector, size: sizeBy === "cap" ? x.market_cap ?? 0 : x.count, colorValue: x.median_1m }))} onFilterGroup={(g) => open("sc01", { sector: g })} />
           </section>
+        ) : null}
+
+        {breadth?.tiles?.length ? (
+          <>
+            <h2 className="sh-h">Sectors by size</h2>
+            <GroupMatrix tiles={breadth.tiles} />
+          </>
+        ) : null}
+
+        {breadth ? (
+          <>
+            <h2 className="sh-h">Breadth, 1 year</h2>
+            <BreadthHistory />
+          </>
         ) : null}
 
         <section className="sh-stats">
@@ -124,6 +145,8 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
             );
           })}
         </section>
+
+        {runs.some((r) => r.status === "completed") ? <><h2 className="sh-h">Recent</h2><RecentRuns runs={runs} /></> : null}
 
         {saved.length ? (
           <>
