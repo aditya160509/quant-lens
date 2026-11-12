@@ -2,6 +2,7 @@ import dynamic from "next/dynamic";
 import { Bell, BookOpen, Bookmark, FlaskConical, Layers, Scale, SlidersHorizontal, Sigma, Table2, Trophy } from "lucide-react";
 import { createElement } from "react";
 import { SCREENER_BASE } from "./base";
+import { send } from "./api";
 import { FormulaControl } from "./formula/FormulaControl";
 import { FilterTree } from "./filters/FilterTree";
 import { InFilter } from "./filters/InFilter";
@@ -202,6 +203,7 @@ export const SCREENER_LAB: LabConfig = {
   signal: false,
   specials: { saved: SavedPage, more: MorePage },
   inspectorClosed: ["sc01"],
+  save: (name, feature, payload) => send("PUT", `/screens/s${Date.now().toString(36)}`, { name, feature_id: feature.id.replace(/^sc/, ""), payload }),
   fixes: (message, feature, form) => {
     const out: { label: string; patch: Record<string, unknown> }[] = [];
     const unavailable = message.match(/Requested filter (.+?) is unavailable/);

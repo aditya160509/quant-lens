@@ -651,3 +651,7 @@ nav.island { container-type: inline-size; }
 .st-pill.green { color: var(--up); background: var(--up-soft); }
 .st-pill.red { color: var(--down); background: var(--down-soft); }
 .st-pill.amber { color: var(--warn); background: var(--warn-soft); }
+.fv-tools { display: flex; align-items: center; gap: 2px; flex: none; }
+.fv-title .page-switch { margin: 0 0 0 6px; }
+@media (max-width: 760px) { .fv-tools { order: 3; } }
+.fv-title .page-switch .pg { display: none; }

@@ -34,6 +34,8 @@ export type LabConfig = {
   contextBar?: ComponentType<{ feature: FeatureSpec; run: FeatureRun }>;
   /** Feature ids whose page opens with the inspector shut. */
   inspectorClosed?: string[];
+  /** Saves the current settings under a name (the Screener keeps them as a saved screen). */
+  save?: (name: string, feature: FeatureSpec, payload: Record<string, unknown>) => Promise<unknown>;
   /** One-click fixes for a failed run: a label and the form change that addresses the message. */
   fixes?: (message: string, feature: FeatureSpec, form: Record<string, unknown>) => { label: string; patch: Record<string, unknown> }[];
   overview?: {
