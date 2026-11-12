@@ -106,6 +106,11 @@ def test_saved_definitions_are_immutable_and_runs_persist(store):
     assert store.run_history('x')[0]['result'] == {'status': 'ok'}
 
 
+def test_primary_listings_drop_the_secondary_venue_only():
+    from app.services.screener_v2.core.data_loader import primary_listings
+    assert primary_listings(["TCS_NS", "TCS_BO", "XYZ_BO", "AAPL"]) == ["TCS_NS", "XYZ_BO", "AAPL"]
+
+
 def test_saved_universe_membership_is_exact(store):
     store.save_universe('u', 'My universe', ['A', 'B'])
     assert store.get_universe('u') == ['A', 'B']

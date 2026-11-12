@@ -11,7 +11,8 @@ import { FilterChips, isRangeField } from "@/modules/research/FilterChips";
 import type { FeatureRun } from "@/modules/research/ResearchApp";
 import { lab } from "@/modules/research/lab";
 import { label as fmtLabel } from "@/modules/research/format";
-import type { FeatureSpec } from "@/modules/research/types";
+import type { FeatureSpec, RunRecord } from "@/modules/research/types";
+import { useRuns } from "@/modules/research/api";
 import { searchSymbols, usePopular, type SymbolHit } from "@/kit/QuickLookData";
 import { PopMenu, type MenuAt } from "@/workspace/ui";
 import { send } from "../api";
@@ -27,6 +28,16 @@ const REBAL: [string, string, number][] = [["Weekly", "weekly", 5], ["Monthly", 
 const TOPN = [10, 20, 50, 100];
 const CATS = ["sector", "industry", "country", "exchange", "currency"];
 const SIZES = [25, 50, 100, 250, 500, 1000];
+const BASIS: [string, string][] = [["liquidity", "Liquidity"], ["market_cap", "Market cap"], ["coverage", "Data coverage"]];
+const EUROPE = ["United Kingdom", "Germany", "France", "Italy", "Switzerland", "Sweden", "Finland"];
+const PRESETS: [string, Record<string, unknown>][] = [
+  ["United States", { country: ["United States"] }], ["India", { country: ["India"] }], ["Europe", { country: EUROPE }], ["Asia Pacific", { country: ["Japan", "South Korea", "Taiwan", "Hong Kong", "Australia", "Singapore", "China"] }],
+  ["Mega cap", { market_cap_min: "200000000000", market_cap_max: "" }], ["Large cap", { market_cap_min: "10000000000", market_cap_max: "200000000000" }],
+  ["Mid cap", { market_cap_min: "2000000000", market_cap_max: "10000000000" }], ["Small cap", { market_cap_min: "300000000", market_cap_max: "2000000000" }],
+];
+const PRESET_KEYS = ["country", "market_cap_min", "market_cap_max"];
+/** Seconds from the dock log line "Completed in 2.3s". */
+const secsOf = (r: RunRecord) => Number(r.log?.find((l) => l.text.startsWith("Completed in"))?.text.match(/([\d.]+)s/)?.[1]);
 const PERIODS: [string, number][] = [["6M", 182], ["1Y", 365], ["2Y", 756], ["3Y", 1095], ["5Y", 1825], ["10Y", 3650]];
 const QUICK = ["market_cap", "pe", "roe", "revenue_growth_yoy", "dividend_yield", "return_12m", "rsi", "beta"];
 const ALL = new Set(["", "master", "all", "default"]);
@@ -80,6 +91,12 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
     const name = window.prompt("Save screen as")?.trim();
     if (name) void send("PUT", `/screens/s${Date.now().toString(36)}`, { name, feature_id: fid, payload: toPayload(feature, run.form) }).then(() => { toast.success(`Saved ${name}`); return qc.invalidateQueries({ queryKey: ["screener", "screens"] }); }).catch((e: Error) => toast.error(e.message));
   };
+  const basis = String(run.form.rank_by ?? "liquidity");
+  // Estimated run time: the last finished run of this study, scaled by universe size.
+  const last = useRuns((st) => st.runs.find((r) => r.featureId === feature.id && r.status === "completed" && Number.isFinite(secsOf(r))));
+  const names = tickers.length || size;
+  const lastNames = last ? parse(last.payload?.universe).length || Number(last.payload?.max_symbols ?? 500) : 0;
+  const eta = last && lastNames ? Math.max(1, Math.round((secsOf(last) * names) / lastNames)) : null;
   const columnOf = useFilterColumns();
   const shownMetrics = [...metrics, ...added];
   const preview = useFilterPreview(toPayload(feature, run.form), [...shownMetrics, ...(menu && menu.key !== "+" && !menu.key.startsWith("cat:") ? [menu.key] : [])].map((m) => columnOf[m]).filter(Boolean)).data;
@@ -101,7 +118,7 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
       <div className="ub-row">
         {keys.has("universe") ? (
           <button type="button" className="ub-title" onClick={() => setOpen(true)}>
-            <Globe2 size={17} /><span>{tickers.length ? `${tickers.length} stocks` : `Top ${size.toLocaleString()} by liquidity`}</span><ChevronDown size={15} />
+            <Globe2 size={17} /><span>{tickers.length ? `${tickers.length} stocks` : `Top ${size.toLocaleString()} by ${BASIS.find(([k]) => k === basis)?.[1].toLowerCase() ?? "liquidity"}`}</span><ChevronDown size={15} />
           </button>
         ) : null}
         {keys.has("lookback_days") ? (
@@ -134,7 +151,7 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
           <button type="button" className="ub-pill add" data-hotkey="f" aria-keyshortcuts="Shift+F" aria-label="All filters" onClick={(e) => at(e, "+")}><Plus size={13} />Filter</button>
           <button type="button" className={`ub-pill${auto && small ? " on" : ""}`} aria-pressed={auto} disabled={!small} title={small ? "Re-run after each change" : "Auto run needs 250 names or fewer"} onClick={() => { const next = !auto; setAuto(next); try { localStorage.setItem("screener-auto-run", next ? "1" : "0"); } catch { /* storage blocked */ } }}>Auto</button>
           <button type="button" className="ub-pill" onClick={saveScreen}><Bookmark size={12} />Save</button>
-          {preview ? <span className="ub-pass num" role="status"><MixBar mix={preview.mix?.sector} /><b>{preview.passed.toLocaleString()}</b> of {preview.universe.toLocaleString()} pass</span> : null}
+          {preview ? <span className="ub-pass num" role="status"><MixBar mix={preview.mix?.sector} /><b>{preview.passed.toLocaleString()}</b> of {preview.universe.toLocaleString()} pass{eta ? <em title="From the last run of this study">≈{eta}s</em> : null}</span> : eta ? <span className="ub-pass num" role="status"><em title="From the last run of this study">≈{eta}s</em></span> : null}
         </div>
       ) : null}
       <PopMenu at={menu?.at ?? null} onClose={() => setMenu(null)} width={menu?.key === "+" ? 440 : 300} sticky>
@@ -158,12 +175,12 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
           </div>
         ) : null}
       </PopMenu>
-      {open ? <Picker tickers={tickers} size={size} onClose={() => setOpen(false)} onApply={(list, n) => { run.setForm((c) => ({ ...c, universe: list.length ? list.join(",") : "master", max_symbols: list.length ? Math.max(list.length, n) : n })); setOpen(false); }} /> : null}
+      {open ? <Picker tickers={tickers} size={size} basis={basis} primary={Boolean(run.form.primary_only)} active={(f) => PRESET_KEYS.every((k) => k in f ? JSON.stringify(run.form[k] ?? "") === JSON.stringify(f[k]) : true)} onPatch={(patch) => run.setForm((c) => ({ ...c, ...patch }))} onClose={() => setOpen(false)} onApply={(list, n) => { run.setForm((c) => ({ ...c, universe: list.length ? list.join(",") : "master", max_symbols: list.length ? Math.max(list.length, n) : n })); setOpen(false); }} /> : null}
     </div>
   );
 }
 
-function Picker({ tickers, size, onApply, onClose }: { tickers: string[]; size: number; onApply: (list: string[], n: number) => void; onClose: () => void }) {
+function Picker({ tickers, size, basis, primary, active, onPatch, onApply, onClose }: { tickers: string[]; size: number; basis: string; primary: boolean; active: (f: Record<string, unknown>) => boolean; onPatch: (patch: Record<string, unknown>) => void; onApply: (list: string[], n: number) => void; onClose: () => void }) {
   const qc = useQueryClient();
   const [list, setList] = useState(tickers);
   const [n, setN] = useState(size);
@@ -213,6 +230,11 @@ function Picker({ tickers, size, onApply, onClose }: { tickers: string[]; size: 
           <aside className="ub-side">
             <h4>Size</h4>
             <div className="ub-sizes">{SIZES.map((s) => <button key={s} type="button" aria-pressed={!list.length && n === s} onClick={() => { setList([]); setN(s); }}>{s.toLocaleString()}</button>)}</div>
+            <h4>Rank by</h4>
+            <div className="ub-sizes">{BASIS.map(([k, l]) => <button key={k} type="button" aria-pressed={basis === k} onClick={() => onPatch({ rank_by: k })}>{l}</button>)}</div>
+            <label className="ub-check"><input type="checkbox" checked={primary} onChange={(e) => onPatch({ primary_only: e.target.checked })} />Primary listing only</label>
+            <h4>Presets</h4>
+            <div className="ub-sizes">{PRESETS.map(([l, f]) => { const on = active(f); return <button key={l} type="button" aria-pressed={on} onClick={() => onPatch(on ? Object.fromEntries(Object.keys(f).map((k) => [k, k === "country" ? "all" : ""])) : f)}>{l}</button>; })}</div>
             <h4>Saved</h4>
             <div className="ub-saved">
               {(saved.data?.universes ?? []).map((u) => (

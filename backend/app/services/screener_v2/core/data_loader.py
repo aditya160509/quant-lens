@@ -278,6 +278,32 @@ def _liquidity_rank(version: int, as_of) -> dict[str, int]:
     return {t: i for i, t in enumerate(sorted(usd, key=lambda t: (-usd[t], t)))}
 
 
+# Dual listings: the first suffix is the primary venue when a name trades on both.
+DUAL_LISTINGS = {"BO": "NS"}
+
+
+def primary_listings(symbols: list[str]) -> list[str]:
+    """Drop the secondary venue of a dual-listed name, such as BSE when the NSE line exists."""
+    have = set(symbols)
+    return [s for s in symbols if not ("_" in s and (alt := DUAL_LISTINGS.get(s.rsplit("_", 1)[1])) and f"{s.rsplit('_', 1)[0]}_{alt}" in have)]
+
+
+def _by_basis(universe: list[str], basis: str) -> list[str]:
+    """Universe order for the top-N cut: liquidity (default), market cap or data coverage."""
+    if basis not in {"liquidity", "market_cap", "coverage"}:
+        raise ValueError("rank_by must be liquidity, market_cap or coverage")
+    # Market cap and coverage come from the latest panel, so a point-in-time run keeps liquidity to avoid look-ahead.
+    if basis == "liquidity" or AS_OF.get() is not None:
+        return _by_liquidity(universe)
+    from .lookup import panel
+    from .screener import data_coverage
+    p = panel()
+    score = p.set_index("ticker")["market_cap"] if basis == "market_cap" else data_coverage(p).set_axis(p["ticker"])
+    score = score.reindex(universe)
+    liquid = {s: i for i, s in enumerate(_by_liquidity(universe))}
+    return sorted(universe, key=lambda s: (-(score.get(s) if pd.notna(score.get(s)) else -1e300), liquid[s]))
+
+
 def _by_liquidity(universe: list[str]) -> list[str]:
     token = _ALL_SYMBOLS.set(tuple(universe))
     try:
@@ -306,7 +332,9 @@ def parse_symbols(payload: dict | None, default_limit: int = 500, max_symbols: i
     if raw is None or label in {"", "default"}:
         requested = universe[:default_limit]
     elif label in {"all", "full", "master", "master_universe", "market_universe", "whole"}:
-        requested = _by_liquidity(universe)
+        requested = _by_basis(universe, str(payload.get("rank_by") or "liquidity"))
+        if payload.get("primary_only"):
+            requested = primary_listings(requested)
     elif isinstance(raw, str):
         requested = [normalize_symbol(x) for x in re.split(r"[,;\s]+", raw) if x.strip()]
     elif isinstance(raw, Iterable):

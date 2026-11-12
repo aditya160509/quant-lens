@@ -17,6 +17,8 @@ def shared_inputs():
             field('calendar_ticker', 'ticker', None, 'Currency', 'Observed session calendar instrument. Required for non-USD portfolios; missing held quotes invalidate a run.'),
             field('universe', 'ticker_list', 'master', 'Universe', 'Local equities with observed prices and a fundamentals inventory entry, or explicit eligible tickers; current coverage is not historical index membership.'),
             field('max_symbols', 'number', 500, 'Universe', min=1, max=1000),
+            field('rank_by', 'select', 'liquidity', 'Universe', 'Order for the top-N cut: liquidity, market cap or data coverage. Point-in-time runs always use liquidity.', options=['liquidity', 'market_cap', 'coverage']),
+            field('primary_only', 'boolean', False, 'Universe', 'Keep one line per dual-listed name (NSE over BSE).'),
             field('lookback_days', 'number', 756, 'Window', min=1, max=10000),
             field('top_n', 'number', 50, 'Selection', min=1, max=5000),
             field('as_of_date', 'date', None, 'Window', 'Prices up to this date; reports become available 90 days after period end.'),
