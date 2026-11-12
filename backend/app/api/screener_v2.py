@@ -207,6 +207,11 @@ async def lookup_statements(ticker: str, period: str = Query("annual", pattern="
     return await asyncio.to_thread(_lookup_call, lookup.statements, ticker, period, all_lines)
 
 
+@router.get("/lookup/{ticker}/ohlcv")
+async def lookup_ohlcv(ticker: str, days: int = Query(400, ge=20, le=4000)) -> dict[str, Any]:
+    return await asyncio.to_thread(_lookup_call, explain.ohlcv, ticker, days)
+
+
 @router.get("/lookup/{ticker}/pdf")
 async def lookup_pdf(ticker: str) -> Response:
     body = await asyncio.to_thread(_lookup_call, lookup.pdf, ticker)

@@ -70,3 +70,18 @@
 .ql-profile { display: grid; grid-template-columns: 220px 1fr; gap: 12px; align-items: center; }
 @container (max-width: 420px) { .ql-profile { grid-template-columns: 1fr; justify-items: center; } }
 .ql-table td.up { color: var(--up); } .ql-table td.down { color: var(--down); }
+.ql-hp { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+.ql-hp b { font-size: 15px; font-weight: 600; }
+.ql-hp em { font-style: normal; font-size: 11px; color: var(--text-3); }
+.ql-hp i { font-style: normal; font-size: 12px; }
+.ql-hp .up { color: var(--up); } .ql-hp .down { color: var(--down); }
+.ql-rbar { display: flex; justify-content: flex-end; gap: 4px; margin-bottom: 4px; }
+.ql-rgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.ql-ratio { position: relative; display: grid; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); }
+.ql-ratio.off { opacity: 0.45; }
+.ql-ratio input { position: absolute; top: 8px; right: 8px; }
+.ql-ratio > span { font-size: 11.5px; color: var(--text-3); }
+.ql-ratio > b { font-size: 17px; font-weight: 600; }
+.ql-ratio > small { font-size: 11px; color: var(--text-3); }
+.ql-strip { position: relative; display: block; height: 4px; border-radius: 2px; background: var(--raise); }
+.ql-strip u { position: absolute; top: -3px; width: 2px; height: 10px; margin-left: -1px; border-radius: 1px; background: var(--text); }

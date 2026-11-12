@@ -1,6 +1,10 @@
 "use client";
 
-import { Check, Download, GitCompareArrows, Plus, X } from "lucide-react";
+import { Check, Download, GitCompareArrows, ListPlus, Pencil, Plus, X } from "lucide-react";
+import toast from "react-hot-toast";
+import { PriceChart } from "@/charts/PriceChart";
+import { RowActions } from "@/modules/screener/RowActions";
+import { useStudies } from "@/modules/research/store";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
 import { Radar } from "@/charts/Radar";
@@ -8,7 +12,7 @@ import { Spark } from "@/charts/RankList";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { isNum } from "@/modules/research/format";
 import { Chip, Segmented } from "@/workspace/ui";
-import { pdfUrl, useCompare, useLookup, useStatements, type Lookup, type Stat } from "./QuickLookData";
+import { pdfUrl, useBars, useCompare, useLookup, useStatements, type Lookup, type Stat } from "./QuickLookData";
 import "./quicklook.css";
 
 export const MAX_COMPARE = 25;
@@ -51,6 +55,17 @@ export function Monogram({ ticker }: { ticker: string }) {
 }
 
 const RANGES = ["1M", "3M", "6M", "1Y", "3Y", "5Y", "10Y"];
+const RANGE_DAYS: Record<string, number> = { "1M": 31, "3M": 92, "6M": 183, "1Y": 365, "3Y": 1095, "5Y": 1825, "10Y": 3650 };
+
+/** Adds a name to the Screen study's explicit universe. */
+function addToScreen(ticker: string) {
+  useStudies.setState((s) => {
+    const form = s.forms.sc01 ?? {};
+    const cur = String(form.universe ?? "").split(/[\s,]+/).filter((t) => t && !["master", "all", "default"].includes(t.toLowerCase()));
+    return { forms: { ...s.forms, sc01: { ...form, universe: [...new Set([...cur, ticker])].join(","), max_symbols: Math.max(cur.length + 1, 25) } } };
+  });
+  toast.success(`${ticker} added to the Screen universe`);
+}
 
 export function QuickLook() {
   const { ticker, tab, basket, close, setTab, toggleBasket } = useQuickLook();
@@ -80,9 +95,12 @@ export function QuickLook() {
         <Monogram ticker={ticker} />
         <div className="ql-title">
           <b>{ticker}</b><span>{d ? d.company_name ?? UNKNOWN : q.isLoading ? "" : UNKNOWN}</span>
-          {d ? <small>{[d.sector, d.industry, d.exchange].filter(Boolean).join(" · ") || UNKNOWN}</small> : null}
+          {d ? <small>{[d.exchange, d.sector, d.industry].filter(Boolean).join(" · ") || UNKNOWN}</small> : null}
+          {d ? <HeadPrice d={d} /> : null}
         </div>
         <div className="ql-actions">
+          <RowActions ticker={ticker} />
+          <button className="btn sm icon ghost" onClick={() => addToScreen(ticker)} aria-label={`Add ${ticker} to the Screen universe`} title="Add to screen"><ListPlus size={13} /></button>
           <button className="btn sm" aria-pressed={inBasket} onClick={() => toggleBasket(ticker)} title={inBasket ? "Remove from compare" : "Add to compare"}>{inBasket ? <Check size={13} /> : <Plus size={13} />}Compare</button>
           <a className="btn sm" href={pdfUrl(ticker)} download title="One-page PDF"><Download size={13} />PDF</a>
           <button className="btn icon ghost" onClick={close} aria-label="Close quick look"><X size={15} /></button>
@@ -98,6 +116,17 @@ export function QuickLook() {
       </div>
       {d && tab !== "compare" ? <footer className="ql-foot">{d.limits.join(" · ")} · prices to {d.price_date}</footer> : null}
     </aside>
+  );
+}
+
+function HeadPrice({ d }: { d: Lookup }) {
+  const month = d.chart["1M"] ?? [];
+  const day = month.length > 1 ? month[month.length - 1].close / month[month.length - 2].close - 1 : null;
+  return (
+    <span className="ql-hp">
+      <b className="num">{numText(d.price)}</b><em>{d.currency ?? ""}</em>
+      {day !== null ? <i className={`num ${day >= 0 ? "up" : "down"}`}>{day >= 0 ? "+" : ""}{(day * 100).toFixed(2)}%</i> : null}
+    </span>
   );
 }
 
@@ -126,7 +155,7 @@ function Overview({ d }: { d: Lookup }) {
       </div>
       <div className="ql-chart">
         {shown ? <Segmented<string> label="Price range" value={shown} onChange={setRange} options={available.map((r) => ({ value: r, label: r }))} /> : null}
-        {series.length > 1 ? <TimeSeries data={series} series={[{ key: "close", label: "Close" }]} height={230} legend={false} format={(v) => numText(v)} /> : <p className="ql-none">No price history held for {d.ticker}</p>}
+        {series.length > 1 ? <Candles ticker={d.ticker} range={shown} fallback={<TimeSeries data={series} series={[{ key: "close", label: "Close" }]} height={230} legend={false} format={(v) => numText(v)} />} /> : <p className="ql-none">No price history held for {d.ticker}</p>}
         {change !== null ? <span className={`ql-change num ${change >= 0 ? "up" : "down"}`}>{change >= 0 ? "+" : ""}{(change * 100).toFixed(1)}% over the range</span> : null}
       </div>
       <h3 className="ql-h">Score profile</h3>
@@ -149,6 +178,12 @@ function Overview({ d }: { d: Lookup }) {
   );
 }
 
+/** Candles, volume and SMA 50/200 for the range; the close line stands in while bars load or if they fail. */
+function Candles({ ticker, range, fallback }: { ticker: string; range: string; fallback: ReactNode }) {
+  const bars = useBars(ticker, RANGE_DAYS[range] ?? 365).data?.bars;
+  return bars && bars.length > 1 ? <PriceChart bars={bars} height={260} /> : <>{fallback}</>;
+}
+
 /** Score profile as a shape on the shared radar; an unknown score is left off its axis. */
 function ProfileRadar({ scores }: { scores: Lookup["scores"] }) {
   if (scores.length < 3) return null;
@@ -165,26 +200,40 @@ function Bar({ label, value }: { label: string; value: number | null }) {
   );
 }
 
+const RATIO_KEY = "quicklook-ratios-hidden";
+
+/** Ratio cards with a tick for where the name sits in its sector; Edit picks which ratios show, kept on this device. */
 function Ratios({ d }: { d: Lookup }) {
+  const [hidden, setHidden] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem(RATIO_KEY) ?? "[]") as string[]; } catch { return []; } });
+  const [editing, setEditing] = useState(false);
   const groups = useMemo(() => [...new Set(d.stats.map((s) => s.group))], [d.stats]);
+  const flip = (k: string) => setHidden((h) => { const next = h.includes(k) ? h.filter((x) => x !== k) : [...h, k]; try { localStorage.setItem(RATIO_KEY, JSON.stringify(next)); } catch { /* storage blocked */ } return next; });
   return (
-    <table className="ql-table">
-      <thead><tr><th>Ratio</th><th className="r">Value</th><th className="r">Sector median</th><th>Sector percentile</th><th className="r">Own 3Y percentile</th></tr></thead>
-      {groups.map((g) => (
-        <tbody key={g}>
-          <tr className="grp"><th colSpan={5}>{g}</th></tr>
-          {d.stats.filter((s) => s.group === g).map((s) => (
-            <tr key={s.key}>
-              <td>{s.label}</td>
-              <td className="r num">{stat(s)}</td>
-              <td className="r num" title={`${s.sector_n} sector names with a value`}>{isNum(s.sector_median) ? stat({ unit: s.unit, value: s.sector_median }) : UNKNOWN}</td>
-              <td><Bar label={s.label} value={s.sector_percentile} /></td>
-              <td className="r num">{isNum(s.own_history_percentile) ? s.own_history_percentile.toFixed(0) : UNKNOWN}</td>
-            </tr>
-          ))}
-        </tbody>
-      ))}
-    </table>
+    <>
+      <div className="ql-rbar">
+        <button type="button" className="btn sm ghost" aria-pressed={editing} onClick={() => setEditing(!editing)}><Pencil size={12} />{editing ? "Done" : "Edit ratios"}</button>
+        {hidden.length && !editing ? <button type="button" className="btn sm ghost" onClick={() => setEditing(true)}><Plus size={12} />{hidden.length} hidden</button> : null}
+      </div>
+      {groups.map((g) => {
+        const list = d.stats.filter((s) => s.group === g && (editing || !hidden.includes(s.key)));
+        return list.length ? (
+          <section key={g}>
+            <h3 className="ql-h">{g}</h3>
+            <div className="ql-rgrid">
+              {list.map((s) => (
+                <div key={s.key} className={`ql-ratio${hidden.includes(s.key) ? " off" : ""}`} title={`${s.sector_n} sector names with a value; own 3Y percentile ${isNum(s.own_history_percentile) ? s.own_history_percentile.toFixed(0) : UNKNOWN}`}>
+                  {editing ? <input type="checkbox" aria-label={`Show ${s.label}`} checked={!hidden.includes(s.key)} onChange={() => flip(s.key)} /> : null}
+                  <span>{s.label}</span>
+                  <b className="num">{stat(s)}</b>
+                  <i className="ql-strip" aria-label={`Sector percentile ${isNum(s.sector_percentile) ? s.sector_percentile.toFixed(0) : UNKNOWN}`}>{isNum(s.sector_percentile) ? <u style={{ left: `${Math.max(0, Math.min(100, s.sector_percentile))}%` }} /> : null}</i>
+                  <small className="num">Sector {isNum(s.sector_median) ? stat({ unit: s.unit, value: s.sector_median }) : UNKNOWN}</small>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null;
+      })}
+    </>
   );
 }
 

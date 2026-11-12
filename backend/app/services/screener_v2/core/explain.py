@@ -250,6 +250,17 @@ def sparklines(tickers: list[str], days: int, points: int = 60) -> dict[str, lis
     return out
 
 
+def ohlcv(ticker: str, days: int) -> dict[str, Any]:
+    """Observed daily bars for one name, quote currency, for a candle chart."""
+    from .data_loader import normalize_symbol, ohlcv_for_symbols
+    symbol = normalize_symbol(ticker)
+    frame = ohlcv_for_symbols([symbol], lookback_days=days).dropna(subset=["Open", "High", "Low", "Close"]).sort_values("Date")
+    if frame.empty:
+        raise KeyError(f"No prices held for {ticker}")
+    return {"ticker": symbol, "bars": [{"time": d.strftime("%Y-%m-%d"), "open": float(o), "high": float(h), "low": float(lo), "close": float(c), "volume": None if pd.isna(v) else float(v)}
+                                       for d, o, h, lo, c, v in zip(frame.Date, frame.Open, frame.High, frame.Low, frame.Close, frame.Volume, strict=True)]}
+
+
 _RANGE: dict[str, Any] = {}
 
 
