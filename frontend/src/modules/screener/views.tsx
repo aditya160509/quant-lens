@@ -1,6 +1,8 @@
 "use client";
 
-import { createElement } from "react";
+import { createElement, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { send } from "./api";
 import { Treemap } from "@/charts/Treemap";
 import { DataTable } from "@/kit/DataTable";
 import { useStudies } from "@/modules/research/store";
@@ -12,6 +14,7 @@ import { ScreenScatter, SensitivityStrip } from "./trust/Charts";
 import { NearMisses, RunInfo, runOf, ScreenDiff, WhyHere } from "./trust/Explain";
 import { SCREENER_BASE } from "./base";
 import "./screen.css";
+import "./filters/universe.css";
 
 /** Every passing name as a rectangle: area is market cap, colour is the 1-month return, grouped by sector. */
 export function ScreenTreemap({ result }: ViewProps) {
@@ -37,10 +40,25 @@ const SCREEN_SETS: Record<string, string[]> = {
 };
 
 /** The results table: its arrangement lives in the URL and in saved views, and a row opens its reasons. */
+const SPARK: [string, number][] = [["1M", 31], ["3M", 92], ["1Y", 365]];
+
 export function ScreenTable({ rows, result, opts }: ViewProps) {
   const runId = runOf(result)?.id;
   const detail = runId ? (row: Record<string, unknown>) => (typeof row.ticker === "string" ? createElement(WhyHere, { ticker: row.ticker, runId }) : null) : undefined;
-  return <DataTable rows={rows} opts={{ ...opts, viewKey: "screener:results", xlsx: `${SCREENER_BASE}/export/xlsx`, detail, lead: SCREEN_LEAD, sets: SCREEN_SETS }} />;
+  // Price sparkline per row over the chosen range, fetched for the names shown.
+  const [days, setDays] = useState(() => { try { return Number(localStorage.getItem("screener-spark-days")) || 92; } catch { return 92; } });
+  const tickers = useMemo(() => rows.map((r) => String(r.ticker ?? "")).filter(Boolean).slice(0, 1000), [rows]);
+  const spark = useQuery({ queryKey: ["screener", "spark", days, tickers.join(",")], queryFn: () => send<Record<string, number[]>>("POST", "/sparklines", { tickers, days }), enabled: tickers.length > 0, staleTime: 600_000, retry: false }).data;
+  const withTrend = useMemo(() => (spark ? rows.map((r) => ({ ...r, trend: spark[String(r.ticker)] ?? null })) : rows), [rows, spark]);
+  const pick = (d: number) => { setDays(d); try { localStorage.setItem("screener-spark-days", String(d)); } catch { /* storage blocked */ } };
+  return (
+    <>
+      <div className="ub-seg spark-range" role="radiogroup" aria-label="Sparkline range">
+        {SPARK.map(([l, d]) => <button key={l} type="button" role="radio" aria-checked={days === d} onClick={() => pick(d)}>{l}</button>)}
+      </div>
+      <DataTable rows={withTrend} opts={{ ...opts, viewKey: "screener:results", xlsx: `${SCREENER_BASE}/export/xlsx`, detail, lead: [...SCREEN_LEAD, "trend"], freeze: SCREEN_LEAD, sets: SCREEN_SETS }} />
+    </>
+  );
 }
 
 export const NearMissView = ({ result }: ViewProps) => <NearMisses result={result} />;

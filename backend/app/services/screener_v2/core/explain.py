@@ -238,6 +238,18 @@ def breadth(payload: dict) -> dict[str, Any]:
     }
 
 
+def sparklines(tickers: list[str], days: int, points: int = 60) -> dict[str, list[float]]:
+    """Observed closes over the last `days` calendar days per ticker, thinned to about `points` values for a table sparkline."""
+    from .data_loader import normalize_symbol, ohlcv_for_symbols
+    frame = ohlcv_for_symbols([normalize_symbol(t) for t in tickers[:1000]], lookback_days=days)
+    out = {}
+    for t, g in frame.dropna(subset=["Close"]).sort_values("Date").groupby("Ticker"):
+        close = g["Close"].to_numpy(dtype=float)
+        step = max(1, len(close) // points)
+        out[str(t)] = [round(float(x), 4) for x in close[::step]]
+    return out
+
+
 _RANGE: dict[str, Any] = {}
 
 

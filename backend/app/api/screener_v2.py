@@ -349,6 +349,18 @@ async def filters_preview(request: PreviewRequest) -> dict[str, Any]:
         raise HTTPException(422, str(exc)) from exc
 
 
+class SparkRequest(BaseModel):
+    tickers: list[str]
+    days: int = 92
+
+
+@router.post("/sparklines")
+async def sparklines(request: SparkRequest) -> dict[str, Any]:
+    if not 7 <= request.days <= 1830:
+        raise HTTPException(422, "days must be between 7 and 1830")
+    return await asyncio.to_thread(explain.sparklines, request.tickers, request.days)
+
+
 @router.get("/data-range")
 async def data_range() -> dict[str, Any]:
     return await asyncio.to_thread(explain.data_range)

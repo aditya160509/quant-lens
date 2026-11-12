@@ -6,7 +6,9 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type { Row } from "@/modules/research/types";
 
 export type Fn = "mean" | "median" | "sum" | "count";
-export type Fmt = { mode: "bar" | "heat" | "sign" | "rule"; op?: ">" | "<"; value?: number };
+export type Fmt = { mode: "bar" | "heat" | "sign" | "rule" | "rank"; op?: ">" | "<"; value?: number };
+/** How a number is written: compact (1.2B), percent, fixed decimals or US dollars. */
+export type NumFmt = { style: "compact" | "percent" | "fixed" | "usd"; dp: number };
 export type TableView = {
   order: string[] | null;
   hidden: string[];
@@ -24,6 +26,7 @@ export type TableView = {
   summary: Exclude<Fn, "count">;
   /** Named column set shown as a tab; null shows every column. */
   set: string | null;
+  num?: Record<string, NumFmt>;
 };
 
 export const EMPTY_VIEW: TableView = { order: null, hidden: [], pinned: [], widths: {}, sort: null, density: "comfortable", tint: false, fmt: {}, pct: {}, groupBy: null, summary: "median", set: null };

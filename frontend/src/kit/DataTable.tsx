@@ -9,7 +9,7 @@ import { ArrowDown, ArrowUp, ChevronRight, Columns3, Download, Link2, Pin, Rotat
 import { Spark } from "@/charts/RankList";
 import { downloadCsv, downloadXlsx } from "@/charts/export";
 import { openQuickLook } from "./QuickLook";
-import { EMPTY_VIEW, reduce, useSavedViews, useTableView, withPercentiles, type Fmt, type TableView } from "./tableView";
+import { EMPTY_VIEW, reduce, useSavedViews, useTableView, withPercentiles, type Fmt, type NumFmt, type TableView } from "./tableView";
 import { columns, fmtKey, isNum, isPKey, isTKey, label, pTone, toneVar } from "@/modules/research/format";
 import type { Row } from "@/modules/research/types";
 import "@/modules/research/outputs/tables.css";
@@ -77,12 +77,16 @@ export function toMarkdown(cols: string[], rows: Row[]): string {
   return [`| ${cols.map((c) => cell(label(c))).join(" | ")} |`, `|${cols.map(() => " --- ").join("|")}|`, ...rows.map((r) => `| ${cols.map((c) => cell(r[c])).join(" | ")} |`)].join("\n");
 }
 
-const FORMATS: { value: Fmt["mode"] | ""; label: string }[] = [{ value: "", label: "Plain" }, { value: "bar", label: "Bars" }, { value: "heat", label: "Heat" }, { value: "sign", label: "Signed" }, { value: "rule", label: "Rule" }];
+const FORMATS: { value: Fmt["mode"] | ""; label: string }[] = [{ value: "", label: "Plain" }, { value: "bar", label: "Bars" }, { value: "heat", label: "Heat" }, { value: "sign", label: "Signed" }, { value: "rule", label: "Rule" }, { value: "rank", label: "Top / bottom N" }];
+const NUMS: { value: NumFmt["style"] | ""; label: string }[] = [{ value: "", label: "Auto" }, { value: "compact", label: "1.2B" }, { value: "percent", label: "%" }, { value: "fixed", label: "0.00" }, { value: "usd", label: "$" }];
+const writeNum = (f: NumFmt, v: number) => f.style === "percent" ? `${(v * 100).toFixed(f.dp)}%`
+  : new Intl.NumberFormat("en-US", f.style === "compact" ? { notation: "compact", maximumFractionDigits: f.dp } : f.style === "usd" ? { style: "currency", currency: "USD", notation: Math.abs(v) >= 1e6 ? "compact" : "standard", maximumFractionDigits: f.dp } : { minimumFractionDigits: f.dp, maximumFractionDigits: f.dp }).format(v);
 
 /** Table of rows. With `opts.viewKey` the arrangement (columns, sort, formats, grouping) is shared with the URL and can be saved; `opts.detail` fills the row drawer. */
 export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<string, unknown> }) {
   const viewKey = opts?.viewKey as string | undefined;
-  const [view, update] = useTableView(viewKey, { tint: opts?.tint === true });
+  // Lead columns (ticker, company) start frozen.
+  const [view, update] = useTableView(viewKey, { tint: opts?.tint === true, pinned: (opts?.freeze as string[] | undefined) ?? (opts?.lead as string[] | undefined) ?? [] });
   const { order: colOrder, hidden, pinned, widths, sort, density, tint } = view;
   const patch = (p: Partial<TableView>) => update((v) => ({ ...v, ...p }));
   const [query, setQuery] = useState("");
@@ -202,12 +206,26 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
     Object.keys(view.fmt).forEach((c) => { const v = rows.map((r) => r[c]).filter(isNum); if (v.length) m[c] = [Math.min(...v), Math.max(...v)]; });
     return m;
   }, [rows, view.fmt]);
+  // Top / bottom N: the Nth best (or worst) value is the cut.
+  const cut = useMemo(() => {
+    const m: Record<string, number> = {};
+    Object.entries(view.fmt).forEach(([c, f]) => {
+      if (f.mode !== "rank") return;
+      const v = rows.map((r) => r[c]).filter(isNum).sort((a, b) => (f.op === "<" ? a - b : b - a));
+      const n = Math.max(1, Math.round(f.value ?? 10));
+      if (v.length) m[c] = v[Math.min(n, v.length) - 1];
+    });
+    return m;
+  }, [rows, view.fmt]);
+  const numText = (c: string, v: unknown) => (view.num?.[c] && isNum(v) ? writeNum(view.num[c], v) : fmtKey(c, v));
+  const [dragCol, setDragCol] = useState<string | null>(null);
   const cellStyle = (c: string, v: unknown) => {
     const f = view.fmt[c];
     if (f && isNum(v) && range[c]) {
       if (f.mode === "heat") return { background: `color-mix(in oklch, var(--accent) ${(range[c][1] > range[c][0] ? ((v - range[c][0]) / (range[c][1] - range[c][0])) * 40 : 20).toFixed(0)}%, transparent)` };
       if (f.mode === "sign") return { color: v > 0 ? "var(--up)" : v < 0 ? "var(--down)" : undefined };
       if (f.mode === "rule" && f.value !== undefined && (f.op === "<" ? v < f.value : v > f.value)) return { background: "color-mix(in oklch, var(--warn) 24%, transparent)" };
+      if (f.mode === "rank" && cut[c] !== undefined && (f.op === "<" ? v <= cut[c] : v >= cut[c])) return { background: `color-mix(in oklch, ${f.op === "<" ? "var(--down)" : "var(--up)"} 22%, transparent)` };
     }
     if (isPKey(c)) return { color: toneVar(pTone(v)) };
     if (tint && isNum(v) && bound[c]) {
@@ -236,7 +254,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
     const d = flash[`${i}:${c}`];
     const f = view.fmt[c];
     const width = f?.mode === "bar" && isNum(v) && range[c] ? (range[c][1] > range[c][0] ? ((v - range[c][0]) / (range[c][1] - range[c][0])) * 100 : 50) : (view.pct[c] || bars?.includes(c)) && isNum(v) ? v : null;
-    const content = width !== null && isNum(v) ? <span className="pbar"><i style={{ width: `${Math.max(0, Math.min(100, width))}%` }} />{view.pct[c] ? Math.round(v) : fmtKey(c, v)}</span> : Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : v === null || v === undefined || v === "" ? <span className="miss">—</span> : fmtKey(c, v);
+    const content = width !== null && isNum(v) ? <span className="pbar"><i style={{ width: `${Math.max(0, Math.min(100, width))}%` }} />{view.pct[c] ? Math.round(v) : numText(c, v)}</span> : Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : v === null || v === undefined || v === "" ? <span className="miss">—</span> : numText(c, v);
     if (c === "sector" && typeof v === "string" && v) return <span className="sec-pill" style={{ "--h": hue(v) } as CSSProperties}>{v}</span>;
     if (c === "company_name" && typeof v === "string") return <span className="co-name" title={v}>{v}</span>;
     return <>{c === "ticker" && typeof v === "string" ? <button type="button" className="tk-link" onClick={(e) => { e.stopPropagation(); openQuickLook(v); }}><span className="mono-tile" aria-hidden style={{ "--h": hue(v) } as CSSProperties}>{v.replace(/[^A-Z0-9]/gi, "").slice(0, 2)}</span>{content}</button> : content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
@@ -252,7 +270,10 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
     }
   };
   const sortTh = (c: string, text: string) => (
-    <th key={c} data-col={c} style={colStyle(c, true)} className={`sortable${numeric.has(c) ? " r" : ""}`} aria-sort={sort?.key === c ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
+    <th key={c} data-col={c} style={colStyle(c, true)} className={`sortable${numeric.has(c) ? " r" : ""}${dragCol && dragCol !== c ? " drop" : ""}`} aria-sort={sort?.key === c ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
+      draggable onDragStart={(e) => { setDragCol(c); e.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setDragCol(null)}
+      onDragOver={(e) => { if (dragCol && dragCol !== c) e.preventDefault(); }}
+      onDrop={(e) => { e.preventDefault(); if (!dragCol || dragCol === c) return; const o = cols.filter((x) => x !== dragCol); o.splice(o.indexOf(c), 0, dragCol); patch({ order: [...o, ...hidden] }); setDragCol(null); }}
       >
       <button className="dt-sort" title="Shift-click to sort by a second column" onClick={(e) => {
         setPage(0);
@@ -264,7 +285,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
       {sort?.key === c ? (sort.dir === 1 ? <ArrowUp size={10} style={{ marginLeft: 4, verticalAlign: -1 }} /> : <ArrowDown size={10} style={{ marginLeft: 4, verticalAlign: -1 }} />) : null}
       {sort2?.key === c ? <span className="sort2">{sort2.dir === 1 ? "↑" : "↓"}2</span> : null}
       </button>
-      <span className="dt-grip" role="separator" aria-label={`Resize ${text}`} onPointerDown={(e) => startResize(c, e)} />
+      <span className="dt-grip" role="separator" aria-label={`Resize ${text}`} title="Drag to resize, double-click to fit" onPointerDown={(e) => startResize(c, e)} onDoubleClick={() => { const { [c]: _, ...rest } = widths; void _; patch({ widths: rest }); }} />
     </th>
   );
   return (
@@ -311,10 +332,19 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
                         <select aria-label={`${label(c)} scale`} value={view.pct[c] ?? ""} onChange={(e) => { const { [c]: _, ...rest } = view.pct; void _; patch({ pct: e.target.value ? { ...rest, [c]: e.target.value as "all" | "sector" } : rest }); }}>
                           <option value="">Value</option><option value="all">%ile of shown</option>{base.includes("sector") ? <option value="sector">%ile of sector</option> : null}
                         </select>
+                        <select aria-label={`${label(c)} number format`} value={view.num?.[c]?.style ?? ""} onChange={(e) => { const { [c]: _, ...rest } = view.num ?? {}; void _; patch({ num: e.target.value ? { ...rest, [c]: { style: e.target.value as NumFmt["style"], dp: e.target.value === "compact" ? 1 : 2 } } : rest }); }}>
+                          {NUMS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                        </select>
+                        {view.num?.[c] ? <input className="input num" style={{ width: 40, height: 24 }} type="number" min={0} max={6} aria-label={`${label(c)} decimals`} value={view.num[c].dp} onChange={(e) => patch({ num: { ...view.num, [c]: { ...view.num![c], dp: Math.max(0, Math.min(6, Number(e.target.value))) } } })} /> : null}
                         <select aria-label={`${label(c)} format`} value={view.fmt[c]?.mode ?? ""} onChange={(e) => { const { [c]: _, ...rest } = view.fmt; void _; patch({ fmt: e.target.value ? { ...rest, [c]: { mode: e.target.value as Fmt["mode"], op: ">", value: view.fmt[c]?.value ?? 0 } } : rest }); }}>
                           {FORMATS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                         </select>
-                        {view.fmt[c]?.mode === "rule" ? (
+                        {view.fmt[c]?.mode === "rank" ? (
+                          <>
+                            <select aria-label="Top or bottom" value={view.fmt[c].op} onChange={(e) => patch({ fmt: { ...view.fmt, [c]: { ...view.fmt[c], op: e.target.value as ">" | "<" } } })}><option value=">">Top</option><option value="<">Bottom</option></select>
+                            <input className="input num" style={{ width: 52, height: 24 }} type="number" min={1} aria-label="N" value={view.fmt[c].value || 10} onChange={(e) => patch({ fmt: { ...view.fmt, [c]: { ...view.fmt[c], value: Number(e.target.value) } } })} />
+                          </>
+                        ) : view.fmt[c]?.mode === "rule" ? (
                           <>
                             <select aria-label="Rule" value={view.fmt[c].op} onChange={(e) => patch({ fmt: { ...view.fmt, [c]: { ...view.fmt[c], op: e.target.value as ">" | "<" } } })}><option value=">">&gt;</option><option value="<">&lt;</option></select>
                             <input className="input num" style={{ width: 64, height: 24 }} type="number" aria-label="Rule value" value={view.fmt[c].value ?? 0} onChange={(e) => patch({ fmt: { ...view.fmt, [c]: { ...view.fmt[c], value: Number(e.target.value) } } })} />
@@ -392,7 +422,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
             <tfoot>
               <tr className="dt-foot">
                 {bulk ? <td /> : null}
-                {cols.map((c, j) => <td key={c} className={numeric.has(c) ? "r num" : undefined} style={colStyle(c)}>{j === 0 ? "Median" : numeric.has(c) && !isPKey(c) ? fmtKey(c, reduce(rows.map((r) => r[c]).filter(isNum), "median")) : ""}</td>)}
+                {cols.map((c, j) => <td key={c} className={numeric.has(c) ? "r num" : undefined} style={colStyle(c)}>{j === 0 ? "Median" : numeric.has(c) && !isPKey(c) ? numText(c, reduce(rows.map((r) => r[c]).filter(isNum), "median")) : ""}</td>)}
                 {rowActions ? <td /> : null}
               </tr>
             </tfoot>
