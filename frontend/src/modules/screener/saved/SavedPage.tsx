@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Play, Save, Search } from "lucide-react";
 import "./saved.css";
+import "../filters/universe.css";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DataTable, Empty } from "@/kit/DataTable";
@@ -14,7 +15,8 @@ import type { FeatureSpec, Row } from "@/modules/research/types";
 import { send } from "../api";
 
 type Screen = { screen_id: string; name: string; feature_id: string; payload: Record<string, unknown> };
-type Schedule = { screen_id: string; interval_seconds: number; enabled: number; error: string | null };
+type Schedule = { screen_id: string; interval_seconds: number; next_due: number; enabled: number; error: string | null };
+type HistoryRun = { run_id: string; as_of_date: string; result: { summary_cards?: { label: string; value: unknown }[] } };
 const EVERY = [[3600, "Hourly"], [86400, "Daily"], [604800, "Weekly"]] as const;
 const KIND: Record<string, string> = { "01": "Screen", "02": "Formula", "03": "Composite", "04": "Strategies", "05": "Backtest", "06": "Alerts", "07": "Valuation", "08": "Changes" };
 /** What a saved screen holds, as short pills: kind, universe, size and each active filter. */
@@ -78,6 +80,39 @@ export default function SavedPage({ features }: { features: FeatureSpec[] }) {
   );
 }
 
+/** Off, hourly, daily, weekly or every N hours; shows when it runs next and the last error. */
+function SchedulePicker({ id, schedule, onChange }: { id: string; schedule?: Schedule; onChange: () => Promise<unknown> }) {
+  const on = Boolean(schedule?.enabled);
+  const sec = on ? schedule!.interval_seconds : 0;
+  const custom = on && !EVERY.some(([s]) => s === sec);
+  const put = (interval: number, enabled: boolean) => void send("PUT", `/screens/${id}/schedule`, { interval_seconds: interval, enabled }).then(onChange).catch(fail);
+  return (
+    <div className="sv-sched">
+      <div className="ub-seg" role="radiogroup" aria-label="Re-run">
+        <button type="button" role="radio" aria-checked={!on} onClick={() => put(schedule?.interval_seconds || 86400, false)}>Off</button>
+        {EVERY.map(([s, name]) => <button key={s} type="button" role="radio" aria-checked={on && sec === s} onClick={() => put(s, true)}>{name}</button>)}
+      </div>
+      <label className="sv-every">Every<input className="input num" type="number" min={1} max={168} aria-label="Every N hours" key={sec} defaultValue={custom ? Math.round(sec / 3600) : ""} placeholder="N" onBlur={(e) => { const h = Number(e.target.value); if (h >= 1 && h <= 168 && h * 3600 !== sec) put(h * 3600, true); }} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />hours</label>
+      {on && schedule?.next_due ? <span className="stat-s num">Next {new Date(schedule.next_due * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span> : null}
+      {schedule?.error ? <span className="sh-pill red" title={schedule.error}>Last run failed</span> : null}
+    </div>
+  );
+}
+
+/** One bar per stored run, height by names passing; hover for the date and count. */
+function RunTimeline({ id }: { id: string }) {
+  const runs = useQuery({ queryKey: ["screener", "history", id], queryFn: () => get<{ runs: HistoryRun[] }>(`/screens/${id}/history?limit=40`), retry: false }).data?.runs ?? [];
+  const points = runs.map((r) => ({ date: r.as_of_date, n: Number(r.result.summary_cards?.find((c) => c.label === "After filters")?.value ?? NaN) })).filter((x) => Number.isFinite(x.n)).reverse();
+  if (points.length < 2) return null;
+  const top = Math.max(1, ...points.map((x) => x.n));
+  return (
+    <div className="sv-tl" role="img" aria-label={`Names passing over ${points.length} runs, from ${points[0].n} to ${points.at(-1)!.n}`}>
+      {points.map((x, i) => <i key={`${x.date}-${i}`} title={`${x.date}: ${x.n}`} style={{ height: `${Math.max(6, (x.n / top) * 100)}%` }} />)}
+      <span className="num">{points[0].date}</span><span className="num">{points.at(-1)!.date}</span>
+    </div>
+  );
+}
+
 function Detail({ screen, schedule, onChange }: { screen: Screen; schedule?: Schedule; onChange: () => Promise<unknown> }) {
   const id = screen.screen_id;
   const [url, setUrl] = useState("");
@@ -88,12 +123,8 @@ function Detail({ screen, schedule, onChange }: { screen: Screen; schedule?: Sch
   const services = (channels.data?.channels ?? []).map((c) => c.service);
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-        <select className="input" aria-label="Re-run" value={schedule?.enabled ? schedule.interval_seconds : 0} onChange={(e) => { const sec = Number(e.target.value); void send("PUT", `/screens/${id}/schedule`, { interval_seconds: sec || 86400, enabled: sec > 0 }).then(onChange).catch(fail); }}>
-          <option value={0}>Not scheduled</option>
-          {EVERY.map(([sec, name]) => <option key={sec} value={sec}>{name}</option>)}
-        </select>
-      </div>
+      <SchedulePicker id={id} schedule={schedule} onChange={onChange} />
+      <RunTimeline id={id} />
       <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
         <input className="input" style={{ flex: 1, minWidth: 220 }} type="password" autoComplete="off" aria-label="Apprise URL" placeholder="mailto://, tgram://, ntfy://, json://" value={url} onChange={(e) => setUrl(e.target.value)} />
         <label style={{ fontSize: 12 }}><input type="checkbox" checked={digest} onChange={(e) => setDigest(e.target.checked)} /> Digest</label>
