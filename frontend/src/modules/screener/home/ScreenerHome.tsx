@@ -5,7 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Search, Bell, FlaskConical, Gem, HeartPulse, Rocket, ShieldCheck, Sparkles, Trophy, Wallet, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { GlassContent, GlassScene, GlassScrollEdges } from "@glass-sdk/liquid-glass";
+import "@glass-sdk/liquid-glass/styles.css";
 import { BreadthHistory, GroupMatrix, RecentRuns, type Tile } from "./OverviewCharts";
 import { get, latestRun } from "@/modules/research/api";
 import { featureHref, metaFor } from "@/modules/research/catalog";
@@ -44,6 +46,7 @@ const terms = (formula: string) => formula.split(/\s+and\s+/).map((t) => t.repla
 const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${Math.max(m, 1)}m` : m < 2880 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
 
 export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs: RunRecord[] }) {
+  const scroller = useRef<HTMLDivElement>(null);
   const router = useRouter();
   useScreenerPalette();
   const [sizeBy, setSizeBy] = useState<"names" | "cap">("cap");
@@ -73,7 +76,8 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
   };
 
   return (
-    <div className="island sh">
+    <GlassScene className="island sh" material="regular" appearance="dark">
+    <GlassContent layout="scroll" ref={scroller} className="results-scroll">
       <div className="sh-in">
         <header className="sh-head">
           <h1>Screener</h1>
@@ -218,7 +222,9 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
           ))}
         </section>
       </div>
-    </div>
+    </GlassContent>
+    <GlassScrollEdges target={scroller} edges={["top"]} size={64} blur={16} />
+    </GlassScene>
   );
 }
 

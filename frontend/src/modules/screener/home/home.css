@@ -1,4 +1,4 @@
-.sh { overflow-y: auto; }
+.sh { position: relative; overflow: hidden; }
 .sh-in { width: 100%; max-width: 1400px; margin: 0 auto; padding: 22px 26px 40px; }
 .sh-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .sh-head h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.03em; }
