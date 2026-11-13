@@ -47,6 +47,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
     return () => { clearTimeout(id); window.removeEventListener("afterprint", done); };
   }, [printing]);
   const scroller = useRef<HTMLDivElement>(null);
+  const glassLook = useWorkspace().theme === "light" ? "light" : "dark";
   const hero = useRef<HTMLDivElement>(null);
   const running = RUNNING.has(run.status);
   // A finished run needs the width more than the form does; the reader can reopen the panel.
@@ -149,7 +150,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
 
   return (
     <ChartScope key={run.jobId ?? feature.id} events={result?.meta.events}>
-    <GlassScene className="island results" data-lab={lab().id} material="regular" appearance="dark">
+    <GlassScene className="island results" data-lab={lab().id} material="regular" appearance={glassLook}>
     <GlassContent layout="scroll" ref={scroller} className="results-scroll">
       <div ref={hero} style={{ padding: "22px 22px 6px" }}>
         <div className="fv-head">
@@ -235,7 +236,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
     </GlassContent>
     <GlassScrollEdges target={scroller} edges={["top"]} size={64} blur={16} />
     {/* Once the bar sticks it floats as real glass over the scrolling results. */}
-    {stuck ? <GlassSurface radius="capsule" material="clear" tint="#0b0c0f" className="sticky-bar stuck glass-bar">
+    {stuck ? <GlassSurface radius="capsule" material="clear" tint={glassLook === "dark" ? "#0b0c0f" : "#ffffff"} className="sticky-bar stuck glass-bar">
         <span className="sticky-title"><Icon size={14} strokeWidth={1.7} style={{ color: "var(--accent)" }} />{meta.name}<span style={{ color: "var(--line-3)" }}>/</span></span>
         <Tabs value={active?.id ?? ""} onChange={(id) => { setTab(id); setMaxKey(null); scroller.current?.scrollTo({ top: Math.min(scroller.current.scrollTop, hero.current?.offsetHeight ?? 0), behavior: "smooth" }); }}
           tabs={sections.map((s) => ({ id: s.id, label: s.label, count: result ? visible(s).length : undefined }))} />

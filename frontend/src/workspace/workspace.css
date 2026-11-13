@@ -728,3 +728,9 @@ nav.island { container-type: inline-size; }
 .ws-animating [data-panel] { transition: flex-grow 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), flex-basis 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
 @keyframes page-in { from { opacity: 0; transform: translateY(4px); } }
 .ws-panels .island { animation: page-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* Light theme: selected pills are white on the grey track, not solid black. */
+.is-light .tab-pill, .is-light .ub-seg button[aria-checked="true"] { background: var(--panel); box-shadow: 0 1px 2px oklch(0 0 0 / 0.12), 0 0 0 1px oklch(0 0 0 / 0.06); }
+.is-light .tabs button[aria-selected="true"] { color: var(--text); }
+.is-light .menu-seg button[aria-pressed="true"], .is-light .page-switch .pill[aria-selected="true"], .is-light .dp-quick button[aria-pressed="true"], .is-light .ub-sizes button[aria-pressed="true"], .is-light .ub-seg button[aria-checked="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px oklch(0 0 0 / 0.12), 0 0 0 1px oklch(0 0 0 / 0.06); }
+.is-light .glass-bar { --lg-foreground: var(--text); }

@@ -6,6 +6,7 @@ import { ArrowUpRight, Search, Bell, FlaskConical, Gem, HeartPulse, Rocket, Shie
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { useWorkspace } from "@/workspace/WorkspaceShell";
 import { GlassContent, GlassScene, GlassScrollEdges } from "@glass-sdk/liquid-glass";
 import "@glass-sdk/liquid-glass/styles.css";
 import { BreadthHistory, GroupMatrix, RecentRuns, type Tile } from "./OverviewCharts";
@@ -47,6 +48,7 @@ const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); ret
 
 export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs: RunRecord[] }) {
   const scroller = useRef<HTMLDivElement>(null);
+  const glassLook = useWorkspace().theme === "light" ? "light" : "dark";
   const router = useRouter();
   useScreenerPalette();
   const [sizeBy, setSizeBy] = useState<"names" | "cap">("cap");
@@ -76,7 +78,7 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
   };
 
   return (
-    <GlassScene className="island sh" material="regular" appearance="dark">
+    <GlassScene className="island sh" material="regular" appearance={glassLook}>
     <GlassContent layout="scroll" ref={scroller} className="results-scroll">
       <div className="sh-in">
         <header className="sh-head">
