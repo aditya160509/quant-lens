@@ -48,25 +48,25 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 - [ ] Section cards with a header row (icon, title, count, menu), as in the fintrack board columns
 - [ ] Status pills in the trade's words (Passed, Near miss, New, Dropped) as pale tints
 - [ ] Output that looks "magnificent, not dull": stronger hierarchy, colour on data only, one lead figure per card
-- [ ] Table output: cleaner headers, quieter coverage bars, sector pills calmer, ticker tiles refined, row hover and selection polished
-- [ ] Remove the leftover blue accents on chrome (tabs, toggles) where they are not data
+- [x] Table output: cleaner headers, quieter coverage bars, sector pills calmer, ticker tiles refined, row hover and selection polished (`a70ced3`)
+- [x] Remove the leftover blue accents on chrome (tabs, toggles) where they are not data (`a70ced3`)
 - [ ] Two search bars (global and table): decide one pattern; the owner's call
 - [ ] Light theme gets the same pass
 
 ## Motion ("liquid smooth")
 
 - [ ] Sidebar open, close and resize animate smoothly; no jank while dragging
-- [ ] Popovers, menus and the date picker open with a short scale and fade
-- [ ] Tabs slide their active pill; page changes cross-fade
+- [x] Popovers, menus and the date picker open with a short scale and fade (`a70ced3`)
+- [x] Tabs slide their active pill; page changes cross-fade (tabs slide `a70ced3`; page cross-fade still open)
 - [ ] Results enter staggered (heading, then figures, then table) once per run
-- [ ] Numbers count up on change; table rows flash on change (exists, tune)
+- [x] Numbers count up on change; table rows flash on change (exists, tune) (`a70ced3`)
 - [ ] Every move has a reduced-motion fallback
 
 ## Icons
 
-- [ ] One outline icon set at 16 px, 1.5 px stroke, grey; no tinted squares anywhere (Overview tiles, menus, cards)
-- [ ] Product mark in the shell drawn for ATLAS, not a generic glyph
-- [ ] Folder and file style icons for Saved, like the Northwind reference
+- [x] ~~One grey outline icon set~~ superseded: owner asked for colour; nav icons are glossy colour tiles (`39dd894`)
+- [x] Product mark in the shell drawn for ATLAS, not a generic glyph (`985844e`)
+- [x] Folder and file style icons for Saved, like the Northwind reference (`985844e`)
 
 ## Hard items still to build (frontend)
 
@@ -74,26 +74,26 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 - [ ] Chart settings on every card: scale, range, colours, labels, benchmark, annotations (reuse existing settings)
 - [ ] Card actions: maximise, pin, width, reorder, hide, duplicate
 - [ ] Crosshair on hover, click to drill into rows, brush to filter
-- [ ] Price chart: P/E mode (`/pe-history`), entry and exit marks from backtests
-- [ ] Compare up to 8 names: overlaid chart, side-by-side table, differences highlighted
-- [ ] Full stock page with its own URL; PDF
+- [x] Price chart: P/E mode (`/pe-history`), entry and exit marks from backtests (`7684e34`)
+- [x] Compare up to 8 names: overlaid chart, side-by-side table, differences highlighted (`15748af`)
+- [x] Full stock page with its own URL; PDF (`5d53ffb`: `?stock=XOM&view=full`)
 - [x] Saved: cards with mini result, last run, change (`/screens/counts`, `/screens/changes`), schedule pill; rename, duplicate, tag, folder, search, sort, archive
 - [ ] More page: Markets tabs, hourly, plain English, share links, API keys
 - [ ] Share page and embed in the same design
 - [x] Plain-English filter box (`/nl-filter`) producing editable filters
 - [x] Compare-to-field and sector-median filters in the editor; "held for N days"
-- [ ] Run progress by stage with cancel and a stale marker
+- [x] Run progress by stage with cancel and a stale marker (stages `5d9bfaf`; cancel and stale marker already in FeatureView)
 - [x] Relative Rotation Graph view (`/rrg`)
 - [ ] Phone layout: bottom nav, filter sheet, card rows
 - [ ] Perspective pivot view for power users
 - [ ] Table benchmark at 1,000 rows
-- [ ] "Customised" marker listing what differs from default
+- [x] "Customised" marker listing what differs from default (`63af607`)
 
 ## Next
-- [ ] Liquid glass on popovers, menus, palette and runs pill
+- [x] Liquid glass on popovers, menus, palette and runs pill (`a70ced3`)
 - [ ] Backtest cold run (16 s): batch about 1,200 small fundamentals reads into one per run
 - [ ] Screen cold run: Piotroski 1.4 s (vectorise carefully or precompute)
-- [ ] Saved tags and folders; run cancel and stale marker
+- [x] Saved tags and folders; run cancel and stale marker (`985844e`)
 
 ## Research still to do
 
@@ -103,7 +103,7 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 ## Beyond what was asked (suggested)
 
 - [ ] Keyboard path for every action, shown in the palette
-- [ ] Empty, loading and error states designed per card (no "None." lines)
+- [x] Empty, loading and error states designed per card (no "None." lines) (empty states `63af607`)
 - [ ] Visual baselines (screenshots) per page so polish does not regress
 - [ ] Accessibility pass: contrast 4.5:1, focus order, labels on icon buttons
 - [ ] Same pass on Rank, Test, Monitor, Saved and More, then the other labs

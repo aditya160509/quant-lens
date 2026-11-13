@@ -79,3 +79,6 @@
 .sh-move span { display: flex; flex-wrap: wrap; gap: 4px; }
 .sh-move button { border: 0; background: none; padding: 0 4px; font: inherit; cursor: pointer; }
 .sh-move em { font-style: normal; color: var(--text-3); }
+.sh-in .ov-stage { margin: 0 0 12px; }
+.sh-in .ov-stage .n { display: none; }
+.sh-in .ov-stage h2 { font-size: 16px; font-weight: 600; letter-spacing: -0.015em; }

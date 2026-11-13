@@ -38,11 +38,16 @@ export function arrange(items: Item[], prefs: Record<string, CardPref>, keepHidd
 
 /** Outputs pinned to the Overview board, each tied to the run it came from. */
 export type Pin = { featureId: string; card: string; jobId: string; at: number };
-type PinStore = { pins: Pin[]; toggle: (p: Omit<Pin, "at">) => void; remove: (card: string, featureId: string) => void };
+type PinStore = { pins: Pin[]; toggle: (p: Omit<Pin, "at">) => void; remove: (card: string, featureId: string) => void; move: (from: Pin, to: Pin) => void };
 export const usePins = create<PinStore>()(persist((set) => ({
   pins: [],
   toggle: (p) => set((s) => (s.pins.some((x) => x.featureId === p.featureId && x.card === p.card)
     ? { pins: s.pins.filter((x) => !(x.featureId === p.featureId && x.card === p.card)) }
     : { pins: [{ ...p, at: Date.now() }, ...s.pins].slice(0, 24) })),
   remove: (card, featureId) => set((s) => ({ pins: s.pins.filter((x) => !(x.featureId === featureId && x.card === card)) })),
+  move: (from, to) => set((s) => {
+    const pins = s.pins.filter((x) => x !== from);
+    pins.splice(pins.indexOf(to) + (s.pins.indexOf(from) < s.pins.indexOf(to) ? 1 : 0), 0, from);
+    return { pins };
+  }),
 }), { name: "research-pins", storage: createJSONStorage(() => localStorage) }));

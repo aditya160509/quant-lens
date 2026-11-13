@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState, type DragEvent } from "react";
 import { motion } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
 import { DUR } from "@/workspace/prefs";
@@ -138,20 +139,29 @@ export function Overview({ features, loading, runs }: { features: FeatureSpec[];
 }
 
 /** Pinned outputs from any feature, side by side, each drawn from the run it was pinned from. */
-function Board({ features }: { features: FeatureSpec[] }) {
+export function Board({ features }: { features: FeatureSpec[] }) {
   const pins = usePins((s) => s.pins).filter((p) => owns(p.featureId));
+  const move = usePins((s) => s.move);
+  const [drag, setDrag] = useState<Pin | null>(null);
   if (!pins.length || !features.length) return null;
   return (
     <section style={{ marginTop: 26 }}>
-      <div className="ov-stage"><span className="n">★</span><h2>Board</h2><p>Outputs you pinned. Right-click any output and choose Pin to board.</p></div>
+      <div className="ov-stage"><span className="n">★</span><h2>Board</h2></div>
       <div className="out-grid">
-        {pins.map((p) => <PinnedCard key={`${p.featureId}:${p.card}`} pin={p} features={features} />)}
+        {pins.map((p) => (
+          <PinnedCard key={`${p.featureId}:${p.card}`} pin={p} features={features} dragging={drag === p}
+            onDragStart={() => setDrag(p)} onDragEnd={() => setDrag(null)}
+            onDragOver={(e) => { if (drag && drag !== p) { e.preventDefault(); move(drag, p); } }} />
+        ))}
       </div>
     </section>
   );
 }
 
-function PinnedCard({ pin, features }: { pin: Pin; features: FeatureSpec[] }) {
+type DragProps = { dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onDragOver: (e: DragEvent) => void };
+function PinnedCard({ pin, features, dragging, ...drag }: { pin: Pin; features: FeatureSpec[] } & DragProps) {
+  // Only the card header drags, so brushing and selecting inside the card still work.
+  const [grab, setGrab] = useState(false);
   const feature = features.find((f) => f.id === pin.featureId);
   const job = useJob(pin.jobId);
   const remove = usePins((s) => s.remove);
@@ -171,7 +181,8 @@ function PinnedCard({ pin, features }: { pin: Pin; features: FeatureSpec[] }) {
     );
   }
   return (
-    <div style={{ gridColumn: `span ${span}`, minWidth: 0 }}>
+    <div className={`pin-cell${dragging ? " dragging" : ""}`} style={{ gridColumn: `span ${span}`, minWidth: 0 }} draggable={grab} {...drag}
+      onPointerDown={(e) => setGrab(Boolean((e.target as HTMLElement).closest(".card-h")) && !(e.target as HTMLElement).closest("button"))} onPointerUp={() => setGrab(false)}>
       <OutputCard item={{ ...item, title: `${metaFor(feature.id, feature.name).name} · ${item.title ?? feature.outputs.find((o) => o.key === item.keys[0])?.title ?? item.keys[0]}` }}
         feature={feature} result={result} maximized={false} onToggleMax={() => undefined} onHide={() => remove(pin.card, pin.featureId)} scope={`${feature.id}:${pin.jobId}`} />
     </div>

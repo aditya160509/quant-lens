@@ -13,6 +13,7 @@ import { useStudies } from "@/modules/research/store";
 import { openQuickLook } from "@/kit/QuickLook";
 import { Treemap } from "@/charts/Treemap";
 import { defaultsFor } from "@/modules/research/StudyForm";
+import { Board } from "@/modules/research/Overview";
 import type { FeatureSpec, RunRecord } from "@/modules/research/types";
 import "./home.css";
 
@@ -204,6 +205,8 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
             </div>
           ))}
         </section>
+
+        <Board features={features} />
 
         <h2 className="sh-h">Sectors</h2>
         <section className="sh-sectors">

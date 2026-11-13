@@ -726,3 +726,6 @@ nav.island { container-type: inline-size; }
 .custom-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 4px 4px 4px 6px; font-size: 12.5px; color: var(--text-2); }
 .custom-row .num { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
 .custom-row s { margin-right: 6px; color: var(--text-4); }
+.pin-cell .card-h { cursor: grab; }
+.pin-cell { transition: opacity 0.15s var(--ease), transform 0.2s var(--ease); }
+.pin-cell.dragging { opacity: 0.45; transform: scale(0.98); cursor: grabbing; }
