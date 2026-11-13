@@ -681,3 +681,14 @@ def test_run_reports_the_as_of_date_it_used_so_two_dates_can_be_compared(local_d
     from app.services.screener_v2.registry import run_feature
     dates = [run_feature('01', {'tickers': ['AAA', 'BBB'], 'as_of_date': day})['meta']['as_of_date'] for day in ['2024-06-28', '2025-06-27']]
     assert dates == ['2024-06-28', '2025-06-27']
+
+
+def test_field_vs_field_and_metric_vs_sector_rules_compare_against_sector_medians():
+    import pandas as pd
+
+    from app.services.screener_v2.core.screener import tree_mask
+    panel = pd.DataFrame({'ticker': ['A', 'B', 'C', 'D'], 'sector': ['Tech', 'Tech', 'Tech', 'Energy'], 'trailing_pe': [10., 30., 20., 5.], 'pb_ratio': [1., 3., 2., 1.]})
+    below_sector = tree_mask(panel, {'left': 'pe', 'op': '<', 'right': 'pe_sector_median'}, panel)
+    cheap_vs_sector = tree_mask(panel, {'metric_vs_sector': 'pe', 'op': '<', 'value': 0.8}, panel)
+    assert below_sector.tolist() == [True, False, False, False]
+    assert cheap_vs_sector.tolist() == [True, False, False, False]

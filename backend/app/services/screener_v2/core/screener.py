@@ -202,10 +202,37 @@ RANGE_FILTERS: list[tuple[str, str, str, str]] = [
 ]
 
 
-def tree_mask(df: pd.DataFrame, node: dict[str, Any]) -> pd.Series:
-    """AND/OR groups of rules (react-querybuilder shape); an unknown value never passes a rule."""
+RELATIVE_OPS = {"<": np.less, "<=": np.less_equal, ">": np.greater, ">=": np.greater_equal, "=": np.equal, "!=": np.not_equal}
+
+
+def _relative_mask(df: pd.DataFrame, universe: pd.DataFrame, node: dict[str, Any], columns: dict[str, str]) -> pd.Series:
+    """`{"left": "pe", "op": "<", "right": "pe_sector_median"}` or `{"metric_vs_sector": "pe", "op": "<", "value": 0.8}` (metric over its sector median)."""
+    def operand(name: str) -> pd.Series:
+        base = name.removesuffix("_sector_median")
+        col = columns.get(base)
+        if col is None or col not in df:
+            raise ValueError(f"Unknown filter field: {name}")
+        if base == name:
+            return pd.to_numeric(df[col], errors="coerce")
+        medians = pd.to_numeric(universe[col], errors="coerce").groupby(universe["sector"]).median()
+        return df["sector"].map(medians)
+    if node.get("op") not in RELATIVE_OPS:
+        raise ValueError(f"Unsupported operator: {node.get('op')}")
+    if "metric_vs_sector" in node:
+        metric = str(node["metric_vs_sector"])
+        bound = number_like(node.get("value"))
+        if bound is None:
+            raise ValueError("Relative rule on a sector median needs a number value")
+        left, right = operand(metric) / operand(f"{metric}_sector_median"), pd.Series(bound, index=df.index)
+    else:
+        left, right = operand(str(node["left"])), operand(str(node["right"]))
+    return RELATIVE_OPS[node["op"]](left, right) & left.notna() & right.notna()
+
+
+def tree_mask(df: pd.DataFrame, node: dict[str, Any], universe: pd.DataFrame | None = None) -> pd.Series:
+    """AND/OR groups of rules (react-querybuilder shape); an unknown value never passes a rule. Sector medians come from `universe`, the whole loaded panel."""
     if "rules" in node:
-        masks = [tree_mask(df, r) for r in node["rules"] if not r.get("disabled")]
+        masks = [tree_mask(df, r, universe) for r in node["rules"] if not r.get("disabled")]
         if not masks:
             return pd.Series(True, index=df.index)
         out = masks[0]
@@ -213,6 +240,8 @@ def tree_mask(df: pd.DataFrame, node: dict[str, Any]) -> pd.Series:
             out = out & m if str(node.get("combinator", "and")).lower() == "and" else out | m
         return ~out if node.get("not") else out
     columns = {lo[:-4]: col for col, lo, _, _ in RANGE_FILTERS} | {"sector": "sector", "industry": "industry", "industry_group": "industry_group", "exchange": "exchange", "country": "country", "currency": "quote_currency"}
+    if "left" in node or "metric_vs_sector" in node:
+        return _relative_mask(df, df if universe is None else universe, node, columns)
     field, op, value = node.get("field"), node.get("operator"), node.get("value")
     col = columns.get(field)
     if col == "country" and "country" not in df:
@@ -316,7 +345,7 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
             allowed = {str(v).strip().lower() for v in (wanted if isinstance(wanted, list) else re.split(r"[,;]", str(wanted))) if str(v).strip()}
             apply(label, column.astype(str).str.lower().isin(allowed), key)
     if payload.get("filter_tree"):
-        apply("Filter groups", tree_mask(filtered, payload["filter_tree"]), "filter_tree")
+        apply("Filter groups", tree_mask(filtered, payload["filter_tree"], panel), "filter_tree")
     listed = payload.get("ticker_in")
     if listed:
         names = {str(v).strip().upper().replace(".", "_").replace("-", "_") for v in (listed if isinstance(listed, list) else re.split(r"[,;\s]+", str(listed))) if str(v).strip()}
