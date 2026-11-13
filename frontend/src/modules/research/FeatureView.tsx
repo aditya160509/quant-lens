@@ -1,6 +1,6 @@
 "use client";
 
-import { GlassContent, GlassScene, GlassScrollEdges } from "@glass-sdk/liquid-glass";
+import { GlassContent, GlassScene, GlassScrollEdges, GlassSurface } from "@glass-sdk/liquid-glass";
 import "@glass-sdk/liquid-glass/styles.css";
 import { ChartScope } from "@/charts/ChartScope";
 import Link from "next/link";
@@ -179,7 +179,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         {running ? <Progress startedAt={run.startedAt} status={run.status} progress={run.progress} /> : null}
       </div>
 
-      <div className={`sticky-bar${stuck ? " stuck" : ""}`}>
+      <div className={`sticky-bar${stuck ? " stuck" : ""}`} inert={stuck}>
         <span className="sticky-title"><Icon size={14} strokeWidth={1.7} style={{ color: "var(--accent)" }} />{meta.name}<span style={{ color: "var(--line-3)" }}>/</span></span>
         <Tabs value={active?.id ?? ""} onChange={(id) => { setTab(id); setMaxKey(null); scroller.current?.scrollTo({ top: Math.min(scroller.current.scrollTop, hero.current?.offsetHeight ?? 0), behavior: "smooth" }); }}
           tabs={sections.map((s) => ({ id: s.id, label: s.label, count: result ? visible(s).length : undefined }))} />
@@ -234,6 +234,14 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
       </div>
     </GlassContent>
     <GlassScrollEdges target={scroller} edges={["top"]} size={64} blur={16} />
+    {/* Once the bar sticks it floats as real glass over the scrolling results. */}
+    {stuck ? <GlassSurface radius="capsule" material="clear" tint="#0b0c0f" className="sticky-bar stuck glass-bar">
+        <span className="sticky-title"><Icon size={14} strokeWidth={1.7} style={{ color: "var(--accent)" }} />{meta.name}<span style={{ color: "var(--line-3)" }}>/</span></span>
+        <Tabs value={active?.id ?? ""} onChange={(id) => { setTab(id); setMaxKey(null); scroller.current?.scrollTo({ top: Math.min(scroller.current.scrollTop, hero.current?.offsetHeight ?? 0), behavior: "smooth" }); }}
+          tabs={sections.map((s) => ({ id: s.id, label: s.label, count: result ? visible(s).length : undefined }))} />
+        {result ? <button className="btn sm ghost" style={{ marginLeft: "auto" }} onClick={() => setPrinting(true)} title="Every section on one page, ready to save as PDF"><FileText size={13} />Report</button> : null}
+        <span className="sticky-run" style={{ marginLeft: result ? 0 : "auto" }} aria-hidden={!stuck} inert={!stuck}>{runButton}</span>
+    </GlassSurface> : null}
     </GlassScene>
     </ChartScope>
   );

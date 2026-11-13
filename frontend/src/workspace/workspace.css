@@ -729,3 +729,5 @@ nav.island { container-type: inline-size; }
 .pin-cell .card-h { cursor: grab; }
 .pin-cell { transition: opacity 0.15s var(--ease), transform 0.2s var(--ease); }
 .pin-cell.dragging { opacity: 0.45; transform: scale(0.98); cursor: grabbing; }
+.sticky-bar.stuck:not(.glass-bar) { visibility: hidden; }
+.glass-bar { position: absolute; z-index: 6; top: 8px; left: 12px; right: 12px; height: 46px; padding: 0 8px 0 16px; border: 0; background: transparent; animation: float-in 0.22s var(--ease); --lg-foreground: var(--text); }
