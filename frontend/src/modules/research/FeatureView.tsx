@@ -335,6 +335,9 @@ const UNIT_FMT: Record<string, (v: number) => string> = {
 /** Headline numbers: enough precision to see small slopes, never more than four decimals. */
 const kpi = (v: number) => (Number.isInteger(v) ? num(v) : Math.abs(v) < 0.1 ? num(v, 4) : Math.abs(v) < 10 ? num(v, 3) : num(v, 1));
 
+/** Screener stage ids, as the API reports them, in words. */
+const STAGE_NAME: Record<string, string> = { load: "Loading data", compute: "Computing metrics", filter: "Filtering", rank: "Ranking" };
+
 /** Elapsed time, plus the stage and percent when the API reports them ({ percent, message }). */
 function Progress({ startedAt, status, progress }: { startedAt: number | null; status: string; progress?: unknown }) {
   const p = progress && typeof progress === "object" ? progress as { percent?: number; message?: string } : null;
@@ -344,7 +347,7 @@ function Progress({ startedAt, status, progress }: { startedAt: number | null; s
   const secs = startedAt ? Math.max(0, (now - startedAt) / 1000) : 0;
   // Each distinct stage message the API reports becomes a step; earlier ones are done.
   const [stages, setStages] = useState<{ text: string; at: number }[]>([]);
-  const msg = p?.message;
+  const msg = p?.message && (STAGE_NAME[p.message] ?? p.message);
   // Adjusting state while rendering (not in an effect): a new message appends a step, timed by the 200 ms clock.
   if (msg && stages[stages.length - 1]?.text !== msg) setStages([...stages, { text: msg, at: now }]);
   return (
@@ -358,7 +361,7 @@ function Progress({ startedAt, status, progress }: { startedAt: number | null; s
     ) : null}
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, background: "var(--panel)", boxShadow: "inset 0 0 0 1px var(--line)", fontSize: 12.5, color: "var(--text-2)" }}>
       <Loader2 size={14} className="spin" style={{ color: "var(--accent)" }} />
-      <span>{status === "queued" ? "Queued" : status === "submitting" ? "Submitting the study" : p?.message || "Estimating"}</span>
+      <span>{status === "queued" ? "Queued" : status === "submitting" ? "Submitting the study" : msg || "Estimating"}</span>
       <div className="progress">{percent !== null && percent > 0 ? <i style={{ animation: "none", width: `${percent}%`, transition: "width .4s var(--ease)" }} /> : <i />}</div>
       {percent !== null && percent > 0 ? <span className="num" style={{ color: "var(--text-3)" }}>{Math.round(percent)}%</span> : null}
       <span className="num" style={{ marginLeft: "auto", color: "var(--text-3)" }}>{secs.toFixed(1)}s</span>
