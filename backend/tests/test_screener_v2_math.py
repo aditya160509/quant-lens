@@ -107,8 +107,9 @@ def test_wilder_seed_includes_all_first_valid_observations():
     assert result.iloc[4] == pytest.approx(8 / 3)
 
 
-def test_piotroski_original_criteria_and_missing_inputs(monkeypatch):
+def test_piotroski_original_criteria_and_missing_inputs(monkeypatch, tmp_path):
     from app.services.screener_v2.core import academic
+    monkeypatch.setattr(academic, '_PIOTROSKI_DIR', tmp_path)  # fake ticker 'A' must not enter the real cache
     history = pd.DataFrame({
         'reportDate': pd.to_datetime(['2021-12-31', '2022-12-31', '2023-12-31']),
         'periodType': ['annual'] * 3, 'Total Assets': [80., 100., 110.],

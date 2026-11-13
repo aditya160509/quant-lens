@@ -246,9 +246,11 @@ def clear_performance_caches() -> None:
     _cached_returns_matrix_versioned.cache_clear()
     _fundamentals_frame.cache_clear()
     _fundamentals_positions.cache_clear()
-    from .academic import _piotroski_row
+    from .academic import _PIOTROSKI_DIR, _piotroski_row
 
     _piotroski_row.cache_clear()
+    for stale in _PIOTROSKI_DIR.glob("*.parquet"):
+        stale.unlink()
 
 
 def performance_cache_info() -> dict[str, object]:
