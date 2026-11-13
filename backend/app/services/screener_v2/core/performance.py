@@ -115,6 +115,32 @@ def _subset_frame(symbols: tuple[str, ...], lookback_days: int | None, columns: 
     from . import data_loader
 
     data_loader.market_source_integrity()  # a corrupt file must fail even when the requested symbols are clean
+    if _PIT_MEMO.get() is not None:  # a backtest already holds its rows in memory
+        return _read_subset(symbols, lookback_days, columns, as_of)
+    version = _market_version()
+    if len(symbols) > 1:
+        return _subset_cached(symbols, lookback_days, columns, as_of, version)
+    # One name: read its history once, then slice per window; the file scan is the cost.
+    frame = _subset_cached(symbols, None, columns, None, version)
+    return _window(frame, lookback_days, as_of)
+
+
+def _window(frame: pl.DataFrame, lookback_days: int | None, as_of) -> pl.DataFrame:
+    if as_of is not None:
+        frame = frame.filter(pl.col("Date") <= pd.Timestamp(as_of))
+    if lookback_days and frame.height:
+        frame = frame.filter(pl.col("Date") >= pd.Timestamp(frame["Date"].max()) - pd.Timedelta(days=int(lookback_days) * 2))
+    return frame
+
+
+@lru_cache(maxsize=24)
+def _subset_cached(symbols, lookback_days, columns, as_of, version) -> pl.DataFrame:
+    return _read_subset(symbols, lookback_days, columns, as_of)
+
+
+def _read_subset(symbols: tuple[str, ...], lookback_days: int | None, columns: tuple[str, ...] | None, as_of) -> pl.DataFrame:
+    from . import data_loader
+
     query = _market_rows(symbols, as_of)
     if as_of is not None:
         query = query.filter(pl.col("Date") <= pd.Timestamp(as_of))
@@ -214,6 +240,7 @@ def cached_fundamental_history(symbol: str) -> pd.DataFrame:
 
 
 def clear_performance_caches() -> None:
+    _subset_cached.cache_clear()
     _cached_close_matrix_versioned.cache_clear()
     _cached_volume_matrix_versioned.cache_clear()
     _cached_returns_matrix_versioned.cache_clear()
