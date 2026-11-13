@@ -86,3 +86,5 @@
 .ql-strip { position: relative; display: block; height: 4px; border-radius: 2px; background: var(--raise); }
 .ql-strip u { position: absolute; top: -3px; width: 2px; height: 10px; margin-left: -1px; border-radius: 1px; background: var(--text); }
 .ql-mode { display: flex; justify-content: flex-end; margin: -2px 0 6px; }
+.ql-cmp td.ql-best { color: var(--up); font-weight: 600; }
+.ql-cmp td.ql-worst { color: var(--down); }

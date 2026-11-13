@@ -15,10 +15,10 @@ import { Spark } from "@/charts/RankList";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { isNum } from "@/modules/research/format";
 import { Chip, Segmented } from "@/workspace/ui";
-import { pdfUrl, useBars, useCompare, useLookup, usePeHistory, useStatements, type Lookup, type Stat } from "./QuickLookData";
+import { pdfUrl, useBars, useBarsMany, useCompare, useLookup, usePeHistory, useStatements, type Lookup, type Stat } from "./QuickLookData";
 import "./quicklook.css";
 
-export const MAX_COMPARE = 25;
+export const MAX_COMPARE = 8;
 export type QuickTab = "overview" | "ratios" | "health" | "peers" | "financials" | "compare";
 
 type QuickLookStore = {
@@ -356,14 +356,42 @@ const CMP_LABEL: Record<string, string> = { price: "Price", market_cap: "Mkt cap
 const CMP_PCT = new Set(["return_1m", "return_12m", "fcf_yield", "roe", "net_margin", "revenue_growth_yoy", "realized_vol_63d"]);
 const CMP_WHOLE = new Set(["core_quant_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile"]);
 
+// Which way is better per metric; unlisted rows (price, size) get no highlight.
+const CMP_LOWER = new Set(["trailing_pe", "pb_ratio", "ev_ebitda", "debt_equity", "realized_vol_63d", "beta_252"]);
+const CMP_HIGHER = new Set(["return_1m", "return_12m", "fcf_yield", "roe", "net_margin", "revenue_growth_yoy", ...CMP_WHOLE]);
+
+/** Each name's close rebased to 100 at the start of the range, so paths compare directly. */
+function CompareChart({ tickers }: { tickers: string[] }) {
+  const range = useQuickLook((s) => s.range);
+  const qs = useBarsMany(tickers, RANGE_DAYS[range] ?? 365);
+  const data = useMemo(() => {
+    const by = new Map<string, Record<string, number | string>>();
+    qs.forEach((q, i) => {
+      const bars = q.data?.bars ?? [];
+      const base = bars.find((b) => b.close > 0)?.close;
+      if (base) bars.forEach((b) => { const r = by.get(b.time) ?? { date: b.time }; r[tickers[i]] = (b.close / base) * 100; by.set(b.time, r); });
+    });
+    return [...by.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  }, [qs, tickers]);
+  if (data.length < 2) return qs.some((q) => q.isLoading) ? <p className="ql-state" role="status">Loading</p> : null;
+  return <TimeSeries data={data} series={tickers.map((t) => ({ key: t, label: t }))} height={240} refLines={[{ y: 100, label: "" }]} format={(v) => v.toFixed(0)} directLabels />;
+}
+
 function ComparePanel() {
   const { basket, toggleBasket, setBasket, open } = useQuickLook();
   const q = useCompare(basket);
+  const tone = (c: string, v: unknown, rows: Record<string, unknown>[]) => {
+    const dir = CMP_LOWER.has(c) ? -1 : CMP_HIGHER.has(c) ? 1 : 0;
+    const vals = rows.map((r) => r[c]).filter(isNum);
+    if (!dir || !isNum(v) || vals.length < 2 || Math.max(...vals) === Math.min(...vals)) return "";
+    return v === (dir > 0 ? Math.max : Math.min)(...vals) ? " ql-best" : v === (dir > 0 ? Math.min : Math.max)(...vals) ? " ql-worst" : "";
+  };
   if (basket.length < 2) return <p className="ql-none">Add at least two names to compare{basket.length ? `, ${basket[0]} is in` : ""}</p>;
   const cell = (c: string, v: unknown): ReactNode => (!isNum(v) ? UNKNOWN : CMP_PCT.has(c) ? pctText(v) : c === "market_cap" ? big(v) : CMP_WHOLE.has(c) ? v.toFixed(0) : numText(v));
   return (
     <>
       <div className="ql-bar-row"><span className="ql-sub">{basket.length} of {MAX_COMPARE} names</span><button className="btn sm ghost" onClick={() => setBasket([])}>Clear</button></div>
+      <CompareChart tickers={basket} />
       {q.isLoading ? <p className="ql-state" role="status">Loading</p> : q.error ? <p className="ql-state err" role="alert">{(q.error as Error).message}</p> : q.data ? (
         <div className="ql-scroll">
           <table className="ql-table ql-cmp">
@@ -371,7 +399,7 @@ function ComparePanel() {
             <tbody>
               <tr><td>Name</td>{q.data.rows.map((r) => <td key={r.ticker} className="r ql-nm">{r.company_name ?? UNKNOWN}</td>)}</tr>
               <tr><td>Sector</td>{q.data.rows.map((r) => <td key={r.ticker} className="r ql-nm">{r.sector ?? UNKNOWN}</td>)}</tr>
-              {q.data.columns.map((c) => <tr key={c}><td>{CMP_LABEL[c] ?? c}</td>{q.data!.rows.map((r) => <td key={r.ticker} className="r num">{cell(c, r[c])}</td>)}</tr>)}
+              {q.data.columns.map((c) => <tr key={c}><td>{CMP_LABEL[c] ?? c}</td>{q.data!.rows.map((r) => <td key={r.ticker} className={`r num${tone(c, r[c], q.data!.rows)}`}>{cell(c, r[c])}</td>)}</tr>)}
             </tbody>
           </table>
         </div>
