@@ -130,9 +130,16 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
       <div className={`ws ws-tokens${themeClass} ${className}`}>
         <header className="ws-top">
           <Link href="/" className="ws-brand" aria-label="ATLAS home">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
-              <rect width="20" height="20" rx="6" fill="var(--text)" />
-              <path d="M5 13.5 8.2 9l2.6 2.6L15 6" stroke="var(--bg)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+            {/* The mark: a globe (the atlas) with a rising line drawn across it. */}
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden className="ws-mark">
+              <defs>
+                <linearGradient id="ws-mark-g" x1="0" y1="0" x2="0" y2="22" gradientUnits="userSpaceOnUse"><stop stopColor="oklch(0.72 0.15 235)" /><stop offset="1" stopColor="oklch(0.5 0.17 255)" /></linearGradient>
+              </defs>
+              <rect width="22" height="22" rx="6.5" fill="url(#ws-mark-g)" />
+              <rect x="0.5" y="0.5" width="21" height="21" rx="6" stroke="white" strokeOpacity="0.22" />
+              <circle cx="11" cy="11" r="6.2" stroke="white" strokeOpacity="0.55" strokeWidth="1.1" />
+              <ellipse cx="11" cy="11" rx="2.6" ry="6.2" stroke="white" strokeOpacity="0.4" strokeWidth="1" />
+              <path d="M4.2 14.2 8.4 10.6l2.4 2 6.8-6" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             ATLAS
           </Link>

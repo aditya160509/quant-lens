@@ -714,3 +714,6 @@ nav.island { container-type: inline-size; }
 .runs-pill { transition: transform 0.16s var(--ease), color 0.16s, border-color 0.16s; }
 .runs-pill:hover { transform: translateY(-1px); }
 @media (prefers-reduced-motion: reduce) { .pop, .popover, .tbl-pop, .menu, .cmdk { animation: none; } .runs-pill:hover { transform: none; } }
+.ws-mark { filter: drop-shadow(0 1px 2px oklch(0 0 0 / 0.35)); transition: transform 0.2s var(--ease); }
+.ws-brand:hover .ws-mark { transform: rotate(-6deg) scale(1.04); }
+@media (prefers-reduced-motion: reduce) { .ws-brand:hover .ws-mark { transform: none; } }
