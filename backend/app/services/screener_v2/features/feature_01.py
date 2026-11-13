@@ -10,6 +10,7 @@ from ..core.academic import academic_strategy_scores
 from ..core.common import access_meta, records, response
 from ..core.data_loader import close_matrix, parse_symbols
 from ..core.explain import remember
+from ..core.explain import stage as report_stage
 from ..core.formula import add_metric_columns
 from ..core.panel import metric_panel
 from ..core.screener import (
@@ -34,7 +35,9 @@ OUTPUTS = [{'key': 'run_changes', 'source': 'charts', 'render': 'table', 'primar
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     symbols = parse_symbols(payload, default_limit=int(payload.get("max_symbols") or 500), max_symbols=1000)
+    report_stage("load")
     panel = metric_panel(payload, symbols=symbols)
+    report_stage("compute")
     dropped = panel.attrs.get("dropped_symbols", [])
     scores = academic_strategy_scores(panel)[["ticker", "piotroski_passed", "piotroski_available_criteria", "altman_z_score"]]
     panel = panel.merge(scores, on="ticker", how="left", validate="one_to_one")
@@ -48,7 +51,9 @@ def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     remember(panel)
     coverage = [{"metric": name, "known": int(panel[name].notna().sum()), "total": len(panel), "share": float(panel[name].notna().mean())}
                 for name in panel.select_dtypes("number").columns]
+    report_stage("filter")
     filtered, funnel = apply_filters(panel, payload)
+    report_stage("rank")
     filtered.attrs.update(panel.attrs)
     bottleneck = max(funnel[1:], key=lambda stage: stage["removed"], default=None)
     bottleneck = bottleneck if bottleneck and bottleneck["removed"] else None

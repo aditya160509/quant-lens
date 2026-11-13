@@ -228,11 +228,16 @@ async def lookup_pdf(ticker: str) -> Response:
     return Response(body, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{ticker}-one-page.pdf"'})
 
 
+STAGE_PERCENT = {"load": 10, "compute": 40, "filter": 70, "rank": 90}
+
+
 def _execute(job_id: str, feature_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     token = explain.RUN_ID.set(job_id)
+    stage_token = explain.STAGE.set(lambda name: JOBS.update(job_id, progress={"percent": STAGE_PERCENT.get(name, 0), "message": name}))
     try:
         result = run_feature(feature_id, payload)
     finally:
+        explain.STAGE.reset(stage_token)
         explain.RUN_ID.reset(token)
     from app.services.screener_v2.core.state import list_metrics
     # Everything needed to rerun this result exactly.

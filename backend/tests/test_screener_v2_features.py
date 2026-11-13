@@ -706,3 +706,34 @@ def test_plain_english_becomes_filter_payload_and_reports_unparsed_words(local_d
     assert body['payload'] == {'pe_max': 20, 'roe_min': 0.15, 'sectors': ['Technology']}
     assert body['unparsed'] == ['zzz']
     assert client.post('/api/screener-v2/nl-filter', json={'text': 'hello there'}).status_code == 422
+
+
+def test_run_job_reports_its_stages_as_progress(local_data, monkeypatch, tmp_path):
+    import time
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.api import screener_v2
+    from app.services.studio.jobs import JobStore
+    store = JobStore(path=tmp_path / 'jobs.json')
+    stages = []
+    update = store.update
+
+    def record_stage(job_id, **patch):
+        if 'progress' in patch:
+            stages.append(patch['progress']['message'])
+        return update(job_id, **patch)
+    monkeypatch.setattr(store, 'update', record_stage)
+    monkeypatch.setattr(screener_v2, 'JOBS', store)
+    monkeypatch.setattr(screener_v2, 'RESULTS_DIR', tmp_path / 'results')
+    app = FastAPI()
+    app.include_router(screener_v2.router, prefix='/api')
+    client = TestClient(app)
+    job_id = client.post('/api/screener-v2/feature/01/jobs', json={'payload': {'tickers': ['AAA', 'BBB'], 'top_n': 2}}).json()['job_id']
+    for _ in range(300):
+        if client.get(f'/api/screener-v2/jobs/{job_id}').json()['status'] in {'completed', 'failed'}:
+            break
+        time.sleep(.01)
+    assert client.get(f'/api/screener-v2/jobs/{job_id}').json()['status'] == 'completed'
+    assert stages == ['load', 'compute', 'filter', 'rank']

@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import threading
 from collections import OrderedDict
+from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any
 
@@ -14,6 +15,8 @@ from .screener import apply_filters, effective_payload, range_filters
 
 # The unfiltered panel behind a finished run, kept for its last few runs so explaining a row does not rebuild it.
 RUN_ID: ContextVar[str | None] = ContextVar("screener_run_id", default=None)
+# Reports a run stage (load, compute, filter, rank) to the job watching it; a no-op outside a job.
+STAGE: ContextVar[Callable[[str], None] | None] = ContextVar("screener_stage", default=None)
 _PANELS: OrderedDict[str, pd.DataFrame] = OrderedDict()
 _LOCK = threading.Lock()
 
@@ -259,6 +262,12 @@ def ohlcv(ticker: str, days: int) -> dict[str, Any]:
         raise KeyError(f"No prices held for {ticker}")
     return {"ticker": symbol, "bars": [{"time": d.strftime("%Y-%m-%d"), "open": float(o), "high": float(h), "low": float(lo), "close": float(c), "volume": None if pd.isna(v) else float(v)}
                                        for d, o, h, lo, c, v in zip(frame.Date, frame.Open, frame.High, frame.Low, frame.Close, frame.Volume, strict=True)]}
+
+
+def stage(name: str) -> None:
+    report = STAGE.get()
+    if report is not None:
+        report(name)
 
 
 RRG_WEEKS = 10
