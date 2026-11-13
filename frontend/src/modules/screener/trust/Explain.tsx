@@ -75,6 +75,7 @@ export function NearMisses({ result }: { result: FeatureResult }) {
   if (!runId) return <Empty text="No run record." />;
   if (res.error) return <div role="alert" style={{ color: "var(--down)", fontSize: 12 }}>{res.error.message}</div>;
   const all = res.data?.near_misses ?? [];
+  if (res.isSuccess && !all.length) return <Empty text="No name misses by just one range filter." />;
   const labels = [...new Map(all.map((m) => [m.filter, m.label])).entries()].map(([filter, text]) => ({ filter, text, n: all.filter((m) => m.filter === filter).length }));
   const rows: Row[] = all.filter((m) => !pick || m.filter === pick).map((m) => ({ ticker: m.symbol, filter: m.label, limit: bound(m.side, "", m.threshold), value: m.value, relax_to: m.value, relax_by: m.relax_by }));
   return (
