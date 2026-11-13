@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as Popover from "@radix-ui/react-popover";
-import { ArrowDown, ArrowUp, ChevronRight, Columns3, Download, Link2, Pin, RotateCcw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronRight, CircleDashed, Columns3, Download, Link2, Pin, RotateCcw, Search, X } from "lucide-react";
 import { Spark } from "@/charts/RankList";
 import { downloadCsv, downloadXlsx } from "@/charts/export";
 import { openQuickLook } from "./QuickLook";
@@ -15,7 +15,7 @@ import type { Row } from "@/modules/research/types";
 import "@/modules/research/outputs/tables.css";
 
 export function Empty({ text = "Nothing to show for this configuration." }: { text?: string }) {
-  return <div style={{ padding: "22px 4px", color: "var(--text-3)", fontSize: 12.5 }}>{text}</div>;
+  return <div className="empty-state" role="status"><CircleDashed size={18} aria-hidden />{text}</div>;
 }
 
 export const FLAG_KEYS = ["fragile", "disagreement", "material_disagreement", "imbalanced", "near_duplicate", "discontinuity", "still_significant", "significant", "flag", "concentrated", "manipulation_detected", "winner", "forbidden_comparison"];

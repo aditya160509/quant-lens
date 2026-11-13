@@ -84,7 +84,7 @@ export function NearMisses({ result }: { result: FeatureResult }) {
         <span className="stat-s" style={{ alignSelf: "center" }}>{all.length.toLocaleString()} names miss exactly one filter</span>
         {labels.map((l) => <button key={l.filter} type="button" className="pill" aria-pressed={pick === l.filter} onClick={() => setPick(pick === l.filter ? null : l.filter)}>{l.text} · {l.n}</button>)}
       </div>
-      {res.isLoading ? <div aria-busy="true">Loading</div> : rows.length ? <DataTable rows={rows} opts={{ max: 200, maxHeight: 420 }} /> : <Empty text="None." />}
+      {res.isLoading ? <div aria-busy="true">Loading</div> : rows.length ? <DataTable rows={rows} opts={{ max: 200, maxHeight: 420 }} /> : <Empty text="No names for this filter." />}
     </div>
   );
 }
