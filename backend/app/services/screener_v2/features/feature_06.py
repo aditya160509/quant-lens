@@ -26,7 +26,7 @@ OUTPUTS = [{'key': 'alert_feed', 'source': 'charts', 'render': 'table', 'primary
 def run(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     payload = {**payload, "universe": payload.get("watchlist") or payload.get("universe") or "AAPL MSFT NVDA AMZN META GOOGL"}
-    symbols = parse_symbols(payload, default_limit=25, max_symbols=250)
+    symbols = parse_symbols(payload, default_limit=25, max_symbols=1000)
     panel = metric_panel(payload, symbols=symbols)
     score_min = float(payload.get("alert_score_min", 80))
     if not panel.empty:

@@ -186,6 +186,12 @@ def test_all_feature_outputs_are_json_safe_and_declared(local_data, feature_id):
             assert output in result['charts'] or output in result['tables']
 
 
+def test_alert_study_accepts_default_500_universe_cap(local_data):
+    from app.services.screener_v2.registry import run_feature
+    result = run_feature('06', {'watchlist': 'AAA BBB CCC', 'max_symbols': 500, 'lookback_days': 60})
+    assert result['status'] == 'ok'
+
+
 def test_future_price_and_statement_changes_do_not_change_historical_screen(local_data):
     import pandas as pd
 
