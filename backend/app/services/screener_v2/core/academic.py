@@ -1,6 +1,8 @@
 """Screener V2 academic computations."""
 from __future__ import annotations
 
+import json
+import os
 from functools import lru_cache
 from typing import Any
 
@@ -8,9 +10,11 @@ import numpy as np
 import pandas as pd
 
 from .common import number_like, records
-from .data_loader import AS_OF, fundamental_history
+from .data_loader import AS_OF, BACKEND_DATA, fundamental_history
 from .performance import _fundamentals_version
 from .stats import _pick, rank_pct
+
+_PIOTROSKI_DIR = BACKEND_DATA / "screener_v2" / "piotroski"
 
 
 def greenblatt_roic(panel: pd.DataFrame, symbols: list[str]) -> pd.Series:
@@ -62,8 +66,18 @@ def academic_strategy_scores(panel: pd.DataFrame) -> pd.DataFrame:
 
 def piotroski_criteria_spec(panel: pd.DataFrame, symbols: list[str]) -> pd.DataFrame:
     """Original nine signals; unavailable inputs are unknown, never failed signals."""
-    version = _fundamentals_version()
-    return pd.DataFrame([_piotroski_row(symbol, AS_OF.get(), version) for symbol in symbols])
+    version, as_of = _fundamentals_version(), AS_OF.get()
+    path = _PIOTROSKI_DIR / f"v1_{version}_{'none' if as_of is None else pd.Timestamp(as_of).date()}.parquet"
+    stored = dict(zip(*pd.read_parquet(path).to_dict("list").values(), strict=True)) if path.exists() else {}
+    rows = {symbol: json.loads(stored[symbol]) if symbol in stored else None for symbol in symbols}
+    fresh = {symbol: _piotroski_row(symbol, as_of, version) for symbol, row in rows.items() if row is None}
+    if fresh:  # persisted per fundamentals-file version and as-of, so a fresh process skips the recompute
+        merged = {**stored, **{symbol: json.dumps(row) for symbol, row in fresh.items()}}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(f".{os.getpid()}.tmp")  # last writer wins; rows are deterministic
+        pd.DataFrame({"ticker": list(merged), "row": list(merged.values())}).to_parquet(temporary)
+        os.replace(temporary, path)
+    return pd.DataFrame([rows[symbol] or fresh[symbol] for symbol in symbols])
 
 
 @lru_cache(maxsize=20_000)  # per ticker, keyed by the as-of date and the fundamentals file version
