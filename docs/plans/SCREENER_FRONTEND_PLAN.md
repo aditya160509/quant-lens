@@ -63,7 +63,7 @@ Our own advantage, shown everywhere: why a stock passed or failed, near misses, 
 - [x] `M` Recent screens and saved screens with last result and change since last run (needs check)
 - [x] `M` Market breadth strip: advancers, new highs, sector returns
 - [x] `M` Sector treemap by market cap coloured by return (needs check)
-- [ ] `H` Biggest entrants and exits across saved screens
+- [x] `H` Biggest entrants and exits across saved screens
 - [ ] `H` Pinned board of outputs, in cards
 
 ## 5. Control bar, every study page

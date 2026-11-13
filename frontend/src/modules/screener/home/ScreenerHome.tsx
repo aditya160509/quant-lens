@@ -10,6 +10,7 @@ import { BreadthHistory, GroupMatrix, RecentRuns, type Tile } from "./OverviewCh
 import { get, latestRun } from "@/modules/research/api";
 import { featureHref, metaFor } from "@/modules/research/catalog";
 import { useStudies } from "@/modules/research/store";
+import { openQuickLook } from "@/kit/QuickLook";
 import { Treemap } from "@/charts/Treemap";
 import { defaultsFor } from "@/modules/research/StudyForm";
 import type { FeatureSpec, RunRecord } from "@/modules/research/types";
@@ -50,6 +51,8 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
   const breadthQ = useQuery({ queryKey: ["screener", "breadth"], queryFn: () => get<Breadth>("/breadth"), staleTime: 600_000, retry: false });
   const breadth = breadthQ.data;
   const saved = useQuery({ queryKey: ["screener", "screens"], queryFn: () => get<{ screens: { screen_id: string; name: string; feature_id: string; payload: Record<string, unknown> }[] }>("/screens"), retry: false }).data?.screens ?? [];
+  const moves = useQuery({ queryKey: ["screener", "changes", saved.map((x) => x.screen_id).join(",")], queryFn: () => get<{ changes: Record<string, { entrants: string[] | null; exits: string[] | null }> }>(`/screens/changes?ids=${saved.slice(0, 50).map((x) => x.screen_id).join(",")}`), enabled: saved.length > 0, staleTime: 300_000, retry: false }).data?.changes;
+  const moved = saved.map((x) => ({ ...x, in: moves?.[x.screen_id]?.entrants ?? [], out: moves?.[x.screen_id]?.exits ?? [] })).filter((x) => x.in.length + x.out.length).sort((a, b) => b.in.length + b.out.length - (a.in.length + a.out.length)).slice(0, 5);
   const byKey = new Map((templates.data?.templates ?? []).map((t) => [t.key, t]));
   const sectors = (facets.data?.sector ?? []).filter((s) => s.name && s.name !== "Unknown");
   const names = sectors.reduce((n, s) => n + s.count, 0);
@@ -167,6 +170,21 @@ export function ScreenerHome({ features, runs }: { features: FeatureSpec[]; runs
                   <span>{x.name}</span>
                   <small>{metaFor(`sc${x.feature_id}`).name}</small>
                 </button>
+              ))}
+            </section>
+          </>
+        ) : null}
+
+        {moved.length ? (
+          <>
+            <h2 className="sh-h">Biggest entrants and exits</h2>
+            <section className="sh-moves">
+              {moved.map((x) => (
+                <div key={x.screen_id} className="sh-move">
+                  <b>{x.name}</b>
+                  <span className="num">{x.in.slice(0, 8).map((t) => <button key={t} type="button" className="up" onClick={() => openQuickLook(t)}>+{t}</button>)}{x.in.length > 8 ? <em>+{x.in.length - 8}</em> : null}</span>
+                  <span className="num">{x.out.slice(0, 8).map((t) => <button key={t} type="button" className="down" onClick={() => openQuickLook(t)}>−{t}</button>)}{x.out.length > 8 ? <em>−{x.out.length - 8}</em> : null}</span>
+                </div>
               ))}
             </section>
           </>

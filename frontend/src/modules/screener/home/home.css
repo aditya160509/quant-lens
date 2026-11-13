@@ -74,3 +74,8 @@
 .sh-screen b { font-weight: 600; }
 .sh-screen .sh-pill { margin-left: 6px; }
 @media (max-width: 760px) { .gm-grid { grid-template-columns: 90px repeat(5, minmax(60px, 1fr)) !important; } }
+.sh-moves { display: grid; gap: 8px; }
+.sh-move { display: grid; grid-template-columns: minmax(140px, 220px) 1fr 1fr; gap: 10px; align-items: baseline; padding: 10px 12px; border-radius: 10px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); font-size: 12.5px; }
+.sh-move span { display: flex; flex-wrap: wrap; gap: 4px; }
+.sh-move button { border: 0; background: none; padding: 0 4px; font: inherit; cursor: pointer; }
+.sh-move em { font-style: normal; color: var(--text-3); }
