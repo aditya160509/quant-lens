@@ -4,11 +4,11 @@ import { createElement, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { send } from "./api";
 import { Treemap } from "@/charts/Treemap";
-import { DataTable } from "@/kit/DataTable";
+import { DataTable, Empty } from "@/kit/DataTable";
 import { useStudies } from "@/modules/research/store";
-import { openQuickLook } from "@/kit/QuickLook";
+import { Monogram, openQuickLook } from "@/kit/QuickLook";
 import { Spark } from "@/charts/RankList";
-import { isNum, label, out, pct } from "@/modules/research/format";
+import { first, isNum, label, out, pct } from "@/modules/research/format";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import type { Row } from "@/modules/research/types";
 import { ScreenScatter, SensitivityStrip } from "./trust/Charts";
@@ -197,6 +197,31 @@ export function TurnoverBars({ rows }: ViewProps) {
       <div className="tb-stats"><span>Rebalances <b className="num">{pts.length}</b></span><span>Average turnover <b className="num">{pct(avg, 0)}</b></span><span>Total cost <b className="num">{pct(cost, 2)}</b></span></div>
       <div className="tb-bars">{pts.map((r, i) => <i key={i} style={{ height: `${((r.turnover as number) / top) * 100}%` }} title={`${String(r.date).slice(0, 10)} · ${pct(r.turnover as number, 0)}`} />)}</div>
       <div className="ts-g-axis num" style={{ paddingLeft: 0 }}><span>{String(pts[0].date).slice(0, 10)}</span><span>{String(pts[pts.length - 1].date).slice(0, 10)}</span></div>
+    </div>
+  );
+}
+
+const QL_SCORES: [string, string][] = [["score", "Score"], ["valuation", "Valuation"], ["quality", "Quality"], ["momentum", "Momentum"], ["low_vol", "Low volatility"]];
+
+/** The run's lead name: price path, percentile scores as bars, and the one-line thesis; opens the full quick look. */
+export function QuickLookCardView({ result }: ViewProps) {
+  const c = first(result, "quick_look_card");
+  if (!c?.ticker) return <Empty text="No name to show." />;
+  const t = String(c.ticker);
+  const path = ((c.chart_windows as Record<string, { close: number }[]> | undefined)?.["1Y"] ?? []).map((p) => p.close);
+  const change = path.length > 1 ? path[path.length - 1] / path[0] - 1 : null;
+  return (
+    <div className="qlc">
+      <button type="button" className="qlc-head" onClick={() => openQuickLook(t)}>
+        <Monogram ticker={t} />
+        <span><b>{t}</b><small>{String(c.sector ?? "Unknown sector")}</small></span>
+        <span className="qlc-px num">{isNum(c.price) ? c.price.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "–"}{change !== null ? <em className={change >= 0 ? "up" : "down"}>{change >= 0 ? "+" : ""}{(change * 100).toFixed(1)}% 1Y</em> : null}</span>
+      </button>
+      {path.length > 1 ? <Spark values={path} width={560} height={64} className="qlc-spark" color={change !== null && change < 0 ? "var(--down)" : "var(--up)"} /> : null}
+      <div className="qlc-bars">
+        {QL_SCORES.map(([k, l]) => isNum(c[k]) ? <div key={k}><span>{l}</span><i><b style={{ width: `${Math.max(0, Math.min(100, c[k] as number))}%` }} /></i><em className="num">{(c[k] as number).toFixed(0)}</em></div> : null)}
+      </div>
+      {c.thesis ? <p className="qlc-thesis">{String(c.thesis)}</p> : null}
     </div>
   );
 }
