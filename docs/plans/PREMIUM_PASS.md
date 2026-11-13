@@ -91,8 +91,8 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 
 ## Next
 - [x] Liquid glass on popovers, menus, palette and runs pill (`a70ced3`)
-- [ ] Backtest cold run (16 s): batch about 1,200 small fundamentals reads into one per run
-- [ ] Screen cold run: Piotroski 1.4 s (vectorise carefully or precompute)
+- [ ] Backtest cold run: 13.5 s to 8.1 s (`285aa3e`); left: ~1,215 per-date snapshot reads (1.8 s) and one wide panel per date (~15 ms x 405). One snapshot file per run is a storage-format change: owner's call
+- [x] Screen cold run 1.76 s to 0.96 s, warm 0.11 s: Piotroski rows persisted per fundamentals version (`427c5f5`, `e31c425`)
 - [x] Saved tags and folders; run cancel and stale marker (`985844e`)
 
 ## Research still to do
