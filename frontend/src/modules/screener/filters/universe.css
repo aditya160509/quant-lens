@@ -7,11 +7,12 @@
 .ub-seg button { height: 30px; padding: 0 11px; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: var(--text-3); }
 .ub-seg button:hover { color: var(--text); }
 .ub-seg button[aria-checked="true"] { color: oklch(0.99 0 0); background: var(--accent); }
-.ub-pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 11px; border-radius: 9px; font-size: 12.5px; font-weight: 500; color: var(--text-2); box-shadow: inset 0 0 0 1px var(--line-2); transition: background 0.12s, color 0.12s; }
+.ub-pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 11px; border-radius: 9px; font-size: 12.5px; font-weight: 500; color: var(--text-2); box-shadow: inset 0 0 0 1px var(--line-2); transition: background 0.16s var(--ease), color 0.16s var(--ease), box-shadow 0.16s var(--ease), transform 0.16s var(--ease); }
 .ub-pill svg { color: var(--text-4); }
 .ub-pill:hover { color: var(--text); background: var(--panel-2); }
-.ub-pill.on { color: var(--text); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
-.ub-pill.on b { font: 500 11.5px var(--mono); color: oklch(0.82 0.11 258); }
+.ub-pill.on { color: var(--text); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line-3); }
+.ub-pill.on b { font-weight: 550; font-size: 12px; color: var(--text); }
+.ub-pill:active { transform: scale(0.97); }
 .ub-pill.add { color: var(--accent); }
 .ub-pill.add svg { color: var(--accent); }
 .ub-range { display: grid; gap: 9px; padding: 10px; font-size: 12.5px; }

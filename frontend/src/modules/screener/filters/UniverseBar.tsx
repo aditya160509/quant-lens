@@ -2,7 +2,7 @@
 
 import { useScreenerPalette } from "../palette";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Check, ChevronDown, Eye, EyeOff, Globe2, Link2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Bookmark, Check, ChevronDown, Eye, EyeOff, Globe2, Link2, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { featureHref } from "@/modules/research/catalog";
 import { encodeSettings } from "@/modules/research/StudyForm";
@@ -295,8 +295,8 @@ function Picker({ tickers, size, basis, primary, active, onPatch, onApply, onClo
               ))}
               {Object.entries(lists).filter(([, l]) => l.length).map(([id, l]) => <button key={id} type="button" onClick={() => merge(l)}>{id}<em>{l.length}</em></button>)}
             </div>
-            <h4>Paste</h4>
-            <input type="file" accept=".csv,text/csv" aria-label="Upload CSV" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const body = new FormData(); body.append("file", f); void fetch(`${lab().base}/uploads`, { method: "POST", body }).then((r) => r.json()).then((j: { symbols?: string[]; detail?: string }) => { if (j.symbols) merge(j.symbols); else setErr(typeof j.detail === "string" ? j.detail : "Upload failed"); }).catch(() => setErr("Upload failed")); e.target.value = ""; }} />
+            <h4>Paste or upload</h4>
+            <label className="btn sm" style={{ justifySelf: "start", width: "fit-content", cursor: "pointer" }}><Upload size={12} aria-hidden />Upload CSV<input type="file" hidden accept=".csv,text/csv" aria-label="Upload CSV" onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const body = new FormData(); body.append("file", f); void fetch(`${lab().base}/uploads`, { method: "POST", body }).then((r) => r.json()).then((j: { symbols?: string[]; detail?: string }) => { if (j.symbols) merge(j.symbols); else setErr(typeof j.detail === "string" ? j.detail : "Upload failed"); }).catch(() => setErr("Upload failed")); e.target.value = ""; }} /></label>
             {err ? <small role="alert">{err}</small> : null}
             <textarea className="input" rows={2} placeholder="AAPL, MSFT" onBlur={(e) => { const v = e.target.value.toUpperCase().split(/[,;\s]+/).filter(Boolean); if (v.length) { merge(v); e.target.value = ""; } }} />
             {list.length ? (
