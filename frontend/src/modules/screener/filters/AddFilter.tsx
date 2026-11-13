@@ -28,10 +28,10 @@ const usePicks = create<{ recent: string[]; stars: string[]; remember: (m: strin
 }), { name: "screener-filter-picks", storage: createJSONStorage(() => localStorage), version: 1 }));
 
 /** Every range filter, searchable and grouped, with recent and starred at the top; picking one opens its editor. */
-export function AddFilter({ fields, active, name, onPick }: { fields: InputSpec[]; active: Set<string>; name: (m: string) => string; onPick: (m: string) => void }) {
+export function AddFilter({ fields, active, empty, name, onPick }: { fields: InputSpec[]; active: Set<string>; empty?: Set<string>; name: (m: string) => string; onPick: (m: string) => void }) {
   const [q, setQ] = useState("");
   const { recent, stars, remember, star } = usePicks();
-  const metrics = useMemo(() => [...new Set(fields.map((f) => f.key.replace(/_(min|max|top)$/, "")))], [fields]);
+  const metrics = useMemo(() => [...new Set(fields.map((f) => f.key.replace(/_(min|max|top)$/, "")))].filter((m) => !empty?.has(m)), [fields, empty]);
   const hit = (m: string) => !q || `${m} ${name(m)}`.toLowerCase().includes(q.toLowerCase());
   const pick = (m: string) => { remember(m); onPick(m); };
   const item = (m: string) => (

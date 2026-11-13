@@ -118,7 +118,7 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
   const eta = last && lastNames ? Math.max(1, Math.round((secsOf(last) * names) / lastNames)) : null;
   const columnOf = useFilterColumns();
   const shownMetrics = [...metrics, ...added];
-  const preview = useFilterPreview(toPayload(feature, run.form), [...shownMetrics, ...(menu && menu.key !== "+" && !menu.key.startsWith("cat:") ? [menu.key] : [])].map((m) => columnOf[m]).filter(Boolean)).data;
+  const preview = useFilterPreview(toPayload(feature, run.form), [...shownMetrics, ...(menu?.key === "+" ? Object.keys(columnOf) : menu && !menu.key.startsWith("cat:") ? [menu.key] : [])].map((m) => columnOf[m]).filter(Boolean)).data;
   const cats = feature.inputs.filter((f) => CATS.includes(f.key));
   const catPill = (f: (typeof cats)[number]) => {
     const n = picked(run.form[f.key]).length;
@@ -189,7 +189,7 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
         ) : catMenu ? (
           <div style={{ padding: 10 }}><InFilter field={catMenu} value={run.form[catMenu.key]} onChange={(v) => set(catMenu.key, v)} /></div>
         ) : menu?.key === "+" ? (
-          <><AddFilter fields={range} active={new Set(shownMetrics.filter((m) => run.form[`${m}_min`] || run.form[`${m}_max`]))} name={name} onPick={(m) => setMenu((cur) => (cur ? { key: m, at: cur.at } : cur))} />
+          <><AddFilter fields={range} empty={new Set(Object.keys(columnOf).filter((m) => preview?.dist[columnOf[m]]?.known === 0))} active={new Set(shownMetrics.filter((m) => run.form[`${m}_min`] || run.form[`${m}_max`]))} name={name} onPick={(m) => setMenu((cur) => (cur ? { key: m, at: cur.at } : cur))} />
           <details className="af-exact"><summary>Exact values and top N</summary><div style={{ padding: 8, maxHeight: 360, overflowY: "auto" }}><FilterChips scope={feature.id} fields={range} form={run.form} setForm={run.setForm} /></div></details></>
         ) : menu ? (
           <div className="ub-range">

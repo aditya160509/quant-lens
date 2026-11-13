@@ -90,6 +90,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const { order: colOrder, hidden, pinned, widths, sort, density, tint } = view;
   const patch = (p: Partial<TableView>) => update((v) => ({ ...v, ...p }));
   const [query, setQuery] = useState("");
+  const [colQ, setColQ] = useState("");
   const rows = useMemo(() => {
     const all = withPercentiles(source, view.pct);
     const q = query.trim().toLowerCase();
@@ -237,7 +238,10 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const items: ({ kind: "group"; g: string; n: number; ix: number[] } | { kind: "row"; i: number; sub: boolean })[] = [];
   if (groupKey) {
     const seen = new Map<string, number[]>();
-    shown.forEach((i) => { const g = String(rows[i][groupKey] ?? "Other"); seen.set(g, [...(seen.get(g) ?? []), i]); });
+    // A numeric column groups into quintiles of the shown rows.
+    const qs = numeric.has(groupKey) ? rows.map((r) => r[groupKey]).filter(isNum).sort((a, b) => a - b) : null;
+    const bucket = (v: unknown) => !qs ? String(v ?? "Other") : !isNum(v) ? "No value" : `Q${Math.min(5, 1 + Math.floor((qs.findIndex((x) => x >= v) / qs.length) * 5))} ${label(groupKey)}`;
+    shown.forEach((i) => { const g = bucket(rows[i][groupKey]); seen.set(g, [...(seen.get(g) ?? []), i]); });
     seen.forEach((ix, g) => { items.push({ kind: "group", g, n: ix.length, ix }); if (!collapsed.includes(g)) ix.forEach((i) => items.push({ kind: "row", i, sub: true })); });
   } else shown.forEach((i) => items.push({ kind: "row", i, sub: false }));
   const virtual = items.length > 200;
@@ -315,15 +319,16 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
                 <label className="xc"><span>Group by</span>
                   <select value={view.groupBy ?? ""} onChange={(e) => patch({ groupBy: e.target.value || null })}>
                     <option value="">None</option>
-                    {base.filter((c) => !numeric.has(c)).map((c) => <option key={c} value={c}>{label(c)}</option>)}
+                    {base.map((c) => <option key={c} value={c}>{label(c)}{numeric.has(c) ? " (quintiles)" : ""}</option>)}
                   </select>
                 </label>
                 {view.groupBy ? <label className="xc"><span>Summary</span>
                   <select value={view.summary} onChange={(e) => patch({ summary: e.target.value as TableView["summary"] })}>{["median", "mean", "sum"].map((f) => <option key={f} value={f}>{label(f)}</option>)}</select>
                 </label> : null}
               </div>
+              <label className="dt-q" style={{ marginBottom: 6 }}><Search size={12} aria-hidden /><input type="search" placeholder="Find column" aria-label="Find column" value={colQ} onChange={(e) => setColQ(e.target.value)} /></label>
               <div className="tp-list">
-                {[...cols, ...hidden].map((c) => (
+                {[...cols, ...hidden].filter((c) => !colQ || `${c} ${label(c)}`.toLowerCase().includes(colQ.toLowerCase())).map((c) => (
                   <div key={c} className="tp-term">
                     <input type="checkbox" checked={!hidden.includes(c)} aria-label={`Show ${c}`} onChange={() => patch({ hidden: hidden.includes(c) ? hidden.filter((x) => x !== c) : [...hidden, c] })} />
                     <span style={{ flex: 1 }}>{label(c)}</span>
