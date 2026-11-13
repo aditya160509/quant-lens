@@ -21,9 +21,9 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 
 ## In progress
 
-- [ ] Alerts fail at the default 500 names ("max_symbols must be between 1 and 250"); raise to 1,000 (Haiku agent)
-- [ ] Speed: time and profile the Screen run, fix the top hotspots (Haiku agent)
-- [ ] Trust tab: "Near misses" shows 0 names; check whether output is missing or the message is wrong (Haiku agent)
+- [x] Alerts fail at the default 500 names; cap raised to 1,000 (`ec8b5fd`)
+- [x] Speed: warm Screen run 1.44 s to 0.68 s by caching Piotroski rows (`be87568`). Cold still about 2.5 s; left: 54 separate Polars reads of prices (about 0.55 s), the close matrix (0.45 s), quick look (0.27 s), all needing the precompute
+- [x] Trust "Near misses": no backend bug; the page now says no name misses by one filter (`7e20427`)
 
 ## Speed and performance
 
