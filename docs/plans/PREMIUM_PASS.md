@@ -72,10 +72,10 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 - [x] Saved: cards with mini result, last run, change (`/screens/counts`, `/screens/changes`), schedule pill; rename, duplicate, tag, folder, search, sort, archive
 - [ ] More page: Markets tabs, hourly, plain English, share links, API keys
 - [ ] Share page and embed in the same design
-- [ ] Plain-English filter box (`/nl-filter`) producing editable filters
+- [x] Plain-English filter box (`/nl-filter`) producing editable filters
 - [x] Compare-to-field and sector-median filters in the editor; "held for N days"
 - [ ] Run progress by stage with cancel and a stale marker
-- [ ] Relative Rotation Graph view (`/rrg`)
+- [x] Relative Rotation Graph view (`/rrg`)
 - [ ] Phone layout: bottom nav, filter sheet, card rows
 - [ ] Perspective pivot view for power users
 - [ ] Table benchmark at 1,000 rows

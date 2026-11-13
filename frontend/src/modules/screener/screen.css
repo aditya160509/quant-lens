@@ -22,3 +22,17 @@
 .cg-foot i { font-style: normal; color: var(--text-3); }
 .cg-more { grid-column: 1 / -1; font-size: 12px; color: var(--text-3); margin: 4px 0 0; }
 .spark-range { float: right; margin: -2px 0 6px 8px; transform: scale(0.9); transform-origin: right; }
+.rrg { display: grid; gap: 10px; }
+.rrg svg { width: 100%; max-height: 520px; }
+.rrg svg rect { stroke: var(--line); }
+.rrg-leading { fill: color-mix(in oklch, var(--up) 10%, transparent); }
+.rrg-weakening { fill: color-mix(in oklch, var(--accent) 8%, transparent); }
+.rrg-lagging { fill: color-mix(in oklch, var(--down) 10%, transparent); }
+.rrg-improving { fill: color-mix(in oklch, var(--text-3) 10%, transparent); }
+.rrg-q { font-size: 12px; fill: var(--text-3); }
+.rrg g text { font-size: 11px; fill: var(--text-2); }
+g.rrg-leading polyline, g.rrg-leading circle { stroke: var(--up); fill: var(--up); }
+g.rrg-lagging polyline, g.rrg-lagging circle { stroke: var(--down); fill: var(--down); }
+g.rrg-weakening polyline, g.rrg-weakening circle { stroke: var(--accent); fill: var(--accent); }
+g.rrg-improving polyline, g.rrg-improving circle { stroke: var(--text-3); fill: var(--text-3); }
+.rrg polyline { stroke-width: 1.5; fill: none; opacity: 0.6; }

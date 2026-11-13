@@ -113,3 +113,45 @@ export function ChartGrid({ rows }: ViewProps) {
     </div>
   );
 }
+
+type Rrg = { benchmark: string; series: Record<string, { date: string; rs_ratio: number; rs_momentum: number }[]>; quadrant: Record<string, string> };
+const SECTOR_ETFS = ["XLK", "XLF", "XLV", "XLY", "XLP", "XLE", "XLI", "XLB", "XLU", "XLRE", "XLC"];
+const QUAD = ["Leading", "Weakening", "Lagging", "Improving"];
+
+/** Relative rotation against SPY: RS-ratio across, RS-momentum up, a tail of recent weeks behind each name. */
+export function RrgView({ rows }: ViewProps) {
+  const [etfs, setEtfs] = useState(false);
+  const names = (etfs ? SECTOR_ETFS : rows.map((r) => String(r.ticker ?? "")).filter(Boolean).slice(0, 12));
+  const q = useQuery({ queryKey: ["screener", "rrg", names.join(",")], queryFn: () => send<Rrg>("GET", `/rrg?tickers=${names.join(",")}&benchmark=SPY`), enabled: names.length > 0, staleTime: 600_000, retry: false });
+  const series = Object.entries(q.data?.series ?? {});
+  const all = series.flatMap(([, p]) => p);
+  const reach = Math.max(2, ...all.map((p) => Math.max(Math.abs(p.rs_ratio - 100), Math.abs(p.rs_momentum - 100)))) * 1.1;
+  const W = 640, H = 440, X = (v: number) => ((v - 100 + reach) / (2 * reach)) * W, Y = (v: number) => H - ((v - 100 + reach) / (2 * reach)) * H;
+  return (
+    <div className="rrg">
+      <div className="ub-seg" role="radiogroup" aria-label="Names">
+        {([[false, "Top results"], [true, "Sector ETFs"]] as const).map(([v, l]) => <button key={l} type="button" role="radio" aria-checked={etfs === v} onClick={() => setEtfs(v)}>{l}</button>)}
+      </div>
+      {q.error ? <p className="err" role="alert">{(q.error as Error).message}</p> : null}
+      {series.length ? (
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Relative rotation graph">
+          <rect x={W / 2} y={0} width={W / 2} height={H / 2} className="rrg-leading" />
+          <rect x={W / 2} y={H / 2} width={W / 2} height={H / 2} className="rrg-weakening" />
+          <rect x={0} y={H / 2} width={W / 2} height={H / 2} className="rrg-lagging" />
+          <rect x={0} y={0} width={W / 2} height={H / 2} className="rrg-improving" />
+          {[[QUAD[0], W - 8, 18, "end"], [QUAD[1], W - 8, H - 8, "end"], [QUAD[2], 8, H - 8, "start"], [QUAD[3], 8, 18, "start"]].map(([t, x, y, a]) => <text key={String(t)} x={x as number} y={y as number} textAnchor={a as "start" | "end"} className="rrg-q">{t}</text>)}
+          {series.map(([t, pts]) => {
+            const cls = `rrg-${(q.data?.quadrant[t] ?? "").toLowerCase()}`, last = pts[pts.length - 1];
+            return (
+              <g key={t} className={cls}>
+                <polyline points={pts.map((p) => `${X(p.rs_ratio)},${Y(p.rs_momentum)}`).join(" ")} fill="none" />
+                <circle cx={X(last.rs_ratio)} cy={Y(last.rs_momentum)} r={5}><title>{`${t}: ratio ${last.rs_ratio.toFixed(1)}, momentum ${last.rs_momentum.toFixed(1)} on ${last.date}`}</title></circle>
+                <text x={X(last.rs_ratio) + 8} y={Y(last.rs_momentum) + 4}>{t}</text>
+              </g>
+            );
+          })}
+        </svg>
+      ) : q.isLoading ? <div className="skel-card" style={{ height: 320 }} aria-busy="true" /> : null}
+    </div>
+  );
+}

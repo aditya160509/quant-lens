@@ -342,7 +342,7 @@ Analyst estimates and forward P/E, shareholding and float, short interest, earni
 Keep: TanStack Table and Virtual, Query, Zustand, d3 maths, Radix, cmdk, CodeMirror, uFuzzy.
 
 - [x] `M` Drawer price chart on TradingView Lightweight Charts v5 (already installed, about 45 KB): candles, volume pane, moving averages, entry and exit markers (needs check)
-- [ ] `H` Relative Rotation Graph (RS-Ratio against RS-Momentum, weekly tails) for sectors and groups, as in xang1234/stock-screener and StockCharts
+- [x] `H` Relative Rotation Graph (RS-Ratio against RS-Momentum, weekly tails) for sectors and groups, as in xang1234/stock-screener and StockCharts
 - [x] `M` Group matrix: sector rows, market-cap columns, stock tiles coloured by 1D, 1W or 1M change (xang1234/stock-screener) (needs check)
 - [x] `M` Breadth history: advance and decline and new highs and lows over time with SPY overlay (StockBee style) (needs check)
 - [x] `M` Test tear sheet sections from OpenStatz/QuantStats: return and risk by horizon (1Y, 3Y, 5Y, all), worst drawdown episodes, losing streaks, weekly heatmap, yearly against benchmark (needs check)
