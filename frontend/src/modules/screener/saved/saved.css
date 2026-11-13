@@ -40,4 +40,3 @@
 .sv-folder span { font-size: 12.5px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sv-folder b { font-size: 20px; font-weight: 550; color: var(--text); line-height: 1; }
 .sv-tag { color: var(--text) !important; background: var(--panel-2) !important; }
-@media (prefers-reduced-motion: reduce) { .sv-folder, .sv-folder:hover { transition: none; transform: none; } }

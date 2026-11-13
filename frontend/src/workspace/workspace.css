@@ -230,7 +230,6 @@
 .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: var(--r); background: var(--panel); box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 oklch(1 0 0 / 0.04); color: var(--text-2); font-weight: 500; font-size: 12.5px; white-space: nowrap; transition: box-shadow 0.16s var(--ease), color 0.16s var(--ease), background 0.16s var(--ease), transform 0.16s var(--ease); }
 .btn:hover { box-shadow: inset 0 0 0 1px var(--line-2), inset 0 1px 0 oklch(1 0 0 / 0.06); color: var(--text); background: var(--panel-2); }
 .btn:active:not(:disabled) { transform: scale(0.97); }
-@media (prefers-reduced-motion: reduce) { .btn:active:not(:disabled) { transform: none; } }
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btn.primary { background: var(--accent); color: oklch(0.99 0 0); box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.2); }
 .btn.primary:hover { background: color-mix(in oklch, var(--accent) 88%, white); color: oklch(0.99 0 0); }
@@ -438,9 +437,6 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
   .ws-rail .sep, .ws-rail .end { display: none; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ws *, .ws *::before, .ws *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-}
 
 /* preferences: density, accent, inverted up/down, reduced motion; durations 120/200/350ms */
 .ws-tokens { --row-h: 32px; --d1: 120ms; --d2: 200ms; --d3: 350ms; }
@@ -618,7 +614,6 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .ov-action em { font-style: normal; font-size: 12px; color: var(--tone); margin-top: 2px; }
 .ov-action-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--tone); background: color-mix(in oklch, var(--tone) 13%, transparent); }
 .ov-action-last { color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-@media (prefers-reduced-motion: reduce) { .ov-action { transition: none; } .ov-action:hover { transform: none; } }
 
 /* Run stages: what has finished so far, with how long each took */
 .run-stages { list-style: none; margin: 0 0 8px; padding: 0 0 0 4px; display: grid; gap: 4px; }
@@ -686,7 +681,6 @@ nav.island { container-type: inline-size; }
 .dp-grid button[data-today="true"] { box-shadow: inset 0 0 0 1px var(--line-3); }
 .dp-grid button[aria-pressed="true"] { background: var(--text); color: var(--bg); font-weight: 600; }
 .dp-grid button:disabled { color: var(--text-4); opacity: .4; }
-@media (prefers-reduced-motion: reduce) { .dp-pop { animation: none; } }
 
 /* Results scroll inside a liquid-glass scene; the top edge softens under the sticky bar. */
 .island.results { position: relative; }
@@ -713,10 +707,8 @@ nav.island { container-type: inline-size; }
 .cmdk { animation: cmdk-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .runs-pill { transition: transform 0.16s var(--ease), color 0.16s, border-color 0.16s; }
 .runs-pill:hover { transform: translateY(-1px); }
-@media (prefers-reduced-motion: reduce) { .pop, .popover, .tbl-pop, .menu, .cmdk { animation: none; } .runs-pill:hover { transform: none; } }
 .ws-mark { filter: drop-shadow(0 1px 2px oklch(0 0 0 / 0.35)); transition: transform 0.2s var(--ease); }
 .ws-brand:hover .ws-mark { transform: rotate(-6deg) scale(1.04); }
-@media (prefers-reduced-motion: reduce) { .ws-brand:hover .ws-mark { transform: none; } }
 .empty-state, .chart-empty { display: grid; justify-items: center; align-content: center; gap: 8px; min-height: 120px; padding: 24px 16px; border-radius: 12px; text-align: center; font-size: 12.5px; color: var(--text-3); background: repeating-linear-gradient(135deg, transparent 0 6px, oklch(1 0 0 / 0.018) 6px 7px); box-shadow: inset 0 0 0 1px var(--line); }
 .empty-state svg { color: var(--text-4); }
 .custom-chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 500; color: var(--text-2); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line-2); transition: color .15s, box-shadow .15s; }
@@ -731,3 +723,8 @@ nav.island { container-type: inline-size; }
 .pin-cell.dragging { opacity: 0.45; transform: scale(0.98); cursor: grabbing; }
 .sticky-bar.stuck:not(.glass-bar) { visibility: hidden; }
 .glass-bar { position: absolute; z-index: 6; top: 8px; left: 12px; right: 12px; height: 46px; padding: 0 8px 0 16px; border: 0; background: transparent; animation: float-in 0.22s var(--ease); --lg-foreground: var(--text); }
+
+/* Motion: sidebar toggles glide (drags stay 1:1), pages fade in. The in-app Reduce motion switch (.rm) stops all of it. */
+.ws-animating [data-panel] { transition: flex-grow 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), flex-basis 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes page-in { from { opacity: 0; transform: translateY(4px); } }
+.ws-panels .island { animation: page-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both; }

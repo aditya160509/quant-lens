@@ -16,8 +16,14 @@ export function useRegionPanel(region: Region) {
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
-    if (open && panel.isCollapsed()) panel.expand();
-    else if (!open && !panel.isCollapsed()) panel.collapse();
+    const toggle = open ? panel.isCollapsed() : !panel.isCollapsed();
+    if (!toggle) return;
+    // Animate only toggles; dragging stays 1:1 with the pointer.
+    const root = document.documentElement;
+    root.classList.add("ws-animating");
+    if (open) panel.expand(); else panel.collapse();
+    const t = setTimeout(() => root.classList.remove("ws-animating"), 320);
+    return () => clearTimeout(t);
   }, [open, panelRef]);
 
   // The first resize is the initial layout, not a user action, so it must not flip the toggle.

@@ -14,7 +14,7 @@ function Roll({ value }: { value: ReactNode }) {
   const [shown, setShown] = useState<number | null>(target);
   useEffect(() => {
     if (target === null) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setShown(target); from.current = target; return; }
+    if (document.querySelector(".rm")) { setShown(target); from.current = target; return; }
     const a = from.current, t0 = performance.now();
     let id = 0;
     const tick = (t: number) => { const k = Math.min(1, (t - t0) / 600), e = 1 - (1 - k) ** 3; setShown(a + (target - a) * e); if (k < 1) id = requestAnimationFrame(tick); else from.current = target; };

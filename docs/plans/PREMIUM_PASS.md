@@ -55,12 +55,12 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 
 ## Motion ("liquid smooth")
 
-- [ ] Sidebar open, close and resize animate smoothly; no jank while dragging
+- [x] Sidebar open, close and resize animate smoothly; no jank while dragging (toggles glide, drags stay 1:1)
 - [x] Popovers, menus and the date picker open with a short scale and fade (`a70ced3`)
-- [x] Tabs slide their active pill; page changes cross-fade (tabs slide `a70ced3`; page cross-fade still open)
-- [ ] Results enter staggered (heading, then figures, then table) once per run
+- [x] Tabs slide their active pill; page changes cross-fade (`a70ced3`; pages fade in)
+- [x] Results enter staggered (heading, then figures, then table) once per run
 - [x] Numbers count up on change; table rows flash on change (exists, tune) (`a70ced3`)
-- [ ] Every move has a reduced-motion fallback
+- [x] Every move has a reduced-motion fallback: the in-app Reduce motion switch. The OS setting no longer silences the app (it had switched off all workspace motion on this Mac)
 
 ## Icons
 

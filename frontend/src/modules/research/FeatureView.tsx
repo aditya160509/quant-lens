@@ -211,7 +211,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
               <OutputCard item={{ ...maxItem, span: 12 }} feature={feature} result={result} maximized onToggleMax={() => setMaxKey(null)} scope={scope} />
             </motion.div>
           ) : (
-            <motion.div key={`${active.id}-${run.jobId}`} className="out-grid" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.015 } } }}>
+            <motion.div key={`${active.id}-${run.jobId}`} className="out-grid" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.035 } } }}>
               {active.intro ? <div className="section-h"><p>{active.intro}</p></div> : null}
               {hiddenIn(active).length ? (
                 <div style={{ gridColumn: "1 / -1" }}><button className="btn sm ghost" onClick={() => hiddenIn(active).forEach((i) => setPref(feature.id, cardId(i), { hidden: false }))}>Show {hiddenIn(active).length} hidden</button></div>

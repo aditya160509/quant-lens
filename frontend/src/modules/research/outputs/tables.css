@@ -12,7 +12,6 @@
 .dt .tbl tbody tr.clickable { cursor: pointer; }
 .dt .flash { animation: dt-flash 600ms ease-out; }
 @keyframes dt-flash { from { background: color-mix(in oklch, var(--accent) 35%, transparent); } to { background: transparent; } }
-@media (prefers-reduced-motion: reduce) { .dt .flash { animation: none; } }
 .dt .dl { font-size: 9px; margin-left: 4px; }
 .dt .dl.up { color: var(--up); } .dt .dl.down { color: var(--down); }
 .dt-cards { display: none; gap: 8px; }

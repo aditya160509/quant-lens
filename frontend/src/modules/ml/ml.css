@@ -115,7 +115,6 @@
 @media (max-width: 760px) {
   .val-checks { grid-template-columns: 1fr; }
 }
-@media (prefers-reduced-motion: reduce) { .val-meter i { transition: none; } }
 .val-strip-mark[data-edge="r"] em { left: auto; right: 0; transform: none; }
 .val-strip-mark[data-edge="l"] em { left: 0; transform: none; }
 .ml-rank-r[role="button"] { cursor: pointer; border-radius: 6px; }
