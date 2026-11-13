@@ -19,6 +19,14 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 - [x] Table: find column, group by any column (numbers in quintiles); filter picker hides empty metrics (`527eb19`)
 - [x] Backend hard items: saved-screen counts and changes, as-of, field vs field and vs sector median, held for N days, plain-English filters, run stages, P/E history, RRG (Haiku agent, `25f1679` to `5b87a39`)
 
+- [x] Drawdown fills the full width, with grid, dates and hover readout (`6eb22cb`)
+- [x] Daily returns histogram: one hue, red for the worst tail, neutral band (`6eb22cb`)
+- [x] Rebalancing: offset, holding period and weekday variants as bars (best marked); turnover as bars over time (`6eb22cb`)
+- [x] Holdings: P&L contributions as percent (`6eb22cb`)
+- [x] Liquid glass (`@glass-sdk/liquid-glass`) on the results scroll, soft blurred top edge under the sticky bar (`6eb22cb`)
+- [x] Nav icons as glossy colour tiles with white glyphs (`39dd894`)
+- [x] Backend: repeated price reads cached; warm Screen 0.68 s to 0.27 s, backtest warm 8 s to 1.2 s, cold 21-58 s to 16 s (`eac80ed`)
+
 ## In progress
 
 - [x] Alerts fail at the default 500 names; cap raised to 1,000 (`ec8b5fd`)
@@ -80,6 +88,12 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 - [ ] Perspective pivot view for power users
 - [ ] Table benchmark at 1,000 rows
 - [ ] "Customised" marker listing what differs from default
+
+## Next
+- [ ] Liquid glass on popovers, menus, palette and runs pill
+- [ ] Backtest cold run (16 s): batch about 1,200 small fundamentals reads into one per run
+- [ ] Screen cold run: Piotroski 1.4 s (vectorise carefully or precompute)
+- [ ] Saved tags and folders; run cancel and stale marker
 
 ## Research still to do
 
