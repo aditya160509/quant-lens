@@ -1,7 +1,8 @@
 "use client";
 
 import * as RT from "@radix-ui/react-tooltip";
-import { useEffect, useRef, type ReactElement, type ReactNode } from "react";
+import { motion } from "framer-motion";
+import { useEffect, useId, useRef, type ReactElement, type ReactNode } from "react";
 
 export type Tone = "up" | "down" | "warn" | "accent" | "neutral";
 
@@ -43,6 +44,7 @@ export function Segmented<T extends string | number>({ value, options, onChange,
 /** Pill tabs that keep the selected tab scrolled into view and move with the arrow keys (WAI-ARIA tabs pattern). */
 export function Tabs<T extends string>({ value, tabs, onChange }: { value: T; tabs: { id: T; label: string; count?: number }[]; onChange: (id: T) => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const pill = useId();
   useEffect(() => {
     const strip = ref.current;
     const sel = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
@@ -64,6 +66,7 @@ export function Tabs<T extends string>({ value, tabs, onChange }: { value: T; ta
     <div className="tabs" role="tablist" ref={ref} onKeyDown={onKey}>
       {tabs.map((t) => (
         <button key={t.id} role="tab" type="button" data-tab={t.id} aria-selected={t.id === value} tabIndex={t.id === value ? 0 : -1} onClick={() => onChange(t.id)}>
+          {t.id === value ? <motion.span className="tab-pill" layoutId={pill} transition={{ type: "spring", stiffness: 520, damping: 40, mass: 0.6 }} /> : null}
           {t.label}
           {t.count !== undefined ? <span className="count">{t.count}</span> : null}
         </button>
