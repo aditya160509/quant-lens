@@ -47,11 +47,11 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 - [ ] Realistic objects where they help, like the Northwind folder cards: saved screens and watchlists as rich cards with a mini result
 - [ ] Section cards with a header row (icon, title, count, menu), as in the fintrack board columns
 - [ ] Status pills in the trade's words (Passed, Near miss, New, Dropped) as pale tints
-- [ ] Output that looks "magnificent, not dull": stronger hierarchy, colour on data only, one lead figure per card
+- [ ] Output that looks "magnificent, not dull": stronger hierarchy, colour on data only, one lead figure per card (Top name card `11d7bdd` replaces the raw quick-look dump)
 - [x] Table output: cleaner headers, quieter coverage bars, sector pills calmer, ticker tiles refined, row hover and selection polished (`a70ced3`)
 - [x] Remove the leftover blue accents on chrome (tabs, toggles) where they are not data (`a70ced3`)
 - [ ] Two search bars (global and table): decide one pattern; the owner's call
-- [ ] Light theme gets the same pass
+- [x] Light theme gets the same pass: white selected pills on grey tracks, glass follows the theme (`2ff7e33`)
 
 ## Motion ("liquid smooth")
 
@@ -91,7 +91,7 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 
 ## Next
 - [x] Liquid glass on popovers, menus, palette and runs pill (`a70ced3`)
-- [ ] Backtest cold run: 13.5 s to 8.1 s (`285aa3e`); left: ~1,215 per-date snapshot reads (1.8 s) and one wide panel per date (~15 ms x 405). One snapshot file per run is a storage-format change: owner's call
+- [ ] Backtest cold run: 13.5 s to ~11 s on this busy machine (agent's 8.1 s was measured quieter). Done: snapshot packs (`275cf31`, reads 2.45 s to ~0.9 s), panel cache sizing 30x faster (`b874fa3`, ~3.5 s under profile). Left: one wide panel built per date (~15 ms x 405)
 - [x] Screen cold run 1.76 s to 0.96 s, warm 0.11 s: Piotroski rows persisted per fundamentals version (`427c5f5`, `e31c425`)
 - [x] Saved tags and folders; run cancel and stale marker (`985844e`)
 
