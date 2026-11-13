@@ -118,6 +118,7 @@ export const SCREENER_LAB: LabConfig = {
           { keys: ["ranked_screener_table"], span: 12, view: "rrg", title: "Relative rotation" },
           { keys: ["ranked_screener_table"], span: 6, view: "screenDiff", title: "Compare runs" },
           { keys: ["ranked_screener_table"], span: 6, view: "runInfo", title: "Run" },
+          { keys: ["cross_sectional_percentile_context"], span: 12, view: "dataTable", title: "Where each name sits in its sector", opts: { max: 500, maxHeight: 480 } },
         ] },
         { id: "funnel", label: "Funnel", items: [{ keys: ["filter_funnel_waterfall"], span: 6, view: "funnel", title: "Funnel" }, { keys: ["market_cap_bucket_distribution"], span: 6 }, { keys: ["quick_look_card"], span: 6, view: "quickLookCard", title: "Top name" }, { keys: ["heatmap_view"], span: 6 }] },
         { id: "coverage", label: "Coverage", items: [{ keys: ["metric_coverage"], span: 12, view: "dataTable", opts: { max: 500, maxHeight: 640 } }] },
