@@ -502,6 +502,15 @@ def nl_formula(request: TextRequest) -> dict[str, Any]:
         raise HTTPException(422, str(exc)) from exc
 
 
+@router.post('/nl-filter')
+def nl_filter(request: TextRequest) -> dict[str, Any]:
+    from app.services.screener_v2.core.nl_formula import to_filters
+    try:
+        return to_filters(request.text)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.post('/screens/{screen_id}/share')
 def share_screen(screen_id: str) -> dict[str, Any]:
     from app.services.screener_v2.core.shares import create_share

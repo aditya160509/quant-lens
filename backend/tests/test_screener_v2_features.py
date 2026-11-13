@@ -692,3 +692,17 @@ def test_field_vs_field_and_metric_vs_sector_rules_compare_against_sector_median
     cheap_vs_sector = tree_mask(panel, {'metric_vs_sector': 'pe', 'op': '<', 'value': 0.8}, panel)
     assert below_sector.tolist() == [True, False, False, False]
     assert cheap_vs_sector.tolist() == [True, False, False, False]
+
+
+def test_plain_english_becomes_filter_payload_and_reports_unparsed_words(local_data):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.api import screener_v2
+    app = FastAPI()
+    app.include_router(screener_v2.router, prefix='/api')
+    client = TestClient(app)
+    body = client.post('/api/screener-v2/nl-filter', json={'text': 'pe under 20 and roe above 15% in IT with zzz'}).json()
+    assert body['payload'] == {'pe_max': 20, 'roe_min': 0.15, 'sectors': ['Technology']}
+    assert body['unparsed'] == ['zzz']
+    assert client.post('/api/screener-v2/nl-filter', json={'text': 'hello there'}).status_code == 422
