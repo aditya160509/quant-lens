@@ -261,6 +261,46 @@ def ohlcv(ticker: str, days: int) -> dict[str, Any]:
                                        for d, o, h, lo, c, v in zip(frame.Date, frame.Open, frame.High, frame.Low, frame.Close, frame.Volume, strict=True)]}
 
 
+RRG_WEEKS = 10
+
+
+def _quadrant(x: float, y: float) -> str:
+    if x >= 100:
+        return "Leading" if y >= 100 else "Weakening"
+    return "Improving" if y >= 100 else "Lagging"
+
+
+def rrg(tickers: list[str], benchmark: str = "SPY", tail: int = 10, lookback_days: int = 520) -> dict[str, Any]:
+    """Weekly relative rotation: close over benchmark close, each series z-scored on its own 10-week window and centred on 100 (JdK-style, not the proprietary normalisation)."""
+    from .data_loader import close_matrix, normalize_symbol
+    bench = normalize_symbol(benchmark)
+    symbols = list(dict.fromkeys(normalize_symbol(t) for t in tickers))
+    prices = close_matrix([*symbols, bench], lookback_days)
+    if bench not in prices or prices[bench].dropna().empty:
+        raise KeyError(f"No prices held for benchmark {benchmark}")
+    weekly = prices.resample("W-FRI").last()
+    relative = weekly[[s for s in symbols if s in weekly]].div(weekly[bench], axis=0)
+
+    def normalise(frame: pd.DataFrame) -> pd.DataFrame:
+        return 100 + (frame - frame.rolling(RRG_WEEKS).mean()) / frame.rolling(RRG_WEEKS).std()
+
+    ratio = normalise(relative)
+    momentum = normalise(ratio)
+    series, quadrant, unavailable = {}, {}, []
+    for symbol in symbols:
+        if symbol not in ratio:
+            unavailable.append(symbol)
+            continue
+        points = pd.DataFrame({"x": ratio[symbol], "y": momentum[symbol]}).dropna().tail(tail)
+        if points.empty:
+            unavailable.append(symbol)
+            continue
+        series[symbol] = [{"date": d.strftime("%Y-%m-%d"), "rs_ratio": round(float(r.x), 4), "rs_momentum": round(float(r.y), 4)} for d, r in points.iterrows()]
+        quadrant[symbol] = _quadrant(float(points.x.iloc[-1]), float(points.y.iloc[-1]))
+    return {"benchmark": bench, "frequency": "weekly", "tail_weeks": tail, "series": series, "quadrant": quadrant, "unavailable": unavailable,
+            "method": f"RS = close / benchmark close; RS-Ratio and RS-Momentum each = 100 + z-score over {RRG_WEEKS} weeks (RS-Momentum applies the same transform to RS-Ratio)"}
+
+
 _RANGE: dict[str, Any] = {}
 
 

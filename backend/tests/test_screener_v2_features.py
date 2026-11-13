@@ -628,3 +628,18 @@ def test_pe_history_reprices_statements_on_observed_sessions(local_data):
     body = TestClient(app).get('/api/screener-v2/lookup/AAA/pe-history?days=300').json()
     assert body['metric'] == 'trailing_pe' and len(body['series']) > 100
     assert all(row['valuation_metric'] > 0 for row in body['series'])
+
+
+def test_rrg_returns_weekly_tail_and_quadrant_for_each_name(local_data):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.api import screener_v2
+    app = FastAPI()
+    app.include_router(screener_v2.router, prefix='/api')
+    body = TestClient(app).get('/api/screener-v2/rrg?tickers=AAA,BBB&benchmark=SPY').json()
+    assert body['benchmark'] == 'SPY' and body['frequency'] == 'weekly' and body['unavailable'] == []
+    for ticker in ['AAA', 'BBB']:
+        assert len(body['series'][ticker]) == 10
+        assert body['quadrant'][ticker] in {'Leading', 'Weakening', 'Lagging', 'Improving'}
+        assert all(90 < p['rs_ratio'] < 110 for p in body['series'][ticker])
