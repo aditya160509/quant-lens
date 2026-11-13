@@ -16,7 +16,7 @@ export interface FormulaBarProps {
 
 const theme = EditorView.theme({
   "&": { fontSize: "13px", background: "var(--panel-2)", borderRadius: "8px", boxShadow: "inset 0 0 0 1px var(--line)" },
-  ".cm-content": { fontFamily: "var(--mono)", padding: "8px 10px" },
+  ".cm-content": { fontFamily: "var(--code)", padding: "8px 10px" },
   ".cm-fn": { color: "var(--accent)" },
   ".cm-num": { color: "var(--text-2)" },
   ".cm-unknown": { textDecoration: "underline wavy var(--down)" },

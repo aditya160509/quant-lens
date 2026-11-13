@@ -6,7 +6,7 @@ import { Bookmark, Check, ChevronDown, Eye, EyeOff, Globe2, Link2, Pencil, Plus,
 import toast from "react-hot-toast";
 import { featureHref } from "@/modules/research/catalog";
 import { encodeSettings } from "@/modules/research/StudyForm";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { get } from "@/modules/research/api";
 import { FilterChips, isRangeField } from "@/modules/research/FilterChips";
 import type { FeatureRun } from "@/modules/research/ResearchApp";
@@ -19,6 +19,7 @@ import { PopMenu, type MenuAt } from "@/workspace/ui";
 import { send } from "../api";
 import { useWatchlists } from "../watchlists";
 import { toPayload } from "@/modules/research/StudyForm";
+import { DatePick } from "@/kit/DatePick";
 import { AddFilter } from "./AddFilter";
 import { InFilter, picked } from "./InFilter";
 import { HistogramRange, MixBar, stageFor, useFilterColumns, useFilterPreview } from "./Preview";
@@ -79,7 +80,12 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
   });
   const added = [...new Set(range.map((f) => f.key.replace(/_(min|max|top)$/, "")))].filter((m) => !QUICK.includes(m) && (run.form[`${m}_min`] || run.form[`${m}_max`] || offOf(m)));
   const name = (m: string) => range.find((f) => f.key === `${m}_min`)?.label.replace(/ (Min|Max)$/, "") ?? fmtLabel(m);
-  const at = (e: React.MouseEvent, key: string) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ key, at: { x: r.left, y: r.bottom + 6 } }); };
+  // A second click on the open chip closes it: the outside press already closed it, so skip the reopen.
+  const shut = useRef({ key: "", t: 0 });
+  const at = (e: React.MouseEvent, key: string) => {
+    if (menu?.key === key || (shut.current.key === key && Date.now() - shut.current.t < 400)) { setMenu(null); return; }
+    const r = e.currentTarget.getBoundingClientRect(); setMenu({ key, at: { x: r.left, y: r.bottom + 6 } });
+  };
   // Shift+F opens the filter picker, F the first table's columns; never while typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -158,7 +164,7 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
             {TOPN.map((n) => <button key={n} type="button" role="radio" aria-checked={Number(run.form.top_n ?? 50) === n} onClick={() => set("top_n", n)}>Top {n}</button>)}
           </div>
         ) : null}
-        {keys.has("as_of_date") ? <input className="ub-date" type="date" aria-label="As of date" value={String(run.form.as_of_date ?? "")} onChange={(e) => set("as_of_date", e.target.value)} /> : null}
+        {keys.has("as_of_date") ? <DatePick label="As of date" value={String(run.form.as_of_date ?? "")} min={span?.first} max={span?.last} onChange={(v) => set("as_of_date", v)} /> : null}
         {run.stale ? <span className="sh-pill amber">Changed</span> : null}
         {range.length ? <button type="button" className="btn sm icon ghost ub-hide" aria-pressed={hidden} aria-label={hidden ? "Show filters" : "Hide filters"} title={hidden ? "Show filters" : "Hide filters"} onClick={toggleHidden}>{hidden ? <Eye size={14} /> : <EyeOff size={14} />}</button> : null}
       </div>
@@ -176,13 +182,13 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
           {preview ? <span className="ub-pass num" role="status"><MixBar mix={preview.mix?.sector} /><b>{preview.passed.toLocaleString()}</b> of {preview.universe.toLocaleString()} pass{eta ? <em title="From the last run of this study">≈{eta}s</em> : null}</span> : eta ? <span className="ub-pass num" role="status"><em title="From the last run of this study">≈{eta}s</em></span> : null}
         </div>
       ) : null}
-      <PopMenu at={menu?.at ?? null} onClose={() => setMenu(null)} width={menu?.key === "+" ? 440 : 300} sticky>
+      <PopMenu at={menu?.at ?? null} onClose={() => { shut.current = { key: menu?.key ?? "", t: Date.now() }; setMenu(null); }} width={menu?.key === "+" ? 440 : 300} sticky>
         {menu?.key === "period" ? (
           <div className="ub-range">
             <b>Period</b>
             <div>
-              <input className="input num" type="date" aria-label="Start" min={span?.first} max={end} value={start} onChange={(e) => { if (e.target.value && end) set("lookback_days", Math.max(1, Math.round((Date.parse(end) - Date.parse(e.target.value)) / DAY))); }} />
-              <input className="input num" type="date" aria-label="End" min={span?.first} max={span?.last} value={end} onChange={(e) => { const v = e.target.value; if (v && start) run.setForm((c) => ({ ...c, as_of_date: v, lookback_days: Math.max(1, Math.round((Date.parse(v) - Date.parse(start)) / DAY)) })); }} />
+              <DatePick label="Start" empty="Start" min={span?.first} max={end} value={start} onChange={(v) => { if (v && end) set("lookback_days", Math.max(1, Math.round((Date.parse(end) - Date.parse(v)) / DAY))); }} />
+              <DatePick label="End" empty="End" min={span?.first} max={span?.last} value={end} onChange={(v) => { if (v && start) run.setForm((c) => ({ ...c, as_of_date: v, lookback_days: Math.max(1, Math.round((Date.parse(v) - Date.parse(start)) / DAY)) })); }} />
             </div>
             {span ? <YearStrip years={span.years} from={Number(start.slice(0, 4))} to={Number(end.slice(0, 4))} /> : null}
           </div>

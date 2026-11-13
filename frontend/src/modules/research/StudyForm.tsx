@@ -1,5 +1,6 @@
 "use client";
 
+import { DatePick } from "@/kit/DatePick";
 import { FilterChips, isRangeField } from "./FilterChips";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -310,7 +311,7 @@ export function Control({ field: f, value, onChange }: { field: InputSpec; value
       return <input className="input num" type="number" inputMode="decimal" value={String(value ?? "")} min={f.min} max={f.max} step="any" aria-label={f.label} onChange={(e) => onChange(e.target.value)} />;
     }
     case "date":
-      return <input className="input num" type="date" aria-label={f.label} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+      return <DatePick label={f.label} value={String(value ?? "")} onChange={onChange} />;
     case "json":
       return <textarea className="input" rows={5} aria-label={f.label} spellCheck={false} value={typeof value === "string" ? value : value ? JSON.stringify(value, null, 2) : ""} onChange={(e) => onChange(e.target.value)} />;
     case "file":
