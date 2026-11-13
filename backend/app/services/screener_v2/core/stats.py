@@ -32,14 +32,16 @@ def average_rank(values: np.ndarray, groups: np.ndarray | None = None) -> np.nda
 
 
 def rank_pct(series: pd.Series, higher_better: bool = True) -> pd.Series:
-    numeric = pd.to_numeric(series, errors="coerce")
-    if numeric.notna().sum() <= 1:
-        return pd.Series(50.0, index=series.index).where(numeric.notna())
-    ranks = pd.Series(average_rank(numeric.to_numpy(dtype=float, na_value=np.nan)), index=series.index)
-    pct = (ranks - 1) / (numeric.notna().sum() - 1) * 100
+    # numpy end to end: Series.clip and arithmetic dominated panels of a few names.
+    values = pd.to_numeric(series, errors="coerce").to_numpy(dtype=float, na_value=np.nan)
+    valid = ~np.isnan(values)
+    n = int(valid.sum())
+    if n <= 1:
+        return pd.Series(np.where(valid, 50.0, np.nan), index=series.index)
+    pct = (average_rank(values) - 1) / (n - 1) * 100
     if not higher_better:
         pct = 100.0 - pct
-    return pct.clip(0, 100)
+    return pd.Series(np.clip(pct, 0, 100), index=series.index)
 
 
 def zscore(series: pd.Series) -> pd.Series:

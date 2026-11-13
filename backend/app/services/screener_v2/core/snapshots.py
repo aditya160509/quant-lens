@@ -17,6 +17,7 @@ from pathlib import Path
 import pandas as pd
 import polars as pl
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from . import data_loader
@@ -61,7 +62,8 @@ def read(key: str, tag: str, tickers: list[str]) -> pd.DataFrame:
     if STORE is None or not _path(key, tag).exists():
         return pd.DataFrame()
     path = _path(key, tag)
-    return pq.read_table(path, filters=[("ticker", "in", list(tickers))]).to_pandas()
+    table = pq.ParquetFile(path).read()  # date files are small; the dataset layer behind filters cost 3x the read
+    return table.filter(pc.is_in(table["ticker"], value_set=pa.array(list(tickers), type=table.schema.field("ticker").type))).to_pandas()
 
 
 def write(key: str, tag: str, rows: pd.DataFrame) -> None:
