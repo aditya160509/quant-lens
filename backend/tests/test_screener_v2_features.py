@@ -675,3 +675,9 @@ def test_saved_screen_counts_equal_the_screen_run_and_cache_by_payload(store, lo
     expected = len(run_feature('01', payload)['tables']['ranked_screener_table'])
     assert body['counts']['c1'] == {'count': expected, 'reason': None} and expected > 0
     assert len(screener_v2.COUNT_CACHE) == 1
+
+
+def test_run_reports_the_as_of_date_it_used_so_two_dates_can_be_compared(local_data):
+    from app.services.screener_v2.registry import run_feature
+    dates = [run_feature('01', {'tickers': ['AAA', 'BBB'], 'as_of_date': day})['meta']['as_of_date'] for day in ['2024-06-28', '2025-06-27']]
+    assert dates == ['2024-06-28', '2025-06-27']
