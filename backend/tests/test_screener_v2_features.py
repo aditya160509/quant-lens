@@ -616,3 +616,15 @@ def test_snapshot_write_merges_rows_atomically(tmp_path, monkeypatch):
     assert snapshots.read('k', 'd', ['A', 'B', 'C']).sort_values('ticker').x.tolist() == [1, 5, 3]
     assert snapshots.read('k', 'd', ['C']).ticker.tolist() == ['C']
     assert not list(tmp_path.glob('k/*.tmp'))
+
+
+def test_pe_history_reprices_statements_on_observed_sessions(local_data):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.api import screener_v2
+    app = FastAPI()
+    app.include_router(screener_v2.router, prefix='/api')
+    body = TestClient(app).get('/api/screener-v2/lookup/AAA/pe-history?days=300').json()
+    assert body['metric'] == 'trailing_pe' and len(body['series']) > 100
+    assert all(row['valuation_metric'] > 0 for row in body['series'])

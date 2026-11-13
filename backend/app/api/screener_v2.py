@@ -212,6 +212,14 @@ async def lookup_ohlcv(ticker: str, days: int = Query(400, ge=20, le=4000)) -> d
     return await asyncio.to_thread(_lookup_call, explain.ohlcv, ticker, days)
 
 
+@router.get("/lookup/{ticker}/pe-history")
+async def lookup_pe_history(ticker: str, days: int = Query(756, ge=20, le=2520)) -> dict[str, Any]:
+    from app.services.screener_v2.core.valuation import historical_valuation_series
+    symbol = lookup.normalize_symbol(ticker)
+    series = await asyncio.to_thread(_lookup_call, historical_valuation_series, symbol, "trailing_pe", days)
+    return {"ticker": symbol, "metric": "trailing_pe", "series": series, "note": None if series else "No statements or prices to reprice trailing P/E for this name"}
+
+
 @router.get("/lookup/{ticker}/pdf")
 async def lookup_pdf(ticker: str) -> Response:
     body = await asyncio.to_thread(_lookup_call, lookup.pdf, ticker)
