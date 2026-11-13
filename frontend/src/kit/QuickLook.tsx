@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Download, GitCompareArrows, ListPlus, Pencil, Plus, X } from "lucide-react";
+import { Check, Download, GitCompareArrows, ListPlus, Maximize2, Minimize2, Pencil, Plus, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { PriceChart, type TradeMark } from "@/charts/PriceChart";
 import { useQuery } from "@tanstack/react-query";
@@ -26,6 +26,8 @@ type QuickLookStore = {
   tab: QuickTab;
   range: string;
   basket: string[];
+  full: boolean;
+  setFull: (full: boolean) => void;
   open: (ticker: string, tab?: QuickTab) => void;
   close: () => void;
   setTab: (tab: QuickTab) => void;
@@ -36,9 +38,10 @@ type QuickLookStore = {
 
 /** One drawer for the whole workspace: any table, chart or search row opens a name with `openQuickLook(ticker)`. */
 export const useQuickLook = create<QuickLookStore>()((set) => ({
-  ticker: null, tab: "overview", range: "1Y", basket: [],
+  ticker: null, tab: "overview", range: "1Y", basket: [], full: false,
+  setFull: (full) => set({ full }),
   open: (ticker, tab) => set((s) => ({ ticker: ticker.toUpperCase(), tab: tab ?? (s.ticker === ticker.toUpperCase() ? s.tab : "overview") })),
-  close: () => set({ ticker: null }),
+  close: () => set({ ticker: null, full: false }),
   setTab: (tab) => set({ tab }),
   setRange: (range) => set({ range }),
   toggleBasket: (ticker) => set((s) => ({ basket: s.basket.includes(ticker) ? s.basket.filter((t) => t !== ticker) : s.basket.length < MAX_COMPARE ? [...s.basket, ticker] : s.basket })),
@@ -71,7 +74,7 @@ function addToScreen(ticker: string) {
 }
 
 export function QuickLook() {
-  const { ticker, tab, basket, close, setTab, toggleBasket } = useQuickLook();
+  const { ticker, tab, basket, full, close, setTab, setFull, toggleBasket } = useQuickLook();
   const q = useLookup(ticker);
   const ref = useRef<HTMLElement>(null);
   const isOpen = ticker !== null;
@@ -85,6 +88,19 @@ export function QuickLook() {
     return () => { window.removeEventListener("keydown", onKey); opener?.focus?.(); };
   }, [isOpen, close]);
 
+  // The open name lives in the URL (?stock=XOM, &view=full) so a stock page can be linked and reloaded.
+  useEffect(() => {
+    const p = new URLSearchParams(location.search);
+    const t = p.get("stock");
+    if (t) { useQuickLook.getState().open(t); setFull(p.get("view") === "full"); }
+  }, [setFull]);
+  useEffect(() => {
+    const u = new URL(location.href);
+    if (ticker) u.searchParams.set("stock", ticker); else u.searchParams.delete("stock");
+    if (ticker && full) u.searchParams.set("view", "full"); else u.searchParams.delete("view");
+    if (u.href !== location.href) history.replaceState(history.state, "", u);
+  }, [ticker, full]);
+
   if (!ticker) return null;
   const d = q.data;
   const inBasket = basket.includes(ticker);
@@ -93,7 +109,7 @@ export function QuickLook() {
     ...(basket.length ? [{ id: "compare" as const, label: `Compare ${basket.length}` }] : []),
   ];
   return (
-    <aside ref={ref} className="ql" role="dialog" aria-label={`${ticker} quick look`} tabIndex={-1}>
+    <aside ref={ref} className={`ql${full ? " full" : ""}`} role="dialog" aria-label={`${ticker} quick look`} tabIndex={-1}>
       <header className="ql-head">
         <Monogram ticker={ticker} />
         <div className="ql-title">
@@ -106,6 +122,7 @@ export function QuickLook() {
           <button className="btn sm icon ghost" onClick={() => addToScreen(ticker)} aria-label={`Add ${ticker} to the Screen universe`} title="Add to screen"><ListPlus size={13} /></button>
           <button className="btn sm" aria-pressed={inBasket} onClick={() => toggleBasket(ticker)} title={inBasket ? "Remove from compare" : "Add to compare"}>{inBasket ? <Check size={13} /> : <Plus size={13} />}Compare</button>
           <a className="btn sm" href={pdfUrl(ticker)} download title="One-page PDF"><Download size={13} />PDF</a>
+          <button className="btn sm icon ghost" onClick={() => setFull(!full)} aria-label={full ? "Back to drawer" : "Open as full page"} title={full ? "Drawer" : "Full page"}>{full ? <Minimize2 size={13} /> : <Maximize2 size={13} />}</button>
           <button className="btn icon ghost" onClick={close} aria-label="Close quick look"><X size={15} /></button>
         </div>
       </header>

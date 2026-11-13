@@ -88,3 +88,5 @@
 .ql-mode { display: flex; justify-content: flex-end; margin: -2px 0 6px; }
 .ql-cmp td.ql-best { color: var(--up); font-weight: 600; }
 .ql-cmp td.ql-worst { color: var(--down); }
+.ql.full { width: 100vw; }
+.ql.full .ql-head, .ql.full .ql-body, .ql.full .ql-tabs, .ql.full .ql-foot { width: 100%; max-width: 1120px; margin-inline: auto; }
