@@ -643,3 +643,35 @@ def test_rrg_returns_weekly_tail_and_quadrant_for_each_name(local_data):
         assert len(body['series'][ticker]) == 10
         assert body['quadrant'][ticker] in {'Leading', 'Weakening', 'Lagging', 'Improving'}
         assert all(90 < p['rs_ratio'] < 110 for p in body['series'][ticker])
+
+
+def test_saved_screen_changes_list_entrants_and_exits_between_last_two_runs(store):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.api import screener_v2
+    store.save_screen('s1', 'Screen', '01', {})
+    rows = lambda *tickers: {'tables': {'ranked_screener_table': [{'ticker': t} for t in tickers]}}
+    store.save_run('s1', '2026-01-02', rows('AAA', 'BBB'))
+    store.save_run('s1', '2026-01-05', rows('BBB', 'CCC'))
+    app = FastAPI()
+    app.include_router(screener_v2.router, prefix='/api')
+    body = TestClient(app).get('/api/screener-v2/screens/changes?ids=s1').json()
+    assert body['changes']['s1'] == {'entrants': ['CCC'], 'exits': ['AAA'], 'as_of': ['2026-01-05', '2026-01-02'], 'reason': None}
+
+
+def test_saved_screen_counts_equal_the_screen_run_and_cache_by_payload(store, local_data, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.api import screener_v2
+    from app.services.screener_v2.registry import run_feature
+    monkeypatch.setattr(screener_v2, 'COUNT_CACHE', {})
+    payload = {'tickers': ['AAA', 'BBB', 'CCC'], 'roe_min': 0, 'top_n': 100}
+    store.save_screen('c1', 'Profitable', '01', payload)
+    app = FastAPI()
+    app.include_router(screener_v2.router, prefix='/api')
+    body = TestClient(app).get('/api/screener-v2/screens/counts').json()
+    expected = len(run_feature('01', payload)['tables']['ranked_screener_table'])
+    assert body['counts']['c1'] == {'count': expected, 'reason': None} and expected > 0
+    assert len(screener_v2.COUNT_CACHE) == 1

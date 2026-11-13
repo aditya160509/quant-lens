@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import hashlib
 import io
 import json
 import re
 import threading
+import time
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile
@@ -612,6 +614,64 @@ def saved_screen_history(screen_id: str, limit: int = Query(20, ge=1, le=100)) -
         return {'runs': run_history(screen_id, limit)}
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+COUNT_CACHE: dict[str, int | None] = {}
+
+
+def _count_key(screen: dict[str, Any]) -> str:
+    from app.services.screener_v2.registry import hash_versions
+    spec = [screen["feature_id"], screen["payload"], format(hash_versions(), "x")]
+    return hashlib.sha256(json.dumps(spec, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _screens_counts(screens: list[dict[str, Any]], budget_seconds: float) -> dict[str, Any]:
+    """Live match counts, from each screen's filter funnel; screens past the time budget are left for their own page."""
+    started, counts = time.monotonic(), {}
+    for screen in screens:
+        key = _count_key(screen)
+        if key not in COUNT_CACHE:
+            if time.monotonic() - started > budget_seconds:
+                counts[screen["screen_id"]] = {"count": None, "reason": "time budget reached; open the screen to count"}
+                continue
+            try:
+                funnel = run_feature(screen["feature_id"], screen["payload"]).get("charts", {}).get("filter_funnel_waterfall") or []
+            except (KeyError, TypeError, ValueError, FileNotFoundError) as exc:
+                counts[screen["screen_id"]] = {"count": None, "reason": str(exc)}
+                continue
+            COUNT_CACHE[key] = int(funnel[-1]["remaining"]) if funnel else None
+        counts[screen["screen_id"]] = {"count": COUNT_CACHE[key], "reason": None if COUNT_CACHE[key] is not None else "feature has no filter funnel"}
+    return {"counts": counts}
+
+
+@router.get('/screens/counts')
+async def saved_screen_counts(budget_seconds: float = Query(20, ge=1, le=120)) -> dict[str, Any]:
+    from app.services.screener_v2.core.state import list_screens
+    return await asyncio.to_thread(_screens_counts, list_screens(), budget_seconds)
+
+
+@router.get('/screens/changes')
+def saved_screen_changes(ids: str = Query(..., max_length=2000)) -> dict[str, Any]:
+    """Entrants and exits per saved screen, between its last two stored runs."""
+    from app.services.screener_v2.core.explain import screen_diff
+    from app.services.screener_v2.core.state import get_screen, run_history
+    screen_ids = list(dict.fromkeys(i.strip() for i in ids.split(',') if i.strip()))
+    if not 1 <= len(screen_ids) <= 50:
+        raise HTTPException(422, 'Compare 1 to 50 saved screens')
+    changes = {}
+    for screen_id in screen_ids:
+        try:
+            get_screen(screen_id)
+        except KeyError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        runs = run_history(screen_id, 2)
+        if len(runs) < 2:
+            changes[screen_id] = {'entrants': None, 'exits': None, 'as_of': [r['as_of_date'] for r in runs], 'reason': 'fewer than two stored runs'}
+            continue
+        newest, previous = (r['result']['tables'].get('ranked_screener_table', []) for r in runs)
+        diff = screen_diff([row['ticker'] for row in previous], [row['ticker'] for row in newest])
+        changes[screen_id] = {'entrants': diff['entered'], 'exits': diff['left'], 'as_of': [runs[0]['as_of_date'], runs[1]['as_of_date']], 'reason': None}
+    return {'changes': changes}
 
 
 @router.get('/universes')
