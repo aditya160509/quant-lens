@@ -76,7 +76,7 @@ export const first = (result: FeatureResult, key: string): Row | undefined => ou
 
 const P_RE = /(^|_)(p|pvalue|p_value)$|p_value|^pr\(/i;
 const T_RE = /(^|_)t(_stat)?$|_t$|^t_|t_stat|z$|^stouffer_z$/i;
-const PCT_RE = /(return|spread|share|fraction|weight|coverage|power|survival|probability|drawdown|r2$|^r2|accuracy)/i;
+const PCT_RE = /(return|spread|share|fraction|weight|coverage|power|survival|probability|drawdown|contribution|pnl|r2$|^r2|accuracy)/i;
 const INT_RE = /(months|periods|nobs|observations|count|^n$|_n$|^n_|replications|tests|assets|units|cohorts|events|donors|lag|rank|placebos|specifications|choices|length|window|holdings|pairs$)/i;
 
 export const isPKey = (k: string) => P_RE.test(k);

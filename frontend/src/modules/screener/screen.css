@@ -36,3 +36,22 @@ g.rrg-lagging polyline, g.rrg-lagging circle { stroke: var(--down); fill: var(--
 g.rrg-weakening polyline, g.rrg-weakening circle { stroke: var(--accent); fill: var(--accent); }
 g.rrg-improving polyline, g.rrg-improving circle { stroke: var(--text-3); fill: var(--text-3); }
 .rrg polyline { stroke-width: 1.5; fill: none; opacity: 0.6; }
+
+/* Rebalancing variants and turnover */
+.vb { display: grid; gap: 2px; font-size: 12.5px; }
+.vb-row { display: grid; grid-template-columns: minmax(110px, 1fr) repeat(3, minmax(0, 1.4fr)); gap: 14px; align-items: center; padding: 6px 8px; border-radius: 8px; }
+.vb-head { color: var(--text-3); font-size: 11.5px; padding-block: 2px 6px; }
+.vb-row[data-best="true"] { background: var(--panel-2); }
+.vb-row[data-best="true"] .vb-name { color: var(--text); font-weight: 600; }
+.vb-name { color: var(--text-2); white-space: nowrap; }
+.vb-cell { position: relative; display: flex; align-items: center; gap: 8px; height: 22px; }
+.vb-cell i { height: 8px; border-radius: 4px; flex: none; max-width: 70%; }
+.vb-cell i.up { background: color-mix(in oklch, var(--up) 70%, transparent); }
+.vb-cell i.down { background: color-mix(in oklch, var(--down) 70%, transparent); }
+.vb-cell b { font-weight: 500; color: var(--text); }
+.tb { display: grid; gap: 10px; }
+.tb-stats { display: flex; gap: 18px; font-size: 12px; color: var(--text-3); }
+.tb-stats b { color: var(--text); font-weight: 600; margin-left: 4px; }
+.tb-bars { display: flex; align-items: flex-end; gap: 2px; height: 120px; }
+.tb-bars i { flex: 1; min-width: 2px; border-radius: 2px 2px 0 0; background: color-mix(in oklch, var(--c1) 70%, transparent); transition: background-color .12s; }
+.tb-bars i:hover { background: var(--c1); }

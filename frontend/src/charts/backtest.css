@@ -1,4 +1,9 @@
-.ts-under svg { height: 110px; }
+.ts-under svg { display: block; width: 100%; height: 180px; overflow: visible; }
+.dd-plot { position: relative; cursor: crosshair; }
+.dd-y { position: absolute; inset: 0 auto 0 0; pointer-events: none; }
+.dd-y span { position: absolute; left: 4px; transform: translateY(-50%); font-size: 10.5px; color: var(--text-4); }
+.dd-tip { position: absolute; top: -6px; transform: translate(-50%, -100%); display: grid; gap: 1px; padding: 5px 8px; border-radius: 8px; background: var(--raise); box-shadow: var(--shadow); font-size: 11px; color: var(--text-3); white-space: nowrap; pointer-events: none; }
+.dd-tip b { color: var(--down); font-size: 12.5px; }
 .ts-legend { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 8px; font-size: 12px; color: var(--text-3); }
 .ts-legend b { color: var(--text); font-weight: 600; }
 .ts-gantt { display: grid; gap: 2px; max-height: 520px; overflow-y: auto; font-size: 11.5px; }
@@ -7,3 +12,4 @@
 .ts-g-track i { position: absolute; top: 1px; bottom: 1px; border-radius: 2px; }
 .ts-g-track i[data-open="true"] { box-shadow: inset -2px 0 0 var(--text); }
 .ts-g-axis { display: flex; justify-content: space-between; padding-left: 72px; color: var(--text-3); font-size: 10.5px; }
+.ts-under .ts-g-axis { padding: 4px 0 0; }

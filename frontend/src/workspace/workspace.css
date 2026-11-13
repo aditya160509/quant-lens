@@ -679,3 +679,8 @@ nav.island { container-type: inline-size; }
 .dp-grid button[aria-pressed="true"] { background: var(--text); color: var(--bg); font-weight: 600; }
 .dp-grid button:disabled { color: var(--text-4); opacity: .4; }
 @media (prefers-reduced-motion: reduce) { .dp-pop { animation: none; } }
+
+/* Results scroll inside a liquid-glass scene; the top edge softens under the sticky bar. */
+.island.results { position: relative; }
+.results-scroll { height: 100%; overflow-y: auto; overflow-x: hidden; }
+.sticky-bar.stuck { background: color-mix(in oklch, var(--island) 55%, transparent); }

@@ -10,6 +10,7 @@ import { openQuickLook } from "@/kit/QuickLook";
 import { Spark } from "@/charts/RankList";
 import { isNum, label, out, pct } from "@/modules/research/format";
 import type { ViewProps } from "@/modules/research/outputs/types";
+import type { Row } from "@/modules/research/types";
 import { ScreenScatter, SensitivityStrip } from "./trust/Charts";
 import { NearMisses, RunInfo, runOf, ScreenDiff, WhyHere } from "./trust/Explain";
 import { SCREENER_BASE } from "./base";
@@ -152,6 +153,50 @@ export function RrgView({ rows }: ViewProps) {
           })}
         </svg>
       ) : q.isLoading ? <div className="skel-card" style={{ height: 320 }} aria-busy="true" /> : null}
+    </div>
+  );
+}
+
+const pick = (r: Row | undefined, keys: string[]) => keys.find((k) => r && isNum(r[k]));
+
+/** One row per tested variant (offset, holding period, weekday): annual return, Sharpe and worst drawdown as bars, best Sharpe marked. */
+export function VariantBars({ rows: all }: ViewProps) {
+  const by = ["rebalance_offset_days", "offset_days", "holding_days", "weekday"].find((k) => all.some((r) => r[k] !== undefined && r[k] !== null && r[k] !== ""));
+  const rows = by ? all.filter((r) => r[by] !== undefined && r[by] !== null && r[by] !== "") : [];
+  const ret = pick(rows[0], ["annualized_return", "cagr", "return", "total_return"]);
+  if (!by || !rows.length) return <DataTable rows={all} />;
+  const cols = [["Return", ret, (v: number) => pct(v, 1)], ["Sharpe", "sharpe", (v: number) => v.toFixed(2)], ["Worst drawdown", "max_drawdown", (v: number) => pct(v, 1)]] as const;
+  const max = (k: string | undefined) => Math.max(1e-9, ...rows.map((r) => (k && isNum(r[k]) ? Math.abs(r[k]) : 0)));
+  const best = rows.reduce((a, r) => (isNum(r.sharpe) && (!isNum(a.sharpe) || r.sharpe > a.sharpe) ? r : a), rows[0]);
+  const name = (v: unknown) => (by === "weekday" ? String(v) : `${v} ${by.endsWith("offset_days") ? "day offset" : "day hold"}`);
+  return (
+    <div className="vb">
+      <div className="vb-row vb-head"><span />{cols.map(([l]) => <span key={l}>{l}</span>)}</div>
+      {rows.map((r, i) => (
+        <div key={i} className="vb-row" data-best={r === best}>
+          <span className="vb-name">{name(r[by])}</span>
+          {cols.map(([l, k, f]) => {
+            const v = k ? r[k] : null;
+            return <span key={l} className="vb-cell">{isNum(v) ? <><i className={v < 0 ? "down" : "up"} style={{ width: `${(Math.abs(v) / max(k)) * 100}%` }} /><b className="num">{f(v)}</b></> : <b className="miss">—</b>}</span>;
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Turnover on each rebalance date as bars, with the trading cost it implied. */
+export function TurnoverBars({ rows }: ViewProps) {
+  const pts = rows.filter((r) => isNum(r.turnover) && (r.rebalance === true || r.rebalance === "Yes" || (r.turnover as number) > 0));
+  if (!pts.length) return <DataTable rows={rows} />;
+  const top = Math.max(1e-9, ...pts.map((r) => r.turnover as number));
+  const avg = pts.reduce((s, r) => s + (r.turnover as number), 0) / pts.length;
+  const cost = rows.reduce((s, r) => s + (isNum(r.cost_fraction) ? r.cost_fraction : 0), 0);
+  return (
+    <div className="tb">
+      <div className="tb-stats"><span>Rebalances <b className="num">{pts.length}</b></span><span>Average turnover <b className="num">{pct(avg, 0)}</b></span><span>Total cost <b className="num">{pct(cost, 2)}</b></span></div>
+      <div className="tb-bars">{pts.map((r, i) => <i key={i} style={{ height: `${((r.turnover as number) / top) * 100}%` }} title={`${String(r.date).slice(0, 10)} · ${pct(r.turnover as number, 0)}`} />)}</div>
+      <div className="ts-g-axis num" style={{ paddingLeft: 0 }}><span>{String(pts[0].date).slice(0, 10)}</span><span>{String(pts[pts.length - 1].date).slice(0, 10)}</span></div>
     </div>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { GlassContent, GlassScene, GlassScrollEdges } from "@glass-sdk/liquid-glass";
+import "@glass-sdk/liquid-glass/styles.css";
 import { ChartScope } from "@/charts/ChartScope";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
@@ -146,7 +148,8 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
 
   return (
     <ChartScope key={run.jobId ?? feature.id} events={result?.meta.events}>
-    <div ref={scroller} className="island results" data-lab={lab().id} style={{ overflowY: "auto", overflowX: "hidden" }}>
+    <GlassScene className="island results" data-lab={lab().id} material="regular" appearance="dark">
+    <GlassContent layout="scroll" ref={scroller} className="results-scroll">
       <div ref={hero} style={{ padding: "22px 22px 6px" }}>
         <div className="fv-head">
           <div className="ov-icon" style={{ width: 40, height: 40, borderRadius: 11 }}><Icon size={19} strokeWidth={1.6} /></div>
@@ -228,7 +231,9 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         )}
         {lab().id === "ml" && feature.description ? <details className="ml-method"><summary>Method</summary><p>{feature.description}</p></details> : null}
       </div>
-    </div>
+    </GlassContent>
+    <GlassScrollEdges target={scroller} edges={["top"]} size={64} blur={16} />
+    </GlassScene>
     </ChartScope>
   );
 }
