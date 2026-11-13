@@ -57,11 +57,77 @@ def _path(key: str, tag: str) -> Path:
     return STORE / key / f"{tag}.parquet"
 
 
+PACK_NAME = "_pack.arrow"
+PACK_STALE = 50  # rebuild the pack once this many date files are newer than it
+_IPC = pa.ipc.IpcWriteOptions(compression="lz4")
+_packs: dict[str, tuple[int, dict[str, tuple[int, pd.DataFrame]]]] = {}
+
+
+def _frames(entries: dict[str, tuple[int, bytes]]) -> dict[str, tuple[int, pd.DataFrame]]:
+    """Decode every packed date and convert to pandas once per schema; per-date conversion was most of the read cost."""
+    groups: dict[pa.Schema, list[tuple[str, pa.Table]]] = {}
+    for tag, (_, data) in entries.items():
+        table = pa.ipc.open_file(pa.py_buffer(data)).read_all()
+        groups.setdefault(table.schema, []).append((tag, table))
+    out: dict[str, tuple[int, pd.DataFrame]] = {}
+    for items in groups.values():
+        whole = pa.concat_tables([t for _, t in items]).to_pandas()
+        start = 0
+        for tag, table in items:
+            out[tag] = (entries[tag][0], whole.iloc[start:start + table.num_rows].reset_index(drop=True))
+            start += table.num_rows
+    return out
+
+
+def _pack(key: str) -> dict[str, tuple[int, pd.DataFrame]]:
+    """Every date file of a key in one memory-mapped Arrow file: tag -> (source mtime_ns, Arrow IPC bytes).
+
+    A backtest reads one small file per date (about 1,200); one mapped file replaces those opens and the
+    parquet decodes. Date files stay the source of truth: an entry whose file changed is ignored.
+    """
+    folder = STORE / key
+    pack_path = folder / PACK_NAME
+    try:
+        mtime = pack_path.stat().st_mtime_ns
+    except FileNotFoundError:
+        mtime = -1
+    cached = _packs.get(key)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    entries: dict[str, tuple[int, bytes]] = {}
+    if mtime >= 0:
+        table = pa.ipc.open_file(pa.memory_map(str(pack_path))).read_all()
+        entries = dict(zip(table["tag"].to_pylist(), zip(table["mtime_ns"].to_pylist(), table["data"].to_pylist())))
+    files = {f.stem: f for f in folder.glob("*.parquet")}
+    stale = [tag for tag, f in files.items() if tag not in entries or entries[tag][0] != f.stat().st_mtime_ns]
+    if len(stale) >= PACK_STALE:
+        entries = {tag: entries[tag] for tag in files if tag not in stale}
+        for tag in stale:
+            sink = pa.BufferOutputStream()
+            table = pq.ParquetFile(files[tag]).read()
+            with pa.ipc.new_file(sink, table.schema, options=_IPC) as writer:
+                writer.write_table(table)
+            entries[tag] = (files[tag].stat().st_mtime_ns, sink.getvalue().to_pybytes())
+        packed = pa.table({"tag": list(entries), "mtime_ns": pa.array([v[0] for v in entries.values()], pa.int64()),
+                           "data": pa.array([v[1] for v in entries.values()], pa.large_binary())})
+        temporary = pack_path.with_suffix(f".{os.getpid()}.tmp")
+        with pa.OSFile(str(temporary), "wb") as sink, pa.ipc.new_file(sink, packed.schema) as writer:
+            writer.write_table(packed)
+        os.replace(temporary, pack_path)
+        mtime = pack_path.stat().st_mtime_ns
+    _packs[key] = (mtime, _frames(entries))
+    return _packs[key][1]
+
+
 def read(key: str, tag: str, tickers: list[str]) -> pd.DataFrame:
     """Rows for these tickers from one date's snapshot; reads nothing else."""
     if STORE is None or not _path(key, tag).exists():
         return pd.DataFrame()
     path = _path(key, tag)
+    entry = _pack(key).get(tag)
+    if entry and entry[0] == path.stat().st_mtime_ns:
+        frame = entry[1]
+        return frame[frame["ticker"].isin(tickers).to_numpy()].reset_index(drop=True)
     table = pq.ParquetFile(path).read()  # date files are small; the dataset layer behind filters cost 3x the read
     return table.filter(pc.is_in(table["ticker"], value_set=pa.array(list(tickers), type=table.schema.field("ticker").type))).to_pandas()
 

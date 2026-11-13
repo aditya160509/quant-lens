@@ -624,6 +624,26 @@ def test_snapshot_write_merges_rows_atomically(tmp_path, monkeypatch):
     assert not list(tmp_path.glob('k/*.tmp'))
 
 
+def test_snapshot_pack_serves_reads_and_yields_to_newer_files(tmp_path, monkeypatch):
+    import os
+
+    import pandas as pd
+
+    from app.services.screener_v2.core import snapshots
+    monkeypatch.setattr(snapshots, 'STORE', tmp_path)
+    monkeypatch.setattr(snapshots, 'PACK_STALE', 1)
+    monkeypatch.setattr(snapshots, '_packs', {})
+    snapshots.write('k', 'd1', pd.DataFrame({'ticker': ['A', 'B'], 'x': [1, 2]}))
+    snapshots.write('k', 'd2', pd.DataFrame({'ticker': ['A'], 'x': [7]}))
+    assert snapshots.read('k', 'd1', ['B']).x.tolist() == [2]
+    assert (tmp_path / 'k' / snapshots.PACK_NAME).exists() and set(snapshots._pack('k')) == {'d1', 'd2'}
+    monkeypatch.setattr(snapshots, 'PACK_STALE', 10**9)  # newer file must win without a rebuild
+    snapshots.write('k', 'd1', pd.DataFrame({'ticker': ['B'], 'x': [9]}))
+    path = tmp_path / 'k' / 'd1.parquet'
+    os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 1))
+    assert snapshots.read('k', 'd1', ['A', 'B']).sort_values('ticker').x.tolist() == [1, 9]
+
+
 def test_pe_history_reprices_statements_on_observed_sessions(local_data):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
