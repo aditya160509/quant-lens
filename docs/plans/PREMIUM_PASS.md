@@ -73,7 +73,7 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 - [ ] More page: Markets tabs, hourly, plain English, share links, API keys
 - [ ] Share page and embed in the same design
 - [ ] Plain-English filter box (`/nl-filter`) producing editable filters
-- [ ] Compare-to-field and sector-median filters in the editor; "held for N days"
+- [x] Compare-to-field and sector-median filters in the editor; "held for N days"
 - [ ] Run progress by stage with cancel and a stale marker
 - [ ] Relative Rotation Graph view (`/rrg`)
 - [ ] Phone layout: bottom nav, filter sheet, card rows
