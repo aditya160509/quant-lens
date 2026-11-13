@@ -29,7 +29,8 @@ function sma(bars: Bar[], n: number) {
 }
 
 /** Candles with a volume pane, SMA 50 and 200, and optional entry and exit marks, on Lightweight Charts v5 in the workspace theme. */
-export function PriceChart({ bars, marks, height = 300, averages = AVERAGES }: { bars: Bar[]; marks?: TradeMark[]; height?: number; averages?: number[] }) {
+/** With `line` (e.g. trailing P/E per session) it draws that line instead of candles, keeping the marks. */
+export function PriceChart({ bars, marks, height = 300, averages = AVERAGES, line }: { bars: Bar[]; marks?: TradeMark[]; height?: number; averages?: number[]; line?: { time: string; value: number }[] }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -42,9 +43,12 @@ export function PriceChart({ bars, marks, height = 300, averages = AVERAGES }: {
       rightPriceScale: { borderVisible: false }, timeScale: { borderVisible: false },
       crosshair: { mode: 1 },
     });
-    const candles = chart.addSeries(CandlestickSeries, { upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false });
-    candles.setData(bars.map((b) => ({ time: b.time as Time, open: b.open, high: b.high, low: b.low, close: b.close })));
-    averages.forEach((n, i) => {
+    const candles = line
+      ? chart.addSeries(LineSeries, { color: css(el, "--c1", "#6ea8fe"), lineWidth: 2, priceLineVisible: false })
+      : chart.addSeries(CandlestickSeries, { upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false });
+    if (line) candles.setData(line.map((p) => ({ time: p.time as Time, value: p.value })));
+    else candles.setData(bars.map((b) => ({ time: b.time as Time, open: b.open, high: b.high, low: b.low, close: b.close })));
+    if (!line) averages.forEach((n, i) => {
       const line = sma(bars, n);
       if (line.length) chart.addSeries(LineSeries, { color: css(el, `--c${i + 1}`, "#888"), lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: `SMA ${n}` }).setData(line);
     });
@@ -54,12 +58,12 @@ export function PriceChart({ bars, marks, height = 300, averages = AVERAGES }: {
       vol.setData(bars.map((b) => ({ time: b.time as Time, value: b.volume ?? 0, color: b.close >= b.open ? upSoft : downSoft })));
       chart.panes()[1]?.setHeight(Math.round(height * 0.22));
     }
-    const shown = new Set(bars.map((b) => b.time));
+    const shown = new Set(line ? line.map((p) => p.time) : bars.map((b) => b.time));
     const m: SeriesMarker<Time>[] = (marks ?? []).filter((x) => shown.has(x.time)).sort((a, b) => a.time.localeCompare(b.time))
       .map((x) => ({ time: x.time as Time, position: x.side === "entry" ? "belowBar" : "aboveBar", shape: x.side === "entry" ? "arrowUp" : "arrowDown", color: x.side === "entry" ? up : down, text: x.label ?? "" }));
     if (m.length) createSeriesMarkers(candles, m);
     chart.timeScale().fitContent();
     return () => chart.remove();
-  }, [bars, marks, height, averages]);
+  }, [bars, marks, height, averages, line]);
   return <div ref={ref} style={{ width: "100%", height }} role="img" aria-label={bars.length ? `Price from ${bars[0].time} to ${bars.at(-1)?.time}` : "No prices"} />;
 }

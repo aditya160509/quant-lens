@@ -2,7 +2,10 @@
 
 import { Check, Download, GitCompareArrows, ListPlus, Pencil, Plus, X } from "lucide-react";
 import toast from "react-hot-toast";
-import { PriceChart } from "@/charts/PriceChart";
+import { PriceChart, type TradeMark } from "@/charts/PriceChart";
+import { useQuery } from "@tanstack/react-query";
+import { latestRun, useRuns } from "@/modules/research/api";
+import { SCREENER_BASE } from "@/modules/screener/base";
 import { RowActions } from "@/modules/screener/RowActions";
 import { useStudies } from "@/modules/research/store";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -12,7 +15,7 @@ import { Spark } from "@/charts/RankList";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { isNum } from "@/modules/research/format";
 import { Chip, Segmented } from "@/workspace/ui";
-import { pdfUrl, useBars, useCompare, useLookup, useStatements, type Lookup, type Stat } from "./QuickLookData";
+import { pdfUrl, useBars, useCompare, useLookup, usePeHistory, useStatements, type Lookup, type Stat } from "./QuickLookData";
 import "./quicklook.css";
 
 export const MAX_COMPARE = 25;
@@ -180,8 +183,29 @@ function Overview({ d }: { d: Lookup }) {
 
 /** Candles, volume and SMA 50/200 for the range; the close line stands in while bars load or if they fail. */
 function Candles({ ticker, range, fallback }: { ticker: string; range: string; fallback: ReactNode }) {
-  const bars = useBars(ticker, RANGE_DAYS[range] ?? 365).data?.bars;
-  return bars && bars.length > 1 ? <PriceChart bars={bars} height={260} /> : <>{fallback}</>;
+  const days = RANGE_DAYS[range] ?? 365;
+  const [mode, setMode] = useState<"price" | "pe">("price");
+  const bars = useBars(ticker, days).data?.bars;
+  const pe = usePeHistory(ticker, days, mode === "pe").data?.series;
+  const line = useMemo(() => (mode === "pe" && pe ? pe.filter((p) => isNum(p.valuation_metric)).map((p) => ({ time: p.date.slice(0, 10), value: p.valuation_metric as number })) : undefined), [mode, pe]);
+  const marks = useTradeMarks(ticker);
+  return (
+    <>
+      <div className="ql-mode"><Segmented<"price" | "pe"> label="Chart" value={mode} onChange={setMode} options={[{ value: "price", label: "Price" }, { value: "pe", label: "P/E" }]} /></div>
+      {bars && bars.length > 1 ? <PriceChart bars={bars} height={260} marks={marks} line={line && line.length > 1 ? line : undefined} /> : <>{fallback}</>}
+    </>
+  );
+}
+
+/** Entry and exit dates of this name in the latest finished backtest, as chart marks. */
+function useTradeMarks(ticker: string): TradeMark[] | undefined {
+  const job = useRuns((s) => latestRun(s.runs, "sc05")?.jobId ?? null);
+  const res = useQuery({ queryKey: ["screener", "job", job], queryFn: () => fetch(`${SCREENER_BASE}/jobs/${job}`).then((r) => r.json() as Promise<{ result?: { tables?: Record<string, unknown> } }>), enabled: !!job, staleTime: Infinity, retry: false }).data;
+  return useMemo(() => {
+    const t = res?.result?.tables?.position_entry_exit_log as { rows?: Record<string, unknown>[] } | Record<string, unknown>[] | undefined;
+    const rows = (Array.isArray(t) ? t : t?.rows ?? []).filter((r) => r.ticker === ticker);
+    return rows.flatMap((r) => [...(r.entry_date ? [{ time: String(r.entry_date).slice(0, 10), side: "entry" as const, label: "Buy" }] : []), ...(r.exit_date ? [{ time: String(r.exit_date).slice(0, 10), side: "exit" as const, label: "Sell" }] : [])]);
+  }, [res, ticker]);
 }
 
 /** Score profile as a shape on the shared radar; an unknown score is left off its axis. */

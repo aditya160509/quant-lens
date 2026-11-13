@@ -34,6 +34,8 @@ export const useCompare = (tickers: string[]) =>
   useQuery({ queryKey: ["lookup-compare", tickers], queryFn: () => get<Compare>(`/lookup/compare?tickers=${tickers.join(",")}`), enabled: tickers.length >= 2, staleTime: 300_000, retry: false });
 export type Bars = { ticker: string; bars: { time: string; open: number; high: number; low: number; close: number; volume: number | null }[] };
 export const useBars = (ticker: string, days: number) => useQuery({ queryKey: ["lookup-bars", ticker, days], queryFn: () => get<Bars>(`/lookup/${encodeURIComponent(ticker)}/ohlcv?days=${days}`), staleTime: 300_000, retry: false });
+export type PeHistory = { series: { date: string; valuation_metric: number | null; history_percentile: number | null }[] };
+export const usePeHistory = (ticker: string, days: number, on: boolean) => useQuery({ queryKey: ["lookup-pe", ticker, days], queryFn: () => get<PeHistory>(`/lookup/${encodeURIComponent(ticker)}/pe-history?days=${days}`), enabled: on, staleTime: 300_000, retry: false });
 export const pdfUrl = (ticker: string) => `${BASE}/lookup/${encodeURIComponent(ticker)}/pdf`;
 
 export type SymbolHit = { ticker: string; company_name: string | null; type: string; exchange: string; sector?: string | null };
