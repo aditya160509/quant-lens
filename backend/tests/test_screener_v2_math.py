@@ -122,7 +122,9 @@ def test_piotroski_original_criteria_and_missing_inputs(monkeypatch):
     result = academic.piotroski_criteria_spec(pd.DataFrame({'ticker': ['A']}), ['A']).iloc[0]
     assert result.piotroski_f_score_spec == 9
     history.drop(columns='Current Portion Of Long Term Debt', inplace=True)
-    missing = academic.piotroski_criteria_spec(pd.DataFrame({'ticker': ['A']}), ['A']).iloc[0]
+    from app.services.screener_v2.core.performance import clear_performance_caches
+    clear_performance_caches()
+    missing =academic.piotroski_criteria_spec(pd.DataFrame({'ticker': ['A']}), ['A']).iloc[0]
     assert pd.isna(missing.piotroski_f_score_spec)
     assert 'f5_leverage_declining' in missing.piotroski_missing_criteria
 

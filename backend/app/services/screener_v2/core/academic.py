@@ -1,13 +1,15 @@
 """Screener V2 academic computations."""
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from .common import number_like, records
-from .data_loader import fundamental_history
+from .data_loader import AS_OF, fundamental_history
+from .performance import _fundamentals_version
 from .stats import _pick, rank_pct
 
 
@@ -60,52 +62,55 @@ def academic_strategy_scores(panel: pd.DataFrame) -> pd.DataFrame:
 
 def piotroski_criteria_spec(panel: pd.DataFrame, symbols: list[str]) -> pd.DataFrame:
     """Original nine signals; unavailable inputs are unknown, never failed signals."""
-    rows = []
-    for symbol in symbols:
-        hist = fundamental_history(symbol)
-        if "periodType" in hist:
-            hist = hist[hist.periodType.eq("annual")]
-        hist = hist.sort_values("reportDate").drop_duplicates("reportDate", keep="last") if not hist.empty else hist
-        def values(fields, hist=hist):
-            return pd.to_numeric(_pick(hist, fields), errors="coerce")
-        assets = values(["Total Assets"])
-        beginning = assets.shift(1).where(assets.shift(1) > 0)
-        average = (assets + assets.shift(1)) / 2
-        average = average.where(average > 0)
-        roa = values(["Net Income"]) / beginning
-        cfo = values(["Operating Cash Flow"]) / beginning
-        # Current portion is required separately; total debt is not a substitute.
-        leverage = (values(["Long Term Debt"]) + values(["Current Portion Of Long Term Debt"])) / average
-        liquidity = values(["Current Assets"]) / values(["Current Liabilities"]).where(values(["Current Liabilities"]) > 0)
-        margin = values(["Gross Profit"]) / values(["Total Revenue"]).where(values(["Total Revenue"]) > 0)
-        turnover = values(["Total Revenue"]) / average
-        issuance = values(["Issuance Of Capital Stock"])
-        def last(series, offset=1):
-            return number_like(series.iloc[-offset]) if len(series) >= offset else None
-        def signal(function, *args):
-            return float(function(*args)) if all(value is not None for value in args) else None
-        r, old_r, c, lev, old_lev, liq, old_liq, mar, old_mar, turn, old_turn = [last(x, i) for x, i in [(roa, 1), (roa, 2), (cfo, 1), (leverage, 1), (leverage, 2), (liquidity, 1), (liquidity, 2), (margin, 1), (margin, 2), (turnover, 1), (turnover, 2)]]
-        tests = {
-            "f1_positive_roa": signal(lambda x: x > 0, r),
-            "f2_positive_cfo_assets": signal(lambda x: x > 0, c),
-            "f3_roa_improving": signal(lambda x, y: x > y, r, old_r),
-            "f4_cfo_exceeds_roa": signal(lambda x, y: x > y, c, r),
-            "f5_leverage_declining": signal(lambda x, y: x < y, lev, old_lev),
-            "f6_liquidity_improving": signal(lambda x, y: x > y, liq, old_liq),
-            "f7_no_equity_issuance": signal(lambda x: x == 0, last(issuance)),
-            "f8_margin_improving": signal(lambda x, y: x > y, mar, old_mar),
-            "f9_turnover_improving": signal(lambda x, y: x > y, turn, old_turn),
-        }
-        gaps = pd.to_datetime(hist.reportDate).diff().dt.days.tail(2) if not hist.empty else pd.Series(dtype=float)
-        if len(gaps) < 2 or not gaps.between(320, 410).all():
-            for key in ("f3_roa_improving", "f5_leverage_declining", "f9_turnover_improving"):
-                tests[key] = None
-        complete = all(value is not None for value in tests.values())
-        rows.append({"ticker": symbol, **tests, "piotroski_f_score_spec": sum(tests.values()) if complete else None,
-                     "piotroski_passed": sum(value for value in tests.values() if value is not None) if any(value is not None for value in tests.values()) else None,
-                     "piotroski_available_criteria": sum(value is not None for value in tests.values()),
-                     "piotroski_missing_criteria": [key for key, value in tests.items() if value is None]})
-    return pd.DataFrame(rows)
+    version = _fundamentals_version()
+    return pd.DataFrame([_piotroski_row(symbol, AS_OF.get(), version) for symbol in symbols])
+
+
+@lru_cache(maxsize=20_000)  # per ticker, keyed by the as-of date and the fundamentals file version
+def _piotroski_row(symbol: str, as_of, version: int) -> dict[str, Any]:
+    hist = fundamental_history(symbol)
+    if "periodType" in hist:
+        hist = hist[hist.periodType.eq("annual")]
+    hist = hist.sort_values("reportDate").drop_duplicates("reportDate", keep="last") if not hist.empty else hist
+    def values(fields, hist=hist):
+        return pd.to_numeric(_pick(hist, fields), errors="coerce")
+    assets = values(["Total Assets"])
+    beginning = assets.shift(1).where(assets.shift(1) > 0)
+    average = (assets + assets.shift(1)) / 2
+    average = average.where(average > 0)
+    roa = values(["Net Income"]) / beginning
+    cfo = values(["Operating Cash Flow"]) / beginning
+    # Current portion is required separately; total debt is not a substitute.
+    leverage = (values(["Long Term Debt"]) + values(["Current Portion Of Long Term Debt"])) / average
+    liquidity = values(["Current Assets"]) / values(["Current Liabilities"]).where(values(["Current Liabilities"]) > 0)
+    margin = values(["Gross Profit"]) / values(["Total Revenue"]).where(values(["Total Revenue"]) > 0)
+    turnover = values(["Total Revenue"]) / average
+    issuance = values(["Issuance Of Capital Stock"])
+    def last(series, offset=1):
+        return number_like(series.iloc[-offset]) if len(series) >= offset else None
+    def signal(function, *args):
+        return float(function(*args)) if all(value is not None for value in args) else None
+    r, old_r, c, lev, old_lev, liq, old_liq, mar, old_mar, turn, old_turn = [last(x, i) for x, i in [(roa, 1), (roa, 2), (cfo, 1), (leverage, 1), (leverage, 2), (liquidity, 1), (liquidity, 2), (margin, 1), (margin, 2), (turnover, 1), (turnover, 2)]]
+    tests = {
+        "f1_positive_roa": signal(lambda x: x > 0, r),
+        "f2_positive_cfo_assets": signal(lambda x: x > 0, c),
+        "f3_roa_improving": signal(lambda x, y: x > y, r, old_r),
+        "f4_cfo_exceeds_roa": signal(lambda x, y: x > y, c, r),
+        "f5_leverage_declining": signal(lambda x, y: x < y, lev, old_lev),
+        "f6_liquidity_improving": signal(lambda x, y: x > y, liq, old_liq),
+        "f7_no_equity_issuance": signal(lambda x: x == 0, last(issuance)),
+        "f8_margin_improving": signal(lambda x, y: x > y, mar, old_mar),
+        "f9_turnover_improving": signal(lambda x, y: x > y, turn, old_turn),
+    }
+    gaps = pd.to_datetime(hist.reportDate).diff().dt.days.tail(2) if not hist.empty else pd.Series(dtype=float)
+    if len(gaps) < 2 or not gaps.between(320, 410).all():
+        for key in ("f3_roa_improving", "f5_leverage_declining", "f9_turnover_improving"):
+            tests[key] = None
+    complete = all(value is not None for value in tests.values())
+    return {"ticker": symbol, **tests, "piotroski_f_score_spec": sum(tests.values()) if complete else None,
+                 "piotroski_passed": sum(value for value in tests.values() if value is not None) if any(value is not None for value in tests.values()) else None,
+                 "piotroski_available_criteria": sum(value is not None for value in tests.values()),
+                 "piotroski_missing_criteria": [key for key, value in tests.items() if value is None]}
 
 
 def altman_z_score(panel: pd.DataFrame) -> pd.Series:
