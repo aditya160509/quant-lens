@@ -52,6 +52,8 @@ const parse = (v: unknown) => { const s = Array.isArray(v) ? v.join(",") : Strin
 
 export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: FeatureRun }) {
   const [open, setOpen] = useState(false);
+  const [nl, setNl] = useState("");
+  const [miss, setMiss] = useState<string[]>([]);
   useScreenerPalette();
   const [menu, setMenu] = useState<{ key: string; at: MenuAt } | null>(null);
   const keys = new Set(feature.inputs.map((f) => f.key));
@@ -176,6 +178,10 @@ export function UniverseBar({ feature, run }: { feature: FeatureSpec; run: Featu
       {range.length && !hidden ? (
         <div className="ub-row">
           {cats.map(catPill)}{metrics.map(pill)}{added.map(pill)}
+          <form className="ub-nl" onSubmit={(e) => { e.preventDefault(); const text = nl.trim(); if (!text) return; void send<{ payload: Record<string, unknown>; unparsed: string[] }>("POST", "/nl-filter", { text }).then(({ payload, unparsed }) => { const { sectors, ...rest } = payload; run.setForm((c) => ({ ...c, ...Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, String(v)])), ...(sectors ? { sector: sectors } : {}) })); setMiss(unparsed); setNl(""); }).catch((err) => toast.error(err instanceof Error ? err.message : "Not understood")); }}>
+            <input className="input" aria-label="Describe filters in plain English" placeholder="PE under 15, ROE above 20%, tech" value={nl} onChange={(e) => setNl(e.target.value)} />
+            {miss.length ? <span className="ub-miss" role="status">Not understood: {miss.join(" ")}</span> : null}
+          </form>
           <button type="button" className="ub-pill add" data-hotkey="f" aria-keyshortcuts="Shift+F" aria-label="All filters" onClick={(e) => at(e, "+")}><Plus size={13} />Filter</button>
           <button type="button" className={`ub-pill${auto && small ? " on" : ""}`} aria-pressed={auto} disabled={!small} title={small ? "Re-run after each change" : "Auto run needs 250 names or fewer"} onClick={() => { const next = !auto; setAuto(next); try { localStorage.setItem("screener-auto-run", next ? "1" : "0"); } catch { /* storage blocked */ } }}>Auto</button>
           <button type="button" className="ub-pill" onClick={saveScreen}><Bookmark size={12} />Save</button>
