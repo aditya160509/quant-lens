@@ -18,15 +18,29 @@ Sources: r/ValueInvesting threads "what tools do you wish existed" (2025-06) and
 | Paid tiers sell | Real-time, backtesting (Finviz Elite $299/yr), equation screens, portfolio reports (Stock Rover $348 to $948/yr), AI screener (TradingView paid) | We already have formula screens, backtests and plain English; make them look like the paid tier |
 | Alerts to action | "Alert me when price drops below my intrinsic value" | Fair-value alerts in Monitor |
 
-## 2. Remove or merge (less, but each one strong)
+## 2. Remove or merge (cut hard: fewer, stronger)
 
-- [ ] Funnel tab: merge "Market Cap Bucket Distribution" and "Heatmap View" into one Sector and size map (they say the same thing twice)
-- [ ] Coverage tab: fold into a single coverage bar in the run header; full table stays in the card's Table view
-- [ ] Trust tab: "Run" card becomes a line in the run header plus Copy settings; drop the card
-- [ ] Trust tab: "Where each name sits in its sector" table shows inside the stock drawer instead of a 500-row table
-- [ ] Test: Losing streaks and Drawdown episodes merge into one Drawdown story (episodes marked on the underwater chart)
-- [ ] Test: Weekly heatmap hidden by default (monthly says it better); kept as an alternate view
-- [ ] Every page: no card without a lead figure or a finding sentence; generic key-value cards go
+Rule: a card stays only if it has a lead figure or a one-line finding and nobody else on the page says the same thing. Everything cut stays reachable as a card's Table view or in the export, never deleted from the data.
+
+Screen
+- [ ] Funnel tab: "Market Cap Bucket Distribution" and "Heatmap View" merge into one Sector and size map
+- [ ] Coverage tab removed: one coverage bar in the run header; full table in Export
+- [ ] "Run" card removed: run id and Copy settings move into the run header menu
+- [ ] "Where each name sits in its sector" 500-row table removed: shown per name in the stock drawer
+- [ ] "Saved Screens" and "Run Changes" outputs removed from results: Saved page and Compare runs already show them
+- [ ] Scatter and RRG: one card with a toggle, not two
+Rank and Composite
+- [ ] "Table" tab removed: the ranked table is the Ranking tab
+- [ ] "Rules and ML" and "Backtest" tabs merge into one Evidence tab
+Test
+- [ ] Losing streaks and Drawdown episodes merge into one Drawdown story (episodes marked on the underwater chart)
+- [ ] Weekly heatmap hidden by default (monthly says it better); kept as an alternate view
+- [ ] Horizon table and Yearly vs benchmark merge into one "By period" card
+- [ ] Turnover moves under Holdings; Rebalancing keeps only the variant bars
+Everywhere
+- [ ] No generic key-value cards; no card titled by its data key ("Quick Look Card", "Heatmap View")
+- [ ] Caveats collapse into one line under the hero with a "4 limits" pill that opens them
+- [ ] The "Report" and "Export" buttons become one Export menu
 
 ## 3. Add: the cinematic set (the "wow" on first open)
 
@@ -49,15 +63,44 @@ Each one is real data, has a still fallback and respects the Reduce motion switc
 - [ ] P6 History depth badges: each metric shows how many years we hold (fundamentals from 2021), so nobody mistakes 4 years for 20
 - [ ] P7 One-page stock and backtest reports (PDF) styled like the app, for sharing
 
-## 5. Order
+## 5. Compare anything (the research's most-bought feature)
 
-1. C1 Hero result (every run benefits)
-2. C2 Funnel story, C3 Backtest replay
-3. P1 Lens overlap, P2 Price vs fair value
-4. Section 2 merges
-5. C4, C5, C6, then P3 to P7
+Finviz made Compare an Elite-only feature in April 2026 (charts with zoom, monthly return heatmap, relative performance, fundamentals as bars, a ranking across the set). Koyfin sells Compare Matrix and five-name PDF comparison reports. Portfolio123 built side-by-side scoring. Ours goes further: compare anything, from anywhere, in two clicks.
 
-## 6. Not doing
+- [ ] X1 Tick any two to eight rows in any table (screen, rank, holdings, near misses, alerts, peers), press C or the Compare button: the compare view opens with exactly those names
+- [ ] X2 Compare view tabs: Price (rebased overlay, zoom and pan), Returns (monthly heatmap with hover, relative performance by month and year), Fundamentals (any metric as bars, yearly or quarterly, grouped or stacked), Scores (radar shapes overlaid), Ranking (who leads each metric, totals)
+- [ ] X3 Winner per row: best and worst highlighted (built for the drawer, `15748af`); a one-line verdict on top ("MSFT leads on 7 of 12 metrics")
+- [ ] X4 Compare two runs of anything: two screens, two backtests, two weightings; shows names in and out, metrics side by side, equity curves overlaid
+- [ ] X5 Compare a stock with its sector median and with SPY as permanent rows
+- [ ] X6 Compare to the past: the same name today against one year ago (valuation, quality, rank)
+- [ ] X7 Compare report: export the view as one styled PDF (Koyfin sells this)
+- [ ] X8 Shareable compare link: names and tab in the URL
+
+## 6. Competitors, studied (2026-11-13)
+
+| Product | What they charge for | The idea we take | Where we beat it |
+|---|---|---|---|
+| Finviz Elite ($299.50 a year) | Real-time, backtests, Compare (2026), advanced charts | Compare's monthly heatmap, relative performance and ranking tabs; the heat map as the home page | Point-in-time backtests with overfitting checks; why a name passed |
+| Koyfin ($39 to $209 a month) | Global data, historical graphs of any metric, Compare Matrix, comparison PDFs, percentile rank vs own history | Percentile vs own history on every metric; colour-synced multi-name charts | Screens that explain themselves; backtest any screen |
+| Stock Rover ($348 to $948 a year) | 800+ metrics, 20-year history, equation screens, portfolio reports | Equation screens (we have formula); history depth as a selling point | Modern UI, speed, plain-English filters, near misses |
+| TIKR ($25 to $120 a month) | 20-year standardised financials, auto peer groups, Bull/Base/Bear valuation | Auto peer group on every stock; three-case valuation | Screening and backtests they do not have |
+| Simply Wall St ($131 to $258 a year) | The snowflake, visual reports | One shape per company everywhere | Depth and honesty about data limits |
+| GuruFocus ($499 to $1,348 a year) | 30-year value data, guru portfolios | Investor lenses (Buffett, Graham) as screens | Price, speed, design |
+| TradingView (from $12.95 a month) | Best charts, AI screener on paid plans | Overlay compare with same % scale; plain-language screening | Fundamentals, research honesty |
+| Portfolio123 | Ranking systems, screens as backtestable strategies | Screen to strategy in one click (we have it; make it louder) | Usability; they are built for quants only |
+
+What nobody has, and we lead with: every result says why (passed, near miss, what removed the rest), every backtest says if it is likely overfit, every number has its as-of date and coverage.
+
+## 7. Order
+
+1. Section 2 cuts (fast, makes room)
+2. C1 Hero result (every run benefits)
+3. X1 to X3 Compare from any table
+4. C2 Funnel story, C3 Backtest replay
+5. P1 Lens overlap, P2 Price vs fair value
+6. X4 to X8, C4, C5, C6, then P3 to P7
+
+## 8. Not doing
 
 - Real-time quotes and intraday (data we do not hold)
 - Conference calls and transcripts (no source)
