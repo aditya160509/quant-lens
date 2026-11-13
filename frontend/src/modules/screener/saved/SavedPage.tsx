@@ -2,11 +2,11 @@
 
 import toast from "react-hot-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Play, Save, Search } from "lucide-react";
+import { Archive, ArchiveRestore, Copy, Play, Save, Search } from "lucide-react";
 import "./saved.css";
 import "../filters/universe.css";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DataTable, Empty } from "@/kit/DataTable";
 import { get, useManifest } from "@/modules/research/api";
 import { defaultsFor, toPayload } from "@/modules/research/StudyForm";
@@ -26,6 +26,10 @@ function summary(s: { feature_id: string; payload: Record<string, unknown> }): s
   const filters = Object.entries(p).filter(([k, v]) => /_(min|max|top)$/.test(k) && v !== "" && v !== null && v !== undefined).map(([k, v]) => `${k.replace(/_(min|max|top)$/, "").replace(/_/g, " ")} ${k.endsWith("_min") ? "≥" : k.endsWith("_max") ? "≤" : "top"} ${String(v)}`);
   return [KIND[s.feature_id] ?? s.feature_id, ["master", "all", ""].includes(uni.toLowerCase()) ? `Top ${String(p.max_symbols ?? 500)} by liquidity` : `${uni.split(/[,\s]+/).filter(Boolean).length} names`, ...(p.sector && p.sector !== "all" ? [String(p.sector)] : []), ...filters.slice(0, 5), ...(filters.length > 5 ? [`+${filters.length - 5} more`] : [])];
 }
+type Count = { count: number | null; reason: string | null };
+type Change = { entrants: string[] | null; exits: string[] | null; reason: string | null };
+const ARCH = "screener-archived-screens";
+const readArch = (): string[] => { try { return JSON.parse(localStorage.getItem(ARCH) ?? "[]"); } catch { return []; } };
 const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : "Failed");
 
 /** Saved screens: rename, duplicate, re-run on a schedule, deliver changes and alerts, read the history and the alert scoreboard. */
@@ -45,19 +49,27 @@ export default function SavedPage({ features }: { features: FeatureSpec[] }) {
     void run(() => send("PUT", `/screens/s${Date.now().toString(36)}`, { name, feature_id: fid, payload: toPayload(spec, useStudies.getState().forms[`sc${fid}`] ?? defaultsFor(spec)) }));
   };
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<"name" | "newest">("newest");
-  const list = (screens.data?.screens ?? []).filter((s) => !q || s.name.toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : b.screen_id.localeCompare(a.screen_id)));
+  const [sort, setSort] = useState<"name" | "newest" | "matches">("newest");
+  const [arch, setArch] = useState<string[]>([]);
+  const [showArch, setShowArch] = useState(false);
+  useEffect(() => setArch(readArch()), []);
+  const toggleArch = (id: string) => { const next = arch.includes(id) ? arch.filter((x) => x !== id) : [...arch, id]; setArch(next); try { localStorage.setItem(ARCH, JSON.stringify(next)); } catch { /* storage blocked */ } };
+  const ids = (screens.data?.screens ?? []).map((s) => s.screen_id);
+  const counts = useQuery({ queryKey: ["screener", "counts", ids.join(",")], queryFn: () => get<{ counts: Record<string, Count> }>("/screens/counts"), enabled: ids.length > 0, staleTime: 300_000, retry: false }).data?.counts;
+  const changes = useQuery({ queryKey: ["screener", "changes", ids.join(",")], queryFn: () => get<{ changes: Record<string, Change> }>(`/screens/changes?ids=${ids.slice(0, 50).join(",")}`), enabled: ids.length > 0, staleTime: 300_000, retry: false }).data?.changes;
+  const list = (screens.data?.screens ?? []).filter((s) => arch.includes(s.screen_id) === showArch).filter((s) => !q || s.name.toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : sort === "matches" ? (counts?.[b.screen_id]?.count ?? -1) - (counts?.[a.screen_id]?.count ?? -1) : b.screen_id.localeCompare(a.screen_id)));
   return (
     <div className="sv">
       <div className="sv-bar">
         <label className="sv-q"><Search size={13} aria-hidden /><input placeholder="Search saved" aria-label="Search saved screens" value={q} onChange={(e) => setQ(e.target.value)} /></label>
-        <select className="sv-sort" aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as "name" | "newest")}><option value="newest">Newest</option><option value="name">Name</option></select>
+        <select className="sv-sort" aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as "name" | "newest" | "matches")}><option value="newest">Newest</option><option value="name">Name</option><option value="matches">Matches</option></select>
+        <button type="button" className="btn sm ghost" aria-pressed={showArch} onClick={() => setShowArch(!showArch)}><Archive size={12} />Archived{arch.length ? ` ${arch.length}` : ""}</button>
         <button type="button" className="btn sm primary" onClick={() => save("01")}><Save size={12} />Save current screen</button>
         <button type="button" className="btn sm" onClick={() => save("06")}><Save size={12} />Save current alerts</button>
       </div>
       {screens.isLoading ? [0, 1, 2].map((i) => <div key={i} className="skel-card" style={{ height: 120 }} aria-busy="true" />) : null}
-      {!list.length && !screens.isLoading ? <Empty text="No saved screens" /> : null}
+      {!list.length && !screens.isLoading ? <Empty text={showArch ? "No archived screens" : "No saved screens"} /> : null}
       {list.map((s) => {
         const sch = schedules.data?.schedules.find((x) => x.screen_id === s.screen_id);
         return (
@@ -66,17 +78,32 @@ export default function SavedPage({ features }: { features: FeatureSpec[] }) {
               <button type="button" className="sv-name" aria-expanded={open === s.screen_id} onClick={() => setOpen(open === s.screen_id ? null : s.screen_id)}>{s.name}</button>
               <span className={`sv-sched${sch?.enabled ? " on" : ""}${sch?.error ? " err" : ""}`} title={sch?.error ?? undefined}>{sch?.enabled ? EVERY.find(([sec]) => sec === sch.interval_seconds)?.[1] ?? `${sch.interval_seconds}s` : "Manual"}</span>
             </div>
+            <Mini id={s.screen_id} count={counts?.[s.screen_id]} change={changes?.[s.screen_id]} />
             <div className="sv-pills">{summary(s).map((t) => <span key={t}>{t}</span>)}</div>
             <div className="sv-actions">
                 <button type="button" className="btn sm ghost" onClick={() => { useStudies.setState((st) => ({ forms: { ...st.forms, [`sc${s.feature_id}`]: s.payload } })); router.push("/screener/screen"); }}>Load</button>
                 <button type="button" className="btn sm ghost" aria-label={`Run ${s.name} now`} onClick={() => void run(() => send("POST", `/screens/${s.screen_id}/jobs`))}><Play size={12} /></button>
                 <button type="button" className="btn sm ghost" aria-label={`Rename ${s.name}`} onClick={() => { const name = window.prompt("Rename", s.name)?.trim(); if (name) void run(() => send("PUT", `/screens/${s.screen_id}`, { name, feature_id: s.feature_id, payload: s.payload })); }}>Rename</button>
                 <button type="button" className="btn sm ghost" aria-label={`Duplicate ${s.name}`} onClick={() => void run(() => send("PUT", `/screens/s${Date.now().toString(36)}`, { name: `${s.name} copy`, feature_id: s.feature_id, payload: s.payload }))}><Copy size={12} /></button>
+                <button type="button" className="btn sm ghost" aria-label={`${arch.includes(s.screen_id) ? "Restore" : "Archive"} ${s.name}`} onClick={() => toggleArch(s.screen_id)}>{arch.includes(s.screen_id) ? <ArchiveRestore size={12} /> : <Archive size={12} />}</button>
             </div>
             {open === s.screen_id ? <Detail screen={s} schedule={sch} onChange={refresh} /> : null}
           </section>
         );
       })}
+    </div>
+  );
+}
+
+/** Live match count, names in and out since the previous run, and when it last ran. */
+function Mini({ id, count, change }: { id: string; count?: Count; change?: Change }) {
+  const last = useQuery({ queryKey: ["screener", "history", id, 1], queryFn: () => get<{ runs: HistoryRun[] }>(`/screens/${id}/history?limit=1`), retry: false }).data?.runs[0];
+  const n = change?.entrants?.length ?? 0, x = change?.exits?.length ?? 0;
+  return (
+    <div className="sv-mini">
+      <b className="num" title={count?.reason ?? undefined}>{count?.count?.toLocaleString() ?? "–"}</b>
+      {change?.entrants ? <span className="num" title={[...change.entrants.map((t) => `+${t}`), ...(change.exits ?? []).map((t) => `−${t}`)].join(" ")}><em className="up">+{n}</em> <em className="down">−{x}</em></span> : null}
+      {last ? <span className="num sv-last">{last.as_of_date}</span> : null}
     </div>
   );
 }

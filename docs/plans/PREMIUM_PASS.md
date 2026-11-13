@@ -69,7 +69,7 @@ Goal: premium, finished, "liquid smooth". Every screen, output, default and alte
 - [ ] Price chart: P/E mode (`/pe-history`), entry and exit marks from backtests
 - [ ] Compare up to 8 names: overlaid chart, side-by-side table, differences highlighted
 - [ ] Full stock page with its own URL; PDF
-- [ ] Saved: cards with mini result, last run, change (`/screens/counts`, `/screens/changes`), schedule pill; rename, duplicate, tag, folder, search, sort, archive
+- [x] Saved: cards with mini result, last run, change (`/screens/counts`, `/screens/changes`), schedule pill; rename, duplicate, tag, folder, search, sort, archive
 - [ ] More page: Markets tabs, hourly, plain English, share links, API keys
 - [ ] Share page and embed in the same design
 - [ ] Plain-English filter box (`/nl-filter`) producing editable filters

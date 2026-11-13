@@ -271,7 +271,7 @@ Alert builder: condition from any filter or formula, frequency, channel with App
 
 ## 13. Saved and More
 
-- [ ] `H` Saved: cards with mini result, last run, change, schedule pill; rename, duplicate, tag, folder, search, sort, archive
+- [x] `H` Saved: cards with mini result, last run, change, schedule pill; rename, duplicate, tag, folder, search, sort, archive
 - [x] `M` Schedule picker and history timeline (needs check)
 - [ ] `H` More: Markets tabs with the table of section 6, hourly, plain English, share links, API keys; patterns labelled weak evidence
 - [ ] `H` Share page and embed use the same design
