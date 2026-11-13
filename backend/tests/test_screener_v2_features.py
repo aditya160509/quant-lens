@@ -737,3 +737,12 @@ def test_run_job_reports_its_stages_as_progress(local_data, monkeypatch, tmp_pat
         time.sleep(.01)
     assert client.get(f'/api/screener-v2/jobs/{job_id}').json()['status'] == 'completed'
     assert stages == ['load', 'compute', 'filter', 'rank']
+
+
+def test_held_for_days_keeps_only_names_that_pass_on_every_recent_session(local_data):
+    from app.services.screener_v2.registry import run_feature
+    names = lambda payload: {row['ticker'] for row in run_feature('01', payload)['tables']['ranked_screener_table']}
+    base, leaf = {'tickers': ['AAA', 'BBB', 'CCC'], 'top_n': 50}, {'field': 'return_1d', 'operator': '>', 'value': 0}
+    per_day = [names({**base, 'as_of_date': day, 'filter_tree': {'rules': [leaf]}}) for day in ['2025-06-25', '2025-06-26', '2025-06-27']]
+    held = names({**base, 'as_of_date': '2025-06-27', 'filter_tree': {'rules': [{**leaf, 'held_for_days': 3}]}})
+    assert held == set.intersection(*per_day) and held < per_day[-1]

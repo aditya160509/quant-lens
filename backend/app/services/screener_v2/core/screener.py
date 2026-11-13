@@ -239,7 +239,7 @@ def tree_mask(df: pd.DataFrame, node: dict[str, Any], universe: pd.DataFrame | N
         for m in masks[1:]:
             out = out & m if str(node.get("combinator", "and")).lower() == "and" else out | m
         return ~out if node.get("not") else out
-    columns = {lo[:-4]: col for col, lo, _, _ in RANGE_FILTERS} | {"sector": "sector", "industry": "industry", "industry_group": "industry_group", "exchange": "exchange", "country": "country", "currency": "quote_currency"}
+    columns = {lo[:-4]: col for col, lo, _, _ in RANGE_FILTERS} | {"sector": "sector", "industry": "industry", "industry_group": "industry_group", "exchange": "exchange", "country": "country", "currency": "quote_currency", "ticker": "ticker"}
     if "left" in node or "metric_vs_sector" in node:
         return _relative_mask(df, df if universe is None else universe, node, columns)
     field, op, value = node.get("field"), node.get("operator"), node.get("value")
@@ -307,6 +307,31 @@ def range_filters(panel: pd.DataFrame) -> list[tuple[str, str, str, str]]:
     return [*RANGE_FILTERS, *((c, f"{c}_min", f"{c}_max", c) for c in panel.attrs.get("metric_columns", []))]
 
 
+HELD_MAX_DAYS = 20
+
+
+def _held_leaves(node: dict[str, Any], panel: pd.DataFrame, payload: dict[str, Any]) -> dict[str, Any]:
+    """A rule with held_for_days passes only names that pass it on each of the last N sessions; each earlier session is one more panel build."""
+    if "rules" in node:
+        return {**node, "rules": [_held_leaves(r, panel, payload) for r in node["rules"]]}
+    if "held_for_days" not in node:
+        return node
+    days = number_like(node["held_for_days"])
+    if days is None or days != int(days) or not 1 <= days <= HELD_MAX_DAYS:
+        raise ValueError(f"held_for_days must be a whole number from 1 to {HELD_MAX_DAYS}")
+    rule = {k: v for k, v in node.items() if k != "held_for_days"}
+    passing = set(panel.ticker[tree_mask(panel, rule, panel)])
+    if days > 1:
+        from .data_loader import as_of_context, close_matrix
+        from .panel import metric_panel
+        sessions = close_matrix(["SPY"], int(days) + 10).index[-int(days):]
+        for session in sessions[:-1]:
+            with as_of_context(session):
+                past = metric_panel({**payload, "as_of_date": str(session.date())}, symbols=panel.ticker.tolist())
+            passing &= set(past.ticker[tree_mask(past, rule, past)])
+    return {"field": "ticker", "operator": "in", "value": sorted(passing)}
+
+
 def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     if panel.empty:
         return panel, []
@@ -345,7 +370,7 @@ def apply_filters(panel: pd.DataFrame, payload: dict | None) -> tuple[pd.DataFra
             allowed = {str(v).strip().lower() for v in (wanted if isinstance(wanted, list) else re.split(r"[,;]", str(wanted))) if str(v).strip()}
             apply(label, column.astype(str).str.lower().isin(allowed), key)
     if payload.get("filter_tree"):
-        apply("Filter groups", tree_mask(filtered, payload["filter_tree"], panel), "filter_tree")
+        apply("Filter groups", tree_mask(filtered, _held_leaves(payload["filter_tree"], panel, payload), panel), "filter_tree")
     listed = payload.get("ticker_in")
     if listed:
         names = {str(v).strip().upper().replace(".", "_").replace("-", "_") for v in (listed if isinstance(listed, list) else re.split(r"[,;\s]+", str(listed))) if str(v).strip()}
