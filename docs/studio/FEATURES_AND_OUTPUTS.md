@@ -328,3 +328,30 @@ The testing side above already goes past every competitor. These are the areas p
 | G15 | **Stress scenarios beyond history** | Shock a backtest: gap down 10% overnight, vol ×2 for a month, correlation to 1; synthetic paths from the noise test | Build Alpha synthetic data; QuantConnect crisis periods (history only) | 3 |
 
 Not added, on purpose: live broker execution (legal weight; webhooks cover it), options strategies (no options history), tick-level fills (no tick data). Each stays in PLAN §9.
+
+## 10. Maximum customisation (everything the Screener lets you change, plus Studio's own)
+
+Rule: every default is a starting point. Any choice the user makes can be saved as their default, reset to built-in, shared in a link and exported. Reused from Screener where marked (S).
+
+| Layer | What the user can change |
+|---|---|
+| Page layout (S) | Hide, show, reorder, resize (span) and duplicate any card; per-card view switch (chart ⇄ table ⇄ alternates); maximise; "Reset this card / every card"; layouts saved per page and per strategy |
+| Chart settings on every card (S) | Range (1M…Max), mark a level with a note, one colour, log scale, benchmark on/off, gross/net, in/out-of-sample shading, axis, annotations |
+| Tables (S) | Column sets as tabs, add any metric as a column, reorder by drag, freeze, number format per column, bars in cells, multi-sort, filters, saved views, CSV |
+| Hero and KPI strip | Pick the hero figure (return, Sharpe, grade, CAGR vs benchmark…) and the KPIs shown, per page |
+| Report order | Default, "Honest order" (§8) or the user's own order; saved as a report template, used by PDF export too |
+| Metrics | Custom metric from a formula over equity, returns or trades (e.g. `cagr / ulcer`); usable as a column, KPI, optimiser objective or My limit |
+| Objectives | Optimiser objective from any metric or custom formula; multi-objective weights; minimum-trade and drawdown constraints |
+| Strategy building | Save any rule group as a reusable block; custom indicators by formula (shared between Chart, Build and Screener formula); personal template library; parameter ranges saved per strategy |
+| Costs and fills | Saved cost profiles (US retail, India retail with STT and brokerage, crypto maker/taker, custom), slippage model choice, fill timing, volume cap |
+| Universe and data | Saved universes (from Screener screens, lists, uploads), custom benchmarks (any symbol, blend such as 60/40, or own CSV), cash yield |
+| Regimes and periods | Custom regime definitions by formula ("VIX > 25 and SPY below 200d"); custom crisis periods added to the 17 built-in; custom calendar splits |
+| Validation | Choose which tests make the Verdict, their weights and pass thresholds; saved as a validation profile; default profile per user |
+| Limits and alerts | My limits templates; drift alert thresholds; alert channels and quiet hours per strategy |
+| Chart (S, rebuilt) | Indicator presets, drawing templates, colours per series, multi-chart layouts, keyboard per tool |
+| Workspace (S) | Theme (dark/light), accent, density, inverted up/down colours, reduced motion, panel sizes and which panels open per page, number and date formats, currency |
+| Palette and keys (S) | Every action in ⌘K; rebind shortcuts; pin favourite actions |
+| Presets | One click "workspace preset" bundles: layout + report order + validation profile + cost profile (e.g. "Swing trader US", "Quant portfolio", "India intraday"); import/export as JSON, shareable by link |
+| Agent (G13) | Every customisation is part of the typed spec, so an agent can read and set it too |
+
+Storage: user prefs sync server-side (Screener `prefsSync`), so layouts follow the user across devices; a shared link carries the strategy, settings and layout, never private prefs.

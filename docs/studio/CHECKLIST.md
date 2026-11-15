@@ -69,6 +69,13 @@ Tick as work lands. Each phase ends with tests green, screenshots at 1440 and 10
 - [ ] G1 alerts and webhooks [5] · G7 meta strategies [5] · G10 tax-aware results [5]
 - [ ] G3 import my real trades [6] · G4 verified strategy gallery [6]
 
+## Customisation (FEATURES_AND_OUTPUTS §10)
+- [ ] Card, chart, table prefs reused from Screener [1]
+- [ ] Custom metrics, objectives, report order and templates [1–3]
+- [ ] Custom blocks, indicators, cost profiles, universes, benchmarks, regimes, crisis periods [2–5]
+- [ ] Validation profiles and Verdict weights [3]
+- [ ] Workspace presets import/export [5]
+
 ## Phase 7: remove old Studio
 - [ ] Graph + `rg` + route checks + smoke test (AGENTS.md)
 - [ ] Delete `app/studio_v2`, `routers/studio.py`, `services/studio`, `components/studio`, `stores|hooks|lib/studio*`, `chart_engine`, old Studio tests
