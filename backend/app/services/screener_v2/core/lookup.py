@@ -256,13 +256,17 @@ def lookup(ticker: str) -> dict[str, Any]:
         pio, alt = _piotroski(p, symbol), _altman(row, symbol)
         stats = _stat_rows(p, row, symbol)
         series = chart(symbol)
+        fh = fundamental_history(symbol)
+    # How far back each kind of figure goes for this name, so 4 years of statements never read as 20.
+    first_price = min((pts[0]["date"] for pts in series.values() if pts), default=None)
+    history = {"fundamentals_from": pd.Timestamp(fh.reportDate.min()).strftime("%Y-%m-%d") if len(fh) else None, "prices_from": str(first_price)[:10] if first_price else None}
     peers = _peers(p, row)
     from .screener import _thesis_line
     return clean_json({
         **_head(row), "industry": row.get("industry") or None, "currency": row.get("quote_currency") or None, "price": number_like(row.get("price")), "market_cap": number_like(row.get("market_cap")), "market_cap_currency": row.get("market_value_currency") or None,
         "price_date": str(row.get("price_observation_date"))[:10], "as_of": str(p.attrs.get("as_of_date")), "chart": series,
         "scores": [{"key": k, "label": label, "value": number_like(row.get(k))} for k, label in SCORES], "thesis": _thesis_line(row),
-        "stats": stats, "piotroski": pio, "altman": alt, "peers": peers, "statements": statements(symbol), "notes": _notes(row, pio, alt), "limits": LIMITS,
+        "stats": stats, "history": history, "piotroski": pio, "altman": alt, "peers": peers, "statements": statements(symbol), "notes": _notes(row, pio, alt), "limits": LIMITS,
     })
 
 

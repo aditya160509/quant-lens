@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { latestRun, useRuns } from "@/modules/research/api";
 import { SCREENER_BASE } from "@/modules/screener/base";
 import { RowActions } from "@/modules/screener/RowActions";
+import { FairAlertToggle } from "@/modules/screener/Lenses";
 import { useStudies } from "@/modules/research/store";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
@@ -134,6 +135,7 @@ export function QuickLook() {
         </div>
         <div className="ql-actions">
           <RowActions ticker={ticker} />
+          <FairAlertToggle ticker={ticker} />
           <button className="btn sm icon ghost" onClick={() => addToScreen(ticker)} aria-label={`Add ${ticker} to the Screen universe`} title="Add to screen"><ListPlus size={13} /></button>
           <button className="btn sm" aria-pressed={inBasket} onClick={() => toggleBasket(ticker)} title={inBasket ? "Remove from compare" : "Add to compare"}>{inBasket ? <Check size={13} /> : <Plus size={13} />}Compare</button>
           <a className="btn sm" href={pdfUrl(ticker)} download title="One-page PDF"><Download size={13} />PDF</a>
@@ -259,6 +261,13 @@ function Bar({ label, value }: { label: string; value: number | null }) {
 const RATIO_KEY = "quicklook-ratios-hidden";
 
 /** Ratio cards with a tick for where the name sits in its sector; Edit picks which ratios show, kept on this device. */
+/** Years of history behind a ratio: statements for most, prices for the risk group. */
+const depth = (d: Lookup, group: string) => {
+  const from = group === "Risk" ? d.history?.prices_from : d.history?.fundamentals_from;
+  const yrs = from ? (Date.parse(d.as_of) - Date.parse(from)) / (365.25 * 864e5) : null;
+  return isNum(yrs) && yrs > 0 ? `${yrs < 1 ? "<1" : Math.floor(yrs)}y` : null;
+};
+
 function Ratios({ d }: { d: Lookup }) {
   const [hidden, setHidden] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem(RATIO_KEY) ?? "[]") as string[]; } catch { return []; } });
   const [editing, setEditing] = useState(false);
@@ -279,7 +288,7 @@ function Ratios({ d }: { d: Lookup }) {
               {list.map((s) => (
                 <div key={s.key} className={`ql-ratio${hidden.includes(s.key) ? " off" : ""}`} title={`${s.sector_n} sector names with a value; own 3Y percentile ${isNum(s.own_history_percentile) ? s.own_history_percentile.toFixed(0) : UNKNOWN}`}>
                   {editing ? <input type="checkbox" aria-label={`Show ${s.label}`} checked={!hidden.includes(s.key)} onChange={() => flip(s.key)} /> : null}
-                  <span>{s.label}</span>
+                  <span>{s.label}{depth(d, s.group) ? <em className="ql-depth num" title={`We hold ${s.group === "Risk" ? "prices" : "statements"} for ${d.ticker} from ${s.group === "Risk" ? d.history?.prices_from : d.history?.fundamentals_from}`}>{depth(d, s.group)}</em> : null}</span>
                   <b className="num">{stat(s)}</b>
                   <i className="ql-strip" aria-label={`Sector percentile ${isNum(s.sector_percentile) ? s.sector_percentile.toFixed(0) : UNKNOWN}`}>{isNum(s.sector_percentile) ? <u style={{ left: `${Math.max(0, Math.min(100, s.sector_percentile))}%` }} /> : null}</i>
                   <small className="num">Sector {isNum(s.sector_median) ? stat({ unit: s.unit, value: s.sector_median }) : UNKNOWN}</small>

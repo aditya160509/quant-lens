@@ -8,6 +8,8 @@ import { isNum, out, pct } from "@/modules/research/format";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import type { FeatureResult } from "@/modules/research/types";
 import { send } from "./api";
+import { useWatchlists } from "./watchlists";
+import { BellRing } from "lucide-react";
 import "./lenses.css";
 
 export type LensRow = { ticker: string; company_name: string | null; sector: string | null; price: number | null; buffett: boolean; graham: boolean; dividend: boolean; momentum: boolean; passes: number; fair_low: number | null; fair_mid: number | null; fair_high: number | null; discount: number | null; fair_basis: number };
@@ -79,7 +81,9 @@ export function FairValueStrip({ result }: ViewProps) {
         {rows.map((r) => {
           const p = r.price as number, d = r.discount as number;
           return (
-            <button key={r.ticker} type="button" className="fv-row" onClick={() => openQuickLook(r.ticker, "ratios")} title={`${r.ticker}: price ${p.toFixed(2)}, fair ${(r.fair_low as number).toFixed(2)} to ${(r.fair_high as number).toFixed(2)} from ${r.fair_basis} multiples`}>
+            <div key={r.ticker} className="fv-line">
+            <FairAlertToggle ticker={r.ticker} />
+            <button type="button" className="fv-row" onClick={() => openQuickLook(r.ticker, "ratios")} title={`${r.ticker}: price ${p.toFixed(2)}, fair ${(r.fair_low as number).toFixed(2)} to ${(r.fair_high as number).toFixed(2)} from ${r.fair_basis} multiples`}>
               <b>{r.ticker}</b>
               <span className="fv-track">
                 <i className="fv-mid0" />
@@ -88,6 +92,7 @@ export function FairValueStrip({ result }: ViewProps) {
               </span>
               <em className={`num ${d >= 0 ? "up" : "down"}`}>{d >= 0 ? "+" : ""}{pct(d, 0)}</em>
             </button>
+            </div>
           );
         })}
       </div>
@@ -126,6 +131,44 @@ export function RedFlagFeed({ result }: ViewProps) {
           </li>
         ))}
       </ol>
+    </div>
+  );
+}
+
+/** The watchlist that holds fair-value alerts; Monitor checks it on every visit. */
+export const FAIR_LIST = "Below fair value";
+
+/** P4: a bell that adds a name to the fair-value alerts. */
+export function FairAlertToggle({ ticker }: { ticker: string }) {
+  const on = useWatchlists((st) => (st.lists[FAIR_LIST] ?? []).includes(ticker));
+  const toggle = useWatchlists((st) => st.toggle);
+  return <button type="button" className="btn sm icon ghost fv-bell" aria-pressed={on} aria-label={`${on ? "Stop" : "Tell me"} when ${ticker} trades below its fair value`} title={on ? "Alert on: below fair value" : "Alert me below fair value"} onClick={() => toggle(ticker, FAIR_LIST)}><BellRing size={12} fill={on ? "currentColor" : "none"} /></button>;
+}
+
+/** P4 in Monitor: each alerted name's price against the middle of its fair-value range; below it, the alert has fired. */
+export function FairValueWatch(_: ViewProps) {
+  const tickers = useWatchlists((st) => st.lists[FAIR_LIST] ?? []);
+  const q = useQuery({ queryKey: ["screener", "lenses", "watch", tickers.join(",")], queryFn: () => send<Lenses>("POST", "/lookup/lenses", { tickers }), enabled: tickers.length > 0, staleTime: 300_000, retry: false });
+  if (!tickers.length) return <Empty text="No fair-value alerts. Use the bell on the fair-value strip or in a stock's drawer." />;
+  if (q.isLoading) return <div aria-busy="true" className="ln-load">Pricing names</div>;
+  if (q.error) return <Empty text={(q.error as Error).message} />;
+  const rows = (q.data?.rows ?? []).sort((a, b) => (b.discount ?? -9) - (a.discount ?? -9));
+  const fired = rows.filter((r) => isNum(r.discount) && r.discount > 0);
+  return (
+    <div className="ln">
+      <p className="ln-head"><b className="num">{fired.length}</b> of {rows.length} trade below fair value{q.data?.as_of ? ` as of ${q.data.as_of}` : ""}</p>
+      <table className="tbl">
+        <thead><tr><th>Name</th><th className="r">Price</th><th className="r">Fair value</th><th className="r">Gap</th><th /></tr></thead>
+        <tbody>{rows.map((r) => (
+          <tr key={r.ticker} data-fired={isNum(r.discount) && r.discount > 0}>
+            <td><button type="button" className="tk-link" onClick={() => openQuickLook(r.ticker, "ratios")}>{r.ticker}</button></td>
+            <td className="r num">{isNum(r.price) ? r.price.toFixed(2) : "–"}</td>
+            <td className="r num">{isNum(r.fair_mid) ? `${r.fair_mid.toFixed(2)} (${(r.fair_low ?? 0).toFixed(0)} to ${(r.fair_high ?? 0).toFixed(0)})` : "Too few multiples"}</td>
+            <td className={`r num ${isNum(r.discount) ? (r.discount > 0 ? "up" : "down") : ""}`}>{isNum(r.discount) ? `${r.discount > 0 ? "below by " : "above by "}${pct(Math.abs(r.discount) / (1 + r.discount), 0)}` : ""}</td>
+            <td className="r"><FairAlertToggle ticker={r.ticker} /></td>
+          </tr>
+        ))}</tbody>
+      </table>
     </div>
   );
 }

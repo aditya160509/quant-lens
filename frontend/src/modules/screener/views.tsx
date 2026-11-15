@@ -8,6 +8,7 @@ import { DataTable, Empty } from "@/kit/DataTable";
 import { useStudies } from "@/modules/research/store";
 import { Monogram, openQuickLook } from "@/kit/QuickLook";
 import { Spark } from "@/charts/RankList";
+import { shapeOf } from "@/kit/Snowflake";
 import { first, isNum, label, out, pct } from "@/modules/research/format";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import type { Row } from "@/modules/research/types";
@@ -50,14 +51,14 @@ export function ScreenTable({ rows, result, opts }: ViewProps) {
   const [days, setDays] = useState(() => { try { return Number(localStorage.getItem("screener-spark-days")) || 92; } catch { return 92; } });
   const tickers = useMemo(() => rows.map((r) => String(r.ticker ?? "")).filter(Boolean).slice(0, 1000), [rows]);
   const spark = useQuery({ queryKey: ["screener", "spark", days, tickers.join(",")], queryFn: () => send<Record<string, number[]>>("POST", "/sparklines", { tickers, days }), enabled: tickers.length > 0, staleTime: 600_000, retry: false }).data;
-  const withTrend = useMemo(() => (spark ? rows.map((r) => ({ ...r, trend: spark[String(r.ticker)] ?? null })) : rows), [rows, spark]);
+  const withTrend = useMemo(() => rows.map((r) => ({ ...r, shape: shapeOf(r), ...(spark ? { trend: spark[String(r.ticker)] ?? null } : {}) })), [rows, spark]);
   const pick = (d: number) => { setDays(d); try { localStorage.setItem("screener-spark-days", String(d)); } catch { /* storage blocked */ } };
   return (
     <>
       <div className="ub-seg spark-range" role="radiogroup" aria-label="Sparkline range">
         {SPARK.map(([l, d]) => <button key={l} type="button" role="radio" aria-checked={days === d} onClick={() => pick(d)}>{l}</button>)}
       </div>
-      <DataTable rows={withTrend} opts={{ ...opts, viewKey: "screener:results", xlsx: `${SCREENER_BASE}/export/xlsx`, detail, lead: [...SCREEN_LEAD, "trend"], freeze: SCREEN_LEAD, sets: SCREEN_SETS }} />
+      <DataTable rows={withTrend} opts={{ ...opts, viewKey: "screener:results", xlsx: `${SCREENER_BASE}/export/xlsx`, detail, lead: [...SCREEN_LEAD, "shape", "trend"], freeze: SCREEN_LEAD, sets: SCREEN_SETS }} />
     </>
   );
 }

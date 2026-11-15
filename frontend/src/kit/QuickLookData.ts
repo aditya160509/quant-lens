@@ -15,7 +15,7 @@ export type Lookup = {
   piotroski: { score: number | null; available: number; complete: boolean; checks: { key: string; label: string; passed: boolean | null }[] };
   altman: { z: number | null; z_double_prime: number | null; zone: "Safe" | "Grey" | "Distress" | null; history: { available_date: string; altman_z_score: number | null }[] };
   peers: { scope: string; scope_n: number; columns: string[]; rows: Record<string, unknown>[]; median: Record<string, number | null> };
-  statements: Statements; notes: { pros: Note[]; cons: Note[]; red_flags: Note[] }; limits: string[];
+  statements: Statements; history?: { fundamentals_from: string | null; prices_from: string | null }; notes: { pros: Note[]; cons: Note[]; red_flags: Note[] }; limits: string[];
 };
 export type Statements = { periods: string[]; lines: { key: string; label: string; values: (number | null)[] }[] };
 export type Compare = { as_of: string; columns: string[]; medians?: ({ label: string; n: number } & Record<string, unknown>)[]; rows: ({ ticker: string; company_name: string | null; sector: string | null } & Record<string, unknown>)[] };

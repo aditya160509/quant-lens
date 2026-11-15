@@ -10,6 +10,7 @@ import { TimeSeries } from "@/charts/TimeSeries";
 import { isNum } from "@/modules/research/format";
 import { Segmented } from "@/workspace/ui";
 import { MAX_COMPARE, useQuickLook } from "./QuickLook";
+import { Snowflake, shapeOf } from "./Snowflake";
 import { statementsQuery, useBarsMany, useCompare, useThen, type Bars, type Compare } from "./QuickLookData";
 
 export type CompareTab = "price" | "returns" | "fundamentals" | "scores" | "ranking";
@@ -70,7 +71,7 @@ export function ComparePanel() {
       <div className="cmp-head">
         <div className="cmp-names">
           {basket.map((t, i) => (
-            <span key={t} className="cmp-name"><i style={{ background: COLORS[i % COLORS.length] }} /><button className="ql-link" onClick={() => open(t, "overview")}>{t}</button><button className="ql-x" aria-label={`Remove ${t}`} onClick={() => toggleBasket(t)}><X size={10} /></button></span>
+            <span key={t} className="cmp-name"><i style={{ background: COLORS[i % COLORS.length] }} />{q.data?.rows.find((r) => r.ticker === t) ? <Snowflake values={shapeOf(q.data.rows.find((r) => r.ticker === t)!)} size={20} /> : null}<button className="ql-link" onClick={() => open(t, "overview")}>{t}</button><button className="ql-x" aria-label={`Remove ${t}`} onClick={() => toggleBasket(t)}><X size={10} /></button></span>
           ))}
         </div>
         <button className="btn sm ghost" onClick={share}><Link2 size={12} />Copy link</button>

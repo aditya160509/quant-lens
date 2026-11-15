@@ -32,3 +32,7 @@
 .rf-flag { color: var(--down); font-weight: 500; }
 .rf-d { color: var(--text-2); min-width: 0; }
 .rf-kind b { color: var(--down); }
+.fv-line { display: grid; grid-template-columns: 28px 1fr; align-items: center; }
+.fv-bell[aria-pressed="true"] { color: var(--accent); }
+.fv-axis { padding-left: 92px !important; }
+tr[data-fired="true"] td:first-child { box-shadow: inset 3px 0 0 var(--up); }
