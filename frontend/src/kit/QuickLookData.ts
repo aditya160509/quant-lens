@@ -39,6 +39,8 @@ export const useBars = (ticker: string, days: number) => useQuery(barsQuery(tick
 export const useBarsMany = (tickers: string[], days: number) => useQueries({ queries: tickers.map((t) => barsQuery(t, days)) });
 export type PeHistory = { series: { date: string; valuation_metric: number | null; history_percentile: number | null }[] };
 export const usePeHistory = (ticker: string, days: number, on: boolean) => useQuery({ queryKey: ["lookup-pe", ticker, days], queryFn: () => get<PeHistory>(`/lookup/${encodeURIComponent(ticker)}/pe-history?days=${days}`), enabled: on, staleTime: 300_000, retry: false });
+export type Then = { ticker: string; now_date: string; then_date: string; ranked: (number | null)[]; rows: { key: string; now: number | null; then: number | null }[] };
+export const useThen = (ticker: string, days = 365) => useQuery({ queryKey: ["lookup-then", ticker, days], queryFn: () => get<Then>(`/lookup/${encodeURIComponent(ticker)}/then?days=${days}`), staleTime: 600_000, retry: false });
 export const pdfUrl = (ticker: string) => `${BASE}/lookup/${encodeURIComponent(ticker)}/pdf`;
 
 export type SymbolHit = { ticker: string; company_name: string | null; type: string; exchange: string; sector?: string | null };

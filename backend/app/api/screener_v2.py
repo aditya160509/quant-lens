@@ -212,6 +212,11 @@ async def lookup_ticker(ticker: str) -> dict[str, Any]:
     return await asyncio.to_thread(_lookup_call, lookup.lookup, ticker)
 
 
+@router.get("/lookup/{ticker}/then")
+async def lookup_then(ticker: str, days: int = Query(365, ge=30, le=1825)) -> dict[str, Any]:
+    return await asyncio.to_thread(_lookup_call, lookup.then_and_now, ticker, days)
+
+
 @router.get("/lookup/{ticker}/statements")
 async def lookup_statements(ticker: str, period: str = Query("annual", pattern="^(annual|quarterly)$"), all_lines: bool = False) -> dict[str, Any]:
     return await asyncio.to_thread(_lookup_call, lookup.statements, ticker, period, all_lines)

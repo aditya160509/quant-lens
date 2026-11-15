@@ -10,7 +10,7 @@ import { TimeSeries } from "@/charts/TimeSeries";
 import { isNum } from "@/modules/research/format";
 import { Segmented } from "@/workspace/ui";
 import { MAX_COMPARE, useQuickLook } from "./QuickLook";
-import { statementsQuery, useBarsMany, useCompare, type Bars, type Compare } from "./QuickLookData";
+import { statementsQuery, useBarsMany, useCompare, useThen, type Bars, type Compare } from "./QuickLookData";
 
 export type CompareTab = "price" | "returns" | "fundamentals" | "scores" | "ranking";
 const TABS: { id: CompareTab; label: string }[] = [{ id: "price", label: "Price" }, { id: "returns", label: "Returns" }, { id: "fundamentals", label: "Fundamentals" }, { id: "scores", label: "Scores" }, { id: "ranking", label: "Ranking" }];
@@ -241,6 +241,35 @@ function RankingTab({ data, w }: { data: Compare; w: ReturnType<typeof wins> }) 
       <table className="ql-table">
         <thead><tr><th>Metric</th><th>Leader</th><th className="r">Value</th><th>Better</th></tr></thead>
         <tbody>{w.leaders.map((l) => <tr key={l.c}><td>{LABEL[l.c] ?? l.c}</td><td><b>{l.lead}</b></td><td className="r num">{cell(l.c, l.value)}</td><td className="ql-nm">{dirOf(l.c) > 0 ? "Higher" : "Lower"}</td></tr>)}</tbody>
+      </table>
+    </div>
+  );
+}
+
+/** X6: one name today against the same name a year earlier, with which way each change cuts. */
+export function PastPanel({ ticker }: { ticker: string }) {
+  const q = useThen(ticker);
+  if (q.isLoading) return <p className="ql-state" role="status">Rebuilding the universe as it stood a year ago</p>;
+  if (q.error) return <p className="ql-state err" role="alert">{(q.error as Error).message}</p>;
+  const d = q.data;
+  if (!d) return null;
+  const rank = (v: number | null, n: number | null | undefined) => (isNum(v) ? `#${v.toFixed(0)}${isNum(n) ? ` of ${n.toLocaleString()}` : ""}` : UNKNOWN);
+  const change = (k: string, a: number | null, b: number | null) => {
+    if (!isNum(a) || !isNum(b)) return { text: "", tone: "" };
+    const d = k === "score_rank" ? b - a : PCT.has(k) || WHOLE.has(k) ? a - b : b ? a / b - 1 : null;
+    if (d === null || (WHOLE.has(k) || k === "score_rank" ? Math.round(d) === 0 : Math.abs(d) < 5e-4)) return { text: "", tone: "" };
+    const better = k === "score_rank" ? d > 0 : dirOf(k) * d > 0;
+    const text = k === "score_rank" ? `${d > 0 ? "up" : "down"} ${Math.abs(d).toFixed(0)}` : PCT.has(k) ? `${d > 0 ? "+" : ""}${(d * 100).toFixed(1)} pts` : WHOLE.has(k) ? `${d > 0 ? "+" : ""}${d.toFixed(0)}` : `${d > 0 ? "+" : ""}${(d * 100).toFixed(0)}%`;
+    return { text, tone: dirOf(k) || k === "score_rank" ? (better ? " up" : " down") : "" };
+  };
+  return (
+    <div className="ql-scroll">
+      <table className="ql-table">
+        <thead><tr><th>Metric</th><th className="r">{d.then_date}</th><th className="r">{d.now_date}</th><th className="r">Change</th></tr></thead>
+        <tbody>{d.rows.map((r) => {
+          const c = change(r.key, r.now, r.then);
+          return <tr key={r.key}><td>{r.key === "score_rank" ? "Score rank" : LABEL[r.key] ?? r.key}</td><td className="r num">{r.key === "score_rank" ? rank(r.then, d.ranked[1]) : cell(r.key, r.then)}</td><td className="r num">{r.key === "score_rank" ? rank(r.now, d.ranked[0]) : cell(r.key, r.now)}</td><td className={`r num${c.tone}`}>{c.text}</td></tr>;
+        })}</tbody>
       </table>
     </div>
   );

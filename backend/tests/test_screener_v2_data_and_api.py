@@ -186,3 +186,19 @@ def test_lookup_lenses_apply_fixed_rules_and_sector_fair_value(monkeypatch):
     # AAA: sector medians P/E 20, P/B 3, P/S 2 against its own 10, 2, 1 price it at 20, 15 and 20.
     assert (rows['AAA']['fair_low'], rows['AAA']['fair_mid'], rows['AAA']['fair_high']) == (15.0, 20.0, 20.0)
     assert rows['AAA']['discount'] == 1.0
+
+
+def test_then_and_now_pairs_each_metric_with_its_value_a_year_earlier(monkeypatch):
+    import pandas as pd
+
+    from app.services.screener_v2.core import lookup as lk
+    now = pd.DataFrame({'ticker': ['AAA', 'BBB'], 'trailing_pe': [20.0, 10.0], 'core_quant_score': [40.0, 80.0]})
+    now.attrs['as_of_date'] = '2026-01-28'
+    old = pd.DataFrame({'ticker': ['AAA', 'BBB'], 'trailing_pe': [15.0, 12.0], 'core_quant_score': [90.0, 10.0]})
+    seen = []
+    monkeypatch.setattr(lk, 'panel', lambda: now)
+    monkeypatch.setattr(lk, 'past_panel', lambda d: seen.append(d) or old)
+    out = lk.then_and_now('AAA')
+    rows = {r['key']: (r['now'], r['then']) for r in out['rows']}
+    assert seen == ['2025-01-28'] and out['then_date'] == '2025-01-28'
+    assert rows['trailing_pe'] == (20.0, 15.0) and rows['score_rank'] == (2.0, 1.0)

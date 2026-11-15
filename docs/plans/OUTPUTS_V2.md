@@ -72,7 +72,7 @@ Finviz made Compare an Elite-only feature in April 2026 (charts with zoom, month
 - [x] X3 Winner per row: best and worst highlighted (built for the drawer, `15748af`); a one-line verdict on top ("MSFT leads on 7 of 12 metrics")
 - [ ] X4 Compare two runs of anything: two screens, two backtests, two weightings; shows names in and out, metrics side by side, equity curves overlaid
 - [x] X5 Compare a stock with its sector median and with SPY as permanent rows
-- [ ] X6 Compare to the past: the same name today against one year ago (valuation, quality, rank)
+- [x] X6 Compare to the past: the same name today against one year ago (valuation, quality, rank)
 - [ ] X7 Compare report: export the view as one styled PDF (Koyfin sells this)
 - [x] X8 Shareable compare link: names and tab in the URL
 

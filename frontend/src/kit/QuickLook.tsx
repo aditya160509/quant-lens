@@ -15,12 +15,12 @@ import { Spark } from "@/charts/RankList";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { isNum } from "@/modules/research/format";
 import { Chip, Segmented } from "@/workspace/ui";
-import { ComparePanel, type CompareTab } from "./Compare";
+import { ComparePanel, PastPanel, type CompareTab } from "./Compare";
 import { pdfUrl, useBars, useLookup, usePeHistory, useStatements, type Lookup, type Stat } from "./QuickLookData";
 import "./quicklook.css";
 
 export const MAX_COMPARE = 8;
-export type QuickTab = "overview" | "ratios" | "health" | "peers" | "financials" | "compare";
+export type QuickTab = "overview" | "ratios" | "health" | "peers" | "financials" | "past" | "compare";
 
 type QuickLookStore = {
   ticker: string | null;
@@ -120,7 +120,7 @@ export function QuickLook() {
   const d = q.data;
   const inBasket = basket.includes(ticker);
   const tabs: { id: QuickTab; label: string }[] = [
-    { id: "overview", label: "Overview" }, { id: "ratios", label: "Ratios" }, { id: "health", label: "Health" }, { id: "peers", label: "Peers" }, { id: "financials", label: "Financials" },
+    { id: "overview", label: "Overview" }, { id: "ratios", label: "Ratios" }, { id: "health", label: "Health" }, { id: "peers", label: "Peers" }, { id: "financials", label: "Financials" }, { id: "past", label: "1Y ago" },
     ...(basket.length ? [{ id: "compare" as const, label: `Compare ${basket.length}` }] : []),
   ];
   return (
@@ -145,11 +145,11 @@ export function QuickLook() {
         {tabs.map((t) => <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>{t.id === "compare" ? <GitCompareArrows size={12} /> : null}{t.label}</button>)}
       </div>
       <div className="ql-body" role="tabpanel">
-        {tab === "compare" ? <ComparePanel /> : q.isLoading ? <p className="ql-state" role="status">Loading {ticker}</p>
+        {tab === "compare" ? <ComparePanel /> : tab === "past" ? <PastPanel ticker={ticker} /> : q.isLoading ? <p className="ql-state" role="status">Loading {ticker}</p>
           : q.error ? <p className="ql-state err" role="alert">{(q.error as Error).message}</p>
           : d ? <Sections d={d} tab={tab} /> : null}
       </div>
-      {d && tab !== "compare" ? <footer className="ql-foot">{d.limits.join(" · ")} · prices to {d.price_date}</footer> : null}
+      {d && tab !== "compare" && tab !== "past" ? <footer className="ql-foot">{d.limits.join(" · ")} · prices to {d.price_date}</footer> : null}
     </aside>
   );
 }

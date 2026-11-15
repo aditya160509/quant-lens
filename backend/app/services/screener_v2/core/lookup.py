@@ -77,6 +77,55 @@ def panel() -> pd.DataFrame:
         return _cache["panel"]
 
 
+_past: dict[tuple[Any, str], pd.DataFrame] = {}
+_past_lock = threading.Lock()  # its own lock: an 8-second past build must not block today's lookups
+
+
+def past_panel(as_of: str) -> pd.DataFrame:
+    """The whole-universe panel as it stood on an earlier date; the last four dates asked for stay cached."""
+    from ..features.feature_01 import INPUTS
+    from ..features.inputs import normalize_payload
+    from .currency import instrument_context
+    from .data_loader import parse_symbols
+    from .panel import metric_panel
+
+    key = (_version(), as_of)
+    with _past_lock:
+        if key not in _past:
+            payload = normalize_payload(INPUTS, {"max_symbols": 5000})
+            payload["as_of_date"] = as_of
+            with as_of_context(as_of), instrument_context(payload):
+                built = metric_panel(payload, symbols=parse_symbols(payload, default_limit=5000, max_symbols=5000))
+            built.attrs["as_of_date"] = as_of
+            while len(_past) >= 4:
+                _past.pop(next(iter(_past)))
+            _past[key] = built
+        return _past[key]
+
+
+def then_and_now(ticker: str, days: int = 365) -> dict[str, Any]:
+    """One name today against the same name `days` earlier: every compare metric plus its score rank in the universe."""
+    now = panel()
+    symbol = normalize_symbol(ticker)
+    if symbol not in set(now.ticker):
+        raise KeyError(f"{ticker} is not in the universe we hold")
+    then_date = (pd.Timestamp(now.attrs["as_of_date"]) - pd.Timedelta(days=days)).strftime("%Y-%m-%d")
+    old = past_panel(then_date)
+
+    def pick(p: pd.DataFrame) -> dict[str, Any]:
+        if symbol not in set(p.ticker):
+            return {}
+        score = pd.to_numeric(p.get("core_quant_score"), errors="coerce")
+        rank = score.rank(ascending=False, method="min")
+        i = p.index[p.ticker.eq(symbol)][0]
+        return {**{c: number_like(p.at[i, c]) for c in COMPARE_COLUMNS if c in p}, "score_rank": number_like(rank.at[i]), "ranked": int(score.notna().sum())}
+
+    a, b = pick(now), pick(old)
+    keys = [*COMPARE_COLUMNS, "score_rank"]
+    return clean_json({"ticker": symbol, "now_date": str(now.attrs["as_of_date"]), "then_date": then_date, "ranked": [a.get("ranked"), b.get("ranked")],
+                       "rows": [{"key": k, "now": a.get(k), "then": b.get(k)} for k in keys]})
+
+
 def popular(limit: int = 12) -> dict[str, Any]:
     """Largest names by market cap, plus the exchanges and types we hold, for the search overlay."""
     p = panel()
