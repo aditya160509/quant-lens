@@ -70,7 +70,7 @@ Finviz made Compare an Elite-only feature in April 2026 (charts with zoom, month
 - [x] X1 Tick any two to eight rows in any table (screen, rank, holdings, near misses, alerts, peers), press C or the Compare button: the compare view opens with exactly those names
 - [x] X2 Compare view tabs: Price (rebased overlay, zoom and pan), Returns (monthly heatmap with hover, relative performance by month and year), Fundamentals (any metric as bars, yearly or quarterly, grouped or stacked), Scores (radar shapes overlaid), Ranking (who leads each metric, totals)
 - [x] X3 Winner per row: best and worst highlighted (built for the drawer, `15748af`); a one-line verdict on top ("MSFT leads on 7 of 12 metrics")
-- [ ] X4 Compare two runs of anything: two screens, two backtests, two weightings; shows names in and out, metrics side by side, equity curves overlaid
+- [x] X4 Compare two runs of anything: two screens, two backtests, two weightings; shows names in and out, metrics side by side, equity curves overlaid
 - [x] X5 Compare a stock with its sector median and with SPY as permanent rows
 - [x] X6 Compare to the past: the same name today against one year ago (valuation, quality, rank)
 - [ ] X7 Compare report: export the view as one styled PDF (Koyfin sells this)

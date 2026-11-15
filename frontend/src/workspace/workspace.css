@@ -754,3 +754,10 @@ nav.island { container-type: inline-size; }
 .hero-bars span { font-size: 10.5px; color: var(--text-3); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hero-stack-bar { display: flex; gap: 2px; height: 28px; border-radius: 8px; overflow: hidden; }
 .hero-stack-bar i { display: block; min-width: 2px; }
+.rc { height: auto; margin-bottom: 14px; }
+.rc-b { display: grid; gap: 12px; }
+.rc-set { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12.5px; color: var(--text-3); }
+.rc-t td.up { color: var(--up); } .rc-t td.down { color: var(--down); }
+.rc-names { display: grid; gap: 6px; font-size: 12.5px; color: var(--text-3); }
+.rc-names > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.rc-names b { color: var(--text); margin-right: 2px; }

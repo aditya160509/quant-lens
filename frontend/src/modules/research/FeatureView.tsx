@@ -6,7 +6,7 @@ import { ChartScope } from "@/charts/ChartScope";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { createElement, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bookmark, Braces, Check, ChevronDown, Copy, Download, FileText, Hash, Link2, Loader2, Play, Square } from "lucide-react";
+import { AlertTriangle, Bookmark, Braces, GitCompareArrows, Check, ChevronDown, Copy, Download, FileText, Hash, Link2, Loader2, Play, Square } from "lucide-react";
 import { downloadText } from "@/charts/export";
 import toast from "react-hot-toast";
 import { DUR } from "@/workspace/prefs";
@@ -26,6 +26,7 @@ import type { FeatureRun } from "./ResearchApp";
 import { Control, encodeSettings, toPayload } from "./StudyForm";
 import { Customised } from "./Customised";
 import { HeroResult } from "./Hero";
+import { RunCompare } from "./RunCompare";
 import type { FeatureResult, FeatureSpec, InputSpec } from "./types";
 
 const RUNNING = new Set(["submitting", "queued", "running", "loading"]);
@@ -40,6 +41,9 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   const prefs = useFeaturePrefs(feature.id);
   const setPref = useCardPrefs((st) => st.set);
   const [printing, setPrinting] = useState(false);
+  const [against, setAgainst] = useState<string | null>(null);
+  const [againstMenu, setAgainstMenu] = useState<MenuAt | null>(null);
+  const earlier = useRuns((st) => st.runs).filter((r) => r.featureId === feature.id && r.status === "completed" && r.jobId !== run.jobId).slice(0, 12);
   // Report: render every section stacked, print once painted, then restore the tabbed view.
   useEffect(() => {
     if (!printing) return;
@@ -164,6 +168,11 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
           <div className="fv-tools">
             {lab().save ? <button className="btn sm ghost" onClick={() => { const name = window.prompt("Save as")?.trim(); if (name) void lab().save!(name, feature, toPayload(feature, run.form)).then(() => toast.success(`Saved ${name}`), (e: Error) => toast.error(e.message)); }}><Bookmark size={13} />Save</button> : null}
             <button className="btn sm ghost" onClick={() => { const u = new URL(location.href); u.searchParams.set("s", encodeSettings(run.form)); u.searchParams.delete("run"); void navigator.clipboard?.writeText(u.toString()).then(() => toast.success("Link with these settings copied")); }}><Link2 size={13} />Share</button>
+            {result && earlier.length ? <button className="btn sm ghost" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setAgainstMenu({ x: r.right - 240, y: r.bottom + 4 }); }}><GitCompareArrows size={13} />Compare runs</button> : null}
+            <PopMenu at={againstMenu} onClose={() => setAgainstMenu(null)} width={240}>
+              <div className="hd">Compare this run with</div>
+              {earlier.map((r) => <MenuItem key={r.jobId} icon={against === r.jobId ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => { setAgainst(r.jobId); setAgainstMenu(null); }}>{new Date(r.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}{r.headline ? ` · ${r.headline.slice(0, 28)}` : ""}</MenuItem>)}
+            </PopMenu>
             {result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={() => setPrinting(true)} /> : null}
           </div>
           {runButton}
@@ -195,6 +204,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
       <div style={{ padding: "6px 18px 22px" }}>
         {run.error && !running ? <RunError message={run.error} fixes={lab().fixes?.(run.error, feature, run.form) ?? []} onFix={(patch) => run.setForm((c) => ({ ...c, ...patch }))} /> : null}
         {result && !running ? <Skipped result={result} /> : null}
+        {result && against && !printing ? <RunCompare feature={feature} result={result} jobId={run.jobId} againstId={against} onClose={() => setAgainst(null)} /> : null}
         {result && printing ? (
           <div className="report">
             {sections.map((sec) => (

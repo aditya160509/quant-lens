@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DataTable, Empty } from "@/kit/DataTable";
 import { fmtKey, label, num } from "@/modules/research/format";
-import { useRuns } from "@/modules/research/api";
 import type { FeatureResult, Row } from "@/modules/research/types";
 import { send } from "../api";
 import { SymbolPick } from "../search/SymbolPick";
@@ -88,34 +87,3 @@ export function NearMisses({ result }: { result: FeatureResult }) {
   );
 }
 
-type DiffResult = { entered: string[]; left: string[]; moved: { symbol: string; from: number; to: number }[]; as_of: (string | null)[]; changed_settings: string[]; counts: number[] };
-
-/** Who entered, left or moved between an earlier run of this screen and this one. */
-export function ScreenDiff({ result, featureId }: { result: FeatureResult; featureId: string }) {
-  const run = runOf(result);
-  const others = useRuns((s) => s.runs).filter((r) => r.featureId === featureId && r.status === "completed" && r.jobId !== run?.id).slice(0, 12);
-  const [before, setBefore] = useState<string | null>(null);
-  const diff = useQuery({ queryKey: ["explain", "diff", before, run?.id], queryFn: () => send<DiffResult>("POST", "/explain/diff", { before, after: run?.id }), enabled: Boolean(before && run), retry: false });
-  if (!run) return <Empty text="No run record." />;
-  const d = diff.data;
-  const rows: Row[] = d ? [...d.entered.map((t) => ({ ticker: t, change: "Entered" })), ...d.left.map((t) => ({ ticker: t, change: "Left" })), ...d.moved.map((m) => ({ ticker: m.symbol, change: "Moved", from_rank: m.from + 1, to_rank: m.to + 1 }))] : [];
-  return (
-    <div style={{ display: "grid", gap: 10 }}>
-      {others.length ? (
-        <label className="xc"><span>Compare with run</span>
-          <select value={before ?? ""} onChange={(e) => setBefore(e.target.value || null)}>
-            <option value="">Choose</option>
-            {others.map((r) => <option key={r.jobId} value={r.jobId}>{new Date(r.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</option>)}
-          </select>
-        </label>
-      ) : <Empty text="No other run." />}
-      {diff.error ? <div role="alert" style={{ color: "var(--down)", fontSize: 12 }}>{diff.error.message}</div> : null}
-      {d ? (
-        <>
-          <div className="stat-s">{d.counts[0].toLocaleString()} names as of {d.as_of[0] ?? "unknown"} → {d.counts[1].toLocaleString()} names as of {d.as_of[1] ?? "unknown"} · {d.entered.length} entered · {d.left.length} left · {d.moved.length} moved{d.changed_settings.length ? ` · settings changed: ${d.changed_settings.map(label).join(", ")}` : ""}</div>
-          {rows.length ? <DataTable rows={rows} opts={{ max: 200, maxHeight: 420 }} /> : <Empty text="No change." />}
-        </>
-      ) : null}
-    </div>
-  );
-}
