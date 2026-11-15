@@ -1,6 +1,7 @@
 "use client";
 
-import { createElement, useMemo, useState } from "react";
+import { createElement, useEffect, useMemo, useState } from "react";
+import { Pause, Play } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { send } from "./api";
 import { Treemap } from "@/charts/Treemap";
@@ -119,34 +120,59 @@ const SECTOR_ETFS = ["XLK", "XLF", "XLV", "XLY", "XLP", "XLE", "XLI", "XLB", "XL
 const QUAD = ["Leading", "Weakening", "Lagging", "Improving"];
 
 /** Relative rotation against SPY: RS-ratio across, RS-momentum up, a tail of recent weeks behind each name. */
+const quadOf = (x: number, y: number) => (x >= 100 ? (y >= 100 ? "leading" : "weakening") : y >= 100 ? "improving" : "lagging");
+const TRAIL = 8;
+
+/** C4: relative rotation against SPY, a year of weeks; each name trails its last eight weeks, fading with age. Play or scrub through time. */
 export function RrgView({ rows }: ViewProps) {
   const [etfs, setEtfs] = useState(false);
   const names = (etfs ? SECTOR_ETFS : rows.map((r) => String(r.ticker ?? "")).filter(Boolean).slice(0, 12));
-  const q = useQuery({ queryKey: ["screener", "rrg", names.join(",")], queryFn: () => send<Rrg>("GET", `/rrg?tickers=${names.join(",")}&benchmark=SPY`), enabled: names.length > 0, staleTime: 600_000, retry: false });
+  const q = useQuery({ queryKey: ["screener", "rrg", 52, names.join(",")], queryFn: () => send<Rrg>("GET", `/rrg?tickers=${names.join(",")}&benchmark=SPY&weeks=52`), enabled: names.length > 0, staleTime: 600_000, retry: false });
   const series = Object.entries(q.data?.series ?? {});
+  const dates = [...new Set(series.flatMap(([, p]) => p.map((x) => x.date)))].sort();
+  const [at, setAt] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const t = at ?? dates.length - 1;
+  useEffect(() => {
+    if (!playing) return;
+    if (t >= dates.length - 1) { setPlaying(false); return; }
+    const id = setTimeout(() => setAt(t + 1), 260);
+    return () => clearTimeout(id);
+  }, [playing, t, dates.length]);
   const all = series.flatMap(([, p]) => p);
   const reach = Math.max(2, ...all.map((p) => Math.max(Math.abs(p.rs_ratio - 100), Math.abs(p.rs_momentum - 100)))) * 1.1;
   const W = 640, H = 440, X = (v: number) => ((v - 100 + reach) / (2 * reach)) * W, Y = (v: number) => H - ((v - 100 + reach) / (2 * reach)) * H;
+  const day = dates[t];
   return (
     <div className="rrg">
-      <div className="ub-seg" role="radiogroup" aria-label="Names">
-        {([[false, "Top results"], [true, "Sector ETFs"]] as const).map(([v, l]) => <button key={l} type="button" role="radio" aria-checked={etfs === v} onClick={() => setEtfs(v)}>{l}</button>)}
+      <div className="rrg-bar">
+        <div className="ub-seg" role="radiogroup" aria-label="Names">
+          {([[false, "Top results"], [true, "Sector ETFs"]] as const).map(([v, l]) => <button key={l} type="button" role="radio" aria-checked={etfs === v} onClick={() => { setEtfs(v); setAt(null); }}>{l}</button>)}
+        </div>
+        {dates.length > 1 ? <>
+          <button type="button" className="btn sm" onClick={() => { if (t >= dates.length - 1) setAt(Math.min(TRAIL, dates.length - 1)); setPlaying((p) => !p); }} aria-label={playing ? "Pause" : "Play the rotation"}>{playing ? <Pause size={11} /> : <Play size={11} fill="currentColor" />}{playing ? "Pause" : "Play"}</button>
+          <input className="br-scrub" type="range" min={0} max={dates.length - 1} value={t} aria-label="Week" onChange={(e) => { setPlaying(false); setAt(Number(e.target.value)); }} />
+          <span className="num rrg-day">{day}</span>
+        </> : null}
       </div>
       {q.error ? <p className="err" role="alert">{(q.error as Error).message}</p> : null}
       {series.length ? (
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Relative rotation graph">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Relative rotation graph, week of ${day}`}>
           <rect x={W / 2} y={0} width={W / 2} height={H / 2} className="rrg-leading" />
           <rect x={W / 2} y={H / 2} width={W / 2} height={H / 2} className="rrg-weakening" />
           <rect x={0} y={H / 2} width={W / 2} height={H / 2} className="rrg-lagging" />
           <rect x={0} y={0} width={W / 2} height={H / 2} className="rrg-improving" />
-          {[[QUAD[0], W - 8, 18, "end"], [QUAD[1], W - 8, H - 8, "end"], [QUAD[2], 8, H - 8, "start"], [QUAD[3], 8, 18, "start"]].map(([t, x, y, a]) => <text key={String(t)} x={x as number} y={y as number} textAnchor={a as "start" | "end"} className="rrg-q">{t}</text>)}
-          {series.map(([t, pts]) => {
-            const cls = `rrg-${(q.data?.quadrant[t] ?? "").toLowerCase()}`, last = pts[pts.length - 1];
+          {[[QUAD[0], W - 8, 18, "end"], [QUAD[1], W - 8, H - 8, "end"], [QUAD[2], 8, H - 8, "start"], [QUAD[3], 8, 18, "start"]].map(([tx, x, y, a]) => <text key={String(tx)} x={x as number} y={y as number} textAnchor={a as "start" | "end"} className="rrg-q">{tx}</text>)}
+          {series.map(([tk, pts]) => {
+            const upto = pts.filter((p) => p.date <= day);
+            const trail = upto.slice(-TRAIL);
+            const last = trail[trail.length - 1];
+            if (!last) return null;
             return (
-              <g key={t} className={cls}>
-                <polyline points={pts.map((p) => `${X(p.rs_ratio)},${Y(p.rs_momentum)}`).join(" ")} fill="none" />
-                <circle cx={X(last.rs_ratio)} cy={Y(last.rs_momentum)} r={5}><title>{`${t}: ratio ${last.rs_ratio.toFixed(1)}, momentum ${last.rs_momentum.toFixed(1)} on ${last.date}`}</title></circle>
-                <text x={X(last.rs_ratio) + 8} y={Y(last.rs_momentum) + 4}>{t}</text>
+              <g key={tk} className={`rrg-${quadOf(last.rs_ratio, last.rs_momentum)}`}>
+                {trail.slice(1).map((p, i) => <line key={p.date} x1={X(trail[i].rs_ratio)} y1={Y(trail[i].rs_momentum)} x2={X(p.rs_ratio)} y2={Y(p.rs_momentum)} style={{ opacity: 0.15 + (0.85 * (i + 1)) / trail.length }} />)}
+                <circle cx={X(last.rs_ratio)} cy={Y(last.rs_momentum)} r={5}><title>{`${tk}: ratio ${last.rs_ratio.toFixed(1)}, momentum ${last.rs_momentum.toFixed(1)} on ${last.date}`}</title></circle>
+                <text x={X(last.rs_ratio) + 8} y={Y(last.rs_momentum) + 4}>{tk}</text>
               </g>
             );
           })}

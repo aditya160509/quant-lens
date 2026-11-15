@@ -10,6 +10,7 @@ import { RowActions } from "@/modules/screener/RowActions";
 import { FairAlertToggle } from "@/modules/screener/Lenses";
 import { useStudies } from "@/modules/research/store";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { motion } from "framer-motion";
 import { create } from "zustand";
 import { Radar } from "@/charts/Radar";
 import { Spark } from "@/charts/RankList";
@@ -21,7 +22,7 @@ import { pdfUrl, useBars, useLookup, usePeHistory, useStatements, type Lookup, t
 import "./quicklook.css";
 
 export const MAX_COMPARE = 8;
-export type QuickTab = "overview" | "ratios" | "health" | "peers" | "financials" | "past" | "compare";
+export type QuickTab = "overview" | "story" | "ratios" | "health" | "peers" | "financials" | "past" | "compare";
 
 type QuickLookStore = {
   ticker: string | null;
@@ -121,7 +122,7 @@ export function QuickLook() {
   const d = q.data;
   const inBasket = basket.includes(ticker);
   const tabs: { id: QuickTab; label: string }[] = [
-    { id: "overview", label: "Overview" }, { id: "ratios", label: "Ratios" }, { id: "health", label: "Health" }, { id: "peers", label: "Peers" }, { id: "financials", label: "Financials" }, { id: "past", label: "1Y ago" },
+    { id: "overview", label: "Overview" }, { id: "story", label: "Story" }, { id: "ratios", label: "Ratios" }, { id: "health", label: "Health" }, { id: "peers", label: "Peers" }, { id: "financials", label: "Financials" }, { id: "past", label: "1Y ago" },
     ...(basket.length ? [{ id: "compare" as const, label: `Compare ${basket.length}` }] : []),
   ];
   return (
@@ -147,7 +148,7 @@ export function QuickLook() {
         {tabs.map((t) => <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}>{t.id === "compare" ? <GitCompareArrows size={12} /> : null}{t.label}</button>)}
       </div>
       <div className="ql-body" role="tabpanel">
-        {tab === "compare" ? <ComparePanel /> : tab === "past" ? <PastPanel ticker={ticker} /> : q.isLoading ? <p className="ql-state" role="status">Loading {ticker}</p>
+        {tab === "compare" ? <ComparePanel /> : tab === "past" ? <PastPanel ticker={ticker} /> : tab === "story" && d ? <Story d={d} /> : q.isLoading ? <p className="ql-state" role="status">Loading {ticker}</p>
           : q.error ? <p className="ql-state err" role="alert">{(q.error as Error).message}</p>
           : d ? <Sections d={d} tab={tab} /> : null}
       </div>
@@ -164,6 +165,45 @@ function HeadPrice({ d }: { d: Lookup }) {
       <b className="num">{numText(d.price)}</b><em>{d.currency ?? ""}</em>
       {day !== null ? <i className={`num ${day >= 0 ? "up" : "down"}`}>{day >= 0 ? "+" : ""}{(day * 100).toFixed(2)}%</i> : null}
     </span>
+  );
+}
+
+const CHAPTERS: [string, (d: Lookup) => ReactNode][] = [
+  ["Price", (d) => <Overview d={d} />],
+  ["Valuation against its own history and sector", (d) => <Ratios d={d} />],
+  ["Quality and financial health", (d) => <Health d={d} />],
+  ["Against its peers", (d) => <Peers d={d} />],
+  ["Risks", (d) => <Risks d={d} />],
+  ["A year ago", (d) => <PastPanel ticker={d.ticker} />],
+];
+
+/** C6: the whole stock as one scrolling read, chapter by chapter, each drawing in as it arrives. */
+function Story({ d }: { d: Lookup }) {
+  const still = typeof document !== "undefined" && Boolean(document.querySelector(".rm"));
+  return (
+    <div className="ql-story">
+      {CHAPTERS.map(([title, body], i) => (
+        <motion.section key={title} className="ql-chapter" initial={still ? false : { opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.15 }} transition={{ duration: 0.5, ease: [0.2, 0, 0, 1] }}>
+          <h2 className="ql-ch"><span className="num">{String(i + 1).padStart(2, "0")}</span>{title}</h2>
+          {body(d)}
+        </motion.section>
+      ))}
+    </div>
+  );
+}
+
+type FlagRows = { rows: { ticker: string; flag: string; quarter: string | null; detail: string }[] };
+
+/** Rule-based warnings with the quarter they appeared, then the cons and data limits. */
+function Risks({ d }: { d: Lookup }) {
+  const q = useQuery({ queryKey: ["lookup-red-flags", d.ticker], queryFn: () => fetch(`${SCREENER_BASE}/lookup/red-flags`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tickers: [d.ticker] }) }).then((r) => r.json() as Promise<FlagRows>), staleTime: 600_000, retry: false });
+  const flags = q.data?.rows ?? [];
+  return (
+    <div className="ql-risks">
+      {flags.length ? <ul>{flags.map((f, i) => <li key={i}><b>{f.flag}</b> <span className="num">{f.quarter ?? "latest"}</span> {f.detail}</li>)}</ul> : q.isLoading ? null : <p className="ql-none">No red flags in the last four quarters</p>}
+      {d.notes.cons.length ? <ul>{d.notes.cons.map((n) => <li key={n.text}>{n.text}</li>)}</ul> : null}
+      <p className="ql-sub">{d.limits.join(" · ")}</p>
+    </div>
   );
 }
 

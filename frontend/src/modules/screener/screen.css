@@ -31,11 +31,10 @@
 .rrg-improving { fill: color-mix(in oklch, var(--text-3) 10%, transparent); }
 .rrg-q { font-size: 12px; fill: var(--text-3); }
 .rrg g text { font-size: 11px; fill: var(--text-2); }
-g.rrg-leading polyline, g.rrg-leading circle { stroke: var(--up); fill: var(--up); }
-g.rrg-lagging polyline, g.rrg-lagging circle { stroke: var(--down); fill: var(--down); }
-g.rrg-weakening polyline, g.rrg-weakening circle { stroke: var(--accent); fill: var(--accent); }
-g.rrg-improving polyline, g.rrg-improving circle { stroke: var(--text-3); fill: var(--text-3); }
-.rrg polyline { stroke-width: 1.5; fill: none; opacity: 0.6; }
+g.rrg-leading line, g.rrg-leading circle { stroke: var(--up); fill: var(--up); }
+g.rrg-lagging line, g.rrg-lagging circle { stroke: var(--down); fill: var(--down); }
+g.rrg-weakening line, g.rrg-weakening circle { stroke: var(--accent); fill: var(--accent); }
+g.rrg-improving line, g.rrg-improving circle { stroke: var(--text-3); fill: var(--text-3); }
 
 /* Rebalancing variants and turnover */
 .vb { display: grid; gap: 2px; font-size: 12.5px; }
@@ -72,3 +71,8 @@ g.rrg-improving polyline, g.rrg-improving circle { stroke: var(--text-3); fill: 
 .qlc-thesis { margin: 0; color: var(--text-2); font-size: 12.5px; }
 .ub-seg.card-toggle { padding: 2px; border-radius: 8px; }
 .ub-seg.card-toggle button { height: 24px; padding: 0 9px; font-size: 12px; border-radius: 6px; }
+.rrg g line { stroke-width: 1.6; stroke-linecap: round; }
+.rrg g circle { transition: cx 0.25s linear, cy 0.25s linear; }
+.rrg-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rrg-bar .br-scrub { flex: 1; min-width: 140px; accent-color: var(--accent); }
+.rrg-day { font-size: 12px; color: var(--text-3); min-width: 80px; }

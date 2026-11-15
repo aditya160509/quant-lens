@@ -127,3 +127,10 @@ th.cmp-med { font-weight: 500; white-space: nowrap; }
   html.print-cmp .ql-actions, html.print-cmp .ql-tabs:not(.cmp-tabs), html.print-cmp .cmp-head .btn, html.print-cmp .ql-x { display: none !important; }
 }
 .ql-depth { margin-left: 6px; padding: 0 5px; border-radius: 99px; font-style: normal; font-size: 10px; color: var(--text-3); box-shadow: inset 0 0 0 1px var(--line); }
+.ql-story { display: grid; gap: 40px; padding-bottom: 40px; }
+.ql-chapter { display: grid; gap: 12px; }
+.ql-ch { display: flex; align-items: baseline; gap: 12px; font-size: 22px; font-weight: 650; letter-spacing: -0.02em; padding-top: 8px; border-top: 1px solid var(--line); }
+.ql-ch span { font-size: 13px; color: var(--accent); font-weight: 600; }
+.ql-risks { display: grid; gap: 10px; font-size: 13px; color: var(--text-2); }
+.ql-risks ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; }
+.ql-risks b { color: var(--down); font-weight: 600; }

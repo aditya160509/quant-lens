@@ -418,11 +418,11 @@ async def market_breadth_history(max_symbols: int = Query(500, ge=1, le=1000), d
 
 
 @router.get("/rrg")
-async def relative_rotation(tickers: str = Query(..., max_length=400), benchmark: str = Query("SPY", max_length=40)) -> dict[str, Any]:
+async def relative_rotation(tickers: str = Query(..., max_length=400), benchmark: str = Query("SPY", max_length=40), weeks: int = Query(10, ge=4, le=104)) -> dict[str, Any]:
     names = [t for t in tickers.replace(",", " ").split() if t]
     if not 1 <= len(names) <= 50:
         raise HTTPException(422, "Rotation graph takes 1 to 50 tickers")
-    return await asyncio.to_thread(_lookup_call, explain.rrg, names, benchmark)
+    return await asyncio.to_thread(_lookup_call, explain.rrg, names, benchmark, weeks, max(520, (weeks + 30) * 7))
 
 
 @router.get("/filters/keys")

@@ -49,9 +49,9 @@ Each one is real data, has a still fallback and respects the Reduce motion switc
 - [x] C1 Hero result: one huge lead figure per run ("+71% vs SPY +38%", "12 of 500 pass") over a full-width chart, then the evidence below. Screen, Rank and Test
 - [x] C2 Funnel story: 500 dots collapse filter by filter to the passing names, count ticking down, each step labelled with the filter that removed most
 - [x] C3 Backtest replay: press play, months advance, names fly in and out of the portfolio, equity line draws live against SPY, drawdowns shade as they happen; scrub bar
-- [ ] C4 Rotation trails: sectors move through the RRG quadrants week by week with fading tails; play and scrub
-- [ ] C5 Live sorting field: every name a bubble sized by market cap; tighten a filter and failing names sink and fade while the strongest rise (the most-liked idea in the research)
-- [ ] C6 Stock story: full stock page scrolls as chapters (price, valuation vs history, quality, peers, risks), each chapter's chart animating in
+- [x] C4 Rotation trails: sectors move through the RRG quadrants week by week with fading tails; play and scrub
+- [x] C5 Live sorting field: every name a bubble sized by market cap; tighten a filter and failing names sink and fade while the strongest rise (the most-liked idea in the research)
+- [x] C6 Stock story: full stock page scrolls as chapters (price, valuation vs history, quality, peers, risks), each chapter's chart animating in
 
 ## 4. Add: the paid-tier set (what people say they would pay for)
 

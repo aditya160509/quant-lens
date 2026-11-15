@@ -5,7 +5,7 @@ import { Pause, Play, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Empty } from "@/kit/DataTable";
 import { openQuickLook } from "@/kit/QuickLook";
-import { isNum, out, pct } from "@/modules/research/format";
+import { isNum, label, out, pct } from "@/modules/research/format";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import "./story.css";
 
@@ -123,6 +123,46 @@ export function BacktestReplay({ result }: ViewProps) {
               initial={{ opacity: 0, y: -10, scale: 0.8 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.8 }} transition={{ duration: still() ? 0 : 0.18 }}>{t}</motion.button>
           ))}
         </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+const FIELD_METRICS = ["core_quant_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile"];
+
+/** C5: every name a bubble sized by market cap, grouped by sector, height = the chosen score. Raise the bar and failing names sink and fade; the strongest rise. */
+export function SortingField({ rows }: ViewProps) {
+  const [metric, setMetric] = useState(FIELD_METRICS[0]);
+  const [min, setMin] = useState(0);
+  const names = useMemo(() => rows.filter((r) => typeof r.ticker === "string").slice(0, 600), [rows]);
+  const sectors = useMemo(() => [...new Set(names.map((r) => (typeof r.sector === "string" && r.sector ? r.sector : "Unknown")))].sort(), [names]);
+  const caps = names.map((r) => (isNum(r.market_cap) && r.market_cap > 0 ? r.market_cap : 0));
+  const top = Math.max(1, ...caps);
+  const vals = names.map((r) => (isNum(r[metric]) ? (r[metric] as number) : null));
+  const passing = vals.filter((v) => v !== null && v >= min).length;
+  const cut90 = [...vals].filter((v): v is number => v !== null && v >= min).sort((a, b) => b - a)[Math.max(0, Math.floor(passing * 0.1) - 1)] ?? Infinity;
+  if (!names.length) return <Empty />;
+  return (
+    <div className="sf">
+      <div className="sf-bar">
+        <select className="cmp-select" value={metric} onChange={(e) => setMetric(e.target.value)} aria-label="Score">{FIELD_METRICS.map((m) => <option key={m} value={m}>{label(m)}</option>)}</select>
+        <label className="sf-min"><span>At least</span><input type="range" min={0} max={95} step={5} value={min} onChange={(e) => setMin(Number(e.target.value))} aria-label="Minimum score" /><b className="num">{min}</b></label>
+        <span className="sf-count"><b className="num">{passing.toLocaleString()}</b> of {names.length.toLocaleString()} pass</span>
+      </div>
+      <div className="sf-field" role="img" aria-label={`${passing} of ${names.length} names score at least ${min} on ${label(metric)}`}>
+        {sectors.map((sec, i) => <span key={sec} className="sf-sec" style={{ left: `${((i + 0.5) / sectors.length) * 100}%` }}>{sec}</span>)}
+        {names.map((r, i) => {
+          const v = vals[i];
+          const pass = v !== null && v >= min;
+          const band = sectors.indexOf(typeof r.sector === "string" && r.sector ? r.sector : "Unknown");
+          const jitter = (((i * 2654435761) % 1000) / 1000) * 0.8 + 0.1;
+          const size = 6 + Math.sqrt(caps[i] / top) * 30;
+          const t = String(r.ticker);
+          return (
+            <button key={t} type="button" className="sf-dot" data-pass={pass} data-top={pass && v !== null && v >= cut90} title={`${t} ${v === null ? "unknown" : v.toFixed(0)}`} onClick={() => openQuickLook(t)}
+              style={{ left: `${((band + jitter) / sectors.length) * 100}%`, top: `${pass ? 96 - (((v as number) - min) / Math.max(1, 100 - min)) * 90 : 100}%`, width: size, height: size, transitionDelay: `${(i % 40) * 4}ms` }} />
+          );
+        })}
       </div>
     </div>
   );
