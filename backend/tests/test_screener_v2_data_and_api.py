@@ -155,3 +155,15 @@ def test_lookup_routes_map_errors(monkeypatch):
     monkeypatch.setattr(screener_v2.lookup, 'lookup', absent)
     assert client.get('/api/screener-v2/lookup/ZZZ').status_code == 404
     assert client.get('/api/screener-v2/lookup/compare?tickers=AAPL').status_code == 422
+
+
+def test_lookup_compare_adds_sector_and_all_name_medians(monkeypatch):
+    import pandas as pd
+
+    from app.services.screener_v2.core import lookup as lk
+    frame = pd.DataFrame({'ticker': ['AAA', 'BBB', 'CCC', 'DDD'], 'company_name': ['A', 'B', 'C', 'D'], 'sector': ['Tech', 'Tech', 'Tech', 'Energy'], 'trailing_pe': [10.0, 20.0, 30.0, 5.0]})
+    monkeypatch.setattr(lk, 'panel', lambda: frame)
+    out = lk.compare(['AAA', 'DDD'])
+    meds = {m['label']: (m['n'], m['trailing_pe']) for m in out['medians']}
+    assert meds == {'Tech median': (3, 20.0), 'Energy median': (1, 5.0), 'All names median': (4, 15.0)}
+    assert [r['ticker'] for r in out['rows']] == ['AAA', 'DDD']

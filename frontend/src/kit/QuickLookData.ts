@@ -18,7 +18,7 @@ export type Lookup = {
   statements: Statements; notes: { pros: Note[]; cons: Note[]; red_flags: Note[] }; limits: string[];
 };
 export type Statements = { periods: string[]; lines: { key: string; label: string; values: (number | null)[] }[] };
-export type Compare = { as_of: string; columns: string[]; rows: ({ ticker: string; company_name: string | null; sector: string | null } & Record<string, unknown>)[] };
+export type Compare = { as_of: string; columns: string[]; medians?: ({ label: string; n: number } & Record<string, unknown>)[]; rows: ({ ticker: string; company_name: string | null; sector: string | null } & Record<string, unknown>)[] };
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
@@ -28,6 +28,7 @@ async function get<T>(path: string): Promise<T> {
 
 export const fetchLookup = (ticker: string) => get<Lookup>(`/lookup/${encodeURIComponent(ticker)}`);
 export const useLookup = (ticker: string | null) => useQuery({ queryKey: ["lookup", ticker], queryFn: () => fetchLookup(ticker!), enabled: !!ticker, staleTime: 300_000, retry: false });
+export const statementsQuery = (ticker: string, period: string) => ({ queryKey: ["lookup-statements", ticker, period, false], queryFn: () => get<Statements>(`/lookup/${encodeURIComponent(ticker)}/statements?period=${period}&all_lines=false`), staleTime: 300_000, retry: false });
 export const useStatements = (ticker: string, period: string, all: boolean) =>
   useQuery({ queryKey: ["lookup-statements", ticker, period, all], queryFn: () => get<Statements>(`/lookup/${encodeURIComponent(ticker)}/statements?period=${period}&all_lines=${all}`), enabled: all, staleTime: 300_000, retry: false });
 export const useCompare = (tickers: string[]) =>

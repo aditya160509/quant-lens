@@ -5,10 +5,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { getCoreRowModel, getSortedRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as Popover from "@radix-ui/react-popover";
-import { ArrowDown, ArrowUp, ChevronRight, CircleDashed, Columns3, Download, Link2, Pin, RotateCcw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronRight, CircleDashed, Columns3, Download, GitCompareArrows, Link2, Pin, RotateCcw, Search, X } from "lucide-react";
 import { Spark } from "@/charts/RankList";
 import { downloadCsv, downloadXlsx } from "@/charts/export";
-import { openQuickLook } from "./QuickLook";
+import { MAX_COMPARE, openCompare, openQuickLook } from "./QuickLook";
 import { EMPTY_VIEW, reduce, useSavedViews, useTableView, withPercentiles, type Fmt, type NumFmt, type TableView } from "./tableView";
 import { columns, fmtKey, isNum, isPKey, isTKey, label, pTone, toneVar } from "@/modules/research/format";
 import type { Row } from "@/modules/research/types";
@@ -109,7 +109,11 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const rowActions = opts?.rowActions as ((row: Row) => ReactNode) | undefined;
   const hatch = opts?.hatch === true;
   const bulk = opts?.bulk as ((rows: Row[], clear: () => void) => ReactNode) | undefined;
+  // Any table of names can be ticked and compared, with or without its own bulk actions.
+  const selectable = Boolean(bulk) || rows.some((r) => typeof r.ticker === "string");
   const [picked, setPicked] = useState<Set<number>>(new Set());
+  const pickedTickers = [...new Set([...picked].map((i) => rows[i]?.ticker).filter((t): t is string => typeof t === "string"))];
+  const canCompare = pickedTickers.length >= 2 && pickedTickers.length <= MAX_COMPARE;
   const [pickedFor, setPickedFor] = useState<Row[]>(rows);
   if (pickedFor !== rows) { setPickedFor(rows); setPicked(new Set()); }
   const base = useMemo(() => {
@@ -264,6 +268,9 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
     return <>{c === "ticker" && typeof v === "string" ? <button type="button" className="tk-link" onClick={(e) => { e.stopPropagation(); openQuickLook(v); }}><span className="mono-tile" aria-hidden style={{ "--h": hue(v) } as CSSProperties}>{v.replace(/[^A-Z0-9]/gi, "").slice(0, 2)}</span>{content}</button> : content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const t = e.target as HTMLElement;
+    const typing = t.isContentEditable || /^(TEXTAREA|SELECT)$/.test(t.tagName) || (t instanceof HTMLInputElement && t.type !== "checkbox");
+    if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey && !e.altKey && canCompare && !typing) { e.preventDefault(); openCompare(pickedTickers); return; }
     if (sel === null) return;
     if (e.key === "Escape") { setSel(null); return; }
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -293,7 +300,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
     </th>
   );
   return (
-    <div className="dt" data-virtual={virtual} data-density={density} data-bulk={!!bulk} onKeyDown={onKey}>
+    <div className="dt" data-virtual={virtual} data-density={density} data-bulk={selectable} onKeyDown={onKey}>
       <div className="dt-bar">
         {sets ? (
           <div className="dt-sets" role="tablist" aria-label="Column sets">
@@ -382,10 +389,11 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
           </Popover.Portal>
         </Popover.Root>
       </div>
-      {bulk && picked.size ? (
+      {selectable && picked.size ? (
         <div className="dt-bulk" role="toolbar" aria-label="Selected rows">
           <strong className="num">{picked.size}</strong> selected
-          {bulk([...picked].map((i) => rows[i]).filter(Boolean), () => setPicked(new Set()))}
+          <button className="btn sm" disabled={!canCompare} title={canCompare ? "Compare these names (C)" : `Tick 2 to ${MAX_COMPARE} names to compare`} onClick={() => openCompare(pickedTickers)}><GitCompareArrows size={11} />Compare<span className="kbd">C</span></button>
+          {bulk?.([...picked].map((i) => rows[i]).filter(Boolean), () => setPicked(new Set()))}
           <button className="btn sm ghost" onClick={() => setPicked(new Set())}><X size={11} />Clear</button>
         </div>
       ) : null}
@@ -393,16 +401,16 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
         <table className="tbl">
           <thead>
             {twoLevel ? <tr>{groups.map((g, k) => (g.head ? <th key={k} colSpan={g.span} className="grp">{label(g.head)}</th> : <th key={k} />))}</tr> : null}
-            <tr ref={headRow}>{bulk ? <th className="dt-chk"><input type="checkbox" aria-label="Select all shown" checked={shown.length > 0 && shown.every((i) => picked.has(i))} onChange={(e) => setPicked(e.target.checked ? new Set(shown) : new Set())} /></th> : null}{groups.flatMap((g) => g.cols.map((c) => sortTh(c, shortName(c, g.head))))}{rowActions ? <th aria-label="Actions" /> : null}</tr>
+            <tr ref={headRow}>{selectable ? <th className="dt-chk"><input type="checkbox" aria-label="Select all shown" checked={shown.length > 0 && shown.every((i) => picked.has(i))} onChange={(e) => setPicked(e.target.checked ? new Set(shown) : new Set())} /></th> : null}{groups.flatMap((g) => g.cols.map((c) => sortTh(c, shortName(c, g.head))))}{rowActions ? <th aria-label="Actions" /> : null}</tr>
           </thead>
           <tbody>
-            {virtual && windowRows[0]?.start > 0 ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0) + (bulk ? 1 : 0)} style={{ height: windowRows[0].start, padding: 0, border: 0 }} /></tr> : null}
+            {virtual && windowRows[0]?.start > 0 ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0) + (selectable ? 1 : 0)} style={{ height: windowRows[0].start, padding: 0, border: 0 }} /></tr> : null}
             {visibleItems.map(({ item: it, index: k }) => {
               if (it.kind === "group") {
                 const closed = collapsed.includes(it.g);
                 return (
                   <tr key={`g${k}`} className="gr">
-                    {bulk ? <td /> : null}
+                    {selectable ? <td /> : null}
                     {cols.map((c, j) => j === 0 ? (
                       <td key={c}><button className="dt-sort" aria-expanded={!closed} onClick={() => setCollapsed(closed ? collapsed.filter((x) => x !== it.g) : [...collapsed, it.g])}><ChevronRight size={12} style={{ marginRight: 6, verticalAlign: -2, transform: closed ? "none" : "rotate(90deg)", transition: "transform .15s" }} />{it.g}<span className="stat-s" style={{ marginLeft: 8 }}>{it.n}</span></button></td>
                     ) : <td key={c} className={numeric.has(c) ? "r num" : undefined}>{numeric.has(c) ? fmtKey(c, reduce(it.ix.map((i) => rows[i][c]).filter(isNum), view.summary)) : ""}</td>)}
@@ -413,7 +421,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
               const r = rows[it.i];
               return (
                 <tr key={`r${it.i}`} className={`clickable${it.sub ? " sub" : ""}`} data-sel={sel === it.i} tabIndex={0} onClick={() => setSel(it.i)} onKeyDown={(e) => { if (e.key === "Enter") setSel(it.i); }}>
-                  {bulk ? <td className="dt-chk" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${String(r.ticker ?? it.i + 1)}`} checked={picked.has(it.i)} onChange={() => setPicked((p) => { const n = new Set(p); if (n.has(it.i)) n.delete(it.i); else n.add(it.i); return n; })} /></td> : null}
+                  {selectable ? <td className="dt-chk" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${String(r.ticker ?? it.i + 1)}`} checked={picked.has(it.i)} onChange={() => setPicked((p) => { const n = new Set(p); if (n.has(it.i)) n.delete(it.i); else n.add(it.i); return n; })} /></td> : null}
                   {cols.map((c, j) => (
                     <td key={c} className={`${numeric.has(c) ? "r num" : ""}${j === 0 ? " strong" : ""}${flash[`${it.i}:${c}`] !== undefined ? " flash" : ""}${hatch && (r[c] === null || r[c] === undefined || r[c] === "Unknown") ? " unk" : ""}`} style={{ ...cellStyle(c, r[c]), ...colStyle(c) }}>{render(r, it.i, c)}</td>
                   ))}
@@ -421,12 +429,12 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
                 </tr>
               );
             })}
-            {virtual && windowRows.length ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0) + (bulk ? 1 : 0)} style={{ height: Math.max(0, virtualizer.getTotalSize() - windowRows[windowRows.length - 1].end), padding: 0, border: 0 }} /></tr> : null}
+            {virtual && windowRows.length ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0) + (selectable ? 1 : 0)} style={{ height: Math.max(0, virtualizer.getTotalSize() - windowRows[windowRows.length - 1].end), padding: 0, border: 0 }} /></tr> : null}
           </tbody>
           {rows.length > 3 && numeric.size ? (
             <tfoot>
               <tr className="dt-foot">
-                {bulk ? <td /> : null}
+                {selectable ? <td /> : null}
                 {cols.map((c, j) => <td key={c} className={numeric.has(c) ? "r num" : undefined} style={colStyle(c)}>{j === 0 ? "Median" : numeric.has(c) && !isPKey(c) ? numText(c, reduce(rows.map((r) => r[c]).filter(isNum), "median")) : ""}</td>)}
                 {rowActions ? <td /> : null}
               </tr>

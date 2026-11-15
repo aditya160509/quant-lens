@@ -15,7 +15,8 @@ import { Spark } from "@/charts/RankList";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { isNum } from "@/modules/research/format";
 import { Chip, Segmented } from "@/workspace/ui";
-import { pdfUrl, useBars, useBarsMany, useCompare, useLookup, usePeHistory, useStatements, type Lookup, type Stat } from "./QuickLookData";
+import { ComparePanel, type CompareTab } from "./Compare";
+import { pdfUrl, useBars, useLookup, usePeHistory, useStatements, type Lookup, type Stat } from "./QuickLookData";
 import "./quicklook.css";
 
 export const MAX_COMPARE = 8;
@@ -34,11 +35,14 @@ type QuickLookStore = {
   setRange: (range: string) => void;
   toggleBasket: (ticker: string) => void;
   setBasket: (tickers: string[]) => void;
+  ctab: CompareTab;
+  setCtab: (tab: CompareTab) => void;
 };
 
 /** One drawer for the whole workspace: any table, chart or search row opens a name with `openQuickLook(ticker)`. */
 export const useQuickLook = create<QuickLookStore>()((set) => ({
-  ticker: null, tab: "overview", range: "1Y", basket: [], full: false,
+  ticker: null, tab: "overview", range: "1Y", basket: [], full: false, ctab: "price",
+  setCtab: (ctab) => set({ ctab }),
   setFull: (full) => set({ full }),
   open: (ticker, tab) => set((s) => ({ ticker: ticker.toUpperCase(), tab: tab ?? (s.ticker === ticker.toUpperCase() ? s.tab : "overview") })),
   close: () => set({ ticker: null, full: false }),
@@ -49,6 +53,14 @@ export const useQuickLook = create<QuickLookStore>()((set) => ({
 }));
 
 export const openQuickLook = (ticker: string, tab?: QuickTab) => useQuickLook.getState().open(ticker, tab);
+/** Opens the full-page compare view on exactly these names. */
+export const openCompare = (tickers: string[], ctab?: CompareTab) => {
+  const s = useQuickLook.getState();
+  s.setBasket(tickers);
+  if (ctab) s.setCtab(ctab);
+  s.open(tickers[0], "compare");
+  s.setFull(true);
+};
 
 const UNKNOWN = "Unknown";
 const pctText = (v: number | null | undefined, d = 1) => (isNum(v) ? `${(v * 100).toFixed(d)}%` : UNKNOWN);
@@ -74,7 +86,7 @@ function addToScreen(ticker: string) {
 }
 
 export function QuickLook() {
-  const { ticker, tab, basket, full, close, setTab, setFull, toggleBasket } = useQuickLook();
+  const { ticker, tab, basket, full, ctab, close, setTab, setFull, toggleBasket } = useQuickLook();
   const q = useLookup(ticker);
   const ref = useRef<HTMLElement>(null);
   const isOpen = ticker !== null;
@@ -91,15 +103,18 @@ export function QuickLook() {
   // The open name lives in the URL (?stock=XOM, &view=full) so a stock page can be linked and reloaded.
   useEffect(() => {
     const p = new URLSearchParams(location.search);
-    const t = p.get("stock");
-    if (t) { useQuickLook.getState().open(t); setFull(p.get("view") === "full"); }
+    const t = p.get("stock"), cmp = p.get("compare")?.split(",").filter(Boolean);
+    if (cmp && cmp.length > 1) openCompare(cmp, (p.get("ctab") as CompareTab | null) ?? undefined);
+    else if (t) { useQuickLook.getState().open(t); setFull(p.get("view") === "full"); }
   }, [setFull]);
   useEffect(() => {
     const u = new URL(location.href);
     if (ticker) u.searchParams.set("stock", ticker); else u.searchParams.delete("stock");
     if (ticker && full) u.searchParams.set("view", "full"); else u.searchParams.delete("view");
+    // An open compare is shareable: its names and tab ride in the URL.
+    if (ticker && tab === "compare" && basket.length > 1) { u.searchParams.set("compare", basket.join(",")); u.searchParams.set("ctab", ctab); } else { u.searchParams.delete("compare"); u.searchParams.delete("ctab"); }
     if (u.href !== location.href) history.replaceState(history.state, "", u);
-  }, [ticker, full]);
+  }, [ticker, full, tab, basket, ctab]);
 
   if (!ticker) return null;
   const d = q.data;
@@ -365,62 +380,6 @@ function Financials({ d }: { d: Lookup }) {
             </table>
           </div>
         ) : <p className="ql-none">No statements held for {d.ticker}</p>}
-    </>
-  );
-}
-
-const CMP_LABEL: Record<string, string> = { price: "Price", market_cap: "Mkt cap", return_1m: "1M return", return_12m: "12M return", trailing_pe: "P/E", pb_ratio: "P/B", ev_ebitda: "EV/EBITDA", fcf_yield: "FCF yield", roe: "ROE", net_margin: "Net margin", debt_equity: "Debt / equity", revenue_growth_yoy: "Rev growth", realized_vol_63d: "Volatility 63d", beta_252: "Beta", core_quant_score: "Score", valuation_percentile: "Valuation", quality_percentile: "Quality", momentum_percentile: "Momentum", low_vol_percentile: "Low volatility" };
-const CMP_PCT = new Set(["return_1m", "return_12m", "fcf_yield", "roe", "net_margin", "revenue_growth_yoy", "realized_vol_63d"]);
-const CMP_WHOLE = new Set(["core_quant_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile"]);
-
-// Which way is better per metric; unlisted rows (price, size) get no highlight.
-const CMP_LOWER = new Set(["trailing_pe", "pb_ratio", "ev_ebitda", "debt_equity", "realized_vol_63d", "beta_252"]);
-const CMP_HIGHER = new Set(["return_1m", "return_12m", "fcf_yield", "roe", "net_margin", "revenue_growth_yoy", ...CMP_WHOLE]);
-
-/** Each name's close rebased to 100 at the start of the range, so paths compare directly. */
-function CompareChart({ tickers }: { tickers: string[] }) {
-  const range = useQuickLook((s) => s.range);
-  const qs = useBarsMany(tickers, RANGE_DAYS[range] ?? 365);
-  const data = useMemo(() => {
-    const by = new Map<string, Record<string, number | string>>();
-    qs.forEach((q, i) => {
-      const bars = q.data?.bars ?? [];
-      const base = bars.find((b) => b.close > 0)?.close;
-      if (base) bars.forEach((b) => { const r = by.get(b.time) ?? { date: b.time }; r[tickers[i]] = (b.close / base) * 100; by.set(b.time, r); });
-    });
-    return [...by.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  }, [qs, tickers]);
-  if (data.length < 2) return qs.some((q) => q.isLoading) ? <p className="ql-state" role="status">Loading</p> : null;
-  return <TimeSeries data={data} series={tickers.map((t) => ({ key: t, label: t }))} height={240} refLines={[{ y: 100, label: "" }]} format={(v) => v.toFixed(0)} directLabels />;
-}
-
-function ComparePanel() {
-  const { basket, toggleBasket, setBasket, open } = useQuickLook();
-  const q = useCompare(basket);
-  const tone = (c: string, v: unknown, rows: Record<string, unknown>[]) => {
-    const dir = CMP_LOWER.has(c) ? -1 : CMP_HIGHER.has(c) ? 1 : 0;
-    const vals = rows.map((r) => r[c]).filter(isNum);
-    if (!dir || !isNum(v) || vals.length < 2 || Math.max(...vals) === Math.min(...vals)) return "";
-    return v === (dir > 0 ? Math.max : Math.min)(...vals) ? " ql-best" : v === (dir > 0 ? Math.min : Math.max)(...vals) ? " ql-worst" : "";
-  };
-  if (basket.length < 2) return <p className="ql-none">Add at least two names to compare{basket.length ? `, ${basket[0]} is in` : ""}</p>;
-  const cell = (c: string, v: unknown): ReactNode => (!isNum(v) ? UNKNOWN : CMP_PCT.has(c) ? pctText(v) : c === "market_cap" ? big(v) : CMP_WHOLE.has(c) ? v.toFixed(0) : numText(v));
-  return (
-    <>
-      <div className="ql-bar-row"><span className="ql-sub">{basket.length} of {MAX_COMPARE} names</span><button className="btn sm ghost" onClick={() => setBasket([])}>Clear</button></div>
-      <CompareChart tickers={basket} />
-      {q.isLoading ? <p className="ql-state" role="status">Loading</p> : q.error ? <p className="ql-state err" role="alert">{(q.error as Error).message}</p> : q.data ? (
-        <div className="ql-scroll">
-          <table className="ql-table ql-cmp">
-            <thead><tr><th>Metric</th>{q.data.rows.map((r) => <th key={r.ticker} className="r"><button className="ql-link" onClick={() => open(r.ticker, "overview")}>{r.ticker}</button><button className="ql-x" aria-label={`Remove ${r.ticker}`} onClick={() => toggleBasket(r.ticker)}><X size={10} /></button></th>)}</tr></thead>
-            <tbody>
-              <tr><td>Name</td>{q.data.rows.map((r) => <td key={r.ticker} className="r ql-nm">{r.company_name ?? UNKNOWN}</td>)}</tr>
-              <tr><td>Sector</td>{q.data.rows.map((r) => <td key={r.ticker} className="r ql-nm">{r.sector ?? UNKNOWN}</td>)}</tr>
-              {q.data.columns.map((c) => <tr key={c}><td>{CMP_LABEL[c] ?? c}</td>{q.data!.rows.map((r) => <td key={r.ticker} className={`r num${tone(c, r[c], q.data!.rows)}`}>{cell(c, r[c])}</td>)}</tr>)}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
     </>
   );
 }

@@ -228,7 +228,13 @@ def compare(tickers: list[str]) -> dict[str, Any]:
     if missing:
         raise KeyError(f"Not in the universe we hold: {', '.join(missing)}")
     rows = p.set_index("ticker").loc[symbols]
-    return clean_json({"as_of": str(p.attrs.get("as_of_date")), "columns": COMPARE_COLUMNS,
+    cols = [c for c in COMPARE_COLUMNS if c in p]
+    num = p[cols].apply(pd.to_numeric, errors="coerce")
+    # Reference rows: the median of each compared name's sector, then of every name we hold.
+    sectors = list(dict.fromkeys(x for x in rows["sector"] if isinstance(x, str) and x))
+    medians = [{"label": f"{sec} median", "n": int(p.sector.eq(sec).sum()), **{c: number_like(num.loc[p.sector.eq(sec), c].median()) for c in cols}} for sec in sectors]
+    medians.append({"label": "All names median", "n": len(p), **{c: number_like(num[c].median()) for c in cols}})
+    return clean_json({"as_of": str(p.attrs.get("as_of_date")), "columns": COMPARE_COLUMNS, "medians": medians,
                        "rows": [{"ticker": s, "company_name": rows.loc[s, "company_name"] or None, "sector": rows.loc[s, "sector"] or None, **{c: number_like(rows.loc[s, c]) if c in rows else None for c in COMPARE_COLUMNS}} for s in symbols]})
 
 
