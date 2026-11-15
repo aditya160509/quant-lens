@@ -1,6 +1,18 @@
 """Shared, typed Screener V2 input declarations for the backend manifest."""
 
 
+# Finance abbreviations read as traders write them: "pe_min" is "P/E Min", not "Pe Min".
+_WORDS = {'pe': 'P/E', 'pb': 'P/B', 'ps': 'P/S', 'pcf': 'P/CF', 'roe': 'ROE', 'roa': 'ROA', 'roic': 'ROIC', 'rsi': 'RSI',
+          'eps': 'EPS', 'yoy': 'YoY', 'ev': 'EV', 'ebit': 'EBIT', 'ebitda': 'EBITDA', 'fcf': 'FCF', 'atr': 'ATR', 'adx': 'ADX',
+          'macd': 'MACD', 'obv': 'OBV', 'sma': 'SMA', 'ema': 'EMA', 'cagr': 'CAGR', 'ocf': 'OCF', 'gpa': 'GP/A', 'ivol': 'IVOL',
+          'usd': 'USD', 'etf': 'ETF', 'csv': 'CSV', 'id': 'ID', 'pbo': 'PBO', 'bps': 'bps'}
+
+
+def _label(key):
+    text = ' '.join(_WORDS.get(w, w.title()) for w in key.replace('p_cf', 'pcf').split('_'))
+    return text.replace('EV EBITDA', 'EV/EBITDA').replace('EV EBIT', 'EV/EBIT').replace('EV Sales', 'EV/Sales')
+
+
 def field(key, type='text', default=None, group='Specification', help='', **constraints):
     if key in {'max_symbols', 'top_n', 'card_limit', 'strategy_perf_limit'}:
         constraints = {'min': 1, 'max': 5000, **constraints}
@@ -8,7 +20,7 @@ def field(key, type='text', default=None, group='Specification', help='', **cons
         constraints = {'min': 1, 'max': 10000, **constraints}
     if key == 'transaction_cost_bps':
         constraints = {'min': 0, 'max': 999, **constraints}
-    return {'key': key, 'label': key.replace('_', ' ').title(), 'type': type, 'default': default,
+    return {'key': key, 'label': _label(key), 'type': type, 'default': default,
             'group': group, 'help': help or f'Configure {key.replace("_", " ")}.', **constraints}
 
 

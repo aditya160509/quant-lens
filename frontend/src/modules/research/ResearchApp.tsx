@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useMemo, useState, useSyncExternalStore } from "react";
-import { Bookmark, ClipboardCheck, FlaskConical, GitCompare, History, LayoutGrid, Trash2, X } from "lucide-react";
+import { Bookmark, ClipboardCheck, FlaskConical, GitCompare, History, LayoutGrid, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import { create } from "zustand";
 import { useLayout } from "@/workspace/layout";
@@ -69,6 +69,7 @@ function ResearchPanels() {
   const runs = useMemo(() => allRuns.filter((r) => owns(r.featureId)), [allRuns]);
   const animate = useLayout((s) => s.animate);
   const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia("(max-width: 760px)").matches, () => false);
+  const sheet = useRef<HTMLDialogElement>(null);
   const shownJob = useSearchParams()?.get("run") ?? (featureId ? runs.find((r) => r.featureId === featureId)?.jobId ?? null : null);
   useBackgroundRuns(manifest.data, shownJob, verdictFor);
   useDoneInTitle(runs);
@@ -169,11 +170,16 @@ function ResearchPanels() {
   if (narrow) {
     return (
       <div className="ws-mobile">
-        <select className="input" aria-label="Page" value={special ? pageHref(special) : feature ? featureHref(feature.id) : L.root} onChange={(e) => router.push(e.target.value)}>
-          <option value={L.root}>Overview</option>
-          {L.pages.map((p) => <option key={p.id} value={pageHref(p)}>{p.label}</option>)}
-        </select>
+        <div className="ws-mobile-bar">
+          <select className="input" aria-label="Page" value={special ? pageHref(special) : feature ? featureHref(feature.id) : L.root} onChange={(e) => router.push(e.target.value)}>
+            <option value={L.root}>Overview</option>
+            {L.pages.map((p) => <option key={p.id} value={pageHref(p)}>{p.label}</option>)}
+          </select>
+          {feature ? <button type="button" className="btn" onClick={() => sheet.current?.showModal()}><SlidersHorizontal size={14} />Settings</button> : null}
+        </div>
         <div style={{ flex: 1, minHeight: 0, display: "flex" }}>{center}</div>
+        {/* Filter sheet: the inspector slides up from the bottom; tap outside or Esc to close. */}
+        {feature ? <dialog ref={sheet} className="ws-sheet" aria-label="Settings" onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}><InspectorHost feature={feature} settings /></dialog> : null}
       </div>
     );
   }
@@ -423,10 +429,10 @@ function RunsPill({ runs }: { runs: RunRecord[] }) {
   );
 }
 
-function InspectorHost({ feature }: { feature: FeatureSpec }) {
+function InspectorHost({ feature, settings = false }: { feature: FeatureSpec; settings?: boolean }) {
   const run = useActiveRun((s) => s.run);
   if (!run) return <div className="island" />;
-  return <Inspector feature={feature} run={run} />;
+  return <Inspector feature={feature} run={run} initial={settings ? "study" : null} />;
 }
 
 function ErrorState({ message, onRetry, busy = false }: { message: string; onRetry: () => void; busy?: boolean }) {

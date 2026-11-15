@@ -56,6 +56,8 @@ def simulate(prices: pd.DataFrame, score_at: Callable, top_n: int = 50,
     # Arrays, not Series, in the daily loop: same elementwise operations and the same NumPy sums
     # pandas uses for float Series, so every number is unchanged.
     values, columns, dates = prices.to_numpy(), prices.columns, prices.index
+    # Index of each ticker's last observed close; a NaN after it is a delisting, not a gap.
+    last_pos = len(values) - 1 - np.argmax(~np.isnan(values[::-1]), axis=0)
     weights = np.zeros(len(columns))
     equity = 1.0
     curve, trades, positions = [], [], []
@@ -69,6 +71,17 @@ def simulate(prices: pd.DataFrame, score_at: Callable, top_n: int = 50,
             episodes[ticker]["cost_contribution"] += fee
     for i in range(start + 1, len(prices)):
         held = weights != 0
+        gone = held & np.isnan(values[i]) & (last_pos < i)
+        if gone.any():
+            # Delisted (an acquisition, say): the position settles at its last close and the proceeds sit in cash.
+            for j in np.flatnonzero(gone):
+                episode = episodes.pop(columns[j], None)
+                if episode:
+                    episode.update(exit_date=dates[last_pos[j]], exit_price=float(values[last_pos[j], j]), status="delisted")
+                    episode["price_return"] = episode["direction"] * (episode["exit_price"] / episode["entry_price"] - 1)
+                    positions.append(episode)
+            weights = np.where(gone, 0.0, weights)
+            held = weights != 0
         if held.any() and (np.isnan(values[i, held]).any() or np.isnan(values[i - 1, held]).any()):
             raise ValueError(f'Missing observed price for held position on {dates[i].date()}; no stale-price substitution')
         returns = values[i] / values[i - 1] - 1
@@ -83,6 +96,15 @@ def simulate(prices: pd.DataFrame, score_at: Callable, top_n: int = 50,
         cost = 0.0
         if i in pending:
             target, formation = pending[i]
+            delisted = (target != 0) & np.isnan(values[i]) & (last_pos < i)
+            if delisted.any():
+                # Delisted before it could be bought: its weight goes to the rest of its side.
+                target = target.copy()
+                for side in (target > 0, target < 0):
+                    total, kept = target[side].sum(), side & ~delisted
+                    target[side & delisted] = 0
+                    if kept.any():
+                        target[kept] *= total / target[kept].sum()
             if np.isnan(values[i][target != 0]).any():
                 raise ValueError(f"Missing execution price on {dates[i].date()}")
             # Cost fraction c solves c = k * sum(|(1-c)target - drifted|).

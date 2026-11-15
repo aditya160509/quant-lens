@@ -1,0 +1,13 @@
+.share { min-height: 100vh; background: var(--bg); color: var(--text); }
+.share-top { display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+.share-brand { font-weight: 650; letter-spacing: -0.01em; color: var(--text); text-decoration: none; }
+.share-main { max-width: 1200px; margin: 0 auto; padding: 32px 24px 48px; display: grid; gap: 20px; }
+.share.embed .share-main { padding: 16px; max-width: none; }
+.share-head h1 { margin: 0; font-size: 28px; font-weight: 650; letter-spacing: -0.02em; }
+.share-head p { margin: 6px 0 0; color: var(--text-3); font-size: 13px; }
+.share-table { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); }
+.share-skel { display: grid; gap: 12px; }
+.share-skel i { display: block; height: 28px; }
+.share-skel i:first-child { width: 40%; height: 34px; }
+.share-skel i:last-child { height: 360px; }
+@media (max-width: 640px) { .share-main { padding: 20px 16px 32px; } .share-head h1 { font-size: 22px; } }

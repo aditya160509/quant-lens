@@ -84,6 +84,15 @@ const writeNum = (f: NumFmt, v: number) => f.style === "percent" ? `${(v * 100).
   : new Intl.NumberFormat("en-US", f.style === "compact" ? { notation: "compact", maximumFractionDigits: f.dp } : f.style === "usd" ? { style: "currency", currency: "USD", notation: Math.abs(v) >= 1e6 ? "compact" : "standard", maximumFractionDigits: f.dp } : { minimumFractionDigits: f.dp, maximumFractionDigits: f.dp }).format(v);
 
 /** Table of rows. With `opts.viewKey` the arrangement (columns, sort, formats, grouping) is shared with the URL and can be saved; `opts.detail` fills the row drawer. */
+/** Status words a trader uses, as pale-tinted pills: the column's raw value maps to the word and its tone. */
+const STATUS_COLS = new Set(["status", "event", "type", "change", "state"]);
+const STATUS: Record<string, [string, "green" | "red" | "amber" | "grey"]> = {
+  entered: ["New", "green"], new: ["New", "green"], added: ["New", "green"], passed: ["Passed", "green"], pass: ["Passed", "green"],
+  exited: ["Dropped", "red"], left: ["Dropped", "red"], dropped: ["Dropped", "red"], removed: ["Dropped", "red"], failed: ["Failed", "red"],
+  near_miss: ["Near miss", "amber"], "near miss": ["Near miss", "amber"], delisted: ["Delisted", "amber"], stale: ["Stale", "amber"],
+  rank_shift: ["Moved", "grey"], moved: ["Moved", "grey"], open: ["Held", "grey"], held: ["Held", "grey"], closed: ["Closed", "grey"],
+};
+
 export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<string, unknown> }) {
   const viewKey = opts?.viewKey as string | undefined;
   // Lead columns (ticker, company) start frozen.
@@ -164,7 +173,9 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / max) - 1));
   const shown = order2.slice(currentPage * max, (currentPage + 1) * max);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const numeric = new Set(cols.filter((c) => rows.some((r) => isNum(r[c]))));
+  const numeric = useMemo(() => new Set(cols.filter((c) => rows.some((r) => isNum(r[c])))), [rows, cols]);
+  // The footer's medians: computed once per data change, not on every scroll frame.
+  const medians = useMemo(() => Object.fromEntries([...numeric].filter((c) => !isPKey(c)).map((c) => [c, reduce(rows.map((r) => r[c]).filter(isNum), "median")])), [rows, numeric]);
   const bound = useMemo(() => {
     const m: Record<string, number> = {};
     cols.forEach((c) => { if (numeric.has(c) && !isPKey(c)) m[c] = Math.max(1e-12, ...rows.map((r) => (isNum(r[c]) ? Math.abs(r[c]) : 0))); });
@@ -257,6 +268,9 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const windowRows = virtual ? virtualizer.getVirtualItems() : [];
   const visibleItems = virtual ? windowRows.map((row) => ({ item: items[row.index], index: row.index })) : items.map((item, index) => ({ item, index }));
   const changePage = (next: number) => { setPage(next); setSel(null); if (scrollRef.current) scrollRef.current.scrollTop = 0; };
+  // Rendered rows, reused while scrolling: only rows entering the window are built. Any input a row reads resets it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const rowCache = useMemo(() => new Map<string, ReactNode>(), [rows, cols, view, range, cut, flash, sel, picked, lefts, numeric, hatch, rowActions, selectable, bars]);
   if (!source.length) return <Empty />;
   const render = (r: Row, i: number, c: string) => {
     const v = r[c];
@@ -264,6 +278,8 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
     const f = view.fmt[c];
     const width = f?.mode === "bar" && isNum(v) && range[c] ? (range[c][1] > range[c][0] ? ((v - range[c][0]) / (range[c][1] - range[c][0])) * 100 : 50) : (view.pct[c] || bars?.includes(c)) && isNum(v) ? v : null;
     const content = c === "shape" && Array.isArray(v) ? <Snowflake values={v as (number | null)[]} /> : width !== null && isNum(v) ? <span className="pbar"><i style={{ width: `${Math.max(0, Math.min(100, width))}%` }} />{view.pct[c] ? Math.round(v) : numText(c, v)}</span> : Array.isArray(v) && v.length > 1 && v.every(isNum) ? <Spark values={v} /> : FLAG_KEYS.includes(c) ? <FlagChip k={c} v={v} /> : isTKey(c) && isNum(v) ? <TBar t={v} /> : v === null || v === undefined || v === "" ? <span className="miss">—</span> : numText(c, v);
+    const st = STATUS_COLS.has(c) && typeof v === "string" ? STATUS[v.toLowerCase()] : undefined;
+    if (st) return <span className={`st-pill ${st[1]}`}>{st[0]}</span>;
     if (c === "sector" && typeof v === "string" && v) return <span className="sec-pill" style={{ "--h": hue(v) } as CSSProperties}>{v}</span>;
     if (c === "company_name" && typeof v === "string") return <span className="co-name" title={v}>{v}</span>;
     return <>{c === "ticker" && typeof v === "string" ? <button type="button" className="tk-link" onClick={(e) => { e.stopPropagation(); openQuickLook(v); }}><span className="mono-tile" aria-hidden style={{ "--h": hue(v) } as CSSProperties}>{v.replace(/[^A-Z0-9]/gi, "").slice(0, 2)}</span>{content}</button> : content}{d ? <span className={`dl ${d > 0 ? "up" : "down"}`} aria-label={d > 0 ? "up" : "down"}>{d > 0 ? "▲" : "▼"}</span> : null}</>;
@@ -419,8 +435,11 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
                   </tr>
                 );
               }
+              const ck = `${it.i}:${it.sub ? 1 : 0}`;
+              const cached = rowCache.get(ck);
+              if (cached) return cached;
               const r = rows[it.i];
-              return (
+              const el = (
                 <tr key={`r${it.i}`} className={`clickable${it.sub ? " sub" : ""}`} data-sel={sel === it.i} tabIndex={0} onClick={() => setSel(it.i)} onKeyDown={(e) => { if (e.key === "Enter") setSel(it.i); }}>
                   {selectable ? <td className="dt-chk" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${String(r.ticker ?? it.i + 1)}`} checked={picked.has(it.i)} onChange={() => setPicked((p) => { const n = new Set(p); if (n.has(it.i)) n.delete(it.i); else n.add(it.i); return n; })} /></td> : null}
                   {cols.map((c, j) => (
@@ -429,6 +448,8 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
                   {rowActions ? <td className="ra" onClick={(e) => e.stopPropagation()}>{rowActions(r)}</td> : null}
                 </tr>
               );
+              rowCache.set(ck, el);
+              return el;
             })}
             {virtual && windowRows.length ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0) + (selectable ? 1 : 0)} style={{ height: Math.max(0, virtualizer.getTotalSize() - windowRows[windowRows.length - 1].end), padding: 0, border: 0 }} /></tr> : null}
           </tbody>
@@ -436,7 +457,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
             <tfoot>
               <tr className="dt-foot">
                 {selectable ? <td /> : null}
-                {cols.map((c, j) => <td key={c} className={numeric.has(c) ? "r num" : undefined} style={colStyle(c)}>{j === 0 ? "Median" : numeric.has(c) && !isPKey(c) ? numText(c, reduce(rows.map((r) => r[c]).filter(isNum), "median")) : ""}</td>)}
+                {cols.map((c, j) => <td key={c} className={numeric.has(c) ? "r num" : undefined} style={colStyle(c)}>{j === 0 ? "Median" : c in medians ? numText(c, medians[c]) : ""}</td>)}
                 {rowActions ? <td /> : null}
               </tr>
             </tfoot>

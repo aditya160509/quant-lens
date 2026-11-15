@@ -37,7 +37,7 @@ export default function GlobalLayout({ children }) {
     ];
 
     // Workspace modules render their own full-screen chrome and command palette
-    const isWorkspace = ['/research', '/ml', '/screener'].some((p) => pathname?.startsWith(p));
+    const isWorkspace = ['/research', '/ml', '/screener', '/share'].some((p) => pathname?.startsWith(p));
 
     return (
         <div className="min-h-screen flex flex-col bg-terminal-black text-terminal-text font-sans selection:bg-terminal-yellow selection:text-terminal-black">

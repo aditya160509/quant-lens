@@ -44,6 +44,12 @@ export type ExploreConfig = {
   fn?: Fn;
   /** Chart and table side by side. */
   split?: boolean;
+  /** Time charts: only the last N days. */
+  range?: number;
+  /** A marked level drawn across the chart, with its note. */
+  ref?: { y: number; note?: string };
+  /** One accent colour for every series instead of the palette. */
+  mono?: boolean;
 };
 
 /** Column roles by name, so defaults pick the estimate and not its standard error or bounds. */
@@ -212,8 +218,15 @@ function pivot(rows: Row[], rowKey: string, colKey: string, y: string, fn: Fn): 
 }
 
 function ExploreOne({ rows, config }: { rows: Row[]; config: ExploreConfig }) {
-  const { kind, x, ys = [], group, sort = "none", limit, transform } = config;
-  const data = useMemo(() => transformed(rows, ys, transform), [rows, ys, transform]);
+  const { kind, x, ys = [], group, sort = "none", limit, transform, range } = config;
+  const data = useMemo(() => {
+    const p = profile(rows), xKey = x ?? "date";
+    const dated = rows.filter((r) => typeof r[xKey] === "string");
+    const last = range && p[xKey] === "date" && dated.length ? Math.max(...dated.map((r) => Date.parse(String(r[xKey])))) : null;
+    const kept = last ? rows.filter((r) => Date.parse(String(r[xKey])) >= last - range! * 86_400_000) : rows;
+    return transformed(kept, ys, transform);
+  }, [rows, ys, transform, range, x]);
+  const marks = config.ref ? [{ y: config.ref.y, label: config.ref.note ?? "", dash: true, color: "var(--warn)" }] : [];
   if (!rows.length) return null;
 
   if (kind === "table") return <DataTable rows={rows} />;
@@ -226,8 +239,8 @@ function ExploreOne({ rows, config }: { rows: Row[]; config: ExploreConfig }) {
       const band = ys.length === 1 && (!transform || transform === "none") ? bandFor(cols, ys[0]) : undefined;
       const sig = cols.find((c) => p[c] === "bool" && /signif|reject|pass/i.test(c));
       return <TimeSeries data={data} x={xKey} height={config.facet ? 180 : 280} zeroFill={config.zeroFill}
-        series={ys.map((y) => ({ key: y, label: seriesLabel(y), kind, dash: y.endsWith(" · B") }))} band={band}
-        highlight={sig} refLines={transform === "rebase" ? [{ y: 100, dash: true }] : transform === "log" ? undefined : [{ y: 0, dash: false, color: "var(--line-3)" }]} />;
+        series={ys.map((y) => ({ key: y, label: seriesLabel(y), kind, dash: y.endsWith(" · B"), ...(config.mono ? { color: "var(--accent)" } : {}) }))} band={band}
+        highlight={sig} refLines={[...(transform === "rebase" ? [{ y: 100, dash: true }] : transform === "log" ? [] : [{ y: 0, dash: false, color: "var(--line-3)" }]), ...marks]} />;
     }
     // Numeric x: ordered line through the points.
     const sorted = [...data].filter((r) => isNum(r[xKey])).sort((a, b) => (a[xKey] as number) - (b[xKey] as number));
@@ -288,19 +301,19 @@ function ExploreOne({ rows, config }: { rows: Row[]; config: ExploreConfig }) {
 }
 
 /** Column and transform pickers for the chosen view. */
-export function ExploreControls({ rows, config, onChange }: { rows: Row[]; config: ExploreConfig; onChange: (c: ExploreConfig) => void }) {
-  const [open, setOpen] = useState(false);
+export function ExploreControls({ rows, config, onChange, startOpen = false }: { rows: Row[]; config: ExploreConfig; onChange: (c: ExploreConfig) => void; startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
   const p = profile(rows);
   const cols = Object.keys(p);
   const nums = cols.filter((c) => p[c] === "number");
   const cats = cols.filter((c) => p[c] !== "number");
   const k = config.kind;
-  const sel = (name: string, value: string | undefined, options: string[], set: (v: string | undefined) => void, allowNone = false) => (
+  const sel = (name: string, value: string | undefined, options: string[], set: (v: string | undefined) => void, allowNone = false, names?: Record<string, string>) => (
     <label className="xc">
       <span>{name}</span>
       <select value={value ?? ""} onChange={(e) => set(e.target.value || undefined)}>
-        {allowNone ? <option value="">None</option> : null}
-        {options.map((o) => <option key={o} value={o}>{label(o)}</option>)}
+        {allowNone ? <option value="">{names ? "All" : "None"}</option> : null}
+        {options.map((o) => <option key={o} value={o}>{names?.[o] ?? label(o)}</option>)}
       </select>
     </label>
   );
@@ -332,6 +345,14 @@ export function ExploreControls({ rows, config, onChange }: { rows: Row[]; confi
         </div>
       </div>}
       {k === "line" || k === "area" || k === "step" ? sel("Transform", config.transform ?? "none", ["none", "cumulative", "rebase", "zscore", "rank", "log"], (v) => onChange({ ...config, transform: (v ?? "none") as ExploreConfig["transform"] })) : null}
+      {(k === "line" || k === "area" || k === "step") && profile(rows)[config.x ?? "date"] === "date" ? sel("Range", config.range ? String(config.range) : "", ["30", "91", "182", "365", "1095", "1825"], (v) => onChange({ ...config, range: v ? Number(v) : undefined }), true, { 30: "1M", 91: "3M", 182: "6M", 365: "1Y", 1095: "3Y", 1825: "5Y" }) : null}
+      {k === "line" || k === "area" || k === "step" ? (
+        <label className="xc"><span>Mark a level</span><span className="xc-pair">
+          <input className="input xc-num" type="number" step="any" aria-label="Level" value={config.ref?.y ?? ""} onChange={(e) => onChange({ ...config, ref: e.target.value === "" ? undefined : { y: Number(e.target.value), note: config.ref?.note } })} />
+          {config.ref ? <input className="input" aria-label="Note" placeholder="Note" value={config.ref.note ?? ""} onChange={(e) => onChange({ ...config, ref: { y: config.ref!.y, note: e.target.value || undefined } })} /> : null}
+        </span></label>
+      ) : null}
+      {k === "line" || k === "area" || k === "step" ? <label className="xc"><span>Colour</span><button type="button" className="pill" aria-pressed={Boolean(config.mono)} onClick={() => onChange({ ...config, mono: !config.mono })}>One colour</button></label> : null}
       {k === "area" ? (
         <label className="xc"><span>Fill</span><button type="button" className="pill" aria-pressed={Boolean(config.zeroFill)} onClick={() => onChange({ ...config, zeroFill: !config.zeroFill })}>Green / red at zero</button></label>
       ) : null}

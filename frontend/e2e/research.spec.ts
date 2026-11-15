@@ -7,7 +7,7 @@ import { expect, test } from "playwright/test";
  * Run with `npm run test:e2e:labs` (one worker: parallel first loads on the dev server race the page switch).
  * Update baselines with: npm run test:e2e:labs -- --update-snapshots
  */
-const PAGES = ["/research", "/research/signal", "/research/report", "/research/canonical", "/ml", "/ml/cpcv", "/ml/validate", "/ml/studio", "/screener", "/screener/screen", "/screener/composite", "/screener/backtest", "/screener/alerts"];
+const PAGES = ["/research", "/research/signal", "/research/report", "/research/canonical", "/ml", "/ml/cpcv", "/ml/validate", "/ml/studio", "/screener", "/screener/screen", "/screener/composite", "/screener/backtest", "/screener/alerts", "/screener/saved", "/screener/more"];
 
 for (const scheme of ["dark", "light"] as const) {
   test.describe(`research ${scheme}`, () => {

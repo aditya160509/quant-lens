@@ -50,7 +50,8 @@ export const useTableViews = create<{ live: Record<string, TableView>; set: (key
 export function useTableView(key: string | undefined, initial: Partial<TableView>): [TableView, (next: (v: TableView) => TableView) => void] {
   const [local, setLocal] = useState<TableView>({ ...EMPTY_VIEW, ...initial });
   const stored = useTableViews((s) => (key ? s.live[key] : undefined));
-  const view = key ? stored ?? { ...EMPTY_VIEW, ...initial } : local;
+  // The local state doubles as the stable default, so a keyed table with nothing stored keeps one view object.
+  const view = key ? stored ?? local : local;
   const update = (next: (v: TableView) => TableView) => (key ? useTableViews.getState().set(key, next(view)) : setLocal(next));
   return [view, update];
 }

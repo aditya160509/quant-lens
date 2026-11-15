@@ -87,7 +87,10 @@ function screenHero(r: FeatureResult): HeroSpec | null {
 function rankHero(r: FeatureResult): HeroSpec | null {
   const rows = out(r, "composite_score_universe_ranking").filter((x) => isNum(x.composite_score) && typeof x.ticker === "string").sort((a, b) => (b.composite_score as number) - (a.composite_score as number));
   if (!rows.length) return null;
-  return { figure: String(rows[0].ticker), versus: `leads ${rows.length.toLocaleString()} names · score ${(rows[0].composite_score as number).toFixed(0)}`, bars: rows.slice(0, 30).map((x) => ({ label: String(x.ticker), value: x.composite_score as number })) };
+  // composite_score is a percentile (a straight ramp); the raw blend shows the real gaps.
+  const v = (x: Record<string, unknown>) => (isNum(x.composite_raw_score) ? x.composite_raw_score : x.composite_score) as number;
+  const last = rows[rows.length - 1];
+  return { figure: String(rows[0].ticker), versus: `blend ${v(rows[0]).toFixed(1)} · #${rows.length} ${String(last.ticker)} ${v(last).toFixed(1)}`, bars: rows.slice(0, 30).map((x) => ({ label: String(x.ticker), value: v(x) })) };
 }
 
 /** Test hero: total return against SPY over the run, both curves drawn full width. */
@@ -118,11 +121,11 @@ function testBanner(r: FeatureResult) {
 
 const rowActions = (row: Record<string, unknown>) => (typeof row.ticker === "string" ? createElement(RowActions, { ticker: row.ticker }) : null);
 const bulk = (rows: Record<string, unknown>[], clear: () => void) => createElement(BulkActions, { rows, clear });
-const RESULT_COLUMNS = ["rank", "ticker", "company_name", "sector", "exchange", "country", "quote_currency", "data_coverage", "statement_age_days", "price", "trend_3m", "market_cap", "core_quant_score", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile", "trailing_pe", "pb_ratio", "roe", "revenue_growth_yoy", "return_1d", "return_1m", "return_6m", "qtr_sales_yoy", "qtr_profit_yoy", "realized_vol_63d", "max_drawdown_252d", "piotroski_passed", "altman_z_score"];
+export const RESULT_COLUMNS = ["rank", "ticker", "company_name", "sector", "exchange", "country", "quote_currency", "data_coverage", "statement_age_days", "price", "trend_3m", "market_cap", "core_quant_score", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile", "trailing_pe", "pb_ratio", "roe", "revenue_growth_yoy", "return_1d", "return_1m", "return_6m", "qtr_sales_yoy", "qtr_profit_yoy", "realized_vol_63d", "max_drawdown_252d", "piotroski_passed", "altman_z_score"];
 /** Percentiles drawn as bars on a 0 to 100 scale. */
-const RESULT_BARS = ["data_coverage", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile"];
+export const RESULT_BARS = ["data_coverage", "sector_relative_score", "valuation_percentile", "quality_percentile", "momentum_percentile", "low_vol_percentile"];
 /** Provenance and always-empty fields, kept out of the columns. */
-const RESULT_HIDDEN = ["currency_units_unavailable_reason", "financial_currency", "market_value_currency", "market_cap_statement_currency", "market_cap_observation_date", "market_cap_basis", "price_observation_date", "valuation_score_definition", "fundamental_basis", "enterprise_value_basis", "beta_effective_source", "beta_252_unavailable_reason", "float_percent", "forward_pe"];
+export const RESULT_HIDDEN = ["currency_units_unavailable_reason", "financial_currency", "market_value_currency", "market_cap_statement_currency", "market_cap_observation_date", "market_cap_basis", "price_observation_date", "valuation_score_definition", "fundamental_basis", "enterprise_value_basis", "beta_effective_source", "beta_252_unavailable_reason", "float_percent", "forward_pe"];
 
 const SavedPage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./saved/SavedPage"), { ssr: false });
 const MorePage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./extras/MorePage"), { ssr: false });

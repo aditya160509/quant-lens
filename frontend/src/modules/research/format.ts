@@ -9,6 +9,8 @@ const ACRONYMS: Record<string, string> = {
   mr: "MR", hhi: "HHI", aic: "AIC", bic: "BIC", smd: "SMD", twfe: "TWFE", fe: "FE", mkt: "Mkt", rf: "RF", smb: "SMB", hml: "HML",
   rmw: "RMW", cma: "CMA", dfbeta: "DFBETA", dffits: "DFFITS", ci90: "90% CI", ci: "CI", pct: "%", "5pct": "5%", "10pct": "10%",
   vs: "vs", t: "t", p: "p", auto: "auto", n: "N", jb: "JB", ff3: "FF3", mom: "Momentum", hl: "HL", ex: "ex", id: "ID",
+  roic: "ROIC", roe: "ROE", roa: "ROA", pe: "P/E", pb: "P/B", ps: "P/S", ev: "EV", ebit: "EBIT", ebitda: "EBITDA", eps: "EPS", fcf: "FCF",
+  yoy: "YoY", cagr: "CAGR", rsi: "RSI", atr: "ATR", etf: "ETF", ttm: "TTM", macd: "MACD", sma: "SMA", ema: "EMA",
 };
 
 /** snake_case to a readable label: "standard_errors" → "Standard errors", "nw_auto" → "NW auto". */
@@ -77,6 +79,8 @@ export const first = (result: FeatureResult, key: string): Row | undefined => ou
 const P_RE = /(^|_)(p|pvalue|p_value)$|p_value|^pr\(/i;
 const T_RE = /(^|_)t(_stat)?$|_t$|^t_|t_stat|z$|^stouffer_z$/i;
 const PCT_RE = /(return|spread|share|fraction|weight|coverage|power|survival|probability|drawdown|contribution|pnl|r2$|^r2|accuracy)/i;
+/** Fundamentals stored as fractions however large (EPS growth of 47 is 4,700%). */
+const FRAC_RE = /(^roic|^roe|^roa|margin|growth|yield|payout)/i;
 const INT_RE = /(months|periods|nobs|observations|count|^n$|_n$|^n_|replications|tests|assets|units|cohorts|events|donors|lag|rank|placebos|specifications|choices|length|window|holdings|pairs$)/i;
 
 export const isPKey = (k: string) => P_RE.test(k);
@@ -96,6 +100,7 @@ export function fmtKey(key: string, v: unknown): string {
   if (isPKey(key)) return pval(v);
   if (isTKey(key)) return tstat(v);
   if (INT_RE.test(key) && Number.isInteger(v)) return v.toLocaleString("en-US");
+  if (FRAC_RE.test(key)) return pct(v, Math.abs(v) >= 10 ? 0 : 1);
   if (PCT_RE.test(key) && Math.abs(v) <= 5) return pct(v, Math.abs(v) < 0.01 ? 2 : 1);
   return num(v, Math.abs(v) < 0.1 ? 4 : 3);
 }

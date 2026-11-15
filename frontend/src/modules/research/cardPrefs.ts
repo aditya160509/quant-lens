@@ -5,14 +5,14 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type { Item } from "./layouts";
 
 /** Per-feature card customisation: which outputs show, how wide, and in what order. Survives new runs. */
-export type CardPref = { hidden?: boolean; span?: number; order?: number };
+export type CardPref = { hidden?: boolean; span?: number; order?: number; copies?: number };
 type Store = {
   prefs: Record<string, Record<string, CardPref>>;
   set: (feature: string, card: string, p: Partial<CardPref>) => void;
   reset: (feature: string) => void;
 };
 
-export const cardId = (i: Item) => i.keys.join("+") + (i.view ? `:${i.view}` : "");
+export const cardId = (i: Item) => i.keys.join("+") + (i.view ? `:${i.view}` : "") + (i.copy ? `#${i.copy}` : "");
 
 export const useCardPrefs = create<Store>()(persist((set) => ({
   prefs: {},
@@ -30,6 +30,7 @@ export const useFeaturePrefs = (feature: string) => useCardPrefs((s) => s.prefs[
 /** Items in the reader's order with their chosen widths; hidden ones removed unless asked for. */
 export function arrange(items: Item[], prefs: Record<string, CardPref>, keepHidden = false): Item[] {
   return items
+    .flatMap((it) => [it, ...Array.from({ length: prefs[cardId(it)]?.copies ?? 0 }, (_, c) => ({ ...it, copy: c + 1 }))])
     .map((it, i) => ({ it, i, p: prefs[cardId(it)] ?? {} }))
     .filter(({ p }) => keepHidden || !p.hidden)
     .sort((a, b) => (a.p.order ?? a.i) - (b.p.order ?? b.i))

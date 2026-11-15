@@ -24,7 +24,7 @@ const useLens = create<{ lens: Record<string, string>; set: (id: string, view: s
     { name: "lab-card-lens", storage: createJSONStorage(() => localStorage), version: 1 }),
 );
 
-export function OutputCard({ item, feature, result, maximized, onToggleMax, onHide, onMove, onSpan, scope, index }: {
+export function OutputCard({ item, feature, result, maximized, onToggleMax, onHide, onMove, onSpan, onDuplicate, scope, index }: {
   item: Item;
   feature: FeatureSpec;
   result: FeatureResult;
@@ -33,6 +33,7 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   onHide?: () => void;
   onMove?: (d: -1 | 1) => void;
   onSpan?: (span: number) => void;
+  onDuplicate?: () => void;
   scope: string;
   /** Exhibit number on the page, for labs that number them. */
   index?: number;
@@ -41,14 +42,15 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const key = item.keys[0];
   const spec = feature.outputs.find((o) => o.key === key);
   const designed = item.view ?? spec?.render ?? "dataTable";
-  const lensId = `${feature.id}:${key}:${designed}`;
+  const dup = item.copy ? `#${item.copy}` : "";
+  const lensId = `${feature.id}:${key}:${designed}${dup}`;
   const alts = ALT_VIEWS[designed] ?? [];
   const lens = useLens((st) => st.lens[lensId]);
   const setLens = useLens((st) => st.set);
   const viewName = lens && alts.some((a) => a.view === lens) ? lens : designed;
   const rows = out(result, key);
   const isChart = CHART_VIEWS.has(viewName);
-  const cfgId = `${feature.id}:${key}:${item.view ?? ""}`;
+  const cfgId = `${feature.id}:${key}:${item.view ?? ""}${dup}`;
   const own = useExplore((st) => st.configs[cfgId]);
   const typeDefault = useExplore((st) => st.configs[`type:${viewName}`]);
   // A reader's default for this kind of output applies until they choose something for this card.
@@ -87,6 +89,9 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
   const empty = Array.isArray(raw) && raw.length === 0;
   const exportable = rows.length > 0 && !["latex", "csv", "pdf"].includes(viewName);
   const openSettings = () => { useLayout.getState().set("right", true, true); };
+  const chartKind = kinds.find((k) => k !== "table");
+  const [editing, setEditing] = useState(0);
+  const editChart = () => { if (!custom && chartKind) setCustom(cfgId, defaults(rows, chartKind)); setEditing((n) => n + 1); };
 
   return (
     <Exhibit id={key} name={title} finding={finding} hint={hint} note={item.note} flush={item.flush} bodyRef={body}
@@ -134,7 +139,8 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
         {rows.length ? <MenuItem icon={<Copy size={13} />} onClick={copy}>Copy data</MenuItem> : null}
         {rows.length ? <MenuItem icon={<Copy size={13} />} onClick={() => void navigator.clipboard?.writeText(markdown())}>Copy as Markdown</MenuItem> : null}
         {currentJob && currentJob !== "draft" ? <MenuItem icon={<Pin size={13} />} onClick={() => togglePin({ featureId: feature.id, card: cardId(item), jobId: currentJob })}>{pinned ? "Unpin from board" : "Pin to board"}</MenuItem> : null}
-        {onHide ? <MenuItem icon={<EyeOff size={13} />} onClick={onHide}>Hide</MenuItem> : null}
+        {onDuplicate ? <MenuItem icon={<Copy size={13} />} onClick={onDuplicate}>Duplicate</MenuItem> : null}
+        {onHide ? <MenuItem icon={<EyeOff size={13} />} onClick={onHide}>{item.copy ? "Remove copy" : "Hide"}</MenuItem> : null}
         <MenuItem icon={maximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />} onClick={onToggleMax} hint={maximized ? "Esc" : undefined}>{maximized ? "Restore" : "Expand"}</MenuItem>
         {canTable ? <MenuItem icon={asTable ? <BarChart3 size={13} /> : <Table2 size={13} />} onClick={() => setAsTable((v) => !v)}>{asTable ? "Show chart" : "Show table"}</MenuItem> : null}
         {isChart && !asTable ? <><div className="sep" />
@@ -153,7 +159,8 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
           <MenuItem icon={<ArrowUp size={13} />} onClick={() => onMove(-1)}>Move earlier</MenuItem>
           <MenuItem icon={<ArrowDown size={13} />} onClick={() => onMove(1)}>Move later</MenuItem></> : null}
         <div className="sep" />
-        <MenuItem icon={<Settings2 size={13} />} onClick={openSettings}>Settings</MenuItem>
+        {chartKind ? <MenuItem icon={<BarChart3 size={13} />} onClick={editChart}>Chart settings</MenuItem> : null}
+        <MenuItem icon={<Settings2 size={13} />} onClick={openSettings}>Run settings</MenuItem>
         <MenuItem icon={<BookOpen size={13} />} onClick={() => setAbout(true)}>About this method</MenuItem>
         {custom || lens || overlayId ? <MenuItem icon={<RotateCcw size={13} />} onClick={() => { setCustom(cfgId, null); setLens(lensId, null); setOverlayId(null); }}>Reset this card</MenuItem> : null}
         <MenuItem icon={<RotateCcw size={13} />} onClick={() => { useExplore.setState({ configs: {} }); useLens.setState({ lens: {} }); }}>Reset every card to its designed view</MenuItem>
@@ -170,7 +177,7 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
           </div>
         ) : custom ? (
           <>
-            <ExploreControls rows={rows} config={custom} onChange={(c) => setCustom(cfgId, c)} />
+            <ExploreControls key={editing} rows={rows} config={custom} onChange={(c) => setCustom(cfgId, c)} startOpen={editing > 0} />
             <Explore rows={rows} config={custom} />
           </>
         ) : createElement(viewFor(viewName), { rows, result, feature, spec, keys: item.keys, opts: item.opts, scope })}

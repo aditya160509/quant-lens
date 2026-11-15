@@ -79,7 +79,8 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
     const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting), { root, threshold: 0, rootMargin: "-50px 0px 0px 0px" });
     io.observe(el);
     return () => io.disconnect();
-  }, []);
+    // ChartScope remounts the hero per run; observe the new node, not the detached one.
+  }, [run.jobId]);
 
   useEffect(() => {
     // A restored card claims Esc, so the workspace does not also close a panel.
@@ -125,17 +126,28 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   const { registerPalette } = useWorkspace();
   const runRef = useRef(run.run);
   runRef.current = run.run;
+  const formRef = useRef(run.form);
+  formRef.current = run.form;
+  const earlierRef = useRef<string | null>(null);
+  earlierRef.current = earlier[0]?.jobId ?? null;
   const exhibitList = result ? sections.flatMap((x) => shown(x).map((i) => ({ key: i.keys[0], title: i.title ?? feature.outputs.find((o) => o.key === i.keys[0])?.title ?? label(i.keys[0]) }))) : [];
   const exhibitSig = exhibitList.map((e) => e.key + e.title).join("|");
   useEffect(() => {
     registerPalette("page", [
       { id: "page-run", group: "This page", icon: Play, label: result ? "Run again" : runLabel(feature.id), meta: "⌘↵", run: () => runRef.current() },
-      ...(result ? [{ id: "page-report", group: "This page", icon: FileText, label: "Open the printable report", run: () => setPrinting("all") }] : []),
+      ...(result ? [
+        { id: "page-report", group: "This page", icon: FileText, label: "Open the printable report", run: () => setPrinting("all") },
+        { id: "page-summary", group: "This page", icon: FileText, label: "One-page summary as PDF", run: () => setPrinting("one") },
+        ...(earlierRef.current ? [{ id: "page-compare", group: "This page", icon: GitCompareArrows, label: "Compare with the previous run", run: () => setAgainst(earlierRef.current) }] : []),
+        ...(run.jobId ? [{ id: "page-runid", group: "This page", icon: Hash, label: "Copy run id", run: () => void navigator.clipboard?.writeText(run.jobId as string).then(() => toast.success("Run id copied")) }] : []),
+      ] : []),
+      { id: "page-link", group: "This page", icon: Link2, label: "Copy link with these settings", run: () => { const u = new URL(location.href); u.searchParams.set("s", encodeSettings(formRef.current)); u.searchParams.delete("run"); void navigator.clipboard?.writeText(u.toString()).then(() => toast.success("Link with these settings copied")); } },
+      ...sections.map((x, i) => ({ id: `sec-${x.id}`, group: "Sections", label: x.label, meta: i === 0 ? "[ ]" : undefined, run: () => { setTab(x.id); setMaxKey(null); } })),
       ...exhibitList.map((e, i) => ({ id: `ex-${i}`, group: "Exhibits", label: `Exhibit ${i + 1}: ${e.title}`, run: () => window.dispatchEvent(new CustomEvent("research:jump", { detail: e.key })) })),
     ]);
     return () => registerPalette("page", []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exhibitSig, feature.id, Boolean(result), registerPalette]);
+  }, [exhibitSig, feature.id, Boolean(result), registerPalette, sectionIds, run.jobId, Boolean(earlier.length)]);
 
   const scope = `${feature.id}:${run.jobId ?? "draft"}`;
   // Exhibits are numbered through the whole page, in section order, so "Exhibit 7" means the same card in the tabbed view and the report.
@@ -235,11 +247,12 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
                 <div style={{ gridColumn: "1 / -1" }}><button className="btn sm ghost" onClick={() => hiddenIn(active).forEach((i) => setPref(feature.id, cardId(i), { hidden: false }))}>Show {hiddenIn(active).length} hidden</button></div>
               ) : null}
               {shown(active).map((item, k) => (
-                <motion.div key={item.keys.join("+") + (item.view ?? "")} style={{ gridColumn: `span ${item.span}`, minWidth: 0 }}
+                <motion.div key={cardId(item)} style={{ gridColumn: `span ${item.span}`, minWidth: 0 }}
                   variants={{ hidden: { opacity: 0, y: 6 }, show: { opacity: 1, y: 0, transition: { duration: DUR.base, ease: [0.2, 0, 0, 1] } } }}>
-                  <OutputCard item={item} feature={feature} result={result} maximized={false} onToggleMax={() => setMaxKey(item.keys[0])} onHide={() => setPref(feature.id, cardId(item), { hidden: true })}
+                  <OutputCard item={item} feature={feature} result={result} maximized={false} onToggleMax={() => setMaxKey(item.keys[0])} onHide={() => { const base = cardId({ ...item, copy: undefined }); if (item.copy && item.copy === prefs[base]?.copies) setPref(feature.id, base, { copies: item.copy - 1 }); else setPref(feature.id, cardId(item), { hidden: true }); }}
                     onMove={(d) => { const list = shown(active); const i = list.findIndex((x) => cardId(x) === cardId(item)); const j = i + d; if (j < 0 || j >= list.length) return; list.forEach((x, k) => setPref(feature.id, cardId(x), { order: k === i ? j : k === j ? i : k })); }}
-                    onSpan={(span) => setPref(feature.id, cardId(item), { span })} scope={scope} index={exhibitNo(active.id, k)} />
+                    onSpan={(span) => setPref(feature.id, cardId(item), { span })}
+                    onDuplicate={() => { const base = { ...item, copy: undefined }; setPref(feature.id, cardId(base), { copies: (prefs[cardId(base)]?.copies ?? 0) + 1 }); }} scope={scope} index={exhibitNo(active.id, k)} />
                 </motion.div>
               ))}
             </motion.div>

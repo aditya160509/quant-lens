@@ -87,6 +87,23 @@ def test_execution_price_gaps_are_rejected():
         simulate(prices, lambda date: pd.Series({'A': 1.}), min_history=2, top_n=1)
 
 
+def test_delisted_names_settle_to_cash_and_are_not_bought():
+    from app.services.screener_v2.core.backtest import simulate
+    dates = pd.date_range('2025-01-01', periods=8, freq='B')
+    prices = pd.DataFrame({'A': [100., 100., 100., 110., 110., np.nan, np.nan, np.nan],
+                           'B': [100.] * 8, 'C': [50.] * 8}, index=dates)
+    result = simulate(prices, lambda date: pd.Series({'A': 3., 'B': 2., 'C': 1.}), min_history=2, top_n=2, rebalance_days=3, cost_bps=0)
+    curve = result['curve'].set_index('date')
+    # A and B bought at the close of dates[2]; A's 10% on half the book, then A delists on dates[5].
+    assert curve.strategy.loc[dates[3]] == pytest.approx(1.05)
+    assert curve.strategy.loc[dates[5]] == pytest.approx(1.05)
+    a = result['positions'].set_index('ticker').loc['A']
+    assert a['status'] == 'delisted' and a['exit_price'] == 110. and a['exit_date'] == dates[4]
+    # The rebalance executing on dates[5] cannot buy A: its weight goes to B.
+    assert result['selected'] == ['B']
+    assert result['trades'].query('execution_date == @dates[5] and ticker == "B"').new_weight.iloc[0] == pytest.approx(1.)
+
+
 def test_missing_values_do_not_receive_normalized_scores():
     values = pd.Series([1., 2., np.nan])
     assert pd.isna(stats.rank_pct(values).iloc[2])

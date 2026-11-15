@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { DataTable, Empty } from "@/kit/DataTable";
 import { get, useManifest } from "@/modules/research/api";
+import { fmtKey, label } from "@/modules/research/format";
 import { defaultsFor, toPayload } from "@/modules/research/StudyForm";
 import { useStudies } from "@/modules/research/store";
 import type { FeatureSpec, Row } from "@/modules/research/types";
@@ -23,7 +24,7 @@ const KIND: Record<string, string> = { "01": "Screen", "02": "Formula", "03": "C
 function summary(s: { feature_id: string; payload: Record<string, unknown> }): string[] {
   const p = s.payload ?? {};
   const uni = String(p.universe ?? "master");
-  const filters = Object.entries(p).filter(([k, v]) => /_(min|max|top)$/.test(k) && v !== "" && v !== null && v !== undefined).map(([k, v]) => `${k.replace(/_(min|max|top)$/, "").replace(/_/g, " ")} ${k.endsWith("_min") ? "≥" : k.endsWith("_max") ? "≤" : "top"} ${String(v)}`);
+  const filters = Object.entries(p).filter(([k, v]) => /_(min|max|top)$/.test(k) && v !== "" && v !== null && v !== undefined).map(([k, v]) => { const f = k.replace(/_(min|max|top)$/, ""); return `${label(f)} ${k.endsWith("_min") ? "≥" : k.endsWith("_max") ? "≤" : "top"} ${k.endsWith("_top") ? String(v) : fmtKey(f, Number(v))}`; });
   return [KIND[s.feature_id] ?? s.feature_id, ["master", "all", ""].includes(uni.toLowerCase()) ? `Top ${String(p.max_symbols ?? 500)} by liquidity` : `${uni.split(/[,\s]+/).filter(Boolean).length} names`, ...(p.sector && p.sector !== "all" ? [String(p.sector)] : []), ...filters.slice(0, 5), ...(filters.length > 5 ? [`+${filters.length - 5} more`] : [])];
 }
 type Count = { count: number | null; reason: string | null };

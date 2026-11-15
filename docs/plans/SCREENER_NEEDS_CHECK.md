@@ -90,3 +90,4 @@ Written and typechecked, not yet seen in the browser. Tick after a look on the p
 | [ ] | Skeletons on Overview and Saved; no jump when data lands | `ScreenerHome.tsx`, `SavedPage.tsx` | skel-1 |
 | [ ] | One-row header: title, status, sub-tabs, Save, Share, Export, Run | `FeatureView.tsx` | header-2 |
 | [ ] | Defaults menu: Make these my defaults, Reset to my defaults, Reset to built-in; card menu: Reset this card, Reset every card | `StudyForm.tsx`, `OutputCard.tsx` | defaults-1 |
+| [ ] | Phone (later): page no longer blank (`.ws-mobile` had zero height); bottom nav; Settings opens the study form as a bottom sheet; floating section bar shows tabs only. Still to do: virtual tables (>200 rows) as card rows, long `?form=` URL | `ResearchApp.tsx`, `workspace.css`, `Inspector.tsx` | phone-1 |

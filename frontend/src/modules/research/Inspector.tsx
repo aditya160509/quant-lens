@@ -18,9 +18,9 @@ import type { FeatureSpec, RunRecord } from "./types";
 
 type View = "study" | "inspect";
 
-export function Inspector({ feature, run }: { feature: FeatureSpec; run: FeatureRun }) {
+export function Inspector({ feature, run, initial = null }: { feature: FeatureSpec; run: FeatureRun; initial?: View | null }) {
   // The user's explicit choice wins; otherwise show results once there are any.
-  const [picked, setView] = useState<View | null>(null);
+  const [picked, setView] = useState<View | null>(initial);
   const selection = useSelection((s) => s.selection);
   const select = useSelection((s) => s.select);
   const running = ["submitting", "queued", "running"].includes(run.status);

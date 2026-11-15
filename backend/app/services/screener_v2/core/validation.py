@@ -213,7 +213,7 @@ def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cach
     from .data_loader import MARKET_UNIVERSE, MASTER_FUNDAMENTALS, _path_version
     shape = json.dumps({k: v for k, v in payload.items() if k not in _SCORE_ONLY_KEYS}, sort_keys=True, default=str)
     run_key = (_path_version(MARKET_UNIVERSE), _path_version(MASTER_FUNDAMENTALS), tuple(symbols), shape)
-    def panel_at(date):
+    def panel_at(date, keep=True):
         # Not kept in the run dict: score_at keeps one score vector per date, the byte-bounded cache the panel.
         date = pd.Timestamp(date)
         hit = _panel_cache_get((*run_key, date))
@@ -221,10 +221,24 @@ def point_in_time_scorer(symbols, payload, kind="field", field=None, shared_cach
             with as_of_context(date), pit_scope(panels):
                 hit = metric_panel({**payload, "as_of_date": str(date.date())}, symbols)
                 hit, _ = apply_filters(hit, payload)
-            _panel_cache_put((*run_key, date), hit)
+            if keep:
+                _panel_cache_put((*run_key, date), hit)
         return hit.copy()
+    # A plain field score needs one number per name: across runs keep that (~12 kB a date), not the
+    # ~0.8 MB panel, so a whole backtest's dates fit the cache and a re-run skips every rebuild.
+    field_name = field or payload.get("score_field") or "core_quant_score"
     def score_at(date):
         key = pd.Timestamp(date)
+        if kind == "field" and key not in cache:
+            scored = _panel_cache_get((*run_key, "score", field_name, key))
+            if scored is None:
+                with as_of_context(key), pit_scope(panels):
+                    panel = panel_at(key, keep=False)
+                if field_name not in panel:
+                    raise ValueError(f"Unknown score field: {field_name}")
+                scored = panel.set_index("ticker")[field_name]
+                _panel_cache_put((*run_key, "score", field_name, key), scored)
+            cache[key] = scored.copy()
         if key not in cache:
             with as_of_context(key), pit_scope(panels):
                 panel = panel_at(key)

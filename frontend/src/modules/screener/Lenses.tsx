@@ -137,6 +137,7 @@ export function RedFlagFeed({ result }: ViewProps) {
 
 /** The watchlist that holds fair-value alerts; Monitor checks it on every visit. */
 export const FAIR_LIST = "Below fair value";
+const NONE: string[] = [];
 
 /** P4: a bell that adds a name to the fair-value alerts. */
 export function FairAlertToggle({ ticker }: { ticker: string }) {
@@ -147,7 +148,7 @@ export function FairAlertToggle({ ticker }: { ticker: string }) {
 
 /** P4 in Monitor: each alerted name's price against the middle of its fair-value range; below it, the alert has fired. */
 export function FairValueWatch(_: ViewProps) {
-  const tickers = useWatchlists((st) => st.lists[FAIR_LIST] ?? []);
+  const tickers = useWatchlists((st) => st.lists[FAIR_LIST] ?? NONE);
   const q = useQuery({ queryKey: ["screener", "lenses", "watch", tickers.join(",")], queryFn: () => send<Lenses>("POST", "/lookup/lenses", { tickers }), enabled: tickers.length > 0, staleTime: 300_000, retry: false });
   if (!tickers.length) return <Empty text="No fair-value alerts. Use the bell on the fair-value strip or in a stock's drawer." />;
   if (q.isLoading) return <div aria-busy="true" className="ln-load">Pricing names</div>;

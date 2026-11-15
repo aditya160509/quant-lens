@@ -13,6 +13,9 @@
 .xc { display: grid; gap: 4px; font-size: 11px; color: var(--text-4); min-width: 0; }
 .xc > span { text-transform: none; letter-spacing: 0; }
 .xc select { height: 26px; padding: 0 22px 0 8px; border-radius: 7px; background: var(--panel-2); color: var(--text); font-size: 12px; box-shadow: inset 0 0 0 1px var(--line); border: 0; max-width: 200px; }
+.xc .input { height: 26px; font-size: 12px; max-width: 160px; }
+.xc .xc-num { max-width: 90px; }
+.xc-pair { display: flex; gap: 6px; }
 .xc.ys { flex: 1 1 260px; }
 .xpills { display: flex; flex-wrap: wrap; gap: 4px; }
 .xpills .pill { height: 24px; font-size: 11.5px; }
