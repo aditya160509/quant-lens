@@ -92,7 +92,11 @@ export function OutputCard({ item, feature, result, maximized, onToggleMax, onHi
     <Exhibit id={key} name={title} finding={finding} hint={hint} note={item.note} flush={item.flush} bodyRef={body}
       style={maximized ? { minHeight: "100%" } : undefined} onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
       tools={<>
-          {(kinds.length > 1 || alts.length > 0) && viewName !== "latex" ? (
+          {item.toggle && alts.length && !custom ? (
+            <div className="ub-seg card-toggle" role="radiogroup" aria-label="View">
+              {[{ label: item.toggle, view: designed }, ...alts].map((a) => <button key={a.view} type="button" role="radio" aria-checked={viewName === a.view} onClick={() => setLens(lensId, a.view === designed ? null : a.view)}>{a.label}</button>)}
+            </div>
+          ) : (kinds.length > 1 || alts.length > 0) && viewName !== "latex" ? (
             <button className="btn sm ghost view-as" aria-haspopup="menu" aria-label="View as" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setViewMenu({ x: r.right - 200, y: r.bottom + 4 }); }}>
               {custom ? VIEW_LABEL[custom.kind] : "View"}<ChevronDown size={11} />
             </button>

@@ -12,7 +12,7 @@ import { first, isNum, label, out, pct } from "@/modules/research/format";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import type { Row } from "@/modules/research/types";
 import { ScreenScatter, SensitivityStrip } from "./trust/Charts";
-import { NearMisses, RunInfo, runOf, ScreenDiff, WhyHere } from "./trust/Explain";
+import { NearMisses, runOf, ScreenDiff, WhyHere } from "./trust/Explain";
 import { SCREENER_BASE } from "./base";
 import "./screen.css";
 import "./filters/universe.css";
@@ -63,7 +63,6 @@ export function ScreenTable({ rows, result, opts }: ViewProps) {
 }
 
 export const NearMissView = ({ result }: ViewProps) => <NearMisses result={result} />;
-export const RunView = ({ result }: ViewProps) => <RunInfo result={result} />;
 export const DiffView = ({ result, feature }: ViewProps) => <ScreenDiff result={result} featureId={feature.id} />;
 export const ScatterView = ({ rows, feature }: ViewProps) => <ScreenScatter rows={rows} feature={feature} />;
 export const SensitivityView = ({ result }: ViewProps) => <SensitivityStrip result={result} />;

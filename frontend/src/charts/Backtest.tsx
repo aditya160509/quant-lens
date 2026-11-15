@@ -8,7 +8,8 @@ import "./backtest.css";
 const Empty = () => <p className="chart-empty">Nothing to show.</p>;
 
 /** Drawdown from the running peak across the full width, with a hover readout. */
-export function DrawdownStrip({ rows }: { rows: Row[] }) {
+/** `marks`: date spans shaded and numbered on the strip (e.g. the worst drawdowns); `to: null` runs to the end. */
+export function DrawdownStrip({ rows, marks = [] }: { rows: Row[]; marks?: { from: string; to: string | null; label: string }[] }) {
   const [hover, setHover] = useState<number | null>(null);
   const pts = rows.filter((r) => isNum(r.drawdown)) as (Row & { drawdown: number })[];
   if (pts.length < 2) return <Empty />;
@@ -18,14 +19,17 @@ export function DrawdownStrip({ rows }: { rows: Row[] }) {
   const path = pts.map((r, i) => `${x(i)},${(r.drawdown / min) * 40}`).join(" L");
   const h = hover === null ? null : pts[hover];
   const grid = [0.25, 0.5, 0.75].map((f) => f * min);
+  const at = (date: string) => { const i = pts.findIndex((r) => String(r.date).slice(0, 10) >= date); return x(i < 0 ? pts.length - 1 : i); };
   return (
     <div className="ts-under">
       <div className="dd-plot" onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); setHover(Math.max(0, Math.min(pts.length - 1, Math.round(((e.clientX - r.left) / r.width) * (pts.length - 1))))); }} onPointerLeave={() => setHover(null)}>
         <svg viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label={`Drawdown, worst ${pct(worst.drawdown, 1)}`}>
           {grid.map((g) => <line key={g} x1={0} x2={100} y1={(g / min) * 40} y2={(g / min) * 40} stroke="var(--grid)" strokeDasharray="1 1" vectorEffect="non-scaling-stroke" />)}
+          {marks.map((m) => <rect key={m.label} className="dd-mark" x={at(m.from)} width={Math.max(0.3, (m.to ? at(m.to) : 100) - at(m.from))} y={0} height={40} />)}
           <path d={`M0,0 L${path} L100,0 Z`} fill="color-mix(in oklch, var(--down) 22%, transparent)" stroke="var(--down)" strokeWidth={1.25} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           {h && hover !== null ? <line x1={x(hover)} x2={x(hover)} y1={0} y2={40} stroke="var(--line-3)" vectorEffect="non-scaling-stroke" /> : null}
         </svg>
+        {marks.map((m) => <span key={m.label} className="dd-mark-n num" style={{ left: `${at(m.from)}%` }}>{m.label}</span>)}
         <div className="dd-y num">{grid.map((g) => <span key={g} style={{ top: `${(g / min) * 100}%` }}>{pct(g, 0)}</span>)}</div>
         {h && hover !== null ? <div className="dd-tip num" style={{ left: `${x(hover)}%` }}><span>{String(h.date).slice(0, 10)}</span><b>{pct(h.drawdown, 1)}</b></div> : null}
       </div>

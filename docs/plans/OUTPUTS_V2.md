@@ -23,24 +23,24 @@ Sources: r/ValueInvesting threads "what tools do you wish existed" (2025-06) and
 Rule: a card stays only if it has a lead figure or a one-line finding and nobody else on the page says the same thing. Everything cut stays reachable as a card's Table view or in the export, never deleted from the data.
 
 Screen
-- [ ] Funnel tab: "Market Cap Bucket Distribution" and "Heatmap View" merge into one Sector and size map
-- [ ] Coverage tab removed: one coverage bar in the run header; full table in Export
-- [ ] "Run" card removed: run id and Copy settings move into the run header menu
-- [ ] "Where each name sits in its sector" 500-row table removed: shown per name in the stock drawer
-- [ ] "Saved Screens" and "Run Changes" outputs removed from results: Saved page and Compare runs already show them
-- [ ] Scatter and RRG: one card with a toggle, not two
+- [x] Funnel tab: "Market Cap Bucket Distribution" and "Heatmap View" merge into one Sector and size map
+- [x] Coverage tab removed: one coverage bar in the run header; full table in Export
+- [x] "Run" card removed: run id and Copy settings move into the run header menu
+- [x] "Where each name sits in its sector" 500-row table removed: shown per name in the stock drawer
+- [x] "Saved Screens" and "Run Changes" outputs removed from results: Saved page and Compare runs already show them
+- [x] Scatter and RRG: one card with a toggle, not two
 Rank and Composite
-- [ ] "Table" tab removed: the ranked table is the Ranking tab
-- [ ] "Rules and ML" and "Backtest" tabs merge into one Evidence tab
+- [x] "Table" tab removed: the ranked table is the Ranking tab
+- [x] "Rules and ML" and "Backtest" tabs merge into one Evidence tab
 Test
-- [ ] Losing streaks and Drawdown episodes merge into one Drawdown story (episodes marked on the underwater chart)
-- [ ] Weekly heatmap hidden by default (monthly says it better); kept as an alternate view
-- [ ] Horizon table and Yearly vs benchmark merge into one "By period" card
-- [ ] Turnover moves under Holdings; Rebalancing keeps only the variant bars
+- [x] Losing streaks and Drawdown episodes merge into one Drawdown story (episodes marked on the underwater chart)
+- [x] Weekly heatmap hidden by default (monthly says it better); kept as an alternate view
+- [x] Horizon table and Yearly vs benchmark merge into one "By period" card
+- [x] Turnover moves under Holdings; Rebalancing keeps only the variant bars
 Everywhere
-- [ ] No generic key-value cards; no card titled by its data key ("Quick Look Card", "Heatmap View")
-- [ ] Caveats collapse into one line under the hero with a "4 limits" pill that opens them
-- [ ] The "Report" and "Export" buttons become one Export menu
+- [x] No generic key-value cards; no card titled by its data key ("Quick Look Card", "Heatmap View")
+- [x] Caveats collapse into one line under the hero with a "4 limits" pill that opens them
+- [x] The "Report" and "Export" buttons become one Export menu
 
 ## 3. Add: the cinematic set (the "wow" on first open)
 

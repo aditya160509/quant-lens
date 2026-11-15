@@ -6,9 +6,10 @@ export type Tone = "up" | "down" | "warn";
 export type Verdict = { headline: string | null; tone: Tone | null };
 
 /** One card. `keys` lets a single card combine several outputs (e.g. three event-study estimators). */
-export type Item = { keys: string[]; view?: string; span: number; title?: string; hint?: string; opts?: Record<string, unknown>; flush?: boolean; /** Method footnote, only where the method changes how to read the card. */ note?: string };
+export type Item = { keys: string[]; view?: string; span: number; title?: string; hint?: string; opts?: Record<string, unknown>; flush?: boolean; /** Method footnote, only where the method changes how to read the card. */ note?: string; /** Label of the designed view, shown with its alternates as a visible switch instead of a menu. */ toggle?: string };
 export type Section = { id: string; label: string; intro?: string; items: Item[] };
-export type FeatureLayout = { sections: Section[]; verdict?: (r: FeatureResult) => Verdict };
+/** `drop`: outputs kept out of the page on purpose; they stay in the JSON export. */
+export type FeatureLayout = { sections: Section[]; verdict?: (r: FeatureResult) => Verdict; drop?: string[] };
 
 const card = (keys: string | string[], span: number, extra: Omit<Item, "keys" | "span"> = {}): Item => ({ keys: Array.isArray(keys) ? keys : [keys], span, ...extra });
 const tests = (keys: string[], span: number, title: string, hint?: string): Item => ({ keys, span, view: "tests", title, hint, flush: true });
@@ -370,7 +371,7 @@ export function layoutFor(feature: FeatureSpec): FeatureLayout {
   const placed = new Set(custom?.sections.flatMap((s) => s.items.flatMap((i) => i.keys)) ?? []);
   const prose = new Set(["summaryLine", "verdict"]);
   const prefixes = (MERGES[feature.id] ?? []).map((m) => m.prefix);
-  const extra = feature.outputs.filter((o) => !placed.has(o.key) && !prefixes.some((pre) => o.key.startsWith(pre) && /(latex|csv|pdf|export)/i.test(o.render)) && !EXPORT_RENDERS.has(o.render) && !(custom && prose.has(o.render)) && o.render !== "decisionLedger");
+  const extra = feature.outputs.filter((o) => !placed.has(o.key) && !custom?.drop?.includes(o.key) && !prefixes.some((pre) => o.key.startsWith(pre) && /(latex|csv|pdf|export)/i.test(o.render)) && !EXPORT_RENDERS.has(o.render) && !(custom && prose.has(o.render)) && o.render !== "decisionLedger");
   if (custom) {
     return extra.length ? { ...custom, sections: [...custom.sections, { id: "more", label: "More", items: extra.map((o) => card(o.key, WIDE.has(o.render) ? 12 : 6)) }] } : custom;
   }

@@ -5,3 +5,5 @@
 .ts-streaks span { font-size: 12px; color: var(--text-3); }
 .ts-streaks b { font-size: 24px; font-weight: 600; }
 .ts-streaks small { grid-column: 1 / -1; font-size: 11px; color: var(--text-3); }
+.ts-story { display: grid; gap: 14px; }
+.ts-story .ts-streaks { grid-template-columns: 1fr 1fr; }

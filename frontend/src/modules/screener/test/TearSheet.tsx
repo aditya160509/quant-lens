@@ -93,48 +93,50 @@ export function HorizonTable({ rows }: ViewProps) {
   );
 }
 
-/** The five deepest peak-to-trough falls: start, trough, recovery (or still open), depth and length. */
-export function DrawdownEpisodes({ rows }: ViewProps) {
-  const eps = useMemo(() => {
-    const p = points(rows);
-    const out: { start: number; trough: number; end: number | null; depth: number }[] = [];
-    let peak = p[0], low: Pt | null = null;
-    p.forEach((x) => {
-      if (x.s >= (peak?.s ?? 0)) {
-        if (low && low.s < peak.s) out.push({ start: peak.t, trough: low.t, end: x.t, depth: low.s / peak.s - 1 });
-        peak = x; low = null;
-      } else if (!low || x.s < low.s) low = x;
-    });
-    if (low && peak && low.s < peak.s) out.push({ start: peak.t, trough: low.t, end: null, depth: low.s / peak.s - 1 });
-    return out.sort((a, b) => a.depth - b.depth).slice(0, 5);
-  }, [rows]);
-  if (!eps.length) return <Empty text="No drawdown in this run." />;
-  const d = (t: number) => new Date(t).toISOString().slice(0, 10);
-  const days = (a: number, b: number) => Math.round((b - a) / 86_400_000);
-  return (
-    <table className="tbl ts-h">
-      <thead><tr><th>Peak</th><th>Trough</th><th>Recovered</th><th className="r">Depth</th><th className="r">Days</th></tr></thead>
-      <tbody>{eps.map((e) => <tr key={e.start}><td className="num">{d(e.start)}</td><td className="num">{d(e.trough)}</td><td className="num">{e.end ? d(e.end) : "Open"}</td><td className="r num" style={{ color: "var(--down)" }}>{pct(e.depth, 1)}</td><td className="r num">{days(e.start, e.end ?? Date.now())}</td></tr>)}</tbody>
-    </table>
-  );
+type Episode = { start: number; trough: number; end: number | null; depth: number };
+
+/** The five deepest peak-to-trough falls: start, trough, recovery (or still open) and depth. */
+function episodes(p: Pt[]): Episode[] {
+  const out: Episode[] = [];
+  let peak = p[0], low: Pt | null = null;
+  p.forEach((x) => {
+    if (x.s >= (peak?.s ?? 0)) {
+      if (low && low.s < peak.s) out.push({ start: peak.t, trough: low.t, end: x.t, depth: low.s / peak.s - 1 });
+      peak = x; low = null;
+    } else if (!low || x.s < low.s) low = x;
+  });
+  if (low && peak && low.s < peak.s) out.push({ start: peak.t, trough: low.t, end: null, depth: low.s / peak.s - 1 });
+  return out.sort((a, b) => a.depth - b.depth).slice(0, 5);
 }
 
-/** Longest and current runs of losing days and losing weeks. */
-export function LosingStreaks({ rows }: ViewProps) {
-  const s = useMemo(() => {
+/** Longest and current run of negative values. */
+function streak(r: number[]) { let best = 0, cur = 0; r.forEach((x) => { cur = x < 0 ? cur + 1 : 0; best = Math.max(best, cur); }); return { best, cur }; }
+
+/** One drawdown story: the underwater chart with the five worst falls marked and numbered, then the falls and the losing streaks. */
+export function DrawdownStory({ rows }: ViewProps) {
+  const { eps, day, week } = useMemo(() => {
     const p = points(rows);
-    const run = (r: number[]) => { let best = 0, cur = 0; r.forEach((x) => { cur = x < 0 ? cur + 1 : 0; best = Math.max(best, cur); }); return { best, cur }; };
-    const daily = p.slice(1).map((x, i) => x.s / p[i].s - 1);
     const weekEnd = new Map<string, number>();
     p.forEach((x) => { const d = new Date(x.t); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); weekEnd.set(d.toISOString().slice(0, 10), x.s); });
     const w = [...weekEnd.values()];
-    return { day: run(daily), week: run(w.slice(1).map((x, i) => x / w[i] - 1)) };
+    return { eps: episodes(p), day: streak(p.slice(1).map((x, i) => x.s / p[i].s - 1)), week: streak(w.slice(1).map((x, i) => x / w[i] - 1)) };
   }, [rows]);
+  const d = (t: number) => new Date(t).toISOString().slice(0, 10);
+  const days = (a: number, b: number) => Math.round((b - a) / 86_400_000);
   return (
-    <div className="ts-streaks">
-      {([["Losing days in a row", s.day], ["Losing weeks in a row", s.week]] as const).map(([l, v]) => (
-        <div key={l}><span>{l}</span><b className="num">{v.best}</b><small className="num">now {v.cur}</small></div>
-      ))}
+    <div className="ts-story">
+      <DrawdownStrip rows={rows} marks={eps.map((e, i) => ({ from: d(e.start), to: e.end ? d(e.end) : null, label: String(i + 1) }))} />
+      {eps.length ? (
+        <table className="tbl ts-h">
+          <thead><tr><th>#</th><th>Peak</th><th>Trough</th><th>Recovered</th><th className="r">Depth</th><th className="r">Days</th></tr></thead>
+          <tbody>{eps.map((e, i) => <tr key={e.start}><td className="num">{i + 1}</td><td className="num">{d(e.start)}</td><td className="num">{d(e.trough)}</td><td className="num">{e.end ? d(e.end) : "Open"}</td><td className="r num" style={{ color: "var(--down)" }}>{pct(e.depth, 1)}</td><td className="r num">{days(e.start, e.end ?? Date.now())}</td></tr>)}</tbody>
+        </table>
+      ) : null}
+      <div className="ts-streaks">
+        {([["Losing days in a row", day], ["Losing weeks in a row", week]] as const).map(([l, v]) => (
+          <div key={l}><span>{l}</span><b className="num">{v.best}</b><small className="num">now {v.cur}</small></div>
+        ))}
+      </div>
     </div>
   );
 }

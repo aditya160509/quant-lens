@@ -13,3 +13,5 @@
 .ts-g-track i[data-open="true"] { box-shadow: inset -2px 0 0 var(--text); }
 .ts-g-axis { display: flex; justify-content: space-between; padding-left: 72px; color: var(--text-3); font-size: 10.5px; }
 .ts-under .ts-g-axis { padding: 4px 0 0; }
+.dd-mark { fill: var(--text); opacity: 0.045; }
+.dd-mark-n { position: absolute; top: 2px; margin-left: 3px; font-size: 10.5px; font-weight: 600; color: var(--down); pointer-events: none; }

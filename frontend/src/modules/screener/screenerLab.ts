@@ -96,8 +96,8 @@ const FS = group(() => import("./rank/FactorStack") as Promise<Record<string, un
 const VV = group(() => import("./valuation/ValuationViews") as Promise<Record<string, unknown>>);
 const MV = group(() => import("./monitor/MonitorViews") as Promise<Record<string, unknown>>);
 const TS = group(() => import("./test/TearSheet") as Promise<Record<string, unknown>>);
-registerViews({ quickLookCard: SV.QuickLookCardView, variantBars: SV.VariantBars, turnoverBars: SV.TurnoverBars, templateGallery: FV.TemplateGallery, formulaStatus: FV.FormulaStatus, factorStack: FS.FactorStack, fourGauges: VV.FourGauges, valuationCards: VV.ValuationCards, chartGrid: SV.ChartGrid, alertFeed: MV.AlertFeed, hitRates: MV.HitRates, funnel: SV.FunnelView, monthlyHeatmap: TS.MonthlyHeatmap, returnHistogram: TS.ReturnHistogram, underwater: TS.Underwater, horizonTable: TS.HorizonTable, drawdownEpisodes: TS.DrawdownEpisodes, losingStreaks: TS.LosingStreaks, weeklyHeatmap: TS.WeeklyHeatmap, yearlyVsBenchmark: TS.YearlyVsBenchmark, piotroskiMatrix: RS.PiotroskiMatrix, altmanZones: RS.AltmanZones, screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, rrg: SV.RrgView, sensitivity: SV.SensitivityView, runInfo: SV.RunView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
-registerAlternates({ variantBars: [{ label: "Table", view: "dataTable" }], turnoverBars: [{ label: "Table", view: "dataTable" }], attributionBars: [{ label: "Table", view: "dataTable" }], holdingsGantt: [{ label: "Table", view: "dataTable" }], templateGallery: [{ label: "Table", view: "dataTable" }], fourGauges: [{ label: "Key values", view: "keyValue" }], valuationCards: [{ label: "Table", view: "dataTable" }], alertFeed: [{ label: "Table", view: "dataTable" }], hitRates: [{ label: "Table", view: "dataTable" }], funnel: [{ label: "Table", view: "dataTable" }], piotroskiMatrix: [{ label: "Table", view: "dataTable" }], altmanZones: [{ label: "Table", view: "dataTable" }], rankedTable: [{ label: "Factor bars", view: "factorStack" }, { label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }] });
+registerViews({ quickLookCard: SV.QuickLookCardView, variantBars: SV.VariantBars, turnoverBars: SV.TurnoverBars, templateGallery: FV.TemplateGallery, formulaStatus: FV.FormulaStatus, factorStack: FS.FactorStack, fourGauges: VV.FourGauges, valuationCards: VV.ValuationCards, chartGrid: SV.ChartGrid, alertFeed: MV.AlertFeed, hitRates: MV.HitRates, funnel: SV.FunnelView, monthlyHeatmap: TS.MonthlyHeatmap, returnHistogram: TS.ReturnHistogram, underwater: TS.Underwater, horizonTable: TS.HorizonTable, drawdownStory: TS.DrawdownStory, weeklyHeatmap: TS.WeeklyHeatmap, yearlyVsBenchmark: TS.YearlyVsBenchmark, piotroskiMatrix: RS.PiotroskiMatrix, altmanZones: RS.AltmanZones, screenTreemap: SV.ScreenTreemap, screenTable: SV.ScreenTable, nearMisses: SV.NearMissView, screenScatter: SV.ScatterView, rrg: SV.RrgView, sensitivity: SV.SensitivityView, screenDiff: SV.DiffView, proofPanel: ST.ProofPanel, scoreWaterfall: RV.ScoreWaterfall, rankVsMl: RV.RankVsMl }, []);
+registerAlternates({ screenScatter: [{ label: "Rotation", view: "rrg" }], factorStack: [{ label: "Table", view: "rankedTable" }], horizonTable: [{ label: "Each year against SPY", view: "yearlyVsBenchmark" }], monthlyHeatmap: [{ label: "Weekly", view: "weeklyHeatmap" }], variantBars: [{ label: "Table", view: "dataTable" }], turnoverBars: [{ label: "Table", view: "dataTable" }], attributionBars: [{ label: "Table", view: "dataTable" }], holdingsGantt: [{ label: "Table", view: "dataTable" }], templateGallery: [{ label: "Table", view: "dataTable" }], fourGauges: [{ label: "Key values", view: "keyValue" }], valuationCards: [{ label: "Table", view: "dataTable" }], alertFeed: [{ label: "Table", view: "dataTable" }], hitRates: [{ label: "Table", view: "dataTable" }], funnel: [{ label: "Table", view: "dataTable" }], piotroskiMatrix: [{ label: "Table", view: "dataTable" }], altmanZones: [{ label: "Table", view: "dataTable" }], rankedTable: [{ label: "Factor bars", view: "factorStack" }, { label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }], screenTable: [{ label: "Sector treemap", view: "screenTreemap" }, { label: "Chart grid", view: "chartGrid" }] });
 
 export const SCREENER_LAB: LabConfig = {
   id: "screener",
@@ -110,38 +110,31 @@ export const SCREENER_LAB: LabConfig = {
     sc01: {
       verdict: headline,
       sections: [
-        { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], span: 12, view: "screenTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, bars: RESULT_BARS, hide: RESULT_HIDDEN, hatch: true, rowActions, bulk } }] },
+        { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], title: "Passing names", span: 12, view: "screenTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, bars: RESULT_BARS, hide: RESULT_HIDDEN, hatch: true, rowActions, bulk } }] },
         { id: "trust", label: "Trust", items: [
           { keys: ["ranked_screener_table"], span: 12, view: "nearMisses", title: "Near misses" },
           { keys: ["ranked_screener_table"], span: 12, view: "sensitivity", title: "Sensitivity" },
-          { keys: ["ranked_screener_table"], span: 12, view: "screenScatter", title: "Scatter" },
-          { keys: ["ranked_screener_table"], span: 12, view: "rrg", title: "Relative rotation" },
-          { keys: ["ranked_screener_table"], span: 6, view: "screenDiff", title: "Compare runs" },
-          { keys: ["ranked_screener_table"], span: 6, view: "runInfo", title: "Run" },
-          { keys: ["cross_sectional_percentile_context"], span: 12, view: "dataTable", title: "Where each name sits in its sector", opts: { max: 500, maxHeight: 480 } },
+          { keys: ["ranked_screener_table"], span: 12, view: "screenScatter", title: "Where the names sit", toggle: "Scatter" },
+          { keys: ["ranked_screener_table"], span: 12, view: "screenDiff", title: "Compare runs" },
         ] },
-        { id: "funnel", label: "Funnel", items: [{ keys: ["filter_funnel_waterfall"], span: 6, view: "funnel", title: "Funnel" }, { keys: ["market_cap_bucket_distribution"], span: 6 }, { keys: ["quick_look_card"], span: 6, view: "quickLookCard", title: "Top name" }, { keys: ["heatmap_view"], span: 6 }] },
-        { id: "coverage", label: "Coverage", items: [{ keys: ["metric_coverage"], span: 12, view: "dataTable", opts: { max: 500, maxHeight: 640 } }] },
+        { id: "funnel", label: "Funnel", items: [{ keys: ["filter_funnel_waterfall"], span: 6, view: "funnel", title: "Funnel" }, { keys: ["quick_look_card"], span: 6, view: "quickLookCard", title: "Top name" }, { keys: ["ranked_screener_table"], span: 12, view: "screenTreemap", title: "Sector and size map" }] },
       ],
+      drop: ["run_changes", "saved_screens", "metric_coverage", "cross_sectional_percentile_context", "heatmap_view", "market_cap_bucket_distribution"],
     },
     sc03: {
       sections: [
         { id: "ranking", label: "Ranking", items: [
-          { keys: ["composite_score_universe_ranking"], span: 8, view: "factorStack", title: "Ranking" },
+          { keys: ["composite_score_universe_ranking"], span: 8, view: "factorStack", title: "Ranking", toggle: "Factor bars", opts: { max: 5000, maxHeight: 640, hatch: true, rowActions, bulk } },
           { keys: ["per_stock_score_decomposition"], span: 4, view: "scoreWaterfall", title: "Why the top name ranks here" },
         ] },
-        { id: "table", label: "Table", items: [
-          { keys: ["composite_score_universe_ranking"], span: 12, view: "rankedTable", opts: { max: 5000, maxHeight: 640, hatch: true, rowActions, bulk } },
-        ] },
-        { id: "weights", label: "Weights", items: [{ keys: ["score_transparency_decomposition"], span: 6, view: "dataTable" }, { keys: ["factor_correlation_heatmap"], span: 6 }, { keys: ["factor_correlation_redundancy_alerts"], span: 6 }, { keys: ["historical_weight_training"], span: 6 }] },
-        { id: "breakdown", label: "Breakdown", items: [{ keys: ["sector_composite_breakdown"], span: 6, view: "dataTable", opts: { bars: ["avg_composite"] } }, { keys: ["macro_regime_attribution"], span: 6 }] },
-        { id: "ml", label: "Rules and ML", items: [{ keys: ["composite_score_universe_ranking"], span: 12, view: "rankVsMl", opts: { max: 5000, maxHeight: 480 } }] },
-        { id: "backtest", label: "Backtest", items: [{ keys: ["composite_vs_spy_backtest"], span: 12 }] },
+        { id: "weights", label: "Weights", items: [{ keys: ["score_transparency_decomposition"], title: "How each factor is weighted", span: 6, view: "dataTable" }, { keys: ["factor_correlation_heatmap"], title: "How the factors move together", span: 6 }, { keys: ["factor_correlation_redundancy_alerts"], title: "Factors that repeat each other", span: 6 }, { keys: ["historical_weight_training"], title: "Weights the past would have chosen", span: 6 }] },
+        { id: "breakdown", label: "Breakdown", items: [{ keys: ["sector_composite_breakdown"], title: "Score by sector", span: 6, view: "dataTable", opts: { bars: ["avg_composite"] } }, { keys: ["macro_regime_attribution"], title: "Score by VIX regime", span: 6 }] },
+        { id: "evidence", label: "Evidence", items: [{ keys: ["composite_vs_spy_backtest"], span: 12, title: "Composite against SPY" }, { keys: ["composite_score_universe_ranking"], span: 12, view: "rankVsMl", title: "Rules against ML", opts: { max: 5000, maxHeight: 480 } }] },
       ],
     },
     sc04: {
       sections: [
-        { id: "picks", label: "Picks", items: [{ keys: ["per_strategy_stock_list"], span: 12, view: "rankedTable", opts: { max: 1000, maxHeight: 560, hatch: true, rowActions, bulk } }] },
+        { id: "picks", label: "Picks", items: [{ keys: ["per_strategy_stock_list"], title: "Picks by strategy", span: 12, view: "rankedTable", opts: { max: 1000, maxHeight: 560, hatch: true, rowActions, bulk } }] },
         { id: "piotroski", label: "Piotroski", items: [{ keys: ["piotroski_breakdown"], span: 12, view: "piotroskiMatrix", title: "Piotroski F-score", note: "Piotroski (2000): nine binary checks on the latest annual statements against the year before." }] },
         { id: "altman", label: "Altman Z", items: [
           { keys: ["altman_z_score_status"], span: 7, view: "altmanZones", title: "Altman zones", note: "Altman (1968) Z for manufacturers; cut lines 1.81 and 2.99." },
@@ -153,9 +146,9 @@ export const SCREENER_LAB: LabConfig = {
       sections: [
         { id: "results", label: "Results", items: [
           { keys: ["formula_validation_panel"], span: 12, view: "formulaStatus", title: "Formula" },
-          { keys: ["formula_result_table"], span: 12, view: "rankedTable", opts: { max: 5000, maxHeight: 640, hatch: true, rowActions, bulk } },
+          { keys: ["formula_result_table"], title: "Ranked by your formula", span: 12, view: "rankedTable", opts: { max: 5000, maxHeight: 640, hatch: true, rowActions, bulk } },
         ] },
-        { id: "backtest", label: "Backtest", items: [{ keys: ["historical_formula_backtest"], span: 12 }, { keys: ["historical_formula_backtest"], span: 12, view: "underwater", title: "Drawdown" }] },
+        { id: "backtest", label: "Backtest", items: [{ keys: ["historical_formula_backtest"], title: "Formula against SPY", span: 12 }, { keys: ["historical_formula_backtest"], span: 12, view: "underwater", title: "Drawdown" }] },
         { id: "templates", label: "Templates", items: [{ keys: ["formula_template_library"], span: 12, view: "templateGallery", title: "Templates" }] },
       ],
     },
@@ -163,13 +156,13 @@ export const SCREENER_LAB: LabConfig = {
       sections: [
         { id: "focus", label: "Focus", items: [
           { keys: ["four_dimension_valuation_card"], span: 7, view: "fourGauges", title: "Valuation percentile" },
-          { keys: ["own_history_percentile_time_series"], span: 5 },
+          { keys: ["own_history_percentile_time_series"], title: "Against its own history", span: 5 },
         ] },
         { id: "universe", label: "Universe", items: [
           { keys: ["universe_wide_four_dimension_cards"], span: 12, view: "valuationCards", title: "Every name" },
-          { keys: ["sector_valuation_landscape_heatmap"], span: 12 },
+          { keys: ["sector_valuation_landscape_heatmap"], title: "Sector valuations", span: 12 },
         ] },
-        { id: "peers", label: "Peers", items: [{ keys: ["peer_comparison_table"], span: 6 }, { keys: ["universe_percentile_table"], span: 6, opts: { bars: ["universe_percentile"] } }] },
+        { id: "peers", label: "Peers", items: [{ keys: ["peer_comparison_table"], title: "Peers", span: 6 }, { keys: ["universe_percentile_table"], title: "Against every name", span: 6, opts: { bars: ["universe_percentile"] } }] },
       ],
     },
     sc06: {
@@ -180,8 +173,8 @@ export const SCREENER_LAB: LabConfig = {
         ] },
         { id: "record", label: "Track record", items: [
           { keys: ["alert_performance_tracker_historical"], span: 12, view: "hitRates", title: "Hit rate by alert type" },
-          { keys: ["alert_performance_tracker"], span: 6 },
-          { keys: ["screen_entry_exit_log"], span: 6 },
+          { keys: ["alert_performance_tracker"], title: "Each alert, after it fired", span: 6 },
+          { keys: ["screen_entry_exit_log"], title: "Entries and exits", span: 6 },
         ] },
       ],
     },
@@ -189,13 +182,14 @@ export const SCREENER_LAB: LabConfig = {
       verdict: testBanner,
       sections: [
         { id: "proof", label: "Proof", items: [{ keys: ["equity_curve", "cscv_pbo"], span: 12, view: "proofPanel", note: "Probability of backtest overfitting from combinatorially symmetric cross-validation (Bailey et al., 2017)." }] },
-        { id: "performance", label: "Performance", items: [{ keys: ["equity_curve"], span: 8 }, { keys: ["full_performance_statistics"], span: 4 }, { keys: ["equity_curve"], span: 7, view: "horizonTable", title: "By horizon" }, { keys: ["equity_curve"], span: 5, view: "losingStreaks", title: "Losing streaks" }, { keys: ["equity_curve"], span: 12, view: "underwater", title: "Drawdown" }, { keys: ["equity_curve"], span: 12, view: "drawdownEpisodes", title: "Worst drawdowns" }, { keys: ["rolling_performance"], span: 12 }] },
-        { id: "returns", label: "Returns", items: [{ keys: ["equity_curve"], span: 8, view: "monthlyHeatmap", title: "Monthly returns" }, { keys: ["equity_curve"], span: 4, view: "returnHistogram", title: "Daily returns" }, { keys: ["equity_curve"], span: 8, view: "weeklyHeatmap", title: "Weekly returns" }, { keys: ["equity_curve"], span: 4, view: "yearlyVsBenchmark", title: "Each year against SPY" }] },
-        { id: "rebalancing", label: "Rebalancing", items: [{ keys: ["rebalancing_date_sensitivity"], span: 6, view: "variantBars" }, { keys: ["holding_period_sensitivity"], span: 6, view: "variantBars" }, { keys: ["rebalancing_date_sensitivity_by_weekday"], span: 6, view: "variantBars" }, { keys: ["turnover_report"], span: 6, view: "turnoverBars" }] },
+        { id: "performance", label: "Performance", items: [{ keys: ["equity_curve"], title: "Growth of $1 against SPY", span: 8 }, { keys: ["full_performance_statistics"], title: "Statistics", span: 4 }, { keys: ["equity_curve"], span: 12, view: "horizonTable", title: "By period", toggle: "Horizon" }, { keys: ["equity_curve"], span: 12, view: "drawdownStory", title: "Drawdown" }, { keys: ["rolling_performance"], title: "Rolling return and Sharpe", span: 12 }] },
+        { id: "returns", label: "Returns", items: [{ keys: ["equity_curve"], span: 8, view: "monthlyHeatmap", title: "Returns by month", toggle: "Monthly" }, { keys: ["equity_curve"], span: 4, view: "returnHistogram", title: "Daily returns" }] },
+        { id: "rebalancing", label: "Rebalancing", items: [{ keys: ["rebalancing_date_sensitivity"], title: "When in the month it rebalances", span: 6, view: "variantBars" }, { keys: ["holding_period_sensitivity"], title: "How long it holds", span: 6, view: "variantBars" }, { keys: ["rebalancing_date_sensitivity_by_weekday"], title: "Weekday it rebalances", span: 12, view: "variantBars" }] },
         { id: "holdings", label: "Holdings", items: [
           { keys: ["stock_level_attribution"], span: 5, view: "attributionBars", title: "Who made and lost money" },
           { keys: ["position_entry_exit_log"], span: 7, view: "holdingsGantt", title: "What it held, when" },
-          { keys: ["position_trade_log"], span: 12, view: "dataTable", opts: { max: 2000, maxHeight: 480 } },
+          { keys: ["turnover_report"], title: "Turnover", span: 12, view: "turnoverBars" },
+          { keys: ["position_trade_log"], title: "Every trade", span: 12, view: "dataTable", opts: { max: 2000, maxHeight: 480 } },
         ] },
       ],
     },

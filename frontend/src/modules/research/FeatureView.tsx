@@ -6,10 +6,11 @@ import { ChartScope } from "@/charts/ChartScope";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { createElement, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bookmark, Check, ChevronDown, FileText, Link2, Loader2, Play, Square } from "lucide-react";
+import { AlertTriangle, Bookmark, Braces, Check, ChevronDown, Copy, Download, FileText, Hash, Link2, Loader2, Play, Square } from "lucide-react";
+import { downloadText } from "@/charts/export";
 import toast from "react-hot-toast";
 import { DUR } from "@/workspace/prefs";
-import { PopMenu, Tabs, type MenuAt } from "@/workspace/ui";
+import { MenuItem, PopMenu, Tabs, type MenuAt } from "@/workspace/ui";
 import { useWorkspace } from "@/workspace/WorkspaceShell";
 import { featureHref, metaFor, pageOf } from "./catalog";
 import { lab, runLabel } from "./lab";
@@ -162,7 +163,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
           <div className="fv-tools">
             {lab().save ? <button className="btn sm ghost" onClick={() => { const name = window.prompt("Save as")?.trim(); if (name) void lab().save!(name, feature, toPayload(feature, run.form)).then(() => toast.success(`Saved ${name}`), (e: Error) => toast.error(e.message)); }}><Bookmark size={13} />Save</button> : null}
             <button className="btn sm ghost" onClick={() => { const u = new URL(location.href); u.searchParams.set("s", encodeSettings(run.form)); u.searchParams.delete("run"); void navigator.clipboard?.writeText(u.toString()).then(() => toast.success("Link with these settings copied")); }}><Link2 size={13} />Share</button>
-            {result ? <button className="btn sm ghost" onClick={() => setPrinting(true)}><FileText size={13} />Export</button> : null}
+            {result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={() => setPrinting(true)} /> : null}
           </div>
           {runButton}
         </div>
@@ -174,6 +175,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
           {result ? (
             <motion.div key={run.jobId ?? "r"} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: DUR.slow, ease: [0.2, 0, 0, 1] }}>
               <VerdictStrip feature={feature} result={result} jobId={run.jobId} />
+              {result.meta.research_caveats?.length ? <Limits items={result.meta.research_caveats} /> : null}
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -184,7 +186,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         <span className="sticky-title"><Icon size={14} strokeWidth={1.7} style={{ color: "var(--accent)" }} />{meta.name}<span style={{ color: "var(--line-3)" }}>/</span></span>
         <Tabs value={active?.id ?? ""} onChange={(id) => { setTab(id); setMaxKey(null); scroller.current?.scrollTo({ top: Math.min(scroller.current.scrollTop, hero.current?.offsetHeight ?? 0), behavior: "smooth" }); }}
           tabs={sections.map((s) => ({ id: s.id, label: s.label, count: result ? visible(s).length : undefined }))} />
-        {result ? <button className="btn sm ghost" style={{ marginLeft: "auto" }} onClick={() => setPrinting(true)} title="Every section on one page, ready to save as PDF"><FileText size={13} />Report</button> : null}
+        {result ? <span style={{ marginLeft: "auto" }}>{result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={() => setPrinting(true)} /> : null}</span> : null}
         <span className="sticky-run" style={{ marginLeft: result ? 0 : "auto" }} aria-hidden={!stuck} inert={!stuck}>{runButton}</span>
       </div>
 
@@ -225,7 +227,6 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
                     onSpan={(span) => setPref(feature.id, cardId(item), { span })} scope={scope} index={exhibitNo(active.id, k)} />
                 </motion.div>
               ))}
-              {result.meta.research_caveats?.length ? <Caveats items={result.meta.research_caveats} /> : null}
             </motion.div>
           )
         ) : (
@@ -240,7 +241,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         <span className="sticky-title"><Icon size={14} strokeWidth={1.7} style={{ color: "var(--accent)" }} />{meta.name}<span style={{ color: "var(--line-3)" }}>/</span></span>
         <Tabs value={active?.id ?? ""} onChange={(id) => { setTab(id); setMaxKey(null); scroller.current?.scrollTo({ top: Math.min(scroller.current.scrollTop, hero.current?.offsetHeight ?? 0), behavior: "smooth" }); }}
           tabs={sections.map((s) => ({ id: s.id, label: s.label, count: result ? visible(s).length : undefined }))} />
-        {result ? <button className="btn sm ghost" style={{ marginLeft: "auto" }} onClick={() => setPrinting(true)} title="Every section on one page, ready to save as PDF"><FileText size={13} />Report</button> : null}
+        {result ? <span style={{ marginLeft: "auto" }}>{result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={() => setPrinting(true)} /> : null}</span> : null}
         <span className="sticky-run" style={{ marginLeft: result ? 0 : "auto" }} aria-hidden={!stuck} inert={!stuck}>{runButton}</span>
     </GlassSurface> : null}
     </GlassScene>
@@ -457,6 +458,35 @@ function RunError({ message, fixes, onFix }: { message: string; fixes: { label: 
         </div>
       </div>
     </div>
+  );
+}
+
+/** The run's limits as one pill under the verdict; the list opens on demand. */
+function Limits({ items }: { items: string[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="limits">
+      <button type="button" className="chip" aria-expanded={open} onClick={() => setOpen((v) => !v)}><AlertTriangle size={11} style={{ color: "var(--warn)" }} />{items.length} {items.length === 1 ? "limit" : "limits"}<ChevronDown size={11} style={{ transform: open ? "rotate(180deg)" : undefined }} /></button>
+      {!open ? <span className="limits-first">{items[0]}</span> : <ul>{items.map((c) => <li key={c}>{c}</li>)}</ul>}
+    </div>
+  );
+}
+
+/** Report, raw data and the run's identity in one menu. */
+function ExportMenu({ feature, result, jobId, form, onReport }: { feature: FeatureSpec; result: FeatureResult; jobId?: string | null; form: Record<string, unknown>; onReport: () => void }) {
+  const [at, setAt] = useState<MenuAt | null>(null);
+  const copy = (text: string, what: string) => void navigator.clipboard?.writeText(text).then(() => toast.success(`${what} copied`));
+  return (
+    <>
+      <button className="btn sm ghost" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setAt({ x: r.right - 240, y: r.bottom + 4 }); }}><Download size={13} />Export<ChevronDown size={11} /></button>
+      <PopMenu at={at} onClose={() => setAt(null)} width={240}>
+        <MenuItem icon={<FileText size={13} />} onClick={() => { setAt(null); onReport(); }}>Report as PDF</MenuItem>
+        <MenuItem icon={<Braces size={13} />} onClick={() => { setAt(null); downloadText(JSON.stringify({ feature: feature.id, run: jobId ?? null, meta: result.meta, summary: result.summary_cards ?? [], tables: result.tables ?? {}, charts: result.charts ?? {} }), `${feature.id}_${jobId ?? "run"}.json`, "application/json"); }}>Every output as JSON</MenuItem>
+        <div className="sep" />
+        <MenuItem icon={<Copy size={13} />} onClick={() => { setAt(null); copy(JSON.stringify(toPayload(feature, form), null, 2), "Settings"); }}>Copy settings</MenuItem>
+        {jobId ? <MenuItem icon={<Hash size={13} />} onClick={() => { setAt(null); copy(jobId, "Run id"); }}>Copy run id</MenuItem> : null}
+      </PopMenu>
+    </>
   );
 }
 

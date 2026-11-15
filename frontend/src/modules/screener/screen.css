@@ -70,3 +70,5 @@ g.rrg-improving polyline, g.rrg-improving circle { stroke: var(--text-3); fill: 
 .qlc-bars i b { display: block; height: 100%; border-radius: inherit; background: var(--c1); }
 .qlc-bars em { font-style: normal; text-align: right; color: var(--text); }
 .qlc-thesis { margin: 0; color: var(--text-2); font-size: 12.5px; }
+.ub-seg.card-toggle { padding: 2px; border-radius: 8px; }
+.ub-seg.card-toggle button { height: 24px; padding: 0 9px; font-size: 12px; border-radius: 6px; }

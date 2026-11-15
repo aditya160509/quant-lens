@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy } from "lucide-react";
 import { DataTable, Empty } from "@/kit/DataTable";
 import { fmtKey, label, num } from "@/modules/research/format";
 import { useRuns } from "@/modules/research/api";
@@ -85,22 +84,6 @@ export function NearMisses({ result }: { result: FeatureResult }) {
         {labels.map((l) => <button key={l.filter} type="button" className="pill" aria-pressed={pick === l.filter} onClick={() => setPick(pick === l.filter ? null : l.filter)}>{l.text} · {l.n}</button>)}
       </div>
       {res.isLoading ? <div aria-busy="true">Loading</div> : rows.length ? <DataTable rows={rows} opts={{ max: 200, maxHeight: 420 }} /> : <Empty text="No names for this filter." />}
-    </div>
-  );
-}
-
-/** What it takes to rerun this result exactly. */
-export function RunInfo({ result }: { result: FeatureResult }) {
-  const run = runOf(result);
-  const [copied, setCopied] = useState(false);
-  const meta = result.meta as { as_of_date?: string; data_version?: string };
-  if (!run) return <Empty text="No run record." />;
-  const facts: [string, string][] = [["Run", run.id], ["As of", meta.as_of_date ?? "unknown"], ["Data", meta.data_version ?? "unknown"],
-    ["Formula", typeof run.payload.formula === "string" ? run.payload.formula : "none"], ...run.metrics.map((m): [string, string] => [`Metric ${m.name}`, m.expression])];
-  return (
-    <div style={{ display: "grid", gap: 10 }}>
-      <dl className="kv">{facts.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className="num">{v}</dd></div>)}</dl>
-      <div><button type="button" className="btn sm" onClick={() => { void navigator.clipboard.writeText(JSON.stringify(run.payload, null, 2)); setCopied(true); setTimeout(() => setCopied(false), 1400); }}>{copied ? <Check size={12} /> : <Copy size={12} />}Copy settings</button></div>
     </div>
   );
 }
