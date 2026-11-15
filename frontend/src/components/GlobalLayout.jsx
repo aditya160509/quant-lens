@@ -30,7 +30,6 @@ export default function GlobalLayout({ children }) {
     const navItems = [
         { name: "Home", path: "/" },
         { name: "Trade", path: "/trade" },
-        { name: "Studio", path: "/studio" },
         { name: "Screener", path: "/screener" },
         { name: "ML", path: "/ml" },
         { name: "Research", path: "/research" },

@@ -1,10 +1,11 @@
+import logging
+import os
+from pathlib import Path
+
+import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-import os
-import uvicorn
-import logging
-from pathlib import Path
 
 # Load environment variables from project root .env
 env_path = Path(__file__).parent.parent / '.env'
@@ -14,12 +15,17 @@ else:
     load_dotenv()  # Fallback to default search
 
 from app import data_loader
-from app.api import options, markets, security, orderbook
-from app.api import prices
-from app.api import nse_india  # NSE India Stock Market API (FREE)
-from app.api import factors_v2  # Factors V2 - 14-feature institutional factor intelligence
-from app.api import research_v2  # Research V2 - empirical finance test battery
-from app.api import screener_v2
+from app.api import (
+    factors_v2,  # Factors V2 - 14-feature institutional factor intelligence
+    markets,
+    nse_india,  # NSE India Stock Market API (FREE)
+    options,
+    orderbook,
+    prices,
+    research_v2,  # Research V2 - empirical finance test battery
+    screener_v2,
+    security,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -55,7 +61,7 @@ if os.environ.get("CORS_ALLOW_ALL", "true").lower() == "true":
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=False if "*" in ALLOWED_ORIGINS else True,
+    allow_credentials="*" not in ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=[
@@ -75,11 +81,10 @@ try:
 except ImportError as e:
     logger.warning(f"Security middleware not loaded: {e}")
 
-# Aggregate Studio V2 request telemetry without retaining payloads or secrets.
-from app.studio_v2.shared.observability import StudioObservabilityMiddleware
 # Compress the large JSON results of the ML and Research labs (often 0.5-2 MB, ~8x smaller gzipped).
 # Scoped by path so streaming endpoints elsewhere are never buffered.
 from starlette.middleware.gzip import GZipMiddleware
+
 
 class _LabGZip(GZipMiddleware):
     async def __call__(self, scope, receive, send):
@@ -89,7 +94,6 @@ class _LabGZip(GZipMiddleware):
             await self.app(scope, receive, send)
 
 app.add_middleware(_LabGZip, minimum_size=1024)
-app.add_middleware(StudioObservabilityMiddleware)
 
 app.include_router(options.router, prefix="/api/options", tags=["options"])
 app.include_router(markets.router, prefix="/api/markets", tags=["markets"])
@@ -103,9 +107,11 @@ app.include_router(prices.router, tags=["prices"])
 # Mounted under /api/labs/factors/v2 so legacy /api/labs/factors remains untouched.
 app.include_router(factors_v2.router, prefix="/api", tags=["factors-v2"])
 app.include_router(research_v2.router, prefix="/api", tags=["research-v2"])
-from app.api import research_v2_reports; app.include_router(research_v2_reports.router, prefix="/api", tags=["research-v2-reports"])
-from app.api import research_v2_signals; app.include_router(research_v2_signals.router, prefix="/api", tags=["research-v2-signals"])
-from app.api import research_v2_projects; app.include_router(research_v2_projects.router, prefix="/api", tags=["research-v2-projects"])
+from app.api import research_v2_projects, research_v2_reports, research_v2_signals
+
+app.include_router(research_v2_reports.router, prefix="/api", tags=["research-v2-reports"])
+app.include_router(research_v2_signals.router, prefix="/api", tags=["research-v2-signals"])
+app.include_router(research_v2_projects.router, prefix="/api", tags=["research-v2-projects"])
 
 # NSE India Router (FREE - No API key needed)
 app.include_router(nse_india.router, prefix="/api", tags=["nse-india"])
@@ -114,54 +120,49 @@ app.include_router(screener_v2.router, prefix="/api", tags=["screener-v2"])
 
 # PCA V2 quantitative feature suite
 from app.api import pca_v2
+
 app.include_router(pca_v2.router, prefix="/api", tags=["pca-v2"])
 
 
 # WebSocket API for live price streaming
 from app.api import websocket_api
+
 app.include_router(websocket_api.router, tags=["websocket"])
 
 # ML V2
 from app.api.ml_v2 import router as ml_v2_router
+
 app.include_router(ml_v2_router, prefix="/api", tags=["ml-v2"])
 
 # Volatility V2 quantitative engines
 from app.api import volatility_v2
+
 app.include_router(volatility_v2.router, prefix="/api")
 
 # Portfolio V2 institutional portfolio engines
 from app.api import portfolio_v2
+
 app.include_router(portfolio_v2.router, prefix="/api")
 
 
-# Sovereign Algo Studio - Institutional Model Engineering
-from app.routers import studio as studio_router
-app.include_router(studio_router.router, prefix="/api", tags=["sovereign-algo-studio"])
-
-# Studio V2 is retired. Only the data-studio and health endpoints stay mounted
-# because the canonical Studio data inspector (useDataStudio) still calls them.
-from fastapi import APIRouter
-from app.studio_v2.router import router as studio_v2_router
-studio_v2_retained = APIRouter()
-studio_v2_retained.routes.extend(
-    route for route in studio_v2_router.routes
-    if route.path.startswith(("/api/v2/data-studio/", "/api/v2/health/"))
-)
-app.include_router(studio_v2_retained)
 
 
 # ML v2 - Extended Intelligence System# Removed redundant v2 router as it's merged into labs.py
 
 # Import rate limiter for stats
 try:
-    from app.services.rate_limiter import get_cache_stats, clear_all_caches
+    from app.services.rate_limiter import clear_all_caches, get_cache_stats
     RATE_LIMITER_AVAILABLE = True
 except ImportError:
     RATE_LIMITER_AVAILABLE = False
 
 # Import API tracker for monitoring yfinance usage
 try:
-    from app.services.api_tracker import get_tracker_stats, reset_tracker, track_api_call
+    from app.services.api_tracker import (
+        get_tracker_stats,
+        reset_tracker,
+        track_api_call,  # noqa: F401 (import checks availability)
+    )
     API_TRACKER_AVAILABLE = True
     logger.info("API tracker enabled: Monitoring yfinance and external API usage")
 except ImportError as e:
