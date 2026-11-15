@@ -60,6 +60,15 @@ Tick as work lands. Each phase ends with tests green, screenshots at 1440 and 10
 - [ ] Paper decay panel: power statement, cost leak, signal IC, drawdown odds, sizing from evidence, shadow book
 - [ ] Certify: server re-run, hash compare, one-page PDF, share link and embed
 
+## Grand-stage additions (FEATURES_AND_OUTPUTS §9; phase in brackets)
+- [ ] G9 India coverage measured [0]
+- [ ] G13 Agent API and MCP tool [1+]
+- [ ] G6 ML and Research signals as blocks [2] · G8 bring my own data [2] · G12 research notebook [2]
+- [ ] G5 prop-firm and risk rules [3] · G11 AI reviewer [3] · G14 impact and capacity curve [3] · G15 stress scenarios [3]
+- [ ] G2 manual replay practice + journal [4]
+- [ ] G1 alerts and webhooks [5] · G7 meta strategies [5] · G10 tax-aware results [5]
+- [ ] G3 import my real trades [6] · G4 verified strategy gallery [6]
+
 ## Phase 7: remove old Studio
 - [ ] Graph + `rg` + route checks + smoke test (AGENTS.md)
 - [ ] Delete `app/studio_v2`, `routers/studio.py`, `services/studio`, `components/studio`, `stores|hooks|lib/studio*`, `chart_engine`, old Studio tests

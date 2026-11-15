@@ -304,3 +304,27 @@ Tear-sheet readers read in this order because "the equity curve is persuasive wh
 5. Rolling Sharpe, first third vs last third
 6. Rolling beta and exposure
 7. Equity curve last, log scale
+
+## 9. Grand-stage additions (whole areas the first draft missed)
+
+The testing side above already goes past every competitor. These are the areas people pay for elsewhere that the first draft left out. Each is ranked by demand seen in the research.
+
+| # | Area | What it is | Who sells it today | Phase |
+|---|---|---|---|---|
+| G1 | **Alerts and webhooks from strategies** | Any strategy (or Signals today) sends entries and exits by email, push, Telegram or webhook (JSON, for TradersPost-style broker bridges). No broker code of ours. | TradingView's most-paid feature (alerts and webhooks by tier); Option Alpha, Tradetron | 5 |
+| G2 | **Manual replay practice + journal** | Chart replay where the user trades by hand (buy, sell, stop, target), each practice trade logged with R; the same stats as a strategy; compare "my hands vs my rules" on the same bars | FX Replay ($17.99–$35/mo), Forex Tester ($159/yr), TradeZella ($35–$59/mo), DT Terminal; a whole product category | 4 |
+| G3 | **Import my real trades** | Broker CSV import; real trades shown on the chart and against the strategy that should have taken them ("you skipped 6 signals, took 4 it never gave") | TradeZella, Tradervue ($29.95–$49.95/mo) | 6 |
+| G4 | **Verified strategy gallery** | Opt-in public page per certified strategy: grade, hash, DSR with its trial count, paper record since freeze. Ranked by verdict and live record, never by backtest return. Fork to your own Build | TradingView public scripts (the moat), Composer's 2,000 community symphonies (ranked by past return: the overfitting machine) | 6, after Certify |
+| G5 | **Prop-firm and risk rules** | Rule sets (daily loss limit, max drawdown, profit target, min days) applied to any backtest; Monte Carlo gives the probability of passing and of breaching | FX Replay Pro, Forex Tester Pro | 3 |
+| G6 | **ML signals as strategy inputs** | Any ML lab model (TodayBoard, Verified) or Research signal is a block and a formula field; the strategy trades it with the same validation | QuantConnect (code only); nobody in no-code | 2 |
+| G7 | **Meta strategies** | If/else by regime ("trend up → strategy A, else B"), weighting between strategies, rotation among a basket: Composer's symphony logic on top of our strategies | Composer ($0–$32/mo) | 5 |
+| G8 | **Bring my own data** | Upload CSV bars (crypto, forex, futures, Indian or any market) and test on them with the same engine; limits say "user data" | QuantConnect imports (25–250 per backtest by tier); Research lab already has uploads | 2 |
+| G9 | **India markets** | NSE/BSE symbols where we hold them (`services/nse_direct.py` exists; coverage to measure in phase 0); INR, STT and brokerage presets for Indian costs | Streak (Zerodha), Tradetron | 0 check, then 1 |
+| G10 | **Tax-aware results** | After-tax return with short/long-term rates (US and India presets), wash-sale flag | Portfolio123 users ask for it; old Studio had a tax engine | 5 |
+| G11 | **AI reviewer, not AI ranker** | Reads the verdict, trades and limits and writes the critique: "edge comes from 3 trades in March 2020; exits are random-like; costs break it at 2×". Suggests one test to run next. Never sorts or picks strategies by return | Build Alpha "suggests improvements"; TrendSpider Sidekick | 3 |
+| G12 | **Research notebook** | Per strategy, a running log: hypothesis, what was tried, each run linked, decisions; exported with the certificate | QuantConnect research notebooks; nobody ties notes to runs | 2 |
+| G13 | **Agent API (AX)** | Typed strategy spec, every page as a job, plain-text verdict, and an MCP tool so an AI agent can write, test and read a strategy end to end; same limits and trial counter apply to agents | Nobody | 1 onward |
+| G14 | **Market impact and capacity curve** | Square-root impact model; return vs capital curve with the capital where Sharpe halves | QuantConnect shows one capacity number | 3 |
+| G15 | **Stress scenarios beyond history** | Shock a backtest: gap down 10% overnight, vol ×2 for a month, correlation to 1; synthetic paths from the noise test | Build Alpha synthetic data; QuantConnect crisis periods (history only) | 3 |
+
+Not added, on purpose: live broker execution (legal weight; webhooks cover it), options strategies (no options history), tick-level fills (no tick data). Each stays in PLAN §9.
