@@ -7,10 +7,7 @@ for relative percentile views without inventing a dynamic data dependency.
 
 from __future__ import annotations
 
-from typing import Any
-
 import pandas as pd
-
 
 INDUSTRY_TO_GROUP: dict[str, str] = {
     "Aerospace & Defense": "Capital Goods",

@@ -1,6 +1,7 @@
 """Local recurring screen execution, sharing the existing durable job runner."""
 import logging
 import threading
+
 from .state import claim_due_schedules, get_screen, schedule_result
 
 logger = logging.getLogger(__name__)

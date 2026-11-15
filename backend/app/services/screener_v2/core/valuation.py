@@ -1,10 +1,17 @@
 """Screener V2 valuation computations."""
 from __future__ import annotations
+
 from typing import Any
+
 import numpy as np
 import pandas as pd
-from .data_loader import close_matrix, fundamental_history, parse_symbols, normalize_symbol
+
 from .common import clean_json, number_like, records
+from .data_loader import (
+    close_matrix,
+    normalize_symbol,
+    parse_symbols,
+)
 from .stats import _pick, rank_pct
 
 
@@ -13,7 +20,7 @@ def historical_valuation_series(symbol, metric="trailing_pe", lookback=756):
     supported = {"trailing_pe", "pb_ratio", "ps_ratio", "p_cf", "ev_ebit", "ev_ebitda", "fcf_yield"}
     if metric not in supported:
         raise ValueError(f"Historical valuation metric unavailable: {metric}")
-    from .fundamentals import statement_snapshots, enterprise_claims
+    from .fundamentals import enterprise_claims, statement_snapshots
     hist = statement_snapshots([symbol])
     prices = close_matrix([symbol], lookback)
     if hist.empty or prices.empty or symbol not in prices:
@@ -119,7 +126,7 @@ def relative_valuation(panel: pd.DataFrame, ticker: str | None = None, payload: 
     history_percentile = own_history_percentile_from_series([item.get("valuation_metric") for item in history_series_rows])
     slope_info = re_rating_slope_from_series(history_series_rows)
     universe_ranks = pd.DataFrame({metric: rank_pct(panel[metric], higher_better=metric == "fcf_yield") for metric in metrics if metric in panel}, index=panel.index)
-    sector_ranks = pd.DataFrame({metric: panel.groupby("sector")[metric].transform(lambda values: rank_pct(values, higher_better=metric == "fcf_yield")) for metric in metrics if metric in panel}, index=panel.index)
+    sector_ranks = pd.DataFrame({metric: panel.groupby("sector")[metric].transform(lambda values, metric=metric: rank_pct(values, higher_better=metric == "fcf_yield")) for metric in metrics if metric in panel}, index=panel.index)
     card = {
         "ticker": r.get("ticker"),
         "sector": sector,
@@ -137,7 +144,7 @@ def relative_valuation(panel: pd.DataFrame, ticker: str | None = None, payload: 
     for sec, g in panel.groupby("sector"):
         for metric in metrics:
             if metric in g.columns:
-                sector_heat.append({"row": str(sec), "col": metric, "value": number_like(rank_pct(panel[metric], higher_better=metric in {"fcf_yield"}).reindex(g.index).mean()), "count": int(len(g)), "median_market_cap": number_like(g["market_cap"].median()) if "market_cap" in g else None})
+                sector_heat.append({"row": str(sec), "col": metric, "value": number_like(rank_pct(panel[metric], higher_better=metric in {"fcf_yield"}).reindex(g.index).mean()), "count": len(g), "median_market_cap": number_like(g["market_cap"].median()) if "market_cap" in g else None})
     cards = panel[["ticker", "sector"]].copy()
     cards["sector_percentile"] = sector_ranks.mean(axis=1)
     cards["universe_percentile"] = universe_ranks.mean(axis=1)

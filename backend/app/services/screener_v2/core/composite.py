@@ -1,10 +1,19 @@
 """Screener V2 composite computations."""
 from __future__ import annotations
+
 from typing import Any
+
 import numpy as np
 import pandas as pd
+
 from .common import clean_json, number_like
-from .stats import _winsorize_at_percentiles, beta_neutralize, rank_pct, sign_correct, zscore
+from .stats import (
+    _winsorize_at_percentiles,
+    beta_neutralize,
+    rank_pct,
+    sign_correct,
+    zscore,
+)
 
 
 def composite_config(payload):
@@ -35,7 +44,6 @@ def component_scores(panel: pd.DataFrame, components: list[dict[str, Any]] | dic
         raise ValueError(f"Unknown composite preset: {preset}")
     rows = config.get("components") if isinstance(config, dict) else components
     rows = [dict(row) for row in (rows or presets.get(preset) or defaults)]
-    target_field = str(config.get("ic_target_field") or "return_1m") if isinstance(config, dict) else "return_1m"
     diagnostics_note = None
     if weighting_mode not in {"manual", "equal", "ic_ir", "ridge"}:
         raise ValueError("Unknown weighting_mode")
@@ -152,9 +160,10 @@ def _normalized_component(panel, field, config):
 
 def historical_weights(panel, rows, config, history_cache=None):
     """Learn only from monthly formation signals with fully matured forward labels."""
+    from sklearn.linear_model import Ridge
+
     from .data_loader import AS_OF, as_of_context, close_matrix
     from .panel import metric_panel
-    from sklearn.linear_model import Ridge
     fields = [row['field'] for row in rows]
     if len(fields) != len(set(fields)):
         raise ValueError('Learned components require distinct fields')
