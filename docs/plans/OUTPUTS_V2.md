@@ -46,7 +46,7 @@ Everywhere
 
 Each one is real data, has a still fallback and respects the Reduce motion switch.
 
-- [ ] C1 Hero result: one huge lead figure per run ("+71% vs SPY +38%", "12 of 500 pass") over a full-width chart, then the evidence below. Screen, Rank and Test
+- [x] C1 Hero result: one huge lead figure per run ("+71% vs SPY +38%", "12 of 500 pass") over a full-width chart, then the evidence below. Screen, Rank and Test
 - [ ] C2 Funnel story: 500 dots collapse filter by filter to the passing names, count ticking down, each step labelled with the filter that removed most
 - [ ] C3 Backtest replay: press play, months advance, names fly in and out of the portfolio, equity line draws live against SPY, drawdowns shade as they happen; scrub bar
 - [ ] C4 Rotation trails: sectors move through the RRG quadrants week by week with fading tails; play and scrub

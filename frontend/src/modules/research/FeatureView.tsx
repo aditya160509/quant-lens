@@ -25,6 +25,7 @@ import { OutputCard } from "./OutputCard";
 import type { FeatureRun } from "./ResearchApp";
 import { Control, encodeSettings, toPayload } from "./StudyForm";
 import { Customised } from "./Customised";
+import { HeroResult } from "./Hero";
 import type { FeatureResult, FeatureSpec, InputSpec } from "./types";
 
 const RUNNING = new Set(["submitting", "queued", "running", "loading"]);
@@ -174,6 +175,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         <AnimatePresence initial={false}>
           {result ? (
             <motion.div key={run.jobId ?? "r"} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: DUR.slow, ease: [0.2, 0, 0, 1] }}>
+              {layout.hero?.(result) ? <HeroResult spec={layout.hero(result)!} /> : null}
               <VerdictStrip feature={feature} result={result} jobId={run.jobId} />
               {result.meta.research_caveats?.length ? <Limits items={result.meta.research_caveats} /> : null}
             </motion.div>

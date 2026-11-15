@@ -12,7 +12,8 @@ import { TemplatePicker } from "./rank/TemplatePicker";
 import { BulkActions, RowActions } from "./RowActions";
 import { UniverseBar } from "./filters/UniverseBar";
 import { ScreenerHome } from "./home/ScreenerHome";
-import { isNum } from "@/modules/research/format";
+import { isNum, out, pct } from "@/modules/research/format";
+import type { HeroSpec } from "@/modules/research/Hero";
 import { group, registerAlternates, registerViews } from "@/modules/research/outputs/registry";
 import type { FeatureMeta, LabConfig, Page } from "@/modules/research/lab";
 import type { FeatureResult, FeatureSpec, InputSpec, OutputSpec } from "@/modules/research/types";
@@ -54,20 +55,58 @@ function toSpec(f: RawFeature): FeatureSpec {
 
 type Meta = FeatureResult["meta"] & { as_of_date?: string; universe_count?: number; data_version?: string; data_sources?: Record<string, { modified_ns?: number }> };
 
-/** The result header: how many names passed, out of what, as of when, on which data. */
+/** The result header: as of when, on which data, how much of it is known (the hero says how many pass). */
 function headline(r: FeatureResult) {
   const meta = r.meta as Meta;
-  const passed = r.summary_cards?.find((c) => c.label === "After filters")?.value;
   const mtimes = Object.values(meta.data_sources ?? {}).map((d) => d.modified_ns).filter(isNum);
   const known = r.summary_cards?.find((c) => c.label === "Data coverage")?.value;
   const parts = [
-    isNum(passed) && isNum(meta.universe_count) ? `${passed.toLocaleString()} of ${meta.universe_count.toLocaleString()} names pass` : null,
     meta.as_of_date ? `as of ${meta.as_of_date}` : null,
     mtimes.length ? `updated ${new Date(Math.max(...mtimes) / 1e6).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : null,
     meta.data_version ? `data ${meta.data_version}` : null,
     isNum(known) ? `${known.toFixed(0)}% of key figures known` : null,
   ];
   return { headline: parts.filter(Boolean).join(" · ") || null, tone: isNum(known) && known < 60 ? ("warn" as const) : null };
+}
+
+const card = (r: FeatureResult, label: string) => r.summary_cards?.find((c) => c.label === label)?.value;
+
+/** Screen hero: how many pass, out of what, and how the passing names split by sector. */
+function screenHero(r: FeatureResult): HeroSpec | null {
+  const passed = card(r, "After filters"), n = (r.meta as Meta).universe_count, neck = card(r, "Bottleneck filter");
+  if (!isNum(passed) || !isNum(n)) return null;
+  const by = new Map<string, number>();
+  out(r, "ranked_screener_table").forEach((x) => { const k = typeof x.sector === "string" && x.sector ? x.sector : "Unknown"; by.set(k, (by.get(k) ?? 0) + 1); });
+  const sorted = [...by].sort((a, b) => b[1] - a[1]);
+  const rest = sorted.slice(7).reduce((a, [, v]) => a + v, 0);
+  const stack = [...sorted.slice(0, 7), ...(rest ? [["Other", rest] as [string, number]] : [])].map(([label, value]) => ({ label, value }));
+  return { figure: passed.toLocaleString(), versus: `of ${n.toLocaleString()} pass`, line: typeof neck === "string" && passed < n ? `Most removed: ${neck}` : undefined, stack };
+}
+
+/** Rank hero: who leads, and the top names' composite scores as bars. */
+function rankHero(r: FeatureResult): HeroSpec | null {
+  const rows = out(r, "composite_score_universe_ranking").filter((x) => isNum(x.composite_score) && typeof x.ticker === "string").sort((a, b) => (b.composite_score as number) - (a.composite_score as number));
+  if (!rows.length) return null;
+  return { figure: String(rows[0].ticker), versus: `leads ${rows.length.toLocaleString()} names · score ${(rows[0].composite_score as number).toFixed(0)}`, bars: rows.slice(0, 30).map((x) => ({ label: String(x.ticker), value: x.composite_score as number })) };
+}
+
+/** Test hero: total return against SPY over the run, both curves drawn full width. */
+function testHero(r: FeatureResult): HeroSpec | null {
+  const rows = out(r, "equity_curve").filter((x) => isNum(x.strategy));
+  if (rows.length < 2) return null;
+  const s = rows.map((x) => x.strategy as number), b = rows.map((x) => x.benchmark).filter(isNum);
+  const sr = s.at(-1)! / s[0] - 1, br = b.length > 1 ? b.at(-1)! / b[0] - 1 : null;
+  const step = Math.max(1, Math.floor(rows.length / 320));
+  const thin = (v: number[]) => v.filter((_, i) => i % step === 0 || i === v.length - 1);
+  const years = (Date.parse(String(rows.at(-1)!.date)) - Date.parse(String(rows[0].date))) / (365.25 * 864e5);
+  const sharpe = card(r, "Sharpe"), dd = card(r, "Max drawdown");
+  const sign = (v: number) => `${v > 0 ? "+" : ""}${pct(v, 0)}`;
+  return {
+    figure: sign(sr), tone: br === null ? (sr >= 0 ? "up" : "down") : sr >= br ? "up" : "down",
+    versus: br === null ? undefined : `SPY ${sign(br)}`,
+    line: [isNum(years) ? `${years.toFixed(1)} years` : null, isNum(sharpe) ? `Sharpe ${sharpe.toFixed(2)}` : null, isNum(dd) ? `worst drawdown ${pct(dd, 0)}` : null].filter(Boolean).join(" · "),
+    lines: [{ label: "Strategy", values: thin(s), color: "var(--accent)" }, ...(b.length > 1 ? [{ label: "SPY", values: thin(b), color: "var(--text-3)" }] : [])],
+  };
 }
 
 /** The standing disclosure on a backtest: what the numbers cannot tell. */
@@ -109,6 +148,7 @@ export const SCREENER_LAB: LabConfig = {
   layouts: {
     sc01: {
       verdict: headline,
+      hero: screenHero,
       sections: [
         { id: "results", label: "Results", items: [{ keys: ["ranked_screener_table"], title: "Passing names", span: 12, view: "screenTable", opts: { max: 5000, maxHeight: 640, columns: RESULT_COLUMNS, bars: RESULT_BARS, hide: RESULT_HIDDEN, hatch: true, rowActions, bulk } }] },
         { id: "trust", label: "Trust", items: [
@@ -122,6 +162,7 @@ export const SCREENER_LAB: LabConfig = {
       drop: ["run_changes", "saved_screens", "metric_coverage", "cross_sectional_percentile_context", "heatmap_view", "market_cap_bucket_distribution"],
     },
     sc03: {
+      hero: rankHero,
       sections: [
         { id: "ranking", label: "Ranking", items: [
           { keys: ["composite_score_universe_ranking"], span: 8, view: "factorStack", title: "Ranking", toggle: "Factor bars", opts: { max: 5000, maxHeight: 640, hatch: true, rowActions, bulk } },
@@ -180,6 +221,7 @@ export const SCREENER_LAB: LabConfig = {
     },
     sc05: {
       verdict: testBanner,
+      hero: testHero,
       sections: [
         { id: "proof", label: "Proof", items: [{ keys: ["equity_curve", "cscv_pbo"], span: 12, view: "proofPanel", note: "Probability of backtest overfitting from combinatorially symmetric cross-validation (Bailey et al., 2017)." }] },
         { id: "performance", label: "Performance", items: [{ keys: ["equity_curve"], title: "Growth of $1 against SPY", span: 8 }, { keys: ["full_performance_statistics"], title: "Statistics", span: 4 }, { keys: ["equity_curve"], span: 12, view: "horizonTable", title: "By period", toggle: "Horizon" }, { keys: ["equity_curve"], span: 12, view: "drawdownStory", title: "Drawdown" }, { keys: ["rolling_performance"], title: "Rolling return and Sharpe", span: 12 }] },

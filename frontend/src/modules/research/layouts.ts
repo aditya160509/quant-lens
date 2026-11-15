@@ -1,6 +1,7 @@
 import { first, isNum, label, num, out, pval, rowsOf, tstat } from "./format";
 import { lab } from "./lab";
 import type { FeatureResult, FeatureSpec } from "./types";
+import type { HeroSpec } from "./Hero";
 
 export type Tone = "up" | "down" | "warn";
 export type Verdict = { headline: string | null; tone: Tone | null };
@@ -9,7 +10,7 @@ export type Verdict = { headline: string | null; tone: Tone | null };
 export type Item = { keys: string[]; view?: string; span: number; title?: string; hint?: string; opts?: Record<string, unknown>; flush?: boolean; /** Method footnote, only where the method changes how to read the card. */ note?: string; /** Label of the designed view, shown with its alternates as a visible switch instead of a menu. */ toggle?: string };
 export type Section = { id: string; label: string; intro?: string; items: Item[] };
 /** `drop`: outputs kept out of the page on purpose; they stay in the JSON export. */
-export type FeatureLayout = { sections: Section[]; verdict?: (r: FeatureResult) => Verdict; drop?: string[] };
+export type FeatureLayout = { sections: Section[]; verdict?: (r: FeatureResult) => Verdict; drop?: string[]; /** The run's lead figure and picture, shown above the evidence. */ hero?: (r: FeatureResult) => HeroSpec | null };
 
 const card = (keys: string | string[], span: number, extra: Omit<Item, "keys" | "span"> = {}): Item => ({ keys: Array.isArray(keys) ? keys : [keys], span, ...extra });
 const tests = (keys: string[], span: number, title: string, hint?: string): Item => ({ keys, span, view: "tests", title, hint, flush: true });
