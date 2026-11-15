@@ -238,6 +238,56 @@ def compare(tickers: list[str]) -> dict[str, Any]:
                        "rows": [{"ticker": s, "company_name": rows.loc[s, "company_name"] or None, "sector": rows.loc[s, "sector"] or None, **{c: number_like(rows.loc[s, c]) if c in rows else None for c in COMPARE_COLUMNS}} for s in symbols]})
 
 
+# Investor lenses with published, fixed rules (fractions, not percent).
+LENSES = [
+    {"key": "buffett", "label": "Buffett", "rule": "ROE at least 15%, debt under half of equity, positive free cash flow, net margin at least 10%"},
+    {"key": "graham", "label": "Graham", "rule": "P/E at most 15 and P/E times P/B at most 22.5 (the Graham number)"},
+    {"key": "dividend", "label": "Dividend safety", "rule": "Pays a dividend, payout at most 60%, debt at most 3 times EBITDA"},
+    {"key": "momentum", "label": "Momentum", "rule": "12-month return positive and in the top 30% of every name we hold"},
+]
+# Multiples whose sector median prices a name: price times sector median over its own multiple.
+FAIR_MULTIPLES = ["trailing_pe", "pb_ratio", "ps_ratio"]
+
+
+def lenses(tickers: list[str]) -> dict[str, Any]:
+    """Which lenses each name passes, and a fair-value range from its peers' median P/E, P/B and P/S."""
+    p = panel()
+    symbols = [s for s in dict.fromkeys(normalize_symbol(t) for t in tickers) if s in set(p.ticker)]
+    num = lambda c: pd.to_numeric(p[c], errors="coerce") if c in p else pd.Series(float("nan"), index=p.index)
+    roe, de, fcf, nm, pe, pb = num("roe"), num("debt_equity"), num("fcf_yield"), num("net_margin"), num("trailing_pe"), num("pb_ratio")
+    dy, payout, debt_ebitda, r12 = num("dividend_yield"), num("payout_ratio"), num("debt_ebitda"), num("return_12m")
+    flags = pd.DataFrame({
+        "buffett": (roe >= 0.15) & (de <= 0.5) & (fcf > 0) & (nm >= 0.10),
+        "graham": (pe > 0) & (pe <= 15) & (pb > 0) & (pe * pb <= 22.5),
+        "dividend": (dy > 0) & (payout > 0) & (payout <= 0.6) & (debt_ebitda <= 3),
+        "momentum": (r12 > 0) & (r12.rank(pct=True) >= 0.7),
+    })
+    price = num("price")
+    implied = []
+    for c in FAIR_MULTIPLES:
+        own = num(c).where(num(c) > 0)
+        # Peers are the industry when it has 4 or more priced names (true peers beat a wide sector), else the sector.
+        by_ind = own.groupby(p.industry).transform("median") if "industry" in p else pd.Series(float("nan"), index=p.index)
+        n_ind = own.groupby(p.industry).transform("count") if "industry" in p else pd.Series(0, index=p.index)
+        med = by_ind.where(n_ind >= 4, own.groupby(p.sector).transform("median"))
+        implied.append(price * med / own)
+    fair = pd.concat(implied, axis=1)
+    enough = fair.notna().sum(axis=1) >= 2
+    lo, mid, hi = fair.min(axis=1).where(enough), fair.median(axis=1).where(enough), fair.max(axis=1).where(enough)
+    idx = p.set_index("ticker").index
+    pos = {s: i for i, s in enumerate(idx)}
+    rows = []
+    for s in symbols:
+        i = pos[s]
+        passed = [k for k in flags if bool(flags[k].iloc[i])]
+        rows.append({"ticker": s, "company_name": p.company_name.iloc[i] or None, "sector": p.sector.iloc[i] or None, "price": number_like(price.iloc[i]),
+                     **{k: bool(flags[k].iloc[i]) for k in flags}, "passes": len(passed),
+                     "fair_low": number_like(lo.iloc[i]), "fair_mid": number_like(mid.iloc[i]), "fair_high": number_like(hi.iloc[i]),
+                     "discount": number_like(mid.iloc[i] / price.iloc[i] - 1) if pd.notna(mid.iloc[i]) and price.iloc[i] else None,
+                     "fair_basis": int(fair.iloc[i].notna().sum())})
+    return clean_json({"as_of": str(p.attrs.get("as_of_date")), "lenses": LENSES, "fair_basis": "Industry median P/E, P/B and P/S (sector when the industry has under 4 priced names) applied to the name's own earnings, book and sales", "rows": rows})
+
+
 def _t(x: Any) -> str:
     """A Typst string literal."""
     return '"' + str(x).replace("\\", "\\\\").replace('"', '\\"') + '"'

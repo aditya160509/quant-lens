@@ -1,0 +1,28 @@
+.ln, .fv { display: grid; gap: 12px; }
+.ln-load { color: var(--text-3); font-size: 12.5px; }
+.ln-head { font-size: 15px; color: var(--text-2); }
+.ln-head b { color: var(--text); font-weight: 650; }
+.ln-lenses { display: flex; flex-wrap: wrap; gap: 8px; }
+.ln-lens { display: grid; gap: 2px; min-width: 120px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); text-align: left; }
+.ln-lens span { font-size: 12px; color: var(--text-3); }
+.ln-lens b { font-size: 22px; font-weight: 600; }
+.ln-lens[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.ln-scroll { max-height: 440px; overflow: auto; }
+.ln-table td, .ln-table th { white-space: nowrap; }
+.ln-table th:not(:first-child) { text-align: center; }
+.ln-co { margin-left: 8px; color: var(--text-3); font-size: 12px; }
+.ln-cell { text-align: center; }
+.ln-cell i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-2, var(--line)); }
+.ln-cell[data-on="true"] i { background: var(--accent); box-shadow: none; }
+.ln-n { font-weight: 600; }
+.fv-axis { display: flex; justify-content: space-between; padding: 0 56px 0 64px; }
+.fv-rows { display: grid; gap: 2px; max-height: 480px; overflow: auto; }
+.fv-row { display: grid; grid-template-columns: 64px 1fr 56px; align-items: center; gap: 0; height: 22px; border-radius: 6px; text-align: left; font-size: 12px; }
+.fv-row:hover { background: var(--panel-2); }
+.fv-row b { font-weight: 600; padding-left: 4px; }
+.fv-row em { font-style: normal; text-align: right; padding-right: 4px; }
+.fv-track { position: relative; height: 100%; }
+.fv-mid0 { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--line-3, var(--line)); }
+.fv-range { position: absolute; top: 8px; height: 6px; border-radius: 99px; background: color-mix(in oklch, var(--accent) 35%, transparent); }
+.fv-mark { position: absolute; top: 5px; width: 3px; height: 12px; margin-left: -1.5px; border-radius: 2px; background: var(--accent); }
+.fv-note { font-size: 11.5px; color: var(--text-3); }

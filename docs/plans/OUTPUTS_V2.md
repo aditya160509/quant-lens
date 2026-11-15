@@ -55,8 +55,8 @@ Each one is real data, has a still fallback and respects the Reduce motion switc
 
 ## 4. Add: the paid-tier set (what people say they would pay for)
 
-- [ ] P1 Lens overlap: Buffett (ROE, cash flow, low debt), Graham (deep value, margin of safety), Dividend safety, Momentum; a matrix of names passing 2+ lenses, the overlap highlighted as the headline
-- [ ] P2 Price vs fair value strip: every passing name on one axis, price against our valuation range, sorted by discount; click opens the drawer at Valuation
+- [x] P1 Lens overlap: Buffett (ROE, cash flow, low debt), Graham (deep value, margin of safety), Dividend safety, Momentum; a matrix of names passing 2+ lenses, the overlap highlighted as the headline
+- [x] P2 Price vs fair value strip: every passing name on one axis, price against our valuation range, sorted by discount; click opens the drawer at Valuation
 - [ ] P3 Red flag feed: debt jump, one-quarter income drop, margin collapse, dilution, Altman distress, with the quarter it happened
 - [ ] P4 Fair-value alert: "tell me when JNJ trades below its fair value" from the strip or drawer, into Monitor
 - [ ] P5 Score snowflake everywhere: the drawer radar as a small mark in table rows and compare, so every name has a shape

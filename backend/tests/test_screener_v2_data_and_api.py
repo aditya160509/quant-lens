@@ -167,3 +167,22 @@ def test_lookup_compare_adds_sector_and_all_name_medians(monkeypatch):
     meds = {m['label']: (m['n'], m['trailing_pe']) for m in out['medians']}
     assert meds == {'Tech median': (3, 20.0), 'Energy median': (1, 5.0), 'All names median': (4, 15.0)}
     assert [r['ticker'] for r in out['rows']] == ['AAA', 'DDD']
+
+
+def test_lookup_lenses_apply_fixed_rules_and_sector_fair_value(monkeypatch):
+    import pandas as pd
+
+    from app.services.screener_v2.core import lookup as lk
+    frame = pd.DataFrame({
+        'ticker': ['AAA', 'BBB', 'CCC'], 'company_name': ['A', 'B', 'C'], 'sector': ['Tech', 'Tech', 'Tech'], 'price': [10.0, 20.0, 30.0],
+        'roe': [0.2, 0.05, 0.3], 'debt_equity': [0.3, 1.0, 0.2], 'fcf_yield': [0.05, 0.01, 0.02], 'net_margin': [0.15, 0.02, 0.2],
+        'trailing_pe': [10.0, 20.0, 30.0], 'pb_ratio': [2.0, 3.0, 4.0], 'ps_ratio': [1.0, 2.0, 3.0],
+        'dividend_yield': [0.03, 0.0, 0.01], 'payout_ratio': [0.4, 0.0, 0.8], 'debt_ebitda': [1.0, 2.0, 1.0], 'return_12m': [0.1, -0.2, 0.5],
+    })
+    monkeypatch.setattr(lk, 'panel', lambda: frame)
+    rows = {r['ticker']: r for r in lk.lenses(['AAA', 'CCC'])['rows']}
+    assert (rows['AAA']['buffett'], rows['AAA']['graham'], rows['AAA']['dividend']) == (True, True, True)
+    assert (rows['CCC']['graham'], rows['CCC']['dividend'], rows['CCC']['momentum']) == (False, False, True)
+    # AAA: sector medians P/E 20, P/B 3, P/S 2 against its own 10, 2, 1 price it at 20, 15 and 20.
+    assert (rows['AAA']['fair_low'], rows['AAA']['fair_mid'], rows['AAA']['fair_high']) == (15.0, 20.0, 20.0)
+    assert rows['AAA']['discount'] == 1.0
