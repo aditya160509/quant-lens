@@ -202,3 +202,18 @@ def test_then_and_now_pairs_each_metric_with_its_value_a_year_earlier(monkeypatc
     rows = {r['key']: (r['now'], r['then']) for r in out['rows']}
     assert seen == ['2025-01-28'] and out['then_date'] == '2025-01-28'
     assert rows['trailing_pe'] == (20.0, 15.0) and rows['score_rank'] == (2.0, 1.0)
+
+
+def test_red_flags_name_the_quarter_of_each_warning(monkeypatch):
+    import pandas as pd
+
+    from app.services.screener_v2.core import lookup as lk
+    dates = pd.date_range('2024-03-31', periods=8, freq='QE')
+    hist = pd.DataFrame({'reportDate': dates, 'periodType': 'quarterly',
+                         'Total Debt': [100, 100, 100, 100, 100, 100, 100, 200], 'Net Income': [10, 10, 10, 10, 10, 10, 10, -1],
+                         'Operating Income': [20] * 7 + [5], 'Total Revenue': [100] * 8, 'Diluted Average Shares': [100] * 4 + [110] * 4})
+    monkeypatch.setattr(lk, 'fundamental_history', lambda s: hist)
+    flags = {(f['flag'], f['quarter']) for f in lk._flags_for('AAA')}
+    last = dates[-1].strftime('%Y-%m-%d')
+    assert {('Debt jump', last), ('Income drop', last), ('Margin collapse', last), ('Dilution', last)} <= flags
+    assert not any(q != last and f in {'Debt jump', 'Income drop', 'Margin collapse'} for f, q in flags)

@@ -337,6 +337,49 @@ def lenses(tickers: list[str]) -> dict[str, Any]:
     return clean_json({"as_of": str(p.attrs.get("as_of_date")), "lenses": LENSES, "fair_basis": "Industry median P/E, P/B and P/S (sector when the industry has under 4 priced names) applied to the name's own earnings, book and sales", "rows": rows})
 
 
+def _flags_for(symbol: str) -> list[dict[str, Any]]:
+    """Red flags in the latest four reported quarters: debt jump, income drop, margin collapse, dilution."""
+    h = fundamental_history(symbol)
+    if h.empty or "periodType" not in h:
+        return []
+    q = h[h.periodType.eq("quarterly")].sort_values("reportDate").drop_duplicates("reportDate", keep="last").tail(8).reset_index(drop=True)
+    col = lambda c: pd.to_numeric(q[c], errors="coerce") if c in q else pd.Series(float("nan"), index=q.index)
+    debt, ni, opi, rev, shares = col("Total Debt"), col("Net Income"), col("Operating Income"), col("Total Revenue"), col("Diluted Average Shares")
+    margin = opi / rev.where(rev > 0)
+    out = []
+    for i in range(max(1, len(q) - 4), len(q)):
+        when = pd.Timestamp(q.reportDate.iloc[i]).strftime("%Y-%m-%d")
+        if debt.iloc[i - 1] > 0 and debt.iloc[i] >= debt.iloc[i - 1] * 1.3:
+            out.append({"flag": "Debt jump", "quarter": when, "detail": f"Total debt up {debt.iloc[i] / debt.iloc[i - 1] - 1:.0%} in one quarter"})
+        # Against the same quarter a year earlier, so seasonal quarters do not read as drops.
+        if i >= 4 and ni.iloc[i - 4] > 0 and (ni.iloc[i] < 0 or ni.iloc[i] <= ni.iloc[i - 4] * 0.5):
+            out.append({"flag": "Income drop", "quarter": when, "detail": "Net income turned to a loss" if ni.iloc[i] < 0 else f"Net income down {1 - ni.iloc[i] / ni.iloc[i - 4]:.0%} against the same quarter a year earlier"})
+        if i >= 4 and pd.notna(margin.iloc[i]) and pd.notna(margin.iloc[i - 4]) and margin.iloc[i] <= margin.iloc[i - 4] - 0.05:
+            out.append({"flag": "Margin collapse", "quarter": when, "detail": f"Operating margin {margin.iloc[i - 4]:.0%} to {margin.iloc[i]:.0%} against the same quarter a year earlier"})
+        if i >= 4 and shares.iloc[i - 4] > 0 and shares.iloc[i] >= shares.iloc[i - 4] * 1.05:
+            out.append({"flag": "Dilution", "quarter": when, "detail": f"Diluted shares up {shares.iloc[i] / shares.iloc[i - 4] - 1:.0%} in a year"})
+    return out
+
+
+def red_flags(tickers: list[str]) -> dict[str, Any]:
+    """P3: warning signs per name with the quarter they appeared, plus Altman distress from the latest statements."""
+    p = panel()
+    known = set(p.ticker)
+    # Altman's Z is built for operating companies; banks, insurers, REITs and utilities sit low by design.
+    want = p[p.ticker.isin({normalize_symbol(t) for t in tickers}) & ~p.sector.isin(["Financial Services", "Real Estate", "Utilities"])]
+    z = pd.Series(pd.to_numeric(altman_z_score(want), errors="coerce").to_numpy(), index=want.ticker) if len(want) else pd.Series(dtype=float)
+    rows = []
+    for s in dict.fromkeys(normalize_symbol(t) for t in tickers):
+        if s not in known:
+            continue
+        with as_of_context(p.attrs.get("as_of_date")):  # statements count only 90 days after the period ends
+            rows += [{"ticker": s, **f} for f in _flags_for(s)]
+        if s in z.index and pd.notna(z.get(s)) and z[s] < 1.81:
+            rows.append({"ticker": s, "flag": "Altman distress", "quarter": None, "detail": f"Altman Z {z[s]:.2f}, under the 1.81 distress line"})
+    rows.sort(key=lambda r: r["quarter"] or "9999", reverse=True)
+    return clean_json({"as_of": str(p.attrs.get("as_of_date")), "rows": rows})
+
+
 def _t(x: Any) -> str:
     """A Typst string literal."""
     return '"' + str(x).replace("\\", "\\\\").replace('"', '\\"') + '"'

@@ -207,6 +207,14 @@ async def lookup_lenses(body: dict[str, Any]) -> dict[str, Any]:
     return await asyncio.to_thread(_lookup_call, lookup.lenses, names)
 
 
+@router.post("/lookup/red-flags")
+async def lookup_red_flags(body: dict[str, Any]) -> dict[str, Any]:
+    names = [str(t) for t in body.get("tickers", []) if str(t).strip()][:5000]
+    if not names:
+        raise HTTPException(422, "Send at least one ticker")
+    return await asyncio.to_thread(_lookup_call, lookup.red_flags, names)
+
+
 @router.get("/lookup/{ticker}")
 async def lookup_ticker(ticker: str) -> dict[str, Any]:
     return await asyncio.to_thread(_lookup_call, lookup.lookup, ticker)

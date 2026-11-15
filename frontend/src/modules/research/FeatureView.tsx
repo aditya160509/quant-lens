@@ -40,17 +40,20 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   const [stuck, setStuck] = useState(false);
   const prefs = useFeaturePrefs(feature.id);
   const setPref = useCardPrefs((st) => st.set);
-  const [printing, setPrinting] = useState(false);
+  // "all": every section; "one": the hero, headline figures and the first section, for a one-page share.
+  const [printing, setPrinting] = useState<false | "all" | "one">(false);
   const [against, setAgainst] = useState<string | null>(null);
   const [againstMenu, setAgainstMenu] = useState<MenuAt | null>(null);
   const earlier = useRuns((st) => st.runs).filter((r) => r.featureId === feature.id && r.status === "completed" && r.jobId !== run.jobId).slice(0, 12);
   // Report: render every section stacked, print once painted, then restore the tabbed view.
   useEffect(() => {
     if (!printing) return;
+    // The one-page summary prints on a portrait page (named page in the print CSS).
+    document.documentElement.classList.toggle("print-one", printing === "one");
     const done = () => setPrinting(false);
     window.addEventListener("afterprint", done);
     const id = setTimeout(() => window.print(), 400);
-    return () => { clearTimeout(id); window.removeEventListener("afterprint", done); };
+    return () => { clearTimeout(id); window.removeEventListener("afterprint", done); document.documentElement.classList.remove("print-one"); };
   }, [printing]);
   const scroller = useRef<HTMLDivElement>(null);
   const glassLook = useWorkspace().theme === "light" ? "light" : "dark";
@@ -127,7 +130,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   useEffect(() => {
     registerPalette("page", [
       { id: "page-run", group: "This page", icon: Play, label: result ? "Run again" : runLabel(feature.id), meta: "⌘↵", run: () => runRef.current() },
-      ...(result ? [{ id: "page-report", group: "This page", icon: FileText, label: "Open the printable report", run: () => setPrinting(true) }] : []),
+      ...(result ? [{ id: "page-report", group: "This page", icon: FileText, label: "Open the printable report", run: () => setPrinting("all") }] : []),
       ...exhibitList.map((e, i) => ({ id: `ex-${i}`, group: "Exhibits", label: `Exhibit ${i + 1}: ${e.title}`, run: () => window.dispatchEvent(new CustomEvent("research:jump", { detail: e.key })) })),
     ]);
     return () => registerPalette("page", []);
@@ -173,11 +176,11 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
               <div className="hd">Compare this run with</div>
               {earlier.map((r) => <MenuItem key={r.jobId} icon={against === r.jobId ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => { setAgainst(r.jobId); setAgainstMenu(null); }}>{new Date(r.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}{r.headline ? ` · ${r.headline.slice(0, 28)}` : ""}</MenuItem>)}
             </PopMenu>
-            {result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={() => setPrinting(true)} /> : null}
+            {result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={(one) => setPrinting(one ? "one" : "all")} /> : null}
           </div>
           {runButton}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div className="fv-ctx" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           {lab().contextBar ? createElement(lab().contextBar!, { feature, run }) : <RunContext feature={feature} run={run} />}
           {lab().signal ? <><ActiveSignalChip /><LedgerChip /></> : null}
         </div>
@@ -197,7 +200,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         <span className="sticky-title"><Icon size={14} strokeWidth={1.7} style={{ color: "var(--accent)" }} />{meta.name}<span style={{ color: "var(--line-3)" }}>/</span></span>
         <Tabs value={active?.id ?? ""} onChange={(id) => { setTab(id); setMaxKey(null); scroller.current?.scrollTo({ top: Math.min(scroller.current.scrollTop, hero.current?.offsetHeight ?? 0), behavior: "smooth" }); }}
           tabs={sections.map((s) => ({ id: s.id, label: s.label, count: result ? visible(s).length : undefined }))} />
-        {result ? <span style={{ marginLeft: "auto" }}>{result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={() => setPrinting(true)} /> : null}</span> : null}
+        {result ? <span style={{ marginLeft: "auto" }}>{result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={(one) => setPrinting(one ? "one" : "all")} /> : null}</span> : null}
         <span className="sticky-run" style={{ marginLeft: result ? 0 : "auto" }} aria-hidden={!stuck} inert={!stuck}>{runButton}</span>
       </div>
 
@@ -207,7 +210,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         {result && against && !printing ? <RunCompare feature={feature} result={result} jobId={run.jobId} againstId={against} onClose={() => setAgainst(null)} /> : null}
         {result && printing ? (
           <div className="report">
-            {sections.map((sec) => (
+            {(printing === "one" ? sections.slice(0, 1) : sections).map((sec) => (
               <section key={sec.id} className="out-grid report-sec">
                 <h2 className="report-h">{sec.label}</h2>
                 {sec.intro ? <div className="section-h"><p>{sec.intro}</p></div> : null}
@@ -218,7 +221,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
                 ))}
               </section>
             ))}
-            {result.meta.research_caveats?.length ? <Caveats items={result.meta.research_caveats} /> : null}
+            {result.meta.research_caveats?.length && printing === "all" ? <Caveats items={result.meta.research_caveats} /> : null}
           </div>
         ) : result && active ? (
           maxItem ? (
@@ -253,7 +256,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         <span className="sticky-title"><Icon size={14} strokeWidth={1.7} style={{ color: "var(--accent)" }} />{meta.name}<span style={{ color: "var(--line-3)" }}>/</span></span>
         <Tabs value={active?.id ?? ""} onChange={(id) => { setTab(id); setMaxKey(null); scroller.current?.scrollTo({ top: Math.min(scroller.current.scrollTop, hero.current?.offsetHeight ?? 0), behavior: "smooth" }); }}
           tabs={sections.map((s) => ({ id: s.id, label: s.label, count: result ? visible(s).length : undefined }))} />
-        {result ? <span style={{ marginLeft: "auto" }}>{result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={() => setPrinting(true)} /> : null}</span> : null}
+        {result ? <span style={{ marginLeft: "auto" }}>{result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={(one) => setPrinting(one ? "one" : "all")} /> : null}</span> : null}
         <span className="sticky-run" style={{ marginLeft: result ? 0 : "auto" }} aria-hidden={!stuck} inert={!stuck}>{runButton}</span>
     </GlassSurface> : null}
     </GlassScene>
@@ -485,14 +488,15 @@ function Limits({ items }: { items: string[] }) {
 }
 
 /** Report, raw data and the run's identity in one menu. */
-function ExportMenu({ feature, result, jobId, form, onReport }: { feature: FeatureSpec; result: FeatureResult; jobId?: string | null; form: Record<string, unknown>; onReport: () => void }) {
+function ExportMenu({ feature, result, jobId, form, onReport }: { feature: FeatureSpec; result: FeatureResult; jobId?: string | null; form: Record<string, unknown>; onReport: (onePage?: boolean) => void }) {
   const [at, setAt] = useState<MenuAt | null>(null);
   const copy = (text: string, what: string) => void navigator.clipboard?.writeText(text).then(() => toast.success(`${what} copied`));
   return (
     <>
       <button className="btn sm ghost" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setAt({ x: r.right - 240, y: r.bottom + 4 }); }}><Download size={13} />Export<ChevronDown size={11} /></button>
       <PopMenu at={at} onClose={() => setAt(null)} width={240}>
-        <MenuItem icon={<FileText size={13} />} onClick={() => { setAt(null); onReport(); }}>Report as PDF</MenuItem>
+        <MenuItem icon={<FileText size={13} />} onClick={() => { setAt(null); onReport(true); }}>One-page summary as PDF</MenuItem>
+        <MenuItem icon={<FileText size={13} />} onClick={() => { setAt(null); onReport(); }}>Full report as PDF</MenuItem>
         <MenuItem icon={<Braces size={13} />} onClick={() => { setAt(null); downloadText(JSON.stringify({ feature: feature.id, run: jobId ?? null, meta: result.meta, summary: result.summary_cards ?? [], tables: result.tables ?? {}, charts: result.charts ?? {} }), `${feature.id}_${jobId ?? "run"}.json`, "application/json"); }}>Every output as JSON</MenuItem>
         <div className="sep" />
         <MenuItem icon={<Copy size={13} />} onClick={() => { setAt(null); copy(JSON.stringify(toPayload(feature, form), null, 2), "Settings"); }}>Copy settings</MenuItem>

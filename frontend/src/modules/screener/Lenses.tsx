@@ -95,3 +95,37 @@ export function FairValueStrip({ result }: ViewProps) {
     </div>
   );
 }
+
+type Flags = { as_of: string; rows: { ticker: string; flag: string; quarter: string | null; detail: string }[] };
+
+/** P3: warning signs among the names, newest quarter first; a flag type filters the list. */
+export function RedFlagFeed({ result }: ViewProps) {
+  const tickers = useMemo(() => out(result, "ranked_screener_table").map((r) => r.ticker).filter((t): t is string => typeof t === "string"), [result]);
+  const q = useQuery({ queryKey: ["screener", "red-flags", tickers.join(",")], queryFn: () => send<Flags>("POST", "/lookup/red-flags", { tickers }), enabled: tickers.length > 0, staleTime: 600_000, retry: false });
+  const [only, setOnly] = useState<string | null>(null);
+  if (q.isLoading) return <div aria-busy="true" className="ln-load">Reading statements</div>;
+  if (q.error) return <Empty text={(q.error as Error).message} />;
+  const rows = q.data?.rows ?? [];
+  if (!rows.length) return <Empty text="No red flags among these names." />;
+  const kinds = [...new Set(rows.map((r) => r.flag))];
+  const names = new Set(rows.map((r) => r.ticker)).size;
+  const shown = only ? rows.filter((r) => r.flag === only) : rows;
+  return (
+    <div className="ln">
+      <p className="ln-head"><b className="num">{names.toLocaleString()}</b> of {tickers.length.toLocaleString()} names carry a red flag</p>
+      <div className="ln-lenses">
+        {kinds.map((k) => <button key={k} type="button" className="ln-lens rf-kind" aria-pressed={only === k} onClick={() => setOnly(only === k ? null : k)}><span>{k}</span><b className="num">{rows.filter((r) => r.flag === k).length}</b></button>)}
+      </div>
+      <ol className="rf">
+        {shown.slice(0, 300).map((r, i) => (
+          <li key={`${r.ticker}-${r.flag}-${i}`}>
+            <span className="rf-q num">{r.quarter ?? "Latest"}</span>
+            <button type="button" className="tk-link" onClick={() => openQuickLook(r.ticker, "health")}>{r.ticker}</button>
+            <span className="rf-flag">{r.flag}</span>
+            <span className="rf-d">{r.detail}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}

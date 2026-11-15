@@ -119,3 +119,10 @@ th.cmp-med { font-weight: 500; white-space: nowrap; }
 .cmp-tbar { height: 10px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
 .cmp-tbar i { display: block; height: 100%; border-radius: 99px; }
 .cmp-tally em { font-style: normal; text-align: right; color: var(--text-2); }
+@media print {
+  /* Print only the open compare: the path from body to the drawer stays, the rest goes. */
+  html.print-cmp body *:has(.ql) > :not(:has(.ql)):not(.ql) { display: none !important; }
+  html.print-cmp body *:has(.ql), html.print-cmp .ql, html.print-cmp .ql-body, html.print-cmp .ql-scroll { display: block !important; position: static !important; overflow: visible !important; height: auto !important; max-height: none !important; width: auto !important; transform: none !important; box-shadow: none !important; }
+  html.print-cmp .ql .ql-head, html.print-cmp .ql .ql-body, html.print-cmp .ql .ql-tabs { max-width: none !important; }
+  html.print-cmp .ql-actions, html.print-cmp .ql-tabs:not(.cmp-tabs), html.print-cmp .cmp-head .btn, html.print-cmp .ql-x { display: none !important; }
+}

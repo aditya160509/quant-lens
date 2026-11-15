@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { useQueries } from "@tanstack/react-query";
-import { Link2, X } from "lucide-react";
+import { FileText, Link2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { Heatmap } from "@/charts/Heatmap";
 import { Radar } from "@/charts/Radar";
@@ -44,6 +44,15 @@ function wins(data: Compare) {
   return { judged, leaders, totals: [...count].sort((a, b) => b[1] - a[1]) };
 }
 
+/** X7: print only the open compare view, styled as on screen, so it saves as one PDF. */
+function printCompare() {
+  const html = document.documentElement;
+  html.classList.add("print-cmp");
+  const done = () => { html.classList.remove("print-cmp"); window.removeEventListener("afterprint", done); };
+  window.addEventListener("afterprint", done);
+  setTimeout(() => window.print(), 50);
+}
+
 export function ComparePanel() {
   const { basket, toggleBasket, setBasket, open, ctab, setCtab } = useQuickLook();
   const q = useCompare(basket);
@@ -65,6 +74,7 @@ export function ComparePanel() {
           ))}
         </div>
         <button className="btn sm ghost" onClick={share}><Link2 size={12} />Copy link</button>
+        <button className="btn sm ghost" onClick={printCompare}><FileText size={12} />PDF</button>
         <button className="btn sm ghost" onClick={() => setBasket([])}>Clear</button>
       </div>
       {w && w.judged.length ? <p className="cmp-verdict"><b>{w.totals[0][0]}</b> leads on {w.totals[0][1]} of {w.judged.length} metrics{w.totals[1] ? `; ${w.totals[1][0]} on ${w.totals[1][1]}` : ""}</p> : null}

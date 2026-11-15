@@ -26,3 +26,9 @@
 .fv-range { position: absolute; top: 8px; height: 6px; border-radius: 99px; background: color-mix(in oklch, var(--accent) 35%, transparent); }
 .fv-mark { position: absolute; top: 5px; width: 3px; height: 12px; margin-left: -1.5px; border-radius: 2px; background: var(--accent); }
 .fv-note { font-size: 11.5px; color: var(--text-3); }
+.rf { list-style: none; margin: 0; padding: 0; display: grid; max-height: 440px; overflow: auto; }
+.rf li { display: grid; grid-template-columns: 84px 64px 130px 1fr; align-items: center; gap: 10px; padding: 6px 4px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.rf-q { color: var(--text-3); }
+.rf-flag { color: var(--down); font-weight: 500; }
+.rf-d { color: var(--text-2); min-width: 0; }
+.rf-kind b { color: var(--down); }
