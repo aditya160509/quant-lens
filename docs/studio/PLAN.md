@@ -70,7 +70,7 @@ New package `backend/app/services/studio_v3/`, same shape as `screener_v2` and `
 
 ```
 studio_v3/
-  registry.py          feature ids st01..st12 → runner, inputs, outputs (manifest)
+  registry.py          feature ids st01..st05 (PAGES §0) → runner, inputs, outputs (manifest)
   core/
     spec.py            Strategy spec (pydantic): universe, signals, entries, exits, sizing, costs, schedule
     compile.py         blocks → spec; formula → spec (reuses research_v2 signal_lang); Python → sandboxed callable
