@@ -22,6 +22,7 @@ export type StudioMeta = FeatureResult["meta"] & {
   survivorship: Skipped | { status: "ok"; with_delisted: number | null; survivors_only: number | null; delisted: number };
   fill_check: Skipped | { status: "ok"; hourly_names: number; with_hourly: number; daily_only: number };
   without_best_months: number | null;
+  rule_check: { starts: number; pass: number; fail_daily_loss: number; fail_drawdown: number; open: number; pass_share: number | null; median_days_to_pass: number | null; target: number; daily_loss: number; max_dd: number; min_days: number };
   thirds_sharpe: number[];
   paths: { status?: string; reason?: string; drawdown_p95?: number; drawdown_median?: number; streak_p95?: number; streak_actual?: number; paths?: number };
   capacity: number | null;

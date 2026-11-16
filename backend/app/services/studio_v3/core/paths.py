@@ -67,3 +67,50 @@ def _longest(flags: np.ndarray) -> int:
         cur = cur + 1 if f else 0
         best = max(best, cur)
     return best
+
+
+def conditions(equity: np.ndarray, market: np.ndarray, dates: pd.DatetimeIndex) -> list[dict]:
+    """Strategy's daily results split by market conditions known at the prior close (no look-ahead)."""
+    r = pd.Series(equity, index=dates).pct_change()
+    m = pd.Series(market, index=dates)
+    vol = m.pct_change().rolling(20, min_periods=20).std() * np.sqrt(252)
+    dd = m / m.cummax() - 1
+    ma = m.rolling(200, min_periods=200).mean()
+    tests = {"Market above its 200-day average": m > ma, "Market below its 200-day average": m <= ma,
+             "Market volatility above 25%": vol > 0.25, "Market volatility 25% or less": vol <= 0.25,
+             "Market more than 10% off its high": dd < -0.10, "Market within 10% of its high": dd >= -0.10}
+    rows = []
+    for name, cond in tests.items():
+        known = cond.shift(1).fillna(False).astype(bool) & ma.shift(1).notna()
+        x = r[known].dropna()
+        if len(x) < 20:
+            continue
+        sd = x.std()
+        rows.append({"condition": name, "days": len(x), "share_of_days": len(x) / r.notna().sum(), "annual_return": float((1 + x).prod() ** (252 / len(x)) - 1),
+                     "sharpe": float(x.mean() / sd * np.sqrt(252)) if sd > 0 else None, "hit_rate": float((x > 0).mean())})
+    return rows
+
+
+def rule_check(equity: np.ndarray, dates: pd.DatetimeIndex, target: float, daily_loss: float, max_dd: float, min_days: int, every: int = 21) -> dict:
+    """Prop-style evaluation from many start dates: pass on reaching the target after min_days, fail on a daily loss or a drawdown from the start balance."""
+    rows = []
+    daily = np.r_[0.0, np.diff(equity) / equity[:-1]]
+    for s in range(0, len(equity) - max(min_days, 2), every):
+        base, outcome, days = equity[s], "open", 0
+        for t in range(s + 1, len(equity)):
+            days = t - s
+            if daily[t] <= -daily_loss:
+                outcome = "fail: daily loss"
+                break
+            if equity[t] / base - 1 <= -max_dd:
+                outcome = "fail: drawdown"
+                break
+            if equity[t] / base - 1 >= target and days >= min_days:
+                outcome = "pass"
+                break
+        rows.append({"start": str(dates[s].date()), "outcome": outcome, "days": days})
+    n = len(rows)
+    count = {k: sum(r["outcome"] == k for r in rows) for k in ("pass", "fail: daily loss", "fail: drawdown", "open")}
+    passed = [r["days"] for r in rows if r["outcome"] == "pass"]
+    return {"starts": n, **{k.replace("fail: ", "fail_").replace(" ", "_"): v for k, v in count.items()}, "pass_share": count["pass"] / n if n else None,
+            "median_days_to_pass": float(np.median(passed)) if passed else None, "rows": rows}

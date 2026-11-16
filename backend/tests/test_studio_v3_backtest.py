@@ -354,3 +354,17 @@ def test_market_rule_blocks_entries_and_closes_everything_when_off():
     s = Strategy(entry_long="close > 0", market_filter="market > 150")
     sig = C.signals(s, bars, pd.bdate_range("2020-01-01", periods=n))
     assert (sig.entries[:30] == 1).all() and (sig.entries[30:] == 0).all() and (sig.exits[30:] & 1).all()
+
+
+def test_rule_check_passes_on_target_and_fails_on_daily_loss():
+    import pandas as pd
+
+    from app.services.studio_v3.core import paths
+
+    dates = pd.bdate_range("2020-01-01", periods=60)
+    up = 100 * 1.01 ** np.arange(60)  # +1% a day: hits +10% on day 10
+    r = paths.rule_check(up, dates, target=0.10, daily_loss=0.05, max_dd=0.10, min_days=5, every=30)
+    assert r["pass"] == r["starts"] and r["rows"][0]["days"] == 10
+    crash = up.copy()
+    crash[3:] *= 0.9  # one -10% day
+    assert paths.rule_check(crash, dates, 0.10, 0.05, 0.10, 5, every=60)["fail_daily_loss"] == 1

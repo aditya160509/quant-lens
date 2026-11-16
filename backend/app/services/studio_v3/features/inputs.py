@@ -61,5 +61,6 @@ def parse(payload: dict[str, Any]) -> tuple[Strategy, Settings, str | None, int 
     symbols = payload.get("symbols") or []
     if isinstance(symbols, str):
         symbols = [s for s in symbols.replace(",", " ").split() if s]
-    keys = ("top_n", "start", "end", "holdout", "fill", "magnifier", "delist_haircut", "capital", "leverage", "benchmark", "seed")
+    keys = ("top_n", "start", "end", "holdout", "fill", "magnifier", "delist_haircut", "capital", "leverage", "benchmark", "seed",
+            "rule_target", "rule_daily_loss", "rule_max_dd", "rule_min_days")
     return spec, Settings(symbols=list(symbols), costs=costs, **{k: payload[k] for k in keys if k in payload}), sid, int(version) if version else None

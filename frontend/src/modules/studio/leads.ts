@@ -27,6 +27,10 @@ export function lead(view: string, r: FeatureResult): string | null {
       for (const q of n) { if (acc >= tot / 2) break; acc += Math.max(0, q.pnl as number); k++; } return tot > 0 ? `${k} of ${n.length} names made half the profit` : null; }
     case "stTradeFan": return isNum(m.paths.drawdown_p95) ? `95% of reshuffled paths stay above ${pct(m.paths.drawdown_p95, 0)} drawdown (actual ${pct(x.max_drawdown, 0)})` : null;
     case "stRuin": { const r = rows("ruin").find((q) => q.drawdown === 0.3); return r ? `P(drawdown > 30%) = ${pct(r.probability, 0)}` : null; }
+    case "stTimeline": { const t = rows("by_regime")[0]; return t ? `Most profit came in ${String(t.regime)}` : null; }
+    case "stConditions": { const c = rows("conditions").filter((q) => isNum(q.sharpe)).sort((a, b) => (a.sharpe as number) - (b.sharpe as number))[0]; return c ? `Weakest: ${String(c.condition).toLowerCase()}, Sharpe ${(c.sharpe as number).toFixed(2)}` : null; }
+    case "stRuleCheck": { const c = m.rule_check; return c?.starts ? `Passes from ${c.pass} of ${c.starts} start dates (${pct(c.pass_share ?? 0, 0)})` : null; }
+    case "stHoldings": { const n = rows("per_name"); return n.length ? `${n.length} names traded; ${n.filter((q) => (q.pnl as number) > 0).length} made money` : null; }
     case "stStreaks": return isNum(m.paths.streak_p95) ? `95th percentile losing streak ${m.paths.streak_p95} trades; actual ${m.paths.streak_actual}` : null;
     case "dataTable": return null;
     case "monthlyHeatmap": return isNum(m.without_best_months) ? `Without the best 3 months: CAGR ${pct(m.without_best_months)}` : null;

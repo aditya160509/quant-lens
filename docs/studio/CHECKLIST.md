@@ -45,7 +45,7 @@ Frontend
 - [x] "What it does" paragraph from the spec, no LLM (B-9)
 - [x] Notes (hypothesis, regime, decisions); My limits saved with the version
 - [x] Templates (20)
-- [x] Backtest tabs When (regime by benchmark trend × vol, seasonality), Names (contributors, per-name table), Paths (trade Monte Carlo fan, ruin, losing streaks); still to do: conditions (needs Library regimes), timeline, holdings treemap, prop rule check
+- [x] Backtest tabs When (regime by benchmark trend × vol, seasonality), Names (contributors, per-name table), Paths (trade Monte Carlo fan, ruin, losing streaks); plus Timeline (regime strip under equity), Conditions (market trend, volatility, drawdown known the night before), Holdings (P&L treemap by name, names held over time), Rule check (target, daily loss, drawdown, min days from every monthly start; ring + table, inputs in settings). Not done: unfilled limit orders (no limit orders in the engine)
 - [x] B-1 same rule as blocks, formula and Python gives identical trades (blocks compile to the formula text; Python parity tested)
 - [x] Checks card (compiles, no look-ahead, fires, trades on one name, exits, parameters used) with jump links; template start grid; command palette ⌘⇧P (lift number to parameter, add parameter, modes, templates, save, run; ⌘K stays the app search); parameter step and sweep size; vol-target sizing in both engines; backtest results side by side in the version diff; regime claim marked when written after a backtest; trial chip opens the ledger; drag to reorder block rows
 

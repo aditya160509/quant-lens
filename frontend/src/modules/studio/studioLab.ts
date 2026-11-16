@@ -100,7 +100,7 @@ registerViews({ stOrders: LV.Orders, stPaper: LV.Paper, stAlerts: LV.Alerts, stR
 const TS = group(() => import("@/modules/screener/test/TearSheet") as Promise<Record<string, unknown>>);
 registerViews({ stEquity: BV.Equity, stStartDates: BV.StartDates, stSurvivorship: BV.Survivorship, stFillCheck: BV.FillCheck, stCarriedBy: BV.CarriedBy, stTradeShape: BV.TradeShape, stTradeReturns: BV.TradeReturns,
   stHoldTime: BV.HoldTime, stCrises: BV.Crises, stCosts: BV.Costs, stCapacity: BV.Capacity, stExposure: BV.Exposure, stDrawdowns: BV.Drawdowns, stStability: BV.Stability, stByRegime: BV.ByRegime, stSeasonality: BV.Seasonality, stPerName: BV.PerName, stContributors: BV.Contributors,
-  stTradeFan: BV.TradeFan, stOnChart: BV.OnChart, stRuin: BV.Ruin, stStreaks: BV.Streaks,
+  stTradeFan: BV.TradeFan, stOnChart: BV.OnChart, stRuin: BV.Ruin, stStreaks: BV.Streaks, stTimeline: BV.Timeline, stConditions: BV.Conditions, stRuleCheck: BV.RuleCheck, stHoldings: BV.Holdings,
   monthlyHeatmap: TS.MonthlyHeatmap, yearlyVsBenchmark: TS.YearlyVsBenchmark, underwater: TS.Underwater },
   ["stEquity", "stStartDates", "stSurvivorship", "stFillCheck", "stTradeShape", "stCrises", "stExposure", "stStability"]);
 registerAlternates({ stTradeShape: [{ label: "Returns", view: "stTradeReturns" }, { label: "Hold time", view: "stHoldTime" }], stCarriedBy: [{ label: "Table", view: "dataTable" }], stCrises: [{ label: "Table", view: "dataTable" }],
@@ -150,16 +150,20 @@ export const STUDIO_LAB: LabConfig = {
         { id: "when", label: "When", items: [
           { keys: ["by_regime"], span: 7, view: "stByRegime", title: "By regime" },
           { keys: ["seasonality"], span: 5, view: "stSeasonality", title: "Seasonality" },
+          { keys: ["equity_curve"], span: 12, view: "stTimeline", title: "Timeline" },
+          { keys: ["conditions"], span: 12, view: "stConditions", title: "Conditions" },
           { keys: ["by_regime"], span: 12, view: "dataTable", title: "Regimes" },
         ] },
         { id: "names", label: "Names", items: [
           { keys: ["per_name"], span: 12, view: "stContributors", title: "Contributors" },
+          { keys: ["per_name"], span: 12, view: "stHoldings", title: "Holdings" },
           { keys: ["per_name"], span: 12, view: "stPerName", title: "Per-name results" },
         ] },
         { id: "paths", label: "Paths", items: [
           { keys: ["trade_mc"], span: 12, view: "stTradeFan", title: "Trade Monte Carlo" },
           { keys: ["ruin"], span: 6, view: "stRuin", title: "Ruin" },
           { keys: ["streaks"], span: 6, view: "stStreaks", title: "Losing streaks" },
+          { keys: ["rule_check"], span: 12, view: "stRuleCheck", title: "Rule check" },
         ] },
       ],
       drop: ["cost_ladder", "my_limits", "limits", "statistics"],

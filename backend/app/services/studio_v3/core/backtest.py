@@ -282,7 +282,9 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
         by_name.setdefault(t["symbol"], []).append(t["pnl"])
     per_name = sorted(({"symbol": k, "trades": len(v), "pnl": float(sum(v)), "win_rate": float(np.mean([x > 0 for x in v])), "share": float(sum(v) / net_profit) if net_profit > 0 else None,
                         "best": max(v), "worst": min(v)} for k, v in by_name.items()), key=lambda x: -x["pnl"])
-    regime_rows = paths.by_regime(paths.regimes(bench_eq, dates), r.trades[:, engine.T_ENTRY_BAR].astype(int), pnl, r.trades[:, engine.T_RET]) if bench_eq is not None else []
+    labels = paths.regimes(bench_eq, dates) if bench_eq is not None else None
+    market = prep.sig_bars["market"][:, 0] if "market" in prep.sig_bars else None
+    regime_rows = paths.by_regime(labels, r.trades[:, engine.T_ENTRY_BAR].astype(int), pnl, r.trades[:, engine.T_RET]) if bench_eq is not None else []
     mc = paths.trade_monte_carlo(closed[:, engine.T_PNL], cap, seed=settings.seed)
     lim_rows = check_limits(spec, ret, tr, bm, cost_share, sd_pass)
     judged = [x for x in lim_rows if x["pass"] is not None]
@@ -291,7 +293,9 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     step = max(1, len(dates) // 2000)
     idx = sorted(set(range(0, len(dates), step)) | {len(dates) - 1})
     curve = [{"date": str(dates[i].date()), "strategy": r.equity[i], "gross": r.gross_equity[i], "benchmark": bench_eq[i] if bench_eq is not None else None,
-              "survivors_only": surv["equity"][i] if surv else None, "daily_fills": fill["daily_equity"][i] if fill["status"] == "ok" else None} for i in idx]
+              "survivors_only": surv["equity"][i] if surv else None, "daily_fills": fill["daily_equity"][i] if fill["status"] == "ok" else None,
+              "regime": labels[i] if labels is not None else None} for i in idx]
+    rules = paths.rule_check(r.equity, dates, settings.rule_target, settings.rule_daily_loss, settings.rule_max_dd, settings.rule_min_days)
     if surv:
         surv.pop("equity")
     if fill["status"] == "ok":
@@ -312,7 +316,8 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
         "feature_id": "st01", "status": "ok",
         "summary_cards": [{"label": k, "value": v, **({"unit": u} if u else {})} for k, v, u in cards],
         "charts": {"trade_mc": mc["fan"] if mc else [], "equity_curve": curve, "cost_ladder": ladder, "start_dates": sd, "exposure": exposure, "rolling": _rolling(r.equity, bench_eq, dates)},
-        "tables": {"by_regime": regime_rows, "seasonality": paths.seasonality(r.equity, dates), "ruin": mc["ruin"] if mc else [], "streaks": mc["streaks"] if mc else [],
+        "tables": {"by_regime": regime_rows, "conditions": paths.conditions(r.equity, market, dates) if market is not None and np.isfinite(market).any() else [],
+                   "rule_check": rules.pop("rows"), "holdings": [{"date": x["date"], "names": x["positions"]} for x in exposure], "seasonality": paths.seasonality(r.equity, dates), "ruin": mc["ruin"] if mc else [], "streaks": mc["streaks"] if mc else [],
                    "trades": trades, "carried_by": carried, "crises": crises, "drawdowns": dd_rows, "per_name": per_name, "my_limits": lim_rows,
                    "limits": limits.run_limits(start=str(dates[0].date()), end=str(dates[-1].date()), requested=prep.requested, held=held, delisted=int(dead.sum()), fill=settings.fill,
                                                costs=settings.costs.model_dump(), haircut=settings.delist_haircut, hourly_held=hourly_held, magnifier=settings.magnifier,
@@ -320,6 +325,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
                    "statistics": [{"metric": k, "value": v} for k, v in {**ret, **tr, **bm}.items()]},
         "meta": {
             "headline": headline, "verdict_chip": "not validated", "metrics": {**ret, **tr, **bm}, "total_return": total, "years": years, "benchmark": settings.benchmark if bm else None,
+            "rule_check": {**rules, "target": settings.rule_target, "daily_loss": settings.rule_daily_loss, "max_dd": settings.rule_max_dd, "min_days": settings.rule_min_days},
             "costs_off": settings.costs.off(), "few_trades": few, "open_trades": len(r.trades) - len(closed), "unfilled": r.unfilled, "entry_signals": n_entries,
             "costs": {"total": costs_total, "share_of_gross": cost_share, "gross_return": float(r.gross_equity[-1] / cap - 1), "net_return": total, "turnover_per_year": turnover},
             "exposure": {"time_in_market": float((r.positions > 0).mean()), "avg_gross": float(r.gross_exposure.mean()), "avg_net": float(r.net_exposure.mean())},

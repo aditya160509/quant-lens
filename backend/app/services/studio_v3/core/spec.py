@@ -109,6 +109,10 @@ class Settings(_Model):
     leverage: float = Field(1.0, gt=0, le=10)
     benchmark: str = "SPY"
     seed: int = 7
+    rule_target: float = Field(0.10, gt=0, le=10)  # Backtest > Paths > Rule check
+    rule_daily_loss: float = Field(0.05, gt=0, le=1)
+    rule_max_dd: float = Field(0.10, gt=0, le=1)
+    rule_min_days: int = Field(5, ge=0)
 
     def hash(self) -> str:
         return hashlib.sha256(json.dumps(self.model_dump(), sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]

@@ -6,6 +6,7 @@ import { Bars } from "@/charts/Bars";
 import { DrawdownStrip } from "@/charts/Backtest";
 import { Distribution } from "@/charts/Distribution";
 import { TimeSeries } from "@/charts/TimeSeries";
+import { Treemap } from "@/charts/Treemap";
 import { XYPlot } from "@/charts/XYPlot";
 import { DataTable } from "@/kit/DataTable";
 import { isNum, pct } from "@/modules/research/format";
@@ -194,6 +195,70 @@ export function OnChart({ rows, result }: ViewProps) {
   return (
     <div className="ch-chips">
       {top.map((r) => <Link key={String(r.symbol)} className="chip" href={`/studio/chart/${encodeURIComponent(String(r.symbol))}?run=${run}`}>{String(r.symbol)} · {String(r.trades)}</Link>)}
+    </div>
+  );
+}
+
+const REGIME_COLORS: Record<string, string> = { "trend up, low vol": "var(--up)", "trend up, high vol": "var(--s3)", "trend down, low vol": "var(--warn)", "trend down, high vol": "var(--down)", "warm-up": "var(--line-2)" };
+
+/** Equity against the benchmark with the market regime of each day as a strip underneath. */
+export function Timeline({ rows, result }: ViewProps) {
+  const m = metaOf(result);
+  if (!rows.some((r) => r.regime)) return <Skipped reason="no benchmark to label regimes" />;
+  return <TimeSeries data={rows} series={[{ key: "strategy", label: "Strategy", color: "var(--accent)", width: 2 }, ...(m.benchmark ? [{ key: "benchmark", label: m.benchmark, color: "var(--text-3)" }] : [])]}
+    ribbon={{ key: "regime", label: "Regime", colors: REGIME_COLORS }} height={280} format={usd} />;
+}
+
+/** Daily results split by market conditions known the night before. */
+export function Conditions({ rows }: ViewProps) {
+  if (!rows.length) return <Skipped reason="no market series for this period" />;
+  return (
+    <table className="vt-table">
+      <thead><tr><th>When</th><th className="num">Days</th><th className="num">Annual return</th><th className="num">Sharpe</th><th className="num">Up days</th></tr></thead>
+      <tbody>{rows.map((r) => (
+        <tr key={String(r.condition)}>
+          <td>{String(r.condition)}</td><td className="num">{pct(r.share_of_days, 0)}</td>
+          <td className={`num ${isNum(r.annual_return) && r.annual_return < 0 ? "st-down" : ""}`}>{pct(r.annual_return, 1)}</td>
+          <td className={`num ${isNum(r.sharpe) && r.sharpe < 0 ? "st-down" : ""}`}>{isNum(r.sharpe) ? r.sharpe.toFixed(2) : "—"}</td><td className="num">{pct(r.hit_rate, 0)}</td>
+        </tr>
+      ))}</tbody>
+    </table>
+  );
+}
+
+/** Prop-style rules from every monthly start date: how often the target is reached before a rule breaks. */
+export function RuleCheck({ rows, result }: ViewProps) {
+  const c = metaOf(result).rule_check;
+  if (!c?.starts) return <Skipped reason="the period is too short for a start-date sweep" />;
+  const parts: [string, number, string][] = [["Passed", c.pass, "var(--up)"], ["Daily loss", c.fail_daily_loss, "var(--down)"], ["Drawdown", c.fail_drawdown, "var(--warn)"], ["Still open", c.open, "var(--line-2)"]];
+  const R = 46, C = 2 * Math.PI * R;
+  let acc = 0;
+  return (
+    <div className="bt-rule">
+      <svg viewBox="0 0 120 120" width={140} height={140} role="img" aria-label={`Passed from ${c.pass} of ${c.starts} start dates`}>
+        {parts.map(([k, v, col]) => { const len = (v / c.starts) * C, el = <circle key={k} cx={60} cy={60} r={R} fill="none" stroke={col} strokeWidth={12} strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-acc} transform="rotate(-90 60 60)" />; acc += len; return el; })}
+        <text x={60} y={58} textAnchor="middle" className="bt-rule-n">{pct(c.pass_share ?? 0, 0)}</text>
+        <text x={60} y={74} textAnchor="middle" className="bt-rule-l">passed</text>
+      </svg>
+      <div className="bt-rule-t">
+        <p className="bd-meta" style={{ margin: 0 }}>Target {pct(c.target, 0)} after {c.min_days}+ days · daily loss {pct(c.daily_loss, 0)} · drawdown {pct(c.max_dd, 0)} · {c.starts} starts</p>
+        {parts.map(([k, v, col]) => <div key={k} className="bt-row"><i className="bt-dot" style={{ background: col }} /><span>{k}</span><b className="num">{v}</b></div>)}
+        {isNum(c.median_days_to_pass) ? <div className="bt-row"><i className="bt-dot" /><span>Median days to pass</span><b className="num">{c.median_days_to_pass.toFixed(0)}</b></div> : null}
+        <DataTable rows={rows} opts={{ maxHeight: 200 }} />
+      </div>
+    </div>
+  );
+}
+
+/** Where the profit sat: names sized by P&L, and how many were held over time. */
+export function Holdings({ rows, result }: ViewProps) {
+  const held = (result.tables.holdings ?? []) as { date: string; names: number }[];
+  const items = rows.filter((r) => isNum(r.pnl) && r.pnl !== 0).slice(0, 200).map((r) => ({ label: String(r.symbol), group: String(r.symbol), size: Math.abs(r.pnl as number), colorValue: r.pnl as number }));
+  if (!items.length) return <Skipped reason="no closed trades" />;
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <Treemap title="Profit and loss by name" sizeLabel="P&L" colorLabel="P&L" items={items} format={usd} colorFormat={usd} />
+      <TimeSeries data={held} series={[{ key: "names", label: "Names held", color: "var(--accent)", kind: "step" }]} height={160} format={(v) => v.toFixed(0)} />
     </div>
   );
 }
