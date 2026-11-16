@@ -90,3 +90,10 @@
 .bd-num i { position: absolute; right: 9px; bottom: 7px; font-style: normal; font-size: 12px; color: var(--text-3); }
 @media (max-width: 1100px) { .bd-grid { grid-template-columns: 1fr; } }
 .bd-head .input { width: auto; flex: 0 0 auto; }
+.bd-modes { display: flex; gap: 4px; }
+.bd-modes .btn.on { background: var(--accent-soft, var(--line-2)); color: var(--text); }
+.bk { display: grid; gap: 6px; }
+.bk-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) 140px minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.bk-row .input { font: 12.5px var(--code, var(--mono)); }
+.bk-join { font-size: 12px; color: var(--text-3); }
+.bk > .btn { justify-self: start; }
