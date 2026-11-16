@@ -23,6 +23,7 @@ export type StudioMeta = FeatureResult["meta"] & {
   fill_check: Skipped | { status: "ok"; hourly_names: number; with_hourly: number; daily_only: number };
   without_best_months: number | null;
   thirds_sharpe: number[];
+  paths: { status?: string; reason?: string; drawdown_p95?: number; drawdown_median?: number; streak_p95?: number; streak_actual?: number; paths?: number };
   capacity: number | null;
   my_limits: { passed: number; of: number; closest: LimitRow | null };
   holdout_from: string | null;

@@ -52,7 +52,8 @@ function backtestHero(r: FeatureResult): HeroSpec | null {
 const BV = group(() => import("./views/BacktestViews") as Promise<Record<string, unknown>>);
 const TS = group(() => import("@/modules/screener/test/TearSheet") as Promise<Record<string, unknown>>);
 registerViews({ stEquity: BV.Equity, stStartDates: BV.StartDates, stSurvivorship: BV.Survivorship, stFillCheck: BV.FillCheck, stCarriedBy: BV.CarriedBy, stTradeShape: BV.TradeShape, stTradeReturns: BV.TradeReturns,
-  stHoldTime: BV.HoldTime, stCrises: BV.Crises, stCosts: BV.Costs, stCapacity: BV.Capacity, stExposure: BV.Exposure, stDrawdowns: BV.Drawdowns, stStability: BV.Stability,
+  stHoldTime: BV.HoldTime, stCrises: BV.Crises, stCosts: BV.Costs, stCapacity: BV.Capacity, stExposure: BV.Exposure, stDrawdowns: BV.Drawdowns, stStability: BV.Stability, stByRegime: BV.ByRegime, stSeasonality: BV.Seasonality, stPerName: BV.PerName, stContributors: BV.Contributors,
+  stTradeFan: BV.TradeFan, stRuin: BV.Ruin, stStreaks: BV.Streaks,
   monthlyHeatmap: TS.MonthlyHeatmap, yearlyVsBenchmark: TS.YearlyVsBenchmark, underwater: TS.Underwater },
   ["stEquity", "stStartDates", "stSurvivorship", "stFillCheck", "stTradeShape", "stCrises", "stExposure", "stStability"]);
 registerAlternates({ stTradeShape: [{ label: "Returns", view: "stTradeReturns" }, { label: "Hold time", view: "stHoldTime" }], stCarriedBy: [{ label: "Table", view: "dataTable" }], stCrises: [{ label: "Table", view: "dataTable" }],
@@ -97,8 +98,22 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["trades"], span: 4, view: "stCapacity", title: "Capacity" },
           { keys: ["exposure"], span: 4, view: "stExposure", title: "Exposure" },
         ] },
+        { id: "when", label: "When", items: [
+          { keys: ["by_regime"], span: 7, view: "stByRegime", title: "By regime" },
+          { keys: ["seasonality"], span: 5, view: "stSeasonality", title: "Seasonality" },
+          { keys: ["by_regime"], span: 12, view: "dataTable", title: "Regimes" },
+        ] },
+        { id: "names", label: "Names", items: [
+          { keys: ["per_name"], span: 12, view: "stContributors", title: "Contributors" },
+          { keys: ["per_name"], span: 12, view: "stPerName", title: "Per-name results" },
+        ] },
+        { id: "paths", label: "Paths", items: [
+          { keys: ["trade_mc"], span: 12, view: "stTradeFan", title: "Trade Monte Carlo" },
+          { keys: ["ruin"], span: 6, view: "stRuin", title: "Ruin" },
+          { keys: ["streaks"], span: 6, view: "stStreaks", title: "Losing streaks" },
+        ] },
       ],
-      drop: ["cost_ladder", "my_limits", "limits", "statistics", "per_name"],
+      drop: ["cost_ladder", "my_limits", "limits", "statistics"],
     },
   },
   manifest: (raw) => (raw as { features: RawFeature[] }).features.filter((f) => f.id in CATALOG).map(toSpec),

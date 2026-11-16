@@ -44,7 +44,7 @@ Frontend
 - [x] "What it does" paragraph from the spec, no LLM (B-9)
 - [x] Notes (hypothesis, regime, decisions); My limits saved with the version
 - [ ] Templates (20)
-- [ ] Backtest tabs When (regime, conditions, seasonality, timeline), Names (per-name, holdings), Paths (trade Monte Carlo, ruin, rule check, streaks)
+- [x] Backtest tabs When (regime by benchmark trend × vol, seasonality), Names (contributors, per-name table), Paths (trade Monte Carlo fan, ruin, losing streaks); still to do: conditions (needs Library regimes), timeline, holdings treemap, prop rule check
 - [ ] B-1 same rule as blocks, formula and Python gives identical trades
 
 ## Phase 3: Optimise, Validate, alerts

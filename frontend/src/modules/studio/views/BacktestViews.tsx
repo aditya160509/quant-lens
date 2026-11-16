@@ -144,3 +144,43 @@ export function Capacity({ result }: ViewProps) {
 export function Exposure({ rows }: ViewProps) {
   return rows.length < 2 ? <Skipped reason="no bars" /> : <TimeSeries data={rows} series={[{ key: "gross", label: "Gross", kind: "area", color: "var(--accent)" }, { key: "net", label: "Net", color: "var(--text-2)" }]} height={200} format={(v) => pct(v, 0)} />;
 }
+
+/** Return and trade count per market regime at entry. */
+export function ByRegime({ rows }: ViewProps) {
+  if (!rows.length) return <Skipped reason="needs a benchmark to label regimes" />;
+  return <Bars bars={rows.map((r) => ({ label: String(r.regime), value: r.pnl as number, detail: [["Trades", String(r.trades)], ["Win rate", pct(r.win_rate, 0)], ["Average return", pct(r.avg_return, 1)], ["Share of profit", pct(r.share, 0)], ["Days in regime", String(r.days)]] }))}
+    format={(v) => money(v)} height={240} />;
+}
+
+export function Seasonality({ rows }: ViewProps) {
+  if (rows.length < 12) return <Skipped reason="needs at least a full year of months" />;
+  return <Bars bars={rows.map((r) => ({ label: String(r.month), value: r.mean as number, detail: [["Positive in", `${pct(r.hit_rate, 0)} of ${String(r.years)} years`]] }))} format={(v) => pct(v, 1)} height={220} />;
+}
+
+export function PerName({ rows }: ViewProps) {
+  return <DataTable rows={rows} opts={{ maxHeight: 520, max: 100000, viewKey: "studio-names" }} />;
+}
+
+export function Contributors({ rows }: ViewProps) {
+  const top = [...rows.slice(0, 10), ...rows.slice(-5).filter((r) => (r.pnl as number) < 0 && !rows.slice(0, 10).includes(r))];
+  return <Bars bars={top.map((r) => ({ label: String(r.symbol), value: r.pnl as number, detail: [["Trades", String(r.trades)], ["Win rate", pct(r.win_rate, 0)]] }))} format={(v) => money(v)} height={240} />;
+}
+
+/** Same trades, reshuffled order: the band of equity paths luck alone could have dealt. */
+export function TradeFan({ rows, result }: ViewProps) {
+  const p = metaOf(result).paths;
+  if (!rows.length) return <Skipped reason={p.reason ?? "fewer than 10 closed trades"} />;
+  const line = (k: string, label: string, color: string, dash?: boolean) => ({ label, color, dash, points: rows.map((r) => ({ x: r.trade as number, y: r[k] as number })) });
+  return <XYPlot points={[]} lines={[line("p5", "5th", "var(--text-4)", true), line("p25", "25th", "var(--text-3)"), line("p50", "Median", "var(--accent)"), line("p75", "75th", "var(--text-3)"), line("p95", "95th", "var(--text-4)", true)]}
+    xLabel="Trade" yLabel="Equity" height={260} formatX={(v) => String(Math.round(v))} formatY={usd} />;
+}
+
+export function Ruin({ rows }: ViewProps) {
+  return <Bars bars={rows.map((r) => ({ label: `> ${pct(r.drawdown, 0)}`, value: r.probability as number }))} format={(v) => pct(v, 0)} signed={false} yLabel="Chance" height={200} />;
+}
+
+export function Streaks({ rows, result }: ViewProps) {
+  const p = metaOf(result).paths;
+  if (!rows.length) return <Skipped reason={p.reason ?? "fewer than 10 closed trades"} />;
+  return <Bars bars={rows.map((r) => ({ label: String(r.length), value: r.share as number, color: r.length === p.streak_actual ? "var(--accent)" : undefined }))} format={(v) => pct(v, 0)} signed={false} yLabel="Share of paths" height={200} />;
+}

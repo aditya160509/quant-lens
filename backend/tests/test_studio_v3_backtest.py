@@ -291,3 +291,12 @@ def test_every_template_compiles_and_trades_only_on_past_bars(studio):
         assert C.compile_spec(spec)["ok"], t["name"]
         assert t["rule"] and t["description"]
         C.signals(spec, bars, p.dates)
+
+
+def test_trade_monte_carlo_keeps_the_trades():
+    from app.services.studio_v3.core import paths
+    pnl = np.array([100.0, -50, 30, -20, 80, -10, 40, -60, 20, 10, -30, 50])
+    mc = paths.trade_monte_carlo(pnl, 1000.0, n=200)
+    assert mc["fan"][-1]["p5"] == pytest.approx(1000 + pnl.sum()) and mc["fan"][-1]["p95"] == pytest.approx(1000 + pnl.sum())  # every reshuffle ends at the same equity
+    assert mc["streak_actual"] == 1 and sum(r["share"] for r in mc["streaks"]) == pytest.approx(1)
+    assert [r["probability"] for r in mc["ruin"]] == sorted((r["probability"] for r in mc["ruin"]), reverse=True)

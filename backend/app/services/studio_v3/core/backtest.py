@@ -14,7 +14,7 @@ from app.services.screener_v2.core import data_loader
 from app.services.shared import metrics as M
 
 from . import compile as C
-from . import data, engine, limits
+from . import data, engine, limits, paths
 from .spec import Settings, Strategy, engine_params
 
 FEW_TRADES = 30
@@ -278,6 +278,8 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
         by_name.setdefault(t["symbol"], []).append(t["pnl"])
     per_name = sorted(({"symbol": k, "trades": len(v), "pnl": float(sum(v)), "win_rate": float(np.mean([x > 0 for x in v])), "share": float(sum(v) / net_profit) if net_profit > 0 else None,
                         "best": max(v), "worst": min(v)} for k, v in by_name.items()), key=lambda x: -x["pnl"])
+    regime_rows = paths.by_regime(paths.regimes(bench_eq, dates), r.trades[:, engine.T_ENTRY_BAR].astype(int), pnl, r.trades[:, engine.T_RET]) if bench_eq is not None else []
+    mc = paths.trade_monte_carlo(closed[:, engine.T_PNL], cap, seed=settings.seed)
     lim_rows = check_limits(spec, ret, tr, bm, cost_share, sd_pass)
     judged = [x for x in lim_rows if x["pass"] is not None]
     closest = min((x for x in judged if x["room"] is not None), key=lambda x: x["room"], default=None)
@@ -305,8 +307,9 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     out = {
         "feature_id": "st01", "status": "ok",
         "summary_cards": [{"label": k, "value": v, **({"unit": u} if u else {})} for k, v, u in cards],
-        "charts": {"equity_curve": curve, "cost_ladder": ladder, "start_dates": sd, "exposure": exposure, "rolling": _rolling(r.equity, bench_eq, dates)},
-        "tables": {"trades": trades, "carried_by": carried, "crises": crises, "drawdowns": dd_rows, "per_name": per_name, "my_limits": lim_rows,
+        "charts": {"trade_mc": mc["fan"] if mc else [], "equity_curve": curve, "cost_ladder": ladder, "start_dates": sd, "exposure": exposure, "rolling": _rolling(r.equity, bench_eq, dates)},
+        "tables": {"by_regime": regime_rows, "seasonality": paths.seasonality(r.equity, dates), "ruin": mc["ruin"] if mc else [], "streaks": mc["streaks"] if mc else [],
+                   "trades": trades, "carried_by": carried, "crises": crises, "drawdowns": dd_rows, "per_name": per_name, "my_limits": lim_rows,
                    "limits": limits.run_limits(start=str(dates[0].date()), end=str(dates[-1].date()), requested=prep.requested, held=held, delisted=int(dead.sum()), fill=settings.fill,
                                                costs=settings.costs.model_dump(), haircut=settings.delist_haircut, hourly_held=hourly_held, magnifier=settings.magnifier,
                                                holdout_from=prep.holdout_from, top_n=None if settings.symbols else settings.top_n),
@@ -318,6 +321,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
             "exposure": {"time_in_market": float((r.positions > 0).mean()), "avg_gross": float(r.gross_exposure.mean()), "avg_net": float(r.net_exposure.mean())},
             "start_dates": {"positive": int(sum(c > 0 for c in cagrs)), "of": len(cagrs), "cagr_low": min(cagrs) if cagrs else None, "cagr_high": max(cagrs) if cagrs else None, "pass_share": sd_pass},
             "survivorship": surv or {"status": "skipped", "reason": "no name in this universe stops trading inside the period"},
+            "paths": {k: v for k, v in mc.items() if k not in ("fan", "ruin", "streaks")} if mc else {"status": "skipped", "reason": "fewer than 10 closed trades"},
             "fill_check": fill, "without_best_months": without_best, "thirds_sharpe": thirds, "capacity": capacity,
             "my_limits": {"passed": sum(x["pass"] for x in judged), "of": len(judged), "closest": closest},
             "holdout_from": prep.holdout_from, "period": [str(dates[0].date()), str(dates[-1].date())], "universe": {"requested": prep.requested, "held": held, "delisted": int(dead.sum())},

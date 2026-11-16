@@ -21,6 +21,13 @@ export function lead(view: string, r: FeatureResult): string | null {
     case "stTradeShape": { const t = rows("trades"), losers = t.filter((q) => isNum(q.pnl) && q.pnl < 0), risk = losers.filter((q) => isNum(q.risk) && isNum(q.mfe) && isNum(q.entry) && isNum(q.shares));
       if (risk.length >= 5) { const hit = risk.filter((q) => (q.mfe as number) * (q.entry as number) * (q.shares as number) >= (q.risk as number)).length; return `Losers reached +1R in ${pct(hit / risk.length, 0)} of cases`; }
       return isNum(x.win_rate) ? `${pct(x.win_rate, 0)} win; average win ${isNum(x.avg_win) ? money(x.avg_win) : "—"}, loss ${isNum(x.avg_loss) ? money(Math.abs(x.avg_loss)) : "—"}` : null; }
+    case "stByRegime": { const t = rows("by_regime")[0]; return t && isNum(t.share) ? `${pct(t.share, 0)} of profit in ${String(t.regime)} (${String(t.trades)} trades)` : null; }
+    case "stSeasonality": { const s = [...rows("seasonality")].sort((a, b) => (b.mean as number) - (a.mean as number)); return s.length >= 12 ? `Best month ${String(s[0].month)} ${pct(s[0].mean, 1)}; worst ${String(s.at(-1)!.month)} ${pct(s.at(-1)!.mean, 1)}` : null; }
+    case "stContributors": { const n = rows("per_name"); if (!n.length) return null; let acc = 0, k = 0; const tot = n.reduce((a, q) => a + Math.max(0, q.pnl as number), 0);
+      for (const q of n) { if (acc >= tot / 2) break; acc += Math.max(0, q.pnl as number); k++; } return tot > 0 ? `${k} of ${n.length} names made half the profit` : null; }
+    case "stTradeFan": return isNum(m.paths.drawdown_p95) ? `95% of reshuffled paths stay above ${pct(m.paths.drawdown_p95, 0)} drawdown (actual ${pct(x.max_drawdown, 0)})` : null;
+    case "stRuin": { const r = rows("ruin").find((q) => q.drawdown === 0.3); return r ? `P(drawdown > 30%) = ${pct(r.probability, 0)}` : null; }
+    case "stStreaks": return isNum(m.paths.streak_p95) ? `95th percentile losing streak ${m.paths.streak_p95} trades; actual ${m.paths.streak_actual}` : null;
     case "dataTable": return null;
     case "monthlyHeatmap": return isNum(m.without_best_months) ? `Without the best 3 months: CAGR ${pct(m.without_best_months)}` : null;
     case "stCrises": { const c = [...rows("crises")].sort((a, b) => (a.benchmark as number) - (b.benchmark as number))[0];
