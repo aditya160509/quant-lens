@@ -59,6 +59,18 @@ def test_pbo_flags_noise_and_clears_a_real_edge():
     assert V.pbo_cscv(edge) < 0.1
 
 
+def test_cpcv_and_anchored_walk_forward_pick_the_real_edge():
+    import pandas as pd
+    rng = np.random.default_rng(1)
+    rets = rng.standard_normal((1000, 8)) * 0.01 + np.linspace(0, 0.001, 8)
+    curves = [({"k": j}, np.concatenate([[1.0], np.cumprod(1 + rets[:, j])])) for j in range(8)]
+    dates = pd.bdate_range("2015-01-01", periods=1001)
+    cp = V.cpcv(curves, dates)
+    assert cp["splits"] == 15 and cp["paths"] == 5 and cp["share_positive"] == 1.0
+    s, rows, _ = V.walk_forward(curves, dates, 4, anchored=True, purge=5)
+    assert len(rows) == 4 and s["oos_sharpe"] > 0
+
+
 def test_validation_is_reproducible():  # V-3: same spec, settings and data give the same tile hash
     from app.services.studio_v3.core.spec import Settings, Strategy
     spec = Strategy(entry_long="crosses_above(sma(close, f), sma(close, 100))", exit_long="crosses_below(sma(close, f), sma(close, 100))",

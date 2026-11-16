@@ -62,16 +62,25 @@ def _cells(spec: Strategy, n: int) -> list[dict[str, float]]:
     return [dict(zip(ranges, (round(float(v), 4) for v in c), strict=True)) for c in itertools.product(*axes)]
 
 
-def walk_forward(curves: list[tuple[dict, np.ndarray]], dates: pd.DatetimeIndex, windows: int) -> tuple[dict, list[dict], list[dict]]:
-    """Rolling: optimise on window i (best Sharpe among the cells), trade window i+1 with that choice. OOS pieces are stitched."""
-    edges = np.linspace(0, len(dates) - 1, windows + 2).astype(int)
+def walk_forward(curves: list[tuple[dict, np.ndarray]], dates: pd.DatetimeIndex, windows: int, anchored: bool = False, purge: int = 0, reopt: bool = True,
+                 is_mult: int = 1) -> tuple[dict, list[dict], list[dict]]:
+    """Optimise on an in-sample window (best Sharpe among the cells), trade the next out-of-sample window with that choice; OOS pieces are stitched.
+    Rolling or anchored (in-sample always starts at the first bar); `purge` bars are dropped between in-sample and out-of-sample; without re-optimising the
+    first window's choice is kept. In-sample is `is_mult` times the out-of-sample length."""
+    n = len(dates) - 1
+    oos_len = max(2, n // (windows + is_mult))
     rows, stitched, is_ann, oos_ann = [], [], [], []
+    k = None
     for i in range(windows):
-        a, b, c = edges[i], edges[i + 1], edges[i + 2]
-        scores = [_sharpe(eq[a:b + 1]) for _, eq in curves]
-        k = int(np.nanargmax(scores)) if np.isfinite(scores).any() else 0
+        b = (is_mult + i) * oos_len
+        c = n if i == windows - 1 else b + oos_len
+        a = 0 if anchored else max(0, b - is_mult * oos_len)
+        e = max(a + 2, b - purge)
+        scores = [_sharpe(eq[a:e + 1]) for _, eq in curves]
+        if reopt or k is None:
+            k = int(np.nanargmax(scores)) if np.isfinite(scores).any() else 0
         params, eq = curves[k]
-        is_r, oos_r = _daily(eq[a:b + 1]), _daily(eq[b:c + 1])
+        is_r, oos_r = _daily(eq[a:e + 1]), _daily(eq[b:c + 1])
         stitched.append(oos_r)
         ia, oa = float(np.mean(is_r) * 252), float(np.mean(oos_r) * 252)
         is_ann.append(ia)
@@ -81,7 +90,8 @@ def walk_forward(curves: list[tuple[dict, np.ndarray]], dates: pd.DatetimeIndex,
     oos = np.concatenate(stitched)
     eq = np.concatenate([[1.0], np.cumprod(1 + oos)])
     step = max(1, len(eq) // 600)
-    curve = [{"date": str(dates[edges[1] + i].date()), "oos": float(eq[i])} for i in range(0, len(eq), step) if edges[1] + i < len(dates)]
+    first = is_mult * oos_len
+    curve = [{"date": str(dates[first + i].date()), "oos": float(eq[i])} for i in range(0, len(eq), step) if first + i < len(dates)]
     wfe = float(np.mean(oos_ann) / np.mean(is_ann)) if np.mean(is_ann) > 0 else None
     summary = {"wfe": wfe, "profitable": int(sum(r["oos_return"] > 0 for r in rows)), "windows": len(rows), "oos_sharpe": float(M.sharpe(oos) or 0.0)}
     return summary, rows, curve
@@ -150,6 +160,11 @@ def luck(daily: np.ndarray, years: float, ledger: dict, trial_sharpes: list[floa
 
 
 def pbo_cscv(m: np.ndarray, partitions: int = 8) -> float | None:
+    d = pbo_detail(m, partitions)
+    return d["pbo"] if d else None
+
+
+def pbo_detail(m: np.ndarray, partitions: int = 8) -> dict | None:
     """CSCV (Bailey et al. 2015) as in shared.stats, except a setting flat for a whole block (in cash) scores Sharpe 0 there instead of voiding the test."""
     from itertools import combinations
 
@@ -163,14 +178,17 @@ def pbo_cscv(m: np.ndarray, partitions: int = 8) -> float | None:
         sd = x.std(0, ddof=1)
         return np.where(sd > 1e-12, x.mean(0) / np.where(sd > 1e-12, sd, 1), 0.0)
 
-    below = []
+    below, logits, pairs = [], [], []
     for train in combinations(range(partitions), partitions // 2):
         tr = np.concatenate([blocks[i] for i in train])
         te = np.concatenate([blocks[i] for i in range(partitions) if i not in train])
-        winner = int(np.argmax(sr(m[tr])))
-        rank = st.rankdata(sr(m[te]), method="average")[winner] / (m.shape[1] + 1)
+        s_tr, s_te = sr(m[tr]), sr(m[te])
+        winner = int(np.argmax(s_tr))
+        rank = st.rankdata(s_te, method="average")[winner] / (m.shape[1] + 1)
         below.append(rank <= 0.5)
-    return float(np.mean(below))
+        logits.append(float(np.log(rank / (1 - rank))))
+        pairs.append({"is_sharpe": float(s_tr[winner] * math.sqrt(252)), "oos_sharpe": float(s_te[winner] * math.sqrt(252))})
+    return {"pbo": float(np.mean(below)), "logits": logits, "pairs": pairs}
 
 
 def grade(tiles: list[dict], few: bool) -> dict:
@@ -211,7 +229,7 @@ def open_holdout(sid: str | None, version: int | None, actor: str) -> list[dict]
 
 
 def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, version: int | None = None, profile: str = "quick", weights: dict | None = None,
-                 show_holdout: bool = False, actor: str = "human", progress=None) -> dict:
+                 show_holdout: bool = False, actor: str = "human", progress=None, anchored: bool = False, purge: int = 5, reopt: bool = True, volume_cap: float = 0.01) -> dict:
     stage = progress or (lambda *_: None)
     prof = PROFILES.get(profile, PROFILES["quick"])
     if not C.compile_spec(spec)["ok"]:
@@ -238,8 +256,10 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
         tiles.append(_tile("walk_forward", "skipped", reason=f"{len(closed)} closed trades; needs {FEW_TRADES}"))
         wf = None
     else:
-        wf, rows, curve = walk_forward(curves, dates, prof["windows"])
+        wf, rows, curve = walk_forward(curves, dates, prof["windows"], anchored, purge, reopt)
         tables["windows"], charts["walk_forward"] = rows, curve
+        if len(curves) > 1:
+            tables["wf_matrix"] = wf_matrix(curves, dates, anchored, purge, reopt)
         ok = wf["wfe"] is not None and wf["wfe"] >= 0.5 and wf["oos_sharpe"] > 0
         tiles.append(_tile("walk_forward", "pass" if ok else "fail", wf["wfe"], "efficiency ≥ 50% and out-of-sample Sharpe > 0",
                            f"walk-forward efficiency {wf['wfe'] * 100:.0f}%, {wf['profitable']} of {wf['windows']} windows profitable" if wf["wfe"] is not None
@@ -282,7 +302,16 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
     tiles.append(_tile("costs", "pass" if c2 > 0 else "fail", c2, "profitable at 2× costs",
                        f"profitable at 2× costs; break-even beyond {ladder[-1]['multiple']}×" if c2 > 0 and breakeven is None else
                        f"costs break it at {breakeven}×" if breakeven else "loses money at 2× costs"))
+    capped = settings.model_copy(update={"costs": settings.costs.model_copy(update={"volume_cap": volume_cap})})
+    vc = _sharpe(simulate(spec, prep, capped, sig=sig, magnifier=False).equity)
+    stage("shocks", 74)
+    tables["shocks"] = shocks(spec, prep, settings, base)
+    tables["shifted"] = shifted_starts(spec, prep, settings)
+    stage("other names", 77)
+    rel = related(spec, settings)
+    tables["related"] = [rel] if rel["status"] == "ok" else []
     tables["execution"] = [{"case": "original", "sharpe": base_sr}, {"case": "delay 1 bar", "sharpe": d1}, {"case": "delay 2 bars", "sharpe": d2},
+                           {"case": f"volume cap {volume_cap * 100:g}% of the day", "sharpe": vc},
                            *({"case": f"costs {x['multiple']}×", "sharpe": x["sharpe"], "total_return": x["total_return"]} for x in ladder[1:])]
 
     stage("parameters", 80)
@@ -304,7 +333,17 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
     pbo = None
     if len(curves) >= 8:
         m = np.array([_daily(eq) for _, eq in curves]).T
-        pbo = pbo_cscv(m)
+        det = pbo_detail(m)
+        if det:
+            pbo = det["pbo"]
+            tables["pbo_pairs"] = det["pairs"]
+            charts["pbo_logits"] = [{"logit": v} for v in det["logits"]]
+    cp = cpcv(curves, dates)
+    if cp:
+        tables["cpcv"] = [{"path": j + 1, "sharpe": s} for j, s in enumerate(cp["sharpes"])]
+        charts["cpcv_paths"] = cp.pop("curve")
+    hurdle_sr = 1.645 / math.sqrt(max(years, 0.25))
+    pw = power(len(dates), len(closed), float(np.mean(np.array(perm_sr) >= hurdle_sr)) if perm_sr else None)
     tiles.append(_tile("pbo", "skipped" if pbo is None else "pass" if pbo <= 0.5 else "fail", pbo, "≤ 50%",
                        f"probability the best in-sample setting underperforms out of sample: {pbo * 100:.0f}%" if pbo is not None else "", reason="needs 8 or more parameter settings" if pbo is None else ""))
     charts["lottery"] = [{"bin": (a + b) / 2, "count": c} for a, b, c in zip(lk["lottery_edges"][:-1], lk["lottery_edges"][1:], lk["lottery_hist"], strict=True)]
@@ -345,6 +384,7 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
         "tables": {"tiles": tiles, "verdict": [{"test": t["name"], "weight": t["weight"], "result": t["status"], "value": t["value"], "threshold": t["threshold"]} for t in tiles],
                    "luck": [{"measure": k, "value": v} for k, v in lk.items() if not isinstance(v, list)], **tables},
         "meta": {"headline": headline, "grade": g, "tiles": tiles, "luck": {k: v for k, v in lk.items() if not isinstance(v, list)}, "holdout": hold,
+                 "power": pw, "cpcv": cp, "related": rel, "walk_forward_mode": {"anchored": anchored, "purge": purge, "reopt": reopt},
                  "next_test": f"Run: {nxt['name']} ({nxt['reason']})" if nxt else None, "what_would_change": change, "walk_forward": wf, "profile": profile,
                  "total_return": float(base.equity[-1] / cap - 1), "metrics": {"sharpe": base_sr, "trades": len(base.trades)},
                  "run_hash": run_hash, "result_hash": tile_hash, "verdict_chip": f"Grade {g['grade']}", "freshness": limits.freshness(),
@@ -356,3 +396,137 @@ def _panel_from(p, bars: dict[str, np.ndarray]):
     from . import data
 
     return data.Panel(p.dates, p.symbols, *(bars[f] if f in bars else getattr(p, f) for f in data.FIELDS))
+
+
+def wf_matrix(curves, dates, anchored: bool, purge: int, reopt: bool) -> list[dict]:
+    """Walk-forward across window counts × in-sample lengths: which combinations pass (efficiency ≥ 50% and OOS Sharpe > 0)."""
+    out = []
+    for w in (3, 4, 5, 6, 8):
+        for mult in (1, 2, 3, 4, 5):
+            if len(dates) // (w + mult) < 40:
+                out.append({"windows": w, "in_sample_x": mult, "pass": None, "wfe": None})
+                continue
+            s, _, _ = walk_forward(curves, dates, w, anchored, purge, reopt, mult)
+            out.append({"windows": w, "in_sample_x": mult, "wfe": s["wfe"], "oos_sharpe": s["oos_sharpe"], "pass": bool(s["wfe"] is not None and s["wfe"] >= 0.5 and s["oos_sharpe"] > 0)})
+    return out
+
+
+def cpcv(curves, dates, groups: int = 6, test: int = 2, purge: int = 5) -> dict | None:
+    """Combinatorial purged cross-validation (López de Prado): choose the best cell on the training groups (purged next to each test group),
+    keep its test-group returns, and stitch the splits into paths. Returns the out-of-sample Sharpe of each path."""
+    from itertools import combinations
+
+    if len(curves) < 2 or len(dates) < groups * 40:
+        return None
+    rets = np.array([_daily(eq) for _, eq in curves])  # cells × days
+    bounds = np.array_split(np.arange(rets.shape[1]), groups)
+    splits = list(combinations(range(groups), test))
+    taken: dict[int, list[np.ndarray]] = {g: [] for g in range(groups)}
+    for tg in splits:
+        keep = np.ones(rets.shape[1], bool)
+        for g in tg:
+            lo, hi = bounds[g][0], bounds[g][-1]
+            keep[max(0, lo - purge):hi + purge + 1] = False
+        tr = rets[:, keep]
+        sd = tr.std(1)
+        k = int(np.argmax(np.where(sd > 1e-12, tr.mean(1) / np.where(sd > 1e-12, sd, 1), -np.inf)))
+        for g in tg:
+            taken[g].append(rets[k, bounds[g]])
+    n_paths = len(splits) * test // groups
+    paths = [np.concatenate([taken[g][j] for g in range(groups)]) for j in range(n_paths)]
+    sharpes = [float(M.sharpe(p) or 0.0) for p in paths]
+    step = max(1, rets.shape[1] // 400)
+    eq = [np.cumprod(1 + p) for p in paths]
+    curve = [{"date": str(dates[i + 1].date()), **{f"p{j}": float(e[i]) for j, e in enumerate(eq)}} for i in range(0, rets.shape[1], step)]
+    return {"splits": len(splits), "paths": n_paths, "sharpes": sharpes, "median": float(np.median(sharpes)), "share_positive": float(np.mean([s > 0 for s in sharpes])), "curve": curve}
+
+
+def power(days: int, trades: int, false_pos: float | None) -> dict:
+    """Chance a one-sided 5% test on this many days of returns detects a true annual Sharpe of 0.25, 0.5, 1.0."""
+    from scipy.stats import norm
+
+    years = days / 252
+    rows = [{"true_sharpe": s, "detected": float(1 - norm.cdf(1.645 - s * math.sqrt(years)))} for s in (0.25, 0.5, 0.75, 1.0)]
+    need = {s: (1.645 + 0.842) ** 2 / s**2 for s in (0.5, 1.0)}  # years for 80% power
+    return {"rows": rows, "years": years, "trades": trades, "false_positive": false_pos, "years_for_80pct": need}
+
+
+def shocks(spec, prep, settings, base) -> list[dict]:
+    """Shocks applied on the bar the strategy held most positions: a 10% gap down, volatility ×3 for 20 bars, every name moving with the market for 20 bars."""
+    t = int(np.argmax(base.positions)) or len(prep.panel.dates) // 2
+    out = []
+    bars = prep.sig_bars
+    rets = {f: bars[f][1:] / bars[f][:-1] for f in ("open", "high", "low", "close")}
+
+    def rebuild(scale):
+        nb = dict(bars)
+        for f in ("open", "high", "low", "close"):
+            r = rets[f].copy()
+            r = scale(r, f)
+            first = bars[f][:1]
+            nb[f] = np.vstack([first, first * np.nancumprod(np.nan_to_num(r, nan=1.0), axis=0)])
+            nb[f][np.isnan(bars[f])] = np.nan
+        return nb
+
+    def gap(r, f):
+        r = r.copy()
+        r[t - 1] *= 0.90
+        return r
+
+    def vol3(r, f):
+        r = r.copy()
+        r[t - 1:t + 19] = 1 + 3 * (r[t - 1:t + 19] - 1)
+        return r
+
+    mkt = bars["market"][1:, :1] / bars["market"][:-1, :1] if "market" in bars else None
+
+    def corr1(r, f):
+        r = r.copy()
+        if mkt is not None:
+            r[t - 1:t + 19] = np.repeat(mkt[t - 1:t + 19], r.shape[1], axis=1)
+        return r
+
+    for name, fn in (("Gap down 10%", gap), ("Volatility ×3 for 20 bars", vol3), ("Everything moves with the market for 20 bars", corr1)):
+        if name.startswith("Everything") and mkt is None:
+            continue
+        nb = rebuild(fn)
+        shocked = replace(prep, sig_bars=nb, panel=_panel_from(prep.panel, nb))
+        eq = simulate(spec, shocked, settings, magnifier=False).equity
+        dd = float((eq / np.maximum.accumulate(eq) - 1).min())
+        out.append({"shock": name, "on": str(prep.panel.dates[t].date()), "max_drawdown": dd, "base_drawdown": float((base.equity / np.maximum.accumulate(base.equity) - 1).min()),
+                    "total_return": float(eq[-1] / eq[0] - 1)})
+    return out
+
+
+def shifted_starts(spec, prep, settings, months=(0, 3, 6, 9, 12)) -> list[dict]:
+    """The same rule started later: drops the first k months, nothing else changes."""
+    out = []
+    for k in months:
+        lo = k * 21
+        if lo >= len(prep.panel.dates) - 252:
+            break
+        sl = replace(prep, panel=prep.panel.window(lo, len(prep.panel.dates)), sig_bars={f: v[lo:] for f, v in prep.sig_bars.items()},
+                     benchmark=None if prep.benchmark is None else prep.benchmark[lo:], hourly=None)
+        eq = simulate(spec, sl, settings, magnifier=False).equity
+        out.append({"start": str(sl.panel.dates[0].date()), "months_later": k, "sharpe": _sharpe(eq), "total_return": float(eq[-1] / eq[0] - 1)})
+    return out
+
+
+def related(spec, settings) -> dict:
+    """The same rule on other names: the next band of liquid names (or the top names not in the list)."""
+    from .backtest import _universe
+
+    if settings.symbols:
+        alt = [s for s in _universe(settings.model_copy(update={"symbols": [], "top_n": 100})) if s not in set(_universe(settings))][:50]
+    else:
+        wide = _universe(settings.model_copy(update={"top_n": settings.top_n * 2}))
+        alt = wide[settings.top_n:]
+    if len(alt) < 5:
+        return {"status": "skipped", "reason": "no other names held"}
+    st = settings.model_copy(update={"symbols": alt})
+    try:
+        pr = prepare(st)
+        eq = simulate(spec, pr, st, magnifier=False).equity
+    except Refusal as e:
+        return {"status": "skipped", "reason": e.reason}
+    return {"status": "ok", "names": len(alt), "sharpe": _sharpe(eq), "total_return": float(eq[-1] / eq[0] - 1), "first": alt[0], "last": alt[-1]}

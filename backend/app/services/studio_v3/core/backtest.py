@@ -57,7 +57,7 @@ def _fill_gaps(a: np.ndarray, alive: np.ndarray) -> np.ndarray:
 def prepare(settings: Settings, *, include_holdout: bool = False) -> Prepared:
     symbols = _universe(settings)
     p = data.panel(symbols, settings.start, settings.end)
-    if not len(p.dates):
+    if not len(p.dates) or not p.close.shape[1]:
         raise Refusal("No bars for this universe in the chosen period.", ["the period is outside the data we hold", "the symbols are not in the file", "the universe is empty"])
     ok = np.isfinite(p.close)
     # keep sessions where at least half the live names trade: drops other markets' holidays from a shared calendar

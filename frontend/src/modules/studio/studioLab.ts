@@ -60,7 +60,7 @@ function backtestHero(r: FeatureResult): HeroSpec | null {
 function validateHero(r: FeatureResult): HeroSpec | null {
   const g = (r.meta as { grade?: { grade: string; reason: string; cap: string | null } }).grade;
   if (!g) return null;
-  return { figure: g.grade, tone: g.grade <= "B" ? "up" : g.grade === "C" ? "warn" : "down", versus: g.cap ? `capped at ${g.cap}` : undefined, line: g.reason };
+  return { figure: g.grade, tone: g.grade <= "B" ? "up" : g.grade === "C" ? "warn" : "down", versus: g.cap ? `capped at ${g.cap}` : undefined };
 }
 
 /** Portfolio hero: the combined line against each member. */
@@ -95,7 +95,7 @@ const BV = group(() => import("./views/BacktestViews") as Promise<Record<string,
 const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string, unknown>>);
 registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto, stStabilityOpt: OV.Stability, stSpread: OV.Spread }, ["stParamMap", "stPareto", "stSpread"]);
 const VV = group(() => import("./views/ValidateViews") as Promise<Record<string, unknown>>);
-registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout, stCertificate: VV.Certificate }, ["stTiles", "stStitched"]);
+registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout, stCertificate: VV.Certificate, stWfMatrix: VV.WfMatrix, stCpcv: VV.Cpcv, stPower: VV.Power, stPboLogits: VV.PboLogits, stPboRanks: VV.PboRanks }, ["stTiles", "stStitched"]);
 const LV = group(() => import("./views/LiveViews") as Promise<Record<string, unknown>>);
 registerViews({ stOrders: LV.Orders, stPaper: LV.Paper, stAlerts: LV.Alerts, stReconcile: LV.Reconcile }, ["stOrders", "stPaper"]);
 const TS = group(() => import("@/modules/screener/test/TearSheet") as Promise<Record<string, unknown>>);
@@ -179,6 +179,8 @@ export const STUDIO_LAB: LabConfig = {
         { id: "wf", label: "Walk-forward", items: [
           { keys: ["walk_forward"], span: 12, view: "stStitched", title: "Stitched out-of-sample" },
           { keys: ["windows"], span: 12, view: "dataTable", title: "Windows" },
+          { keys: ["wf_matrix"], span: 6, view: "stWfMatrix", title: "Windows × in-sample length" },
+          { keys: ["cpcv_paths"], span: 6, view: "stCpcv", title: "CPCV paths" },
         ] },
         { id: "robust", label: "Robustness", items: [
           { keys: ["vs_random"], span: 7, view: "stVsRandom", title: "Vs random entries" },
@@ -186,10 +188,16 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["parameters"], span: 12, view: "dataTable", title: "Nearby settings" },
           { keys: ["noise"], span: 6, view: "dataTable", title: "Price noise" },
           { keys: ["mcpt"], span: 6, view: "dataTable", title: "Permutation" },
+          { keys: ["shocks"], span: 12, view: "dataTable", title: "Shocks" },
+          { keys: ["shifted"], span: 6, view: "dataTable", title: "Shifted starts" },
+          { keys: ["related"], span: 6, view: "dataTable", title: "Other names" },
         ] },
         { id: "luck", label: "Luck", items: [
           { keys: ["lottery"], span: 7, view: "stLottery", title: "Luck lottery" },
           { keys: ["luck"], span: 5, view: "dataTable", title: "Luck measures" },
+          { keys: ["pbo_logits"], span: 6, view: "stPboLogits", title: "Overfitting logits" },
+          { keys: ["pbo_pairs"], span: 6, view: "stPboRanks", title: "Winner in vs out of sample" },
+          { keys: ["tiles"], span: 12, view: "stPower", title: "Power" },
         ] },
         { id: "holdout", label: "Hold-out", items: [{ keys: ["tiles"], span: 12, view: "stHoldout", title: "Sealed hold-out" }] },
         { id: "certificate", label: "Certificate", items: [{ keys: ["tiles"], span: 12, view: "stCertificate", title: "Certificate" }] },

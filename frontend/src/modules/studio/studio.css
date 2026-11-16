@@ -155,3 +155,7 @@
 .bt-row { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; font-size: 12.5px; color: var(--text-2); max-width: 320px; padding: 2px 0; }
 .op-stab { display: grid; grid-template-columns: 160px 1fr; gap: 16px; align-items: center; }
 @media (max-width: 700px) { .op-stab { grid-template-columns: 1fr; } }
+.vd-bar { flex: 1; height: 6px; background: var(--line-2); border-radius: 3px; overflow: hidden; margin: 0 10px; }
+.vd-bar i { display: block; height: 100%; }
+.vd-row { display: grid; grid-template-columns: 130px 1fr 44px; align-items: center; font-size: 12.5px; color: var(--text-2); padding: 4px 0; max-width: 560px; }
+.vd-row b { text-align: right; font-variant-numeric: tabular-nums; }

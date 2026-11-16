@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import { Bars } from "@/charts/Bars";
 import { TimeSeries } from "@/charts/TimeSeries";
+import { Heatmap } from "@/charts/Heatmap";
+import { Distribution } from "@/charts/Distribution";
+import { XYPlot } from "@/charts/XYPlot";
 import { isNum, pct } from "@/modules/research/format";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import { Skipped } from "./BacktestViews";
@@ -10,7 +13,9 @@ import { Skipped } from "./BacktestViews";
 type Tile = { test: string; name: string; status: "pass" | "fail" | "skipped"; value: number | null; threshold: string; finding: string; reason: string; weight: number };
 type VMeta = { grade: { grade: string; score: number | null; reason: string; cap: string | null }; tiles: Tile[]; next_test: string | null; what_would_change: string[];
   holdout: { status: string; from: string | null; looks: { actor: string; at: number; version: number | null }[]; sharpe?: number; dev_sharpe?: number; return?: number };
-  luck: { sharpe: number; lottery_p95: number; effective_trials: number; raw_trials: number } };
+  luck: { sharpe: number; lottery_p95: number; effective_trials: number; raw_trials: number };
+  power?: { rows: { true_sharpe: number; detected: number }[]; years: number; trades: number; false_positive: number | null; years_for_80pct: Record<string, number> };
+  cpcv?: { splits: number; paths: number; median: number; share_positive: number } | null };
 const vm = (r: ViewProps["result"]) => r.meta as unknown as VMeta;
 const TONE = { pass: "var(--up)", fail: "var(--down)", skipped: "var(--text-4)" };
 
@@ -116,4 +121,53 @@ export function Certificate({ result }: ViewProps) {
       </div>
     </div>
   );
+}
+
+/** Walk-forward over window counts × in-sample lengths: efficiency per cell, passing cells outlined. */
+export function WfMatrix({ rows }: ViewProps) {
+  const ws = [...new Set(rows.map((r) => r.windows as number))], xs = [...new Set(rows.map((r) => r.in_sample_x as number))];
+  if (!rows.length) return <Skipped reason="needs at least two settings to choose from" />;
+  const at = (w: number, x: number) => rows.find((r) => r.windows === w && r.in_sample_x === x);
+  return <Heatmap rows={ws.map(String)} cols={xs.map((x) => `${x}×`)} values={ws.map((w) => xs.map((x) => (at(w, x)?.wfe as number | null) ?? null))} format={(v) => pct(v, 0)}
+    centered={false} rowTitle="Windows" colTitle="In-sample length vs out-of-sample" outline={(r, c) => at(ws[r], xs[c])?.pass === true} />;
+}
+
+/** CPCV: equity of every recombined out-of-sample path. */
+export function Cpcv({ rows, result }: ViewProps) {
+  const c = vm(result).cpcv;
+  if (!c || rows.length < 2) return <Skipped reason="needs at least two settings and six groups of 40 bars" />;
+  return (
+    <>
+      <TimeSeries data={rows} series={Array.from({ length: c.paths }, (_, j) => ({ key: `p${j}`, label: `Path ${j + 1}`, color: "var(--text-3)", width: 1.2 }))} height={240} legend={false} format={(v) => `${((v - 1) * 100).toFixed(0)}%`} />
+      <p className="calendar-note">{c.splits} splits · {c.paths} paths · median Sharpe {c.median.toFixed(2)} · {pct(c.share_positive, 0)} of paths above zero</p>
+    </>
+  );
+}
+
+/** Chance this much history detects a strategy that truly has each Sharpe. */
+export function Power({ result }: ViewProps) {
+  const p = vm(result).power;
+  if (!p) return <Skipped reason="not run" />;
+  return (
+    <div>
+      {p.rows.map((r) => (
+        <div key={r.true_sharpe} className="vd-row"><span>True Sharpe {r.true_sharpe.toFixed(2)}</span>
+          <span className="vd-bar"><i style={{ width: `${r.detected * 100}%`, background: r.detected >= 0.8 ? "var(--up)" : "var(--text-3)" }} /></span><b>{pct(r.detected, 0)}</b></div>
+      ))}
+      <p className="calendar-note">{p.years.toFixed(1)} years, {p.trades} trades{isNum(p.false_positive) ? ` · ${pct(p.false_positive, 0)} of shuffled prices clear the same bar` : ""} · 80% power needs {p.years_for_80pct["0.5"]?.toFixed(0)} years at Sharpe 0.5</p>
+    </div>
+  );
+}
+
+/** PBO detail: logit of the in-sample winner's out-of-sample rank, and the ranks themselves. */
+export function PboLogits({ rows }: ViewProps) {
+  const v = rows.map((r) => r.logit).filter(isNum);
+  if (v.length < 4) return <Skipped reason="needs at least eight settings" />;
+  return <Distribution values={v} observed={0} tail="left" xLabel="Logit of the winner's out-of-sample rank; left of 0 = overfit" observedLabel="Median rank" />;
+}
+
+export function PboRanks({ rows }: ViewProps) {
+  if (rows.length < 4) return <Skipped reason="needs at least eight settings" />;
+  return <XYPlot points={rows.map((r) => ({ x: r.is_sharpe as number, y: r.oos_sharpe as number }))} xLabel="Winner's in-sample Sharpe" yLabel="Same setting out of sample" refY={[{ y: 0 }]} diagonal height={240}
+    formatX={(v) => v.toFixed(2)} formatY={(v) => v.toFixed(2)} />;
 }
