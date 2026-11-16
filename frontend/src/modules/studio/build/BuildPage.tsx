@@ -18,22 +18,23 @@ import "../studio.css";
 
 type Param = { value: number; min?: number | null; max?: number | null; step?: number | null };
 type Spec = {
-  name: string; entry_long: string; exit_long: string; entry_short: string; exit_short: string; score: string;
+  name: string; entry_long: string; exit_long: string; entry_short: string; exit_short: string; score: string; market_filter: string;
   params: Record<string, Param>;
   exits: Record<string, number>; sizing: { mode: string; value: number; max_positions: number };
   limits: Record<string, number | null>; code: string; hypothesis: string; regime_claim: string; notes: string; [k: string]: unknown;
 };
 type Version = { version: number; hash: string; actor: string; created: number };
-type Loaded = { id: string; name: string; version: number; latest: number; spec: Spec; draft: Spec | null; versions: Version[]; trials: Ledger };
+type RunSum = { headline?: string; total_return?: number; sharpe?: number | null; trades?: number };
+type Loaded = { id: string; name: string; version: number; latest: number; spec: Spec; draft: Spec | null; versions: Version[]; trials: Ledger; runs_by_version: Record<string, RunSum>; regime_written_after: boolean };
 
 const BLANK: Spec = {
-  name: "Untitled", entry_long: "", exit_long: "", entry_short: "", exit_short: "", score: "", params: {},
+  name: "Untitled", entry_long: "", exit_long: "", entry_short: "", exit_short: "", score: "", market_filter: "", params: {},
   exits: { stop: 0, stop_atr: 0, target: 0, trail: 0, time_stop: 0, breakeven: 0, scale_at: 0, scale_frac: 0 },
   sizing: { mode: "equal", value: 0, max_positions: 10 },
   limits: { max_drawdown: 0.25, max_drawdown_months: null, min_trades: 30, min_years: null, max_beta: null, max_cost_share: null, min_start_pass: null },
   code: "", hypothesis: "", regime_claim: "", notes: "",
 };
-const ROLES: [string, string][] = [["entry_long", "Enter long"], ["exit_long", "Exit long"], ["entry_short", "Enter short"], ["exit_short", "Exit short"], ["score", "Rank by"]];
+const ROLES: [string, string][] = [["entry_long", "Enter long"], ["exit_long", "Exit long"], ["entry_short", "Enter short"], ["exit_short", "Exit short"], ["score", "Rank by"], ["market_filter", "Trade only when"]];
 const EXITS: [string, string, boolean][] = [["stop", "Stop", true], ["stop_atr", "Stop × ATR", false], ["target", "Target", true], ["trail", "Trailing stop", true], ["time_stop", "Time stop (bars)", false],
   ["breakeven", "Breakeven at", true], ["scale_at", "Scale out at", true], ["scale_frac", "Scale out share", true]];
 const LIMITS: [string, string, boolean][] = [["max_drawdown", "Max drawdown", true], ["max_drawdown_months", "Max drawdown months", false], ["min_trades", "Min trades", false],
@@ -226,6 +227,11 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         <section className="bd-card">
           <h3>v{diff.version} → this draft {diff.rows.length ? `· ${diff.rows.length} change${diff.rows.length === 1 ? "" : "s"}` : "· no changes"}</h3>
           {diff.rows.map(([k, a, b]) => <div key={k} className="bd-diff"><span>{k}</span><del>{a || "—"}</del><ins>{b || "—"}</ins></div>)}
+          {loaded ? (() => {
+            const ra = loaded.runs_by_version[diff.version], rb = loaded.runs_by_version[loaded.version];
+            const cell = (r?: RunSum) => (r ? `${(r.total_return ?? 0) >= 0 ? "+" : ""}${((r.total_return ?? 0) * 100).toFixed(1)}% · Sharpe ${r.sharpe?.toFixed(2) ?? "—"} · ${r.trades ?? "—"} trades` : "not run");
+            return <div className="bd-diff"><span>backtest</span><del>{cell(ra)}</del><ins>{`v${loaded.version}: ${cell(rb)}`}</ins></div>;
+          })() : null}
         </section>
       ) : null}
       <div className="bd-grid">
@@ -269,7 +275,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
               {rows ? <BlockRows id={`b-${role}`} rows={rows.length ? rows : [{ left: "", op: ">", right: "", join: "&" } as Row]} suggestions={catalogue}
                 onChange={(r) => edit({ [role]: toFormula(r) })} /> : null}
               {mode === "blocks" && role !== "score" && !rows ? <p className="bd-find warning"><b>Formula only</b>This rule is not a list of comparisons, so it stays as a formula.</p> : null}
-              {rows ? null : <textarea id={`r-${role}`} className="input" spellCheck={false} rows={role === "score" ? 1 : 2} value={spec[role] as string} onSelect={track(role)} onFocus={track(role)} onChange={(e) => edit({ [role]: e.target.value })} />}
+              {rows ? null : <textarea id={`r-${role}`} className="input" spellCheck={false} rows={role === "score" || role === "market_filter" ? 1 : 2} placeholder={role === "market_filter" ? "market > sma(market, 200)" : undefined} value={spec[role] as string} onSelect={track(role)} onFocus={track(role)} onChange={(e) => edit({ [role]: e.target.value })} />}
               {findings(role).map((f, i) => <p key={i} className={`bd-find ${f.severity}`}><b>{f.severity === "error" ? "Error" : "Warning"}</b>{f.token ? <code>{f.token}</code> : null}{f.message}</p>)}
             </div>
           ); })}
@@ -348,7 +354,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         <section className="bd-card">
           <h3>Notes</h3>
           <label className="bd-rule"><span>Hypothesis</span><textarea className="input" rows={2} value={spec.hypothesis} onChange={(e) => edit({ hypothesis: e.target.value })} /></label>
-          <label className="bd-rule"><span>Regime it should work in</span><input className="input" value={spec.regime_claim} onChange={(e) => edit({ regime_claim: e.target.value })} /></label>
+          <label className="bd-rule"><span>Regime it should work in{loaded?.regime_written_after ? <b className="chip warn" style={{ marginLeft: 8 }}>written after a backtest</b> : null}</span><input className="input" value={spec.regime_claim} onChange={(e) => edit({ regime_claim: e.target.value })} /></label>
           <label className="bd-rule"><span>Decisions</span><textarea className="input" rows={3} value={spec.notes} onChange={(e) => edit({ notes: e.target.value })} /></label>
         </section>
       </div>

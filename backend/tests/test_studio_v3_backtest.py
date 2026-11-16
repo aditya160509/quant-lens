@@ -339,3 +339,18 @@ def test_agent_validate_and_holdout_budget(studio):  # V-5 through MCP
         assert call("open_holdout")["structuredContent"]["looks_left_for_agents"] == left
     refused = call("open_holdout")
     assert refused["isError"] and "budget" in refused["structuredContent"]["reason"]
+
+
+def test_market_rule_blocks_entries_and_closes_everything_when_off():
+    import pandas as pd
+
+    from app.services.studio_v3.core import compile as C
+    from app.services.studio_v3.core.spec import Strategy
+
+    n, k = 60, 2
+    c = np.ones((n, k)) * 100
+    mkt = np.r_[np.full(30, 200.0), np.full(30, 100.0)]  # market falls at bar 30
+    bars = {"open": c, "high": c, "low": c, "close": c, "volume": c, "market": np.repeat(mkt[:, None], k, axis=1)}
+    s = Strategy(entry_long="close > 0", market_filter="market > 150")
+    sig = C.signals(s, bars, pd.bdate_range("2020-01-01", periods=n))
+    assert (sig.entries[:30] == 1).all() and (sig.entries[30:] == 0).all() and (sig.exits[30:] & 1).all()

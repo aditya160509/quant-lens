@@ -12,8 +12,8 @@ from app.services.shared.formula import SignalError
 from . import formula, pycode
 from .spec import Strategy
 
-ROLES = ("entry_long", "exit_long", "entry_short", "exit_short", "score")
-ROLE_LABEL = {"entry_long": "Buy when", "exit_long": "Sell when", "entry_short": "Short when", "exit_short": "Cover when", "score": "Rank by"}
+ROLES = ("entry_long", "exit_long", "entry_short", "exit_short", "score", "market_filter")
+ROLE_LABEL = {"entry_long": "Buy when", "exit_long": "Sell when", "entry_short": "Short when", "exit_short": "Cover when", "score": "Rank by", "market_filter": "Trade only when"}
 
 
 def compile_spec(spec: Strategy) -> dict:
@@ -73,6 +73,7 @@ def signals(spec: Strategy, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex
     shape = bars["close"].shape
     if spec.code.strip():
         entries, exits = pycode.run(spec.code, bars, dates, params, cache=cache)
+        _gate(spec, entries, exits, bars, dates, params, cache)
         dist = spec.exits.stop_atr * formula.evaluate("atr(14)", bars, dates, params, cache) if spec.exits.stop_atr else None
         return Signals(entries, exits, None, None if dist is None else np.nan_to_num(dist), _vol(spec, bars, dates, params, cache))
     entries, exits = np.zeros(shape, dtype=np.int8), np.zeros(shape, dtype=np.int8)
@@ -84,9 +85,19 @@ def signals(spec: Strategy, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex
         exits[_bool(spec.exit_long, bars, dates, params, cache)] |= 1
     if spec.exit_short.strip():
         exits[_bool(spec.exit_short, bars, dates, params, cache)] |= 2
+    _gate(spec, entries, exits, bars, dates, params, cache)
     score = formula.evaluate(spec.score, bars, dates, params, cache).astype(float) if spec.score.strip() else None
     dist = spec.exits.stop_atr * formula.evaluate("atr(14)", bars, dates, params, cache) if spec.exits.stop_atr else None
     return Signals(entries, exits, score, None if dist is None else np.nan_to_num(dist), _vol(spec, bars, dates, params, cache))
+
+
+def _gate(spec: Strategy, entries, exits, bars, dates, params, cache) -> None:
+    """Market rule: no entries while it is false, and everything closes on the bar it turns false."""
+    if not spec.market_filter.strip():
+        return
+    on = _bool(spec.market_filter, bars, dates, params, cache)
+    entries[~on] = 0
+    exits[~on] |= 3
 
 
 def _vol(spec: Strategy, bars, dates, params, cache) -> np.ndarray | None:
@@ -112,4 +123,5 @@ def describe(spec: Strategy) -> str:
             "equal": "an equal share of equity", "vol_target": f"an equal share scaled to {_pct(s.value)} annual volatility"}[s.mode]
     cap = f", at most {s.max_positions} positions" if s.max_positions else ""
     rank = f", best {spec.score.strip()} first" if spec.score.strip() else ""
+    rank += f". Only while {spec.market_filter.strip()}, else cash" if spec.market_filter.strip() else ""
     return "\n".join([("; ".join(entry) or "No entry rule") + ".", "Exit: " + ("; ".join(out) or "none, held to the end") + ".", f"Size: {size} per trade{cap}{rank}."])

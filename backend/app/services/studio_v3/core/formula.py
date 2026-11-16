@@ -15,7 +15,7 @@ from app.services.shared.formula import BINOPS, CMPOPS, SignalError
 from app.services.shared.formula import parse as _parse
 
 MAX_WINDOW = 2000
-FIELDS = {"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume", "returns": "Close-to-close return"}
+FIELDS = {"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume", "returns": "Close-to-close return", "market": "SPY close (the market), same on every name"}
 
 
 def _df(x) -> pd.DataFrame:

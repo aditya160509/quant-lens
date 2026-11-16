@@ -94,7 +94,11 @@ def get(sid: str, version: int | None = None) -> dict:
         if not spec:
             raise KeyError(f"Strategy {sid} has no version {v}")
         card = _card(con, row)
-    return {**card, "version": v, "latest": versions[-1]["version"], "spec": json.loads(spec["spec"]), "draft": json.loads(row["draft"]) if row["draft"] else None,
+        runs = con.execute("SELECT version, summary, created FROM runs WHERE strategy_id = ? AND feature = 'st01' ORDER BY created", (sid,)).fetchall()
+        claimed = next((r for r in versions if json.loads(con.execute("SELECT spec FROM versions WHERE strategy_id = ? AND version = ?", (sid, r["version"])).fetchone()["spec"]).get("regime_claim")), None)
+    by_version = {r["version"]: json.loads(r["summary"]) for r in runs}  # latest backtest per version
+    regime_after = bool(claimed and claimed["version"] > 1 and any(r["created"] < claimed["created"] for r in runs))
+    return {**card, "version": v, "runs_by_version": by_version, "regime_written_after": regime_after, "latest": versions[-1]["version"], "spec": json.loads(spec["spec"]), "draft": json.loads(row["draft"]) if row["draft"] else None,
             "versions": [dict(r) for r in versions], "trials": ledger(sid, detail=False)}
 
 

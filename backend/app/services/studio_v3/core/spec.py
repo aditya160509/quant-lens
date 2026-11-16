@@ -59,6 +59,7 @@ class Strategy(_Model):
     entry_short: str = ""
     exit_short: str = ""
     score: str = ""  # which candidates take the free slots first (higher first)
+    market_filter: str = ""  # trade only while true; when it turns false every position is closed and the book sits in cash
     params: dict[str, Param] = Field(default_factory=dict)
     exits: Exits = Field(default_factory=Exits)
     sizing: Sizing = Field(default_factory=Sizing)

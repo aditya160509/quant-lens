@@ -71,6 +71,9 @@ def prepare(settings: Settings, *, include_holdout: bool = False) -> Prepared:
     holdout_from = str(p.dates[cut].date()) if cut < len(p.dates) else None
     p, alive = p.window(0, cut), alive[:cut]
     sig_bars = {f: _fill_gaps(getattr(p, f), alive) for f in ("open", "high", "low", "close")} | {"volume": np.where(alive, np.nan_to_num(p.volume), np.nan)}
+    m = data.panel(["SPY"], None, None)
+    mkt = pd.Series(m.close[:, 0], index=m.dates).reindex(p.dates, method="ffill").to_numpy() if len(m.dates) else np.full(len(p.dates), np.nan)
+    sig_bars["market"] = np.repeat(mkt[:, None], p.close.shape[1], axis=1)  # SPY close on every column, for market rules
     bench = None
     if settings.benchmark:
         b = data.panel([settings.benchmark], None, None)
