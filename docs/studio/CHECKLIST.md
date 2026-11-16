@@ -104,7 +104,7 @@ Frontend
 ## Phase 9: data refresh (after the whole build)
 Until it lands, every result's limits popover states the data as it is (mixed adjustment, most tickers end 2026-01-28 to 2026-02-01, hourly for 23 names).
 - [ ] Rebuild daily parquet from Yahoo `period="max"`: one total-return adjustment for OHLC, plus RawClose, Dividends, Splits; delisted names keep their old rows; stage, validate (no ticker lost, spot checks), back up, swap
-- [ ] Hourly parquet: 730 days of 1h bars for every ticker
+- [x] ~~Hourly parquet~~ dropped 2026-11-16: Yahoo serves only 730 days of 1h bars, too short to validate anything; Studio is daily only (see DECISIONS.md)
 - [ ] Daily update job (EOD append, same adjustment), logged; freshness date exposed (needed before Live is used for real)
 - [ ] Data audit: symbols per year, bars per symbol, rows / 252, gaps, adjusted status, delisted share, fundamentals lag (Y-2)
 - [ ] India and non-equity coverage measured; result written into PLAN §5.3

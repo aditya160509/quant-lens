@@ -12,7 +12,7 @@ What the data can and cannot support, and what Studio does about it. Source: `li
 | Delisted names | 55 ended early (1.3%) | Survivorship bias: dead names are mostly missing |
 | Price adjustment | Mixed: older segments raw, newer ones dividend-adjusted | Returns and total-return comparisons are approximate |
 | Dividends, splits columns | None | No dividend charge on shorts, no real total return |
-| Hourly bars | 23 index tickers only, 2023-02-27 to 2026-04-03 | No intraday data for stocks |
+| Hourly bars | Not used by Studio (removed 2026-11-16) | Daily only |
 | Fundamentals | From 2021, 90-day filing lag | 5 years only |
 | India and non-equity | Not measured | Unknown |
 
@@ -20,7 +20,6 @@ What the data can and cannot support, and what Studio does about it. Source: `li
 
 | Feature or output | Page | Why | Decision |
 |---|---|---|---|
-| Intraday magnifier (stop/target fill order inside a bar) | Backtest | Hourly bars exist for 23 indices, none for stocks | Hide for stock universes; keep for the 23 indices |
 | Crisis strip rows before 2015 (dot-com, 2008, 2011) | Backtest › Returns | No stock bars then | Show only 2015+ events (2018 Q4, 2020 Covid, 2022 rates) |
 | Live › Today signals, paper fills, order CSV, distance to trigger | Live | Data is 288 days old | Disable with "data ends 2026-02-01" until the daily update job runs |
 | Alerts and daily digest | Live | Same: would fire on stale bars | Do not ship until the daily update job exists |
@@ -43,6 +42,7 @@ What the data can and cannot support, and what Studio does about it. Source: `li
 
 ## Decisions already taken
 
+- 2026-11-16: hourly bars removed from Studio (bar magnifier, fill check, 1h chart bars, hourly audit). Yahoo keeps only 730 days of hourly bars: too short for walk-forward or luck tests, and held for 23 indices, no stocks. A stop and a target inside one bar now always fill the stop first (worst case). Saved runs that still carry `magnifier` load fine; the field is dropped on read. `data_version` no longer changes when the hourly file changes.
 - 2026-11-15: old Studio removed; Studio Chart embeds the full `chart_engine` chart (owner ask).
 - `/trade` is not redirected to `/studio/chart`: it is a multi-tab trading page.
 - Docker sandbox for Python strategies deferred (owner: "keep for later"); Python runs in a locked child process instead.

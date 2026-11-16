@@ -200,7 +200,7 @@ def run_optimise(spec: Strategy, settings: Settings, method: str = "grid", objec
 
     def one(params: dict[str, float]) -> dict:
         sig = C.signals(spec, prep.sig_bars, dates, params)
-        r = simulate(spec, prep, settings, sig=sig, params=params, magnifier=False)
+        r = simulate(spec, prep, settings, sig=sig, params=params)
         score, m = _score(r.equity, dates, objective, r.trades[:, engine.T_PNL] if len(r.trades) else np.zeros(0), custom)
         monthly = pd.Series(r.equity, index=dates).resample("ME").last().pct_change().dropna().to_numpy()
         excluded = "too few trades" if len(r.trades) < min_trades else "drawdown over limit" if max_dd and m.get("max_drawdown") is not None and m["max_drawdown"] < -max_dd else None

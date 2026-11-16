@@ -20,7 +20,6 @@ from dataclasses import astuple, dataclass, fields
 import numpy as np
 
 from . import fills
-from .fills import NONE as F_NONE
 from .fills import STOP as F_STOP
 from .fills import TARGET as F_TARGET
 
@@ -76,7 +75,6 @@ CASH, COSTS, NTR, UNFILLED, TRADED = range(5)
 
 _fill_price = njit(cache=True)(fills.fill_price)
 _commission = njit(cache=True)(fills.commission)
-_magnify = njit(cache=True)(fills.magnify)
 _exit_check = njit(cache=True)(fills.exit_check)
 _size_shares = njit(cache=True)(fills.size_shares)
 _kelly = njit(cache=True)(fills.kelly)
@@ -167,7 +165,7 @@ def _execute(S, acct, trades, P, t, px, rng, vol, stop_dist, has_dist):
 
 
 @njit(cache=True)
-def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist, size_vol, has_vol, hh, hl, hidx, has_mag, last_bar, P):
+def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist, size_vol, has_vol, last_bar, P):
     T, N = c.shape
     S = np.zeros((N, NS))
     acct = np.zeros(5)
@@ -186,17 +184,14 @@ def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist
             d = 1.0 if S[n, SH] > 0 else -1.0
             if S[n, EBAR] < t or P[P_FILL] == 0.0:  # a same-close entry has not lived through this bar
                 level = S[n, SCL] if np.isfinite(S[n, SCL]) else S[n, TGT]
-                first = F_NONE
-                if has_mag and hidx[t, n, 0] >= 0 and np.isfinite(S[n, STOP]) and np.isfinite(level):
-                    first = _magnify(hh, hl, hidx[t, n, 0], hidx[t, n, 1], d, S[n, STOP], level)
-                reason, px = _exit_check(d, o[t, n], h[t, n], l[t, n], S[n, STOP], level, first)
+                reason, px = _exit_check(d, o[t, n], h[t, n], l[t, n], S[n, STOP], level)
                 if reason == F_STOP:
                     _close(S, acct, trades, P, n, t, px, S[n, SKIND], 1.0, rng[n])
                 elif reason == F_TARGET:
                     if np.isfinite(S[n, SCL]):
                         _close(S, acct, trades, P, n, t, px, R_SCALE, P[P_SCALE_FRAC], rng[n])
                         S[n, SCL] = np.nan
-                        r2, px2 = _exit_check(d, o[t, n], h[t, n], l[t, n], np.nan, S[n, TGT], F_NONE)
+                        r2, px2 = _exit_check(d, o[t, n], h[t, n], l[t, n], np.nan, S[n, TGT])
                         if r2 == F_TARGET and S[n, SH] != 0.0:
                             _close(S, acct, trades, P, n, t, px2, R_TARGET, 1.0, rng[n])
                     else:
@@ -350,8 +345,8 @@ class SignalStrategy:
 
 
 class EventEngine:
-    def __init__(self, bars: dict[str, np.ndarray], params: Params, score=None, stop_dist=None, hourly=None, size_vol=None):
-        self.bars, self.p, self.score, self.stop_dist, self.hourly, self.size_vol = bars, params, score, stop_dist, hourly, size_vol
+    def __init__(self, bars: dict[str, np.ndarray], params: Params, score=None, stop_dist=None, size_vol=None):
+        self.bars, self.p, self.score, self.stop_dist, self.size_vol = bars, params, score, stop_dist, size_vol
         self.positions: dict[int, Position] = {}
         self.pending: dict[int, tuple[int, float, int]] = {}  # symbol -> (direction, shares, signal bar)
         self.wants: dict[int, int] = {}
@@ -443,18 +438,14 @@ class EventEngine:
                 d = 1.0 if pos.shares > 0 else -1.0
                 if pos.entry_bar < t or p.fill == 0:
                     level = pos.scale if math.isfinite(pos.scale) else pos.target
-                    first = fills.NONE
-                    if self.hourly is not None and self.hourly[2][t, n, 0] >= 0 and math.isfinite(pos.stop) and math.isfinite(level):
-                        hh, hl, hidx = self.hourly
-                        first = fills.magnify(hh, hl, hidx[t, n, 0], hidx[t, n, 1], d, pos.stop, level)
-                    reason, px = fills.exit_check(d, o[t, n], h[t, n], l[t, n], pos.stop, level, first)
+                    reason, px = fills.exit_check(d, o[t, n], h[t, n], l[t, n], pos.stop, level)
                     if reason == fills.STOP:
                         self._close(n, t, px, pos.stop_kind, 1.0, rng[n])
                     elif reason == fills.TARGET:
                         if math.isfinite(pos.scale):
                             self._close(n, t, px, R_SCALE, p.scale_frac, rng[n])
                             pos.scale = math.nan
-                            r2, px2 = fills.exit_check(d, o[t, n], h[t, n], l[t, n], math.nan, pos.target, fills.NONE)
+                            r2, px2 = fills.exit_check(d, o[t, n], h[t, n], l[t, n], math.nan, pos.target)
                             if r2 == fills.TARGET and n in self.positions:
                                 self._close(n, t, px2, R_TARGET, 1.0, rng[n])
                         else:
@@ -546,25 +537,21 @@ def _last_bar(close: np.ndarray) -> np.ndarray:
 
 
 _EMPTY2 = np.zeros((1, 1))
-_EMPTY1 = np.zeros(1)
-_EMPTYI = np.full((1, 1, 2), -1, dtype=np.int64)
 
 
 def run(bars: dict[str, np.ndarray], entries: np.ndarray, exits: np.ndarray, params: Params, *, engine: str = "vector",
-        score: np.ndarray | None = None, stop_dist: np.ndarray | None = None, hourly: tuple | None = None, strategy=None, size_vol: np.ndarray | None = None) -> Result:
+        score: np.ndarray | None = None, stop_dist: np.ndarray | None = None, strategy=None, size_vol: np.ndarray | None = None) -> Result:
     """bars: open, high, low, close, volume as (bars x symbols) float arrays, NaN where a name has no bar.
     entries: int8, +1 long, -1 short. exits: int8 bits, 1 closes longs, 2 closes shorts.
-    hourly: (highs, lows, index) where index[t, n] = (start, end) into the hourly arrays, -1 when not held.
     """
     o, h, l, c, v = (np.ascontiguousarray(bars[k], dtype=np.float64) for k in ("open", "high", "low", "close", "volume"))
     entries, exits = np.ascontiguousarray(entries, dtype=np.int8), np.ascontiguousarray(exits, dtype=np.int8)
     if engine == "event" or strategy is not None:
-        eng = EventEngine({"open": o, "high": h, "low": l, "close": c, "volume": v}, params, score, stop_dist, hourly, size_vol)
+        eng = EventEngine({"open": o, "high": h, "low": l, "close": c, "volume": v}, params, score, stop_dist, size_vol)
         out = eng.run(strategy or SignalStrategy(entries, exits))
     else:
-        hh, hl, hidx = hourly if hourly is not None else (_EMPTY1, _EMPTY1, _EMPTYI)
         out = _vector(o, h, l, c, v, entries, exits, score if score is not None else _EMPTY2, score is not None,
                       stop_dist if stop_dist is not None else _EMPTY2, stop_dist is not None,
-                      np.ascontiguousarray(size_vol, dtype=np.float64) if size_vol is not None else _EMPTY2, size_vol is not None, hh, hl, hidx, hourly is not None,
+                      np.ascontiguousarray(size_vol, dtype=np.float64) if size_vol is not None else _EMPTY2, size_vol is not None,
                       _last_bar(c), np.array(astuple(params), dtype=np.float64))
     return Result(*out[:7], unfilled=int(out[7]))

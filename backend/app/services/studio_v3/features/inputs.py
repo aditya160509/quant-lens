@@ -31,7 +31,6 @@ def shared_inputs() -> list[dict]:
         field("end", "To", "date", None, "Period"),
         field("holdout", "Hold-out share", "number", 0.2, "Period", min=0, max=0.5),
         field("fill", "Fill", "select", "next_open", "Fill", options=["next_open", "same_close"]),
-        field("magnifier", "Bar magnifier", "boolean", True, "Fill"),
         field("cost_profile", "Cost profile", "select", "US retail", "Costs", options=list(COST_PROFILES)),
         field("commission_bps", "Commission", "number", 1.0, "Costs", min=0, max=500, unit="bp"),
         field("slippage_bps", "Slippage", "number", 2.0, "Costs", min=0, max=500, unit="bp"),
@@ -61,6 +60,6 @@ def parse(payload: dict[str, Any]) -> tuple[Strategy, Settings, str | None, int 
     symbols = payload.get("symbols") or []
     if isinstance(symbols, str):
         symbols = [s for s in symbols.replace(",", " ").split() if s]
-    keys = ("top_n", "start", "end", "holdout", "fill", "magnifier", "delist_haircut", "capital", "leverage", "benchmark", "seed",
+    keys = ("top_n", "start", "end", "holdout", "fill", "delist_haircut", "capital", "leverage", "benchmark", "seed",
             "rule_target", "rule_daily_loss", "rule_max_dd", "rule_min_days")
     return spec, Settings(symbols=list(symbols), costs=costs, **{k: payload[k] for k in keys if k in payload}), sid, int(version) if version else None

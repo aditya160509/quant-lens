@@ -52,18 +52,11 @@ def test_gap_through_stop_fills_at_the_open_not_the_stop():  # K-3
     assert (t[engine.T_EXIT_BAR], t[engine.T_EXIT_PX], t[engine.T_REASON]) == (2, 80.0, engine.R_STOP)  # stop was 90
 
 
-def test_stop_and_target_in_one_bar_fills_the_stop_first_unless_hourly_bars_say_otherwise():
+def test_stop_and_target_in_one_bar_fills_the_stop_first():
     b = bars([100, 100, 100], [100, 100, 112], [100, 100, 88], [100, 100, 100])
     e, x = sig(3, [0])
     p = Params(stop=0.10, target=0.10, size_mode=fills.SHARES, size=1, **FREE)
     assert both(b, e, x, p).trades[0, engine.T_REASON] == engine.R_STOP
-    idx = np.full((3, 1, 2), -1, dtype=np.int64)
-    idx[2, 0] = (0, 2)
-    target_first = (np.array([112.0, 101.0]), np.array([99.0, 88.0]), idx)
-    r = both(b, e, x, p, hourly=target_first)
-    assert r.trades[0, engine.T_REASON] == engine.R_TARGET and r.trades[0, engine.T_EXIT_PX] == pytest.approx(110.0)
-    stop_first = (np.array([101.0, 112.0]), np.array([88.0, 99.0]), idx)
-    assert both(b, e, x, p, hourly=stop_first).trades[0, engine.T_REASON] == engine.R_STOP
 
 
 def test_time_stop_breakeven_and_scale_out_exact_trades():  # B-8

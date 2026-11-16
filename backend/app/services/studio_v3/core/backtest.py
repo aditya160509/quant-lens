@@ -36,7 +36,6 @@ class Prepared:
     panel: data.Panel  # development period only
     sig_bars: dict[str, np.ndarray]  # bars with gaps inside a name's life filled, for indicators
     benchmark: np.ndarray | None
-    hourly: tuple | None
     holdout_from: str | None  # first sealed date
     requested: int
     all_dates: pd.DatetimeIndex  # development + hold-out (dates only; hold-out bars never leave this module)
@@ -81,10 +80,10 @@ def prepare(settings: Settings, *, include_holdout: bool = False) -> Prepared:
             bench = pd.Series(b.close[:, 0], index=b.dates).reindex(p.dates, method="ffill").to_numpy()
             if not np.isfinite(bench).any():
                 bench = None
-    return Prepared(p, sig_bars, bench, data.magnifier(p) if settings.magnifier else None, holdout_from, len(symbols), all_dates)
+    return Prepared(p, sig_bars, bench, holdout_from, len(symbols), all_dates)
 
 
-def simulate(spec: Strategy, prep: Prepared, settings: Settings, *, sig: C.Signals | None = None, cost_multiple: float = 1.0, lo: int = 0, magnifier: bool = True,
+def simulate(spec: Strategy, prep: Prepared, settings: Settings, *, sig: C.Signals | None = None, cost_multiple: float = 1.0, lo: int = 0,
              mask: np.ndarray | None = None, params: dict[str, float] | None = None, exits_override: dict | None = None) -> engine.Result:
     sig = sig or C.signals(spec, prep.sig_bars, prep.panel.dates, params)
     traded = np.isfinite(prep.panel.close)
@@ -92,13 +91,11 @@ def simulate(spec: Strategy, prep: Prepared, settings: Settings, *, sig: C.Signa
     p = engine_params(spec, settings, cost_multiple)
     if exits_override:
         p = replace(p, **exits_override)
-    hourly = prep.hourly if magnifier else None
     if lo:
-        hourly = (hourly[0], hourly[1], hourly[2][lo:]) if hourly else None
         bars = {k: v[lo:] for k, v in prep.panel.bars().items()}
-        return engine.run(bars, entries[lo:], sig.exits[lo:], p, score=None if sig.score is None else sig.score[lo:], stop_dist=None if sig.stop_dist is None else sig.stop_dist[lo:], hourly=hourly,
+        return engine.run(bars, entries[lo:], sig.exits[lo:], p, score=None if sig.score is None else sig.score[lo:], stop_dist=None if sig.stop_dist is None else sig.stop_dist[lo:],
                           size_vol=None if sig.size_vol is None else sig.size_vol[lo:])
-    return engine.run(prep.panel.bars(), entries, sig.exits, p, score=sig.score, stop_dist=sig.stop_dist, hourly=hourly, size_vol=sig.size_vol)
+    return engine.run(prep.panel.bars(), entries, sig.exits, p, score=sig.score, stop_dist=sig.stop_dist, size_vol=sig.size_vol)
 
 
 def _cagr(eq: np.ndarray, capital: float) -> float | None:
@@ -239,14 +236,6 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
         rs = simulate(spec, prep, settings, sig=sig, mask=~dead)
         surv = {"status": "ok", "with_delisted": ret.get("cagr"), "survivors_only": _cagr(rs.equity, cap), "delisted": int(dead.sum()), "equity": rs.equity}
 
-    stage("fill check", 84)
-    e = spec.exits
-    hourly_held = int((prep.hourly[2][:, :, 0] >= 0).any(axis=0).sum()) if prep.hourly else 0
-    fill = {"status": "skipped", "reason": "worst-case same-bar rule applied: no hourly bars for these names" if not hourly_held else "needs a stop and a target: only then can both fall inside one bar"}
-    if hourly_held and (e.stop or e.stop_atr) and (e.target or e.scale_at):
-        rb = simulate(spec, prep, settings, sig=sig, magnifier=False)
-        fill = {"status": "ok", "hourly_names": hourly_held, "with_hourly": float(r.equity[-1] / cap - 1), "daily_only": float(rb.equity[-1] / cap - 1), "daily_equity": rb.equity}
-
     stage("report", 90)
     trades = trades_table(r, p)
     pnl = r.trades[:, engine.T_PNL]
@@ -293,13 +282,11 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     step = max(1, len(dates) // 2000)
     idx = sorted(set(range(0, len(dates), step)) | {len(dates) - 1})
     curve = [{"date": str(dates[i].date()), "strategy": r.equity[i], "gross": r.gross_equity[i], "benchmark": bench_eq[i] if bench_eq is not None else None,
-              "survivors_only": surv["equity"][i] if surv else None, "daily_fills": fill["daily_equity"][i] if fill["status"] == "ok" else None,
+              "survivors_only": surv["equity"][i] if surv else None,
               "regime": labels[i] if labels is not None else None} for i in idx]
     rules = paths.rule_check(r.equity, dates, settings.rule_target, settings.rule_daily_loss, settings.rule_max_dd, settings.rule_min_days)
     if surv:
         surv.pop("equity")
-    if fill["status"] == "ok":
-        fill.pop("daily_equity")
     exposure = [{"date": str(dates[i].date()), "gross": r.gross_exposure[i], "net": r.net_exposure[i], "positions": r.positions[i]} for i in idx]
 
     sign = lambda v: f"{'+' if v > 0 else ''}{v * 100:.0f}%"
@@ -320,7 +307,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
                    "rule_check": rules.pop("rows"), "holdings": [{"date": x["date"], "names": x["positions"]} for x in exposure], "seasonality": paths.seasonality(r.equity, dates), "ruin": mc["ruin"] if mc else [], "streaks": mc["streaks"] if mc else [],
                    "trades": trades, "carried_by": carried, "crises": crises, "drawdowns": dd_rows, "per_name": per_name, "my_limits": lim_rows,
                    "limits": limits.run_limits(start=str(dates[0].date()), end=str(dates[-1].date()), requested=prep.requested, held=held, delisted=int(dead.sum()), fill=settings.fill,
-                                               costs=settings.costs.model_dump(), haircut=settings.delist_haircut, hourly_held=hourly_held, magnifier=settings.magnifier,
+                                               costs=settings.costs.model_dump(), haircut=settings.delist_haircut,
                                                holdout_from=prep.holdout_from, top_n=None if settings.symbols else settings.top_n),
                    "statistics": [{"metric": k, "value": v} for k, v in {**ret, **tr, **bm}.items()]},
         "meta": {
@@ -332,7 +319,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
             "start_dates": {"positive": int(sum(c > 0 for c in cagrs)), "of": len(cagrs), "cagr_low": min(cagrs) if cagrs else None, "cagr_high": max(cagrs) if cagrs else None, "pass_share": sd_pass},
             "survivorship": surv or {"status": "skipped", "reason": "no name in this universe stops trading inside the period"},
             "paths": {k: v for k, v in mc.items() if k not in ("fan", "ruin", "streaks")} if mc else {"status": "skipped", "reason": "fewer than 10 closed trades"},
-            "fill_check": fill, "without_best_months": without_best, "thirds_sharpe": thirds, "capacity": capacity,
+            "without_best_months": without_best, "thirds_sharpe": thirds, "capacity": capacity,
             "my_limits": {"passed": sum(x["pass"] for x in judged), "of": len(judged), "closest": closest},
             "holdout_from": prep.holdout_from, "period": [str(dates[0].date()), str(dates[-1].date())], "universe": {"requested": prep.requested, "held": held, "delisted": int(dead.sum())},
             "fill_model": settings.fill, "data_version": data.data_version(), "freshness": limits.freshness(), "run_hash": run_hash, "result_hash": result_hash,
@@ -350,10 +337,10 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0) -> dict:
     if not found["ok"]:
         return {"status": "skipped", "reason": "the rule does not compile", "bars": [], "trades": []}
     # load extra history so long windows are warm before the visible span
-    prep = prepare(Settings(symbols=[symbol], benchmark="", magnifier=False))
+    prep = prepare(Settings(symbols=[symbol], benchmark=""))
     p = prep.panel
     lo = max(0, int(p.dates.searchsorted(p.dates[-1] - pd.DateOffset(days=int(365 * years)))))
-    r = simulate(spec, prep, Settings(symbols=[symbol], benchmark="", magnifier=False), magnifier=False)
+    r = simulate(spec, prep, Settings(symbols=[symbol], benchmark=""))
     trades = [t for t in trades_table(r, p) if t["exit_date"] >= str(p.dates[lo].date())]
     bars = [{"date": str(d.date()), "close": float(c)} for d, c in zip(p.dates[lo:], p.close[lo:, 0], strict=True) if np.isfinite(c)]
     total = float(np.prod([1 + t["return"] for t in trades]) - 1) if trades else 0.0

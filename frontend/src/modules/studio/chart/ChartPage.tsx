@@ -24,7 +24,7 @@ function FullChart({ symbol, onSymbol }: { symbol: string; onSymbol: (s: string)
   );
 }
 
-const TF = [["1d", "Day"], ["1w", "Week"], ["1mo", "Month"], ["1h", "Hour"]] as const;
+const TF = [["1d", "Day"], ["1w", "Week"], ["1mo", "Month"]] as const;
 const SPEEDS = [1, 5, 20];
 type Job = { result?: { tables: { trades?: (ChartTrade & { symbol: string })[] }; meta: { strategy?: { name: string } } } };
 
@@ -53,10 +53,10 @@ export default function ChartPage({ id }: { features: FeatureSpec[]; id?: string
   useEffect(() => { setDraft(symbol); }, [symbol]);
   useEffect(() => {
     setError(null);
-    void studio<{ bars: Record<string, ChartBar[]>; missing?: string[]; hourly_names?: string[] }>("GET", `/bars?symbols=${encodeURIComponent(symbol)}&tf=${tf}`).then((d) => {
+    void studio<{ bars: Record<string, ChartBar[]>; missing?: string[] }>("GET", `/bars?symbols=${encodeURIComponent(symbol)}&tf=${tf}`).then((d) => {
       const b = d.bars[symbol] ?? [];
       setBars(b);
-      if (!b.length) setError(tf === "1h" ? `hourly bars held for ${d.hourly_names?.length ?? 0} names; not ${symbol}` : `no bars for ${symbol}`);
+      if (!b.length) setError(`no bars for ${symbol}`);
     }, (e) => { setBars([]); setError(e instanceof Error ? e.message : "bars unavailable"); });
   }, [symbol, tf]);
   useEffect(() => { if (run) void studio<Job>("GET", `/jobs/${run}`).then(setJob, () => setJob(null)); else setJob(null); }, [run]);

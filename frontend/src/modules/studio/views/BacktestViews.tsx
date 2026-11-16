@@ -52,12 +52,6 @@ export function Survivorship({ rows, result }: ViewProps) {
   return <TimeSeries data={rows} series={[{ key: "strategy", label: "Delisted kept", color: "var(--accent)", width: 2 }, { key: "survivors_only", label: "Survivors only", color: "var(--warn)" }]} height={220} format={usd} />;
 }
 
-export function FillCheck({ rows, result }: ViewProps) {
-  const f = metaOf(result).fill_check;
-  if (f.status !== "ok") return <Skipped reason={f.reason} />;
-  return <TimeSeries data={rows} series={[{ key: "strategy", label: "Hourly bars decide", color: "var(--accent)", width: 2 }, { key: "daily_fills", label: "Stop first (daily only)", color: "var(--text-3)" }]} height={220} format={usd} />;
-}
-
 /** Share of net profit from the best 1, 5 and 10 trades, and the CAGR left without them. */
 export function CarriedBy({ rows }: ViewProps) {
   if (!rows.length || !rows.some((r) => isNum(r.share))) return <Skipped reason="no net profit to share out" />;

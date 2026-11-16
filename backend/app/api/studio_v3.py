@@ -87,29 +87,16 @@ _RULE = {"1w": "W-FRI", "1mo": "ME"}
 def bars(symbols: str, tf: str = "1d", start: str | None = Query(None, alias="from"), end: str | None = Query(None, alias="to")) -> dict[str, Any]:
     """The one price source for every page: daily bars, 1h where held, weekly and monthly resampled."""
     names = [normalize_symbol(s) for s in symbols.replace(",", " ").split() if s][:8]
-    if tf not in {"1d", "1h", "1w", "1mo"} or not names:
-        raise HTTPException(422, "tf must be 1d, 1h, 1w or 1mo, with at least one symbol")
+    if tf not in {"1d", "1w", "1mo"} or not names:
+        raise HTTPException(422, "tf must be 1d, 1w or 1mo, with at least one symbol")
     out: dict[str, Any] = {}
-    if tf == "1h":
-        from app.services.screener_v2.core import data_loader, performance
-
-        h = data._hourly(performance._path_version(data_loader.MARKET_UNIVERSE_HOURLY))
-        for s in names:
-            rows = h.filter(h["Ticker"] == s)
-            if start:
-                rows = rows.filter(rows["Datetime"] >= pd.Timestamp(start))
-            if end:
-                rows = rows.filter(rows["Datetime"] <= pd.Timestamp(end) + pd.Timedelta(days=1))
-            out[s] = [{"time": int(t.timestamp()), "open": o, "high": hi, "low": lo, "close": c, "volume": v}
-                      for t, o, hi, lo, c, v in zip(rows["Datetime"].to_list(), rows["Open"].to_list(), rows["High"].to_list(), rows["Low"].to_list(), rows["Close"].to_list(), rows["Volume"].to_list(), strict=True)]
-        return {"tf": tf, "bars": out, "hourly_names": list(data.hourly_symbols())}
     p = data.panel(names, start, end)
     for i, s in enumerate(p.symbols):
         df = pd.DataFrame({f: getattr(p, f)[:, i] for f in data.FIELDS}, index=p.dates).dropna(subset=["close"])
         if tf in _RULE:
             df = df.resample(_RULE[tf]).agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna(subset=["close"])
         out[s] = [{"time": str(d.date()), "open": r.open, "high": r.high, "low": r.low, "close": r.close, "volume": 0.0 if np.isnan(r.volume) else r.volume} for d, r in zip(df.index, df.itertuples(), strict=True)]
-    return {"tf": tf, "bars": out, "missing": [s for s in names if s not in out], "hourly_names": list(data.hourly_symbols())}
+    return {"tf": tf, "bars": out, "missing": [s for s in names if s not in out]}
 
 
 # --- compile and strategies ------------------------------------------------------
@@ -485,7 +472,7 @@ TOOLS: dict[str, tuple[str, dict, Any]] = {
                     lambda a, actor: {k: v for k, v in _tool_validate(a, actor).items() if k in ("grade", "next_test", "what_would_change")}),
     "open_holdout": ("Open the sealed hold-out for a saved strategy. Logged; agents have 3 looks per strategy, then a human must open it.",
                      {"payload": {"type": "object", "description": "strategy_id plus run settings"}}, _tool_open_holdout),
-    "get_data_audit": ("What data is held: range, tickers, hourly coverage, adjustment, freshness.", {}, lambda a, actor: {"freshness": limits.freshness(), **limits.audit()}),
+    "get_data_audit": ("What data is held: range, tickers, adjustment, freshness.", {}, lambda a, actor: {"freshness": limits.freshness(), **limits.audit()}),
 }
 
 

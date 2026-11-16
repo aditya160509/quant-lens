@@ -238,7 +238,7 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
     prep = prepare(settings)
     p, dates, cap = prep.panel, prep.panel.dates, settings.capital
     sig = C.signals(spec, prep.sig_bars, dates)
-    base = simulate(spec, prep, settings, sig=sig, magnifier=False)
+    base = simulate(spec, prep, settings, sig=sig)
     closed = base.trades[base.trades[:, engine.T_REASON] != engine.R_OPEN]
     if len(base.trades) == 0:
         raise Refusal("0 trades: nothing to validate.", ["the rule never fires on this universe"])
@@ -251,7 +251,7 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
 
     stage("walk-forward", 15)
     cells = _cells(spec, prof["cells"])
-    curves = [(c, simulate(spec, prep, settings, params=c, magnifier=False).equity) for c in cells] if cells else [({}, base.equity)]
+    curves = [(c, simulate(spec, prep, settings, params=c).equity) for c in cells] if cells else [({}, base.equity)]
     if few:
         tiles.append(_tile("walk_forward", "skipped", reason=f"{len(closed)} closed trades; needs {FEW_TRADES}"))
         wf = None
@@ -276,26 +276,26 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
 
     stage("noise", 40)
     rng = np.random.default_rng(settings.seed)
-    noise_sr = [_sharpe(simulate(spec, prep, settings, sig=C.signals(spec, _noisy(prep.sig_bars, rng, 0.25), dates), magnifier=False).equity) for _ in range(prof["noise"])]
+    noise_sr = [_sharpe(simulate(spec, prep, settings, sig=C.signals(spec, _noisy(prep.sig_bars, rng, 0.25), dates)).equity) for _ in range(prof["noise"])]
     med = float(np.nanmedian(noise_sr))
     tiles.append(_tile("noise", "pass" if base_sr > 0 and med >= 0.5 * base_sr else "fail", med, "median Sharpe ≥ half the original",
                        f"with price noise the median Sharpe is {med:.2f} (original {base_sr:.2f})"))
     tables["noise"] = [{"run": i + 1, "sharpe": s} for i, s in enumerate(noise_sr)]
 
     stage("permutation", 55)
-    perm_sr = [_sharpe(simulate(spec, replace(prep, sig_bars=(pb := _permuted(prep.sig_bars, rng)), panel=_panel_from(p, pb)), settings, magnifier=False).equity)
+    perm_sr = [_sharpe(simulate(spec, replace(prep, sig_bars=(pb := _permuted(prep.sig_bars, rng)), panel=_panel_from(p, pb)), settings).equity)
                for _ in range(prof["mcpt"])]
     pval = float((np.array(perm_sr) >= base_sr).mean()) if perm_sr else 1.0
     tiles.append(_tile("mcpt", "pass" if pval <= 0.05 else "fail", pval, "p ≤ 0.05", f"{pval * 100:.0f}% of {len(perm_sr)} shuffled-return markets did as well (p = {pval:.2f})"))
     tables["mcpt"] = [{"run": i + 1, "sharpe": s} for i, s in enumerate(perm_sr)]
 
     stage("execution", 70)
-    d1 = _sharpe(simulate(spec, prep, settings, sig=_shift(sig, 1), magnifier=False).equity)
-    d2 = _sharpe(simulate(spec, prep, settings, sig=_shift(sig, 2), magnifier=False).equity)
+    d1 = _sharpe(simulate(spec, prep, settings, sig=_shift(sig, 1)).equity)
+    d2 = _sharpe(simulate(spec, prep, settings, sig=_shift(sig, 2)).equity)
     tiles.append(_tile("delay", "pass" if base_sr > 0 and d1 >= 0.5 * base_sr else "fail", d1, "Sharpe ≥ half the original", f"one bar late: Sharpe {d1:.2f}; two bars: {d2:.2f}"))
     ladder = []
     for m in (1, 2, 3, 5, 8):
-        eq = simulate(spec, prep, settings, sig=sig, cost_multiple=m, magnifier=False).equity
+        eq = simulate(spec, prep, settings, sig=sig, cost_multiple=m).equity
         ladder.append({"multiple": m, "total_return": float(eq[-1] / cap - 1), "sharpe": _sharpe(eq)})
     breakeven = next((x["multiple"] for x in ladder if x["total_return"] <= 0), None)
     c2 = ladder[1]["total_return"]
@@ -303,7 +303,7 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
                        f"profitable at 2× costs; break-even beyond {ladder[-1]['multiple']}×" if c2 > 0 and breakeven is None else
                        f"costs break it at {breakeven}×" if breakeven else "loses money at 2× costs"))
     capped = settings.model_copy(update={"costs": settings.costs.model_copy(update={"volume_cap": volume_cap})})
-    vc = _sharpe(simulate(spec, prep, capped, sig=sig, magnifier=False).equity)
+    vc = _sharpe(simulate(spec, prep, capped, sig=sig).equity)
     stage("shocks", 74)
     tables["shocks"] = shocks(spec, prep, settings, base)
     tables["shifted"] = shifted_starts(spec, prep, settings)
@@ -359,7 +359,7 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
     if show_holdout and prep.holdout_from:
         looks = open_holdout(sid, version, actor)
         full = prepare(settings, include_holdout=True)
-        eq = simulate(spec, full, settings, magnifier=False).equity
+        eq = simulate(spec, full, settings).equity
         cut = int(full.panel.dates.searchsorted(pd.Timestamp(prep.holdout_from)))
         hold = {"status": "open", "from": prep.holdout_from, "looks": looks, "sharpe": _sharpe(eq[cut:]), "dev_sharpe": base_sr, "return": float(eq[-1] / eq[cut] - 1)}
 
@@ -491,7 +491,7 @@ def shocks(spec, prep, settings, base) -> list[dict]:
             continue
         nb = rebuild(fn)
         shocked = replace(prep, sig_bars=nb, panel=_panel_from(prep.panel, nb))
-        eq = simulate(spec, shocked, settings, magnifier=False).equity
+        eq = simulate(spec, shocked, settings).equity
         dd = float((eq / np.maximum.accumulate(eq) - 1).min())
         out.append({"shock": name, "on": str(prep.panel.dates[t].date()), "max_drawdown": dd, "base_drawdown": float((base.equity / np.maximum.accumulate(base.equity) - 1).min()),
                     "total_return": float(eq[-1] / eq[0] - 1)})
@@ -506,8 +506,8 @@ def shifted_starts(spec, prep, settings, months=(0, 3, 6, 9, 12)) -> list[dict]:
         if lo >= len(prep.panel.dates) - 252:
             break
         sl = replace(prep, panel=prep.panel.window(lo, len(prep.panel.dates)), sig_bars={f: v[lo:] for f, v in prep.sig_bars.items()},
-                     benchmark=None if prep.benchmark is None else prep.benchmark[lo:], hourly=None)
-        eq = simulate(spec, sl, settings, magnifier=False).equity
+                     benchmark=None if prep.benchmark is None else prep.benchmark[lo:])
+        eq = simulate(spec, sl, settings).equity
         out.append({"start": str(sl.panel.dates[0].date()), "months_later": k, "sharpe": _sharpe(eq), "total_return": float(eq[-1] / eq[0] - 1)})
     return out
 
@@ -526,7 +526,7 @@ def related(spec, settings) -> dict:
     st = settings.model_copy(update={"symbols": alt})
     try:
         pr = prepare(st)
-        eq = simulate(spec, pr, st, magnifier=False).equity
+        eq = simulate(spec, pr, st).equity
     except Refusal as e:
         return {"status": "skipped", "reason": e.reason}
     return {"status": "ok", "names": len(alt), "sharpe": _sharpe(eq), "total_return": float(eq[-1] / eq[0] - 1), "first": alt[0], "last": alt[-1]}

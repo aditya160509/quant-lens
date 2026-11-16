@@ -44,7 +44,6 @@ def studio(tmp_path, monkeypatch):
         return data.Panel(full.dates[rows], tuple(full.symbols[i] for i in cols), *(getattr(full, f)[rows][:, cols] for f in data.FIELDS))
 
     monkeypatch.setattr(data, "panel", panel)
-    monkeypatch.setattr(data, "magnifier", lambda p: None)
     monkeypatch.setattr(data, "data_version", lambda: "fixture")
     monkeypatch.setattr(store, "DB_PATH", tmp_path / "studio.sqlite")
     monkeypatch.setattr(api, "RESULTS_DIR", tmp_path / "results")

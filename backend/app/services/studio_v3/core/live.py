@@ -141,12 +141,12 @@ def run_live(spec: Strategy, settings: Settings, sid: str | None, version: int |
     orders = "\n".join(f"{r['action'].upper()} {r['shares']} {r['symbol']} at next open" if r["shares"] else f"{r['action'].upper()} {r['symbol']} at next open" for r in today)
 
     stage("paper", 60)
-    r = simulate(spec, prep, settings, sig=sig, magnifier=False)
+    r = simulate(spec, prep, settings, sig=sig)
     seg = next((s for s in reversed(segments(sid)) if s["version"] == version), None)
     forward, curve, fills = None, [], []
     if seg:
         lo = int(dates.searchsorted(pd.Timestamp(seg["from"])))
-        dev_eq = simulate(spec, prepare(settings), settings, magnifier=False).equity
+        dev_eq = simulate(spec, prepare(settings), settings).equity
         dev_daily = np.diff(dev_eq) / dev_eq[:-1]
         if lo >= len(dates) - 1:
             forward = {"status": "waiting", "from": seg["from"], "backdated": seg["backdated"], "reason": f"no bar after {seg['from']} yet; data ends {as_of}"}

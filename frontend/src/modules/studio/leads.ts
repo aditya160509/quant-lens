@@ -14,8 +14,6 @@ export function lead(view: string, r: FeatureResult): string | null {
     case "stStartDates": { const s = m.start_dates; return s.of ? `Positive from ${s.positive} of ${s.of} start dates; CAGR ${pct(s.cagr_low, 0)} to ${pct(s.cagr_high, 0)}` : null; }
     case "stSurvivorship": { const s = m.survivorship; if (s.status !== "ok" || !isNum(s.with_delisted) || !isNum(s.survivors_only)) return null;
       const d = s.survivors_only - s.with_delisted; return `Dead companies ${d >= 0 ? "cost" : "added"} ${Math.abs(d * 100).toFixed(1)} points a year (${pct(s.survivors_only)} vs ${pct(s.with_delisted)})`; }
-    case "stFillCheck": { const f = m.fill_check; if (f.status !== "ok") return null; const d = f.with_hourly - f.daily_only;
-      return `Hourly fills ${d >= 0 ? "add" : "cut"} ${Math.abs(d * 100).toFixed(1)} points of return (${f.hourly_names} names with hourly data)`; }
     case "stCarriedBy": { const c = rows("carried_by").find((q) => q.top === 5) ?? rows("carried_by")[0];
       return c && isNum(c.share) ? `Best ${String(c.top)} trade${c.top === 1 ? "" : "s"} made ${pct(c.share, 0)} of profit${isNum(c.cagr_without) ? `; without them CAGR ${pct(c.cagr_without)}` : ""}` : "No net profit to share out"; }
     case "stTradeShape": { const t = rows("trades"), losers = t.filter((q) => isNum(q.pnl) && q.pnl < 0), risk = losers.filter((q) => isNum(q.risk) && isNum(q.mfe) && isNum(q.entry) && isNum(q.shares));

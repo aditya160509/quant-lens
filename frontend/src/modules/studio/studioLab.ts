@@ -101,11 +101,11 @@ registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Sti
 const LV = group(() => import("./views/LiveViews") as Promise<Record<string, unknown>>);
 registerViews({ stOrders: LV.Orders, stPaper: LV.Paper, stAlerts: LV.Alerts, stReconcile: LV.Reconcile }, ["stOrders", "stPaper"]);
 const TS = group(() => import("@/modules/screener/test/TearSheet") as Promise<Record<string, unknown>>);
-registerViews({ stEquity: BV.Equity, stStartDates: BV.StartDates, stSurvivorship: BV.Survivorship, stFillCheck: BV.FillCheck, stCarriedBy: BV.CarriedBy, stTradeShape: BV.TradeShape, stTradeReturns: BV.TradeReturns,
+registerViews({ stEquity: BV.Equity, stStartDates: BV.StartDates, stSurvivorship: BV.Survivorship, stCarriedBy: BV.CarriedBy, stTradeShape: BV.TradeShape, stTradeReturns: BV.TradeReturns,
   stHoldTime: BV.HoldTime, stCrises: BV.Crises, stCosts: BV.Costs, stCapacity: BV.Capacity, stExposure: BV.Exposure, stDrawdowns: BV.Drawdowns, stStability: BV.Stability, stByRegime: BV.ByRegime, stSeasonality: BV.Seasonality, stPerName: BV.PerName, stContributors: BV.Contributors,
   stTradeFan: BV.TradeFan, stOnChart: BV.OnChart, stRuin: BV.Ruin, stStreaks: BV.Streaks, stTimeline: BV.Timeline, stConditions: BV.Conditions, stRuleCheck: BV.RuleCheck, stHoldings: BV.Holdings,
   monthlyHeatmap: TS.MonthlyHeatmap, yearlyVsBenchmark: TS.YearlyVsBenchmark, underwater: TS.Underwater },
-  ["stEquity", "stStartDates", "stSurvivorship", "stFillCheck", "stTradeShape", "stCrises", "stExposure", "stStability"]);
+  ["stEquity", "stStartDates", "stSurvivorship", "stTradeShape", "stCrises", "stExposure", "stStability"]);
 registerAlternates({ stTradeShape: [{ label: "Returns", view: "stTradeReturns" }, { label: "Hold time", view: "stHoldTime" }], stCarriedBy: [{ label: "Table", view: "dataTable" }], stCrises: [{ label: "Table", view: "dataTable" }],
   stStartDates: [{ label: "Table", view: "dataTable" }], stDrawdowns: [{ label: "Table", view: "dataTable" }] });
 
@@ -130,7 +130,6 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["equity_curve"], span: 12, view: "stEquity", title: "Equity and drawdown" },
           { keys: ["start_dates"], span: 6, view: "stStartDates", title: "Start dates" },
           { keys: ["equity_curve"], span: 6, view: "stSurvivorship", title: "Survivorship" },
-          { keys: ["equity_curve"], span: 12, view: "stFillCheck", title: "Fill check" },
         ] },
         { id: "trades", label: "Trades", items: [
           { keys: ["per_name"], span: 12, view: "stOnChart", title: "Trades on price" },

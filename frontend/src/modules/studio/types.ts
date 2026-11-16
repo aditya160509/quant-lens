@@ -20,7 +20,6 @@ export type StudioMeta = FeatureResult["meta"] & {
   exposure: { time_in_market: number; avg_gross: number; avg_net: number };
   start_dates: { positive: number; of: number; cagr_low: number | null; cagr_high: number | null; pass_share: number | null };
   survivorship: Skipped | { status: "ok"; with_delisted: number | null; survivors_only: number | null; delisted: number };
-  fill_check: Skipped | { status: "ok"; hourly_names: number; with_hourly: number; daily_only: number };
   without_best_months: number | null;
   rule_check: { starts: number; pass: number; fail_daily_loss: number; fail_drawdown: number; open: number; pass_share: number | null; median_days_to_pass: number | null; target: number; daily_loss: number; max_dd: number; min_days: number };
   thirds_sharpe: number[];

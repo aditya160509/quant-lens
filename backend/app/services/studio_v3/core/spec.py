@@ -6,7 +6,7 @@ import hashlib
 import json
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import fills
 from .engine import Params
@@ -97,13 +97,17 @@ class Costs(_Model):
 class Settings(_Model):
     """Shared run inputs (PAGES §0.1)."""
 
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired(cls, v):  # saved runs from before hourly bars were removed still carry `magnifier`
+        return {k: x for k, x in v.items() if k != "magnifier"} if isinstance(v, dict) else v
+
     symbols: list[str] = Field(default_factory=list)
     top_n: int = Field(100, ge=1, le=5000)  # top names by liquidity when `symbols` is empty
     start: str | None = None
     end: str | None = None
     holdout: float = Field(0.2, ge=0, lt=0.9)
     fill: Literal["next_open", "same_close"] = "next_open"
-    magnifier: bool = True
     costs: Costs = Field(default_factory=Costs)
     delist_haircut: float = Field(0.0, ge=0, le=1)
     capital: float = Field(100_000.0, gt=0)

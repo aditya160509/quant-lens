@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from app.services.screener_v2.core import data_loader, performance
+from app.services.screener_v2.core import performance
 
 FIELDS = ("open", "high", "low", "close", "volume")
 
@@ -32,7 +32,7 @@ class Panel:
 
 
 def data_version() -> str:
-    return format(performance._market_version() ^ performance._path_version(data_loader.MARKET_UNIVERSE_HOURLY), "x")[-8:]
+    return format(performance._market_version(), "x")[-8:]
 
 
 @lru_cache(maxsize=4)
@@ -64,32 +64,3 @@ def panel(symbols, start: str | None = None, end: str | None = None) -> Panel:
     return _panel(performance.symbol_key(symbols), start, end, performance._market_version())
 
 
-@lru_cache(maxsize=1)
-def _hourly(version: int) -> pl.DataFrame:
-    return pl.read_parquet(data_loader.MARKET_UNIVERSE_HOURLY).with_columns(data_loader.NORMALIZED_TICKER.alias("Ticker")).sort("Ticker", "Datetime")
-
-
-def hourly_symbols() -> tuple[str, ...]:
-    return tuple(sorted(_hourly(performance._path_version(data_loader.MARKET_UNIVERSE_HOURLY))["Ticker"].unique().to_list()))
-
-
-def magnifier(p: Panel) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
-    """Hourly highs and lows with, per (day, symbol), the slice of that day's hours. None when no symbol of the panel has hourly bars."""
-    h = _hourly(performance._path_version(data_loader.MARKET_UNIVERSE_HOURLY)).filter(pl.col("Ticker").is_in(list(p.symbols)))
-    if not h.height or not len(p.dates):
-        return None
-    col = {s: i for i, s in enumerate(p.symbols)}
-    sym = np.array([col[s] for s in h["Ticker"].to_list()])
-    day = np.searchsorted(p.dates.values, h["Datetime"].dt.truncate("1d").to_numpy().astype("datetime64[ns]"))
-    ok = (day < len(p.dates))
-    ok[ok] &= p.dates.values[day[ok]] == h["Datetime"].dt.truncate("1d").to_numpy().astype("datetime64[ns]")[ok]
-    idx = np.full((len(p.dates), len(p.symbols), 2), -1, dtype=np.int64)
-    pos = np.flatnonzero(ok)
-    if not len(pos):
-        return None
-    key = day[pos] * len(p.symbols) + sym[pos]  # sorted by symbol then time, so each (day, symbol) is one run
-    starts = np.flatnonzero(np.concatenate(([True], key[1:] != key[:-1])))
-    ends = np.concatenate((starts[1:], [len(pos)]))
-    idx[day[pos[starts]], sym[pos[starts]], 0] = starts
-    idx[day[pos[starts]], sym[pos[starts]], 1] = ends
-    return h["High"].to_numpy()[pos].astype(np.float64), h["Low"].to_numpy()[pos].astype(np.float64), idx

@@ -143,7 +143,7 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
         try:
             if not C.compile_spec(spec)["ok"]:
                 raise Refusal("does not compile", [])
-            curves[f"{spec.name} v{ver}"] = (sid, simulate(spec, prep, settings, magnifier=False).equity)
+            curves[f"{spec.name} v{ver}"] = (sid, simulate(spec, prep, settings).equity)
         except Refusal as e:
             failed.append({"strategy": spec.name, "reason": e.reason})
     if len(curves) < (1 if switch else 2):
