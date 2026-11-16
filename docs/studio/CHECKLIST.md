@@ -40,7 +40,7 @@ Frontend
 - [x] Higher-timeframe rules aligned to the last closed bar: `weekly(x)` (B-3, tested)
 - [ ] Allocate blocks (if/else on regime, rotate, weight)
 - [ ] Preview chart < 300 ms after typing (B-5); repaint check and lint rows
-- [x] Autosave draft every 2 s, undo/redo (⌘Z / ⇧⌘Z), immutable versions with picker (B-6); side-by-side diff still to do
+- [x] Autosave draft every 2 s, undo/redo (⌘Z / ⇧⌘Z), immutable versions with picker, field-by-field diff against any version (B-6)
 - [x] "What it does" paragraph from the spec, no LLM (B-9)
 - [x] Notes (hypothesis, regime, decisions); My limits saved with the version
 - [ ] Templates (20)
