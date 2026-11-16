@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Bars } from "@/charts/Bars";
 import { DrawdownStrip } from "@/charts/Backtest";
@@ -183,4 +184,16 @@ export function Streaks({ rows, result }: ViewProps) {
   const p = metaOf(result).paths;
   if (!rows.length) return <Skipped reason={p.reason ?? "fewer than 10 closed trades"} />;
   return <Bars bars={rows.map((r) => ({ label: String(r.length), value: r.share as number, color: r.length === p.streak_actual ? "var(--accent)" : undefined }))} format={(v) => pct(v, 0)} signed={false} yLabel="Share of paths" height={200} />;
+}
+
+/** The most-traded names, each opening Chart with this run's trades on price (C-4). */
+export function OnChart({ rows, result }: ViewProps) {
+  const run = (result.meta as { run?: { id: string } }).run?.id;
+  const top = [...rows].sort((a, b) => (b.trades as number) - (a.trades as number)).slice(0, 12);
+  if (!run || !top.length) return <Skipped reason="no trades to show" />;
+  return (
+    <div className="ch-chips">
+      {top.map((r) => <Link key={String(r.symbol)} className="chip" href={`/studio/chart/${encodeURIComponent(String(r.symbol))}?run=${run}`}>{String(r.symbol)} · {String(r.trades)}</Link>)}
+    </div>
+  );
 }

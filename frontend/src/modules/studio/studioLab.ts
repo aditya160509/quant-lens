@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { FlaskConical, PencilRuler, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { CandlestickChart, FlaskConical, PencilRuler, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { STUDIO_BASE } from "./base";
 import { StudioContext, StrategyPicker } from "./RunHeader";
 import { isNum, pct } from "@/modules/research/format";
@@ -19,6 +19,7 @@ const CATALOG: Record<string, FeatureMeta> = {
 const PAGES: Page[] = [
   { id: "build", label: "Build", icon: PencilRuler, question: "", features: [], slug: "build" },
   { id: "test", label: "Test", icon: FlaskConical, question: "", features: ["st01", "st02", "st03"] },
+  { id: "chart", label: "Chart", icon: CandlestickChart, question: "", features: [], slug: "chart" },
 ];
 
 type RawFeature = { id: string; name: string; inputs: InputSpec[]; outputs: { key: string; label: string; source: "tables" | "charts"; render: string }[] };
@@ -75,7 +76,7 @@ registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Sti
 const TS = group(() => import("@/modules/screener/test/TearSheet") as Promise<Record<string, unknown>>);
 registerViews({ stEquity: BV.Equity, stStartDates: BV.StartDates, stSurvivorship: BV.Survivorship, stFillCheck: BV.FillCheck, stCarriedBy: BV.CarriedBy, stTradeShape: BV.TradeShape, stTradeReturns: BV.TradeReturns,
   stHoldTime: BV.HoldTime, stCrises: BV.Crises, stCosts: BV.Costs, stCapacity: BV.Capacity, stExposure: BV.Exposure, stDrawdowns: BV.Drawdowns, stStability: BV.Stability, stByRegime: BV.ByRegime, stSeasonality: BV.Seasonality, stPerName: BV.PerName, stContributors: BV.Contributors,
-  stTradeFan: BV.TradeFan, stRuin: BV.Ruin, stStreaks: BV.Streaks,
+  stTradeFan: BV.TradeFan, stOnChart: BV.OnChart, stRuin: BV.Ruin, stStreaks: BV.Streaks,
   monthlyHeatmap: TS.MonthlyHeatmap, yearlyVsBenchmark: TS.YearlyVsBenchmark, underwater: TS.Underwater },
   ["stEquity", "stStartDates", "stSurvivorship", "stFillCheck", "stTradeShape", "stCrises", "stExposure", "stStability"]);
 registerAlternates({ stTradeShape: [{ label: "Returns", view: "stTradeReturns" }, { label: "Hold time", view: "stHoldTime" }], stCarriedBy: [{ label: "Table", view: "dataTable" }], stCrises: [{ label: "Table", view: "dataTable" }],
@@ -83,6 +84,7 @@ registerAlternates({ stTradeShape: [{ label: "Returns", view: "stTradeReturns" }
 
 const TRADE_COLUMNS = ["symbol", "side", "entry_date", "exit_date", "entry", "exit", "shares", "pnl", "return", "bars", "mae", "mfe", "exit_reason", "costs", "signal_date"];
 const BuildPage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./build/BuildPage"), { ssr: false });
+const ChartPage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./chart/ChartPage"), { ssr: false });
 const HomePage = dynamic<{ features: FeatureSpec[]; runs: RunRecord[] }>(() => import("./home/StudioHome"), { ssr: false });
 
 export const STUDIO_LAB: LabConfig = {
@@ -104,6 +106,7 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["equity_curve"], span: 12, view: "stFillCheck", title: "Fill check" },
         ] },
         { id: "trades", label: "Trades", items: [
+          { keys: ["per_name"], span: 12, view: "stOnChart", title: "Trades on price" },
           { keys: ["carried_by"], span: 5, view: "stCarriedBy", title: "Carried by" },
           { keys: ["trades"], span: 7, view: "stTradeShape", title: "Trade shape", toggle: "Excursion" },
           { keys: ["trades"], span: 12, view: "dataTable", title: "Trades", opts: { max: 100000, maxHeight: 560, columns: TRADE_COLUMNS, viewKey: "studio-trades" } },
@@ -191,6 +194,6 @@ export const STUDIO_LAB: LabConfig = {
   takeaway: (_feature, key, view, result) => lead(view ?? key, result),
   runLabel: (f) => (f === "st02" ? "Run sweep" : f === "st03" ? "Run validation" : "Run backtest"),
   defaultUniverse: "Top names by liquidity",
-  specials: { build: BuildPage },
+  specials: { build: BuildPage, chart: ChartPage },
   overview: { home: HomePage, intro: "", stages: [] },
 };

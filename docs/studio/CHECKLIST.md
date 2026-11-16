@@ -61,12 +61,12 @@ Frontend
 - [ ] V-9 tile flip, V-10 quick profile < 10 s
 
 ## Phase 4: Chart
-- [ ] `StudioChart` on lightweight-charts 5, `/bars` only, 1-4 pane grid with synced crosshair
-- [ ] Indicator maths ported from `chart_engine` and matched to backend formulas (C-1)
+- [x] `StudioChart` on lightweight-charts 5, `/bars` only: candles, volume pane, indicator panes, day/week/month/hour. Not done: 1-4 chart grid with synced crosshair, compare symbols
+- [x] Indicators: all 70 from `chart_engine` registry usable (imported in place until phase 7 moves the file), editable params, kept per user. Not done: C-1 match test (registry EMA seeds with an SMA, backend EMA does not: differs in the first bars)
 - [ ] Drawings ported, saved per symbol on the server
-- [ ] Strategy overlay (2 strategies), trade navigator, replay (C-4, C-5)
+- [x] Strategy overlay (one run's trades: entries, exits with P&L), trade navigator (← →, zoom to trade ±20 bars), replay (R, 1×/5×/20×, scrub); Backtest > Trades links each traded name to Chart (C-4). Not done: two strategies at once, C-5 frame test
 - [ ] Alerts created on the chart use the phase 3 engine
-- [ ] `/trade` redirects to `/studio/chart` (X-7); C-2, C-3 green
+- [ ] `/trade` redirects to `/studio/chart` (X-7): not done on purpose; `/trade` is a multi-tab trading page, not only a chart, so redirecting would remove features. Owner decision. C-2, C-3 not yet measured
 
 ## Phase 5: Portfolio and Live
 - [ ] Portfolio: combine up to 8, allocation methods, correlation, marginal contribution, overlap, meta rules (P-1..P-4)
