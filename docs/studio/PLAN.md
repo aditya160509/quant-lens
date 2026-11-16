@@ -124,53 +124,36 @@ No new router. Studio registers as a lab on the same pattern as Screener:
 - `GET /api/studio-v3/bars?symbols=&from=&to=&tf=1d|1h`: the one price source, also for the chart.
 - `POST /shares`, `GET /shared/{token}`: same as Screener's share code.
 
-### 5.3 Data (what we hold, said plainly)
+### 5.3 Data (what we hold, said plainly; measured 2026-11-15)
 
-- Daily OHLCV: `market_universe.parquet`, about 4,157 instruments, 1999 to 2026-01-28 (Screener's range strip).
-- Hourly: `market_universe_hourly.parquet` and `intraday_hourly_v5`; range and coverage to be measured in phase 0.
+- Daily OHLCV: `market_universe.parquet`, 4,158 tickers, 1996-03-18 to 2026-07-06; most tickers end 2026-01-28 to 2026-02-01; 3,039 start only in 2015. Adjustment is mixed (old segments raw, newer dividend-adjusted), so phase 0 rebuilds it from Yahoo with one adjustment.
+- Hourly: `market_universe_hourly.parquet`, 23 tickers, 2023-02-27 to 2026-04-03; phase 0 extends to Yahoo's 730-day limit for every ticker. Until then the bar magnifier and Fill check apply to those 23 only.
+- No daily update job yet: phase 0 adds one; Live is blocked when data is more than 10 days old.
 - Fundamentals: from 2021, 90-day filing lag (Screener rule).
-- No tick data, no order book, no options chains history: no tick-level fills, no options strategies in v3.
-- Survivorship: listed and delisted names as the parquet holds them; measure the delisted share in phase 0 and print it.
+- No tick data, order book or options history.
+- Survivorship: delisted names kept as the parquet holds them; share printed in the limits popover.
 
 ## 6. The chart, rebuilt
 
 `components/chart_engine` holds the most finished work (71 indicators, ~40 drawing tools, candlestick patterns, alerts) but reads live yfinance and is one 2k-line core plus a 1.7k-line canvas. Plan: dissect, keep the maths, rebuild the shell.
 
-- Keep and port to `frontend/src/charts/studio/`: indicator maths (`IndicatorEngine/registry.ts`), drawing tool geometry (`DrawingEngine/*`), pattern detectors (`PatternScanner`).
+- Keep and port to `frontend/src/charts/studio/`: indicator maths (`IndicatorEngine/registry.ts`) and drawing tool geometry (`DrawingEngine/*`). `PatternScanner` is not ported until a page names a use.
 - Rebuild: one chart component on `lightweight-charts` 5 (already installed; panes and plugins), fed only by `/api/studio-v3/bars`.
 - New: strategy overlay (entries, exits, stops as price lines, position shading), trade markers that open the trade in the ledger, replay with a scrub bar (C3 pattern), multi-symbol sync.
 - Alerts move to the server (Screener's alerts and notify), not `localStorage`.
 - Detail in [FRONTEND.md](FRONTEND.md) §5.
 
-## 7. Phases (importance order; phone last)
+## 7. Phases
 
-Each phase ends with tests green, a screenshot pass at 1440 and 1024, and a commit.
+The build order, phase by phase, is [CHECKLIST.md](CHECKLIST.md); pages and acceptance tests are [PAGES.md](PAGES.md). Summary: 0 data and engine, 1 Backtest end to end, 2 Build, 3 Optimise and Validate, 4 Chart, 5 Portfolio and Live, 6 Library, 7 cross-page finish, 8 phone.
 
-| Phase | Ships | Done means |
-|---|---|---|
-| 0 | Data audit and engine spike | Hourly coverage and delisted share measured; vector engine runs SMA cross on 500 names under target speed; event engine matches it trade for trade |
-| 1 | Spec, compile, engine, metrics, Backtest page (st01) | Formula and block strategies backtest end to end in the lab; hero, equity, trades, metrics, limits |
-| 2 | Build page: blocks, formula, Python sandbox, versions, live lint | Same rule written three ways gives identical trades (test) |
-| 3 | Optimise (st02) and Validate: walk-forward (st03), robustness (st04), Monte Carlo (st05), overfitting (st06), one verdict | Planted overfit strategy is flagged; a known-robust one passes |
-| 4 | Chart workspace (st12) | Trades on price, replay, indicators ported, one data source |
-| 5 | Regimes (st07), Combine (st08), Signals today (st09) | |
-| 6 | Paper (st10) and Certify (st11) | Paper steps daily from parquet; certify re-runs and the hash matches |
-| 7 | Remove old Studio | Graph + `rg` + route checks + smoke test, per AGENTS.md; `/studio` points at the new lab |
-| 8 | Phone layout | Bottom nav, settings sheet, card rows (shared with Screener phone-1) |
+## 8. Removed
 
-## 8. Removed (when phase 7 lands)
-
-Removal follows AGENTS.md: graph check, `rg`, route registration check, smoke test, then delete in one commit.
-
-- `backend/app/studio_v2/` (all of it, after `persistence` and `observability` callers move)
-- `backend/app/routers/studio.py`, `backend/app/services/studio/`
-- `frontend/src/components/studio/`, `src/app/studio/` (replaced), `src/stores/studio/`, `src/hooks/studio/`, `src/lib/studio*.js`
-- `frontend/src/components/chart_engine/` after its maths is ported
-- Old Studio tests (`backend/tests/test_studio_*.py`) replaced by `test_studio_v3_*.py`
-- `/trade` redirects to the Studio chart
+Old Studio code was deleted on 2026-11-15 (commit `e778120`); the shared `services/studio/jobs.py` job store stays. `components/chart_engine/` goes after its maths is ported (phase 4).
 
 ## 9. Not doing in v3
 
+- Manual replay and journal, public gallery, tax and wash-sale (REVIEW §3)
 - Live broker trading (paper only; a broker adapter is a later decision with legal weight)
 - Tick data, order book, options strategies (data we do not hold)
 - Crypto and forex unless Screener's non-equity loader covers them (check in phase 0)

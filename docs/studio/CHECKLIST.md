@@ -1,90 +1,115 @@
-# Studio v3 checklist
+# Studio v3 checklist (build order)
 
-Tick as work lands. Each phase ends with tests green, screenshots at 1440 and 1024, a commit and a push. Plan: [PLAN.md](PLAN.md) §7.
+The one order of work. Page specs and acceptance ids (H-, B-, K-, O-, V-, P-, L-, C-, Y-, X-) are in [PAGES.md](PAGES.md); reasons in [REVIEW.md](REVIEW.md). Each phase ends with its acceptance tests green, screenshots at 1440 and 1024 (dark and light), a commit and a push. A phase starts only when the one before is done, except where marked "parallel".
 
-## Phase 0: data and engine spike
-- [ ] Measure hourly bars: symbols, date range, gaps (`market_universe_hourly.parquet`, `intraday_hourly_v5`)
-- [ ] Measure delisted share of the daily universe; print it in limits
-- [ ] Check non-equity coverage (crypto, forex) via Screener's non-equity loader
-- [ ] Vector engine: SMA cross, 500 names, 10 years under 50 ms (numba)
-- [ ] Event engine: same strategy, trade-for-trade match with vector engine (test)
-- [ ] Merge the three `performance.py` / `stats.py` copies into one `metrics.py`; other labs green
+## Phase 0: data and engine foundations
+Nothing else is trustworthy until this is done.
 
-## Phase 1: backtest end to end
-- [ ] `studio_v3` package, registry, manifest, jobs API (`/api/studio-v3/...`)
-- [ ] Strategy spec (pydantic) + formula compile (shared `signal_lang`)
-- [ ] Fill model: next open default, same close switch, stops/limits in bar, gap fills, conservative same-bar rule
-- [ ] Costs: commission, slippage, borrow, dividends on shorts, volume cap
-- [ ] Metric set (FEATURES_AND_OUTPUTS §4) with exact-number tests
-- [ ] `studioLab.ts`, routes, nav, Home placeholder
-- [ ] Backtest page: hero, KPIs, equity/drawdown, returns, trade list, carried by, fill check, crisis events, capacity, limits
-- [ ] "Honest order" layout; best-months toggle; first vs last third rolling Sharpe
-- [ ] Visual baselines added
+Data
+- [ ] Rebuild daily parquet from Yahoo `period="max"`: one total-return adjustment for OHLC, plus RawClose, Dividends, Splits; delisted names keep their old rows; stage, validate (no ticker lost, spot checks), back up, swap
+- [ ] Hourly parquet: 730 days of 1h bars for every ticker (today 23 names, 2023-02-27 to 2026-04-03)
+- [ ] Daily update job (EOD append, same adjustment), logged; freshness date exposed
+- [ ] Data audit: symbols per year, bars per symbol, rows / 252, gaps, adjusted status, delisted share, fundamentals lag (Y-2)
+- [ ] India and non-equity coverage measured; result written into PLAN §5.3
+
+Engine
+- [ ] Merge the three `performance.py` / `stats.py` copies into one `metrics.py`; other labs' tests green
+- [ ] Vector engine (numba): SMA cross, 500 names, 10 years; measure against the 5 s budget (K-9)
+- [ ] Event engine: same strategy, trade-for-trade match with the vector engine
+- [ ] Fill model shared by both: next open default, same close (optimistic label), gap through stop fills at open, worse-first same-bar rule, bar magnifier where hourly exists (K-3)
+
+## Phase 1: backtest end to end (first usable Studio)
+Backend
+- [ ] `studio_v3` package: registry, manifest, jobs API `/api/studio-v3/...` on the shared `JobStore`
+- [ ] `/limits` and `/bars` endpoints (one price source for every page)
+- [ ] Strategy spec (pydantic) + compile from formula (shared `signal_lang` lifted to `services/shared/formula/`); look-ahead refused with line and token (B-2)
+- [ ] Costs: commission, slippage, borrow, dividends on shorts, volume cap; delisting-return setting
+- [ ] Sizing incl. risk per trade; exits incl. time stop, breakeven, scale out (B-8)
+- [ ] Trial ledger: raw and effective counts (B-7)
+- [ ] Zero- or too-few-trade runs refused with a reason (K-7)
+- [ ] Hold-out boundary (last 20%) excluded from every Backtest series (K-10)
+- [ ] Agent API: REST + MCP for `compile`, `backtest`, `get_ledger`, `get_data_audit`; actor log (X-3)
+
+Frontend
+- [ ] `studioLab.ts`, `/studio/[[...slug]]`, nav (Home · Build · Test · Portfolio · Live · Chart · Library), Studio back in `GlobalLayout`
+- [ ] Shared pieces: run header, limits pill, freshness pill, My limits strip with closest call, trial chip, verdict chip ("not validated")
+- [ ] Backtest hero (net vs benchmark, drawdown shade, hold-out line) + cost ladder 1×/2×/4×
+- [ ] Tabs Overview (equity, start dates, survivorship delta, fill check), Trades (list, carried by, trade shape, unfilled), Returns (calendar, crisis strip), Risk (drawdowns, stability, costs, capacity, exposure)
+- [ ] Home: strategy cards, needs attention, duplicate, import JSON spec (H-1..H-5)
+- [ ] K-1..K-11 green
 
 ## Phase 2: Build
-- [ ] Blocks editor ⇄ formula
-- [ ] Python in Docker sandbox (no network, read-only, non-root, caps, `ast` screen)
-- [ ] Plain English → formula (review before run)
-- [ ] Repaint check (50 cuts) and lint, live
-- [ ] Trial counter
-- [ ] My limits (walk-away conditions) and Stated regime, saved with the version
-- [ ] Versions, immutable, diff
+- [ ] Formula editor (Screener formula bar) with live compile < 100 ms (B-4)
+- [ ] Blocks editor ⇄ formula both ways
+- [ ] Python in Docker sandbox (no network, read-only, non-root, caps, `ast` screen); formula → Python one way
+- [ ] Plain English → formula, shown for review before it runs
+- [ ] Higher-timeframe rules aligned to the last closed bar (B-3)
+- [ ] Allocate blocks (if/else on regime, rotate, weight)
+- [ ] Preview chart < 300 ms after typing (B-5); repaint check and lint rows
+- [ ] Autosave draft, undo history, versions (immutable, diff) (B-6)
+- [ ] "What it does" paragraph from the spec, no LLM (B-9)
+- [ ] Notes (hypothesis, decisions); My limits saved with the version
 - [ ] Templates (20)
-- [ ] Test: same rule as blocks, formula and Python gives identical trades
+- [ ] Backtest tabs When (regime, conditions, seasonality, timeline), Names (per-name, holdings), Paths (trade Monte Carlo, ruin, rule check, streaks)
+- [ ] B-1 same rule as blocks, formula and Python gives identical trades
 
-## Phase 3: optimise and validate
-- [ ] Optimise: grid, random, Optuna; map, surface, stability, top sets, Pareto, importance
-- [ ] Walk-forward: anchored and rolling, purge and embargo, WF matrix, WFE, drift
-- [ ] Robustness: vs random, MCPT, noise, vs shifted, vs others, delay, cost shock, liquidity, parameter permutation, variance, data source
-- [ ] Monte Carlo: reshuffle, resample, block, trade skip, randomized exits, ruin
-- [ ] Overfitting: PSR, DSR (trial count), PBO/CSCV, CPCV, min track record, haircut, hold-out log
-- [ ] Verdict grade with reasons and cheapest fix
-- [ ] Test: planted overfit strategy flagged; known-robust strategy passes
+## Phase 3: Optimise, Validate, alerts
+- [ ] Optimise: grid, random, Optuna; heatmap with plateau, 3D lazy and off by default, top sets, Pareto, importance; sweep feeds ledger (O-1..O-5)
+- [ ] Validate > Walk-forward: anchored and rolling, purge and embargo, matrix, drift
+- [ ] Validate > Robustness: tiles, vs random, price paths (noise, MCPT, shifted), execution, parameters, others, shocks
+- [ ] Validate > Luck: luck lottery, DSR, PBO, CPCV, track record, haircut
+- [ ] Validate > Hold-out: sealed, look log by actor, agent budget of 3 (V-4, V-5)
+- [ ] Validate > Verdict: server-side grade, next test, what would change it (no tuning advice), power card, editable weights (V-1, V-2, V-6..V-8)
+- [ ] Validate > Certificate: server re-run, hash, one-page PDF, share link (V-3)
+- [ ] Alerts and daily digest engine (email, push, Telegram, webhook) with quota and failure status
+- [ ] Agent API adds `optimise`, `validate`, `get_verdict`, `open_holdout`
+- [ ] V-9 tile flip, V-10 quick profile < 10 s
 
-## Phase 4: chart
-- [ ] `StudioChart` on lightweight-charts 5, `/bars` only
-- [ ] Indicators ported and tested
-- [ ] Drawings ported, saved on server
-- [ ] Strategy overlay, trade navigator, replay
-- [ ] Patterns with "not found" legend
-- [ ] Server alerts
-- [ ] `/trade` redirects here
+## Phase 4: Chart
+- [ ] `StudioChart` on lightweight-charts 5, `/bars` only, 1-4 pane grid with synced crosshair
+- [ ] Indicator maths ported from `chart_engine` and matched to backend formulas (C-1)
+- [ ] Drawings ported, saved per symbol on the server
+- [ ] Strategy overlay (2 strategies), trade navigator, replay (C-4, C-5)
+- [ ] Alerts created on the chart use the phase 3 engine
+- [ ] `/trade` redirects to `/studio/chart` (X-7); C-2, C-3 green
 
-## Phase 5: understand and live signals
-- [ ] Regimes: trend, vol, drawdown, HMM, seasonality, trades per regime, conditions
-- [ ] Combine: correlation, allocation methods, marginal contribution, overlap
-- [ ] Signals today: table, near triggers, map
+## Phase 5: Portfolio and Live
+- [ ] Portfolio: combine up to 8, allocation methods, correlation, marginal contribution, overlap, meta rules (P-1..P-4)
+- [ ] Live > Today: signals, near triggers, map, orders sheet; blocked when data is red
+- [ ] Live > Forward: freeze (`F`), daily step from parquet, Monte Carlo band, drift, decay clock (L-1..L-3, L-6)
+- [ ] Live > Ledger, Health (cost leak, signal health, drawdown odds, shadow book)
+- [ ] Live > Reconcile: backtest vs paper vs real, real-trade CSV import (L-5)
+- [ ] Live > Alerts and digest wired (L-4, L-7)
+- [ ] Live phone-first at 390 px (L-8)
+- [ ] Agent API adds `get_signals`, `freeze_paper` (human click required)
 
-## Phase 6: paper and certify
-- [ ] Paper: freeze, daily EOD step from parquet, MC band, drift alerts to Monitor, kill switch, limits
-- [ ] Paper decay panel: power statement, cost leak, signal IC, drawdown odds, sizing from evidence, shadow book
-- [ ] Certify: server re-run, hash compare, one-page PDF, share link and embed
+## Phase 6: Library and imports
+- [ ] Universes, costs (dated India STT if coverage allows), benchmarks, blocks and indicators, regimes and crises
+- [ ] Custom metrics usable as KPI, column, objective, limit (Y-1)
+- [ ] Profiles: validation, report order, sizing, layout; export and import (Y-3)
+- [ ] Data section shows the phase 0 audit live
+- [ ] Imports: CSV bars, Composer and QuantMage JSON mapper with untranslated parts listed
+- [ ] Agents: tokens, scopes, actor log, look budget
+- [ ] Optional AI reviewer as text over deterministic findings (never sets the grade)
+- [ ] X-5 cost profile change marks runs stale; Y-4
 
-## Grand-stage additions (FEATURES_AND_OUTPUTS §9; phase in brackets)
-- [ ] G9 India coverage measured [0]
-- [ ] G13 Agent API and MCP tool [1+]
-- [ ] G6 ML and Research signals as blocks [2] · G8 bring my own data [2] · G12 research notebook [2]
-- [ ] G5 prop-firm and risk rules [3] · G11 AI reviewer [3] · G14 impact and capacity curve [3] · G15 stress scenarios [3]
-- [ ] G2 manual replay practice + journal [4]
-- [ ] G1 alerts and webhooks [5] · G7 meta strategies [5] · G10 tax-aware results [5]
-- [ ] G3 import my real trades [6] · G4 verified strategy gallery [6]
-
-## Customisation (FEATURES_AND_OUTPUTS §10)
-- [ ] Card, chart, table prefs reused from Screener [1]
-- [ ] Custom metrics, objectives, report order and templates [1–3]
-- [ ] Custom blocks, indicators, cost profiles, universes, benchmarks, regimes, crisis periods [2–5]
-- [ ] Validation profiles and Verdict weights [3]
-- [ ] Workspace presets import/export [5]
-
-## Phase 7: remove old Studio
-- [ ] Graph + `rg` + route checks + smoke test (AGENTS.md)
-- [ ] Delete `app/studio_v2`, `routers/studio.py`, `services/studio`, `components/studio`, `stores|hooks|lib/studio*`, `chart_engine`, old Studio tests
+## Phase 7: cross-page finish
+- [ ] Old Studio code removed (done 2026-11-15, commit `e778120`); `chart_engine` removed after phase 4 port (graph + `rg` + route checks + smoke test)
+- [ ] Old Studio routes redirect to the nearest new page (X-7); `rg` finds no removed imports (X-8)
+- [ ] Compare, share, export, reproduce across pages (X-4, X-6)
+- [ ] Empty, loading, error, skipped states on every page (X-2)
+- [ ] Budgets in PAGES §10.7 as Playwright checks under `frontend/e2e/perf/`
+- [ ] Visual baselines for every route (X-1)
 
 ## Phase 8: phone
-- [ ] Bottom nav, settings sheet, card rows (with Screener phone-1)
+- [ ] Bottom nav, settings sheet, card rows (with Screener phone-1) for every page besides Live
+- [ ] Build on phone: Formula and Plain English only
+
+## Not in v3 (REVIEW §3)
+Manual replay and journal (G2), public gallery (G4), prop-firm page (now a Paths panel), tax and wash-sale (G10), live broker trading, tick data, options.
 
 ## Decisions for the owner
 - [ ] Pyodide (MPL-2.0) for in-browser Python preview: default no
 - [ ] OpenBB licence conflict (Apache vs AGPL): default not used
 - [ ] `arch` licence file missing on GitHub: check before relying on it beyond the existing install
-- [ ] Live broker trading: out of v3
+- [ ] Pine import: only after the PineTS licence check (AGPL)

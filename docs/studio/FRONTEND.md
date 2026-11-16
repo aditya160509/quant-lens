@@ -6,51 +6,13 @@ Date: 2026-11-15. From scratch, on the shared lab workspace. Style: Outputs v2 (
 
 Studio is the fourth lab, configured by `frontend/src/modules/studio/studioLab.ts` the way `screenerLab.ts` configures Screener. It gets the workspace for free: left nav, center results, right inspector, bottom dock (runs and log), palette (⌘K), runs pill, share, export, phone branch.
 
-Routes (`frontend/src/app/studio/[[...slug]]/page.tsx`, one entry like Screener):
-
-| Route | Page |
-|---|---|
-| `/studio` | Home |
-| `/studio/build/:id?` | Build |
-| `/studio/backtest`, `/optimise` | Test |
-| `/studio/walk-forward`, `/robustness`, `/monte-carlo`, `/overfitting`, `/verdict` | Validate |
-| `/studio/regimes`, `/combine` | Understand |
-| `/studio/signals`, `/paper`, `/certify` | Live |
-| `/studio/chart/:symbol?` | Chart |
+Routes, nav and every page's tabs and heroes: [PAGES.md](PAGES.md) §0 (one entry `frontend/src/app/studio/[[...slug]]/page.tsx`). Nav: `Home · Build · Test (Backtest, Optimise, Validate) · Portfolio · Live · Chart · Library`.
 
 Every run page reads `?strategy=<id>@<version>&run=<job>`; the strategy picker sits in the run header so any page can switch strategy without going back to Build.
 
-Nav (left), grouped, with a dot per page that has a fresh run (Screener pattern):
-```
-Home
-Build
-Test        Backtest · Optimise
-Validate    Walk-forward · Robustness · Monte Carlo · Overfitting · Verdict
-Understand  Regimes · Combine
-Live        Signals today · Paper · Certify
-Chart
-```
+## 2. The run pages
 
-## 2. The run pages (one layout, ten pages)
-
-All ten use `FeatureView` unchanged: title, status, strategy chip, sub-tabs, Save/Share/Export/Run; hero; KPI strip; "N limits" pill; section tabs; cards.
-
-| Page | Hero kind | Section tabs |
-|---|---|---|
-| Backtest | `lines` (equity vs benchmark) + drawdown shade | Overview · Trades · Returns · Risk · Holdings · Replay |
-| Optimise | `heatmap` (new hero kind) | Map · Surface · Top sets · Trade-offs |
-| Walk-forward | `lines` (stitched OOS) with window bands | Windows · Matrix · Drift |
-| Robustness | `tiles` (new: pass/fail strip) | Edge vs luck · Price paths · Execution · Parameters |
-| Monte Carlo | `fan` (new: percentile bands) | Bands · Drawdown · Ruin · Exits |
-| Overfitting | `gauge` (new: DSR / PBO dial) | Sharpe tests · PBO · CPCV · Hold-out |
-| Verdict | `grade` (new: A–F with reason) | Scorecard · What would change it |
-| Regimes | `bars` (P&L by regime) | Regimes · Calendar · Conditions |
-| Combine | `lines` (combined vs each) | Correlation · Allocation · Overlap |
-| Signals today | `figure` ("7 entries, 3 exits") + sorting field | Signals · Near triggers · Map |
-| Paper | `lines` with Monte Carlo band | Forward · Fills · Drift |
-| Certify | `grade` + hash | Report · Reproduce · Share |
-
-New hero kinds go into `modules/research/Hero.tsx` (shared): `heatmap`, `tiles`, `fan`, `gauge`, `grade`. Each has a still render for Reduce motion and print.
+All use `FeatureView` unchanged: title, status, strategy chip, sub-tabs, Save/Share/Export/Run; hero; KPI strip; limits and freshness pills; My limits strip; section tabs; cards. New hero kinds go into `modules/research/Hero.tsx` (shared): `heatmap`, `tiles`, `fan`, `gauge`, `grade`, each with a still render for Reduce motion and print.
 
 ## 3. Build
 
@@ -111,12 +73,12 @@ Each one is real data, has a still fallback and respects Reduce motion.
 | # | Moment | Where |
 |---|---|---|
 | S1 | Equity draws left to right against the benchmark, drawdowns shade as they happen | Backtest hero (C1 pattern) |
-| S2 | Replay on price: trades pop in at their bars, holdings fly in and out | Backtest Replay tab, Chart |
-| S3 | Monte Carlo fan blooms from the original curve, percentile labels settle | Monte Carlo hero |
-| S4 | Walk-forward windows sweep across the timeline, each OOS piece joins the stitched line | Walk-forward hero |
-| S5 | Parameter surface rotates once, then rests on the plateau with its outline | Optimise Surface |
-| S6 | Robustness tiles flip to pass or fail one by one as the jobs finish (live, from SSE) | Robustness hero |
-| S7 | Grade reveal: tests feed the dial, the letter lands with its one-line reason | Verdict |
+| S2 | Replay on price: trades pop in at their bars, holdings fly in and out | Backtest hero action (`R`), Chart |
+| S3 | Monte Carlo fan blooms from the original curve, percentile labels settle | Backtest > Paths |
+| S4 | Walk-forward windows sweep across the timeline (optional) | Validate > Walk-forward |
+| S5 | Heatmap plateau outline draws in; 3D surface lazy, off by default | Optimise |
+| S6 | Robustness tiles flip to pass or fail one by one as the jobs finish (live, from SSE) | Validate > Robustness |
+| S7 | Grade reveal: tests feed the dial, the letter lands with its one-line reason | Validate > Verdict |
 
 ## 7. Interaction rules
 
@@ -143,7 +105,7 @@ Each one is real data, has a still fallback and respects Reduce motion.
 
 `modules/studio/`: `studioLab.ts`, `build/BlockEditor.tsx`, `build/CodeEditor.tsx` (Monaco wrapper), `build/Checks.tsx`, `build/Versions.tsx`, `views/*.tsx` (Studio output views: `CarriedBy`, `FillCheck`, `CrisisEvents`, `ParamMap`, `ParamSurface`, `WindowsSweep`, `WfMatrix`, `RobustTiles`, `McFan`, `PboView`, `GradeCard`, `RegimeBars`, `TradePaths`), `charts/studio/*` (chart rebuild).
 
-## 10. Phone (last, phase 8)
+## 10. Phone (phase 8; Live is phone-first from phase 5)
 
 Shared with Screener's phone-1 item: bottom nav, settings as a bottom sheet, card rows for tables. Build on phone is Formula and Plain English only (blocks and Monaco are desktop).
 

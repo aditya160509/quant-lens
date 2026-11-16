@@ -28,23 +28,21 @@ Pages map onto the lab shell exactly like Screener: each page is a feature with 
 
 ## 0. Pages
 
-| id | Page | Group in nav | Runs a job |
-|---|---|---|---|
-| — | Home | Overview | no |
-| — | Build | Build | compile only |
-| st01 | Backtest | Test | yes |
-| st02 | Optimise | Test | yes |
-| st03 | Walk-forward | Validate | yes |
-| st04 | Robustness | Validate | yes |
-| st05 | Monte Carlo | Validate | yes |
-| st06 | Overfitting | Validate | yes |
-| — | Verdict | Validate | reads st03–st06 |
-| st07 | Regimes | Understand | yes |
-| st08 | Combine | Understand | yes |
-| st09 | Signals today | Live | yes |
-| st10 | Paper | Live | yes (daily) |
-| st11 | Certify | Live | yes |
-| st12 | Chart | Chart | bars only |
+Superseded by [PAGES.md](PAGES.md) (9 pages). The old ids below map as follows; their output lists in §3 still describe the content.
+
+| Old | Now |
+|---|---|
+| st01 Backtest | Backtest (Overview, Trades, Returns, Risk, When, Names, Paths) |
+| st02 Optimise | Optimise |
+| st03 Walk-forward, st04 Robustness, st06 Overfitting, Verdict, st11 Certify | Validate (Verdict, Walk-forward, Robustness, Luck, Hold-out, Certificate) |
+| st05 Monte Carlo | Trade-based: Backtest > Paths; price-based: Validate > Robustness |
+| st07 Regimes | Backtest > When |
+| st08 Combine | Portfolio |
+| st09 Signals today, st10 Paper | Live (Today, Forward, Ledger, Health, Reconcile, Alerts) |
+| st12 Chart | Chart |
+| — | Library (new) |
+
+Cut or merged from §9: G2 and G4 out of v3, G5 a panel in Backtest > Paths, G10 deferred, G12 into Build > Notes, G14 into Capacity, G15 into Robustness > Shocks.
 
 ## 1. Shared strategy inputs (every run page reads the same spec)
 
