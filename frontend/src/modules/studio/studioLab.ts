@@ -87,12 +87,12 @@ function optimiseHero(r: FeatureResult): HeroSpec | null {
   if (!m.plateau) return null;
   const v = m.plateau.status === "plateau" ? m.plateau.centre_score : m.plateau.best_score;
   return { figure: isNum(v) ? v.toFixed(2) : "—", tone: m.plateau.status === "spike" ? "warn" : null, versus: m.plateau.status === "spike" ? "spike only" : `${m.objective_label} on the plateau`,
-    line: `${m.cells} cells · ${m.headline ?? ""}` };
+    line: `${m.cells} cells${(r.meta as { trial_cost?: { raw: number; effective: number } }).trial_cost ? ` · this sweep added ${(r.meta as { trial_cost: { raw: number; effective: number } }).trial_cost.raw} raw, ${(r.meta as { trial_cost: { raw: number; effective: number } }).trial_cost.effective.toFixed(1)} effective trials` : ""}` };
 }
 
 const BV = group(() => import("./views/BacktestViews") as Promise<Record<string, unknown>>);
 const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string, unknown>>);
-registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto }, ["stParamMap", "stPareto"]);
+registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto, stStabilityOpt: OV.Stability, stSpread: OV.Spread }, ["stParamMap", "stPareto", "stSpread"]);
 const VV = group(() => import("./views/ValidateViews") as Promise<Record<string, unknown>>);
 registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout, stCertificate: VV.Certificate }, ["stTiles", "stStitched"]);
 const LV = group(() => import("./views/LiveViews") as Promise<Record<string, unknown>>);
@@ -241,6 +241,8 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["heatmap"], span: 12, view: "stParamMap", title: "Parameter map" },
           { keys: ["importance"], span: 5, view: "stImportance", title: "What matters" },
           { keys: ["pareto"], span: 7, view: "stPareto", title: "Trade-offs" },
+          { keys: ["stability"], span: 6, view: "stStabilityOpt", title: "Stability" },
+          { keys: ["spread"], span: 6, view: "stSpread", title: "Spread across the plateau" },
         ] },
         { id: "sets", label: "Top sets", items: [
           { keys: ["top_sets"], span: 12, view: "dataTable", title: "Top 10 sets" },

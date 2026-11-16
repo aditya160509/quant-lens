@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import itertools
 import math
+import operator
+import time
 
 import numpy as np
 import pandas as pd
@@ -15,8 +18,48 @@ from . import compile as C
 from . import engine, limits
 from .backtest import Refusal, prepare, simulate
 from .spec import Settings, Strategy
+from .store import effective_trials as store_effective
 
-OBJECTIVES = {"sharpe": "Sharpe", "cagr": "CAGR", "calmar": "Calmar", "sortino": "Sortino"}
+OBJECTIVES = {"sharpe": "Sharpe", "cagr": "CAGR", "calmar": "Calmar", "sortino": "Sortino", "profit_factor": "Profit factor", "ulcer": "Return / Ulcer", "custom": "Custom"}
+_OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv, ast.Pow: operator.pow, ast.USub: operator.neg,
+        ast.Lt: operator.lt, ast.LtE: operator.le, ast.Gt: operator.gt, ast.GtE: operator.ge}
+METRIC_NAMES = ("sharpe", "cagr", "max_drawdown", "sortino", "trades", "total_return", "profit_factor", "ulcer", "win_rate")
+
+
+def _arith(expr: str, names: dict[str, float | None]) -> float | bool | None:
+    """Arithmetic and comparisons over named numbers; nothing else parses. None when a name has no value."""
+    def go(n):
+        if isinstance(n, ast.Expression):
+            return go(n.body)
+        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
+            return float(n.value)
+        if isinstance(n, ast.Name):
+            if n.id not in names:
+                raise ValueError(f"unknown name '{n.id}'")
+            return names[n.id]
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "abs" and len(n.args) == 1:
+            v = go(n.args[0])
+            return None if v is None else abs(v)
+        if isinstance(n, ast.UnaryOp) and type(n.op) in _OPS:
+            v = go(n.operand)
+            return None if v is None else _OPS[type(n.op)](v)
+        if isinstance(n, ast.BinOp) and type(n.op) in _OPS:
+            a, b = go(n.left), go(n.right)
+            if a is None or b is None or (isinstance(n.op, ast.Div) and b == 0):
+                return None
+            return _OPS[type(n.op)](a, b)
+        if isinstance(n, ast.Compare) and len(n.ops) == 1 and type(n.ops[0]) in _OPS:
+            a, b = go(n.left), go(n.comparators[0])
+            return None if a is None or b is None else _OPS[type(n.ops[0])](a, b)
+        raise ValueError("only numbers, names, + - * / **, abs() and one comparison")
+    return go(ast.parse(expr, mode="eval"))
+
+
+def check_expr(expr: str, names) -> None:
+    try:
+        _arith(expr, dict.fromkeys(names, 1.0))
+    except (SyntaxError, ValueError) as e:
+        raise Refusal(f"Cannot read '{expr}': {e}", [f"names allowed: {', '.join(names)}"]) from e
 
 
 def _ranges(spec: Strategy) -> dict[str, tuple[float, float, float | None]]:
@@ -48,18 +91,30 @@ def _snap(v: float, lo: float, step: float | None) -> float:
     return round(lo + round((v - lo) / step) * step, 6) if step else round(v, 6)
 
 
-def _random(ranges: dict, n: int, seed: int) -> list[dict[str, float]]:
+def _random(ranges: dict, n: int, seed: int, logs: set[str] = frozenset()) -> list[dict[str, float]]:
     rng = np.random.default_rng(seed)
-    return [{k: _snap(rng.uniform(lo, hi), lo, step) for k, (lo, hi, step) in ranges.items()} for _ in range(n)]
+    def draw(k, lo, hi):
+        return float(np.exp(rng.uniform(np.log(lo), np.log(hi)))) if k in logs and lo > 0 else rng.uniform(lo, hi)
+    return [{k: _snap(draw(k, lo, hi), lo, step) for k, (lo, hi, step) in ranges.items()} for _ in range(n)]
 
 
-def _score(eq: np.ndarray, dates: pd.DatetimeIndex, objective: str) -> tuple[float | None, dict]:
-    m = M.return_metrics(eq, dates)
+def _score(eq: np.ndarray, dates: pd.DatetimeIndex, objective: str, pnl: np.ndarray, custom: str = "") -> tuple[float | None, dict]:
+    m = dict(M.return_metrics(eq, dates))
+    wins, losses = pnl[pnl > 0].sum(), -pnl[pnl < 0].sum()
+    m["profit_factor"] = float(wins / losses) if losses > 0 else None
+    m["win_rate"] = float((pnl > 0).mean()) if len(pnl) else None
+    dd = eq / np.maximum.accumulate(eq) - 1
+    m["ulcer"] = float(np.sqrt((dd**2).mean()))
+    m["trades"], m["total_return"] = len(pnl), float(eq[-1] / eq[0] - 1)
     if objective == "calmar":
         v = m.get("cagr") / abs(m["max_drawdown"]) if m.get("cagr") is not None and m.get("max_drawdown") else None
+    elif objective == "ulcer":
+        v = m.get("cagr") / m["ulcer"] if m.get("cagr") is not None and m["ulcer"] > 0 else None
+    elif objective == "custom":
+        v = _arith(custom, {k: m.get(k) for k in METRIC_NAMES})
     else:
         v = m.get(objective)
-    return (None if v is None or not math.isfinite(v) else float(v)), m
+    return (None if v is None or isinstance(v, bool) or not math.isfinite(v) else float(v)), m
 
 
 def plateau(cells: list[dict], names: list[str], ranges: dict, objective: str = "score") -> dict:
@@ -103,13 +158,35 @@ def pareto(cells: list[dict]) -> list[dict]:
     return [c for c in ok if not any(o["sharpe"] >= c["sharpe"] and o["max_drawdown"] >= c["max_drawdown"] and (o["sharpe"] > c["sharpe"] or o["max_drawdown"] > c["max_drawdown"]) for o in ok)]
 
 
-def run_optimise(spec: Strategy, settings: Settings, method: str = "grid", objective: str = "sharpe", n_max: int = 200, progress=None, cancelled=lambda: False) -> dict:
+def stability(cells: list[dict], names: list[str], ranges: dict, centre: dict, radius: int = 1, objective: str = "score") -> dict | None:
+    """Cells within `radius` steps of the plateau centre on every axis: their scores, and the share within 20% of the best."""
+    ok = [c for c in cells if c.get(objective) is not None]
+    if not ok or not centre:
+        return None
+    def near(c):
+        return all(abs(c[n] - centre[n]) <= radius * (ranges[n][2] or (ranges[n][1] - ranges[n][0]) / 10) + 1e-9 for n in names)
+    hood = [c[objective] for c in ok if near(c)]
+    best = max(c[objective] for c in ok)
+    if not hood:
+        return None
+    within = [v for v in hood if (best - v) <= 0.2 * abs(best)] if best else hood
+    return {"radius": radius, "cells": len(hood), "within_20pct": len(within) / len(hood), "scores": hood}
+
+
+def run_optimise(spec: Strategy, settings: Settings, method: str = "grid", objective: str = "sharpe", n_max: int = 200, progress=None, cancelled=lambda: False,
+                 custom: str = "", link: str = "", min_trades: int = 0, max_dd: float | None = None, radius: int = 1, budget_s: float = 0) -> dict:
     stage = progress or (lambda *_: None)
     found = C.compile_spec(spec)
     if not found["ok"]:
         raise Refusal("The strategy does not compile.", ["fix the rule in Build"])
     ranges = _ranges(spec)
     names = list(ranges)
+    if objective == "custom":
+        check_expr(custom or "x", METRIC_NAMES)
+    if link:
+        check_expr(link, list(spec.params))
+    logs = {k for k, p in spec.params.items() if p.log}
+    t0 = time.perf_counter()
     stage("load", 5)
     prep = prepare(settings)
     dates, cap = prep.panel.dates, settings.capital
@@ -117,10 +194,18 @@ def run_optimise(spec: Strategy, settings: Settings, method: str = "grid", objec
     def one(params: dict[str, float]) -> dict:
         sig = C.signals(spec, prep.sig_bars, dates, params)
         r = simulate(spec, prep, settings, sig=sig, params=params, magnifier=False)
-        score, m = _score(r.equity, dates, objective)
+        score, m = _score(r.equity, dates, objective, r.trades[:, engine.T_PNL] if len(r.trades) else np.zeros(0), custom)
         monthly = pd.Series(r.equity, index=dates).resample("ME").last().pct_change().dropna().to_numpy()
-        return {**params, "score": score, "sharpe": m.get("sharpe"), "cagr": m.get("cagr"), "max_drawdown": m.get("max_drawdown"), "total_return": float(r.equity[-1] / cap - 1),
-                "trades": len(r.trades), "_returns": monthly, "_open": int((r.trades[:, engine.T_REASON] == engine.R_OPEN).sum()) if len(r.trades) else 0}
+        excluded = "too few trades" if len(r.trades) < min_trades else "drawdown over limit" if max_dd and m.get("max_drawdown") is not None and m["max_drawdown"] < -max_dd else None
+        return {**params, "score": None if excluded else score, "excluded": excluded, "sharpe": m.get("sharpe"), "cagr": m.get("cagr"), "max_drawdown": m.get("max_drawdown"),
+                "profit_factor": m.get("profit_factor"), "total_return": float(r.equity[-1] / cap - 1), "trades": len(r.trades), "_returns": monthly, "_equity": r.equity,
+                "_open": int((r.trades[:, engine.T_REASON] == engine.R_OPEN).sum()) if len(r.trades) else 0}
+
+    def allowed(p: dict[str, float]) -> bool:
+        return not link or bool(_arith(link, {**spec.values(), **p}))
+
+    def out_of_time() -> bool:
+        return bool(budget_s) and time.perf_counter() - t0 > budget_s
 
     cells: list[dict] = []
     if method == "optuna":
@@ -129,29 +214,45 @@ def run_optimise(spec: Strategy, settings: Settings, method: str = "grid", objec
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=settings.seed))
         for i in range(n_max):
-            if cancelled():
+            if cancelled() or out_of_time():
                 break
             t = study.ask()
-            p = {k: (t.suggest_float(k, lo, hi, step=step) if step else t.suggest_float(k, lo, hi)) for k, (lo, hi, step) in ranges.items()}
+            p = {k: (t.suggest_float(k, lo, hi, log=True) if k in logs and lo > 0 else t.suggest_float(k, lo, hi, step=step) if step else t.suggest_float(k, lo, hi))
+                 for k, (lo, hi, step) in ranges.items()}
+            if not allowed(p):
+                study.tell(t, -1e9)
+                continue
             c = one(p)
             study.tell(t, c["score"] if c["score"] is not None else -1e9)
             cells.append(c)
             stage(f"cell {i + 1} / {n_max}", 10 + 80 * (i + 1) / n_max)
     else:
-        todo = _grid(ranges, n_max) if method == "grid" else _random(ranges, n_max, settings.seed)
+        todo = [p for p in (_grid(ranges, n_max * 2 if link else n_max) if method == "grid" else _random(ranges, n_max * 2 if link else n_max, settings.seed, logs)) if allowed(p)][:n_max]
         for i, p in enumerate(todo):
-            if cancelled():
+            if cancelled() or out_of_time():
                 break
             cells.append(one(p))
             stage(f"cell {i + 1} / {len(todo)}", 10 + 80 * (i + 1) / len(todo))
     if not cells:
-        raise Refusal("No cell finished.", ["the run was cancelled before the first cell"])
+        raise Refusal("No cell finished.", ["the run was cancelled before the first cell", "the link rule rejects every setting"])
 
     stage("report", 92)
     plat = plateau(cells, names, ranges)
-    trials = [{"returns": c.pop("_returns"), "sharpe": c["sharpe"], "hash": hashlib.sha256(f"{spec.hash()}:{settings.hash()}:{sorted(c.items())}".encode()).hexdigest()[:16]} for c in cells]
+    stab = stability(cells, names, ranges, plat.get("centre") or {}, radius)
+    # Spread: equity of the plateau region's cells (up to 12), best bold
+    region = plat.get("region") or {}
+    in_region = [c for c in cells if c["score"] is not None and region and all(region[n][0] - 1e-9 <= c[n] <= region[n][1] + 1e-9 for n in names)]
+    in_region = sorted(in_region, key=lambda c: -c["score"])[:12]
+    step = max(1, len(dates) // 400)
+    idx = sorted(set(range(0, len(dates), step)) | {len(dates) - 1})
+    spread = [{"date": str(dates[i].date()), **{f"c{j}": float(c["_equity"][i]) for j, c in enumerate(in_region)}} for i in idx]
+    spread_labels = [", ".join(f"{n} {c[n]:g}" for n in names) for c in in_region]
+    rets = [c["_returns"] for c in cells]
+    eff = store_effective(rets)
+    trials = [{"returns": c.pop("_returns"), "sharpe": c["sharpe"], "hash": hashlib.sha256(f"{spec.hash()}:{settings.hash()}:{sorted((k, v) for k, v in c.items() if k != '_equity')}".encode()).hexdigest()[:16]} for c in cells]
     for c in cells:
         c.pop("_open", None)
+        c.pop("_equity", None)
     ranked = sorted(cells, key=lambda c: -(c["score"] if c["score"] is not None else -1e18))
     heat = [{"x": c[names[0]], "y": c[names[1]] if len(names) > 1 else 0.0, "value": c["score"], "neighbourhood": c.get("neighbourhood")} for c in cells]
     label = OBJECTIVES.get(objective, objective)
@@ -168,10 +269,12 @@ def run_optimise(spec: Strategy, settings: Settings, method: str = "grid", objec
         "feature_id": "st02", "status": "ok",
         "summary_cards": [{"label": "Cells", "value": len(cells)}, {"label": f"Plateau {label}", "value": plat.get("centre_score")}, {"label": f"Best cell {label}", "value": best["score"]},
                           {"label": "Profitable nearby", "value": plat.get("share_profitable_nearby"), "unit": "%"}],
-        "charts": {"heatmap": heat},
-        "tables": {"cells": ranked, "top_sets": ranked[:10], "importance": importance(cells, names), "pareto": pareto(cells)},
+        "charts": {"heatmap": heat, "spread": spread},
+        "tables": {"cells": ranked, "top_sets": ranked[:20], "stability": [{"score": v} for v in (stab or {}).get("scores", [])], "importance": importance(cells, names), "pareto": pareto(cells)},
         "meta": {"headline": headline, "plateau": plat, "parameters": names, "ranges": {k: list(v) for k, v in ranges.items()}, "objective": objective, "objective_label": label,
-                 "method": method, "cells": len(cells), "total_return": best["total_return"], "metrics": {"sharpe": best["sharpe"], "trades": best["trades"]},
+                 "method": method, "cells": len(cells), "stability": {k: v for k, v in (stab or {}).items() if k != "scores"} or None, "spread_labels": spread_labels,
+                 "trial_cost": {"raw": len(cells), "effective": eff}, "excluded": {k: sum(c.get("excluded") == k for c in cells) for k in ("too few trades", "drawdown over limit")},
+                 "stopped_early": len(cells) < n_max and out_of_time(), "custom": custom if objective == "custom" else None, "link": link or None, "total_return": best["total_return"], "metrics": {"sharpe": best["sharpe"], "trades": best["trades"]},
                  "run_hash": run_hash, "result_hash": hashlib.sha256(str([c["score"] for c in cells]).encode()).hexdigest()[:16], "period": [str(dates[0].date()), str(dates[-1].date())],
                  "spec": spec.model_dump(), "settings": settings.model_dump(), "freshness": limits.freshness(), "verdict_chip": "not validated"},
         "_trials": trials,

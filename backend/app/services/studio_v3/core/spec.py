@@ -21,6 +21,7 @@ class Param(_Model):
     min: float | None = None
     max: float | None = None
     step: float | None = None
+    log: bool = False  # search on a log scale (random and Bayesian)
 
 
 class Exits(_Model):

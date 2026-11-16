@@ -4,14 +4,17 @@ import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { Bars } from "@/charts/Bars";
 import { Heatmap } from "@/charts/Heatmap";
+import { TimeSeries } from "@/charts/TimeSeries";
 import { XYPlot } from "@/charts/XYPlot";
+import { Distribution } from "@/charts/Distribution";
+import { PlotlyChart } from "@/components/ui/plotly-chart";
 import { isNum, pct } from "@/modules/research/format";
 import type { ViewProps } from "@/modules/research/outputs/types";
 import { studio } from "../api";
 import { Skipped } from "./BacktestViews";
 
 type Plateau = { status: string; reason?: string; centre?: Record<string, number>; region?: Record<string, [number, number]>; centre_score?: number; best_score?: number };
-type OptMeta = { plateau: Plateau; parameters: string[]; objective_label: string; strategy?: { id: string | null; version: number | null } };
+type OptMeta = { plateau: Plateau; parameters: string[]; objective_label: string; strategy?: { id: string | null; version: number | null }; stability: { radius: number; cells: number; within_20pct: number } | null; spread_labels: string[] };
 const meta = (r: ViewProps["result"]) => r.meta as unknown as OptMeta;
 const f2 = (v: number) => v.toFixed(2);
 
@@ -21,6 +24,7 @@ export function ParamMap({ rows, result }: ViewProps) {
   const names = m.parameters;
   const cells = (result.tables.cells ?? []) as Record<string, number | null>[];
   const [ax, setAx] = useState<[string, string]>([names[0], names[1] ?? names[0]]);
+  const [three, setThree] = useState(false);
   const grid = useMemo(() => {
     const xs = [...new Set(cells.map((c) => c[ax[0]] as number))].sort((a, b) => a - b);
     const ys = [...new Set(cells.map((c) => c[ax[1]] as number))].sort((a, b) => a - b);
@@ -52,10 +56,18 @@ export function ParamMap({ rows, result }: ViewProps) {
           </select>
         )) : null}
         <span style={{ flex: 1 }} />
+        {names.length > 1 ? <label className="st-toggle"><input type="checkbox" checked={three} onChange={(e) => setThree(e.target.checked)} />3D</label> : null}
         {m.plateau.status === "plateau" && m.strategy?.id ? <button className="btn sm" onClick={send}>Send plateau centre to Build</button> : null}
       </div>
-      <Heatmap rows={grid.ys.map(String)} cols={grid.xs.map(String)} values={grid.v} format={f2} rowTitle={ax[1]} colTitle={ax[0]}
-        outline={(r, c) => inside(grid.ys[r], ax[1]) && inside(grid.xs[c], ax[0])} />
+      {three ? (
+        <PlotlyChart className="op-3d" style={{ width: "100%", height: 420 }} config={{ displaylogo: false, responsive: true, scrollZoom: false }}
+          data={[{ type: "surface", x: grid.xs, y: grid.ys, z: grid.v, colorscale: "Viridis", showscale: false, hovertemplate: `${ax[0]} %{x}<br>${ax[1]} %{y}<br>${m.objective_label} %{z:.2f}<extra></extra>` }]}
+          layout={{ margin: { l: 0, r: 0, t: 0, b: 0 }, paper_bgcolor: "rgba(0,0,0,0)", font: { color: "#9aa0a6", size: 11 },
+            scene: { xaxis: { title: { text: ax[0] } }, yaxis: { title: { text: ax[1] } }, zaxis: { title: { text: m.objective_label } } } }} />
+      ) : (
+        <Heatmap rows={grid.ys.map(String)} cols={grid.xs.map(String)} values={grid.v} format={f2} rowTitle={ax[1]} colTitle={ax[0]}
+          outline={(r, c) => inside(grid.ys[r], ax[1]) && inside(grid.xs[c], ax[0])} />
+      )}
     </div>
   );
 }
@@ -74,4 +86,30 @@ export function Pareto({ rows, result }: ViewProps) {
       detail: meta(result).parameters.map((k) => [k, String(c[k])] as [string, string]) };
   });
   return <XYPlot points={pts} xLabel="Worst drawdown" yLabel="Sharpe" formatX={(v) => pct(v, 0)} formatY={f2} height={260} groupColors={{ "Best trade-off": "var(--accent)", "Other cells": "var(--text-4)" }} />;
+}
+
+/** Cells around the plateau centre: share within 20% of the best, and how their scores spread. */
+export function Stability({ rows, result }: ViewProps) {
+  const st = meta(result).stability;
+  const v = rows.map((r) => r.score).filter(isNum);
+  if (!st || v.length < 2) return <Skipped reason="too few cells near the centre" />;
+  const share = st.within_20pct, C = Math.PI * 46;
+  return (
+    <div className="op-stab">
+      <svg viewBox="0 0 120 70" width={150} height={88} role="img" aria-label={`${pct(share, 0)} of neighbours within 20% of the best`}>
+        <path d="M14 62 A46 46 0 0 1 106 62" fill="none" stroke="var(--line-2)" strokeWidth={10} />
+        <path d="M14 62 A46 46 0 0 1 106 62" fill="none" stroke={share >= 0.7 ? "var(--up)" : share >= 0.4 ? "var(--warn)" : "var(--down)"} strokeWidth={10} strokeDasharray={`${share * C} ${C}`} />
+        <text x={60} y={58} textAnchor="middle" className="bt-rule-n">{pct(share, 0)}</text>
+      </svg>
+      <Distribution values={v} observed={Math.max(...v)} tail="two" xLabel={`${meta(result).objective_label} of the ${st.cells} cells within ${st.radius} step${st.radius > 1 ? "s" : ""}`} observedLabel="Best" format={f2} />
+    </div>
+  );
+}
+
+/** Equity of every setting on the plateau; the best is drawn bold. */
+export function Spread({ rows, result }: ViewProps) {
+  const labels = meta(result).spread_labels ?? [];
+  if (!labels.length) return <Skipped reason="no plateau cells" />;
+  return <TimeSeries data={rows} series={labels.map((l, j) => ({ key: `c${j}`, label: l, color: j ? "var(--text-4)" : "var(--accent)", width: j ? 1 : 2.5, muted: j > 0 }))} height={260} legend={false}
+    format={(v) => `$${Math.round(v).toLocaleString()}`} />;
 }

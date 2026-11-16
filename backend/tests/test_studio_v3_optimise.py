@@ -38,3 +38,18 @@ def test_thousand_cells_one_symbol_under_ten_seconds_and_every_cell_is_a_trial(t
         store.record_trial(sid, tr["hash"], "human", "optimise", tr["sharpe"], tr["returns"])
     led = store.ledger(sid, detail=False)
     assert led["raw"] == 50 and led["effective"] < 50  # neighbouring cells are correlated tries
+
+
+def test_custom_objective_and_link_rule_are_checked_and_applied():
+    import pytest
+
+    from app.services.studio_v3.core import optimise as O
+    from app.services.studio_v3.core.backtest import Refusal
+
+    assert O._arith("cagr / abs(max_drawdown)", {"cagr": 0.1, "max_drawdown": -0.2}) == pytest.approx(0.5)
+    assert O._arith("fast < slow", {"fast": 10, "slow": 50}) is True
+    with pytest.raises(Refusal):
+        O.check_expr("__import__('os')", O.METRIC_NAMES)
+    cells = [{"a": a, "b": b, "score": float(a + b)} for a in range(5) for b in range(5)]
+    st = O.stability(cells, ["a", "b"], {"a": (0, 4, 1), "b": (0, 4, 1)}, {"a": 4, "b": 4})
+    assert st["cells"] == 4 and st["within_20pct"] == 0.75  # (3,3)=6 is more than 20% below the best 8

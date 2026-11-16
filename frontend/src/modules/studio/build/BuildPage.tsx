@@ -16,7 +16,7 @@ import { Palette, type Command } from "./Palette";
 import { fromFormula, toFormula, type Row } from "./blocks";
 import "../studio.css";
 
-type Param = { value: number; min?: number | null; max?: number | null; step?: number | null };
+type Param = { value: number; min?: number | null; max?: number | null; step?: number | null; log?: boolean };
 type Spec = {
   name: string; entry_long: string; exit_long: string; entry_short: string; exit_short: string; score: string; market_filter: string;
   params: Record<string, Param>;
@@ -323,6 +323,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
                 <Num label="Min" value={p.min} empty onChange={(v) => edit({ params: { ...spec.params, [k]: { ...p, min: v } } })} />
                 <Num label="Max" value={p.max} empty onChange={(v) => edit({ params: { ...spec.params, [k]: { ...p, max: v } } })} />
                 <Num label="Step" value={p.step} empty onChange={(v) => edit({ params: { ...spec.params, [k]: { ...p, step: v } } })} />
+                <label className="bd-num" title="Search on a log scale"><span>Log</span><input type="checkbox" checked={!!p.log} onChange={(e) => edit({ params: { ...spec.params, [k]: { ...p, log: e.target.checked } } })} /></label>
                 <button className="btn sm" aria-label={`Remove ${k}`} onClick={() => { const { [k]: _, ...rest } = spec.params; edit({ params: rest }); }}><Trash2 size={12} /></button>
               </div>
             ))}
