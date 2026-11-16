@@ -300,3 +300,20 @@ def test_trade_monte_carlo_keeps_the_trades():
     assert mc["fan"][-1]["p5"] == pytest.approx(1000 + pnl.sum()) and mc["fan"][-1]["p95"] == pytest.approx(1000 + pnl.sum())  # every reshuffle ends at the same equity
     assert mc["streak_actual"] == 1 and sum(r["share"] for r in mc["streaks"]) == pytest.approx(1)
     assert [r["probability"] for r in mc["ruin"]] == sorted((r["probability"] for r in mc["ruin"]), reverse=True)
+
+
+@pytest.mark.parametrize(("text", "fields", "exits", "unmatched"), [
+    ("buy when the 50 day sma crosses above the 200 day sma; sell when rsi(2) above 70; stop 8%",
+     {"entry_long": "crosses_above(sma(close, 50), sma(close, 200))", "exit_long": "(rsi(close, 2) > 70)"}, {"stop": 0.08}, []),
+    ("buy a new 52 week high when the weekly trend is up, trailing stop of 10%, purple elephants",
+     {"entry_long": "(close >= highest(high, 252)) & (weekly(close) > weekly(sma(close, 30)))"}, {"trail": 0.1}, ["purple", "elephants"]),
+])
+def test_plain_english_rules(text, fields, exits, unmatched):
+    from app.services.studio_v3.core import compile as C
+    from app.services.studio_v3.core import plain
+    from app.services.studio_v3.core.spec import Strategy
+    out = plain.to_spec(text)
+    assert (out["fields"], out["exits"], out["unmatched"]) == (fields, exits, unmatched)
+    assert C.compile_spec(Strategy(**out["fields"], exits=out["exits"]))["ok"]
+    with pytest.raises(ValueError):
+        plain.to_spec("make me rich")

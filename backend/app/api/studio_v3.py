@@ -19,6 +19,7 @@ from app.services.studio_v3.core import (
     data,
     formula,
     limits,
+    plain,
     store,
     templates,
 )
@@ -116,6 +117,19 @@ def compile_strategy(request: SpecRequest) -> dict[str, Any]:
     t0 = time.perf_counter()
     out = compiler.compile_spec(_spec(request.spec))
     return {**out, "ms": round((time.perf_counter() - t0) * 1000, 2)}
+
+
+class PlainRequest(BaseModel):
+    text: str
+
+
+@router.post("/plain-english")
+def plain_english(request: PlainRequest) -> dict[str, Any]:
+    """Sentence -> rule fields for review; nothing is saved or run."""
+    try:
+        return plain.to_spec(request.text)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.get("/templates")
