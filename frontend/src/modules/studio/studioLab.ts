@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { FlaskConical, PencilRuler, SlidersHorizontal } from "lucide-react";
+import { FlaskConical, PencilRuler, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { STUDIO_BASE } from "./base";
 import { StudioContext, StrategyPicker } from "./RunHeader";
 import { isNum, pct } from "@/modules/research/format";
@@ -13,11 +13,12 @@ import { lead } from "./leads";
 const CATALOG: Record<string, FeatureMeta> = {
   st01: { name: "Backtest", slug: "backtest", icon: FlaskConical, question: "" },
   st02: { name: "Optimise", slug: "optimise", icon: SlidersHorizontal, question: "" },
+  st03: { name: "Validate", slug: "validate", icon: ShieldCheck, question: "" },
 };
 
 const PAGES: Page[] = [
   { id: "build", label: "Build", icon: PencilRuler, question: "", features: [], slug: "build" },
-  { id: "test", label: "Test", icon: FlaskConical, question: "", features: ["st01", "st02"] },
+  { id: "test", label: "Test", icon: FlaskConical, question: "", features: ["st01", "st02", "st03"] },
 ];
 
 type RawFeature = { id: string; name: string; inputs: InputSpec[]; outputs: { key: string; label: string; source: "tables" | "charts"; render: string }[] };
@@ -50,6 +51,13 @@ function backtestHero(r: FeatureResult): HeroSpec | null {
   };
 }
 
+/** Validate hero: the grade and its one reason. */
+function validateHero(r: FeatureResult): HeroSpec | null {
+  const g = (r.meta as { grade?: { grade: string; reason: string; cap: string | null } }).grade;
+  if (!g) return null;
+  return { figure: g.grade, tone: g.grade <= "B" ? "up" : g.grade === "C" ? "warn" : "down", versus: g.cap ? `capped at ${g.cap}` : undefined, line: g.reason };
+}
+
 /** Optimise hero: the plateau's score, not the best cell's. */
 function optimiseHero(r: FeatureResult): HeroSpec | null {
   const m = r.meta as { headline?: string; plateau?: { status: string; centre_score?: number; best_score?: number }; objective_label?: string; cells?: number };
@@ -62,6 +70,8 @@ function optimiseHero(r: FeatureResult): HeroSpec | null {
 const BV = group(() => import("./views/BacktestViews") as Promise<Record<string, unknown>>);
 const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string, unknown>>);
 registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto }, ["stParamMap", "stPareto"]);
+const VV = group(() => import("./views/ValidateViews") as Promise<Record<string, unknown>>);
+registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout }, ["stTiles", "stStitched"]);
 const TS = group(() => import("@/modules/screener/test/TearSheet") as Promise<Record<string, unknown>>);
 registerViews({ stEquity: BV.Equity, stStartDates: BV.StartDates, stSurvivorship: BV.Survivorship, stFillCheck: BV.FillCheck, stCarriedBy: BV.CarriedBy, stTradeShape: BV.TradeShape, stTradeReturns: BV.TradeReturns,
   stHoldTime: BV.HoldTime, stCrises: BV.Crises, stCosts: BV.Costs, stCapacity: BV.Capacity, stExposure: BV.Exposure, stDrawdowns: BV.Drawdowns, stStability: BV.Stability, stByRegime: BV.ByRegime, stSeasonality: BV.Seasonality, stPerName: BV.PerName, stContributors: BV.Contributors,
@@ -127,6 +137,31 @@ export const STUDIO_LAB: LabConfig = {
       ],
       drop: ["cost_ladder", "my_limits", "limits", "statistics"],
     },
+    st03: {
+      hero: validateHero,
+      sections: [
+        { id: "verdict", label: "Verdict", items: [
+          { keys: ["tiles"], span: 12, view: "stTiles", title: "Tests" },
+          { keys: ["verdict"], span: 12, view: "stScorecard", title: "Scorecard" },
+        ] },
+        { id: "wf", label: "Walk-forward", items: [
+          { keys: ["walk_forward"], span: 12, view: "stStitched", title: "Stitched out-of-sample" },
+          { keys: ["windows"], span: 12, view: "dataTable", title: "Windows" },
+        ] },
+        { id: "robust", label: "Robustness", items: [
+          { keys: ["vs_random"], span: 7, view: "stVsRandom", title: "Vs random entries" },
+          { keys: ["execution"], span: 5, view: "dataTable", title: "Execution" },
+          { keys: ["parameters"], span: 12, view: "dataTable", title: "Nearby settings" },
+          { keys: ["noise"], span: 6, view: "dataTable", title: "Price noise" },
+          { keys: ["mcpt"], span: 6, view: "dataTable", title: "Permutation" },
+        ] },
+        { id: "luck", label: "Luck", items: [
+          { keys: ["lottery"], span: 7, view: "stLottery", title: "Luck lottery" },
+          { keys: ["luck"], span: 5, view: "dataTable", title: "Luck measures" },
+        ] },
+        { id: "holdout", label: "Hold-out", items: [{ keys: ["tiles"], span: 12, view: "stHoldout", title: "Sealed hold-out" }] },
+      ],
+    },
     st02: {
       hero: optimiseHero,
       sections: [
@@ -153,7 +188,7 @@ export const STUDIO_LAB: LabConfig = {
   contextBar: StudioContext,
   widgets: { strategy_id: StrategyPicker },
   takeaway: (_feature, key, view, result) => lead(view ?? key, result),
-  runLabel: (f) => (f === "st02" ? "Run sweep" : "Run backtest"),
+  runLabel: (f) => (f === "st02" ? "Run sweep" : f === "st03" ? "Run validation" : "Run backtest"),
   defaultUniverse: "Top names by liquidity",
   specials: { build: BuildPage },
   overview: { home: HomePage, intro: "", stages: [] },

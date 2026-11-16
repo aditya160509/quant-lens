@@ -22,6 +22,7 @@ from app.services.studio_v3.core import (
     plain,
     store,
     templates,
+    validate,
 )
 from app.services.studio_v3.core import compile as compiler
 from app.services.studio_v3.core.spec import Strategy
@@ -145,6 +146,12 @@ def preview(request: PreviewRequest) -> dict[str, Any]:
         return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
 
 
+@router.get("/strategies/{sid}/holdout")
+def holdout_log(sid: str) -> dict[str, Any]:
+    _known(store.get, sid)
+    return {"looks": validate.holdout_looks(sid), "agent_budget": validate.HOLDOUT_AGENT_BUDGET}
+
+
 @router.get("/templates")
 def get_templates() -> dict[str, Any]:
     return {"templates": templates.list_templates()}
@@ -255,6 +262,8 @@ def _finish(job_id: str | None, feature_id: str, payload: dict[str, Any], result
     elif sid and trial is not None:
         store.record_trial(sid, meta["run_hash"], actor, payload.get("trial_kind") or "backtest", trial["sharpe"], trial["returns"])
         meta["ledger"] = store.ledger(sid, detail=False)
+    elif sid:  # a run that is not a new try (Validate) still shows the strategy's ledger
+        meta["ledger"] = store.ledger(sid, detail=False)
     else:
         meta["ledger"] = {"raw": 1, "effective": 1.0, "by_actor": {}, "unsaved": True}
     meta["actor"] = actor
@@ -298,7 +307,7 @@ def create_job(feature_id: str, request: FeatureRequest, x_studio_actor: str | N
         raise HTTPException(422, str(exc)) from exc
     job = JOBS.create(job_type=f"studio_v3_{feature.FEATURE_ID}", params={"feature_id": feature.FEATURE_ID, "payload": request.payload, "data_version": data.data_version()})
     if job["status"] == "queued":
-        JOBS.submit(job["job_id"], _execute, job["job_id"], feature.FEATURE_ID, request.payload, _actor(x_studio_actor))
+        JOBS.submit(job["job_id"], _execute, job["job_id"], feature.FEATURE_ID, {**request.payload, "_actor": _actor(x_studio_actor)}, _actor(x_studio_actor))
     return {"job_id": job["job_id"], "status": job["status"], "feature_id": feature.FEATURE_ID}
 
 

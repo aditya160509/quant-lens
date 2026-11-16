@@ -50,11 +50,11 @@ Frontend
 
 ## Phase 3: Optimise, Validate, alerts
 - [x] Optimise: grid, random, Optuna (TPE); parameter map with plateau outlined, spike vs plateau call, send plateau centre to Build as a new version, top sets, all cells, Pareto, importance; every cell a trial (O-1..O-3 tested; 1,000 cells on one symbol < 10 s). Not done: 3D surface, cancel keeps finished cells (O-4) untested, screenshots baseline (O-5)
-- [ ] Validate > Walk-forward: anchored and rolling, purge and embargo, matrix, drift
-- [ ] Validate > Robustness: tiles, vs random, price paths (noise, MCPT, shifted), execution, parameters, others, shocks
-- [ ] Validate > Luck: luck lottery, DSR, PBO, CPCV, track record, haircut
-- [ ] Validate > Hold-out: sealed, look log by actor, agent budget of 3 (V-4, V-5)
-- [ ] Validate > Verdict: server-side grade, next test, what would change it (no tuning advice), power card, editable weights (V-1, V-2, V-6..V-8)
+- [x] Validate > Walk-forward: rolling windows over a parameter grid, stitched out-of-sample, efficiency, windows table with chosen params (drift). Not done: anchored mode, purge and embargo, re-opt × OOS matrix
+- [x] Validate > Robustness: tiles, vs random entries, price noise, permutation (MCPT), delay 1 and 2 bars, cost ladder to break-even, nearby settings. Not done: shifted starts (Backtest has start dates), related symbols, shocks
+- [x] Validate > Luck: luck lottery, deflated Sharpe on the effective trial count, PBO (CSCV, cash blocks score 0), minimum track record, Harvey-Liu haircut. Not done: CPCV
+- [x] Validate > Hold-out: sealed by default, opened only on request, every look logged by actor, agents capped at 3 (V-4, V-5 tested)
+- [x] Validate > Verdict: server-side grade with one reason, cap at C on few trades, next test, what would change it (no tuning advice), editable weights recompute in the page (V-1, V-7, V-8 tested). Not done: power card (V-6), V-2 API test
 - [ ] Validate > Certificate: server re-run, hash, one-page PDF, share link (V-3)
 - [ ] Alerts and daily digest engine (email, push, Telegram, webhook) with quota and failure status
 - [ ] Agent API adds `optimise`, `validate`, `get_verdict`, `open_holdout`
