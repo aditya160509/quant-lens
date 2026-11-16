@@ -70,7 +70,7 @@ Frontend
 - [ ] `/trade` redirects to `/studio/chart` (X-7): not done on purpose; `/trade` is a multi-tab trading page, not only a chart, so redirecting would remove features. Owner decision. C-2, C-3 not yet measured
 
 ## Phase 5: Portfolio and Live
-- [x] Portfolio: combine up to 8 saved strategies (picked in the strip), equal / inverse-vol / min-variance (weights in-sample, labelled), correlation, marginal contribution, overlap, meta switch rule on the benchmark acted next bar (P-1, P-2 tested). Not done: P-3 send combined to Validate
+- [x] Portfolio: combine up to 12 saved strategies, equal / inverse-vol / min-variance / risk parity / HRP / max Sharpe / fixed, weights in-sample or re-estimated quarterly on the trailing year (no look-ahead, tested), rotation to the top N by 3-month return, cluster tree, weights over time, correlation, marginal contribution, overlap, meta switch rule acted next bar (P-1, P-2 tested). Not done: combined grade, P-3 send combined to Validate
 - [x] Live > Today: signals, near triggers, orders sheet; red freshness shown (runs anyway). Not done: map
 - [x] Live > Forward: freeze per version (backdate labelled), bootstrap band, drift, segments (L-6 tested). Not done: `F` key, decay clock, L-1..L-3 tests
 - [ ] Live > Ledger, Health: fills and drawdown odds done. Not done: cost leak, signal health, shadow book
