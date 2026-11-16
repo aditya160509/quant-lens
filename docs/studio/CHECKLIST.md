@@ -35,10 +35,10 @@ Frontend
 ## Phase 2: Build
 - [x] Formula editor with live compile (0.26 ms measured) and per-role findings (B-4); Screener formula-bar autocomplete not yet wired
 - [x] Blocks editor ⇄ formula both ways (rows of comparisons and crosses joined by and/or; other shapes stay formula; vitest round-trip)
-- [ ] Python in Docker sandbox (no network, read-only, non-root, caps, `ast` screen); formula → Python one way. Blocked: Docker daemon not running on this machine; Python strategies are refused with that reason until then
+- [x] Python mode: Monaco with `ctx` completion, hovers, snippets, inline markers from server checks and runtime errors; `class Strategy` with `init`, `on_bar`, `on_fill`; runs in a child process (`-I`, empty env, CPU/file limits, builtins allow-list, `ast` screen, no positive indexes); formula → Python one way (tested: same trades). Not done: Docker container (daemon off), format on save
 - [x] Plain English → formula by fixed phrase rules (MAs, crosses, RSI, highs and lows, ROC, weekly trend, volume, stops, targets, time stops); ignored words listed; review then "Use this rule"
 - [x] Higher-timeframe rules aligned to the last closed bar: `weekly(x)` (B-3, tested)
-- [x] Allocate blocks: the Portfolio switch rule (if the benchmark rule holds, strategy A, else B or cash), next-bar (P-2). Not done: rotate and weight blocks inside Build
+- [x] Allocate: "Trade only when" market rule (`market` = SPY close; no entries while false, everything closed on the bar it turns false); rotate = Rank by + max positions; Portfolio switch rule (P-2). Not done: weight by score sizing, Kelly
 - [x] Preview chart: any symbol, last 2 development years, entries and exits marked, refreshes 300 ms after typing (server 0.37 s); lint rows shown per rule (B-5)
 - [x] Repaint check: signals recomputed on 50 history cuts of the preview name must equal full-history signals; shown under the preview
 - [x] Autosave draft every 2 s, undo/redo (⌘Z / ⇧⌘Z), immutable versions with picker, field-by-field diff against any version (B-6)
@@ -46,7 +46,8 @@ Frontend
 - [x] Notes (hypothesis, regime, decisions); My limits saved with the version
 - [x] Templates (20)
 - [x] Backtest tabs When (regime by benchmark trend × vol, seasonality), Names (contributors, per-name table), Paths (trade Monte Carlo fan, ruin, losing streaks); still to do: conditions (needs Library regimes), timeline, holdings treemap, prop rule check
-- [ ] B-1 same rule as blocks, formula and Python gives identical trades: blocks compile to the formula text itself (vitest round-trip); Python leg waits for the sandbox
+- [x] B-1 same rule as blocks, formula and Python gives identical trades (blocks compile to the formula text; Python parity tested)
+- [x] Checks card (compiles, no look-ahead, fires, trades on one name, exits, parameters used) with jump links; template start grid; command palette ⌘⇧P (lift number to parameter, add parameter, modes, templates, save, run; ⌘K stays the app search); parameter step and sweep size; vol-target sizing in both engines; backtest results side by side in the version diff; regime claim marked when written after a backtest; trial chip opens the ledger; drag to reorder block rows
 
 ## Phase 3: Optimise, Validate, alerts
 - [x] Optimise: grid, random, Optuna (TPE); parameter map with plateau outlined, spike vs plateau call, send plateau centre to Build as a new version, top sets, all cells, Pareto, importance; every cell a trial (O-1..O-3 tested; 1,000 cells on one symbol < 10 s). Not done: 3D surface, cancel keeps finished cells (O-4) untested, screenshots baseline (O-5)
