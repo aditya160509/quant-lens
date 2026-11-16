@@ -70,11 +70,11 @@ Frontend
 
 ## Phase 5: Portfolio and Live
 - [x] Portfolio: combine up to 8 saved strategies (picked in the strip), equal / inverse-vol / min-variance (weights in-sample, labelled), correlation, marginal contribution, overlap, meta switch rule on the benchmark acted next bar (P-1, P-2 tested). Not done: P-3 send combined to Validate
-- [ ] Live > Today: signals, near triggers, map, orders sheet; blocked when data is red
-- [ ] Live > Forward: freeze (`F`), daily step from parquet, Monte Carlo band, drift, decay clock (L-1..L-3, L-6)
-- [ ] Live > Ledger, Health (cost leak, signal health, drawdown odds, shadow book)
-- [ ] Live > Reconcile: backtest vs paper vs real, real-trade CSV import (L-5)
-- [ ] Live > Alerts and digest wired (L-4, L-7)
+- [x] Live > Today: signals, near triggers, orders sheet; red freshness shown (runs anyway). Not done: map
+- [x] Live > Forward: freeze per version (backdate labelled), bootstrap band, drift, segments (L-6 tested). Not done: `F` key, decay clock, L-1..L-3 tests
+- [ ] Live > Ledger, Health: fills and drawdown odds done. Not done: cost leak, signal health, shadow book
+- [x] Live > Reconcile: real-trade CSV matched ±2 days, fills vs model (L-5 tested)
+- [x] Live > Alerts: Apprise channels, test send, digest on run, failures logged (L-7 tested). Not done: scheduled daily digest
 - [ ] Live phone-first at 390 px (L-8)
 - [ ] Agent API adds `get_signals`, `freeze_paper` (human click required)
 
@@ -89,7 +89,7 @@ Frontend
 - [ ] X-5 cost profile change marks runs stale; Y-4
 
 ## Phase 7: cross-page finish
-- [ ] Old Studio code removed (done 2026-11-15, commit `e778120`); `chart_engine` removed after phase 4 port (graph + `rg` + route checks + smoke test)
+- [ ] Old Studio code removed (done 2026-11-15, commit `e778120`); Studio Chart now embeds the full `chart_engine` chart (owner ask), so `chart_engine` stays (graph + `rg` + route checks + smoke test)
 - [ ] Old Studio routes redirect to the nearest new page (X-7); `rg` finds no removed imports (X-8)
 - [ ] Compare, share, export, reproduce across pages (X-4, X-6)
 - [ ] Empty, loading, error, skipped states on every page (X-2)
