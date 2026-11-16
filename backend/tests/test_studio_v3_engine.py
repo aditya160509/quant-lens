@@ -125,6 +125,17 @@ def test_vector_engine_matches_event_engine_trade_for_trade(p):
     assert again.trades.tobytes() == r.trades.tobytes() and again.equity.tobytes() == r.equity.tobytes()
 
 
+def test_vol_target_sizing_matches_across_engines_and_shrinks_volatile_names():
+    b, e, x, score, _ = random_market()
+    vol = np.full(b["close"].shape, 0.2)
+    vol[:, 0] = 0.8  # one name four times as volatile
+    p = Params(size_mode=fills.VOL, size=0.15, max_positions=5)
+    r = both(b, e, x, p, score=score, size_vol=vol)
+    value = r.trades[:, engine.T_SHARES] * r.trades[:, engine.T_ENTRY_PX]
+    calm, wild = value[r.trades[:, engine.T_SYM] != 0], value[r.trades[:, engine.T_SYM] == 0]
+    assert len(wild) and np.median(wild) < np.median(calm) / 3
+
+
 def test_equity_is_cash_plus_marked_positions_and_reconciles_with_trades():
     b, e, x, _, _ = random_market()
     p = Params(stop=0.05, target=0.08, max_positions=4)

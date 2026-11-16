@@ -166,7 +166,7 @@ def _execute(S, acct, trades, P, t, px, rng, vol, stop_dist, has_dist):
 
 
 @njit(cache=True)
-def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist, hh, hl, hidx, has_mag, last_bar, P):
+def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist, size_vol, has_vol, hh, hl, hidx, has_mag, last_bar, P):
     T, N = c.shape
     S = np.zeros((N, NS))
     acct = np.zeros(5)
@@ -249,7 +249,7 @@ def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist
             for i in range(slots):
                 n = order[i]
                 dist = stop_dist[t, n] if has_dist else c[t, n] * P[P_STOP]
-                sh = _size_shares(int(P[P_SIZE_MODE]), P[P_SIZE], eq, c[t, n], dist, per)
+                sh = _size_shares(int(P[P_SIZE_MODE]), P[P_SIZE], eq, c[t, n], dist, per, size_vol[t, n] if has_vol else np.nan)
                 if sh > 0.0:
                     S[n, PDIR], S[n, PSH], S[n, SIGBAR] = entries[t, n], sh, t
         if P[P_FILL] != 0.0:
@@ -335,8 +335,8 @@ class SignalStrategy:
 
 
 class EventEngine:
-    def __init__(self, bars: dict[str, np.ndarray], params: Params, score=None, stop_dist=None, hourly=None):
-        self.bars, self.p, self.score, self.stop_dist, self.hourly = bars, params, score, stop_dist, hourly
+    def __init__(self, bars: dict[str, np.ndarray], params: Params, score=None, stop_dist=None, hourly=None, size_vol=None):
+        self.bars, self.p, self.score, self.stop_dist, self.hourly, self.size_vol = bars, params, score, stop_dist, hourly, size_vol
         self.positions: dict[int, Position] = {}
         self.pending: dict[int, tuple[int, float, int]] = {}  # symbol -> (direction, shares, signal bar)
         self.wants: dict[int, int] = {}
@@ -481,7 +481,7 @@ class EventEngine:
                 per = min(p.max_positions, float(N)) if p.max_positions > 0 else float(N)
                 for n in cands[:slots]:
                     dist = self.stop_dist[t, n] if self.stop_dist is not None else c[t, n] * p.stop
-                    sh = fills.size_shares(int(p.size_mode), p.size, eq, c[t, n], dist, per)
+                    sh = fills.size_shares(int(p.size_mode), p.size, eq, c[t, n], dist, per, self.size_vol[t, n] if self.size_vol is not None else math.nan)
                     if sh > 0:
                         self.pending[n] = (self.wants[n], sh, t)
             if p.fill != 0:
@@ -529,7 +529,7 @@ _EMPTYI = np.full((1, 1, 2), -1, dtype=np.int64)
 
 
 def run(bars: dict[str, np.ndarray], entries: np.ndarray, exits: np.ndarray, params: Params, *, engine: str = "vector",
-        score: np.ndarray | None = None, stop_dist: np.ndarray | None = None, hourly: tuple | None = None, strategy=None) -> Result:
+        score: np.ndarray | None = None, stop_dist: np.ndarray | None = None, hourly: tuple | None = None, strategy=None, size_vol: np.ndarray | None = None) -> Result:
     """bars: open, high, low, close, volume as (bars x symbols) float arrays, NaN where a name has no bar.
     entries: int8, +1 long, -1 short. exits: int8 bits, 1 closes longs, 2 closes shorts.
     hourly: (highs, lows, index) where index[t, n] = (start, end) into the hourly arrays, -1 when not held.
@@ -537,11 +537,12 @@ def run(bars: dict[str, np.ndarray], entries: np.ndarray, exits: np.ndarray, par
     o, h, l, c, v = (np.ascontiguousarray(bars[k], dtype=np.float64) for k in ("open", "high", "low", "close", "volume"))
     entries, exits = np.ascontiguousarray(entries, dtype=np.int8), np.ascontiguousarray(exits, dtype=np.int8)
     if engine == "event" or strategy is not None:
-        eng = EventEngine({"open": o, "high": h, "low": l, "close": c, "volume": v}, params, score, stop_dist, hourly)
+        eng = EventEngine({"open": o, "high": h, "low": l, "close": c, "volume": v}, params, score, stop_dist, hourly, size_vol)
         out = eng.run(strategy or SignalStrategy(entries, exits))
     else:
         hh, hl, hidx = hourly if hourly is not None else (_EMPTY1, _EMPTY1, _EMPTYI)
         out = _vector(o, h, l, c, v, entries, exits, score if score is not None else _EMPTY2, score is not None,
-                      stop_dist if stop_dist is not None else _EMPTY2, stop_dist is not None, hh, hl, hidx, hourly is not None,
+                      stop_dist if stop_dist is not None else _EMPTY2, stop_dist is not None,
+                      np.ascontiguousarray(size_vol, dtype=np.float64) if size_vol is not None else _EMPTY2, size_vol is not None, hh, hl, hidx, hourly is not None,
                       _last_bar(c), np.array(astuple(params), dtype=np.float64))
     return Result(*out[:7], unfilled=int(out[7]))

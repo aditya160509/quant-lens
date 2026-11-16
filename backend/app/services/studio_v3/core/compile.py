@@ -59,6 +59,7 @@ class Signals:
     exits: np.ndarray  # int8 bits: 1 closes longs, 2 closes shorts
     score: np.ndarray | None
     stop_dist: np.ndarray | None
+    size_vol: np.ndarray | None = None  # annualised 20-day volatility, for vol-target sizing
 
 
 def _bool(expr: str, bars, dates, params, cache) -> np.ndarray:
@@ -73,7 +74,7 @@ def signals(spec: Strategy, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex
     if spec.code.strip():
         entries, exits = pycode.run(spec.code, bars, dates, params, cache=cache)
         dist = spec.exits.stop_atr * formula.evaluate("atr(14)", bars, dates, params, cache) if spec.exits.stop_atr else None
-        return Signals(entries, exits, None, None if dist is None else np.nan_to_num(dist))
+        return Signals(entries, exits, None, None if dist is None else np.nan_to_num(dist), _vol(spec, bars, dates, params, cache))
     entries, exits = np.zeros(shape, dtype=np.int8), np.zeros(shape, dtype=np.int8)
     if spec.entry_short.strip():
         entries[_bool(spec.entry_short, bars, dates, params, cache)] = -1
@@ -85,7 +86,11 @@ def signals(spec: Strategy, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex
         exits[_bool(spec.exit_short, bars, dates, params, cache)] |= 2
     score = formula.evaluate(spec.score, bars, dates, params, cache).astype(float) if spec.score.strip() else None
     dist = spec.exits.stop_atr * formula.evaluate("atr(14)", bars, dates, params, cache) if spec.exits.stop_atr else None
-    return Signals(entries, exits, score, None if dist is None else np.nan_to_num(dist))
+    return Signals(entries, exits, score, None if dist is None else np.nan_to_num(dist), _vol(spec, bars, dates, params, cache))
+
+
+def _vol(spec: Strategy, bars, dates, params, cache) -> np.ndarray | None:
+    return formula.evaluate("std(returns, 20)", bars, dates, params, cache) * np.sqrt(252) if spec.sizing.mode == "vol_target" else None
 
 
 def _pct(v: float) -> str:
@@ -104,7 +109,7 @@ def describe(spec: Strategy) -> str:
                         f"stop to entry after {_pct(e.breakeven)}" if e.breakeven else "",
                         f"sell {_pct(e.scale_frac)} at {_pct(e.scale_at)}" if e.scale_at and e.scale_frac else "") if t]
     size = {"shares": f"{s.value:g} shares", "cash": f"${s.value:,.0f}", "pct_equity": f"{_pct(s.value)} of equity", "risk": f"{_pct(s.value)} of equity at risk to the stop",
-            "equal": "an equal share of equity"}[s.mode]
+            "equal": "an equal share of equity", "vol_target": f"an equal share scaled to {_pct(s.value)} annual volatility"}[s.mode]
     cap = f", at most {s.max_positions} positions" if s.max_positions else ""
     rank = f", best {spec.score.strip()} first" if spec.score.strip() else ""
     return "\n".join([("; ".join(entry) or "No entry rule") + ".", "Exit: " + ("; ".join(out) or "none, held to the end") + ".", f"Size: {size} per trade{cap}{rank}."])

@@ -93,8 +93,9 @@ def simulate(spec: Strategy, prep: Prepared, settings: Settings, *, sig: C.Signa
     if lo:
         hourly = (hourly[0], hourly[1], hourly[2][lo:]) if hourly else None
         bars = {k: v[lo:] for k, v in prep.panel.bars().items()}
-        return engine.run(bars, entries[lo:], sig.exits[lo:], p, score=None if sig.score is None else sig.score[lo:], stop_dist=None if sig.stop_dist is None else sig.stop_dist[lo:], hourly=hourly)
-    return engine.run(prep.panel.bars(), entries, sig.exits, p, score=sig.score, stop_dist=sig.stop_dist, hourly=hourly)
+        return engine.run(bars, entries[lo:], sig.exits[lo:], p, score=None if sig.score is None else sig.score[lo:], stop_dist=None if sig.stop_dist is None else sig.stop_dist[lo:], hourly=hourly,
+                          size_vol=None if sig.size_vol is None else sig.size_vol[lo:])
+    return engine.run(prep.panel.bars(), entries, sig.exits, p, score=sig.score, stop_dist=sig.stop_dist, hourly=hourly, size_vol=sig.size_vol)
 
 
 def _cagr(eq: np.ndarray, capital: float) -> float | None:

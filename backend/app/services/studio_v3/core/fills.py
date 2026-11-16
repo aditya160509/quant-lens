@@ -60,11 +60,12 @@ def exit_check(d: float, o: float, h: float, low: float, stop: float, target: fl
 
 
 # Sizing modes
-SHARES, CASH, PCT_EQUITY, RISK, EQUAL = 0, 1, 2, 3, 4
+SHARES, CASH, PCT_EQUITY, RISK, EQUAL, VOL = 0, 1, 2, 3, 4, 5
 
 
-def size_shares(mode: int, value: float, equity: float, price: float, stop_distance: float, slots: float) -> float:
-    """Shares to order, decided at the signal bar's close. Risk sizing needs a stop; without one it orders nothing."""
+def size_shares(mode: int, value: float, equity: float, price: float, stop_distance: float, slots: float, vol: float = math.nan) -> float:
+    """Shares to order, decided at the signal bar's close. Risk sizing needs a stop; without one it orders nothing.
+    VOL: each slot's share of equity scaled so the position's annual volatility is `value` (vol = annualised stdev of daily returns)."""
     if price <= 0 or equity <= 0:
         return 0.0
     if mode == SHARES:
@@ -75,4 +76,6 @@ def size_shares(mode: int, value: float, equity: float, price: float, stop_dista
         return equity * value / price
     if mode == RISK:
         return equity * value / stop_distance if stop_distance > 0 else 0.0
+    if mode == VOL:
+        return equity / slots * min(value / vol, 1.0) / price if vol > 0 else 0.0
     return equity / slots / price

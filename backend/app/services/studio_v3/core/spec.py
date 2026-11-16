@@ -35,7 +35,7 @@ class Exits(_Model):
 
 
 class Sizing(_Model):
-    mode: Literal["shares", "cash", "pct_equity", "risk", "equal"] = "equal"
+    mode: Literal["shares", "cash", "pct_equity", "risk", "equal", "vol_target"] = "equal"
     value: float = Field(0.0, ge=0)
     max_positions: int = Field(10, ge=0)
 
@@ -113,7 +113,7 @@ class Settings(_Model):
         return hashlib.sha256(json.dumps(self.model_dump(), sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]
 
 
-_SIZE = {"shares": fills.SHARES, "cash": fills.CASH, "pct_equity": fills.PCT_EQUITY, "risk": fills.RISK, "equal": fills.EQUAL}
+_SIZE = {"shares": fills.SHARES, "cash": fills.CASH, "pct_equity": fills.PCT_EQUITY, "risk": fills.RISK, "equal": fills.EQUAL, "vol_target": fills.VOL}
 
 
 def engine_params(spec: Strategy, settings: Settings, cost_multiple: float = 1.0) -> Params:

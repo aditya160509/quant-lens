@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { RunContext } from "@/modules/research/FeatureView";
 import { isNum, pct } from "@/modules/research/format";
 import type { FeatureRun } from "@/modules/research/ResearchApp";
 import type { FeatureSpec, InputSpec, Row } from "@/modules/research/types";
-import { useHome, type Freshness, type Ledger } from "./api";
+import { studio, useHome, type Freshness, type Ledger } from "./api";
 import { metaOf, type LimitRow } from "./types";
 import "./studio.css";
 
@@ -25,7 +25,20 @@ export function FreshnessPill({ f }: { f: Freshness }) {
 export function TrialChip({ ledger, strategyId }: { ledger: Ledger; strategyId?: string | null }) {
   const by = Object.entries(ledger.by_actor).map(([k, v]) => `${k.replace("_", " ")} ${v}`).join(", ");
   const text = `${ledger.raw.toLocaleString()} raw / ${ledger.effective.toLocaleString(undefined, { maximumFractionDigits: 1 })} effective trials`;
-  return strategyId ? <Link className="chip" href={`/studio/library/agents?strategy=${strategyId}`} title={by || undefined} data-testid="trials">{text}</Link> : <span className="chip" title="Save the strategy to keep its trial count" data-testid="trials">{text}</span>;
+  const [rows, setRows] = useState<{ run_hash: string; actor: string; kind: string; sharpe: number | null; at: number }[] | null>(null);
+  if (!strategyId) return <span className="chip" data-testid="trials">{text}</span>;
+  return (
+    <details className="st-pop" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && !rows) void studio<{ trials: NonNullable<typeof rows> }>("GET", `/strategies/${strategyId}/ledger`).then((d) => setRows(d.trials), () => setRows([])); }}>
+      <summary className="chip" data-testid="trials">{text}</summary>
+      <div className="st-pop-b" style={{ maxHeight: 360, overflow: "auto" }}>
+        {by ? <div className="st-row"><span>{by}</span></div> : null}
+        {(rows ?? []).slice().reverse().map((t) => (
+          <div key={t.run_hash} className="st-row"><span>{new Date(t.at * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span><span>{t.kind}</span><span>{t.actor}</span><b className="num">{isNum(t.sharpe) ? t.sharpe.toFixed(2) : "—"}</b></div>
+        ))}
+        {rows === null ? <div className="st-row"><span>Loading…</span></div> : null}
+      </div>
+    </details>
+  );
 }
 
 /** Above every result, before the hero: My limits with the closest call, the cost ladder, and the pills every run carries. */

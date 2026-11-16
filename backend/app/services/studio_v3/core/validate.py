@@ -49,7 +49,7 @@ def _shift(sig: C.Signals, k: int) -> C.Signals:
         out = np.zeros_like(a)
         out[k:] = a[:-k]
         return out
-    return C.Signals(sh(sig.entries), sh(sig.exits), sig.score, sig.stop_dist)
+    return C.Signals(sh(sig.entries), sh(sig.exits), sig.score, sig.stop_dist, sig.size_vol)
 
 
 def _cells(spec: Strategy, n: int) -> list[dict[str, float]]:
