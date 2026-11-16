@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
-import { CandlestickChart, FlaskConical, PencilRuler, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Blend, CandlestickChart, FlaskConical, PencilRuler, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { STUDIO_BASE } from "./base";
-import { StudioContext, StrategyPicker } from "./RunHeader";
+import { StudioContext, StrategiesPicker, StrategyPicker } from "./RunHeader";
 import { isNum, pct } from "@/modules/research/format";
 import type { HeroSpec } from "@/modules/research/Hero";
 import { group, registerAlternates, registerViews } from "@/modules/research/outputs/registry";
@@ -14,11 +14,13 @@ const CATALOG: Record<string, FeatureMeta> = {
   st01: { name: "Backtest", slug: "backtest", icon: FlaskConical, question: "" },
   st02: { name: "Optimise", slug: "optimise", icon: SlidersHorizontal, question: "" },
   st03: { name: "Validate", slug: "validate", icon: ShieldCheck, question: "" },
+  st04: { name: "Portfolio", slug: "portfolio", icon: Blend, question: "" },
 };
 
 const PAGES: Page[] = [
   { id: "build", label: "Build", icon: PencilRuler, question: "", features: [], slug: "build" },
   { id: "test", label: "Test", icon: FlaskConical, question: "", features: ["st01", "st02", "st03"] },
+  { id: "portfolio", label: "Portfolio", icon: Blend, question: "", features: ["st04"] },
   { id: "chart", label: "Chart", icon: CandlestickChart, question: "", features: [], slug: "chart" },
 ];
 
@@ -57,6 +59,17 @@ function validateHero(r: FeatureResult): HeroSpec | null {
   const g = (r.meta as { grade?: { grade: string; reason: string; cap: string | null } }).grade;
   if (!g) return null;
   return { figure: g.grade, tone: g.grade <= "B" ? "up" : g.grade === "C" ? "warn" : "down", versus: g.cap ? `capped at ${g.cap}` : undefined, line: g.reason };
+}
+
+/** Portfolio hero: the combined line against each member. */
+function portfolioHero(r: FeatureResult): HeroSpec | null {
+  const m = r.meta as { headline?: string; names?: string[]; total_return?: number };
+  const rows = (r.charts.combined ?? []) as Record<string, number>[];
+  if (rows.length < 2 || !m.names) return null;
+  const step = Math.max(1, Math.floor(rows.length / 320));
+  const thin = (k: string) => rows.filter((_, i) => i % step === 0 || i === rows.length - 1).map((x) => x[k]);
+  return { figure: sign(m.total_return ?? 0), tone: (m.total_return ?? 0) >= 0 ? "up" : "down", line: m.headline,
+    lines: [{ label: "Combined", values: thin("combined"), color: "var(--accent)" }, ...m.names.map((n, i) => ({ label: n, values: thin(n), color: `var(--c${(i % 6) + 2})` }))] };
 }
 
 /** Optimise hero: the plateau's score, not the best cell's. */
@@ -166,6 +179,22 @@ export const STUDIO_LAB: LabConfig = {
         { id: "certificate", label: "Certificate", items: [{ keys: ["tiles"], span: 12, view: "stCertificate", title: "Certificate" }] },
       ],
     },
+    st04: {
+      hero: portfolioHero,
+      sections: [
+        { id: "together", label: "Together", items: [
+          { keys: ["combined"], span: 12, view: "lineChart", title: "Combined vs each" },
+          { keys: ["methods"], span: 6, view: "dataTable", title: "Allocation methods" },
+          { keys: ["weights"], span: 6, view: "dataTable", title: "Weights" },
+        ] },
+        { id: "relations", label: "Correlation", items: [
+          { keys: ["correlation"], span: 7, view: "dataTable", title: "Correlation" },
+          { keys: ["overlap"], span: 5, view: "dataTable", title: "Overlap" },
+          { keys: ["marginal"], span: 6, view: "dataTable", title: "Marginal contribution" },
+          { keys: ["members"], span: 6, view: "dataTable", title: "Members" },
+        ] },
+      ],
+    },
     st02: {
       hero: optimiseHero,
       sections: [
@@ -190,9 +219,9 @@ export const STUDIO_LAB: LabConfig = {
   },
   signal: false,
   contextBar: StudioContext,
-  widgets: { strategy_id: StrategyPicker },
+  widgets: { strategy_id: StrategyPicker, strategy_ids: StrategiesPicker, switch_off: StrategyPicker },
   takeaway: (_feature, key, view, result) => lead(view ?? key, result),
-  runLabel: (f) => (f === "st02" ? "Run sweep" : f === "st03" ? "Run validation" : "Run backtest"),
+  runLabel: (f) => ({ st02: "Run sweep", st03: "Run validation", st04: "Combine" } as Record<string, string>)[f] ?? "Run backtest",
   defaultUniverse: "Top names by liquidity",
   specials: { build: BuildPage, chart: ChartPage },
   overview: { home: HomePage, intro: "", stages: [] },

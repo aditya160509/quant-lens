@@ -38,6 +38,7 @@ export function StudioContext({ feature, run }: { feature: FeatureSpec; run: Fea
   return (
     <>
       <RunContext feature={feature} run={run} />
+      {feature.id === "st04" ? <MemberChips run={run} /> : null}
       {m && r ? (
         <div className="st-strip" data-testid="studio-strip">
           {m.my_limits?.of ? (
@@ -57,7 +58,7 @@ export function StudioContext({ feature, run }: { feature: FeatureSpec; run: Fea
             <div className="st-pop-b wide">{printed.map((x) => <div key={String(x.limit)} className="st-limit"><b>{String(x.limit)}</b><span>{String(x.detail)}</span></div>)}</div>
           </details> : null}
           {m.freshness ? <FreshnessPill f={m.freshness} /> : null}
-          {m.ledger ? <TrialChip ledger={m.ledger} strategyId={m.strategy?.id} /> : null}
+          {m.ledger && feature.id !== "st04" ? <TrialChip ledger={m.ledger} strategyId={m.strategy?.id} /> : null}
           <Link className="chip" href="/studio/validate" data-testid="verdict-chip">{m.verdict_chip ?? "not validated"}</Link>
         </div>
       ) : null}
@@ -82,5 +83,46 @@ export function StrategyPicker({ value, onChange }: { field: InputSpec; value: u
       <option value="">{home.isLoading ? "Loading…" : list.length ? "Pick a strategy" : "No saved strategy yet"}</option>
       {list.map((s) => <option key={s.id} value={s.id}>{s.name} · v{s.version}</option>)}
     </select>
+  );
+}
+
+/** Several strategies for Portfolio: ticked boxes, stored as space-separated ids (up to 8). */
+export function StrategiesPicker({ value, onChange }: { field: InputSpec; value: unknown; onChange: (v: unknown) => void }) {
+  const home = useHome();
+  const list = home.data?.strategies ?? [];
+  const picked = new Set(typeof value === "string" ? value.split(/[\s,]+/).filter(Boolean) : []);
+  const toggle = (id: string) => {
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id); else if (next.size < 8) next.add(id);
+    onChange([...next].join(" "));
+  };
+  return (
+    <div style={{ display: "grid", gap: 4 }}>
+      {list.map((s) => (
+        <label key={s.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5 }}>
+          <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(s.id)} />{s.name} · v{s.version}
+        </label>
+      ))}
+      {!list.length ? <span className="bd-meta">{home.isLoading ? "Loading…" : "No saved strategy yet"}</span> : null}
+    </div>
+  );
+}
+
+/** Portfolio's members, picked in the strip (the inspector starts closed). */
+function MemberChips({ run }: { run: FeatureRun }) {
+  const home = useHome();
+  const raw = run.form.strategy_ids;
+  const picked = new Set(typeof raw === "string" ? raw.split(/[\s,]+/).filter(Boolean) : []);
+  const toggle = (id: string) => run.setForm((cur) => {
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id); else if (next.size < 8) next.add(id);
+    return { ...cur, strategy_ids: [...next].join(" ") };
+  });
+  return (
+    <div className="st-strip">
+      {(home.data?.strategies ?? []).map((s) => (
+        <button key={s.id} type="button" className={`chip${picked.has(s.id) ? " up" : ""}`} aria-pressed={picked.has(s.id)} onClick={() => toggle(s.id)}>{picked.has(s.id) ? "✓ " : ""}{s.name} v{s.version}</button>
+      ))}
+    </div>
   );
 }

@@ -38,7 +38,7 @@ Frontend
 - [ ] Python in Docker sandbox (no network, read-only, non-root, caps, `ast` screen); formula → Python one way. Blocked: Docker daemon not running on this machine; Python strategies are refused with that reason until then
 - [x] Plain English → formula by fixed phrase rules (MAs, crosses, RSI, highs and lows, ROC, weekly trend, volume, stops, targets, time stops); ignored words listed; review then "Use this rule"
 - [x] Higher-timeframe rules aligned to the last closed bar: `weekly(x)` (B-3, tested)
-- [ ] Allocate blocks (if/else on regime, rotate, weight): built with Portfolio meta rules in phase 5 (same engine, P-2)
+- [x] Allocate blocks: the Portfolio switch rule (if the benchmark rule holds, strategy A, else B or cash), next-bar (P-2). Not done: rotate and weight blocks inside Build
 - [x] Preview chart: any symbol, last 2 development years, entries and exits marked, refreshes 300 ms after typing (server 0.37 s); lint rows shown per rule (B-5)
 - [x] Repaint check: signals recomputed on 50 history cuts of the preview name must equal full-history signals; shown under the preview
 - [x] Autosave draft every 2 s, undo/redo (⌘Z / ⇧⌘Z), immutable versions with picker, field-by-field diff against any version (B-6)
@@ -69,7 +69,7 @@ Frontend
 - [ ] `/trade` redirects to `/studio/chart` (X-7): not done on purpose; `/trade` is a multi-tab trading page, not only a chart, so redirecting would remove features. Owner decision. C-2, C-3 not yet measured
 
 ## Phase 5: Portfolio and Live
-- [ ] Portfolio: combine up to 8, allocation methods, correlation, marginal contribution, overlap, meta rules (P-1..P-4)
+- [x] Portfolio: combine up to 8 saved strategies (picked in the strip), equal / inverse-vol / min-variance (weights in-sample, labelled), correlation, marginal contribution, overlap, meta switch rule on the benchmark acted next bar (P-1, P-2 tested). Not done: P-3 send combined to Validate
 - [ ] Live > Today: signals, near triggers, map, orders sheet; blocked when data is red
 - [ ] Live > Forward: freeze (`F`), daily step from parquet, Monte Carlo band, drift, decay clock (L-1..L-3, L-6)
 - [ ] Live > Ledger, Health (cost leak, signal health, drawdown odds, shadow book)
