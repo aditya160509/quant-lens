@@ -126,9 +126,9 @@ No new router. Studio registers as a lab on the same pattern as Screener:
 
 ### 5.3 Data (what we hold, said plainly; measured 2026-11-15)
 
-- Daily OHLCV: `market_universe.parquet`, 4,158 tickers, 1996-03-18 to 2026-07-06; most tickers end 2026-01-28 to 2026-02-01; 3,039 start only in 2015. Adjustment is mixed (old segments raw, newer dividend-adjusted), so phase 0 rebuilds it from Yahoo with one adjustment.
-- Hourly: `market_universe_hourly.parquet`, 23 tickers, 2023-02-27 to 2026-04-03; phase 0 extends to Yahoo's 730-day limit for every ticker. Until then the bar magnifier and Fill check apply to those 23 only.
-- No daily update job yet: phase 0 adds one; Live is blocked when data is more than 10 days old.
+- Daily OHLCV: `market_universe.parquet`, 4,158 tickers, 1996-03-18 to 2026-07-06; most tickers end 2026-01-28 to 2026-02-01; 3,039 start only in 2015. Adjustment is mixed (old segments raw, newer dividend-adjusted), so the later data track rebuilds it from Yahoo with one adjustment.
+- Hourly: `market_universe_hourly.parquet`, 23 tickers, 2023-02-27 to 2026-04-03; the data track extends to Yahoo's 730-day limit for every ticker. Until then the bar magnifier and Fill check apply to those 23 only.
+- No daily update job yet: the data track adds one; Live is blocked when data is more than 10 days old.
 - Fundamentals: from 2021, 90-day filing lag (Screener rule).
 - No tick data, order book or options history.
 - Survivorship: delisted names kept as the parquet holds them; share printed in the limits popover.
@@ -145,7 +145,7 @@ No new router. Studio registers as a lab on the same pattern as Screener:
 
 ## 7. Phases
 
-The build order, phase by phase, is [CHECKLIST.md](CHECKLIST.md); pages and acceptance tests are [PAGES.md](PAGES.md). Summary: 0 data and engine, 1 Backtest end to end, 2 Build, 3 Optimise and Validate, 4 Chart, 5 Portfolio and Live, 6 Library, 7 cross-page finish, 8 phone.
+The build order, phase by phase, is [CHECKLIST.md](CHECKLIST.md); pages and acceptance tests are [PAGES.md](PAGES.md). Summary: 0 engine, 1 Backtest end to end, 2 Build, 3 Optimise and Validate, 4 Chart, 5 Portfolio and Live, 6 Library, 7 cross-page finish, 8 phone; the data refresh is a separate track that blocks nothing.
 
 ## 8. Removed
 
