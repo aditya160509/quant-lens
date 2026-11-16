@@ -56,8 +56,8 @@ Frontend
 - [x] Validate > Hold-out: sealed by default, opened only on request, every look logged by actor, agents capped at 3 (V-4, V-5 tested)
 - [x] Validate > Verdict: server-side grade with one reason, cap at C on few trades, next test, what would change it (no tuning advice), editable weights recompute in the page (V-1, V-7, V-8 tested). Not done: power card (V-6), V-2 API test
 - [x] Validate > Certificate: server re-runs the stored payload and compares result hashes (V-3 tested); PDF and share link from the shared run header
-- [ ] Alerts and daily digest engine (email, push, Telegram, webhook) with quota and failure status
-- [ ] Agent API adds `optimise`, `validate`, `get_verdict`, `open_holdout`
+- [ ] Alerts and daily digest engine (email, push, Telegram, webhook) with quota and failure status: built with Live in phase 5 (alerts fire on Live's daily signals; reuses Screener's Apprise notifier)
+- [x] Agent API adds `optimise`, `validate`, `get_verdict`, `open_holdout` (MCP; agents cannot open the hold-out through validate; budget tested)
 - [ ] V-9 tile flip, V-10 quick profile < 10 s
 
 ## Phase 4: Chart

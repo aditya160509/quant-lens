@@ -386,12 +386,42 @@ def _tool_ledger(args: dict, actor: str) -> dict:
     return store.ledger(args["strategy_id"])
 
 
+def _tool_optimise(args: dict, actor: str) -> dict:
+    payload = args.get("payload", args)
+    result = _finish(None, "st02", payload, run_feature("st02", payload), actor)
+    m = result["meta"]
+    return {"headline": m["headline"], "plateau": m["plateau"], "top_sets": result["tables"]["top_sets"], "importance": result["tables"]["importance"], "ledger": m["ledger"],
+            "note": "every cell was counted as a trial; pick the plateau centre, not the best cell"}
+
+
+def _tool_validate(args: dict, actor: str) -> dict:
+    payload = {k: v for k, v in args.get("payload", args).items() if k != "show_holdout"}  # agents open the hold-out only through open_holdout
+    result = _finish(None, "st03", {**payload, "_actor": actor}, run_feature("st03", {**payload, "_actor": actor}), actor)
+    m = result["meta"]
+    return {"grade": m["grade"], "tiles": m["tiles"], "luck": m["luck"], "next_test": m["next_test"], "what_would_change": m["what_would_change"], "ledger": m["ledger"],
+            "run_hash": m["run_hash"], "result_hash": m["result_hash"]}
+
+
+def _tool_open_holdout(args: dict, actor: str) -> dict:
+    payload = {**args.get("payload", args), "show_holdout": True, "_actor": actor}
+    m = run_feature("st03", payload)["meta"]
+    return {"holdout": m["holdout"], "grade": m["grade"]["grade"], "looks_left_for_agents": validate.HOLDOUT_AGENT_BUDGET - sum(1 for x in m["holdout"]["looks"] if x["actor"].startswith("agent"))}
+
+
 TOOLS: dict[str, tuple[str, dict, Any]] = {
     "list_templates": ("Twenty starter strategies as full specs.", {}, lambda a, actor: {"templates": templates.list_templates()}),
     "compile": ("Compile a strategy spec: findings with line, token and message; look-ahead is refused.", {"spec": {"type": "object"}}, _tool_compile),
     "backtest": ("Backtest a saved strategy or a spec on the development period. Returns metrics, limits and the trial ledger; every call counts as a trial.",
                  {"payload": {"type": "object", "description": "strategy_id or spec, plus run settings (symbols, top_n, start, end, costs)"}}, lambda a, actor: _agent_backtest(a.get("payload", a), actor)),
     "get_ledger": ("Raw and effective trial counts for a strategy, by actor.", {"strategy_id": {"type": "string"}}, _tool_ledger),
+    "optimise": ("Sweep a saved strategy's parameter ranges (grid, random or optuna). Returns the plateau, not just the best cell; every cell counts as a trial.",
+                 {"payload": {"type": "object", "description": "strategy_id, method, objective, max_cells, plus run settings"}}, _tool_optimise),
+    "validate": ("Run the validation suite (walk-forward, robustness, luck, overfitting) and return the server-side grade with its reason.",
+                 {"payload": {"type": "object", "description": "strategy_id, profile (quick|full), plus run settings"}}, _tool_validate),
+    "get_verdict": ("Same as validate; returns only the grade, reason and what would change it.", {"payload": {"type": "object"}},
+                    lambda a, actor: {k: v for k, v in _tool_validate(a, actor).items() if k in ("grade", "next_test", "what_would_change")}),
+    "open_holdout": ("Open the sealed hold-out for a saved strategy. Logged; agents have 3 looks per strategy, then a human must open it.",
+                     {"payload": {"type": "object", "description": "strategy_id plus run settings"}}, _tool_open_holdout),
     "get_data_audit": ("What data is held: range, tickers, hourly coverage, adjustment, freshness.", {}, lambda a, actor: {"freshness": limits.freshness(), **limits.audit()}),
 }
 
@@ -417,7 +447,7 @@ async def mcp(request: Request, x_studio_actor: str | None = Header(None)) -> di
             return {"jsonrpc": "2.0", "id": rid, "error": {"code": -32602, "message": f"Unknown tool {name}"}}
         try:
             out = await asyncio.to_thread(TOOLS[name][2], args, actor)
-            if name != "backtest":
+            if name not in ("backtest", "optimise", "validate", "get_verdict", "open_holdout"):
                 store.log(actor, name, args.get("strategy_id"))
             return ok({"content": [{"type": "text", "text": json.dumps(out, default=str)}], "structuredContent": out, "isError": False})
         except backtest.Refusal as exc:

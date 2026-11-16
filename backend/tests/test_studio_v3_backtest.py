@@ -324,3 +324,18 @@ def test_repaint_check_passes_a_causal_rule():
     from app.services.studio_v3.core.spec import Strategy
     out = B.preview(Strategy(entry_long="crosses_above(sma(close, 10), sma(close, 30))", exit_long="close < sma(close, 30)"), "SPY")
     assert out["repaint"]["cuts"] >= 40 and out["repaint"]["changed"] == 0
+
+
+def test_agent_validate_and_holdout_budget(studio):  # V-5 through MCP
+    sid = studio.post("/api/studio-v3/strategies", json={"spec": SMA}).json()["id"]
+
+    def call(name, **payload):
+        return studio.post("/api/studio-v3/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": {"payload": {"strategy_id": sid, **SETTINGS, **payload}}}}).json()["result"]
+
+    v = call("validate", show_holdout=True)
+    assert not v["isError"] and v["structuredContent"]["grade"]["grade"] in "ABCDF"
+    assert studio.get(f"/api/studio-v3/strategies/{sid}/holdout").json()["looks"] == []  # show_holdout is ignored for agents on validate
+    for left in (2, 1, 0):
+        assert call("open_holdout")["structuredContent"]["looks_left_for_agents"] == left
+    refused = call("open_holdout")
+    assert refused["isError"] and "budget" in refused["structuredContent"]["reason"]
