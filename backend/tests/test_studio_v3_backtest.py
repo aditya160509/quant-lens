@@ -317,3 +317,10 @@ def test_plain_english_rules(text, fields, exits, unmatched):
     assert C.compile_spec(Strategy(**out["fields"], exits=out["exits"]))["ok"]
     with pytest.raises(ValueError):
         plain.to_spec("make me rich")
+
+
+def test_repaint_check_passes_a_causal_rule():
+    from app.services.studio_v3.core import backtest as B
+    from app.services.studio_v3.core.spec import Strategy
+    out = B.preview(Strategy(entry_long="crosses_above(sma(close, 10), sma(close, 30))", exit_long="close < sma(close, 30)"), "SPY")
+    assert out["repaint"]["cuts"] >= 40 and out["repaint"]["changed"] == 0
