@@ -280,7 +280,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
 
 const CTX: { id: string; label: string; match: (f: InputSpec) => boolean }[] = [
   { id: "period", label: "Period", match: (f) => /lookback|start_date|end_date|period|horizon|window|years/i.test(f.key) },
-  { id: "universe", label: "Universe", match: (f) => f.type === "ticker_list" || /^(universe|max_symbols|signal)$/.test(f.key) },
+  { id: "universe", label: "Universe", match: (f) => /^(universe|max_symbols|signal)$/.test(f.key) },
   { id: "costs", label: "Costs", match: (f) => /cost|fee|slippage|bps|turnover/i.test(f.key) },
 ];
 

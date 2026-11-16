@@ -8,22 +8,24 @@ import { useUniverse } from "./api";
 import { UniversePicks } from "@/modules/screener/filters/UniversePicks";
 import { SymbolPick } from "@/modules/screener/search/SymbolPick";
 
-type Mode = "all" | "sectors" | "custom";
+type Mode = "all" | "global" | "sectors" | "custom";
 
-const NAMED = new Set(["us_equities", ""]);
+const NAMED = new Set(["us_equities", "all", ""]);
 
 /**
  * Builds the stock universe: the whole US equity file, whole sectors, or a hand-picked list
- * (search, paste from anywhere, remove). Writes either "us_equities" or a comma-separated list.
+ * (search, paste from anywhere, remove). Writes "us_equities", "all" (every market held) or a comma-separated list.
+ * `listOnly`: a list of specific tickers (e.g. the treated names in a causal study), never a whole market.
  */
-export function UniverseBuilder({ value, onChange, maxSymbols, onMaxSymbols }: {
+export function UniverseBuilder({ value, onChange, maxSymbols, onMaxSymbols, listOnly = false }: {
   value: string;
   onChange: (v: string) => void;
   maxSymbols?: number;
   onMaxSymbols?: (n: number) => void;
+  listOnly?: boolean;
 }) {
   const tokens = useMemo(() => value.split(",").map((s) => s.trim()).filter(Boolean), [value]);
-  const initial: Mode = tokens.length === 0 || (tokens.length === 1 && NAMED.has(tokens[0])) ? "all" : "custom";
+  const initial: Mode = listOnly ? "custom" : tokens.length === 1 && tokens[0] === "all" ? "global" : tokens.length === 0 || (tokens.length === 1 && NAMED.has(tokens[0])) ? "all" : "custom";
   const [mode, setMode] = useState<Mode>(initial);
   const [sectors, setSectors] = useState<string[]>([]);
   const [paste, setPaste] = useState(false);
@@ -47,22 +49,23 @@ export function UniverseBuilder({ value, onChange, maxSymbols, onMaxSymbols }: {
     onChange(merged.join(","));
   };
   const unknown = custom.filter((t) => all.length && !known.has(t));
-  const count = mode === "all" ? Math.min(maxSymbols ?? all.length, all.length || maxSymbols || 0) : custom.length;
+  const count = mode === "all" || mode === "global" ? Math.min(maxSymbols ?? all.length, all.length || maxSymbols || 0) : custom.length;
 
   // A lab with a fixed default (ML) sends an empty list for it; Research sends the whole US market.
   const preset = lab().defaultUniverse;
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      <Segmented<Mode> label="Universe source" value={mode} onChange={(m) => {
+      {listOnly ? null : <Segmented<Mode> label="Universe source" value={mode} onChange={(m) => {
         setMode(m);
         if (m === "all") onChange(preset ? "" : "us_equities");
+        if (m === "global") onChange("all");
         if (m === "sectors") setSectorList(sectors);
-      }} options={[{ value: "all", label: preset ? "Default" : "All US" }, { value: "sectors", label: "Sectors" }, { value: "custom", label: "Custom" }]} />
+      }} options={[{ value: "all", label: preset ? "Default" : "All US" }, ...(preset ? [] : [{ value: "global" as Mode, label: "All markets" }]), { value: "sectors", label: "Sectors" }, { value: "custom", label: "Custom" }]} />}
 
       {mode === "all" && preset ? <div className="hint">{preset}, all on one exchange calendar, so every held position has a return every day.</div> : null}
-      {mode === "all" && !preset ? (
+      {(mode === "all" || mode === "global") && !preset ? (
         <div style={{ display: "grid", gap: 6 }}>
-          <div className="hint">US common stocks, ranked by how much price history the data has. The study uses the top names.</div>
+          <div className="hint">{mode === "global" ? "Every instrument held, all markets, ranked by how much price history the data has." : "US common stocks, ranked by how much price history the data has."} The study uses the top names.</div>
           {onMaxSymbols && maxSymbols !== undefined ? (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 64px", gap: 10, alignItems: "center" }}>
               <input className="range" type="range" min={30} max={Math.max(2000, all.length ? Math.min(2000, all.length) : 2000)} step={10} value={maxSymbols}
@@ -104,20 +107,20 @@ export function UniverseBuilder({ value, onChange, maxSymbols, onMaxSymbols }: {
               {custom.map((t) => (
                 <span key={t} className="token" style={unknown.includes(t) ? { boxShadow: "inset 0 0 0 1px var(--down)", color: "var(--down)" } : undefined} title={known.get(t)?.sector ?? (unknown.includes(t) ? "Not in the data" : "")}>
                   {t}
-                  <button type="button" aria-label={`Remove ${t}`} onClick={() => onChange(custom.filter((x) => x !== t).join(",") || "us_equities")}><X size={10} /></button>
+                  <button type="button" aria-label={`Remove ${t}`} onClick={() => onChange(custom.filter((x) => x !== t).join(",") || (listOnly ? "" : "us_equities"))}><X size={10} /></button>
                 </span>
               ))}
             </div>
-          ) : <div className="hint">Add at least 30 stocks for cross-sectional tests.</div>}
+          ) : <div className="hint">{listOnly ? "Add the tickers." : "Add at least 30 stocks for cross-sectional tests."}</div>}
           {unknown.length ? <div className="err">{unknown.length} ticker{unknown.length > 1 ? "s are" : " is"} not in the data and will be rejected: {unknown.slice(0, 6).join(", ")}</div> : null}
         </div>
       ) : null}
 
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "var(--text-3)" }}>
-        <span>{mode === "custom" ? "Custom list" : mode === "sectors" ? `${sectors.length} sector${sectors.length === 1 ? "" : "s"}` : preset ? "Default" : "Whole market"}</span>
+        <span>{mode === "custom" ? "Custom list" : mode === "global" ? "All markets" : mode === "sectors" ? `${sectors.length} sector${sectors.length === 1 ? "" : "s"}` : preset ? "Default" : "Whole market"}</span>
         <span className="num">{mode === "all" && preset ? preset : `${count.toLocaleString()} stocks`}{mode === "sectors" && maxSymbols ? `, capped at ${maxSymbols}` : ""}</span>
       </div>
-      {mode !== "all" && custom.length ? <button type="button" className="btn sm ghost" style={{ justifySelf: "start" }} onClick={() => { onChange(preset ? "" : "us_equities"); setSectors([]); setMode("all"); }}>{preset ? "Reset to the default" : "Reset to all US equities"}</button> : null}
+      {!listOnly && mode !== "all" && custom.length ? <button type="button" className="btn sm ghost" style={{ justifySelf: "start" }} onClick={() => { onChange(preset ? "" : "us_equities"); setSectors([]); setMode("all"); }}>{preset ? "Reset to the default" : "Reset to all US equities"}</button> : null}
     </div>
   );
 }

@@ -157,7 +157,7 @@ export function StudyForm({ feature, form, setForm, errors: submittedErrors }: {
                         sweep={sweeps[f.key]} onSweep={(list) => setSweep(feature.id, f.key, list)}>
                         {f.type === "ticker_list" ? (
                           <UniverseBuilder value={Array.isArray(form[f.key]) ? (form[f.key] as string[]).join(",") : String(form[f.key] ?? "").toLowerCase() === "master" ? "" : String(form[f.key] ?? "")} onChange={set(f.key)}
-                            maxSymbols={maxField ? Number(form.max_symbols ?? maxField.default ?? 400) : undefined} onMaxSymbols={maxField ? set("max_symbols") : undefined} />
+                            maxSymbols={maxField ? Number(form.max_symbols ?? maxField.default ?? 400) : undefined} onMaxSymbols={maxField ? set("max_symbols") : undefined} listOnly={f.key !== "universe"} />
                         ) : null}
                         {lab().widgets?.[f.key] ? createElement(lab().widgets![f.key], { field: f, value: form[f.key], onChange: set(f.key) }) : null}
                         {f.type === "ticker_list" && f.key === "universe" ? (
