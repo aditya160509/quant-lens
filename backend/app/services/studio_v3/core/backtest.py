@@ -300,11 +300,11 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     result_hash = hashlib.sha256(r.trades.tobytes() + r.equity.tobytes()).hexdigest()[:16]
     run_hash = hashlib.sha256(f"{spec.hash()}:{settings.hash()}:{data.data_version()}".encode()).hexdigest()[:16]
     few = len(r.trades) < FEW_TRADES
-    cards = [("Sharpe", ret.get("sharpe")), ("CAGR", ret.get("cagr")), ("Max drawdown", ret.get("max_drawdown")), ("Trades", len(r.trades)), ("Win rate", tr.get("win_rate")),
-             ("Profit factor", tr.get("profit_factor"))]
+    cards = [("Sharpe", ret.get("sharpe"), None), ("CAGR", ret.get("cagr"), "%"), ("Max drawdown", ret.get("max_drawdown"), "%"), ("Trades", len(r.trades), None),
+             ("Win rate", tr.get("win_rate"), "%"), ("Profit factor", tr.get("profit_factor"), "×")]
     out = {
         "feature_id": "st01", "status": "ok",
-        "summary_cards": [{"label": k, "value": v} for k, v in cards],
+        "summary_cards": [{"label": k, "value": v, **({"unit": u} if u else {})} for k, v, u in cards],
         "charts": {"equity_curve": curve, "cost_ladder": ladder, "start_dates": sd, "exposure": exposure, "rolling": _rolling(r.equity, bench_eq, dates)},
         "tables": {"trades": trades, "carried_by": carried, "crises": crises, "drawdowns": dd_rows, "per_name": per_name, "my_limits": lim_rows,
                    "limits": limits.run_limits(start=str(dates[0].date()), end=str(dates[-1].date()), requested=prep.requested, held=held, delisted=int(dead.sum()), fill=settings.fill,
