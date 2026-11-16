@@ -245,9 +245,14 @@ def home() -> dict[str, Any]:
 def _finish(job_id: str | None, feature_id: str, payload: dict[str, Any], result: dict[str, Any], actor: str) -> dict[str, Any]:
     """Count the trial, log the actor, attach the ledger: the same for UI jobs and agent calls."""
     trial = result.pop("_trial", None)
+    many = result.pop("_trials", None)
     meta = result["meta"]
     sid = (meta.get("strategy") or {}).get("id")
-    if sid and trial is not None:
+    if sid and many:
+        for t in many:  # every sweep cell is a try (O-3)
+            store.record_trial(sid, t["hash"], actor, "optimise", t["sharpe"], t["returns"])
+        meta["ledger"] = store.ledger(sid, detail=False)
+    elif sid and trial is not None:
         store.record_trial(sid, meta["run_hash"], actor, payload.get("trial_kind") or "backtest", trial["sharpe"], trial["returns"])
         meta["ledger"] = store.ledger(sid, detail=False)
     else:
@@ -264,7 +269,11 @@ def _finish(job_id: str | None, feature_id: str, payload: dict[str, Any], result
 
 
 def _execute(job_id: str, feature_id: str, payload: dict[str, Any], actor: str) -> dict[str, Any]:
-    result = run_feature(feature_id, payload, lambda name, pct: JOBS.update(job_id, progress={"percent": pct, "message": name}))
+    def progress(name: str, pct: float) -> None:
+        JOBS.update(job_id, progress={"percent": pct, "message": name})
+
+    progress.cancelled = lambda: (JOBS.get(job_id) or {}).get("status") == "cancelled"  # type: ignore[attr-defined]
+    result = run_feature(feature_id, payload, progress)
     result = _finish(job_id, feature_id, payload, result, actor)
     result["meta"]["run"] = {"id": job_id, "feature_id": feature_id, "payload": payload}
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)

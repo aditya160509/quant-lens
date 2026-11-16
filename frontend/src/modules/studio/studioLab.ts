@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { FlaskConical, PencilRuler } from "lucide-react";
+import { FlaskConical, PencilRuler, SlidersHorizontal } from "lucide-react";
 import { STUDIO_BASE } from "./base";
 import { StudioContext, StrategyPicker } from "./RunHeader";
 import { isNum, pct } from "@/modules/research/format";
@@ -12,11 +12,12 @@ import { lead } from "./leads";
 
 const CATALOG: Record<string, FeatureMeta> = {
   st01: { name: "Backtest", slug: "backtest", icon: FlaskConical, question: "" },
+  st02: { name: "Optimise", slug: "optimise", icon: SlidersHorizontal, question: "" },
 };
 
 const PAGES: Page[] = [
   { id: "build", label: "Build", icon: PencilRuler, question: "", features: [], slug: "build" },
-  { id: "test", label: "Test", icon: FlaskConical, question: "", features: ["st01"] },
+  { id: "test", label: "Test", icon: FlaskConical, question: "", features: ["st01", "st02"] },
 ];
 
 type RawFeature = { id: string; name: string; inputs: InputSpec[]; outputs: { key: string; label: string; source: "tables" | "charts"; render: string }[] };
@@ -49,7 +50,18 @@ function backtestHero(r: FeatureResult): HeroSpec | null {
   };
 }
 
+/** Optimise hero: the plateau's score, not the best cell's. */
+function optimiseHero(r: FeatureResult): HeroSpec | null {
+  const m = r.meta as { headline?: string; plateau?: { status: string; centre_score?: number; best_score?: number }; objective_label?: string; cells?: number };
+  if (!m.plateau) return null;
+  const v = m.plateau.status === "plateau" ? m.plateau.centre_score : m.plateau.best_score;
+  return { figure: isNum(v) ? v.toFixed(2) : "—", tone: m.plateau.status === "spike" ? "warn" : null, versus: m.plateau.status === "spike" ? "spike only" : `${m.objective_label} on the plateau`,
+    line: `${m.cells} cells · ${m.headline ?? ""}` };
+}
+
 const BV = group(() => import("./views/BacktestViews") as Promise<Record<string, unknown>>);
+const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string, unknown>>);
+registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto }, ["stParamMap", "stPareto"]);
 const TS = group(() => import("@/modules/screener/test/TearSheet") as Promise<Record<string, unknown>>);
 registerViews({ stEquity: BV.Equity, stStartDates: BV.StartDates, stSurvivorship: BV.Survivorship, stFillCheck: BV.FillCheck, stCarriedBy: BV.CarriedBy, stTradeShape: BV.TradeShape, stTradeReturns: BV.TradeReturns,
   stHoldTime: BV.HoldTime, stCrises: BV.Crises, stCosts: BV.Costs, stCapacity: BV.Capacity, stExposure: BV.Exposure, stDrawdowns: BV.Drawdowns, stStability: BV.Stability, stByRegime: BV.ByRegime, stSeasonality: BV.Seasonality, stPerName: BV.PerName, stContributors: BV.Contributors,
@@ -115,14 +127,33 @@ export const STUDIO_LAB: LabConfig = {
       ],
       drop: ["cost_ladder", "my_limits", "limits", "statistics"],
     },
+    st02: {
+      hero: optimiseHero,
+      sections: [
+        { id: "map", label: "Map", items: [
+          { keys: ["heatmap"], span: 12, view: "stParamMap", title: "Parameter map" },
+          { keys: ["importance"], span: 5, view: "stImportance", title: "What matters" },
+          { keys: ["pareto"], span: 7, view: "stPareto", title: "Trade-offs" },
+        ] },
+        { id: "sets", label: "Top sets", items: [
+          { keys: ["top_sets"], span: 12, view: "dataTable", title: "Top 10 sets" },
+          { keys: ["cells"], span: 12, view: "dataTable", title: "All cells", opts: { max: 100000, maxHeight: 560 } },
+        ] },
+      ],
+    },
   },
   manifest: (raw) => (raw as { features: RawFeature[] }).features.filter((f) => f.id in CATALOG).map(toSpec),
-  submit: (featureId, payload) => ({ path: `/feature/${featureId}/jobs`, body: { payload } }),
+  submit: (featureId, payload) => {
+    // A run with no strategy picked uses the last one used anywhere in Studio (the picker lives in the closed inspector).
+    let sid = payload.strategy_id;
+    if (!sid) { try { sid = localStorage.getItem("studio:strategy"); } catch { /* storage blocked */ } }
+    return { path: `/feature/${featureId}/jobs`, body: { payload: { ...payload, strategy_id: sid || undefined } } };
+  },
   signal: false,
   contextBar: StudioContext,
   widgets: { strategy_id: StrategyPicker },
   takeaway: (_feature, key, view, result) => lead(view ?? key, result),
-  runLabel: () => "Run backtest",
+  runLabel: (f) => (f === "st02" ? "Run sweep" : "Run backtest"),
   defaultUniverse: "Top names by liquidity",
   specials: { build: BuildPage },
   overview: { home: HomePage, intro: "", stages: [] },

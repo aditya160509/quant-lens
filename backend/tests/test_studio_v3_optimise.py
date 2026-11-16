@@ -1,0 +1,40 @@
+"""Optimise acceptance (PAGES O-1..O-3)."""
+
+import time
+
+import numpy as np
+
+from app.services.studio_v3.core import optimise as O
+from app.services.studio_v3.core import store
+from app.services.studio_v3.core.spec import Settings, Strategy
+
+RANGES = {"a": (0.0, 10.0, 1.0), "b": (0.0, 10.0, 1.0)}
+
+
+def _cells(f):
+    return [{"a": float(a), "b": float(b), "score": f(a, b)} for a in range(11) for b in range(11)]
+
+
+def test_spike_is_called_a_spike():  # O-1
+    out = O.plateau(_cells(lambda a, b: 3.0 if (a, b) == (7, 2) else 0.1 * np.sin(a * b)), ["a", "b"], RANGES)
+    assert out["status"] == "spike" and out["best"] == {"a": 7.0, "b": 2.0}
+
+
+def test_plateau_is_called_a_plateau():  # O-1
+    out = O.plateau(_cells(lambda a, b: 1.0 - 0.02 * ((a - 5) ** 2 + (b - 5) ** 2)), ["a", "b"], RANGES)
+    assert out["status"] == "plateau" and 4 <= out["centre"]["a"] <= 6 and 4 <= out["centre"]["b"] <= 6
+
+
+def test_thousand_cells_one_symbol_under_ten_seconds_and_every_cell_is_a_trial(tmp_path, monkeypatch):  # O-2, O-3
+    monkeypatch.setattr(store, "DB_PATH", tmp_path / "studio.sqlite")
+    spec = Strategy(entry_long="crosses_above(sma(close, fast), sma(close, slow))", exit_long="crosses_below(sma(close, fast), sma(close, slow))",
+                    params={"fast": {"value": 20, "min": 5, "max": 100, "step": 1}, "slow": {"value": 100, "min": 50, "max": 300, "step": 1}})
+    t = time.perf_counter()
+    out = O.run_optimise(spec, Settings(symbols=["SPY"]), "grid", "sharpe", 1000)
+    assert time.perf_counter() - t < 10
+    assert out["meta"]["cells"] >= 900 and len(out["_trials"]) == out["meta"]["cells"]
+    sid = store.create(spec)["id"]
+    for tr in out["_trials"][:50]:
+        store.record_trial(sid, tr["hash"], "human", "optimise", tr["sharpe"], tr["returns"])
+    led = store.ledger(sid, detail=False)
+    assert led["raw"] == 50 and led["effective"] < 50  # neighbouring cells are correlated tries

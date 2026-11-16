@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { RunContext } from "@/modules/research/FeatureView";
 import { isNum, pct } from "@/modules/research/format";
 import type { FeatureRun } from "@/modules/research/ResearchApp";
@@ -39,7 +40,7 @@ export function StudioContext({ feature, run }: { feature: FeatureSpec; run: Fea
       <RunContext feature={feature} run={run} />
       {m && r ? (
         <div className="st-strip" data-testid="studio-strip">
-          {m.my_limits.of ? (
+          {m.my_limits?.of ? (
             <details className="st-pop">
               <summary className={`chip ${m.my_limits.passed === m.my_limits.of ? "up" : "down"}`} data-testid="my-limits">Passes {m.my_limits.passed} of {m.my_limits.of}{closestCall(m.my_limits.closest) ? ` · ${closestCall(m.my_limits.closest)}` : ""}</summary>
               <div className="st-pop-b">
@@ -51,13 +52,13 @@ export function StudioContext({ feature, run }: { feature: FeatureSpec; run: Fea
           <span style={{ flex: 1 }} />
           {m.costs_off ? <span className="chip warn" data-testid="costs-off">costs off</span> : null}
           {m.few_trades ? <span className="chip warn" title="Fewer than 30 trades: every statistic here is weak">few trades</span> : null}
-          <details className="st-pop right">
+          {printed.length ? <details className="st-pop right">
             <summary className="chip" data-testid="limits-pill">{printed.length} limits</summary>
             <div className="st-pop-b wide">{printed.map((x) => <div key={String(x.limit)} className="st-limit"><b>{String(x.limit)}</b><span>{String(x.detail)}</span></div>)}</div>
-          </details>
-          <FreshnessPill f={m.freshness} />
-          <TrialChip ledger={m.ledger} strategyId={m.strategy.id} />
-          <Link className="chip" href="/studio/validate" data-testid="verdict-chip">{m.verdict_chip}</Link>
+          </details> : null}
+          {m.freshness ? <FreshnessPill f={m.freshness} /> : null}
+          {m.ledger ? <TrialChip ledger={m.ledger} strategyId={m.strategy?.id} /> : null}
+          <Link className="chip" href="/studio/validate" data-testid="verdict-chip">{m.verdict_chip ?? "not validated"}</Link>
         </div>
       ) : null}
     </>
@@ -68,8 +69,16 @@ export function StudioContext({ feature, run }: { feature: FeatureSpec; run: Fea
 export function StrategyPicker({ value, onChange }: { field: InputSpec; value: unknown; onChange: (v: unknown) => void }) {
   const home = useHome();
   const list = home.data?.strategies ?? [];
+  // An empty picker takes the last strategy used on any Studio page, else the most recently edited one.
+  useEffect(() => {
+    if (typeof value === "string" && value) return;
+    let last: string | null = null;
+    try { last = localStorage.getItem("studio:strategy"); } catch { /* storage blocked */ }
+    const pick = list.find((s) => s.id === last)?.id ?? list[0]?.id;
+    if (pick) onChange(pick);
+  }, [value, list, onChange]);
   return (
-    <select className="input" aria-label="Strategy" value={typeof value === "string" ? value : ""} onChange={(e) => onChange(e.target.value)}>
+    <select className="input" aria-label="Strategy" value={typeof value === "string" ? value : ""} onChange={(e) => { try { localStorage.setItem("studio:strategy", e.target.value); } catch { /* storage blocked */ } onChange(e.target.value); }}>
       <option value="">{home.isLoading ? "Loading…" : list.length ? "Pick a strategy" : "No saved strategy yet"}</option>
       {list.map((s) => <option key={s.id} value={s.id}>{s.name} · v{s.version}</option>)}
     </select>

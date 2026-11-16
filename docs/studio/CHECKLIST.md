@@ -35,21 +35,21 @@ Frontend
 ## Phase 2: Build
 - [x] Formula editor with live compile (0.26 ms measured) and per-role findings (B-4); Screener formula-bar autocomplete not yet wired
 - [x] Blocks editor ⇄ formula both ways (rows of comparisons and crosses joined by and/or; other shapes stay formula; vitest round-trip)
-- [ ] Python in Docker sandbox (no network, read-only, non-root, caps, `ast` screen); formula → Python one way
+- [ ] Python in Docker sandbox (no network, read-only, non-root, caps, `ast` screen); formula → Python one way. Blocked: Docker daemon not running on this machine; Python strategies are refused with that reason until then
 - [x] Plain English → formula by fixed phrase rules (MAs, crosses, RSI, highs and lows, ROC, weekly trend, volume, stops, targets, time stops); ignored words listed; review then "Use this rule"
 - [x] Higher-timeframe rules aligned to the last closed bar: `weekly(x)` (B-3, tested)
-- [ ] Allocate blocks (if/else on regime, rotate, weight)
+- [ ] Allocate blocks (if/else on regime, rotate, weight): built with Portfolio meta rules in phase 5 (same engine, P-2)
 - [x] Preview chart: any symbol, last 2 development years, entries and exits marked, refreshes 300 ms after typing (server 0.37 s); lint rows shown per rule (B-5)
 - [x] Repaint check: signals recomputed on 50 history cuts of the preview name must equal full-history signals; shown under the preview
 - [x] Autosave draft every 2 s, undo/redo (⌘Z / ⇧⌘Z), immutable versions with picker, field-by-field diff against any version (B-6)
 - [x] "What it does" paragraph from the spec, no LLM (B-9)
 - [x] Notes (hypothesis, regime, decisions); My limits saved with the version
-- [ ] Templates (20)
+- [x] Templates (20)
 - [x] Backtest tabs When (regime by benchmark trend × vol, seasonality), Names (contributors, per-name table), Paths (trade Monte Carlo fan, ruin, losing streaks); still to do: conditions (needs Library regimes), timeline, holdings treemap, prop rule check
-- [ ] B-1 same rule as blocks, formula and Python gives identical trades
+- [ ] B-1 same rule as blocks, formula and Python gives identical trades: blocks compile to the formula text itself (vitest round-trip); Python leg waits for the sandbox
 
 ## Phase 3: Optimise, Validate, alerts
-- [ ] Optimise: grid, random, Optuna; heatmap with plateau, 3D lazy and off by default, top sets, Pareto, importance; sweep feeds ledger (O-1..O-5)
+- [x] Optimise: grid, random, Optuna (TPE); parameter map with plateau outlined, spike vs plateau call, send plateau centre to Build as a new version, top sets, all cells, Pareto, importance; every cell a trial (O-1..O-3 tested; 1,000 cells on one symbol < 10 s). Not done: 3D surface, cancel keeps finished cells (O-4) untested, screenshots baseline (O-5)
 - [ ] Validate > Walk-forward: anchored and rolling, purge and embargo, matrix, drift
 - [ ] Validate > Robustness: tiles, vs random, price paths (noise, MCPT, shifted), execution, parameters, others, shocks
 - [ ] Validate > Luck: luck lottery, DSR, PBO, CPCV, track record, haircut

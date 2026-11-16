@@ -43,6 +43,7 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
 
   /** Point the Backtest form at this strategy and go there; `go` runs it at once. */
   const openIn = (id: string, query: string) => {
+    try { localStorage.setItem("studio:strategy", id); } catch { /* storage blocked */ }
     const f = features.find((x) => x.id === "st01");
     if (f) useStudies.getState().setForm("st01", (cur) => ({ ...cur, strategy_id: id }), defaultsFor(f));
     router.push(`/studio/backtest?${query}`);
