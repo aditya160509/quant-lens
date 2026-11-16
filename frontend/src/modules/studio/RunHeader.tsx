@@ -99,14 +99,14 @@ export function StrategyPicker({ value, onChange }: { field: InputSpec; value: u
   );
 }
 
-/** Several strategies for Portfolio: ticked boxes, stored as space-separated ids (up to 8). */
+/** Several strategies for Portfolio: ticked boxes, stored as space-separated ids (up to 12). */
 export function StrategiesPicker({ value, onChange }: { field: InputSpec; value: unknown; onChange: (v: unknown) => void }) {
   const home = useHome();
   const list = home.data?.strategies ?? [];
   const picked = new Set(typeof value === "string" ? value.split(/[\s,]+/).filter(Boolean) : []);
   const toggle = (id: string) => {
     const next = new Set(picked);
-    if (next.has(id)) next.delete(id); else if (next.size < 8) next.add(id);
+    if (next.has(id)) next.delete(id); else if (next.size < 12) next.add(id);
     onChange([...next].join(" "));
   };
   return (
@@ -128,7 +128,7 @@ function MemberChips({ run }: { run: FeatureRun }) {
   const picked = new Set(typeof raw === "string" ? raw.split(/[\s,]+/).filter(Boolean) : []);
   const toggle = (id: string) => run.setForm((cur) => {
     const next = new Set(picked);
-    if (next.has(id)) next.delete(id); else if (next.size < 8) next.add(id);
+    if (next.has(id)) next.delete(id); else if (next.size < 12) next.add(id);
     return { ...cur, strategy_ids: [...next].join(" ") };
   });
   return (

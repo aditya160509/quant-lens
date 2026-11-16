@@ -25,3 +25,20 @@ def test_min_variance_is_long_only_and_sums_to_one():
     r = pd.DataFrame(rng.standard_normal((500, 4)) * [0.01, 0.02, 0.03, 0.01])
     w = P._weights(r, "min_variance")
     assert (w >= 0).all() and abs(w.sum() - 1) < 1e-9
+
+
+def test_risk_parity_hrp_and_rolling_weights():
+    import numpy as np
+    import pandas as pd
+
+    from app.services.studio_v3.core import portfolio as P
+    rng = np.random.default_rng(0)
+    r = pd.DataFrame(rng.standard_normal((600, 4)) * [0.005, 0.01, 0.02, 0.01], columns=list("abcd"), index=pd.bdate_range("2020-01-01", periods=600))
+    w = P._weights(r, "risk_parity")
+    rc = w * (r.cov().to_numpy() @ w)
+    assert abs(w.sum() - 1) < 1e-9 and rc.max() / rc.min() < 1.05  # equal risk contributions
+    h = P._weights(r, "hrp")
+    assert abs(h.sum() - 1) < 1e-9 and h[0] > h[2]  # the quiet name gets more
+    out, hist = P.rolling(r, "inverse_vol")
+    assert np.allclose(out[:253], r.iloc[:253].mean(1))  # equal weight until a year of history: no look-ahead
+    assert hist[0]["date"] == str(r.index[253].date())

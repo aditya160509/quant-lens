@@ -70,7 +70,7 @@ function portfolioHero(r: FeatureResult): HeroSpec | null {
   if (rows.length < 2 || !m.names) return null;
   const step = Math.max(1, Math.floor(rows.length / 320));
   const thin = (k: string) => rows.filter((_, i) => i % step === 0 || i === rows.length - 1).map((x) => x[k]);
-  return { figure: sign(m.total_return ?? 0), tone: (m.total_return ?? 0) >= 0 ? "up" : "down", line: m.headline,
+  return { figure: sign(m.total_return ?? 0), tone: (m.total_return ?? 0) >= 0 ? "up" : "down",
     lines: [{ label: "Combined", values: thin("combined"), color: "var(--accent)" }, ...m.names.map((n, i) => ({ label: n, values: thin(n), color: `var(--c${(i % 6) + 2})` }))] };
 }
 
@@ -94,6 +94,8 @@ const LiveSweep = dynamic(() => import("./views/LiveSweep"), { ssr: false });
 const BV = group(() => import("./views/BacktestViews") as Promise<Record<string, unknown>>);
 const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string, unknown>>);
 registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto, stStabilityOpt: OV.Stability, stSpread: OV.Spread }, ["stParamMap", "stPareto", "stSpread"]);
+const PV = group(() => import("./views/PortfolioViews") as Promise<Record<string, unknown>>);
+registerViews({ stTree: PV.Tree, stWeightsTime: PV.WeightsOverTime }, ["stWeightsTime"]);
 const VV = group(() => import("./views/ValidateViews") as Promise<Record<string, unknown>>);
 registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout, stCertificate: VV.Certificate, stWfMatrix: VV.WfMatrix, stCpcv: VV.Cpcv, stPower: VV.Power, stPboLogits: VV.PboLogits, stPboRanks: VV.PboRanks }, ["stTiles", "stStitched"]);
 const LV = group(() => import("./views/LiveViews") as Promise<Record<string, unknown>>);
@@ -210,10 +212,12 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["combined"], span: 12, view: "lineChart", title: "Combined vs each" },
           { keys: ["methods"], span: 6, view: "dataTable", title: "Allocation methods" },
           { keys: ["weights"], span: 6, view: "dataTable", title: "Weights" },
+          { keys: ["weights_over_time"], span: 12, view: "stWeightsTime", title: "Weights over time" },
         ] },
         { id: "relations", label: "Correlation", items: [
           { keys: ["correlation"], span: 7, view: "dataTable", title: "Correlation" },
           { keys: ["overlap"], span: 5, view: "dataTable", title: "Overlap" },
+          { keys: ["correlation"], span: 12, view: "stTree", title: "Clusters" },
           { keys: ["marginal"], span: 6, view: "dataTable", title: "Marginal contribution" },
           { keys: ["members"], span: 6, view: "dataTable", title: "Members" },
         ] },
