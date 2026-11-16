@@ -6,10 +6,10 @@ The one order of work. Page specs and acceptance ids (H-, B-, K-, O-, V-, P-, L-
 Built on the data we hold today; the data refresh is phase 9, after the whole build.
 
 Engine
-- [ ] Merge the three `performance.py` / `stats.py` copies into one `metrics.py`; other labs' tests green
-- [ ] Vector engine (numba): SMA cross, 500 names, 10 years; measure against the 5 s budget (K-9)
-- [ ] Event engine: same strategy, trade-for-trade match with the vector engine
-- [ ] Fill model shared by both: next open default, same close (optimistic label), gap through stop fills at open, worse-first same-bar rule, bar magnifier where hourly exists (K-3)
+- [x] One canonical `services/shared/metrics.py` (the metric set); ML's Sharpe, drawdown and equity now import it. The three `performance.py` files turned out to be caches, not metric copies; Portfolio `performance_metrics` and Factors `perf_stats` keep their own output contracts (different ddof and Sortino definitions, pinned by their tests)
+- [x] Vector engine (numba): SMA cross, 500 names, 10 years; measure against the 5 s budget (K-9). Measured 2026-11-16: load + signals 0.44 s (warm file cache), engine 0.009 s, 500 names × 3,319 bars
+- [x] Event engine: same strategy, trade-for-trade match with the vector engine (5 parameter sets, longs and shorts, 1e-9)
+- [x] Fill model shared by both: next open default, same close (optimistic label), gap through stop fills at open, worse-first same-bar rule, bar magnifier where hourly exists (K-3)
 
 ## Phase 1: backtest end to end (first usable Studio)
 Backend
