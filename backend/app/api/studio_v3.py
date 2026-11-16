@@ -337,8 +337,12 @@ def _finish(job_id: str | None, feature_id: str, payload: dict[str, Any], result
 
 
 def _execute(job_id: str, feature_id: str, payload: dict[str, Any], actor: str) -> dict[str, Any]:
-    def progress(name: str, pct: float) -> None:
-        JOBS.update(job_id, progress={"percent": pct, "message": name})
+    last: dict[str, Any] = {}
+
+    def progress(name: str, pct: float, partial: Any = None) -> None:
+        if partial is not None:
+            last["partial"] = partial  # kept across the updates in between
+        JOBS.update(job_id, progress={"percent": pct, "message": name, **last})
 
     progress.cancelled = lambda: (JOBS.get(job_id) or {}).get("status") == "cancelled"  # type: ignore[attr-defined]
     result = run_feature(feature_id, payload, progress)

@@ -173,6 +173,13 @@ def stability(cells: list[dict], names: list[str], ranges: dict, centre: dict, r
     return {"radius": radius, "cells": len(hood), "within_20pct": len(within) / len(hood), "scores": hood}
 
 
+def _partial(cells: list[dict], names: list[str], i: int) -> tuple:
+    """Every 5th cell: the finished cells as [x, y, score], so the map fills in while the sweep runs."""
+    if i % 5:
+        return ()
+    return ({"x": names[0], "y": names[1] if len(names) > 1 else None, "cells": [[c[names[0]], c[names[1]] if len(names) > 1 else 0, c["score"]] for c in cells]},)
+
+
 def run_optimise(spec: Strategy, settings: Settings, method: str = "grid", objective: str = "sharpe", n_max: int = 200, progress=None, cancelled=lambda: False,
                  custom: str = "", link: str = "", min_trades: int = 0, max_dd: float | None = None, radius: int = 1, budget_s: float = 0) -> dict:
     stage = progress or (lambda *_: None)
@@ -225,14 +232,14 @@ def run_optimise(spec: Strategy, settings: Settings, method: str = "grid", objec
             c = one(p)
             study.tell(t, c["score"] if c["score"] is not None else -1e9)
             cells.append(c)
-            stage(f"cell {i + 1} / {n_max}", 10 + 80 * (i + 1) / n_max)
+            stage(f"cell {i + 1} / {n_max}", 10 + 80 * (i + 1) / n_max, *_partial(cells, names, i))
     else:
         todo = [p for p in (_grid(ranges, n_max * 2 if link else n_max) if method == "grid" else _random(ranges, n_max * 2 if link else n_max, settings.seed, logs)) if allowed(p)][:n_max]
         for i, p in enumerate(todo):
             if cancelled() or out_of_time():
                 break
             cells.append(one(p))
-            stage(f"cell {i + 1} / {len(todo)}", 10 + 80 * (i + 1) / len(todo))
+            stage(f"cell {i + 1} / {len(todo)}", 10 + 80 * (i + 1) / len(todo), *_partial(cells, names, i))
     if not cells:
         raise Refusal("No cell finished.", ["the run was cancelled before the first cell", "the link rule rejects every setting"])
 

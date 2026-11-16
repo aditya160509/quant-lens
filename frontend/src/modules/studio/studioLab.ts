@@ -90,6 +90,7 @@ function optimiseHero(r: FeatureResult): HeroSpec | null {
     line: `${m.cells} cells${(r.meta as { trial_cost?: { raw: number; effective: number } }).trial_cost ? ` · this sweep added ${(r.meta as { trial_cost: { raw: number; effective: number } }).trial_cost.raw} raw, ${(r.meta as { trial_cost: { raw: number; effective: number } }).trial_cost.effective.toFixed(1)} effective trials` : ""}` };
 }
 
+const LiveSweep = dynamic(() => import("./views/LiveSweep"), { ssr: false });
 const BV = group(() => import("./views/BacktestViews") as Promise<Record<string, unknown>>);
 const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string, unknown>>);
 registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto, stStabilityOpt: OV.Stability, stSpread: OV.Spread }, ["stParamMap", "stPareto", "stSpread"]);
@@ -260,6 +261,7 @@ export const STUDIO_LAB: LabConfig = {
   },
   signal: false,
   contextBar: StudioContext,
+  liveView: LiveSweep,
   widgets: { strategy_id: StrategyPicker, strategy_ids: StrategiesPicker, switch_off: StrategyPicker },
   takeaway: (_feature, key, view, result) => lead(view ?? key, result),
   runLabel: (f) => ({ st02: "Run sweep", st03: "Run validation", st04: "Combine", st05: "Get signals" } as Record<string, string>)[f] ?? "Run backtest",

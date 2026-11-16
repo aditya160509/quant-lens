@@ -34,6 +34,8 @@ export type LabConfig = {
   /** Overview intro and the ordered stages its feature cards are grouped into. */
   /** Replaces the run-context chips above the results. */
   contextBar?: ComponentType<{ feature: FeatureSpec; run: FeatureRun }>;
+  /** Shown under the progress bar while a run is going, fed by the job's progress (e.g. a map that fills in). */
+  liveView?: ComponentType<{ feature: FeatureSpec; progress: unknown }>;
   /** Feature ids whose page opens with the inspector shut. */
   inspectorClosed?: string[];
   /** Saves the current settings under a name (the Screener keeps them as a saved screen). */

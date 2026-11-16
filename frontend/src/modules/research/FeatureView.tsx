@@ -206,6 +206,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
           ) : null}
         </AnimatePresence>
         {running ? <Progress startedAt={run.startedAt} status={run.status} progress={run.progress} /> : null}
+        {running && lab().liveView ? (() => { const Live = lab().liveView!; return <Live feature={feature} progress={run.progress} />; })() : null}
       </div>
 
       <div className={`sticky-bar${stuck ? " stuck" : ""}`} inert={stuck}>
