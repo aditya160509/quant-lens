@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { Blend, CandlestickChart, FlaskConical, PencilRuler, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Blend, CandlestickChart, Radio, FlaskConical, PencilRuler, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { STUDIO_BASE } from "./base";
 import { StudioContext, StrategiesPicker, StrategyPicker } from "./RunHeader";
 import { isNum, pct } from "@/modules/research/format";
@@ -15,12 +15,14 @@ const CATALOG: Record<string, FeatureMeta> = {
   st02: { name: "Optimise", slug: "optimise", icon: SlidersHorizontal, question: "" },
   st03: { name: "Validate", slug: "validate", icon: ShieldCheck, question: "" },
   st04: { name: "Portfolio", slug: "portfolio", icon: Blend, question: "" },
+  st05: { name: "Live", slug: "live", icon: Radio, question: "" },
 };
 
 const PAGES: Page[] = [
   { id: "build", label: "Build", icon: PencilRuler, question: "", features: [], slug: "build" },
   { id: "test", label: "Test", icon: FlaskConical, question: "", features: ["st01", "st02", "st03"] },
   { id: "portfolio", label: "Portfolio", icon: Blend, question: "", features: ["st04"] },
+  { id: "live", label: "Live", icon: Radio, question: "", features: ["st05"] },
   { id: "chart", label: "Chart", icon: CandlestickChart, question: "", features: [], slug: "chart" },
 ];
 
@@ -72,6 +74,13 @@ function portfolioHero(r: FeatureResult): HeroSpec | null {
     lines: [{ label: "Combined", values: thin("combined"), color: "var(--accent)" }, ...m.names.map((n, i) => ({ label: n, values: thin(n), color: `var(--c${(i % 6) + 2})` }))] };
 }
 
+/** Live hero: entries and exits on the last bar. */
+function liveHero(r: FeatureResult): HeroSpec | null {
+  const m = r.meta as { headline?: string; stale?: boolean; as_of?: string };
+  const n = ((r.tables.signals ?? []) as { action: string }[]).length;
+  return { figure: String(n), tone: m.stale ? "warn" : null, versus: `signals on ${m.as_of}`, line: m.headline };
+}
+
 /** Optimise hero: the plateau's score, not the best cell's. */
 function optimiseHero(r: FeatureResult): HeroSpec | null {
   const m = r.meta as { headline?: string; plateau?: { status: string; centre_score?: number; best_score?: number }; objective_label?: string; cells?: number };
@@ -86,6 +95,8 @@ const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string,
 registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto }, ["stParamMap", "stPareto"]);
 const VV = group(() => import("./views/ValidateViews") as Promise<Record<string, unknown>>);
 registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout, stCertificate: VV.Certificate }, ["stTiles", "stStitched"]);
+const LV = group(() => import("./views/LiveViews") as Promise<Record<string, unknown>>);
+registerViews({ stOrders: LV.Orders, stPaper: LV.Paper, stAlerts: LV.Alerts, stReconcile: LV.Reconcile }, ["stOrders", "stPaper"]);
 const TS = group(() => import("@/modules/screener/test/TearSheet") as Promise<Record<string, unknown>>);
 registerViews({ stEquity: BV.Equity, stStartDates: BV.StartDates, stSurvivorship: BV.Survivorship, stFillCheck: BV.FillCheck, stCarriedBy: BV.CarriedBy, stTradeShape: BV.TradeShape, stTradeReturns: BV.TradeReturns,
   stHoldTime: BV.HoldTime, stCrises: BV.Crises, stCosts: BV.Costs, stCapacity: BV.Capacity, stExposure: BV.Exposure, stDrawdowns: BV.Drawdowns, stStability: BV.Stability, stByRegime: BV.ByRegime, stSeasonality: BV.Seasonality, stPerName: BV.PerName, stContributors: BV.Contributors,
@@ -195,6 +206,30 @@ export const STUDIO_LAB: LabConfig = {
         ] },
       ],
     },
+    st05: {
+      hero: liveHero,
+      sections: [
+        { id: "today", label: "Today", items: [
+          { keys: ["signals"], span: 7, view: "dataTable", title: "Signals" },
+          { keys: ["signals"], span: 5, view: "stOrders", title: "Orders" },
+          { keys: ["near"], span: 12, view: "dataTable", title: "Near triggers" },
+        ] },
+        { id: "paper", label: "Paper", items: [
+          { keys: ["forward"], span: 12, view: "lineChart", title: "Paper vs backtest band" },
+          { keys: ["forward"], span: 6, view: "stPaper", title: "Paper" },
+          { keys: ["segments"], span: 6, view: "dataTable", title: "Segments" },
+          { keys: ["fills"], span: 12, view: "dataTable", title: "Fills" },
+        ] },
+        { id: "reconcile", label: "Reconcile", items: [
+          { keys: ["reconcile"], span: 12, view: "stReconcile", title: "Reconcile" },
+          { keys: ["reconcile"], span: 12, view: "dataTable", title: "Matched" },
+        ] },
+        { id: "alerts", label: "Alerts", items: [
+          { keys: ["deliveries"], span: 6, view: "stAlerts", title: "Channels" },
+          { keys: ["deliveries"], span: 6, view: "dataTable", title: "Deliveries" },
+        ] },
+      ],
+    },
     st02: {
       hero: optimiseHero,
       sections: [
@@ -221,7 +256,7 @@ export const STUDIO_LAB: LabConfig = {
   contextBar: StudioContext,
   widgets: { strategy_id: StrategyPicker, strategy_ids: StrategiesPicker, switch_off: StrategyPicker },
   takeaway: (_feature, key, view, result) => lead(view ?? key, result),
-  runLabel: (f) => ({ st02: "Run sweep", st03: "Run validation", st04: "Combine" } as Record<string, string>)[f] ?? "Run backtest",
+  runLabel: (f) => ({ st02: "Run sweep", st03: "Run validation", st04: "Combine", st05: "Get signals" } as Record<string, string>)[f] ?? "Run backtest",
   defaultUniverse: "Top names by liquidity",
   specials: { build: BuildPage, chart: ChartPage },
   overview: { home: HomePage, intro: "", stages: [] },

@@ -6,7 +6,7 @@ from functools import lru_cache
 from importlib import import_module
 from typing import Any
 
-_MODULES = ["feature_01", "feature_02", "feature_03", "feature_04"]
+_MODULES = ["feature_01", "feature_02", "feature_03", "feature_04", "feature_05"]
 
 
 @lru_cache(maxsize=1)

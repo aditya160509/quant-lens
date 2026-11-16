@@ -1,13 +1,28 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Pause, Play, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useStableDimensions } from "@/components/chart_engine/StableChartContainer";
 import { getAllIndicators } from "@/components/chart_engine/IndicatorEngine/registry";
 import { StudioChart, type ChartBar, type ChartIndicator, type ChartTrade } from "@/charts/studio/StudioChart";
 import type { FeatureSpec } from "@/modules/research/types";
 import { studio } from "../api";
 import "../studio.css";
+
+const Q360ChartCore = dynamic(() => import("@/components/chart_engine/q360_chart_core"), { ssr: false, loading: () => null });
+
+/** The full trading chart (drawings, layouts, indicators, replay, alerts), the same one /trade uses. */
+function FullChart({ symbol, onSymbol }: { symbol: string; onSymbol: (s: string) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const dims = useStableDimensions(ref);
+  return (
+    <div ref={ref} style={{ width: "100%", height: "calc(100vh - 120px)", minHeight: 520, background: "#03050a", overflow: "hidden", borderRadius: 8 }}>
+      <Q360ChartCore symbol={symbol} timeframe="1d" mode="intraday" height={dims.height} width={dims.width} onSymbolChange={onSymbol} />
+    </div>
+  );
+}
 
 const TF = [["1d", "Day"], ["1w", "Week"], ["1mo", "Month"], ["1h", "Hour"]] as const;
 const SPEEDS = [1, 5, 20];
@@ -67,6 +82,8 @@ export default function ChartPage({ id }: { features: FeatureSpec[]; id?: string
 
   const go = (s: string) => router.push(`/studio/chart/${encodeURIComponent(s.trim().toUpperCase())}${run ? `?run=${run}` : ""}`);
   const cur = at >= 0 ? trades[at] : null;
+
+  if (!run) return <div className="bd"><FullChart symbol={symbol} onSymbol={go} /></div>;
 
   return (
     <div className="bd">

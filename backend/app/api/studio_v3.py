@@ -19,6 +19,7 @@ from app.services.studio_v3.core import (
     data,
     formula,
     limits,
+    live,
     plain,
     store,
     templates,
@@ -150,6 +151,38 @@ def preview(request: PreviewRequest) -> dict[str, Any]:
 def holdout_log(sid: str) -> dict[str, Any]:
     _known(store.get, sid)
     return {"looks": validate.holdout_looks(sid), "agent_budget": validate.HOLDOUT_AGENT_BUDGET}
+
+
+class FreezeRequest(BaseModel):
+    version: int | None = None
+    as_of: str | None = None
+
+
+@router.post("/strategies/{sid}/freeze")
+def freeze_paper(sid: str, request: FreezeRequest, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Freeze a version to paper. Agents cannot freeze: it needs a human click (PAGES §10.5)."""
+    actor = _actor(x_studio_actor)
+    if actor.startswith("agent"):
+        raise HTTPException(403, "Freezing to paper needs a human click")
+    s = _known(store.get, sid, request.version)
+    return live.freeze(sid, s["version"], request.as_of, actor)
+
+
+class ChannelsRequest(BaseModel):
+    urls: list[str]
+    quiet: str = ""
+
+
+@router.put("/strategies/{sid}/channels")
+def put_channels(sid: str, request: ChannelsRequest) -> dict[str, Any]:
+    _known(store.get, sid)
+    return {"channels": [{"kind": c["url"].split("://")[0], "quiet": c["quiet"]} for c in live.set_channels(sid, request.urls, request.quiet)]}
+
+
+@router.post("/strategies/{sid}/test-alert")
+def test_alert(sid: str) -> dict[str, Any]:
+    _known(store.get, sid)
+    return {"sent": live.deliver(sid, "Studio test alert", "This is a test alert from Studio.")}
 
 
 @router.get("/templates")
