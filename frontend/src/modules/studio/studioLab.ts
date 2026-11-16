@@ -71,7 +71,7 @@ const BV = group(() => import("./views/BacktestViews") as Promise<Record<string,
 const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string, unknown>>);
 registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto }, ["stParamMap", "stPareto"]);
 const VV = group(() => import("./views/ValidateViews") as Promise<Record<string, unknown>>);
-registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout }, ["stTiles", "stStitched"]);
+registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout, stCertificate: VV.Certificate }, ["stTiles", "stStitched"]);
 const TS = group(() => import("@/modules/screener/test/TearSheet") as Promise<Record<string, unknown>>);
 registerViews({ stEquity: BV.Equity, stStartDates: BV.StartDates, stSurvivorship: BV.Survivorship, stFillCheck: BV.FillCheck, stCarriedBy: BV.CarriedBy, stTradeShape: BV.TradeShape, stTradeReturns: BV.TradeReturns,
   stHoldTime: BV.HoldTime, stCrises: BV.Crises, stCosts: BV.Costs, stCapacity: BV.Capacity, stExposure: BV.Exposure, stDrawdowns: BV.Drawdowns, stStability: BV.Stability, stByRegime: BV.ByRegime, stSeasonality: BV.Seasonality, stPerName: BV.PerName, stContributors: BV.Contributors,
@@ -160,6 +160,7 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["luck"], span: 5, view: "dataTable", title: "Luck measures" },
         ] },
         { id: "holdout", label: "Hold-out", items: [{ keys: ["tiles"], span: 12, view: "stHoldout", title: "Sealed hold-out" }] },
+        { id: "certificate", label: "Certificate", items: [{ keys: ["tiles"], span: 12, view: "stCertificate", title: "Certificate" }] },
       ],
     },
     st02: {

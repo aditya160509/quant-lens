@@ -325,6 +325,24 @@ def job_status(job_id: str) -> dict[str, Any]:
     return out
 
 
+@router.post("/jobs/{job_id}/reproduce")
+def reproduce(job_id: str) -> dict[str, Any]:
+    """Certificate: re-run a stored job from its own payload on the server and compare hashes (V-3, X-4). Nothing from the browser is trusted."""
+    path = RESULTS_DIR / f"{job_id}.json"
+    if not path.is_file():
+        raise HTTPException(404, "Unknown run")
+    stored = json.loads(path.read_text())
+    run = stored["meta"].get("run") or {}
+    payload = {k: v for k, v in (run.get("payload") or {}).items() if k not in ("show_holdout", "_actor")}
+    fresh = run_feature(run["feature_id"], payload)
+    fresh.pop("_trial", None)
+    fresh.pop("_trials", None)
+    a, b = stored["meta"], fresh["meta"]
+    return {"job_id": job_id, "feature_id": run["feature_id"], "run_hash": a["run_hash"], "result_hash": a["result_hash"], "reproduced_hash": b["result_hash"],
+            "match": a["result_hash"] == b["result_hash"], "data_version": data.data_version(), "at": time.time(),
+            "grade": (b.get("grade") or {}).get("grade"), "headline": b.get("headline")}
+
+
 @router.post("/jobs/{job_id}/cancel")
 @router.delete("/jobs/{job_id}")
 def cancel_job(job_id: str) -> dict[str, Any]:

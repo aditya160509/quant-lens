@@ -93,3 +93,27 @@ export function Holdout({ result }: ViewProps) {
     </div>
   );
 }
+
+type Repro = { match: boolean; result_hash: string; reproduced_hash: string; data_version: string; at: number; grade: string | null };
+
+/** Certificate: the server re-runs this validation from its stored settings and compares hashes. */
+export function Certificate({ result }: ViewProps) {
+  const m = result.meta as unknown as { run?: { id: string }; run_hash: string; result_hash: string; grade: { grade: string; reason: string }; strategy?: { name: string; version: number | null } };
+  const [r, setR] = useState<Repro | { error: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const go = () => {
+    if (!m.run?.id) return;
+    setBusy(true);
+    void import("../api").then(({ studio }) => studio<Repro>("POST", `/jobs/${m.run!.id}/reproduce`)).then(setR, (e) => setR({ error: e instanceof Error ? e.message : "Failed" })).finally(() => setBusy(false));
+  };
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <div className="st-fig"><b>{m.grade?.grade}</b><span>{m.strategy?.name}{m.strategy?.version ? ` v${m.strategy.version}` : ""} · result {m.result_hash} · run {m.run_hash}</span></div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button className="btn" disabled={busy || !m.run?.id} onClick={go}>{busy ? "Re-running on the server…" : "Reproduce on the server"}</button>
+        {r && "error" in r ? <span className="bd-find error"><b>Failed</b>{r.error}</span> : null}
+        {r && !("error" in r) ? <span className={`chip ${r.match ? "up" : "down"}`}>{r.match ? `reproduced ${new Date(r.at * 1000).toLocaleDateString()} ✓` : `differs: ${r.reproduced_hash}`}</span> : null}
+      </div>
+    </div>
+  );
+}

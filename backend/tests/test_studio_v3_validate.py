@@ -57,3 +57,12 @@ def test_pbo_flags_noise_and_clears_a_real_edge():
     assert V.pbo_cscv(noise) > 0.3
     edge = noise + np.linspace(0, 0.002, 16)  # higher index, steadily better everywhere
     assert V.pbo_cscv(edge) < 0.1
+
+
+def test_validation_is_reproducible():  # V-3: same spec, settings and data give the same tile hash
+    from app.services.studio_v3.core.spec import Settings, Strategy
+    spec = Strategy(entry_long="crosses_above(sma(close, f), sma(close, 100))", exit_long="crosses_below(sma(close, f), sma(close, 100))",
+                    params={"f": {"value": 20, "min": 10, "max": 50, "step": 10}})
+    a = V.run_validate(spec, Settings(symbols=["SPY", "QQQ", "IWM"]))
+    b = V.run_validate(spec, Settings(symbols=["SPY", "QQQ", "IWM"]))
+    assert a["meta"]["result_hash"] == b["meta"]["result_hash"]

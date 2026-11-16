@@ -55,7 +55,7 @@ Frontend
 - [x] Validate > Luck: luck lottery, deflated Sharpe on the effective trial count, PBO (CSCV, cash blocks score 0), minimum track record, Harvey-Liu haircut. Not done: CPCV
 - [x] Validate > Hold-out: sealed by default, opened only on request, every look logged by actor, agents capped at 3 (V-4, V-5 tested)
 - [x] Validate > Verdict: server-side grade with one reason, cap at C on few trades, next test, what would change it (no tuning advice), editable weights recompute in the page (V-1, V-7, V-8 tested). Not done: power card (V-6), V-2 API test
-- [ ] Validate > Certificate: server re-run, hash, one-page PDF, share link (V-3)
+- [x] Validate > Certificate: server re-runs the stored payload and compares result hashes (V-3 tested); PDF and share link from the shared run header
 - [ ] Alerts and daily digest engine (email, push, Telegram, webhook) with quota and failure status
 - [ ] Agent API adds `optimise`, `validate`, `get_verdict`, `open_holdout`
 - [ ] V-9 tile flip, V-10 quick profile < 10 s
