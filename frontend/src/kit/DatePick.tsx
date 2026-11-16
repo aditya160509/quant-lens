@@ -2,7 +2,7 @@
 
 import * as Popover from "@radix-ui/react-popover";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const parse = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
@@ -12,6 +12,7 @@ const WEEK = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 /** A date field: a button that opens a month calendar with quick picks. Empty means the latest data. */
 export function DatePick({ value, onChange, min, max, label, empty = "Latest" }: { value: string; onChange: (v: string) => void; min?: string; max?: string; label: string; empty?: string }) {
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   const base = value ? parse(value) : max ? parse(max) : new Date();
   const [month, setMonth] = useState(new Date(base.getFullYear(), base.getMonth(), 1));
   const ok = (s: string) => (!min || s >= min) && (!max || s <= max);
@@ -26,9 +27,9 @@ export function DatePick({ value, onChange, min, max, label, empty = "Latest" }:
   return (
     <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) setMonth(new Date(base.getFullYear(), base.getMonth(), 1)); }}>
       <Popover.Trigger asChild>
-        <button type="button" className="dp-btn" aria-label={label} data-set={!!value}><CalendarDays size={14} aria-hidden />{value ? shown(value) : empty}</button>
+        <button ref={trigger} type="button" className="dp-btn" aria-label={label} data-set={!!value}><CalendarDays size={14} aria-hidden />{value ? shown(value) : empty}</button>
       </Popover.Trigger>
-      <Popover.Portal container={typeof document === "undefined" ? undefined : document.querySelector<HTMLElement>(".ws")}>
+      <Popover.Portal container={typeof document === "undefined" ? undefined : trigger.current?.closest("dialog") ?? document.querySelector<HTMLElement>(".ws")}>
         <Popover.Content className="dp-pop" align="start" sideOffset={6} collisionPadding={12}>
           <div className="dp-quick">
             <button type="button" aria-pressed={!value} onClick={() => pick("")}>{empty}</button>

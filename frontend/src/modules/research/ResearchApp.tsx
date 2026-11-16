@@ -324,7 +324,13 @@ function useFeatureRun(feature: FeatureSpec) {
   const run = useCallback(() => {
     const errs = validate(feature, form);
     setErrors(errs);
-    if (Object.keys(errs).length) { useLayout.getState().set("right", true, true); return; } // errors live in the inspector: open it so the run never looks dead
+    if (Object.keys(errs).length) { // errors live in the inspector: open it (side panel, or the phone sheet) so the run never looks dead
+      useLayout.getState().set("right", true, true);
+      const sheet = document.querySelector<HTMLDialogElement>("dialog.ws-sheet");
+      if (sheet && !sheet.open) sheet.showModal();
+      setTimeout(() => { document.querySelector('.err[role=alert]')?.scrollIntoView({ block: "center" }); }, 150);
+      return;
+    }
     const active = useActiveSignal.getState();
     const context = lab().signal ? { ...(active.expr ? { signal_expr: active.expr } : {}), ...(active.projectId ? { project_id: active.projectId } : {}) } : {};
     const base: Record<string, unknown> = { ...toPayload(feature, form), ...context };
