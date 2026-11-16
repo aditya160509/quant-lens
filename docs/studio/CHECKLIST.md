@@ -3,7 +3,7 @@
 The one order of work. Page specs and acceptance ids (H-, B-, K-, O-, V-, P-, L-, C-, Y-, X-) are in [PAGES.md](PAGES.md); reasons in [REVIEW.md](REVIEW.md). Each phase ends with its acceptance tests green, screenshots at 1440 and 1024 (dark and light), a commit and a push. A phase starts only when the one before is done, except where marked "parallel".
 
 ## Phase 0: engine foundations
-Built on the data we hold today; the data refresh is a separate later track (below) and does not block any phase.
+Built on the data we hold today; the data refresh is phase 9, after the whole build.
 
 Engine
 - [ ] Merge the three `performance.py` / `stats.py` copies into one `metrics.py`; other labs' tests green
@@ -94,17 +94,17 @@ Frontend
 - [ ] Budgets in PAGES §10.7 as Playwright checks under `frontend/e2e/perf/`
 - [ ] Visual baselines for every route (X-1)
 
-## Data track (later, runs alongside; never blocks a phase)
+## Phase 8: phone
+- [ ] Bottom nav, settings sheet, card rows (with Screener phone-1) for every page besides Live
+- [ ] Build on phone: Formula and Plain English only
+
+## Phase 9: data refresh (after the whole build)
 Until it lands, every result's limits popover states the data as it is (mixed adjustment, most tickers end 2026-01-28 to 2026-02-01, hourly for 23 names).
 - [ ] Rebuild daily parquet from Yahoo `period="max"`: one total-return adjustment for OHLC, plus RawClose, Dividends, Splits; delisted names keep their old rows; stage, validate (no ticker lost, spot checks), back up, swap
 - [ ] Hourly parquet: 730 days of 1h bars for every ticker
 - [ ] Daily update job (EOD append, same adjustment), logged; freshness date exposed (needed before Live is used for real)
 - [ ] Data audit: symbols per year, bars per symbol, rows / 252, gaps, adjusted status, delisted share, fundamentals lag (Y-2)
 - [ ] India and non-equity coverage measured; result written into PLAN §5.3
-
-## Phase 8: phone
-- [ ] Bottom nav, settings sheet, card rows (with Screener phone-1) for every page besides Live
-- [ ] Build on phone: Formula and Plain English only
 
 ## Not in v3 (REVIEW §3)
 Manual replay and journal (G2), public gallery (G4), prop-firm page (now a Paths panel), tax and wash-sale (G10), live broker trading, tick data, options.
