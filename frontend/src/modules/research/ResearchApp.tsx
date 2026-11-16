@@ -354,6 +354,7 @@ function useFeatureRun(feature: FeatureSpec) {
         } catch { break; }
       }
       if (lastId) router.replace(`${featureHref(feature.id)}?run=${lastId}`, { scroll: false });
+      if (lastId) document.querySelector<HTMLDialogElement>("dialog.ws-sheet")?.close();
       if (sweepKey && lastId) useLayout.getState().set("bottom", true, true);
     })();
   }, [feature, form, submit, addRun, router]);
