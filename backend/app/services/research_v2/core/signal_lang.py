@@ -12,29 +12,24 @@ from __future__ import annotations
 
 import ast
 import threading
+from collections.abc import Callable
 from functools import lru_cache
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
+from app.services.shared.formula import BINOPS as _BINOPS
+from app.services.shared.formula import CMPOPS as _CMPOPS
+from app.services.shared.formula import MAX_EXPR_LEN, MAX_NODES, SignalError  # noqa: F401  (re-exported)
+from app.services.shared.formula import parse as _parse
+
 from . import data_loader as dl
 
-MAX_EXPR_LEN = 2000
-MAX_NODES = 250
 MAX_WINDOW = 120
 
 # Flow items below mix quarterly and annual rows; keep annual only (shared helper reads this set).
 dl.FLOW_FIELDS.update({"Operating Cash Flow", "Free Cash Flow", "Capital Expenditure", "EBITDA", "Research And Development", "Selling General And Administration", "Interest Expense", "Cost Of Revenue", "Cash Dividends Paid", "Pretax Income"})
-
-
-class SignalError(ValueError):
-    def __init__(self, message: str, start: int = 0, end: int | None = None):
-        super().__init__(message)
-        self.message, self.start, self.end = message, start, start if end is None else end
-
-    def as_dict(self) -> dict[str, Any]:
-        return {"message": self.message, "start": self.start, "end": self.end}
 
 
 class Groups:
@@ -244,7 +239,7 @@ def _neutralize(x, g):
     x = _need(x, "neutralize")
     lab = _grp(g, "neutralize")
     out = x.copy()
-    for _, cols in lab.dropna().groupby(lab.dropna()).groups.items():
+    for cols in lab.dropna().groupby(lab.dropna()).groups.values():
         cols = [c for c in cols if c in x.columns]
         if cols:
             out[cols] = x[cols].sub(x[cols].mean(axis=1), axis=0)
@@ -256,7 +251,7 @@ def _group_rank(x, g):
     x = _need(x, "group_rank")
     lab = _grp(g, "group_rank")
     out = pd.DataFrame(np.nan, index=x.index, columns=x.columns)
-    for _, cols in lab.dropna().groupby(lab.dropna()).groups.items():
+    for cols in lab.dropna().groupby(lab.dropna()).groups.values():
         cols = [c for c in cols if c in x.columns]
         if cols:
             out[cols] = x[cols].rank(axis=1, pct=True)
@@ -341,70 +336,13 @@ OPERATORS: dict[str, tuple[Callable, list[str], str, str, str]] = {
 }
 ARITY = {k: (len(v[1]) - (1 if k == "winsorize" else 0), len(v[1])) for k, v in OPERATORS.items()}
 
-_BINOPS = {ast.Add: lambda a, b: a + b, ast.Sub: lambda a, b: a - b, ast.Mult: lambda a, b: a * b, ast.Div: lambda a, b: a / b, ast.Pow: lambda a, b: a**b}
-_CMPOPS = {ast.Gt: lambda a, b: a > b, ast.GtE: lambda a, b: a >= b, ast.Lt: lambda a, b: a < b, ast.LtE: lambda a, b: a <= b, ast.Eq: lambda a, b: a == b, ast.NotEq: lambda a, b: a != b}
-
-
 # ---------------------------------------------------------------------------
 # parsing and evaluation
 
 
 def parse(expr: str) -> ast.Expression:
     """Parse and statically validate a formula. Raises SignalError with a character span."""
-
-    if not isinstance(expr, str) or not expr.strip():
-        raise SignalError("Formula is empty")
-    if len(expr) > MAX_EXPR_LEN:
-        raise SignalError(f"Formula is longer than {MAX_EXPR_LEN} characters", 0, len(expr))
-    try:
-        tree = ast.parse(expr.strip(), mode="eval")
-    except SyntaxError as e:
-        off = max((e.offset or 1) - 1, 0)
-        raise SignalError(f"Syntax error: {e.msg}", off, off + 1) from None
-    lead = len(expr) - len(expr.lstrip())
-    nodes = list(ast.walk(tree))
-    if len(nodes) > MAX_NODES:
-        raise SignalError("Formula is too complex", 0, len(expr))
-    names = set(field_names())
-    for n in nodes:
-        span = (getattr(n, "col_offset", 0) + lead, getattr(n, "end_col_offset", 0) + lead)
-        if isinstance(n, (ast.Expression, ast.Load, ast.operator, ast.unaryop, ast.cmpop)):
-            if isinstance(n, ast.operator) and type(n) not in _BINOPS and not isinstance(n, (ast.BitAnd, ast.BitOr)):
-                raise SignalError(f"Operator {type(n).__name__} is not allowed", *span)
-            continue
-        if isinstance(n, ast.Constant):
-            if isinstance(n.value, bool) or not isinstance(n.value, (int, float)):
-                raise SignalError("Only numeric constants are allowed", *span)
-        elif isinstance(n, ast.Name):
-            if n.id not in names and n.id not in OPERATORS:
-                raise SignalError(f"Unknown name '{n.id}'", *span)
-        elif isinstance(n, ast.Call):
-            if not isinstance(n.func, ast.Name):
-                raise SignalError("Only calls to named operators are allowed", *span)
-            if n.func.id not in OPERATORS:
-                raise SignalError(f"Unknown operator '{n.func.id}'", *span)
-            if n.keywords:
-                raise SignalError("Keyword arguments are not supported", *span)
-            lo, hi = ARITY[n.func.id]
-            if not lo <= len(n.args) <= hi:
-                raise SignalError(f"{n.func.id} takes {lo if lo == hi else f'{lo}-{hi}'} arguments, got {len(n.args)}", *span)
-        elif isinstance(n, ast.BinOp):
-            if type(n.op) not in _BINOPS and not isinstance(n.op, (ast.BitAnd, ast.BitOr)):
-                raise SignalError("Operator not allowed", *span)
-        elif isinstance(n, ast.UnaryOp):
-            if not isinstance(n.op, (ast.USub, ast.UAdd)):
-                raise SignalError("Only unary + and - are allowed", *span)
-        elif isinstance(n, ast.Compare):
-            if len(n.ops) != 1 or type(n.ops[0]) not in _CMPOPS:
-                raise SignalError("Use a single comparison (>, >=, <, <=, ==, !=)", *span)
-        else:
-            raise SignalError(f"'{type(n).__name__}' is not allowed in formulas (no attribute access, subscripts, lambdas or strings)", *span)
-    # bare operator names (not called) are not values
-    called = {id(n.func) for n in nodes if isinstance(n, ast.Call)}
-    for n in nodes:
-        if isinstance(n, ast.Name) and n.id in OPERATORS and n.id not in names and id(n) not in called:
-            raise SignalError(f"'{n.id}' is an operator; call it like {n.id}(...)", n.col_offset + lead, n.end_col_offset + lead)
-    return tree
+    return _parse(expr, set(field_names()), OPERATORS, ARITY)
 
 
 def references_forward(tree: ast.Expression) -> str | None:

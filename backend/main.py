@@ -117,6 +117,9 @@ app.include_router(research_v2_projects.router, prefix="/api", tags=["research-v
 app.include_router(nse_india.router, prefix="/api", tags=["nse-india"])
 
 app.include_router(screener_v2.router, prefix="/api", tags=["screener-v2"])
+from app.api import studio_v3
+
+app.include_router(studio_v3.router, prefix="/api", tags=["studio-v3"])
 
 # PCA V2 quantitative feature suite
 from app.api import pca_v2

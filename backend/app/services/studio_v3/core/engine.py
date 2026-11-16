@@ -245,7 +245,7 @@ def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist
                 for i in range(k):
                     sc[i] = -score[t, cand[i]] if np.isfinite(score[t, cand[i]]) else np.inf
                 order = cand[:k][np.argsort(sc, kind="mergesort")]
-            per = P[P_MAXPOS] if P[P_MAXPOS] > 0.0 else float(N)
+            per = min(P[P_MAXPOS], float(N)) if P[P_MAXPOS] > 0.0 else float(N)
             for i in range(slots):
                 n = order[i]
                 dist = stop_dist[t, n] if has_dist else c[t, n] * P[P_STOP]
@@ -478,7 +478,7 @@ class EventEngine:
                 slots = len(cands) if p.max_positions <= 0 else min(len(cands), max(int(p.max_positions) - held, 0))
                 if self.score is not None and slots < len(cands):
                     cands.sort(key=lambda n: (-self.score[t, n] if math.isfinite(self.score[t, n]) else math.inf, n))
-                per = p.max_positions if p.max_positions > 0 else float(N)
+                per = min(p.max_positions, float(N)) if p.max_positions > 0 else float(N)
                 for n in cands[:slots]:
                     dist = self.stop_dist[t, n] if self.stop_dist is not None else c[t, n] * p.stop
                     sh = fills.size_shares(int(p.size_mode), p.size, eq, c[t, n], dist, per)
