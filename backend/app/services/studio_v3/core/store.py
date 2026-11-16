@@ -95,7 +95,7 @@ def get(sid: str, version: int | None = None) -> dict:
             raise KeyError(f"Strategy {sid} has no version {v}")
         card = _card(con, row)
     return {**card, "version": v, "latest": versions[-1]["version"], "spec": json.loads(spec["spec"]), "draft": json.loads(row["draft"]) if row["draft"] else None,
-            "versions": [dict(r) for r in versions]}
+            "versions": [dict(r) for r in versions], "trials": ledger(sid, detail=False)}
 
 
 def save_version(sid: str, spec: Strategy, actor: str = "human") -> dict:

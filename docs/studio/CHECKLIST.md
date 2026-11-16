@@ -33,16 +33,16 @@ Frontend
 - [ ] K-1..K-11 green
 
 ## Phase 2: Build
-- [ ] Formula editor (Screener formula bar) with live compile < 100 ms (B-4)
+- [x] Formula editor with live compile (0.26 ms measured) and per-role findings (B-4); Screener formula-bar autocomplete not yet wired
 - [ ] Blocks editor ⇄ formula both ways
 - [ ] Python in Docker sandbox (no network, read-only, non-root, caps, `ast` screen); formula → Python one way
 - [ ] Plain English → formula, shown for review before it runs
 - [ ] Higher-timeframe rules aligned to the last closed bar (B-3)
 - [ ] Allocate blocks (if/else on regime, rotate, weight)
 - [ ] Preview chart < 300 ms after typing (B-5); repaint check and lint rows
-- [ ] Autosave draft, undo history, versions (immutable, diff) (B-6)
-- [ ] "What it does" paragraph from the spec, no LLM (B-9)
-- [ ] Notes (hypothesis, decisions); My limits saved with the version
+- [x] Autosave draft every 2 s, undo/redo (⌘Z / ⇧⌘Z), immutable versions with picker (B-6); side-by-side diff still to do
+- [x] "What it does" paragraph from the spec, no LLM (B-9)
+- [x] Notes (hypothesis, regime, decisions); My limits saved with the version
 - [ ] Templates (20)
 - [ ] Backtest tabs When (regime, conditions, seasonality, timeline), Names (per-name, holdings), Paths (trade Monte Carlo, ruin, rule check, streaks)
 - [ ] B-1 same rule as blocks, formula and Python gives identical trades

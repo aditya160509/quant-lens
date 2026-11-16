@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, PencilRuler } from "lucide-react";
 import { STUDIO_BASE } from "./base";
 import { StudioContext, StrategyPicker } from "./RunHeader";
 import { isNum, pct } from "@/modules/research/format";
@@ -15,6 +15,7 @@ const CATALOG: Record<string, FeatureMeta> = {
 };
 
 const PAGES: Page[] = [
+  { id: "build", label: "Build", icon: PencilRuler, question: "", features: [], slug: "build" },
   { id: "test", label: "Test", icon: FlaskConical, question: "", features: ["st01"] },
 ];
 
@@ -58,6 +59,7 @@ registerAlternates({ stTradeShape: [{ label: "Returns", view: "stTradeReturns" }
   stStartDates: [{ label: "Table", view: "dataTable" }], stDrawdowns: [{ label: "Table", view: "dataTable" }] });
 
 const TRADE_COLUMNS = ["symbol", "side", "entry_date", "exit_date", "entry", "exit", "shares", "pnl", "return", "bars", "mae", "mfe", "exit_reason", "costs", "signal_date"];
+const BuildPage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./build/BuildPage"), { ssr: false });
 const HomePage = dynamic<{ features: FeatureSpec[]; runs: RunRecord[] }>(() => import("./home/StudioHome"), { ssr: false });
 
 export const STUDIO_LAB: LabConfig = {
@@ -107,5 +109,6 @@ export const STUDIO_LAB: LabConfig = {
   takeaway: (_feature, key, view, result) => lead(view ?? key, result),
   runLabel: () => "Run backtest",
   defaultUniverse: "Top names by liquidity",
+  specials: { build: BuildPage },
   overview: { home: HomePage, intro: "", stages: [] },
 };
