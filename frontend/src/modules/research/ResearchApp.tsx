@@ -324,7 +324,7 @@ function useFeatureRun(feature: FeatureSpec) {
   const run = useCallback(() => {
     const errs = validate(feature, form);
     setErrors(errs);
-    if (Object.keys(errs).length) return;
+    if (Object.keys(errs).length) { useLayout.getState().set("right", true, true); return; } // errors live in the inspector: open it so the run never looks dead
     const active = useActiveSignal.getState();
     const context = lab().signal ? { ...(active.expr ? { signal_expr: active.expr } : {}), ...(active.projectId ? { project_id: active.projectId } : {}) } : {};
     const base: Record<string, unknown> = { ...toPayload(feature, form), ...context };
