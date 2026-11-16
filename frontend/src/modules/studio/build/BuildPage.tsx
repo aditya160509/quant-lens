@@ -115,9 +115,10 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     return () => clearTimeout(t);
   }, [spec, dirty, loaded]);
 
-  const save = useCallback(async (): Promise<string | null> => {
+  const save = useCallback(async (over?: Spec): Promise<string | null> => {
+    const body = { spec: over ?? spec };
     try {
-      const s = loaded ? await studio<Loaded>("PUT", `/strategies/${loaded.id}`, { spec }) : await studio<Loaded>("POST", "/strategies", { spec });
+      const s = loaded ? await studio<Loaded>("PUT", `/strategies/${loaded.id}`, body) : await studio<Loaded>("POST", "/strategies", body);
       setLoaded(s); setDirty(false); toast.success(`Saved version ${s.latest}`);
       if (!loaded) router.replace(`/studio/build/${s.id}`);
       return s.id;
@@ -242,7 +243,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           </div>
           {mode === "python" ? (
             <>
-              <CodeEditor value={spec.code} onChange={(code) => edit({ code })} findings={findings("code")} catalogue={catalogue} onSave={() => void save()} onRun={() => void run()}
+              <CodeEditor value={spec.code} onChange={(code) => edit({ code })} findings={findings("code")} catalogue={catalogue} onSave={() => void studio<{ code: string }>("POST", "/format-python", { code: spec.code }).then((r) => { const next = { ...spec, code: r.code }; if (r.code !== spec.code) edit({ code: r.code }); return save(next); }, fail)} onRun={() => void run()}
                 runtime={prev?.status === "error" ? { line: prev.line ?? null, message: prev.reason ?? "" } : null} />
               {findings("code").map((f, i) => <p key={i} className={`bd-find ${f.severity}`}><b>Line {f.line}</b>{f.message}</p>)}
               {prev?.status === "error" ? <p className="bd-find error"><b>{prev.line ? `Line ${prev.line}` : "Run"}</b>{prev.reason}</p> : null}
@@ -339,10 +340,10 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           <div className="bd-nums">
             <label className="bd-num"><span>Mode</span>
               <select className="input" value={spec.sizing.mode} onChange={(e) => edit({ sizing: { ...spec.sizing, mode: e.target.value } })}>
-                <option value="equal">Equal</option><option value="pct_equity">% of equity</option><option value="risk">Risk per trade</option><option value="vol_target">Vol target</option><option value="cash">Fixed $</option><option value="shares">Fixed shares</option>
+                <option value="equal">Equal</option><option value="pct_equity">% of equity</option><option value="risk">Risk per trade</option><option value="vol_target">Vol target</option><option value="score">Weight by score</option><option value="kelly">Kelly (capped)</option><option value="cash">Fixed $</option><option value="shares">Fixed shares</option>
               </select>
             </label>
-            {spec.sizing.mode !== "equal" ? <Num label={spec.sizing.mode === "shares" ? "Shares" : spec.sizing.mode === "cash" ? "Dollars" : spec.sizing.mode === "vol_target" ? "Annual vol" : "Percent"} pct={spec.sizing.mode === "pct_equity" || spec.sizing.mode === "risk" || spec.sizing.mode === "vol_target"}
+            {spec.sizing.mode !== "equal" && spec.sizing.mode !== "score" ? <Num label={spec.sizing.mode === "shares" ? "Shares" : spec.sizing.mode === "cash" ? "Dollars" : spec.sizing.mode === "vol_target" ? "Annual vol" : spec.sizing.mode === "kelly" ? "Cap" : "Percent"} pct={["pct_equity", "risk", "vol_target", "kelly"].includes(spec.sizing.mode)}
               value={spec.sizing.value} onChange={(v) => edit({ sizing: { ...spec.sizing, value: v ?? 0 } })} /> : null}
             <Num label="Max positions" value={spec.sizing.max_positions} onChange={(v) => edit({ sizing: { ...spec.sizing, max_positions: v ?? 0 } })} />
           </div>

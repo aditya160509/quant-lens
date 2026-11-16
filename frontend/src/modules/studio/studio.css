@@ -106,8 +106,8 @@
 .bd-diff ins { color: var(--up); text-decoration: none; }
 .bd-name { flex: 1 1 160px; min-width: 120px; width: auto; }
 /* Validate */
-.vt { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-.vt-tile { display: grid; gap: 4px; padding: 12px 14px; border-radius: 12px; background: var(--panel); box-shadow: inset 3px 0 0 var(--tone); }
+.vt { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); column-gap: 28px; }
+.vt-tile { display: grid; gap: 3px; padding: 12px 0; border-top: 1px solid var(--line); }
 .vt-tile b { font-size: 13px; }
 .vt-status { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--tone); }
 .vt-tile p { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
@@ -124,9 +124,9 @@
 .ch-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; background: var(--island); box-shadow: inset 0 0 0 1px var(--line); }
 .bd-code-ed { border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
 .bd-modes .bd-find button { margin-left: 8px; }
-.bd-tpls { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
-.bd-tpl { display: grid; gap: 4px; text-align: left; padding: 10px 12px; border-radius: 10px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); cursor: pointer; }
-.bd-tpl:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+.bd-tpls { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); column-gap: 24px; }
+.bd-tpl { display: grid; gap: 3px; text-align: left; padding: 10px 2px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--text); cursor: pointer; }
+.bd-tpl:hover b { color: var(--accent); }
 .bd-tpl b { font-size: 13px; font-weight: 600; }
 .bd-tpl span { font: 11.5px/1.45 var(--code, var(--mono)); color: var(--text-3); }
 .bd-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }

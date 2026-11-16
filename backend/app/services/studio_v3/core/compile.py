@@ -44,7 +44,9 @@ def compile_spec(spec: Strategy) -> dict:
                                  "message": f"No exit for {side} positions: they are held to the end"})
         if spec.sizing.mode == "risk" and not (e.stop or e.stop_atr):
             findings.append({"severity": "error", "role": "sizing", "line": 0, "start": 0, "end": 0, "token": "risk", "message": "Risk per trade needs a stop"})
-        if spec.sizing.mode != "equal" and not spec.sizing.value:
+        if spec.sizing.mode == "score" and not spec.score.strip():
+            findings.append({"severity": "error", "role": "sizing", "line": 0, "start": 0, "end": 0, "token": "score", "message": "Weight by score needs a Rank by rule"})
+        if spec.sizing.mode not in ("equal", "score") and not spec.sizing.value:
             findings.append({"severity": "error", "role": "sizing", "line": 0, "start": 0, "end": 0, "token": spec.sizing.mode, "message": "Position size is zero"})
         if e.scale_at and not e.scale_frac:
             findings.append({"severity": "warning", "role": "exits", "line": 0, "start": 0, "end": 0, "token": "scale_at", "message": "Scale-out level set without a share to sell"})
@@ -120,7 +122,8 @@ def describe(spec: Strategy) -> str:
                         f"stop to entry after {_pct(e.breakeven)}" if e.breakeven else "",
                         f"sell {_pct(e.scale_frac)} at {_pct(e.scale_at)}" if e.scale_at and e.scale_frac else "") if t]
     size = {"shares": f"{s.value:g} shares", "cash": f"${s.value:,.0f}", "pct_equity": f"{_pct(s.value)} of equity", "risk": f"{_pct(s.value)} of equity at risk to the stop",
-            "equal": "an equal share of equity", "vol_target": f"an equal share scaled to {_pct(s.value)} annual volatility"}[s.mode]
+            "equal": "an equal share of equity", "vol_target": f"an equal share scaled to {_pct(s.value)} annual volatility",
+            "score": "an equal share weighted by score", "kelly": f"the Kelly fraction of closed trades, at most {_pct(s.value)}"}[s.mode]
     cap = f", at most {s.max_positions} positions" if s.max_positions else ""
     rank = f", best {spec.score.strip()} first" if spec.score.strip() else ""
     rank += f". Only while {spec.market_filter.strip()}, else cash" if spec.market_filter.strip() else ""

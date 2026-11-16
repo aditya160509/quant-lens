@@ -79,6 +79,7 @@ _commission = njit(cache=True)(fills.commission)
 _magnify = njit(cache=True)(fills.magnify)
 _exit_check = njit(cache=True)(fills.exit_check)
 _size_shares = njit(cache=True)(fills.size_shares)
+_kelly = njit(cache=True)(fills.kelly)
 
 
 @njit(cache=True)
@@ -246,10 +247,24 @@ def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist
                     sc[i] = -score[t, cand[i]] if np.isfinite(score[t, cand[i]]) else np.inf
                 order = cand[:k][np.argsort(sc, kind="mergesort")]
             per = min(P[P_MAXPOS], float(N)) if P[P_MAXPOS] > 0.0 else float(N)
+            kf = _kelly(trades[:, T_RET], int(acct[NTR])) if int(P[P_SIZE_MODE]) == 7 else np.nan
+            mean_sc = np.nan
+            if int(P[P_SIZE_MODE]) == 6 and has_score:
+                tot, cnt = 0.0, 0
+                for i in range(slots):
+                    v_ = score[t, order[i]]
+                    if np.isfinite(v_) and v_ > 0:
+                        tot += v_
+                        cnt += 1
+                mean_sc = tot / cnt if cnt else np.nan
             for i in range(slots):
                 n = order[i]
                 dist = stop_dist[t, n] if has_dist else c[t, n] * P[P_STOP]
-                sh = _size_shares(int(P[P_SIZE_MODE]), P[P_SIZE], eq, c[t, n], dist, per, size_vol[t, n] if has_vol else np.nan)
+                mult = kf
+                if int(P[P_SIZE_MODE]) == 6:
+                    v_ = score[t, n] if has_score else np.nan
+                    mult = min(max(v_ / mean_sc, 0.0), 3.0) if np.isfinite(v_) and mean_sc > 0 else 1.0
+                sh = _size_shares(int(P[P_SIZE_MODE]), P[P_SIZE], eq, c[t, n], dist, per, size_vol[t, n] if has_vol else np.nan, mult)
                 if sh > 0.0:
                     S[n, PDIR], S[n, PSH], S[n, SIGBAR] = entries[t, n], sh, t
         if P[P_FILL] != 0.0:
@@ -479,9 +494,16 @@ class EventEngine:
                 if self.score is not None and slots < len(cands):
                     cands.sort(key=lambda n: (-self.score[t, n] if math.isfinite(self.score[t, n]) else math.inf, n))
                 per = min(p.max_positions, float(N)) if p.max_positions > 0 else float(N)
+                kf = fills.kelly([x[8] for x in self.trades], len(self.trades)) if int(p.size_mode) == fills.KELLY else math.nan
+                pos_sc = [self.score[t, n] for n in cands[:slots] if self.score is not None and math.isfinite(self.score[t, n]) and self.score[t, n] > 0]
+                mean_sc = sum(pos_sc) / len(pos_sc) if pos_sc else math.nan
                 for n in cands[:slots]:
                     dist = self.stop_dist[t, n] if self.stop_dist is not None else c[t, n] * p.stop
-                    sh = fills.size_shares(int(p.size_mode), p.size, eq, c[t, n], dist, per, self.size_vol[t, n] if self.size_vol is not None else math.nan)
+                    mult = kf
+                    if int(p.size_mode) == fills.SCORE:
+                        v_ = self.score[t, n] if self.score is not None else math.nan
+                        mult = min(max(v_ / mean_sc, 0.0), 3.0) if math.isfinite(v_) and mean_sc > 0 else 1.0
+                    sh = fills.size_shares(int(p.size_mode), p.size, eq, c[t, n], dist, per, self.size_vol[t, n] if self.size_vol is not None else math.nan, mult)
                     if sh > 0:
                         self.pending[n] = (self.wants[n], sh, t)
             if p.fill != 0:

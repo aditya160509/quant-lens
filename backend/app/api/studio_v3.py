@@ -142,6 +142,22 @@ def to_python(request: SpecRequest) -> dict[str, str]:
     return {"code": pycode.from_formulas(spec) if spec.entry_long.strip() or spec.entry_short.strip() else pycode.TEMPLATE}
 
 
+class CodeRequest(BaseModel):
+    code: str
+
+
+@router.post("/format-python")
+def format_python(request: CodeRequest) -> dict[str, str]:
+    """ruff format; code that does not parse comes back unchanged."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    ruff = Path(sys.executable).with_name("ruff")
+    p = subprocess.run([str(ruff), "format", "--line-length", "110", "-"], check=False, input=request.code, capture_output=True, text=True, timeout=10)
+    return {"code": p.stdout if p.returncode == 0 and p.stdout else request.code}
+
+
 class PreviewRequest(BaseModel):
     spec: dict
     symbol: str = "SPY"

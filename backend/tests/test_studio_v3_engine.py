@@ -115,7 +115,9 @@ def random_market(T=400, N=12, seed=0):
     Params(trail=0.06, time_stop=15, size_mode=fills.PCT_EQUITY, size=0.2, volume_cap=0.001),
     Params(stop=0.04, breakeven=0.03, scale_at=0.05, scale_frac=0.5, target=0.12, size_mode=fills.RISK, size=0.01, max_positions=5),
     Params(fill=1, stop=0.05, target=0.05, max_positions=3, size_mode=fills.CASH, size=20_000, leverage=2.0, slippage_range=0.05),
-], ids=["defaults", "bracket", "trail_time_volcap", "risk_breakeven_scale", "same_close_leverage"])
+    Params(stop=0.05, max_positions=4, size_mode=fills.SCORE),
+    Params(stop=0.05, target=0.08, max_positions=4, size_mode=fills.KELLY, size=0.25),
+], ids=["defaults", "bracket", "trail_time_volcap", "risk_breakeven_scale", "same_close_leverage", "score_weight", "kelly"])
 def test_vector_engine_matches_event_engine_trade_for_trade(p):
     b, e, x, score, dist = random_market()
     r = both(b, e, x, p, score=score)

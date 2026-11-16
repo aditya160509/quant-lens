@@ -340,7 +340,7 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
     return {
         "feature_id": "st03", "status": "ok",
         "summary_cards": [{"label": "Grade", "value": g["grade"]}, {"label": "Tests passed", "value": f"{passed} of {judged}"}, {"label": "Deflated Sharpe", "value": dsr},
-                          {"label": "Effective trials", "value": lk["effective_trials"]}],
+                          {"label": "Effective trials", "value": lk["effective_trials"], "unit": "trials"}],
         "charts": charts,
         "tables": {"tiles": tiles, "verdict": [{"test": t["name"], "weight": t["weight"], "result": t["status"], "value": t["value"], "threshold": t["threshold"]} for t in tiles],
                    "luck": [{"measure": k, "value": v} for k, v in lk.items() if not isinstance(v, list)], **tables},

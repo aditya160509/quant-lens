@@ -374,6 +374,7 @@ const UNIT_FMT: Record<string, (v: number) => string> = {
   "×": (v) => `${v.toFixed(2)}×`,
   "Δ Sharpe": (v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}`,
   days: (v) => `${Math.round(v)} days`,
+  trials: (v) => v.toLocaleString(undefined, { maximumFractionDigits: 1 }),
 };
 
 /** Headline numbers: enough precision to see small slopes, never more than four decimals. */

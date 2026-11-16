@@ -60,11 +60,13 @@ def exit_check(d: float, o: float, h: float, low: float, stop: float, target: fl
 
 
 # Sizing modes
-SHARES, CASH, PCT_EQUITY, RISK, EQUAL, VOL = 0, 1, 2, 3, 4, 5
+SHARES, CASH, PCT_EQUITY, RISK, EQUAL, VOL, SCORE, KELLY = 0, 1, 2, 3, 4, 5, 6, 7
 
 
-def size_shares(mode: int, value: float, equity: float, price: float, stop_distance: float, slots: float, vol: float = math.nan) -> float:
+def size_shares(mode: int, value: float, equity: float, price: float, stop_distance: float, slots: float, vol: float = math.nan, mult: float = math.nan) -> float:
     """Shares to order, decided at the signal bar's close. Risk sizing needs a stop; without one it orders nothing.
+    SCORE: the slot's share times `mult` (this name's score over the mean score of today's entries, 0 to 3).
+    KELLY: `mult` (the Kelly fraction from trades closed so far) capped at `value`, of equity; an equal share until 20 trades have closed.
     VOL: each slot's share of equity scaled so the position's annual volatility is `value` (vol = annualised stdev of daily returns)."""
     if price <= 0 or equity <= 0:
         return 0.0
@@ -76,6 +78,30 @@ def size_shares(mode: int, value: float, equity: float, price: float, stop_dista
         return equity * value / price
     if mode == RISK:
         return equity * value / stop_distance if stop_distance > 0 else 0.0
+    if mode == SCORE:
+        return equity / slots * (mult if math.isfinite(mult) else 1.0) / price
+    if mode == KELLY:
+        return equity * min(max(mult, 0.0), value) / price if math.isfinite(mult) else equity / slots / price
     if mode == VOL:
         return equity / slots * min(value / vol, 1.0) / price if vol > 0 else 0.0
     return equity / slots / price
+
+
+def kelly(rets, n: int) -> float:
+    """Kelly fraction W - (1 - W) / R from the first n closed trade returns; NaN under 20 trades or no losers."""
+    if n < 20:
+        return math.nan
+    wins = losses = 0
+    sw = sl = 0.0
+    for i in range(n):
+        r = rets[i]
+        if r > 0:
+            wins += 1
+            sw += r
+        elif r < 0:
+            losses += 1
+            sl -= r
+    if losses == 0 or wins == 0:
+        return math.nan
+    w = wins / n
+    return w - (1.0 - w) / ((sw / wins) / (sl / losses))
