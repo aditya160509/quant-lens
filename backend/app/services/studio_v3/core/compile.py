@@ -9,7 +9,7 @@ import pandas as pd
 
 from app.services.shared.formula import SignalError
 
-from . import formula
+from . import formula, pycode
 from .spec import Strategy
 
 ROLES = ("entry_long", "exit_long", "entry_short", "exit_short", "score")
@@ -31,7 +31,10 @@ def compile_spec(spec: Strategy) -> dict:
         except SignalError as e:
             findings.append({"severity": "error", "role": role, "line": line, "start": e.start, "end": e.end, "token": text[e.start:e.end], "message": e.message,
                              "lookahead": e.message.startswith("Look-ahead")})
-    if not spec.code.strip():
+    if spec.code.strip():
+        findings += pycode.check(spec.code, params)
+        used |= {n for n in params if f'"{n}"' in spec.code or f"'{n}'" in spec.code}
+    else:
         if not (spec.entry_long.strip() or spec.entry_short.strip()):
             findings.append({"severity": "error", "role": "entry_long", "line": 1, "start": 0, "end": 0, "token": "", "message": "No entry rule yet"})
         e = spec.exits
@@ -67,6 +70,10 @@ def signals(spec: Strategy, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex
     params = {**spec.values(), **(params or {})}
     cache: dict = {}
     shape = bars["close"].shape
+    if spec.code.strip():
+        entries, exits = pycode.run(spec.code, bars, dates, params, cache=cache)
+        dist = spec.exits.stop_atr * formula.evaluate("atr(14)", bars, dates, params, cache) if spec.exits.stop_atr else None
+        return Signals(entries, exits, None, None if dist is None else np.nan_to_num(dist))
     entries, exits = np.zeros(shape, dtype=np.int8), np.zeros(shape, dtype=np.int8)
     if spec.entry_short.strip():
         entries[_bool(spec.entry_short, bars, dates, params, cache)] = -1

@@ -21,6 +21,7 @@ from app.services.studio_v3.core import (
     limits,
     live,
     plain,
+    pycode,
     store,
     templates,
     validate,
@@ -134,6 +135,13 @@ def plain_english(request: PlainRequest) -> dict[str, Any]:
         raise HTTPException(422, str(exc)) from exc
 
 
+@router.post("/to-python")
+def to_python(request: SpecRequest) -> dict[str, str]:
+    """Formula -> Python, one way (the formulas stay); a blank spec gets the starter."""
+    spec = _spec(request.spec)
+    return {"code": pycode.from_formulas(spec) if spec.entry_long.strip() or spec.entry_short.strip() else pycode.TEMPLATE}
+
+
 class PreviewRequest(BaseModel):
     spec: dict
     symbol: str = "SPY"
@@ -145,6 +153,8 @@ def preview(request: PreviewRequest) -> dict[str, Any]:
         return backtest.preview(_spec(request.spec), request.symbol)
     except backtest.Refusal as exc:
         return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
+    except pycode.CodeError as exc:
+        return {"status": "error", "reason": exc.message, "line": exc.line, "bars": [], "trades": []}
 
 
 @router.get("/strategies/{sid}/holdout")

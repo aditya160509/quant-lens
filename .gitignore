@@ -308,3 +308,4 @@ backend/app/studio_v2/storage/strategies/
 !frontend/src/lib/
 
 frontend/e2e/output/
+!frontend/src/modules/studio/build/
