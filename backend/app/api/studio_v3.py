@@ -132,6 +132,19 @@ def plain_english(request: PlainRequest) -> dict[str, Any]:
         raise HTTPException(422, str(exc)) from exc
 
 
+class PreviewRequest(BaseModel):
+    spec: dict
+    symbol: str = "SPY"
+
+
+@router.post("/preview")
+def preview(request: PreviewRequest) -> dict[str, Any]:
+    try:
+        return backtest.preview(_spec(request.spec), request.symbol)
+    except backtest.Refusal as exc:
+        return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
+
+
 @router.get("/templates")
 def get_templates() -> dict[str, Any]:
     return {"templates": templates.list_templates()}

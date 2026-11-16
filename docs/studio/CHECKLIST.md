@@ -39,7 +39,8 @@ Frontend
 - [x] Plain English → formula by fixed phrase rules (MAs, crosses, RSI, highs and lows, ROC, weekly trend, volume, stops, targets, time stops); ignored words listed; review then "Use this rule"
 - [x] Higher-timeframe rules aligned to the last closed bar: `weekly(x)` (B-3, tested)
 - [ ] Allocate blocks (if/else on regime, rotate, weight)
-- [ ] Preview chart < 300 ms after typing (B-5); repaint check and lint rows
+- [x] Preview chart: any symbol, last 2 development years, entries and exits marked, refreshes 300 ms after typing (server 0.37 s); lint rows shown per rule (B-5)
+- [ ] Repaint check (50 cuts)
 - [x] Autosave draft every 2 s, undo/redo (⌘Z / ⇧⌘Z), immutable versions with picker, field-by-field diff against any version (B-6)
 - [x] "What it does" paragraph from the spec, no LLM (B-9)
 - [x] Notes (hypothesis, regime, decisions); My limits saved with the version

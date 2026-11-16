@@ -332,3 +332,19 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     }
     out["_trial"] = {"returns": monthly.to_numpy(), "sharpe": ret.get("sharpe")}  # for the ledger; removed before the result is stored
     return _clean(out) | {"_trial": out["_trial"]}
+
+
+def preview(spec: Strategy, symbol: str, years: float = 2.0) -> dict:
+    """Build's preview: one name, the last `years` of development bars, closes plus the trades the rule takes there (B-5)."""
+    found = C.compile_spec(spec)
+    if not found["ok"]:
+        return {"status": "skipped", "reason": "the rule does not compile", "bars": [], "trades": []}
+    # load extra history so long windows are warm before the visible span
+    prep = prepare(Settings(symbols=[symbol], benchmark="", magnifier=False))
+    p = prep.panel
+    lo = max(0, int(p.dates.searchsorted(p.dates[-1] - pd.DateOffset(days=int(365 * years)))))
+    r = simulate(spec, prep, Settings(symbols=[symbol], benchmark="", magnifier=False), magnifier=False)
+    trades = [t for t in trades_table(r, p) if t["exit_date"] >= str(p.dates[lo].date())]
+    bars = [{"date": str(d.date()), "close": float(c)} for d, c in zip(p.dates[lo:], p.close[lo:, 0], strict=True) if np.isfinite(c)]
+    total = float(np.prod([1 + t["return"] for t in trades]) - 1) if trades else 0.0
+    return {"status": "ok", "symbol": symbol, "bars": bars, "trades": trades, "total_return": total}
