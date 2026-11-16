@@ -7,8 +7,7 @@ import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   Activity, BrainCircuit, ChartNetwork, Command as CommandIcon, FlaskConical, Home, ListFilter, CloudDownload, CloudUpload, FileDown, FileUp, Moon, Orbit, PanelBottom, PanelLeft, PanelRight,
-  PieChart, Search, Settings2, SlidersHorizontal, Sun, type LucideIcon,
-} from "lucide-react";
+  PieChart, Search, Settings2, SlidersHorizontal, Sun, type LucideIcon, CandlestickChart } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { QuickLook } from "@/kit/QuickLook";
 import { SearchOverlay } from "@/modules/screener/search/SearchOverlay";
@@ -25,6 +24,7 @@ export const MODULES: ModuleLink[] = [
   { id: "research", label: "Research", href: "/research", icon: FlaskConical },
   { id: "ml", label: "Machine learning", href: "/ml", icon: BrainCircuit },
   { id: "screener", label: "Screener", href: "/screener", icon: ListFilter },
+  { id: "studio", label: "Studio", href: "/studio", icon: CandlestickChart },
 ];
 
 export type PaletteItem = { id: string; group: string; label: string; icon?: LucideIcon; meta?: string; keywords?: string[]; run: () => void };

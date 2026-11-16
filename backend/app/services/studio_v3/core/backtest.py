@@ -233,7 +233,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     surv = None
     if dead.any() and (~dead).any():
         rs = simulate(spec, prep, settings, sig=sig, mask=~dead)
-        surv = {"with_delisted": ret.get("cagr"), "survivors_only": _cagr(rs.equity, cap), "delisted": int(dead.sum()), "equity": rs.equity}
+        surv = {"status": "ok", "with_delisted": ret.get("cagr"), "survivors_only": _cagr(rs.equity, cap), "delisted": int(dead.sum()), "equity": rs.equity}
 
     stage("fill check", 84)
     e = spec.exits

@@ -178,7 +178,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
           <div className="ov-icon" style={{ width: 40, height: 40, borderRadius: 11 }}><Icon size={19} strokeWidth={1.6} /></div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div className="fv-title"><h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{meta.name}</h1><RunStamp status={run.status} result={result} /><Customised feature={feature} form={run.form} setForm={run.setForm} /><PageSwitch featureId={feature.id} /></div>
-            {lab().id !== "ml" && lab().id !== "screener" ? <><p style={{ marginTop: 4, color: "var(--text-2)", fontSize: 13.5 }}>{meta.question}</p><p style={{ marginTop: 6, color: "var(--text-3)", fontSize: 12.5, maxWidth: 860, lineHeight: 1.55 }}>{feature.description !== meta.question ? feature.description : null}</p></> : null}
+            {lab().id !== "ml" && lab().id !== "screener" && lab().id !== "studio" ? <><p style={{ marginTop: 4, color: "var(--text-2)", fontSize: 13.5 }}>{meta.question}</p><p style={{ marginTop: 6, color: "var(--text-3)", fontSize: 12.5, maxWidth: 860, lineHeight: 1.55 }}>{feature.description !== meta.question ? feature.description : null}</p></> : null}
           </div>
           <div className="fv-tools">
             {lab().save ? <button className="btn sm ghost" onClick={() => { const name = window.prompt("Save as")?.trim(); if (name) void lab().save!(name, feature, toPayload(feature, run.form)).then(() => toast.success(`Saved ${name}`), (e: Error) => toast.error(e.message)); }}><Bookmark size={13} />Save</button> : null}
@@ -293,7 +293,7 @@ const summarize = (f: InputSpec, v: unknown) => {
 };
 
 /** Run-context bar: what the shown run used, as chips that open the matching study fields. */
-function RunContext({ feature, run }: { feature: FeatureSpec; run: FeatureRun }) {
+export function RunContext({ feature, run }: { feature: FeatureSpec; run: FeatureRun }) {
   const [open, setOpen] = useState<{ id: string; at: MenuAt } | null>(null);
   const groups = CTX.map((g) => ({ ...g, fields: feature.inputs.filter(g.match).slice(0, 5) })).filter((g) => g.fields.length);
   if (!groups.length) return null;

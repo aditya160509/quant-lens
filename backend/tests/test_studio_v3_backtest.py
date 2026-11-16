@@ -279,3 +279,15 @@ def test_manifest_lists_the_backtest_feature(studio):
     m = studio.get("/api/studio-v3/features").json()
     assert m["features"][0]["id"] == "st01" and {i["key"] for i in m["features"][0]["inputs"]} >= {"strategy_id", "symbols", "fill", "commission_bps", "capital", "benchmark"}
     assert json.dumps(m)
+
+
+def test_every_template_compiles_and_trades_only_on_past_bars(studio):
+    got = studio.get("/api/studio-v3/templates").json()["templates"]
+    assert len(got) == 20 and len({t["name"] for t in got}) == 20
+    p = fixture_panel(400)
+    bars = {f: getattr(p, f)[:, :3] for f in data.FIELDS}
+    for t in got:
+        spec = Strategy(**t["spec"])
+        assert C.compile_spec(spec)["ok"], t["name"]
+        assert t["rule"] and t["description"]
+        C.signals(spec, bars, p.dates)

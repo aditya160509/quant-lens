@@ -14,10 +14,18 @@ from pydantic import BaseModel, Field, ValidationError
 
 from app.services.screener_v2.core.data_loader import BACKEND_DATA, normalize_symbol
 from app.services.studio.jobs import JobStore
-from app.services.studio_v3.core import backtest, data, formula, limits, store
+from app.services.studio_v3.core import (
+    backtest,
+    data,
+    formula,
+    limits,
+    store,
+    templates,
+)
 from app.services.studio_v3.core import compile as compiler
 from app.services.studio_v3.core.spec import Strategy
 from app.services.studio_v3.features.inputs import COST_PROFILES
+from app.services.studio_v3.features.inputs import parse as parse_payload
 from app.services.studio_v3.registry import feature_manifest, get_feature, run_feature
 
 RESULTS_DIR = BACKEND_DATA / "studio_v3" / "results"
@@ -108,6 +116,11 @@ def compile_strategy(request: SpecRequest) -> dict[str, Any]:
     t0 = time.perf_counter()
     out = compiler.compile_spec(_spec(request.spec))
     return {**out, "ms": round((time.perf_counter() - t0) * 1000, 2)}
+
+
+@router.get("/templates")
+def get_templates() -> dict[str, Any]:
+    return {"templates": templates.list_templates()}
 
 
 @router.get("/strategies")
@@ -241,6 +254,12 @@ def create_job(feature_id: str, request: FeatureRequest, x_studio_actor: str | N
         feature = get_feature(feature_id)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+    try:
+        parse_payload(request.payload)  # a run that cannot start is refused here, not as a failed job
+    except KeyError as exc:
+        raise HTTPException(404, str(exc).strip("'\"")) from exc
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, str(exc)) from exc
     job = JOBS.create(job_type=f"studio_v3_{feature.FEATURE_ID}", params={"feature_id": feature.FEATURE_ID, "payload": request.payload, "data_version": data.data_version()})
     if job["status"] == "queued":
         JOBS.submit(job["job_id"], _execute, job["job_id"], feature.FEATURE_ID, request.payload, _actor(x_studio_actor))
@@ -305,6 +324,7 @@ def _tool_ledger(args: dict, actor: str) -> dict:
 
 
 TOOLS: dict[str, tuple[str, dict, Any]] = {
+    "list_templates": ("Twenty starter strategies as full specs.", {}, lambda a, actor: {"templates": templates.list_templates()}),
     "compile": ("Compile a strategy spec: findings with line, token and message; look-ahead is refused.", {"spec": {"type": "object"}}, _tool_compile),
     "backtest": ("Backtest a saved strategy or a spec on the development period. Returns metrics, limits and the trial ledger; every call counts as a trial.",
                  {"payload": {"type": "object", "description": "strategy_id or spec, plus run settings (symbols, top_n, start, end, costs)"}}, lambda a, actor: _agent_backtest(a.get("payload", a), actor)),

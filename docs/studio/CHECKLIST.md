@@ -12,16 +12,17 @@ Engine
 - [x] Fill model shared by both: next open default, same close (optimistic label), gap through stop fills at open, worse-first same-bar rule, bar magnifier where hourly exists (K-3)
 
 ## Phase 1: backtest end to end (first usable Studio)
+Status 2026-11-16: backend done and tested (34 tests). Frontend written and typechecked (lab, route, nav, run header, Home, Backtest hero and four tabs) but never opened in a browser: no screenshots, no Playwright tests, so the frontend boxes stay open.
 Backend
-- [ ] `studio_v3` package: registry, manifest, jobs API `/api/studio-v3/...` on the shared `JobStore`
-- [ ] `/limits` and `/bars` endpoints (one price source for every page)
-- [ ] Strategy spec (pydantic) + compile from formula (shared `signal_lang` lifted to `services/shared/formula/`); look-ahead refused with line and token (B-2)
-- [ ] Costs: commission, slippage, borrow, dividends on shorts, volume cap; delisting-return setting
-- [ ] Sizing incl. risk per trade; exits incl. time stop, breakeven, scale out (B-8)
-- [ ] Trial ledger: raw and effective counts (B-7)
-- [ ] Zero- or too-few-trade runs refused with a reason (K-7)
-- [ ] Hold-out boundary (last 20%) excluded from every Backtest series (K-10)
-- [ ] Agent API: REST + MCP for `compile`, `backtest`, `get_ledger`, `get_data_audit`; actor log (X-3)
+- [x] `studio_v3` package: registry, manifest, jobs API `/api/studio-v3/...` on the shared `JobStore`
+- [x] `/limits` and `/bars` endpoints (one price source for every page)
+- [x] Strategy spec (pydantic) + compile from formula (shared `signal_lang` lifted to `services/shared/formula/`); look-ahead refused with line and token (B-2)
+- [ ] Costs: commission, slippage, borrow, volume cap and delisting haircut done; dividends on shorts not charged (no dividend column until phase 9)
+- [x] Sizing incl. risk per trade; exits incl. time stop, breakeven, scale out (B-8). Not built: vol target, Kelly, score, risk parity sizing; scale in
+- [x] Trial ledger: raw and effective counts (B-7)
+- [x] Zero- or too-few-trade runs refused with a reason (K-7)
+- [x] Hold-out boundary (last 20%) excluded from every Backtest series (K-10)
+- [x] Agent API: REST + MCP for `compile`, `backtest`, `get_ledger`, `get_data_audit`; actor log (X-3)
 
 Frontend
 - [ ] `studioLab.ts`, `/studio/[[...slug]]`, nav (Home · Build · Test · Portfolio · Live · Chart · Library), Studio back in `GlobalLayout`

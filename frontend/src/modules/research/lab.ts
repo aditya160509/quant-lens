@@ -16,6 +16,8 @@ export type Page = { id: string; label: string; icon: LucideIcon; question: stri
 export type LabConfig = {
   id: string;
   title: string;
+  /** Name of the root page in the nav; "Overview" when unset. */
+  homeLabel?: string;
   /** Route root, e.g. "/research". */
   root: string;
   /** API base for manifest and jobs. */

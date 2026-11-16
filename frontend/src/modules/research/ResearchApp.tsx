@@ -50,10 +50,14 @@ export function ResearchApp({ config = RESEARCH_LAB }: { config?: LabConfig }) {
 function ResearchPanels() {
   const L = lab();
   const params = useParams<{ feature?: string; token?: string }>();
-  const featureId = idFromSlug(params?.feature);
-  const special = specialPage(params?.feature);
+  // A lab on a catch-all route (/studio/[[...slug]]) sends its segments as `slug`: the page, then an optional id.
+  const slugs = (params as { slug?: string[] } | null)?.slug;
+  const segment = params?.feature ?? slugs?.[0];
+  const featureId = idFromSlug(segment);
+  const special = specialPage(segment);
   const sharedToken = (params as { token?: string } | null)?.token ?? null;
   const verifiedId = (params as { id?: string } | null)?.id ?? null;
+  const home = L.homeLabel ?? "Overview";
   const Special = verifiedId ? L.specials?.verified : special ? L.specials?.[special.id] : undefined;
   const embed = useSearchParams()?.get("embed") === "1";
   useEffect(() => {
@@ -77,7 +81,7 @@ function ResearchPanels() {
   // Some pages start with the inspector shut; it opens on demand for advanced settings.
   useEffect(() => { if (featureId && L.inspectorClosed?.includes(featureId)) useLayout.getState().set("right", false); }, [featureId, L.inspectorClosed]);
 
-  useEffect(() => setCrumb(verifiedId ? "Verified result" : special ? special.label : sharedToken ? "Shared run" : feature ? metaFor(feature.id, feature.name).name : "Overview"), [feature, special, sharedToken, verifiedId, setCrumb]);
+  useEffect(() => setCrumb(verifiedId ? "Verified result" : special ? special.label : sharedToken ? "Shared run" : feature ? metaFor(feature.id, feature.name).name : home), [feature, special, sharedToken, verifiedId, setCrumb, home]);
 
   useEffect(() => {
     if (!animate) return;
@@ -112,7 +116,7 @@ function ResearchPanels() {
   useEffect(() => {
     if (!manifest.data) return;
     registerPalette(L.id, [
-      { id: `${L.id}-overview`, group: L.title, label: "Overview", icon: LayoutGrid, run: () => router.push(L.root) },
+      { id: `${L.id}-overview`, group: L.title, label: L.homeLabel ?? "Overview", icon: LayoutGrid, run: () => router.push(L.root) },
       ...manifest.data.map((f) => {
         const m = metaFor(f.id, f.name);
         return { id: `feature-${f.id}`, group: L.title, icon: m.icon, label: m.name, keywords: [f.name, f.description, m.question], meta: latestRun(runs, f.id)?.headline?.split(".")[0], run: () => router.push(featureHref(f.id)) };
@@ -154,7 +158,7 @@ function ResearchPanels() {
             ) : sharedToken ? (
               <SharedView token={sharedToken} features={manifest.data ?? []} />
             ) : Special ? (
-              <Special features={manifest.data ?? []} id={verifiedId ?? undefined} />
+              <Special features={manifest.data ?? []} id={verifiedId ?? slugs?.[1]} />
             ) : special?.id === "signal" && L.signal ? (
               <SignalPage />
             ) : special?.id === "report" && L.signal ? (
@@ -172,7 +176,7 @@ function ResearchPanels() {
       <div className="ws-mobile">
         <div className="ws-mobile-bar">
           <select className="input" aria-label="Page" value={special ? pageHref(special) : feature ? featureHref(feature.id) : L.root} onChange={(e) => router.push(e.target.value)}>
-            <option value={L.root}>Overview</option>
+            <option value={L.root}>{home}</option>
             {L.pages.map((p) => <option key={p.id} value={pageHref(p)}>{p.label}</option>)}
           </select>
           {feature ? <button type="button" className="btn" onClick={() => sheet.current?.showModal()}><SlidersHorizontal size={14} />Settings</button> : null}
@@ -217,9 +221,9 @@ function FeatureNav({ features, loading, activeId, activePage, runs }: { feature
       <div className="nav-h"><span>{L.title}</span></div>
       {L.signal ? <ProjectSwitcher /> : null}
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
-        <Link href={L.root} className="nav-item" title="Overview" aria-current={activeId === null && activePage === null ? "page" : undefined}>
+        <Link href={L.root} className="nav-item" title={L.homeLabel ?? "Overview"} aria-current={activeId === null && activePage === null ? "page" : undefined}>
           <LayoutGrid size={15} strokeWidth={1.7} />
-          <span className="label">Overview</span>
+          <span className="label">{L.homeLabel ?? "Overview"}</span>
         </Link>
         <div style={{ height: 1, margin: "6px 16px", background: "var(--line)" }} />
         {loading ? Array.from({ length: 6 }, (_, i) => (
