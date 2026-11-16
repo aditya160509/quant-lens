@@ -183,11 +183,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
         raise Refusal(f"The strategy does not compile: {first['message']}" + (f" (line {first['line']}, '{first['token']}')" if first["token"] else "") + ".",
                       ["a rule has a typo", "a rule reads a future bar", "a setting is missing"])
     if spec.code.strip() and not (spec.entry_long.strip() or spec.entry_short.strip()):
-        from .sandbox import (
-            run_python,  # Python strategies run in the sandbox (phase 2)
-        )
-
-        return run_python(spec, settings, stage)
+        raise Refusal("Python strategies cannot run yet.", ["the sandbox is not built", "write the rule as a formula", "or as blocks"])
     stage("load", 10)
     prep = prepare(settings)
     p, cap = prep.panel, settings.capital
