@@ -1,6 +1,6 @@
 # Studio v3: frontend plan
 
-Date: 2026-11-15. From scratch, on the shared lab workspace. Style: Outputs v2 (fewer, bigger, cinematic; one lead figure per card; limits in one pill). Every page, input and output is listed in [FEATURES_AND_OUTPUTS.md](FEATURES_AND_OUTPUTS.md); what is imported is in [REUSE.md](REUSE.md). This file covers the screens, the interaction and the budgets.
+Date: 2026-11-15. From scratch, on the shared lab workspace. Style: Outputs v2 (fewer, bigger, cinematic; one lead figure per card; limits in one pill). Every page, input and output is listed in [FEATURES_AND_OUTPUTS.md](FEATURES_AND_OUTPUTS.md); what is imported is in [REUSE.md](../research/REUSE.md). This file covers the screens, the interaction and the budgets.
 
 ## 1. Shape
 

@@ -2,11 +2,11 @@ You are building Studio v3 in this repo, from scratch, as far as you can get in 
 
 ## Read first, in this order
 1. `AGENTS.md` (repo rules: smallest complete change, reuse before writing, verify before deleting).
-2. `docs/studio/CHECKLIST.md` (the build order, phases 0 to 9, and the only progress tracker).
-3. `docs/studio/PAGES.md` (the spec: 9 pages, inputs, outputs, acceptance ids H-, B-, K-, O-, V-, P-, L-, C-, Y-, X-).
-4. `docs/studio/PLAN.md` §3 principles, §5 backend architecture, §5.1 engine, §5.2 API.
-5. `docs/studio/REUSE.md` (what to import or lift from Screener, Research, ML and `chart_engine`).
-6. `docs/studio/FEATURES_AND_OUTPUTS.md` §4 metric set and §10 customisation; `FRONTEND.md` §3-§9.
+2. `docs/studio/plan/CHECKLIST.md` (the build order, phases 0 to 9, and the only progress tracker).
+3. `docs/studio/plan/PAGES.md` (the spec: 9 pages, inputs, outputs, acceptance ids H-, B-, K-, O-, V-, P-, L-, C-, Y-, X-).
+4. `docs/studio/plan/PLAN.md` §3 principles, §5 backend architecture, §5.1 engine, §5.2 API.
+5. `docs/studio/research/REUSE.md` (what to import or lift from Screener, Research, ML and `chart_engine`).
+6. `docs/studio/plan/FEATURES_AND_OUTPUTS.md` §4 metric set and §10 customisation; `FRONTEND.md` §3-§9.
 Read `REVIEW.md`, `COMPETITORS.md` and `OPEN_SOURCE.md` only when a decision needs the reason.
 Do not read `docs/screener_v2_optimization/Screener V2 Master Audit Prompt.md`.
 
@@ -17,7 +17,7 @@ Do not read `docs/screener_v2_optimization/Screener V2 Master Audit Prompt.md`.
 - Old Studio is already deleted. `components/chart_engine/` stays until phase 4 ports its maths (it still serves `/trade`).
 
 ## How to work each phase
-1. Tick items in `docs/studio/CHECKLIST.md` as they land.
+1. Tick items in `docs/studio/plan/CHECKLIST.md` as they land.
 2. Each item is done only when its acceptance ids in `PAGES.md` pass as real tests (backend pytest, Playwright for UI and budgets).
 3. Run the narrowest tests while working; at the end of a phase run all Studio tests plus the other labs' backend tests (`cd backend && uv run pytest`), `npm run typecheck` and `npm run lint` in `frontend/`.
 4. Look at what you built: start the dev servers via the preview tools, open every new page, screenshot at 1440 and 1024 in dark and light, fix what looks wrong, then look again.

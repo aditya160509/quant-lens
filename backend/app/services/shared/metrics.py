@@ -1,4 +1,4 @@
-"""The one metric set (docs/studio/FEATURES_AND_OUTPUTS.md §4). Every lab imports its Sharpe and drawdown from here.
+"""The one metric set (docs/studio/plan/FEATURES_AND_OUTPUTS.md §4). Every lab imports its Sharpe and drawdown from here.
 
 Unknown stays unknown: a metric that cannot be computed is None, never zero.
 """

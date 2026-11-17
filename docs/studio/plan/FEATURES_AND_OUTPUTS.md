@@ -2,9 +2,9 @@
 
 Date: 2026-11-15. Rule (from Outputs v2): **an output exists only if it has a lead figure or a one-line finding, and nobody else on the page says the same thing.** Everything cut stays reachable as a card's Table view or in Export.
 
-Sources for what each competitor sells: [COMPETITORS.md](COMPETITORS.md). Marks: **(TV)** TradingView, **(SQ)** StrategyQuant X, **(BA)** Build Alpha, **(QC)** QuantConnect, **(P123)** Portfolio123, **(C)** Composer, **(AB)** AmiBroker, **(WL)** WealthLab. **Ours** = nobody sells it this way.
+Sources for what each competitor sells: [COMPETITORS.md](../research/COMPETITORS.md). Marks: **(TV)** TradingView, **(SQ)** StrategyQuant X, **(BA)** Build Alpha, **(QC)** QuantConnect, **(P123)** Portfolio123, **(C)** Composer, **(AB)** AmiBroker, **(WL)** WealthLab. **Ours** = nobody sells it this way.
 
-### Why each feature exists (from [COMPETITORS.md](COMPETITORS.md), third pass)
+### Why each feature exists (from [COMPETITORS.md](../research/COMPETITORS.md), third pass)
 
 | What users said or what competitors lack | Feature here |
 |---|---|
@@ -271,7 +271,7 @@ CSV of every table, trade list as CSV, equity as CSV, PNG/SVG of any chart, one-
 
 ## 7. Paid features elsewhere, free here (researched 2026-11-15)
 
-Prices as read on the pages cited in [COMPETITORS.md](COMPETITORS.md).
+Prices as read on the pages cited in [COMPETITORS.md](../research/COMPETITORS.md).
 
 | Feature | Who charges, and how much | Here |
 |---|---|---|

@@ -1,4 +1,4 @@
-"""Two engines over one fill model (docs/studio/PLAN.md §5.1).
+"""Two engines over one fill model (docs/studio/plan/PLAN.md §5.1).
 
 `vector`: one numba kernel over (bars x symbols) arrays; used for signal strategies, sweeps and robustness repeats.
 `event`:  a plain Python bar loop with a strategy hook (`on_bar(ctx)`); used for Python strategies and as the cross-check.

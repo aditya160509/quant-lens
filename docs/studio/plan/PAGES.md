@@ -4,7 +4,7 @@ Date: 2026-11-15. Replaces the page plan in FRONTEND.md §1-2 and the page list 
 
 Style rule (Outputs v2): one lead figure or one-line finding per card; no taglines; no helper text a good layout would not need. Everything cut from a card stays in its Table view or Export.
 
-Reuse paths are from [REUSE.md](REUSE.md) (checked 2026-11-15). "Shared" = already in `modules/research` or `kit`.
+Reuse paths are from [REUSE.md](../research/REUSE.md) (checked 2026-11-15). "Shared" = already in `modules/research` or `kit`.
 
 ---
 

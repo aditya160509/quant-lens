@@ -1,4 +1,4 @@
-"""Studio v3 phase 1: compile, backtest payload, ledger, strategies and the agent API. Acceptance ids from docs/studio/PAGES.md."""
+"""Studio v3 phase 1: compile, backtest payload, ledger, strategies and the agent API. Acceptance ids from docs/studio/plan/PAGES.md."""
 
 import json
 import time

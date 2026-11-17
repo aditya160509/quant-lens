@@ -2,7 +2,7 @@
 
 Date: 2026-11-15. Status: proposed, not started. Owner decision taken: **rewrite from scratch**. Nothing in the current Studio code is kept as code; ideas that worked are carried over by name (section 4). The chart engine is also taken apart and rebuilt (section 6); it is the only part with progress worth mining.
 
-Companion files: [FEATURES_AND_OUTPUTS.md](FEATURES_AND_OUTPUTS.md) (every page, input and output), [FRONTEND.md](FRONTEND.md) (screens and interaction), [REUSE.md](REUSE.md) (what to copy from Screener, Research, ML), [COMPETITORS.md](COMPETITORS.md) and [OPEN_SOURCE.md](OPEN_SOURCE.md) (research), [CHECKLIST.md](CHECKLIST.md) (progress).
+Companion files: [FEATURES_AND_OUTPUTS.md](FEATURES_AND_OUTPUTS.md) (every page, input and output), [FRONTEND.md](FRONTEND.md) (screens and interaction), [REUSE.md](../research/REUSE.md) (what to copy from Screener, Research, ML), [COMPETITORS.md](../research/COMPETITORS.md) and [OPEN_SOURCE.md](../research/OPEN_SOURCE.md) (research), [CHECKLIST.md](CHECKLIST.md) (progress).
 
 ---
 
@@ -111,7 +111,7 @@ Fill model (shared, explicit, printed on every run):
 - Delisted holdings settle at last close into cash (same rule as `screener_v2/core/backtest.py`).
 - Corporate actions: adjusted prices for signals, raw for share counts when both exist; otherwise adjusted, said in limits.
 
-Why our own engine: vectorbt OSS carries the Commons Clause (not shippable), nautilus_trader is LGPL and an execution platform we do not need, backtesting.py is AGPL, backtrader GPL, zipline is portfolio-only and slow. Our arrays plus numba match their speed for the cases we sell. Licences: see [OPEN_SOURCE.md](OPEN_SOURCE.md).
+Why our own engine: vectorbt OSS carries the Commons Clause (not shippable), nautilus_trader is LGPL and an execution platform we do not need, backtesting.py is AGPL, backtrader GPL, zipline is portfolio-only and slow. Our arrays plus numba match their speed for the cases we sell. Licences: see [OPEN_SOURCE.md](../research/OPEN_SOURCE.md).
 
 ### 5.2 API
 
