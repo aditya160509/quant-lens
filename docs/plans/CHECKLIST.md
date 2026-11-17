@@ -1,5 +1,7 @@
 # Checklist
 
+Product line and order after Studio: [PRODUCT_LINE.md](../architecture/PRODUCT_LINE.md) (2026-11-17).
+
 Tick items here only. The plan is in [PLAN.md](PLAN.md).
 
 ## Now: finish ML
