@@ -192,3 +192,32 @@ Before a new screen, look at 3–5 real products that solve the same task, then 
 - [ ] Radii concentric; shadows only on floating layers.
 - [ ] Every state (empty, loading, error, skipped, dense) designed, and broken with worst-case data.
 - [ ] Copy: verbs on buttons, `…` on pending states, errors say how to fix.
+
+## 12. What the best products do (screenshots in `refs/`)
+
+Captured 2026-11-17 at 1440×900. Signed-in app screens are not public, so these show each product's own shots of its UI and its docs.
+
+| Product | Screenshot | What to copy |
+|---|---|---|
+| QuantConnect | `refs/quantconnect-docs.png`, `refs/quantconnect.png` | Backtest result layout: a full-width stat strip of 8 figures in mono with green/red sign colour, then the equity chart (wide, with 1m/3m/1y/All ranges and a daily-return bar strip beneath), then a narrow right column with chart picker and ranking. Docs layout: left tree, content at ~730px, right "in this page" rail |
+| Linear | `refs/linear.png` | Inverted-L chrome: sidebar ~220px, dimmer than the work area; 13px labels with 16px icons; a header row with ID, title, star and `1 / 84` pager with ↑↓; side panel opens over the content, not beside it |
+| Koyfin | `refs/koyfin.png` | Dashboard of small titled panels on a dark frame: news table, currency table with right-aligned price, change and % columns, checkbox per row to add to the chart; 12px rows, no card padding wasted |
+| Raycast | `refs/raycast.png` | Command palette as the main navigation: one search box for every item and action, shortcut shown on the right of each row |
+| Stripe docs | `refs/stripe-docs.png` | Calm reference layout; code and prose side by side |
+| Vercel Geist | `refs/geist.png` | Grey scale, Geist Sans/Mono, the system Studio's tokens most resemble |
+| TradingView Pine | `refs/tradingview-pine.png` | Editor docs; the Pine editor docks under the chart, results in the same frame |
+
+### Rules learned from them
+
+- **Rank the data, don't hide it** (Koyfin team, DIXI). Investors want more on screen, not less. Removing data to "look clean" sends them back to a spreadsheet.
+- **Whitespace can kill a pro tool.** A portfolio analytics firm blamed its stalled growth on a "modern" white-space-heavy web app beside the Bloomberg terminal (HN 19153875). Studio's density target is Bloomberg and Koyfin, not a SaaS landing page.
+- **Show how fresh every number is.** Mark delayed or end-of-day data and keep its date visible (Koyfin). For Studio: "data ends 2026-02-01" on every live figure.
+- **Colour only for direction, and never alone.** Pair red and green with a sign or arrow; 1 in 12 men are colour-blind.
+- **Number columns don't move.** Use fixed-width figures and no tick animation, so the eye never re-finds a number (BridgeIQ trading UI).
+- **No transitions on live data panels.** Drop padding and fades on panels that update.
+- **Separate dark panels by background steps.** Use 4 steps about 6–7 hex points apart (`#0a0a0a / #111 / #161616 / #1c1c1c`), add `rgba(255,255,255,.06)` borders only where needed, and use two scales per semantic colour: green `#22c55e` dark and `#16a34a` light (pixel-show, trading journal).
+- **One search for everything.** One box finds tickers, runs, pages and actions (Koyfin, Raycast, Bloomberg `<GO>`).
+- **Let users save their own views.** Column sets, screens and layouts are per user, saved and shareable.
+- **Change gradually.** Bloomberg ships UI changes in small steps over months and releases on Friday nights, so users adapt over the weekend. For Studio, redesign one page at a time and keep shortcuts and positions stable.
+- **Keyboard first.** Bloomberg, Linear and Raycast all reach every function from the keyboard, which is what makes a tool feel like an extension of the user.
+- **Backtest page order** follows QuantConnect: stat strip → equity with drawdown or returns strip → tabs (orders, trades, logs, insights, report). Studio's Backtest hero already matches; keep the stat strip to a single row of at most 8 figures.
