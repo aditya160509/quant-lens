@@ -42,6 +42,14 @@ What the data can and cannot support, and what Studio does about it. Source: `li
 
 ## Decisions already taken
 
+- 2026-11-17 (owner):
+  - Live in v3 is paper trading plus an order CSV. Broker execution comes after launch (OD-6).
+  - Manual replay and journal are out of v3 (OD-7).
+  - The AI assistant and experiment agent come later, off by default (OD-11).
+  - No notebook inside Studio; the Research lab covers it (OD-10).
+  - Work goes one page at a time.
+  - Still open: OD-8, whether Live refuses to run or disables only Today and Forward while the data is stale.
+
 - 2026-11-16: hourly bars removed from Studio (bar magnifier, fill check, 1h chart bars, hourly audit). Yahoo keeps only 730 days of hourly bars: too short for walk-forward or luck tests, and held for 23 indices, no stocks. A stop and a target inside one bar now always fill the stop first (worst case). Saved runs that still carry `magnifier` load fine; the field is dropped on read. `data_version` no longer changes when the hourly file changes.
 - 2026-11-15: old Studio removed; Studio Chart embeds the full `chart_engine` chart (owner ask).
 - `/trade` is not redirected to `/studio/chart`: it is a multi-tab trading page.
