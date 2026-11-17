@@ -14,6 +14,7 @@ Build a trading strategy (blocks, formula, Python or plain English), test it unt
 | [FEATURES_AND_OUTPUTS.md](plan/FEATURES_AND_OUTPUTS.md) | Every input and output with its reason |
 | [FRONTEND.md](plan/FRONTEND.md) | Screens, layouts, keyboard, budgets |
 | [BUILD_PROMPT.md](plan/BUILD_PROMPT.md) | Prompt for an agent continuing the build |
+| [PYTHON_IDE.md](plan/PYTHON_IDE.md) | Python editor audit vs QuantConnect and the plan to a full IDE |
 
 ## standards/ — what every change is checked against
 
