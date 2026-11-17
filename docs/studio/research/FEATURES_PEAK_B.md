@@ -1,6 +1,6 @@
 # Studio: every feature at its peak (pass B)
 
-Second, independent pass. Pass A (`IDE_FEATURES_A.md`, a research agent) and this one merge into `plan/FEATURES_PEAK.md`. Part I is the Python IDE (Build). Part II covers every other page.
+Second, independent pass. Pass A (`FEATURES_PEAK_A.md`, a research agent) and this one merge into `plan/FEATURES_PEAK.md`. Part I is the Python IDE (Build). Part II covers every other page.
 
 Pages read on 2026-11-17:
 - QuantConnect: `cloud-platform/projects/ide`, `cloud-platform/backtesting/debugging`, `cloud-platform/projects/shared-libraries`
