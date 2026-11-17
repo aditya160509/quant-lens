@@ -32,7 +32,10 @@ Decisions:
 ## Other decisions on 2026-11-17
 
 - PCA is a section of Factors, not its own lab (`plans/FACTORS_CHECKLIST.md`).
-- Widget workspace: cut for now; revisit after launch.
+- Widget workspace: deferred, not cut.
+  1. Now: every exhibit in the shared kit gets one contract (inputs, data fetch, min size).
+  2. After the data refresh: "Pin" on any exhibit and a Home dashboard of pins, refreshing daily (1–2 weeks).
+  3. Later: saved layouts, templates, ticker-linked widgets.
 - Chart system: shrink to export and annotations; no per-chart styling panel.
 - Order after Studio:
   1. Data refresh and the daily update job
