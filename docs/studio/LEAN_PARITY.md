@@ -111,6 +111,17 @@ LEAN gets its accuracy from raw prices plus factor files (splits, dividends) and
 
 Each step: tests first (they fail), then the fix, then `CODE_STANDARDS.md` gates, then commit. A step isn't done until both engines pass its goldens.
 
+### After every module: review and improve
+
+Once a module passes its goldens, it gets a full pass before the next module starts:
+
+1. **Audit against `CODE_STANDARDS.md`.** Every applicable item is marked PASS, FAIL, N/A or UNVERIFIED with evidence. No UNVERIFIED item counts as done.
+2. **Correctness review.** Read every function line by line for look-ahead, off-by-one bar indexing, NaN and empty-input handling, division by zero, integer and float mixing, and sample-vs-population choices.
+3. **Edge-case tests.** Cover one bar, zero trades, all-NaN symbols, a delisting on day 1, a gap on the entry bar, zero volume, and a huge universe.
+4. **Simplify.** Remove duplicate formulas (one function per statistic, shared by every caller), dead paths and old code the port replaced.
+5. **Speed.** Benchmark before and after; keep or improve the speed, within the §8 budget.
+6. **Record.** Tick the module in `CHECKLIST.md`, add any intended difference from LEAN to `DECISIONS.md`, and commit with the audit result in the message.
+
 ## 8. Risks
 
 - **LEAN version drift.** Pin the Docker image tag; refresh goldens only deliberately, and review the diff.
