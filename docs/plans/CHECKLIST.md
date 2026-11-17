@@ -80,18 +80,15 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [x] Redo product review: full paid feature parity, India and global
 - [ ] Build: see [SCREENER_CHECKLIST.md](SCREENER_CHECKLIST.md); ship and tag `screener-v1`
 
-## Step 3: Factors
-- [ ] Build: see [FACTORS_CHECKLIST.md](FACTORS_CHECKLIST.md); ship and tag `factors-v1`
+## Step 3: Factors (includes PCA as a section)
+- [ ] Build: see [FACTORS_CHECKLIST.md](FACTORS_CHECKLIST.md), PCA section included (33 correctness fixes first); ship and tag `factors-v1`
 
 ## Step 4: Volatility
 - [ ] Redo product review against the feature rule (listed under Planning)
 - [ ] Build: see [VOLATILITY_CHECKLIST.md](VOLATILITY_CHECKLIST.md); ship and tag `volatility-v1`
 
 ## Step 5: PCA
-- [ ] Product review (written 2026-11-09)
-- [ ] Remove preview filler; show fallback flags (PLAN 5.2; not in the review)
-- [ ] Rolling loadings (PLAN 5.4; not in the review)
-- [ ] Build: see [PCA_CHECKLIST.md](PCA_CHECKLIST.md); 33 correctness fixes first; ship and tag `pca-v1`
+Merged into Factors as a section (2026-11-17). See Step 3.
 
 ## Step 6: Portfolio
 - [ ] Product review (written 2026-11-09)
