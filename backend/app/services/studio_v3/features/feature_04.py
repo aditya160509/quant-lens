@@ -14,6 +14,7 @@ INPUTS = [field("strategy_ids", "Strategies", "text", None, "Strategy"), *[f for
           field("rebalance", "Weights", "select", "in_sample", "Allocation", options=["in_sample", "quarterly"]),
           field("fixed", "Fixed weights (name=weight, …)", "text", "", "Allocation"),
           field("rotate_top", "Rotate: hold the top N by 3-month return (0 = off)", "number", 0, "Allocation"),
+          field("max_weight", "Max weight per member (0 = none)", "number", 0, "Allocation"),
           field("switch", "Switch rule (on the benchmark)", "text", "", "Allocation"),
           field("switch_off", "Hold when the rule is false", "text", "", "Allocation")]
 OUTPUTS = [
@@ -24,6 +25,11 @@ OUTPUTS = [
     {"key": "members", "source": "tables", "render": "table", "label": "Members"},
     {"key": "marginal", "source": "tables", "render": "table", "label": "Marginal contribution"},
     {"key": "overlap", "source": "tables", "render": "table", "label": "Overlap"},
+    {"key": "risk_share", "source": "tables", "render": "table", "label": "Risk share"},
+    {"key": "crises", "source": "tables", "render": "table", "label": "Crisis stress"},
+    {"key": "dropout", "source": "tables", "render": "table", "label": "Drop one member"},
+    {"key": "drawdown_overlap", "source": "tables", "render": "table", "label": "Drawdown overlap"},
+    {"key": "rolling_correlation", "source": "tables", "render": "lineChart", "label": "Rolling correlation"},
     {"key": "weights_over_time", "source": "tables", "render": "table", "label": "Weights over time"},
 ]
 
@@ -39,6 +45,7 @@ def run(payload: dict[str, Any] | None = None, progress=None) -> dict[str, Any]:
     if isinstance(fixed, str):
         fixed = {k.strip(): float(v) for k, v in (x.split("=", 1) for x in fixed.split(",") if "=" in x)}
     out = portfolio.run_portfolio(portfolio.members_from(ids), settings, str(payload.get("method") or "equal"), str(payload.get("switch") or ""), payload.get("switch_off") or None, progress,
-                                  str(payload.get("rebalance") or "in_sample"), fixed, int(payload.get("rotate_top") or 0))
+                                  str(payload.get("rebalance") or "in_sample"), fixed, int(payload.get("rotate_top") or 0),
+                                  float(payload.get("max_weight") or 0) or None)
     out["meta"]["strategy"] = {"id": None, "version": None, "name": "Portfolio"}
     return backtest._clean(out)

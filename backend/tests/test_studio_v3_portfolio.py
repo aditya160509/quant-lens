@@ -42,3 +42,29 @@ def test_risk_parity_hrp_and_rolling_weights():
     out, hist = P.rolling(r, "inverse_vol")
     assert np.allclose(out[:253], r.iloc[:253].mean(1))  # equal weight until a year of history: no look-ahead
     assert hist[0]["date"] == str(r.index[253].date())
+
+
+def test_cap_redistributes_and_frontier_dominates_members():
+    w = P._cap(np.array([0.7, 0.2, 0.1]), 0.4)
+    assert abs(w.sum() - 1) < 1e-9 and w.max() <= 0.4 + 1e-9 and w[1] > w[2]  # excess goes in proportion
+    rng = np.random.default_rng(1)
+    r = pd.DataFrame(rng.standard_normal((800, 3)) * 0.01 + [0.0004, 0.0002, 0.0003], columns=list("abc"))
+    md = P._weights(r, "max_diversification")
+    assert (md >= 0).all() and abs(md.sum() - 1) < 1e-9
+    f = P.frontier(r)
+    assert len(f) > 5 and max(p["ret"] for p in f) >= r.mean().max() * 252 * 0.95  # frontier reaches the best member's return
+
+
+def test_analytics_netting_dropout_and_grade():
+    from types import SimpleNamespace as NS
+    dates = pd.bdate_range("2018-01-01", periods=700)
+    rng = np.random.default_rng(2)
+    r = pd.DataFrame(rng.standard_normal((700, 3)) * 0.01 + 0.0005, columns=["a", "b", "c"], index=dates)
+    pos = np.zeros((700, 1)); pos[100:200] = 10  # a and b hold opposite sides: netting removes all of it
+    res = {"a": NS(traded=np.ones(700), positions=pos), "b": NS(traded=np.ones(700), positions=-pos), "c": NS(traded=np.ones(700), positions=np.zeros((700, 1)))}
+    w = np.ones(3) / 3
+    eq = 1e5 * np.cumprod(1 + r.to_numpy() @ w)
+    out = P.analytics(r, w, eq, dates, 1e5, None, res, {}, list(r.columns), "equal", "", 7)
+    assert out["stats"]["netting"]["saved"] == 1.0
+    assert abs(out["stats"]["effective_bets"] - 3) < 1e-9 and len(out["tables"]["dropout"]) == 3
+    assert out["grade"]["grade"] in "ABCDF" and {t["test"] for t in out["tiles"]} >= {"dsr", "walk_forward"}
