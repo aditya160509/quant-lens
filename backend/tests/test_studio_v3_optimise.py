@@ -76,3 +76,21 @@ def test_python_declared_parameters_are_used_by_preview_and_grid():
         assert result.trades[:, backtest.engine.T_SHARES].tolist() == [quantity]
     result = O.run_optimise(spec, Settings(symbols=["SPY"]), "grid", "sharpe", 3)
     assert result["meta"]["cells"] == 3
+
+
+def test_python_starter_gallery_trades_on_real_market_data():
+    from app.services.studio_v3.core import backtest, templates
+    from app.services.studio_v3.core import compile as C
+
+    gallery = templates.list_python_templates()
+    assert len({item["name"] for item in gallery}) == 8
+    prepared = {}
+    for item in gallery:
+        spec = Strategy(**item["spec"])
+        settings = Settings(symbols=item["symbols"], benchmark="")
+        key = tuple(settings.symbols)
+        if key not in prepared:
+            prepared[key] = backtest.prepare(settings)
+        assert C.compile_spec(spec)["ok"], item["name"]
+        result = backtest.simulate(spec, prepared[key], settings)
+        assert len(result.trades) > 0, item["name"]

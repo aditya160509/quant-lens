@@ -222,7 +222,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-95 User snippets: save a selection with tab stops and a prefix trigger; shareable through Library
 - [ ] [M] B-96 Examples in hover docs insert with one click
 - [ ] [M] B-97 Gallery of 12 starters with a one-line description, last backtest on the default universe and "use as start" (trend 50/200, RSI(2), momentum top 10, dual momentum, pairs z-score, vol target, ATR breakout, turn of month, gap fade, sector rotation, ML ranking, risk parity) (partial: 20 formula templates exist; gallery stats open)
-- [ ] [M] B-98 Python starters: trend, mean reversion, momentum rotation, pairs, vol target, breakout, seasonality, ML score [PY B10]
+- [ ] [M] B-98 Python starters: trend, mean reversion, momentum rotation, pairs, vol target, breakout, seasonality, ML score [PY B10] (backend done: eight starters trade on real data; gallery UI open)
 - [ ] [M] B-99 Warn above 200 blocks, hard stop above 1,000; warn above 8 optimisable parameters (backend done: compile findings; frontend wiring open)
 - [ ] [E] B-100 Customise: personal templates, parameter ranges per strategy, default sizing and costs per user, editor font and keymap
 - [ ] [M] B-101 Monaco palette and the app palette merged into one list, grouped Editor, Run, View, Studio

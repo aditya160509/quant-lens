@@ -51,3 +51,107 @@ TEMPLATES = [
 
 def list_templates() -> list[dict]:
     return [{**t, "description": compile_spec(Strategy(**t["spec"]))["description"]} for t in TEMPLATES]
+
+
+PYTHON_TEMPLATES = [
+    _t("Python trend", "Buy above the 100-session average and exit below it.", code='''class Strategy:
+    warmup = 99
+
+    def on_bar(self, ctx):
+        if ctx.rule("close > sma(close, 100)"):
+            ctx.buy()
+        else:
+            ctx.sell()
+'''),
+    _t("Python mean reversion", "Buy an oversold RSI and exit when it recovers.", code='''class Strategy:
+    def on_bar(self, ctx):
+        if ctx.rule("rsi(close, 14) < 35"):
+            ctx.buy()
+        elif ctx.rule("rsi(close, 14) > 55"):
+            ctx.sell()
+'''),
+    _t("Python momentum rotation", "At month start, hold the strongest name by 63-session return.", code='''class Strategy:
+    warmup = 63
+    rebalance_schedule = "month_start"
+
+    def on_data(self, ctx):
+        if not ctx.rebalancing:
+            return
+        ranked = ctx.rank("roc(close, 63)", top=1)
+        if ranked:
+            leader = ranked[0][0]
+            ctx.target_weights({symbol: 0.9 if symbol == leader else 0 for symbol in ctx.symbols})
+'''),
+    _t("Python pairs", "Trade the spread between SPY and QQQ after normalising each by its recent average.", code='''class Strategy:
+    warmup = 30
+
+    def on_data(self, ctx):
+        if "SPY" not in ctx.symbols or "QQQ" not in ctx.symbols:
+            return
+        spy = ctx.value("close / sma(close, 30)", "SPY")
+        qqq = ctx.value("close / sma(close, 30)", "QQQ")
+        spread = spy - qqq
+        if abs(spread) < 0.005:
+            ctx.liquidate()
+        elif spread > 0.025:
+            ctx.target_weights({"SPY": -0.25, "QQQ": 0.25})
+        elif spread < -0.025:
+            ctx.target_weights({"SPY": 0.25, "QQQ": -0.25})
+'''),
+    _t("Python volatility target", "Scale exposure to a 12% annualised volatility target each month.", code='''class Strategy:
+    warmup = 21
+    rebalance_schedule = "month_start"
+
+    def on_data(self, ctx):
+        if not ctx.rebalancing:
+            return
+        for symbol in ctx.symbols:
+            volatility = ctx.value("std(returns, 20)", symbol) * math.sqrt(252)
+            if volatility > 0:
+                ctx.set_holdings(symbol, min(0.9, 0.12 / volatility) / len(ctx.symbols))
+'''),
+    _t("Python breakout", "Enter on a new 30-session closing high and exit below the 15-session average.", code='''class Strategy:
+    def on_bar(self, ctx):
+        if ctx.rule("close > delay(highest(close, 30), 1)"):
+            ctx.buy()
+        elif ctx.rule("close < sma(close, 15)"):
+            ctx.sell()
+'''),
+    _t("Python seasonality", "Enter at the start of each month and exit after five observed sessions.", code='''class Strategy:
+    def init(self, ctx):
+        self.exit_at = 0
+
+    def on_data(self, ctx):
+        if ctx.is_month_start:
+            ctx.target_weights({symbol: 0.9 / len(ctx.symbols) for symbol in ctx.symbols})
+            self.exit_at = ctx.bar_index + 5
+        elif ctx.bar_index == self.exit_at:
+            ctx.liquidate()
+'''),
+    _t("Python ML score", "Fit a one-feature streaming regression to completed daily returns.", code='''class Strategy:
+    warmup = 30
+
+    def init(self, ctx):
+        self.cross_product = 0.0
+        self.feature_power = 0.0
+
+    def on_bar(self, ctx):
+        x = ctx.value("delay(returns, 1)")
+        y = ctx.value("returns")
+        if math.isfinite(x) and math.isfinite(y):
+            self.cross_product = 0.98 * self.cross_product + x * y
+            self.feature_power = 0.98 * self.feature_power + x * x
+            if self.feature_power > 0:
+                score = self.cross_product / self.feature_power * y
+                if score > 0:
+                    ctx.buy()
+                elif score < 0:
+                    ctx.sell()
+'''),
+]
+
+
+def list_python_templates() -> list[dict]:
+    return [{"name": template["name"], "rule": template["rule"], "spec": template["spec"],
+             "symbols": ["SPY", "QQQ"] if template["name"] == "Python pairs" else ["SPY", "QQQ", "IWM"]}
+            for template in PYTHON_TEMPLATES]

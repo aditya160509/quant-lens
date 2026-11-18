@@ -529,7 +529,7 @@ def test_alert(sid: str) -> dict[str, Any]:
 
 @router.get("/templates")
 def get_templates() -> dict[str, Any]:
-    return {"templates": templates.list_templates()}
+    return {"templates": templates.list_templates(), "python_templates": templates.list_python_templates()}
 
 
 @router.get("/strategies")

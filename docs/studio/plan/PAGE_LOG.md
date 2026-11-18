@@ -145,3 +145,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-70 advanced. The debugger accepts a file and line with an optional conjunction of date and symbol comparisons. It captures bounded locals before that line executes and returns the account and order snapshot after the same bar. Hit counts are computed by replay. Arbitrary expressions, equity breakpoints and editor wiring remain open.
 
 - B-70 backend now includes an equity-loss trigger. Send `event: "equity"` and a positive `loss_fraction` to the debugger. It stops at the next eligible bar whose completed account equity meets the requested loss from the preceding session and returns the exact equity change. Editor wiring remains open.
+
+- B-98 backend ships eight Python starters through the `python_templates` field of `GET /api/studio-v3/templates`. The existing formula catalogue stays available. The real-data acceptance test compiles and executes each starter with its suggested universe and verifies at least one trade. Gallery UI wiring remains open.
