@@ -799,3 +799,18 @@ class Strategy:
     assert result["breakpoint"]["locals"]["local_value"] == 4
     invalid = {"file": "helper.py", "line": 3, "condition": "ctx.buy()"}
     assert studio.post(path, json=body | {"breakpoint": invalid}).status_code == 422
+
+
+def test_build_debug_can_stop_on_an_equity_loss(studio):
+    url = "/api/studio-v3/build/debug"
+    request = {
+        "symbol": "SPY", "date": "2015-01-01", "event": "equity", "loss_fraction": 0.01,
+        "spec": {"code": "class Strategy:\n    def on_bar(self, ctx):\n        if ctx.bar == 0:\n            ctx.buy()\n"},
+    }
+    result = studio.post(url, json=request)
+    assert result.status_code == 200
+    found = result.json()
+    assert found["bar_index"] > 0 and found["equity_change"] <= -0.01
+    previous = studio.post(url, json={**request, "event": None, "loss_fraction": None, "date": found["previous_date"]}).json()
+    assert found["equity_change"] == pytest.approx(found["context"]["total_value"] / previous["context"]["total_value"] - 1)
+    assert studio.post(url, json={**request, "loss_fraction": None}).status_code == 422

@@ -84,7 +84,7 @@ def prepare(settings: Settings, *, include_holdout: bool = False) -> Prepared:
 
 
 def _simulate_python(spec, prep, settings, *, cost_multiple=1.0, lo=0, mask=None, params=None, exits_override=None,
-                     output=None, repaint_from=None, debug_symbol=None, debug_after=None, debug_event=None, debug_breakpoint=None):
+                     output=None, repaint_from=None, debug_symbol=None, debug_after=None, debug_event=None, debug_breakpoint=None, debug_loss=None):
     params = {**spec.values(), **(params or {})}
     panel = prep.panel
     symbols = panel.symbols
@@ -114,7 +114,7 @@ def _simulate_python(spec, prep, settings, *, cost_multiple=1.0, lo=0, mask=None
         size_vol=None if size_vol is None else size_vol[lo:],
         market_filter=None if market_filter is None else market_filter[lo:],
         benchmark=None if prep.benchmark is None else prep.benchmark[lo:],
-        files=spec.files, debug_symbol=debug_symbol, debug_after=debug_after, debug_event=debug_event, debug_breakpoint=debug_breakpoint,
+        files=spec.files, debug_symbol=debug_symbol, debug_after=debug_after, debug_event=debug_event, debug_breakpoint=debug_breakpoint, debug_loss=debug_loss,
     )
 
 
@@ -390,7 +390,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
 
 
 
-def debug_bar(spec: Strategy, settings: Settings, symbol: str, date: str, step: int, event: str | None = None, breakpoint: dict | None = None) -> dict:
+def debug_bar(spec: Strategy, settings: Settings, symbol: str, date: str, step: int, event: str | None = None, breakpoint: dict | None = None, loss_fraction: float | None = None) -> dict:
     if not spec.code.strip():
         raise Refusal("The debugger needs Python source.", ["Switch to Python or generate Python from the formula."])
     prep = prepare(settings)
@@ -407,9 +407,10 @@ def debug_bar(spec: Strategy, settings: Settings, symbol: str, date: str, step: 
     output: dict = {}
     if event is not None:
         _simulate_python(spec, prep, settings, output=output, debug_symbol=symbol, debug_after=bar, debug_event=event,
-                         debug_breakpoint=breakpoint)
+                         debug_breakpoint=breakpoint, debug_loss=loss_fraction)
         if "debug" not in output:
-            raise Refusal(f"No later {event} for {symbol}.", ["Try an earlier session or choose a different symbol."])
+            label = "equity loss at the requested threshold" if event == "equity" else event
+            raise Refusal(f"No later {label} for {symbol}.", ["Try an earlier session or choose a different symbol."])
         target = int(available.searchsorted(output["debug"]["bar_index"]))
     else:
         end = bar + 1

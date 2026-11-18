@@ -143,3 +143,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-69 backend now also jumps to the next order or fill for the selected symbol. The event engine stops after processing that bar and returns the same debugger snapshot as a date selection. Requests with no later activity return a 422 with a fix hint. Editor wiring and breakpoint controls remain open.
 
 - B-70 advanced. The debugger accepts a file and line with an optional conjunction of date and symbol comparisons. It captures bounded locals before that line executes and returns the account and order snapshot after the same bar. Hit counts are computed by replay. Arbitrary expressions, equity breakpoints and editor wiring remain open.
+
+- B-70 backend now includes an equity-loss trigger. Send `event: "equity"` and a positive `loss_fraction` to the debugger. It stops at the next eligible bar whose completed account equity meets the requested loss from the preceding session and returns the exact equity change. Editor wiring remains open.

@@ -601,7 +601,7 @@ class EventEngine:
                     on_fill(ctx, fill)
                 self._fills.clear()
             out[:, t] = eq, eq + self.costs, gx / eq, nx / eq, npos, self.traded
-            if stop_after is not None and stop_after(t):
+            if stop_after is not None and stop_after(t, eq):
                 T = t + 1
                 out = out[:, :T]
                 break

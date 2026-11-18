@@ -674,6 +674,8 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
         paused = None
         hit = None
         hit_count = 0
+        prior_equity = None
+        equity_change = None
         bp = meta["debug_breakpoint"]
         comparisons = {"Eq": operator.eq, "NotEq": operator.ne, "Lt": operator.lt, "LtE": operator.le,
                        "Gt": operator.gt, "GtE": operator.ge}
@@ -693,13 +695,17 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
                                    "locals": _debug_value(frame.f_locals)}
             return trace
 
-        def stop_at_event(t):
-            nonlocal paused
+        def stop_at_event(t, equity):
+            nonlocal paused, prior_equity, equity_change
+            equity_change = float((equity - prior_equity) / prior_equity) if prior_equity and prior_equity > 0 else None
+            prior_equity = equity
             executions = captured_fills.pop(t, [])
             if t <= after or column not in available[t]:
                 return False
             if event == "breakpoint":
                 matched = hit is not None and hit["bar"] == t
+            elif event == "equity":
+                matched = equity_change is not None and equity_change <= -meta["debug_loss"]
             elif event == "fill":
                 matched = any(fill["symbol"] == target for fill in executions)
             else:
@@ -737,6 +743,8 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
         if paused is not None:
             t, executions = paused
             debug = _debug_snapshot(adapter, account, submitted[:t + 1], bars, meta["dates"], meta["symbols"], column, executions)
+            if event == "equity":
+                debug["equity_change"] = equity_change
             if hit is not None:
                 debug["breakpoint"] = {key: value for key, value in hit.items() if key != "bar"}
         return engine.Result(*result[:7], unfilled=int(result[7])), submitted, warmup, isinstance(adapter, PortfolioStrategy), debug

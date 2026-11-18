@@ -407,7 +407,8 @@ class DebugBreakpointRequest(BaseModel):
 class BuildDebugRequest(PreviewRequest):
     date: dt.date
     step: Literal[-1, 0, 1] = 0
-    event: Literal["order", "fill"] | None = None
+    event: Literal["order", "fill", "equity"] | None = None
+    loss_fraction: float | None = Field(default=None, gt=0, le=1)
     breakpoint: DebugBreakpointRequest | None = None
     settings: Settings | None = None
 
@@ -447,6 +448,7 @@ class BuildDebugResult(BaseModel):
     previous_date: str | None
     next_date: str | None
     breakpoint: DebugBreakpointHit | None = None
+    equity_change: float | None = None
 
 
 @router.post("/build/debug", response_model=BuildDebugResult, response_model_exclude_unset=True)
@@ -455,6 +457,8 @@ def debug_python(request: BuildDebugRequest) -> dict:
     settings = request.settings or Settings(symbols=[symbol], benchmark="")
     if sum(bool(item) for item in (request.step, request.event, request.breakpoint)) > 1:
         raise HTTPException(422, "Choose a session step, event jump or breakpoint.")
+    if (request.event == "equity") != (request.loss_fraction is not None):
+        raise HTTPException(422, "Set loss_fraction only for an equity event.")
     spec = _spec(request.spec)
     breakpoint = None
     if request.breakpoint:
@@ -468,7 +472,7 @@ def debug_python(request: BuildDebugRequest) -> dict:
         breakpoint = {"file": request.breakpoint.file, "line": request.breakpoint.line, "condition": condition}
     try:
         return backtest.debug_bar(spec, settings, symbol, request.date.isoformat(), request.step,
-                                  "breakpoint" if breakpoint else request.event, breakpoint)
+                                  "breakpoint" if breakpoint else request.event, breakpoint, request.loss_fraction)
     except backtest.Refusal as exc:
         raise HTTPException(422, str(exc)) from exc
     except pycode.CodeError as exc:
