@@ -35,7 +35,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 
 | Page | Done | Total |
 |---|---|---|
-| Portfolio | 24 | 28 |
+| Portfolio | 25 | 28 |
 | Home | 1 | 26 |
 | Build | 29 | 162 |
 | Backtest | 18 | 57 |
@@ -45,9 +45,9 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **127** | **538** |
+| **All pages** | **128** | **538** |
 
-## Portfolio (`/studio/portfolio`, spec §6): 24 / 28 done
+## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
 ### Acceptance (PAGES)
 
@@ -58,7 +58,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 
 ### Target additions (FEATURES_PEAK)
 
-- [ ] [E] P-5 Sleeves carry weight, capital, start date, enable toggle and scaling (vol target, leverage cap); a sleeve can be a portfolio (partial: weights, up to 12 members, enable toggle, start date, per-member vol target, per-sleeve capital share (deploys that share, rest cash) and portfolio leverage_cap built in the backend; nesting and page controls open)
+- [ ] [E] P-5 Sleeves carry weight, capital, start date, enable toggle and scaling (vol target, leverage cap); a sleeve can be a portfolio (partial: weights, up to 12 members, enable toggle, start date, per-member vol target, per-sleeve capital share (deploys that share, rest cash) and portfolio leverage_cap built in the backend; nesting built in the backend as book_ids (a saved book enters as one return series; self-reference refused; nested books add no exposure or netting), page controls open)
 - [x] [M] P-6 More allocation methods: minimum variance, max diversification, mean-variance with shrinkage, capped Kelly, momentum of members, drawdown throttle, custom Python function (partial: equal, inverse vol, risk parity, HRP, max Sharpe, max diversification, minimum variance, shrunk minimum variance, mean-variance with Ledoit-Wolf shrinkage, capped Kelly, member momentum, drawdown throttle, fixed built; custom Python function skipped; backend only) [FP 36]
 - [x] P-7 Rebalance on a calendar or a threshold corridor, with a minimum trade size to cut churn
 - [x] P-8 Stacked-area weights over time with the effective number of bets
@@ -70,13 +70,13 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] P-14 Crisis stress: the combined portfolio in each crisis window from 2015
 - [x] P-15 Overlap guard: warns when two members hold the same symbol in opposite directions or share more than 70% of signals
 - [x] P-16 Walk-forward allocation test: out-of-sample weights shown against full-sample weights
-- [ ] [H] P-17 Netting: opposite trades on one symbol across members cancel before execution (partial: netting measured, not applied to execution) [FP 74]
+- [x] [H] P-17 Netting: opposite trades on one symbol across members cancel before execution (built in the backend: net_execution charges the book cost on netted per-symbol flow and reports cost saved per year in meta.stats.netting, approximate: entry and final-exit flows, bps costs only) [FP 74]
 - [x] P-18 Efficient frontier of the members with the chosen mix marked
 - [x] P-19 Rebalance costs counted when weights shift
 - [x] [M] P-20 Deploy as one book, paper first, with netted orders and per-member P&L attribution (Paper tab; netting measured on today's orders)
 - [x] P-21 Alpha, beta, tracking error and information ratio against the chosen benchmark
 - [ ] P-22 Multi-currency account with a base currency and FX on cash (blocked by data: no FX data in the data set)
-- [ ] [E] P-23 Portfolio view during a run: exposure by symbol, sector and asset class, cash, margin, beta to benchmark (partial: holdings treemap and names held built; backend last-bar gross, net, beta to benchmark and sector exposure built; asset class, cash, margin and page view open)
+- [ ] [E] P-23 Portfolio view during a run: exposure by symbol, sector and asset class, cash, margin, beta to benchmark (partial: holdings treemap and names held built; backend last-bar gross, net, beta to benchmark and sector exposure built; book_cash and book_margin built in the backend; asset class (all US equity in this data) and page view open)
 - [x] P-24 Meta rule: weight by regime; rotate to the strongest by trailing N months
 - [x] [M] P-25 Customise: default method, rebalance frequency, estimation window, constraints (Study rail › Defaults › Make these my defaults; chosen settings also in run meta)
 - [x] P-26 Cluster tree of members

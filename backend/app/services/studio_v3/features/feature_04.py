@@ -27,6 +27,8 @@ INPUTS = [field("strategy_ids", "Strategies", "text", None, "Strategy"), *[f for
           field("max_net", "Max net exposure (0 = off)", "number", 0, "Constraints"),
           field("leverage_cap", "Leverage cap on gross exposure (0 = off)", "number", 0, "Constraints"),
           field("ban", "Ban list (symbols, comma separated)", "text", "", "Constraints"),
+          field("net_execution", "Charge cost on netted trades per symbol", "boolean", False, "Constraints"),
+          field("book_ids", "Saved books as members (ids, space separated)", "text", "", "Strategy"),
           field("regime_rule", "Regime rule (on the benchmark)", "text", "", "Allocation"),
           field("regime_on", "Allocation when the rule is true", "select", "", "Allocation", options=["", *portfolio.METHODS]),
           field("regime_off", "Allocation when false", "select", "", "Allocation", options=["", *portfolio.METHODS]),
@@ -68,7 +70,14 @@ def run(payload: dict[str, Any] | None = None, progress=None) -> dict[str, Any]:
             sleeves = json.loads(sleeves) if sleeves.strip() else {}
         except ValueError:
             raise backtest.Refusal("Sleeves must be JSON.", ['{"id": {"enabled": false}}']) from None
-    opts = {"corridor": float(payload.get("corridor") or 5) / 100, "min_trade": float(payload.get("min_trade") if payload.get("min_trade") is not None else 1) / 100, "sleeves": sleeves,
+    net = payload.get("net_execution", False)
+    if isinstance(net, str):
+        net = {"true": True, "on": True, "1": True, "false": False, "off": False, "0": False, "": False}.get(net.strip().lower())
+    if not isinstance(net, bool):
+        raise backtest.Refusal("net_execution must be on or off.", ["true or false"])
+    books = payload.get("book_ids") or []
+    books = books.replace(",", " ").split() if isinstance(books, str) else books
+    opts = {"net_execution": net, "book_ids": books, "corridor": float(payload.get("corridor") or 5) / 100, "min_trade": float(payload.get("min_trade") if payload.get("min_trade") is not None else 1) / 100, "sleeves": sleeves,
             "ban": [x for x in str(payload.get("ban") or "").replace(",", " ").split() if x],
             **{k: float(payload.get(k) or 0) for k in ("max_symbol", "max_sector", "max_gross", "max_net", "leverage_cap")},
             **{k: payload.get(k) for k in ("max_correlation", "cash_reserve", "min_members", "regime_rule", "regime_on", "regime_off")}}

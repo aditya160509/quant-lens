@@ -173,3 +173,29 @@ def test_run_with_limits_ban_and_bad_input():  # P-5, P-11
         F.run({"strategy_ids": ids, "max_gross": -1})
     out = F.run({"strategy_ids": ids, "max_gross": 0.5, "ban": "AAPL", "method": "mean_variance_shrunk"})
     assert out["meta"]["constraints"]["limits"] == {"max_gross": 0.5} and out["meta"]["banned"] == ["AAPL"] and len(out["tables"]["capacity"]) == 2
+
+
+def test_net_execution_book_nesting_and_cash(monkeypatch):  # P-17, P-5, P-23
+    import pytest
+
+    from app.services.studio_v3.core import book as BK
+    from app.services.studio_v3.core import store
+    from app.services.studio_v3.core.backtest import Refusal
+    from app.services.studio_v3.core.spec import Settings
+    from app.services.studio_v3.features import feature_04 as F
+    panel, res = _panel_and_result()
+    opp = type(res)(trades=res.trades.copy(), equity=res.equity)
+    opp.trades[0, P.T_DIR] = -1  # the same trade the other way: nets to nothing
+    out, st = P.net_execution(np.full(40, 1e4), {"a": (res, 1.0), "b": (opp, 1.0)}, panel, Settings(), panel.dates)
+    assert st["traded_netted"] == 0 and st["cost_saved_per_year"] > 0 and out[-1] > 1e4 and st["approximate"]
+    ids = "6a211f9e020a 3713c9254031"
+    with pytest.raises(Refusal):
+        F.run({"strategy_ids": ids, "net_execution": "maybe"})
+    with pytest.raises(Refusal):
+        F.run({"strategy_ids": ids, "book_ids": "nosuchbook"})
+    db = {"b1": {"name": "x", "members": [{"book_id": "b1", "weight": 1}]}}
+    monkeypatch.setattr(store, "kv_get", lambda k, d=None: db.get(k.removeprefix("book:"), d))
+    with pytest.raises(Refusal, match="contains itself"):
+        BK.daily_returns("b1", type("Prep", (), {"panel": panel})(), Settings())
+    stats, _ = P.book_view(P._book(res, panel, 39)[-1] * 15, panel, None)
+    assert abs(stats["book_gross"] - 1.5) < 1e-9

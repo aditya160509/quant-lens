@@ -40,6 +40,24 @@ def books() -> list[dict]:
     return [b for b in (store.kv_get(f"book:{i}") for i in store.kv_get("books", [])) if b]
 
 
+def daily_returns(bid: str, prep, settings: Settings, mask=None, seen: tuple = ()) -> tuple[str, np.ndarray]:
+    """A frozen book as one member: its weighted daily return series over the whole backtest period (no paper start). A book that contains itself, directly or through another book, is refused."""
+    b = store.kv_get(f"book:{bid}")
+    if not b:
+        raise Refusal(f"No such book: {bid}.", ["deploy one from Portfolio"])
+    if bid in seen:
+        raise Refusal(f"Book {bid} contains itself.", [" > ".join([*seen, bid])])
+    out = np.zeros(len(prep.panel.dates))
+    for m in b["members"]:
+        if m.get("book_id"):
+            r = daily_returns(m["book_id"], prep, settings, mask, (*seen, bid))[1]
+        else:
+            eq = simulate(Strategy(**store.get(m["strategy_id"], m["version"])["spec"]), prep, settings, mask=mask).equity
+            r = np.r_[0.0, np.diff(eq) / eq[:-1]]
+        out += m["weight"] * r
+    return f"{b['name']} ({bid})", out
+
+
 def net_orders(per_member: list[tuple[str, float, list[dict]]]) -> tuple[list[dict], float]:
     """Sum signed shares by symbol across members (weight-scaled). Returns the netted orders and the share of gross shares netting removed."""
     gross, net = 0.0, {}
