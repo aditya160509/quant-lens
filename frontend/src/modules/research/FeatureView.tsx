@@ -176,7 +176,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
       <div ref={hero} style={{ padding: "22px 22px 6px" }}>
         <div className="fv-head">
           <div className="ov-icon" style={{ width: 40, height: 40, borderRadius: 11 }}><Icon size={19} strokeWidth={1.6} /></div>
-          <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ minWidth: 0, flex: "1 1 220px" }}>
             <div className="fv-title"><h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{meta.name}</h1><RunStamp status={run.status} result={result} /><Customised feature={feature} form={run.form} setForm={run.setForm} /><PageSwitch featureId={feature.id} /></div>
             {lab().id !== "ml" && lab().id !== "screener" && lab().id !== "studio" ? <><p style={{ marginTop: 4, color: "var(--text-2)", fontSize: 13.5 }}>{meta.question}</p><p style={{ marginTop: 6, color: "var(--text-3)", fontSize: 12.5, maxWidth: 860, lineHeight: 1.55 }}>{feature.description !== meta.question ? feature.description : null}</p></> : null}
           </div>

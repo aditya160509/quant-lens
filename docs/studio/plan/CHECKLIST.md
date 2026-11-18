@@ -35,7 +35,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 
 | Page | Done | Total |
 |---|---|---|
-| Portfolio | 19 | 28 |
+| Portfolio | 20 | 28 |
 | Home | 1 | 26 |
 | Build | 29 | 162 |
 | Backtest | 18 | 57 |
@@ -45,9 +45,9 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **122** | **538** |
+| **All pages** | **123** | **538** |
 
-## Portfolio (`/studio/portfolio`, spec §6): 19 / 28 done
+## Portfolio (`/studio/portfolio`, spec §6): 20 / 28 done
 
 ### Acceptance (PAGES)
 
@@ -78,7 +78,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [ ] P-22 Multi-currency account with a base currency and FX on cash (blocked by data: no FX data in the data set)
 - [ ] [E] P-23 Portfolio view during a run: exposure by symbol, sector and asset class, cash, margin, beta to benchmark (partial: holdings treemap and names held built; sector exposure, beta and margin open)
 - [x] P-24 Meta rule: weight by regime; rotate to the strongest by trailing N months
-- [ ] [M] P-25 Customise: default method, rebalance frequency, estimation window, constraints (partial: chosen defaults returned in the run meta; saving and the settings page open)
+- [x] [M] P-25 Customise: default method, rebalance frequency, estimation window, constraints (Study rail › Defaults › Make these my defaults; chosen settings also in run meta)
 - [x] P-26 Cluster tree of members
 - [x] P-27 Rotation to the top N by trailing 3-month return
 - [x] P-28 Weights re-estimated quarterly on the trailing year (no look-ahead, tested)

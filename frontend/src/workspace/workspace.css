@@ -617,7 +617,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .upload-kinds { display: flex; flex-wrap: wrap; gap: 5px; }
 
 /* Feature header: title block and run button side by side; on phones the button drops under the text. */
-.fv-head { display: flex; align-items: flex-start; gap: 14px; }
+.fv-head { display: flex; align-items: flex-start; gap: 10px 14px; flex-wrap: wrap; }
 .fv-run { display: flex; gap: 6px; flex: none; }
 @media (max-width: 640px) {
   .fv-head { flex-wrap: wrap; gap: 10px 12px; }
