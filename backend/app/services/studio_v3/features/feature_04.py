@@ -21,6 +21,12 @@ INPUTS = [field("strategy_ids", "Strategies", "text", None, "Strategy"), *[f for
           field("max_correlation", "Drop later member above correlation (0 = off)", "number", 0, "Allocation"),
           field("cash_reserve", "Cash reserve (0-0.9)", "number", 0, "Allocation"),
           field("min_members", "Minimum members (0 = off)", "number", 0, "Allocation"),
+          field("max_symbol", "Max exposure per symbol, share of capital (0 = off)", "number", 0, "Constraints"),
+          field("max_sector", "Max net exposure per sector (0 = off)", "number", 0, "Constraints"),
+          field("max_gross", "Max gross exposure (0 = off)", "number", 0, "Constraints"),
+          field("max_net", "Max net exposure (0 = off)", "number", 0, "Constraints"),
+          field("leverage_cap", "Leverage cap on gross exposure (0 = off)", "number", 0, "Constraints"),
+          field("ban", "Ban list (symbols, comma separated)", "text", "", "Constraints"),
           field("regime_rule", "Regime rule (on the benchmark)", "text", "", "Allocation"),
           field("regime_on", "Allocation when the rule is true", "select", "", "Allocation", options=["", *portfolio.METHODS]),
           field("regime_off", "Allocation when false", "select", "", "Allocation", options=["", *portfolio.METHODS]),
@@ -40,6 +46,8 @@ OUTPUTS = [
     {"key": "dropout", "source": "tables", "render": "table", "label": "Drop one member"},
     {"key": "drawdown_overlap", "source": "tables", "render": "table", "label": "Drawdown overlap"},
     {"key": "rolling_correlation", "source": "tables", "render": "lineChart", "label": "Rolling correlation"},
+    {"key": "capacity", "source": "tables", "render": "table", "label": "Capacity by sleeve"},
+    {"key": "exposure", "source": "tables", "render": "table", "label": "Sector exposure"},
     {"key": "weights_over_time", "source": "tables", "render": "table", "label": "Weights over time"},
 ]
 
@@ -61,6 +69,8 @@ def run(payload: dict[str, Any] | None = None, progress=None) -> dict[str, Any]:
         except ValueError:
             raise backtest.Refusal("Sleeves must be JSON.", ['{"id": {"enabled": false}}']) from None
     opts = {"corridor": float(payload.get("corridor") or 5) / 100, "min_trade": float(payload.get("min_trade") if payload.get("min_trade") is not None else 1) / 100, "sleeves": sleeves,
+            "ban": [x for x in str(payload.get("ban") or "").replace(",", " ").split() if x],
+            **{k: float(payload.get(k) or 0) for k in ("max_symbol", "max_sector", "max_gross", "max_net", "leverage_cap")},
             **{k: payload.get(k) for k in ("max_correlation", "cash_reserve", "min_members", "regime_rule", "regime_on", "regime_off")}}
     out = portfolio.run_portfolio(portfolio.members_from(ids), settings, str(payload.get("method") or "equal"), str(payload.get("switch") or ""), payload.get("switch_off") or None, progress,
                                   str(payload.get("rebalance") or "in_sample"), fixed, int(payload.get("rotate_top") or 0),

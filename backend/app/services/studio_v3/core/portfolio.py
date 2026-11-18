@@ -9,14 +9,25 @@ from math import sqrt
 import numpy as np
 import pandas as pd
 
+from app.services.screener_v2.core import data_loader
 from app.services.shared import metrics as M
 
 from . import compile as C
 from . import formula, limits, store
 from .backtest import Refusal, prepare, simulate
+from .engine import (
+    R_OPEN,
+    T_DIR,
+    T_ENTRY_BAR,
+    T_ENTRY_PX,
+    T_EXIT_BAR,
+    T_REASON,
+    T_SHARES,
+    T_SYM,
+)
 from .spec import Settings, Strategy
 
-METHODS = ("equal", "inverse_vol", "min_variance", "risk_parity", "hrp", "max_sharpe", "max_diversification", "min_variance_shrunk", "capped_kelly", "member_momentum", "drawdown_throttle")
+METHODS = ("equal", "inverse_vol", "min_variance", "risk_parity", "hrp", "max_sharpe", "max_diversification", "min_variance_shrunk", "mean_variance_shrunk", "capped_kelly", "member_momentum", "drawdown_throttle")
 MAX_MEMBERS = 12
 
 
@@ -49,6 +60,10 @@ def _weights(r: pd.DataFrame, method: str) -> np.ndarray:
         from sklearn.covariance import LedoitWolf
         cov = LedoitWolf().fit(r.to_numpy()).covariance_ + np.eye(n) * 1e-10
         w = np.clip(np.linalg.solve(cov, np.ones(n)), 0, None)
+    elif method == "mean_variance_shrunk":  # Ledoit-Wolf covariance, long-only tangency on the sample means
+        from sklearn.covariance import LedoitWolf
+        cov = LedoitWolf().fit(r.to_numpy()).covariance_ + np.eye(n) * 1e-10
+        w = np.clip(np.linalg.solve(cov, r.mean().to_numpy()), 0, None)
     elif method == "capped_kelly":  # mean / variance per member, shares capped at 25%
         var, mu = r.var().to_numpy(), r.mean().to_numpy()
         k = np.clip(np.where(var > 0, mu / np.where(var > 0, var, 1), 0), 0, None)
@@ -154,7 +169,7 @@ def threshold(rets: pd.DataFrame, target: np.ndarray, corridor: float = 0.05, mi
 
 
 def apply_sleeves(rets: pd.DataFrame, ids: dict[str, str], sleeves: dict) -> pd.DataFrame:
-    """Per-member switches keyed by strategy id: enabled=false or a date before `start` contribute 0; `vol_target` scales by target / trailing 63-bar vol, shifted one bar, capped at 3x."""
+    """Per-member switches keyed by strategy id: enabled=false or a date before `start` contribute 0; `capital` (0-1] deploys that share; `vol_target` scales by target / trailing 63-bar vol, shifted one bar, capped at 3x."""
     r = rets.copy()
     for n, sid in ids.items():
         s = sleeves.get(sid) or {}
@@ -166,10 +181,15 @@ def apply_sleeves(rets: pd.DataFrame, ids: dict[str, str], sleeves: dict) -> pd.
                 r.loc[r.index < pd.Timestamp(s["start"]), n] = 0.0
             except ValueError:
                 raise Refusal("Bad sleeve start date.", [f"{n}: {s['start']}"]) from None
+        cp = s.get("capital")
+        if cp is not None and not 0 < float(cp) <= 1:
+            raise Refusal("Sleeve capital is a share from 0 to 1.", [f"{n}: {cp}"])
         vt = float(s.get("vol_target") or 0)
         if vt > 0:
             vol = r[n].rolling(63).std().shift(1) * sqrt(252)
             r[n] = r[n] * (vt / vol).where(vol > 0, 1.0).clip(upper=3.0).fillna(1.0)
+        if cp is not None:  # the sleeve deploys only this share of its capital; the rest sits in cash
+            r[n] = r[n] * float(cp)
     return r
 
 
@@ -204,6 +224,81 @@ def switch_series(rule: str, bench_close: np.ndarray, dates: pd.DatetimeIndex) -
     return out
 
 
+def _book(res, panel, lo: int = 0) -> np.ndarray:
+    """Signed position value per bar and symbol as a share of the member's equity, rebuilt from its trades (held from the entry bar to the bar before the exit; open trades to the end)."""
+    T, N = panel.close.shape
+    out = np.zeros((T - lo, N))
+    close = np.nan_to_num(panel.close)
+    for t in res.trades[res.trades[:, T_EXIT_BAR] >= lo]:
+        a, b = max(int(t[T_ENTRY_BAR]), lo), int(t[T_EXIT_BAR]) - (0 if t[T_REASON] == R_OPEN else 1)
+        if b >= a:
+            s = int(t[T_SYM])
+            out[a - lo:b + 1 - lo, s] += t[T_DIR] * t[T_SHARES] * close[a:b + 1, s]
+    return out / res.equity[lo:, None]
+
+
+def _sector_of(symbols) -> np.ndarray:
+    from app.services.factors_v2.core import data_loader
+    m = data_loader.load_sector_maps()["sector"]
+    return np.array([m.get(s, "") for s in symbols])
+
+
+def _bucket(E: np.ndarray, label: np.ndarray) -> dict[str, np.ndarray]:
+    return {k: E[:, label == k].sum(1) for k in sorted(set(label) - {""})}
+
+
+def capacity(res, panel, cap: float) -> dict | None:
+    """Dollar size at which the member's average trade is 1% of the 20-day median dollar volume of the names it trades; None without trades."""
+    tr = res.trades
+    if not len(tr):
+        return None
+    syms = sorted({int(s) for s in tr[:, T_SYM]})
+    adv = pd.DataFrame(panel.close[:, syms] * panel.volume[:, syms], columns=syms).rolling(20, min_periods=5).median().to_numpy()
+    col = {s: i for i, s in enumerate(syms)}
+    d = np.array([adv[int(t[T_ENTRY_BAR]), col[int(t[T_SYM])]] for t in tr])
+    d = d[np.isfinite(d) & (d > 0)]
+    avg_trade = float((tr[:, T_SHARES] * tr[:, T_ENTRY_PX]).mean())
+    if not len(d) or avg_trade <= 0:
+        return None
+    return {"avg_trade": avg_trade, "median_dollar_volume": float(d.mean()), "capacity": float(cap * 0.01 * d.mean() / avg_trade)}
+
+
+def book_view(E: np.ndarray, panel, bench: np.ndarray | None) -> tuple[dict, list[dict]]:
+    """Last-bar book (E: one row, share of capital): gross, net, beta to the benchmark from trailing 252-bar betas of the names held, and net/gross by sector."""
+    held = np.flatnonzero(E)
+    stats: dict = {"book_gross": float(np.abs(E).sum()), "book_net": float(E.sum()), "book_beta": None}
+    if bench is not None and len(bench) == len(panel.close) and len(held):
+        b = pd.Series(bench[-253:]).pct_change().to_numpy()[1:]
+        beta = 0.0
+        for j in held:
+            x = pd.Series(panel.close[-253:, j]).pct_change().to_numpy()[1:]
+            ok = np.isfinite(x) & np.isfinite(b)
+            if ok.sum() >= 60 and b[ok].var() > 0:
+                beta += E[j] * np.cov(x[ok], b[ok])[0, 1] / b[ok].var(ddof=1) * (ok.sum() - 1) / ok.sum()
+        stats["book_beta"] = float(beta)
+    lab = _sector_of(np.asarray(panel.symbols)[held])
+    rows = [{"sector": k, "net": float(E[held][lab == k].sum()), "gross": float(np.abs(E[held][lab == k]).sum())} for k in sorted(set(lab) - {""})]
+    return stats, rows
+
+
+def overlay(r: np.ndarray, E: np.ndarray, symbols, o: dict) -> tuple[np.ndarray, dict | None]:
+    """Scale the combined return series down on bars after one where the book (E: bars x symbols, share of capital) broke a limit: per symbol, per sector, gross, net, leverage."""
+    gross, net = np.abs(E).sum(1), E.sum(1)
+    s = np.ones(len(E))
+    lim = {k: float(o[k]) for k in ("max_symbol", "max_sector", "max_gross", "max_net", "leverage_cap") if o.get(k)}
+    if "max_symbol" in lim:
+        s = np.minimum(s, lim["max_symbol"] / np.maximum(np.abs(E).max(1), 1e-12))
+    if "max_sector" in lim:
+        sec = np.stack(list(_bucket(E, _sector_of(symbols)).values()) or [np.zeros(len(E))], 1)
+        s = np.minimum(s, lim["max_sector"] / np.maximum(np.abs(sec).max(1), 1e-12))
+    for k, x in (("max_gross", gross), ("leverage_cap", gross), ("max_net", np.abs(net))):
+        if k in lim:
+            s = np.minimum(s, lim[k] / np.maximum(x, 1e-12))
+    s = np.minimum(s, 1.0)
+    lag = np.r_[1.0, s[:-1]]  # known at the previous close, no look-ahead
+    return r * lag, {"limits": lim, "mean_scale": float(lag.mean()), "bars_cut": float((lag < 1 - 1e-9).mean())}
+
+
 def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, method: str = "equal", switch: str = "", switch_off: str | None = None, progress=None,
                   rebalance: str = "in_sample", fixed: dict | None = None, rotate_top: int = 0, max_weight: float | None = None, opts: dict | None = None) -> dict:
     """members: (strategy id, version, spec). With `switch`, the first member is held while the rule is true and `switch_off` (an id among members) otherwise."""
@@ -212,19 +307,27 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
         raise Refusal("Add two strategies.", ["pick at least two saved strategies"])
     if len(members) > MAX_MEMBERS:
         raise Refusal(f"At most {MAX_MEMBERS} strategies.", ["remove some"])
+    o = opts or {}
+    for k in ("max_symbol", "max_sector", "max_gross", "max_net", "leverage_cap"):
+        if o.get(k) is not None and float(o[k]) < 0:
+            raise Refusal("Bad portfolio limit.", [f"{k} must be 0 (off) or a positive share of capital"])
     stage("load", 5)
     prep = prepare(settings)
     dates, cap = prep.panel.dates, settings.capital
+    ban = {data_loader.normalize_symbol(x) for x in (o.get("ban") or [])}
+    mask = ~np.isin(np.asarray(prep.panel.symbols), list(ban)) if ban else None
+    if mask is not None and not mask.any():
+        raise Refusal("The ban list removes every symbol.", sorted(ban))
     curves, failed, results, cost2 = {}, [], {}, {}
     for i, (sid, ver, spec) in enumerate(members):
         stage(f"{spec.name}", 10 + 60 * i / len(members))
         try:
             if not C.compile_spec(spec)["ok"]:
                 raise Refusal("does not compile", [])
-            res = simulate(spec, prep, settings)
+            res = simulate(spec, prep, settings, mask=mask)
             curves[f"{spec.name} v{ver}"] = (sid, res.equity)
             results[f"{spec.name} v{ver}"] = res
-            cost2[f"{spec.name} v{ver}"] = simulate(spec, prep, settings, cost_multiple=2.0).equity
+            cost2[f"{spec.name} v{ver}"] = simulate(spec, prep, settings, cost_multiple=2.0, mask=mask).equity
         except Refusal as e:
             failed.append({"strategy": spec.name, "reason": e.reason})
     if len(curves) < (1 if switch else 2):
@@ -232,7 +335,6 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
     names = list(curves)
     rets = pd.DataFrame({n: pd.Series(eq, index=dates).pct_change().fillna(0.0) for n, (_, eq) in curves.items()})
 
-    o = opts or {}
     corridor, min_trade, cash_res, max_corr, min_mem = (float(o.get(k) or d) for k, d in (("corridor", 0.05), ("min_trade", 0.01), ("cash_reserve", 0), ("max_correlation", 0), ("min_members", 0)))
     if not (0 < corridor < 1 and 0 <= min_trade < 1 and 0 <= cash_res < 0.9 and 0 <= max_corr <= 1):
         raise Refusal("Bad portfolio setting.", ["corridor 0-100 pts, minimum trade 0-100 pts, cash reserve 0-90%, max correlation 0-1"])
@@ -306,6 +408,18 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
         combined = cap * np.cumprod(1 + r)
         switch_info = {"rule": switch, "on": on_name, "off": off if off != on_name else "cash", "share_on": float(state.mean()), "switches": int(np.abs(np.diff(state.astype(int))).sum())}
 
+    sf = {n: 0.0 if (o.get("sleeves") or {}).get(curves[n][0], {}).get("enabled") is False else float((o.get("sleeves") or {}).get(curves[n][0], {}).get("capital") or 1) for n in names}
+    wt = {n: float(last[i]) * (1 - cash_res) * sf[n] for i, n in enumerate(names)}
+    limited = any(o.get(k) for k in ("max_symbol", "max_sector", "max_gross", "max_net", "leverage_cap"))
+    T = len(dates)
+    E_all = sum(wt[n] * _book(results[n], prep.panel, 0 if limited else T - 1) for n in names)
+    constraints = None
+    if limited:
+        r, constraints = overlay(np.r_[0.0, combined[1:] / combined[:-1] - 1], E_all, prep.panel.symbols, o)
+        combined = cap * np.cumprod(1 + r)
+    book_stats, sector_rows = book_view(E_all[-1], prep.panel, prep.benchmark)
+    cap_rows = [{"strategy": n, **(capacity(results[n], prep.panel, cap) or {"avg_trade": None, "median_dollar_volume": None, "capacity": None})} for n in names]
+
     cm = M.return_metrics(combined, dates)
     each = {n: M.return_metrics(eq, dates) for n, (_, eq) in curves.items()}
     best_single = max(names, key=lambda n: each[n].get("sharpe") or -1e9)
@@ -322,7 +436,7 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
     extra = analytics(rets, w, combined, dates, cap, prep.benchmark, results, cost2, names, method, switch, len(by_method))
     extra["warnings"] = warns + extra["warnings"]
     defaults = {"method": method, "rebalance": rebalance, "corridor": corridor * 100, "min_trade": min_trade * 100, "max_weight": max_weight or 0, "max_correlation": max_corr,
-                "cash_reserve": cash_res, "min_members": min_mem, "rotate_top": rotate_top, "regime_rule": o.get("regime_rule") or "", "regime_on": o.get("regime_on") or "", "regime_off": o.get("regime_off") or ""}
+                "cash_reserve": cash_res, "min_members": min_mem, "max_symbol": o.get("max_symbol") or 0, "max_sector": o.get("max_sector") or 0, "max_gross": o.get("max_gross") or 0, "max_net": o.get("max_net") or 0, "leverage_cap": o.get("leverage_cap") or 0, "ban": ",".join(sorted(ban)), "rotate_top": rotate_top, "regime_rule": o.get("regime_rule") or "", "regime_on": o.get("regime_on") or "", "regime_off": o.get("regime_off") or ""}
     curve = pd.DataFrame({"date": [str(d.date()) for d in dates], "combined": combined, **{n: eq for n, (_, eq) in curves.items()}})
     step = max(1, len(curve) // 1500)
     sh = cm.get("sharpe")
@@ -337,8 +451,8 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
                    "methods": [{"method": m, **{k: M.return_metrics(eq, dates).get(k) for k in ("sharpe", "cagr", "max_drawdown")}} for m, (_, eq) in by_method.items()],
                    "members": [{"strategy": n, "weight": float(w[i]), **{k: each[n].get(k) for k in ("sharpe", "cagr", "max_drawdown")}} for i, n in enumerate(names)],
                    "correlation": [{"strategy": a, **{b: float(corr.loc[a, b]) for b in names}} for a in names],
-                   "marginal": marginal, "overlap": overlap, "failed": failed, **extra["tables"]},
-        "meta": {"headline": head, "grade": extra["grade"], "tiles": extra["tiles"], "warnings": extra["warnings"], "stats": extra["stats"], "frontier": extra["frontier"], "method": "rotate" if rotate_top else method, "rebalance": rebalance, "tree": tree, "names": names, "switch": switch_info, "regime": regime, "member_ids": member_ids, "rebalances": reb, "defaults": defaults, "total_return": float(combined[-1] / cap - 1), "metrics": {"sharpe": sh, "trades": None},
+                   "marginal": marginal, "overlap": overlap, "failed": failed, "capacity": cap_rows, "exposure": sector_rows, **extra["tables"]},
+        "meta": {"headline": head, "grade": extra["grade"], "tiles": extra["tiles"], "warnings": extra["warnings"], "stats": extra["stats"] | book_stats, "constraints": constraints, "banned": sorted(ban), "frontier": extra["frontier"], "method": "rotate" if rotate_top else method, "rebalance": rebalance, "tree": tree, "names": names, "switch": switch_info, "regime": regime, "member_ids": member_ids, "rebalances": reb, "defaults": defaults, "total_return": float(combined[-1] / cap - 1), "metrics": {"sharpe": sh, "trades": None},
                  "run_hash": hashlib.sha256(f"st04:{[m[0] for m in members]}:{[m[2].hash() for m in members]}:{settings.hash()}:{method}:{switch}:{switch_off}:{rebalance}:{fixed}:{rotate_top}:{max_weight}:{sorted(o.items())}".encode()).hexdigest()[:16],
                  "result_hash": hashlib.sha256(np.round(combined, 6).tobytes()).hexdigest()[:16], "freshness": limits.freshness(), "verdict_chip": f"grade {extra['grade']['grade']}",
                  "weights_note": None if rebalance in ("quarterly", "threshold") or rotate_top else "weights use the whole development period (in-sample)",

@@ -122,3 +122,54 @@ def test_run_exposes_member_ids_for_deploy():
     from app.services.studio_v3.features import feature_04 as F
     m = F.run({"strategy_ids": "6a211f9e020a 3713c9254031"})["meta"]
     assert [d["name"] for d in m["member_ids"]] == m["names"] and abs(sum(d["weight"] for d in m["member_ids"]) - 1) < 1e-9
+
+
+def test_mean_variance_shrunk_long_only_and_capped():  # P-6
+    r = _r(400, k=4)
+    w = P._weights(r, "mean_variance_shrunk")
+    assert (w >= 0).all() and abs(w.sum() - 1) < 1e-9 and P._cap(w.copy(), 0.4).max() <= 0.4 + 1e-9
+
+
+def test_sleeve_capital_scales_and_is_bounded():  # P-5
+    import pytest
+
+    from app.services.studio_v3.core.backtest import Refusal
+    r = _r(100, k=2)
+    out = P.apply_sleeves(r, {"a": "x", "b": "y"}, {"x": {"capital": 0.5}})
+    assert np.allclose(out["a"], r["a"] * 0.5) and np.allclose(out["b"], r["b"])
+    with pytest.raises(Refusal):
+        P.apply_sleeves(r, {"a": "x"}, {"x": {"capital": 2}})
+
+
+def _panel_and_result():
+    from types import SimpleNamespace as NS
+    T = 40
+    close = np.full((T, 3), 100.0)
+    tr = np.zeros((1, 15)); tr[0, [0, 1, 2, 3, 4, 6]] = [1, 1, 5, T - 1, 100, 10]  # symbol 1, long, 10 sh, bars 5..end
+    tr[0, 11] = 7  # open at end
+    return NS(close=close, volume=np.full((T, 3), 1e5), symbols=("A", "B", "C"), dates=pd.bdate_range("2020-01-01", periods=T)), NS(trades=tr, equity=np.full(T, 1e4))
+
+
+def test_capacity_book_and_overlay():  # P-9, P-11, P-23
+    panel, res = _panel_and_result()
+    c = P.capacity(res, panel, 1e4)
+    assert c["avg_trade"] == 1000 and abs(c["capacity"] - 1e4 * 0.01 * 1e7 / 1000) < 1e-6  # 1% of 1e7 dollar volume
+    assert P.capacity(type(res)(trades=res.trades[:0], equity=res.equity), panel, 1e4) is None
+    E = P._book(res, panel)
+    assert E[4, 1] == 0 and np.allclose(E[5:, 1], 0.1) and np.allclose(P._book(res, panel, 39), E[-1:])
+    r, info = P.overlay(np.full(40, 0.01), E, panel.symbols, {"max_symbol": 0.05})
+    assert np.allclose(r[7:], 0.005) and r[5] == 0.01 and info["bars_cut"] > 0  # cut from the bar after the breach
+    stats, _ = P.book_view(E[-1], panel, None)
+    assert abs(stats["book_gross"] - 0.1) < 1e-9 and stats["book_beta"] is None
+
+
+def test_run_with_limits_ban_and_bad_input():  # P-5, P-11
+    import pytest
+
+    from app.services.studio_v3.core.backtest import Refusal
+    from app.services.studio_v3.features import feature_04 as F
+    ids = "6a211f9e020a 3713c9254031"
+    with pytest.raises(Refusal):
+        F.run({"strategy_ids": ids, "max_gross": -1})
+    out = F.run({"strategy_ids": ids, "max_gross": 0.5, "ban": "AAPL", "method": "mean_variance_shrunk"})
+    assert out["meta"]["constraints"]["limits"] == {"max_gross": 0.5} and out["meta"]["banned"] == ["AAPL"] and len(out["tables"]["capacity"]) == 2
