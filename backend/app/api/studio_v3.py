@@ -157,8 +157,21 @@ def format_python(request: CodeRequest) -> dict[str, str]:
     return {"code": p.stdout if p.returncode == 0 and p.stdout else request.code}
 
 
-class BuildCheckRequest(BaseModel):
+class BuildProjectDocument(BaseModel):
     code: str = Field(max_length=200_000)
+    file: str = Field(default="main.py", max_length=128)
+    files: dict[str, str] = Field(default_factory=dict, max_length=50)
+
+
+def _editor_project(request: BuildProjectDocument) -> Strategy:
+    sources = {**request.files, request.file: request.code}
+    main = sources.pop("main.py", "")
+    if not request.file.endswith(".py"):
+        raise HTTPException(422, "Select a Python file.")
+    return _spec({"code": main, "files": sources})
+
+
+class BuildCheckRequest(BuildProjectDocument):
     params: dict[str, float] = Field(default_factory=dict)
 
 
@@ -178,7 +191,9 @@ class BuildCheckResult(BaseModel):
 
 @router.post("/build/check", response_model=BuildCheckResult)
 def check_python(request: BuildCheckRequest) -> BuildCheckResult:
-    return BuildCheckResult(problems=pycode.lint(request.code, request.params))
+    project = _editor_project(request)
+    modules = {name[:-3] for name in project.files if name.endswith(".py")}
+    return BuildCheckResult(problems=pycode.lint(request.code, request.params, file=request.file, modules=modules))
 
 
 class BuildCompleteRequest(BaseModel):
@@ -212,10 +227,7 @@ def signature_python(request: BuildSignatureRequest) -> dict | None:
                  if item["name"] == request.name and item["signature"]), None)
 
 
-class BuildDefinitionRequest(BaseModel):
-    code: str = Field(max_length=200_000)
-    file: str = Field(default="main.py", max_length=128)
-    files: dict[str, str] = Field(default_factory=dict, max_length=50)
+class BuildDefinitionRequest(BuildProjectDocument):
     line: int = Field(ge=1)
     column: int = Field(ge=1)
 
@@ -228,11 +240,7 @@ class BuildDefinition(BaseModel):
 
 
 def _navigate_python(request: BuildDefinitionRequest, *, references=False, new_name=None):
-    sources = {**request.files, request.file: request.code}
-    main = sources.pop("main.py", "")
-    project = _spec({"code": main, "files": sources})
-    if not request.file.endswith(".py"):
-        raise HTTPException(422, "Select a Python file.")
+    project = _editor_project(request)
     try:
         return pycode.navigate(request.code, request.line, request.column, file=request.file,
                                files=project.project_files(), references=references, new_name=new_name)

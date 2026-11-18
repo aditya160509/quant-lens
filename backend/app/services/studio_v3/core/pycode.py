@@ -292,16 +292,42 @@ def _local_definition(code: str, line: int, column: int) -> list[dict]:
              "column": node.col_offset + (7 if isinstance(node, ast.ClassDef) else 5)}]
 
 
-def lint(code: str, params: dict[str, float]) -> list[dict]:
+_ORDER_CALLS = {"buy", "sell", "short", "cover", "market_order", "limit_order", "stop_order", "stop_limit_order",
+                "order", "order_value", "limit", "stop", "stop_limit", "target_weights", "set_holdings", "set_weight", "liquidate"}
+
+
+def _unreachable_orders(tree):
+    unreachable = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If) and isinstance(node.test, ast.Constant):
+            unreachable.extend(node.orelse if bool(node.test.value) else node.body)
+        for _, statements in ast.iter_fields(node):
+            if isinstance(statements, list):
+                for index, statement in enumerate(statements):
+                    if isinstance(statement, (ast.Return, ast.Raise, ast.Break, ast.Continue)):
+                        unreachable.extend(statements[index + 1:])
+                        break
+    return {
+        node for statement in unreachable for node in ast.walk(statement)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name) and node.func.value.id == "ctx" and node.func.attr in _ORDER_CALLS
+    }
+
+
+def lint(code: str, params: dict[str, float], *, file: str = "main.py", modules: set[str] | None = None) -> list[dict]:
     problems = [
         {"severity": f["severity"], "line": f["line"], "column": f["start"] + 1, "end_column": f["end"] + 1,
          "code": "studio-check", "message": f["message"]}
-        for f in check(code, params)
+        for f in check(code, params, modules=modules, entry=file == "main.py")
     ]
     try:
         tree = ast.parse(code)
     except SyntaxError:
-        return problems
+        return [{**problem, "file": file} for problem in problems]
+    for node in _unreachable_orders(tree):
+        problems.append({"severity": "warning", "line": node.lineno, "column": node.col_offset + 1,
+                         "end_column": node.end_col_offset + 1, "code": "unreachable-order",
+                         "message": "This order cannot be reached."})
     for node in ast.walk(tree):
         if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute) and node.value.attr in {"open", "high", "low", "close", "volume"}:
             index = node.slice
@@ -325,7 +351,7 @@ def lint(code: str, params: dict[str, float]) -> list[dict]:
         problems.append({"severity": "warning" if row["code"] == "F841" else "error", "line": location["row"],
                          "column": location["column"], "end_column": end["column"],
                          "code": row["code"], "message": row["message"]})
-    return sorted(problems, key=lambda problem: (problem["line"], problem["column"], problem["code"]))
+    return [{**problem, "file": file} for problem in sorted(problems, key=lambda p: (p["line"], p["column"], p["code"]))]
 
 
 class CodeError(Exception):

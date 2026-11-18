@@ -708,3 +708,23 @@ class Strategy:
     assert method["kind"] == "method" and method["name"] == "on_bar"
     assert (indicator["name"], indicator["kind"], indicator["line"]) == ("self.fast", "indicator", 7)
     assert studio.post(endpoint, json={"code": "class"}).json() == []
+
+
+def test_build_check_lints_project_helper_and_unreachable_orders(studio):
+    code = """from config import threshold
+
+def handle(ctx):
+    if False:
+        ctx.buy()
+    if threshold > 0:
+        return
+        ctx.liquidate()
+    ctx.sell()
+"""
+    response = studio.post("/api/studio-v3/build/check", json={
+        "file": "helper.py", "code": code, "files": {"config.py": "threshold = 3"},
+    })
+    assert response.status_code == 200
+    assert [(p["file"], p["line"], p["code"]) for p in response.json()["problems"]] == [
+        ("helper.py", 5, "unreachable-order"), ("helper.py", 8, "unreachable-order"),
+    ]
