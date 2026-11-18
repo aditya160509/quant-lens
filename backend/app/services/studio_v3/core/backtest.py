@@ -84,7 +84,7 @@ def prepare(settings: Settings, *, include_holdout: bool = False) -> Prepared:
 
 
 def _simulate_python(spec, prep, settings, *, cost_multiple=1.0, lo=0, mask=None, params=None, exits_override=None,
-                     output=None, repaint_from=None):
+                     output=None, repaint_from=None, debug_symbol=None):
     params = {**spec.values(), **(params or {})}
     panel = prep.panel
     symbols = panel.symbols
@@ -114,7 +114,7 @@ def _simulate_python(spec, prep, settings, *, cost_multiple=1.0, lo=0, mask=None
         size_vol=None if size_vol is None else size_vol[lo:],
         market_filter=None if market_filter is None else market_filter[lo:],
         benchmark=None if prep.benchmark is None else prep.benchmark[lo:],
-        files=spec.files,
+        files=spec.files, debug_symbol=debug_symbol,
     )
 
 
@@ -388,6 +388,28 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     out["_trial"] = {"returns": monthly.to_numpy(), "sharpe": ret.get("sharpe")}  # for the ledger; removed before the result is stored
     return _clean(out) | {"_trial": out["_trial"]}
 
+
+
+def debug_bar(spec: Strategy, settings: Settings, symbol: str, date: str, step: int) -> dict:
+    if not spec.code.strip():
+        raise Refusal("The debugger needs Python source.", ["Switch to Python or generate Python from the formula."])
+    prep = prepare(settings)
+    panel = prep.panel
+    if symbol not in panel.symbols:
+        raise Refusal(f"{symbol} is outside the run universe.", ["Select one of the strategy symbols."])
+    available = np.flatnonzero(np.isfinite(panel.close[:, panel.symbols.index(symbol)]))
+    dates = panel.dates[available]
+    target = int(dates.searchsorted(pd.Timestamp(date)))
+    if target >= len(dates) or dates[target] != pd.Timestamp(date) or not 0 <= target + step < len(dates):
+        raise Refusal(f"No selected bar for {symbol} on {date} with step {step}.", ["Select an observed session within the development window."])
+    target += step
+    end = int(available[target]) + 1
+    prefix = replace(prep, panel=panel.window(0, end), sig_bars={k: v[:end] for k, v in prep.sig_bars.items()},
+                     benchmark=None if prep.benchmark is None else prep.benchmark[:end])
+    output: dict = {}
+    _simulate_python(spec, prefix, settings, output=output, debug_symbol=symbol)
+    return {**output["debug"], "previous_date": str(dates[target - 1].date()) if target else None,
+            "next_date": str(dates[target + 1].date()) if target + 1 < len(dates) else None}
 
 def preview(spec: Strategy, symbol: str, years: float = 2.0) -> dict:
     """Build's preview: one name, the last `years` of development bars, closes plus the trades the rule takes there (B-5)."""

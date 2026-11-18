@@ -398,6 +398,53 @@ class PreviewResult(BaseModel):
     warmup: PreviewWarmup | None = None
 
 
+class BuildDebugRequest(PreviewRequest):
+    date: dt.date
+    step: Literal[-1, 0, 1] = 0
+    settings: Settings | None = None
+
+
+class DebugOrder(BaseModel):
+    symbol: str
+    quantity_or_direction: float
+    exit_side: int
+    limit: float | None
+    stop: float | None
+    canceled: bool
+
+
+class DebugFill(BaseModel):
+    symbol: str
+    side: str
+    quantity: float
+    price: float
+    fee: float
+
+
+class BuildDebugResult(BaseModel):
+    date: str
+    symbol: str
+    bar_index: int
+    state: dict[str, Any]
+    context: dict[str, float | None]
+    orders: list[DebugOrder]
+    fills: list[DebugFill]
+    previous_date: str | None
+    next_date: str | None
+
+
+@router.post("/build/debug", response_model=BuildDebugResult)
+def debug_python(request: BuildDebugRequest) -> dict:
+    symbol = normalize_symbol(request.symbol)
+    settings = request.settings or Settings(symbols=[symbol], benchmark="")
+    try:
+        return backtest.debug_bar(_spec(request.spec), settings, symbol, request.date.isoformat(), request.step)
+    except backtest.Refusal as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except pycode.CodeError as exc:
+        raise HTTPException(422, {"message": exc.message, **exc.problem}) from exc
+
+
 @router.post("/preview", response_model=PreviewResult, response_model_exclude_unset=True)
 def preview(request: PreviewRequest) -> dict[str, Any]:
     try:

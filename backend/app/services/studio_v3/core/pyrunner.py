@@ -607,6 +607,43 @@ class EventStrategy:
                 callback(ctx)
 
 
+def _debug_value(value, depth=0):
+    if type(value) is str:
+        return value[:512]
+    if value is None or type(value) is bool:
+        return value
+    if type(value) in (int, float):
+        return value if -sys.float_info.max <= value <= sys.float_info.max else None
+    if depth < 3 and type(value) in (list, tuple):
+        return [_debug_value(item, depth + 1) for item in value[:20]]
+    if depth < 3 and type(value) is dict:
+        return {key[:128]: _debug_value(item, depth + 1) for key, item in list(value.items())[:20] if type(key) is str}
+    return None
+
+
+def _debug_snapshot(adapter, account, submitted, bars, dates, symbols, n, captured_fills):
+    t = len(submitted) - 1
+    is_portfolio = isinstance(adapter, PortfolioStrategy)
+    strategy = adapter.strategy if is_portfolio else adapter.strategies[n]
+    state = _debug_value(vars(strategy) if hasattr(strategy, "__dict__") else {})
+    holding = account.positions.get(n)
+    equity, _, _, _ = account._mark()
+    orders = []
+    for column, (quantity, exit_side, limit, stop, canceled) in enumerate(submitted[t]):
+        if quantity or exit_side or canceled:
+            orders.append({
+                "symbol": symbols[column], "quantity_or_direction": float(quantity),
+                "exit_side": int(exit_side), "limit": float(limit) or None, "stop": float(stop) or None, "canceled": bool(canceled),
+            })
+    return {
+        "date": dates[t], "symbol": symbols[n], "bar_index": t, "state": state,
+        "context": {"cash": _debug_value(float(account.cash)), "total_value": _debug_value(float(equity)),
+                    "quantity": float(holding.shares) if holding else 0,
+                    **{field: _debug_value(float(series[t, n])) for field, series in bars.items()}},
+        "orders": orders, "fills": captured_fills,
+    }
+
+
 def event_run(z, meta, load_strategy, make_contexts, use_context, values):
     # Isolated mode excludes the repository from sys.path.
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
@@ -629,12 +666,28 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values):
             adapter = PortfolioStrategy(cls, PortfolioContext(contexts, bars, values), warmup, use_context, submitted, gate)
         else:
             adapter = EventStrategy(cls, contexts, available, warmup, use_context, gate, submitted)
-        result = engine.EventEngine({k: v[:end] for k, v in bars.items()}, params, stop_dist=stop_dist, size_vol=size_vol).run(adapter)
-        if collect:
-            adapter.finish()
-        return engine.Result(*result[:7], unfilled=int(result[7])), submitted, warmup, isinstance(adapter, PortfolioStrategy)
+        account = engine.EventEngine({k: v[:end] for k, v in bars.items()}, params, stop_dist=stop_dist, size_vol=size_vol)
+        target = meta["debug_symbol"]
+        captured_fills = []
+        if target is not None:
+            on_fill = adapter.on_fill
 
-    result, submitted, warmup, is_portfolio = run_to(shape[0], True)
+            def capture_fill(ctx, fill):
+                if fill.bar == end - 1:
+                    captured_fills.append({"symbol": meta["symbols"][fill.symbol], "side": fill.side,
+                                           "quantity": float(fill.quantity), "price": float(fill.price), "fee": float(fill.fee)})
+                on_fill(ctx, fill)
+
+            adapter.on_fill = capture_fill
+        result = account.run(adapter)
+        if collect and target is None:
+            adapter.finish()
+        debug = None if target is None else _debug_snapshot(
+            adapter, account, submitted, bars, meta["dates"], meta["symbols"], meta["symbols"].index(target), captured_fills,
+        )
+        return engine.Result(*result[:7], unfilled=int(result[7])), submitted, warmup, isinstance(adapter, PortfolioStrategy), debug
+
+    result, submitted, warmup, is_portfolio, debug = run_to(shape[0], True)
     dates = meta["dates"]
     start_dates = {}
     if is_portfolio:
@@ -647,11 +700,11 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values):
     warmup_report = {"bars": warmup, "first_eligible_date": starts, "first_eligible_by_symbol": start_dates}
     cuts, changed = meta["repaint_bars"], []
     for t in cuts:
-        _, cut, _, _ = run_to(t + 1, False)
+        _, cut, _, _, _ = run_to(t + 1, False)
         if not np.array_equal(cut[-1], submitted[t]):
             changed.append(meta["dates"][t])
     repaint = {"cuts": len(cuts), "changed": len(changed), "dates": changed[:5]} if cuts else None
-    return vars(result), repaint, int(np.count_nonzero(submitted[:, :, 0])), warmup_report
+    return vars(result), repaint, int(np.count_nonzero(submitted[:, :, 0])), warmup_report, debug
 
 
 def main():
@@ -726,12 +779,12 @@ def main():
 
     repaint = None
     entry_signals = None
-    warmup_report = None
+    warmup_report = debug = None
     try:
         compiled = compile(src, "<studio:main.py>", "exec")
         helper_code = {name[:-3]: compile(source, f"<studio:{name}>", "exec") for name, source in meta["modules"].items()}
         if meta["event_settings"] is not None:
-            arrays, repaint, entry_signals, warmup_report = event_run(z, meta, load_strategy, make_contexts, use_context, values)
+            arrays, repaint, entry_signals, warmup_report, debug = event_run(z, meta, load_strategy, make_contexts, use_context, values)
         else:
             cls, warmup = load_strategy()
             entries, exits = np.zeros((T, N), np.int8), np.zeros((T, N), np.int8)
@@ -775,7 +828,7 @@ def main():
         }}))
         return
     np.savez(sys.argv[2], **arrays)
-    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report}))
+    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report, "debug": debug}))
 
 
 if __name__ == "__main__":

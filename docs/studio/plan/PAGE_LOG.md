@@ -137,3 +137,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-25 backend ships through `POST /api/studio-v3/build/outline`. It returns the active file’s classes, functions, nested methods and assignments from indicator or formula calls, with source spans. It uses static parsing and returns an empty outline while the file has a syntax error. Editor wiring remains open.
 
 - B-33 advanced. The check endpoint accepts the active project document and validates imports against supplied helpers. Diagnostics carry the active filename. It flags direct context orders in literal dead branches and after unconditional control flow in the same block. Dynamic reachability and frontend debounce remain open.
+
+- B-69 advanced. `POST /api/studio-v3/build/debug` replays Python source through the requested date and symbol, or steps one observed session forward or backward. The result includes bounded scalar state, current OHLCV, account values, accepted order intents and executed fills for the paused bar. It creates no saved run. Breakpoints, jumps to order or fill, and editor wiring remain open.

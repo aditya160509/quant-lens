@@ -728,3 +728,32 @@ def handle(ctx):
     assert [(p["file"], p["line"], p["code"]) for p in response.json()["problems"]] == [
         ("helper.py", 5, "unreachable-order"), ("helper.py", 8, "unreachable-order"),
     ]
+
+
+def test_build_debug_steps_between_observed_bars_and_reports_orders_and_fills(studio):
+    code = """class Strategy:
+    def init(self, ctx):
+        self.counter = 0
+
+    def on_bar(self, ctx):
+        self.counter += 1
+        if self.counter == 2:
+            ctx.buy()
+"""
+    path = "/api/studio-v3/build/debug"
+    payload = {"symbol": "SPY", "date": "2015-01-02", "spec": {"code": code}}
+    first = studio.post(path, json=payload)
+    assert first.status_code == 200
+    snapshot = first.json()
+    assert snapshot["state"] == {"counter": 2}
+    assert snapshot["fills"] == []
+    assert snapshot["orders"][0]["quantity_or_direction"] == 1
+    assert snapshot["next_date"] == "2015-01-05"
+    second = studio.post(path, json=payload | {"step": 1}).json()
+    assert second["date"] == snapshot["next_date"]
+    assert second["state"] == {"counter": 3}
+    assert second["previous_date"] == snapshot["date"]
+    assert second["fills"][0]["symbol"] == "SPY"
+    assert second["fills"][0]["side"] == "buy"
+    assert second["context"]["quantity"] == second["fills"][0]["quantity"]
+    assert studio.post(path, json=payload).json() == snapshot
