@@ -40,6 +40,11 @@ Fixed on this page; the shared ones apply to every Studio page:
 - Grade shown once: the verdict chip is hidden on Portfolio.
 - Exposure, net and gross columns format as percent (shared `format.ts`).
 - Paper view: no middle-dot meta string, spacing on the scale.
+- Every menu trigger closes its menu on a second click (shared `PopMenu`); the inspector toggle no longer reopens itself mid-animation (shared `panels.ts`).
+- One Run button: the header's hides on desktop while the inspector is open, and the inspector shows Run in both Study and Inspect.
+- Tables stay tables down to 400px; label-value cards are for phones only.
+- Symbol search is a full popup: company, type and exchange per row, exchange filters, several adds without closing, ticks on names already added.
+- CAGR and volatility columns format as percent.
 
 ### Open
 
