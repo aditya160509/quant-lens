@@ -17,15 +17,18 @@ from app.services.research_v2.core.ledger_math import deflated_sharpe_hurdle, ha
 from app.services.shared import metrics as M
 
 from . import compile as C
-from . import engine, limits, store
+from . import engine, limits, paths, store
 from .backtest import FEW_TRADES, Refusal, prepare, simulate
 from .spec import Settings, Strategy
 
 PROFILES = {"quick": {"noise": 20, "mcpt": 20, "random": 300, "windows": 4, "cells": 16},
             "full": {"noise": 100, "mcpt": 200, "random": 1000, "windows": 8, "cells": 49}}
-WEIGHTS = {"walk_forward": 3, "vs_random": 2, "noise": 2, "mcpt": 2, "delay": 1, "costs": 2, "parameters": 2, "dsr": 3, "pbo": 2}
+WEIGHTS = {"walk_forward": 3, "vs_random": 2, "noise": 2, "mcpt": 2, "delay": 1, "costs": 2, "parameters": 2, "dsr": 3, "pbo": 2,
+           "mc_trades": 1, "skip_trades": 2, "regimes": 2, "sanity": 2, "unseen": 1}
 NAMES = {"walk_forward": "Walk-forward", "vs_random": "Vs random entries", "noise": "Price noise", "mcpt": "Permutation (MCPT)", "delay": "Delay 1 bar",
-         "costs": "Costs 2×", "parameters": "Nearby settings", "dsr": "Deflated Sharpe", "pbo": "Overfitting (PBO)"}
+         "costs": "Costs 2×", "parameters": "Nearby settings", "dsr": "Deflated Sharpe", "pbo": "Overfitting (PBO)",
+         "mc_trades": "Trade Monte Carlo", "skip_trades": "Skipped trades and slippage", "regimes": "Every regime", "sanity": "Look-ahead and one-trade", "unseen": "Unseen symbols"}
+MAX_SIMS = 100_000
 HOLDOUT_AGENT_BUDGET = 3
 
 
@@ -144,6 +147,60 @@ def _permuted(bars: dict[str, np.ndarray], rng) -> dict[str, np.ndarray]:
     return {k: (v * ratio if k != "volume" else v) for k, v in bars.items()}
 
 
+def trade_mc(pnl: np.ndarray, costs: np.ndarray, cap: float, mode: str, sims: int, seed: int, years: float) -> dict[str, np.ndarray]:
+    """Vectorised Monte Carlo over the closed-trade pnl array (no re-simulation): final return, max drawdown (positive share) and trade Sharpe per run.
+    Modes: shuffle, resample (with replacement), skip (drop 10% at random), slip (extra 0-2x cost per trade). Chunked to bound memory."""
+    n = len(pnl)
+    rng = np.random.default_rng([seed, ("shuffle", "resample", "skip", "slip").index(mode)])
+    out: dict[str, list] = {"ret": [], "dd": [], "sharpe": []}
+    step = max(1, 2_000_000 // n)
+    for a in range(0, sims, step):
+        b = min(step, sims - a)
+        keep = np.ones((b, n))
+        if mode == "shuffle":
+            x = rng.permuted(np.tile(pnl, (b, 1)), axis=1)
+        elif mode == "resample":
+            x = pnl[rng.integers(0, n, (b, n))]
+        elif mode == "skip":
+            keep = (rng.random((b, n)) >= 0.10).astype(float)
+            x = pnl * keep
+        else:
+            x = pnl - rng.uniform(0, 2, (b, n)) * costs
+        e = cap + np.cumsum(x, axis=1)
+        peak = np.maximum(np.maximum.accumulate(e, axis=1), cap)
+        k = np.maximum(keep.sum(1), 1)
+        mu = (x.sum(1)) / k
+        sd = np.sqrt(np.maximum((keep * (x - mu[:, None]) ** 2).sum(1) / k, 0))
+        out["ret"].append(e[:, -1] / cap - 1)
+        out["dd"].append(((peak - e) / peak).max(1))
+        out["sharpe"].append(np.where(sd > 1e-12, mu / np.where(sd > 1e-12, sd, 1) * np.sqrt(k / max(years, 0.25)), 0.0))
+    return {k: np.concatenate(v) for k, v in out.items()}
+
+
+def regime_tables(daily: np.ndarray, labels: np.ndarray, dates: pd.DatetimeIndex) -> tuple[list[dict], list[dict]]:
+    """Strategy performance per benchmark regime (a regime needs 60 bars to be judged) and per calendar year. daily[i] is the return into bar i+1."""
+    lab, d = labels[1:], dates[1:]
+    reg = []
+    for name in sorted(set(lab) - {"warm-up"}):
+        r = daily[lab == name]
+        reg.append({"regime": name, "days": len(r), "sharpe": float(M.sharpe(r) or 0.0) if len(r) >= 60 else None, "total_return": float(np.prod(1 + r) - 1),
+                    "judged": len(r) >= 60})
+    years = [{"year": int(y), "days": len(r), "total_return": float(np.prod(1 + r) - 1), "sharpe": float(M.sharpe(r) or 0.0) if len(r) >= 60 else None}
+             for y in sorted(set(d.year)) for r in [daily[d.year == y]]]
+    return reg, years
+
+
+def lookahead(spec, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, sig: C.Signals, seed: int, cuts: int = 5) -> list[dict]:
+    """Re-run the signals on data cut at random dates: every signal before the cut must equal the full-data signal."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for c in sorted(int(x) for x in rng.integers(len(dates) // 4, len(dates) - 1, cuts)):
+        cut = C.signals(spec, {k: v[:c] for k, v in bars.items()}, dates[:c])
+        same = all(a is None and b is None or a is not None and b is not None and np.array_equal(a[:c], b) for a, b in ((sig.entries, cut.entries), (sig.exits, cut.exits)))
+        rows.append({"check": f"cut at {dates[c].date()}", "ok": bool(same)})
+    return rows
+
+
 def luck(daily: np.ndarray, years: float, ledger: dict, trial_sharpes: list[float], seed: int) -> dict:
     n_eff = max(1.0, float(ledger.get("effective") or 1.0))
     sr = float(M.sharpe(daily) or 0.0)
@@ -229,8 +286,9 @@ def open_holdout(sid: str | None, version: int | None, actor: str) -> list[dict]
 
 
 def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, version: int | None = None, profile: str = "quick", weights: dict | None = None,
-                 show_holdout: bool = False, actor: str = "human", progress=None, anchored: bool = False, purge: int = 5, reopt: bool = True, volume_cap: float = 0.01) -> dict:
+                 show_holdout: bool = False, actor: str = "human", progress=None, anchored: bool = False, purge: int = 5, reopt: bool = True, volume_cap: float = 0.01, sims: int = 1000) -> dict:
     stage = progress or (lambda *_: None)
+    sims = max(1, min(int(sims or 1000), MAX_SIMS))
     prof = PROFILES.get(profile, PROFILES["quick"])
     if not C.compile_spec(spec)["ok"]:
         raise Refusal("The strategy does not compile.", ["fix the rule in Build"])
@@ -292,13 +350,19 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
     stage("execution", 70)
     d1 = _sharpe(simulate(spec, prep, settings, sig=_shift(sig, 1)).equity)
     d2 = _sharpe(simulate(spec, prep, settings, sig=_shift(sig, 2)).equity)
-    tiles.append(_tile("delay", "pass" if base_sr > 0 and d1 >= 0.5 * base_sr else "fail", d1, "Sharpe ≥ half the original", f"one bar late: Sharpe {d1:.2f}; two bars: {d2:.2f}"))
+    d5 = _sharpe(simulate(spec, prep, settings, sig=_shift(sig, 5)).equity)
+    tiles.append(_tile("delay", "pass" if base_sr > 0 and d1 >= 0.5 * base_sr else "fail", d1, "Sharpe ≥ half the original",
+                       f"one bar late: Sharpe {d1:.2f}; two bars: {d2:.2f}; five bars: {d5:.2f}"))
     ladder = []
-    for m in (1, 2, 3, 5, 8):
-        eq = simulate(spec, prep, settings, sig=sig, cost_multiple=m).equity
+    for m in (1, 1.5, 2, 2.5, 3, 5, 8):
+        eq = base.equity if m == 1 else simulate(spec, prep, settings, sig=sig, cost_multiple=m).equity
         ladder.append({"multiple": m, "total_return": float(eq[-1] / cap - 1), "sharpe": _sharpe(eq)})
-    breakeven = next((x["multiple"] for x in ladder if x["total_return"] <= 0), None)
-    c2 = ladder[1]["total_return"]
+    cross = next((i for i, x in enumerate(ladder) if x["total_return"] <= 0), None)
+    breakeven = None if cross is None else ladder[0]["multiple"] if cross == 0 else round(
+        ladder[cross - 1]["multiple"] + (ladder[cross]["multiple"] - ladder[cross - 1]["multiple"]) * ladder[cross - 1]["total_return"]
+        / (ladder[cross - 1]["total_return"] - ladder[cross]["total_return"]), 1)  # linear between the two sweep points around zero
+    tables["cost_sweep"] = [{**x, "break_even": breakeven} for x in ladder]
+    c2 = next(x["total_return"] for x in ladder if x["multiple"] == 2)
     tiles.append(_tile("costs", "pass" if c2 > 0 else "fail", c2, "profitable at 2× costs",
                        f"profitable at 2× costs; break-even beyond {ladder[-1]['multiple']}×" if c2 > 0 and breakeven is None else
                        f"costs break it at {breakeven}×" if breakeven else "loses money at 2× costs"))
@@ -310,9 +374,77 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
     stage("other names", 77)
     rel = related(spec, settings)
     tables["related"] = [rel] if rel["status"] == "ok" else []
-    tables["execution"] = [{"case": "original", "sharpe": base_sr}, {"case": "delay 1 bar", "sharpe": d1}, {"case": "delay 2 bars", "sharpe": d2},
+    tables["execution"] = [{"case": "original", "sharpe": base_sr}, {"case": "delay 1 bar", "sharpe": d1}, {"case": "delay 2 bars", "sharpe": d2}, {"case": "delay 5 bars", "sharpe": d5},
                            {"case": f"volume cap {volume_cap * 100:g}% of the day", "sharpe": vc},
-                           *({"case": f"costs {x['multiple']}×", "sharpe": x["sharpe"], "total_return": x["total_return"]} for x in ladder[1:])]
+                           *({"case": f"costs {x['multiple']}×", "sharpe": x["sharpe"], "total_return": x["total_return"]} for x in ladder if x["multiple"] > 1)]
+
+    stage("monte carlo", 78)
+    pnl, tcost = closed[:, engine.T_PNL], closed[:, engine.T_COSTS]
+    q = lambda a, pc: float(np.percentile(a, pc))
+    if len(closed) < 10:
+        for k in ("mc_trades", "skip_trades"):
+            tiles.append(_tile(k, "skipped", reason=f"{len(closed)} closed trades; needs 10"))
+    else:
+        mc = {m: trade_mc(pnl, tcost, cap, m, sims, settings.seed, years) for m in ("shuffle", "resample", "skip", "slip")}
+        tables["mc_trades"] = [{"method": {"shuffle": "reshuffle", "resample": "resample", "skip": "random skip 10%"}[m], "confidence": c, "max_drawdown": q(mc[m]["dd"], c),
+                                "final_return": q(mc[m]["ret"], 100 - c)} for m in ("shuffle", "resample", "skip") for c in (80, 90, 95, 99)]
+        rs5 = q(mc["resample"]["ret"], 5)
+        tiles.append(_tile("mc_trades", "pass" if rs5 > 0 else "fail", rs5, "5th-percentile final return > 0 when trades are resampled",
+                           f"resampling the {len(closed)} trades {sims:,} times, 95% of runs end above {rs5 * 100:.1f}%; worst-case drawdown at 95%: {q(mc['resample']['dd'], 95) * 100:.0f}%"))
+        tables["skip_trades"] = [{"case": c, "p5_sharpe": q(mc[m]["sharpe"], 5), "median_sharpe": q(mc[m]["sharpe"], 50), "p5_return": q(mc[m]["ret"], 5), "median_return": q(mc[m]["ret"], 50)}
+                                 for c, m in (("skip 10% of trades", "skip"), ("slippage + 0 to 2× cost per trade", "slip"))]
+        sk5, sl5 = q(mc["skip"]["sharpe"], 5), q(mc["slip"]["sharpe"], 5)
+        tiles.append(_tile("skip_trades", "pass" if sk5 > 0 and sl5 > 0 else "fail", min(sk5, sl5), "5th-percentile Sharpe > 0 with 10% of trades skipped and with random extra slippage",
+                           f"skipping 10% at random: 5th-percentile Sharpe {sk5:.2f}; random extra slippage: {sl5:.2f}"))
+
+    stage("regimes", 79)
+    if prep.benchmark is None:
+        tiles.append(_tile("regimes", "skipped", reason="needs a benchmark"))
+    else:
+        reg, yrs = regime_tables(daily, paths.regimes(pd.Series(prep.benchmark).bfill().to_numpy(), dates), dates)  # bfill only touches the 200-bar warm-up
+        tables["regimes"], tables["years"] = reg, yrs
+        judged_r = [r for r in reg if r["judged"]]
+        if not judged_r:
+            tiles.append(_tile("regimes", "skipped", reason="no regime lasts 60 bars"))
+        else:
+            worst = min(judged_r, key=lambda r: r["sharpe"])
+            tiles.append(_tile("regimes", "pass" if worst["sharpe"] > 0 else "fail", worst["sharpe"], "Sharpe > 0 in every regime of 60+ bars",
+                               f"worst regime: {worst['regime']} (Sharpe {worst['sharpe']:.2f}, {worst['days']} bars); {sum(r['sharpe'] > 0 for r in judged_r)} of {len(judged_r)} regimes positive"))
+
+    stage("sanity", 79)
+    look = lookahead(spec, prep.sig_bars, dates, sig, settings.seed)
+    bad = sum(not r["ok"] for r in look)
+    rows_s = list(look)
+    best_ret = None
+    if len(closed) >= 2:
+        rest = np.delete(pnl, int(np.argmax(pnl)))
+        best_ret = float(rest.sum() / cap)
+        sd = rest.std()
+        rows_s.append({"check": "best trade removed", "ok": best_ret > 0, "total_return": best_ret, "sharpe": float(rest.mean() / sd * math.sqrt(len(rest) / max(years, 0.25))) if sd > 1e-12 else 0.0})
+    tables["sanity"] = rows_s
+    one = best_ret is not None and best_ret <= 0
+    tiles.append(_tile("sanity", "fail" if bad or one else "pass", bad if bad or best_ret is None else best_ret, "signals identical on truncated data; profitable without the best trade",
+                       f"signals changed before {bad} of {len(look)} cut dates: look-ahead" if bad else
+                       "without the best trade the strategy loses money" if one else
+                       f"signals identical at {len(look)} cut dates" + (f"; without the best trade the return is {best_ret * 100:.1f}%" if best_ret is not None else "")))
+
+    stage("unseen symbols", 79)
+    ns = len(p.symbols)
+    if ns < 10:
+        tiles.append(_tile("unseen", "skipped", reason=f"{ns} symbols; needs 10"))
+    else:
+        order = np.random.default_rng(settings.seed).permutation(ns)
+        halves = []
+        for j, idx in enumerate((order[:ns // 2], order[ns // 2:])):
+            mask = np.zeros(ns, bool)
+            mask[idx] = True
+            eq = simulate(spec, prep, settings, sig=sig, mask=mask).equity
+            halves.append({"half": "AB"[j], "names": int(mask.sum()), "sharpe": _sharpe(eq), "total_return": float(eq[-1] / cap - 1)})
+        tables["unseen"] = halves
+        sh = [h["sharpe"] if math.isfinite(h["sharpe"]) else 0.0 for h in halves]
+        ok = min(sh) > 0 and min(sh) >= 0.5 * max(sh)
+        tiles.append(_tile("unseen", "pass" if ok else "fail", min(sh), "weaker half Sharpe > 0 and ≥ 50% of the stronger",
+                           f"two halves of the universe: Sharpe {sh[0]:.2f} and {sh[1]:.2f}"))
 
     stage("parameters", 80)
     if len(curves) > 1:
@@ -372,7 +504,7 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
     if lk["track_record_years"]:
         change.append(f"needs {lk['track_record_years']:.1f} years of record for 95% confidence the Sharpe is above 0")
     tile_hash = hashlib.sha256(repr([(t["test"], t["status"], None if t["value"] is None else round(float(t["value"]), 6)) for t in tiles]).encode()).hexdigest()[:16]
-    run_hash = hashlib.sha256(f"st03:{spec.hash()}:{settings.hash()}:{profile}".encode()).hexdigest()[:16]
+    run_hash = hashlib.sha256(f"st03:{spec.hash()}:{settings.hash()}:{profile}:{sims}".encode()).hexdigest()[:16]
     passed = sum(t["status"] == "pass" for t in tiles)
     judged = sum(t["status"] in ("pass", "fail") for t in tiles)
     headline = f"{g['grade']}: {g['reason']}"
@@ -385,7 +517,7 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
                    "luck": [{"measure": k, "value": v} for k, v in lk.items() if not isinstance(v, list)], **tables},
         "meta": {"headline": headline, "grade": g, "tiles": tiles, "luck": {k: v for k, v in lk.items() if not isinstance(v, list)}, "holdout": hold,
                  "power": pw, "cpcv": cp, "related": rel, "walk_forward_mode": {"anchored": anchored, "purge": purge, "reopt": reopt},
-                 "next_test": f"Run: {nxt['name']} ({nxt['reason']})" if nxt else None, "what_would_change": change, "walk_forward": wf, "profile": profile,
+                 "next_test": f"Run: {nxt['name']} ({nxt['reason']})" if nxt else None, "what_would_change": change, "walk_forward": wf, "profile": profile, "sims": sims, "seed": settings.seed, "cost_breakeven": breakeven,
                  "total_return": float(base.equity[-1] / cap - 1), "metrics": {"sharpe": base_sr, "trades": len(base.trades)},
                  "run_hash": run_hash, "result_hash": tile_hash, "verdict_chip": f"Grade {g['grade']}", "freshness": limits.freshness(),
                  "period": [str(dates[0].date()), str(dates[-1].date())], "spec": spec.model_dump(), "settings": settings.model_dump(), "few_trades": few},
