@@ -162,7 +162,7 @@ class PreviewRequest(BaseModel):
 
 class PreviewLog(BaseModel):
     date: str
-    symbol: str
+    symbol: str | None
     line: int
     text: str
     level: str
@@ -170,7 +170,7 @@ class PreviewLog(BaseModel):
 
 class PreviewPlotPoint(BaseModel):
     date: str
-    symbol: str
+    symbol: str | None
     value: float | None
 
 

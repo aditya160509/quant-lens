@@ -85,3 +85,6 @@ Fixed on this page; the shared ones apply to every Studio page:
 - `POST /api/studio-v3/preview` returned actual SPY fill logs and 50 prefix comparisons in 323 ms on a warm server. Replays share the worker process. Full Backtest results carry Python logs and plots in `meta` through the existing `POST /api/studio-v3/feature/st01/jobs` route.
 - Portfolio state and orders, imports, language services, project files, templates, debugger, indicator objects, remaining Build checks and QuantConnect import remain open.
 - The full backend test suite stops on the missing Screener `cscv_pbo` import in `tests/test_shared_stats.py`. Repository-wide Ruff reports 1,157 findings. Ruff passes on the changed Python files.
+
+- B-47 shipped. `on_data(ctx)` sees the run universe with current bars, immutable holdings and marked account state. B-43 advanced. The `rebalance` hook supports daily, week and month starts, every N observed sessions, and disabling the schedule. Calendar properties use observed sessions. Portfolio buy, sell, short and cover still use the sizing card. Explicit quantities, weights, limit and stop orders, and NumPy history remain open.
+- The portfolio preview returned HTTP 200 on SPY in 755 ms from a cold server. The Studio suite passed all 128 tests.

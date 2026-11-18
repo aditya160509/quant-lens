@@ -119,3 +119,79 @@ def test_python_event_runner_receives_actual_fill_and_can_exit_from_it():
             ("SPY", side, 2.0, float(bars["open"][i, 0]), str(dates[i].date()), 0.5)
         )
     assert result.trades[0, [engine.T_ENTRY_BAR, engine.T_EXIT_BAR, engine.T_SHARES]].tolist() == [1, 2, 2]
+
+
+def test_portfolio_callback_sees_all_symbols_and_causal_schedule():
+    from app.services.studio_v3.core import engine
+
+    bars, _ = _bars(4, 2)
+    dates = pd.DatetimeIndex(["2020-01-30", "2020-01-31", "2020-02-03", "2020-02-04"])
+    output = {}
+    code = """class Strategy:
+    rebalance_schedule = "month_start"
+
+    def on_data(self, ctx):
+        ctx.log((ctx.bar_index, ctx.symbols, ctx.is_week_start, ctx.is_month_start, ctx.every(2)))
+        ctx.plot("value", ctx.portfolio.total_value)
+        ctx.plot("BBB", ctx.bar("BBB").close)
+
+    def rebalance(self, ctx):
+        ctx.log("rebalance")
+"""
+    pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], engine.Params(), output=output)
+    rows = output["logs"]
+    assert [row["text"] for row in rows] == [
+        "rebalance",
+        "(0, ('AAA', 'BBB'), True, True, True)",
+        "(1, ('AAA', 'BBB'), False, False, False)",
+        "rebalance",
+        "(2, ('AAA', 'BBB'), True, True, True)",
+        "(3, ('AAA', 'BBB'), False, False, False)",
+    ]
+    assert [point["value"] for point in output["plots"]["BBB"]] == bars["close"][:, 1].tolist()
+    assert [point["value"] for point in output["plots"]["value"]] == [100_000] * 4
+
+
+def test_portfolio_state_marks_actual_fills_and_is_read_only():
+    from app.services.studio_v3.core import engine, fills
+
+    bars, dates = _bars(4, 2)
+    output = {}
+    code = """class Strategy:
+    def on_data(self, ctx):
+        if ctx.bar_index == 0:
+            ctx.buy("BBB")
+        if ctx.bar_index == 1:
+            ctx.plot("quantity", ctx.portfolio["BBB"].quantity)
+            ctx.plot("cash", ctx.portfolio.cash)
+            ctx.plot("equity", ctx.portfolio.total_value)
+            ctx.plot("profit", ctx.pos("BBB").unrealized_profit)
+            ctx.plot("gross", ctx.portfolio.gross_exposure)
+            ctx.plot("leverage", ctx.portfolio.leverage)
+"""
+    settings = engine.Params(size_mode=fills.SHARES, size=5, slippage_bps=0, commission_bps=0)
+    pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], settings, output=output)
+    points = {name: series[0]["value"] for name, series in output["plots"].items()}
+    gross = 5 * bars["open"][1, 1]
+    assert points == {"quantity": 5, "cash": 100_000 - gross, "equity": 100_000, "profit": 0,
+                      "gross": gross, "leverage": gross / 100_000}
+
+    mutation = code.replace('ctx.buy("BBB")', 'ctx.portfolio["BBB"].quantity = 10')
+    with pytest.raises(pycode.CodeError) as error:
+        pycode.run_event(mutation, bars, dates, {}, ["AAA", "BBB"], settings)
+    assert error.value.line == 4
+    assert error.value.problem["exception_type"] == "FrozenInstanceError"
+
+
+def test_portfolio_current_bar_refuses_indexing_future_sessions():
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(3, 2)
+    code = """class Strategy:
+    def on_data(self, ctx):
+        ctx.bar("BBB").close[1]
+"""
+    with pytest.raises(pycode.CodeError) as error:
+        pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], engine.Params())
+    assert error.value.line == 3
+    assert error.value.problem["exception_type"] == "TypeError"

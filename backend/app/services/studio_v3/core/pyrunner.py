@@ -9,7 +9,9 @@ import math
 import sys
 import traceback
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
+from types import MappingProxyType
 
 import numpy as np
 
@@ -122,6 +124,196 @@ class Execution:
     fee: float
 
 
+@dataclass(frozen=True, slots=True)
+class Bar:
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+@dataclass(frozen=True, slots=True)
+class Holding:
+    quantity: float = 0
+    average_price: float = 0
+    unrealized_profit: float = 0
+    bars_held: int = 0
+    entry_date: str | None = None
+
+    @property
+    def invested(self):
+        return self.quantity != 0
+
+
+@dataclass(frozen=True, slots=True)
+class Portfolio:
+    cash: float
+    total_value: float
+    leverage: float
+    gross_exposure: float
+    net_exposure: float
+    positions: MappingProxyType
+
+    def __getitem__(self, symbol):
+        return self.positions[symbol]
+
+
+class PortfolioContext(Ctx):
+    def __init__(self, contexts, bars):
+        first = contexts[0]
+        super().__init__(first._cols, first._values, first.params.copy(), None, first._dates)
+        self._logs, self._plots, self._plot_count = first._logs, first._plots, first._plot_count
+        self._contexts = {ctx.symbol: ctx for ctx in contexts}
+        self._columns = {symbol: i for i, symbol in enumerate(self._contexts)}
+        self._bars = bars
+        self._weeks = [date.fromisoformat(d).isocalendar()[:2] for d in self._dates]
+        self.symbols = tuple(self._contexts)
+
+    @property
+    def bar_index(self):
+        return self.t
+
+    @property
+    def is_month_start(self):
+        return self.t == 0 or self._dates[self.t][:7] != self._dates[self.t - 1][:7]
+
+    @property
+    def is_week_start(self):
+        return self.t == 0 or self._weeks[self.t] != self._weeks[self.t - 1]
+
+    @property
+    def is_quarter_start(self):
+        if self.t == 0:
+            return True
+        previous, current = (date.fromisoformat(self._dates[i]) for i in (self.t - 1, self.t))
+        return (previous.year, (previous.month - 1) // 3) != (current.year, (current.month - 1) // 3)
+
+    @property
+    def is_year_start(self):
+        return self.t == 0 or self._dates[self.t][:4] != self._dates[self.t - 1][:4]
+
+    @property
+    def rebalancing(self):
+        return self._rebalancing
+
+    def every(self, n):
+        if type(n) is not int or n <= 0:
+            raise ValueError("every(n) needs a positive integer")
+        return self.t % n == 0
+
+    def bar(self, symbol):
+        column = self._columns[symbol]
+        if not math.isfinite(self._bars["close"][self.t, column]):
+            return None
+        return Bar(*(float(self._bars[f][self.t, column]) for f in ("open", "high", "low", "close", "volume")))
+
+    def value(self, expr, symbol=None):
+        if symbol is None:
+            raise ValueError("ctx.value(formula, symbol) needs a symbol in on_data")
+        ctx = self._contexts[symbol]
+        ctx._t = self.t
+        return ctx.value(expr)
+
+    def rule(self, expr, symbol=None):
+        return self.value(expr, symbol) > 0
+
+    def buy(self, symbol):
+        self.orders.append((symbol, 1))
+
+    def sell(self, symbol):
+        self.orders.append((symbol, 2))
+
+    def short(self, symbol):
+        self.orders.append((symbol, -1))
+
+    def cover(self, symbol):
+        self.orders.append((symbol, 3))
+
+    def pos(self, symbol):
+        pos = self._account.positions.get(self._columns[symbol])
+        if pos is None:
+            return Holding()
+        return Holding(float(pos.shares), float(pos.entry_px), float(pos.shares * (pos.last - pos.entry_px)),
+                       self.t - pos.entry_bar + 1, self._dates[pos.entry_bar])
+
+    @property
+    def portfolio(self):
+        equity, gross, net, _ = self._account._mark()
+        positions = {symbol: self.pos(symbol) for symbol in self.symbols}
+        return Portfolio(float(self._account.cash), float(equity), float(gross / equity) if equity else 0,
+                         float(gross), float(net), MappingProxyType(positions))
+
+
+class PortfolioStrategy:
+    def __init__(self, cls, ctx, warmup, use_context, submitted, market_filter):
+        self.strategy = cls()
+        self.ctx = ctx
+        self.warmup = warmup
+        self.use_context = use_context
+        self.submitted = submitted
+        self.market_filter = market_filter
+        self.rebalance = getattr(self.strategy, "rebalance", None)
+        self.schedule = getattr(self.strategy, "rebalance_schedule", "daily")
+        self.callback = getattr(self.strategy, "on_fill", None)
+        self.legacy_fill = self.callback is not None and len(inspect.signature(self.callback).parameters) == 1
+
+    def _context(self, engine_ctx):
+        self.ctx._t = engine_ctx.t
+        self.ctx._account = engine_ctx._e
+        self.ctx._rebalancing = self._scheduled(self.ctx)
+        self.use_context(self.ctx)
+        return self.ctx
+
+    def on_bar(self, engine_ctx):
+        ctx = self._context(engine_ctx)
+        if ctx.t == 0 and hasattr(self.strategy, "init"):
+            self.strategy.init(ctx)
+            ctx.orders.clear()
+        if self.rebalance is not None and ctx.rebalancing:
+            self.rebalance(ctx)
+        self.strategy.on_data(ctx)
+        if ctx.t >= self.warmup:
+            for symbol, action in ctx.orders:
+                n = ctx._columns[symbol]
+                qty = engine_ctx.position(n)
+                if self.market_filter is not None and not self.market_filter[ctx.t, n]:
+                    continue
+                if action == 1 and qty <= 0:
+                    engine_ctx.enter(n, 1)
+                    self.submitted[ctx.t, n, 0] = 1
+                elif action == -1 and qty >= 0:
+                    engine_ctx.enter(n, -1)
+                    self.submitted[ctx.t, n, 0] = -1
+                elif (action == 2 and qty > 0) or (action == 3 and qty < 0):
+                    engine_ctx.exit(n)
+                    self.submitted[ctx.t, n, 1] = 1 if qty > 0 else 2
+        if self.market_filter is not None:
+            for n in engine_ctx._e.positions:
+                if not self.market_filter[ctx.t, n]:
+                    engine_ctx.exit(n)
+        ctx.orders.clear()
+
+    def _scheduled(self, ctx):
+        if self.schedule is None:
+            return False
+        if self.schedule == "daily":
+            return True
+        if self.schedule == "month_start":
+            return ctx.is_month_start
+        if self.schedule == "week_start":
+            return ctx.is_week_start
+        return ctx.every(self.schedule)
+
+    def on_fill(self, engine_ctx, fill):
+        if self.callback is not None:
+            ctx = self._context(engine_ctx)
+            if self.legacy_fill:
+                self.callback(ctx)
+            else:
+                self.callback(ctx, Execution(ctx.symbols[fill.symbol], fill.side, float(fill.quantity), float(fill.price), ctx.date, float(fill.fee)))
+
+
 class EventStrategy:
     def __init__(self, cls, contexts, available, warmup, use_context, market_filter, submitted):
         self.contexts = contexts
@@ -199,7 +391,11 @@ def event_run(z, meta, load_strategy, make_contexts, use_context):
         use_context(None)
         cls, warmup = load_strategy()
         submitted = np.zeros((end, shape[1], 2), dtype=np.int8)
-        adapter = EventStrategy(cls, make_contexts(collect), available, warmup, use_context, gate, submitted)
+        contexts = make_contexts(collect)
+        if hasattr(cls, "on_data"):
+            adapter = PortfolioStrategy(cls, PortfolioContext(contexts, bars), warmup, use_context, submitted, gate)
+        else:
+            adapter = EventStrategy(cls, contexts, available, warmup, use_context, gate, submitted)
         result = engine.EventEngine({k: v[:end] for k, v in bars.items()}, params, stop_dist=stop_dist, size_vol=size_vol).run(adapter)
         return engine.Result(*result[:7], unfilled=int(result[7])), submitted
 
