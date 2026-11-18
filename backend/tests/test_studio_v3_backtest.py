@@ -484,3 +484,22 @@ def test_compile_counts_rules_and_independent_tunable_parameters(studio):
     result = studio.post("/api/studio-v3/compile", json={"spec": spec}).json()
     assert result["ok"]
     assert result["complexity"] == {"parameter_count": 3, "formula_rule_count": 5, "degrees_of_freedom": 1}
+
+
+@pytest.mark.parametrize(("blocks", "params", "expected"), [
+    (200, 8, {}),
+    (201, 9, {"blocks": "warning", "params": "warning"}),
+    (1000, 8, {"blocks": "warning"}),
+    (1001, 8, {"blocks": "error"}),
+])
+def test_build_compile_checks_strategy_limits(studio, blocks, params, expected):
+    spec = {
+        "entry_long": "close > 0",
+        "exit_long": "close < 0",
+        "blocks": [{}] * blocks,
+        "params": {f"p{i}": {"value": 1, "min": 0, "max": 2} for i in range(params)},
+    }
+    result = studio.post("/api/studio-v3/compile", json={"spec": spec}).json()
+    limits = {item["token"]: item["severity"] for item in result["findings"] if item["token"] in {"blocks", "params"}}
+    assert limits == expected
+    assert result["ok"] is ("error" not in expected.values())

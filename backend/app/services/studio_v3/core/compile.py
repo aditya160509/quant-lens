@@ -60,13 +60,26 @@ def compile_spec(spec: Strategy) -> dict:
             findings.append({"severity": "warning", "role": "exits", "line": 0, "start": 0, "end": 0, "token": "scale_at", "message": "Scale-out level set without a share to sell"})
     for name in sorted(set(params) - used):
         findings.append({"severity": "warning", "role": "params", "line": 0, "start": 0, "end": 0, "token": name, "message": f"Parameter '{name}' is not used by any rule"})
+    block_count = len(spec.blocks)
+    tunable = {
+        name for name, param in spec.params.items()
+        if param.min is not None and param.max is not None and param.min < param.max
+    }
+    if block_count > 200:
+        severity = "error" if block_count > 1000 else "warning"
+        message = (
+            f"Strategy has {block_count} blocks. Reduce it to 1,000 blocks or fewer."
+            if severity == "error" else f"Strategy has {block_count} blocks. Review strategies above 200 blocks."
+        )
+        findings.append({"severity": severity, "role": "blocks", "line": 0, "start": 0, "end": 0,
+                         "token": "blocks", "message": message})
+    if len(tunable) > 8:
+        findings.append({"severity": "warning", "role": "params", "line": 0, "start": 0, "end": 0,
+                         "token": "params", "message": f"Strategy has {len(tunable)} optimisable parameters. Review strategies above eight."})
     complexity = {
         "parameter_count": len(params),
         "formula_rule_count": rule_count,
-        "degrees_of_freedom": sum(
-            name in used and p.min is not None and p.max is not None and p.min < p.max
-            for name, p in spec.params.items()
-        ),
+        "degrees_of_freedom": len(used & tunable),
     }
     return {"ok": not any(f["severity"] == "error" for f in findings), "findings": findings, "hash": spec.hash(),
             "description": describe(spec), "complexity": complexity}

@@ -101,3 +101,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-108, B-109, B-111 and B-116 backend diagnostics ship through `POST /api/studio-v3/build/condition`. It evaluates one formula or block expression over the symbol’s development data and returns true rate, most recent true date, all matching preview dates and a constant-condition flag. The visible interval is the last 730 days of development data. Frontend wiring remains open.
 
 - B-117 backend ships in `POST /api/studio-v3/compile`. Complexity reports declared parameters, parsed formula conditions and independent referenced parameters with a variable optimisation range. Formula rules count Boolean leaves across entry, exit and market conditions. Score formulas and arbitrary Python control flow are excluded from the rule count.
+
+- B-99 backend ships through the existing compile endpoint. It warns above 200 saved block rows or eight parameters with nonconstant optimisation ranges and rejects more than 1,000 block rows. Frontend wiring remains open.
