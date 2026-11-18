@@ -99,6 +99,13 @@ class Ctx:
         end = self.t + 1
         return HistoryWindow(self._cols[fields][max(0, end - n):end])
 
+    @property
+    def market(self):
+        if self._benchmark is None:
+            return None
+        close = float(self._benchmark[self.t])
+        return MarketBar(close) if math.isfinite(close) else None
+
     def value(self, expr):
         """A formula's value on this bar, e.g. ctx.value("rsi(close, 14)")."""
         a = self._values.get(expr)
@@ -159,6 +166,11 @@ class Execution:
 
 
 @dataclass(frozen=True, slots=True)
+class MarketBar:
+    close: float
+
+
+@dataclass(frozen=True, slots=True)
 class Bar:
     open: float
     high: float
@@ -197,6 +209,7 @@ class PortfolioContext(Ctx):
     def __init__(self, contexts, bars):
         first = contexts[0]
         super().__init__(first._cols, first._values, first.params.copy(), None, first._dates)
+        self._benchmark = first._benchmark
         self._logs, self._plots, self._plot_count = first._logs, first._plots, first._plot_count
         self._contexts = {ctx.symbol: ctx for ctx in contexts}
         self._columns = {symbol: i for i, symbol in enumerate(self._contexts)}
@@ -531,6 +544,7 @@ def main():
     meta = json.loads(str(z["meta"]))
     fields = {f: z[f] for f in ("open", "high", "low", "close", "volume")}
     values = {e: z[f"v{i}"] for i, e in enumerate(meta["exprs"])}
+    benchmark = z.get("benchmark")
     T, N = fields["close"].shape
     logs, plots = [], {}
     ctx = None
@@ -565,6 +579,7 @@ def main():
         ]
         plot_count = [0]
         for item in contexts:
+            item._benchmark = benchmark
             item._logs = logs if collect else None
             item._plots = plots if collect else None
             item._plot_count = plot_count

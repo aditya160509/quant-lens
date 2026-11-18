@@ -97,11 +97,16 @@ def run(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params:
 def run_event(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params: dict[str, float],
               symbols: list[str], settings: engine.Params, *, output: dict | None = None,
               signal_bars: dict[str, np.ndarray] | None = None, stop_dist: np.ndarray | None = None,
-              size_vol: np.ndarray | None = None, market_filter: np.ndarray | None = None, repaint_bars: list[int] | None = None) -> engine.Result:
+              size_vol: np.ndarray | None = None, market_filter: np.ndarray | None = None, repaint_bars: list[int] | None = None,
+              benchmark: np.ndarray | None = None) -> engine.Result:
     extras = {}
     for name, array in (("stop_dist", stop_dist), ("size_vol", size_vol), ("market_filter", market_filter)):
         if array is not None:
             extras[name] = array
+    if benchmark is None and signal_bars is not None and "market" in signal_bars:
+        benchmark = signal_bars["market"][:, 0]
+    if benchmark is not None:
+        extras["benchmark"] = benchmark
     arrays = _execute(code, signal_bars if signal_bars is not None else bars, dates, params, symbols, None, output,
                       event_settings=asdict(settings), repaint_bars=repaint_bars, extras={**extras, **{f"raw_{k}": v for k, v in bars.items()}})
     return engine.Result(*(arrays[name] for name in (

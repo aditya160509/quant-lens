@@ -113,6 +113,7 @@ def _simulate_python(spec, prep, settings, *, cost_multiple=1.0, lo=0, mask=None
         stop_dist=None if stop_dist is None else np.nan_to_num(stop_dist[lo:]),
         size_vol=None if size_vol is None else size_vol[lo:],
         market_filter=None if market_filter is None else market_filter[lo:],
+        benchmark=None if prep.benchmark is None else prep.benchmark[lo:],
     )
 
 

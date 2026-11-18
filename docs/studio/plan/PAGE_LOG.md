@@ -93,3 +93,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - `POST /api/studio-v3/preview` returned actual SPY buy and sell fills for four shares in 596 ms on a cold server. The 300 ms target remains open.
 
 - B-48 advanced and B-68 shipped. History windows expose the current observation at offset zero and past observations at negative offsets. Saved windows retain their original cutoff, and a future offset reports the offending token and user line. The runner keeps raw ndarray and DataFrame objects private.
+
+- B-49 shipped. Python strategies can read the configured benchmark’s current close through `ctx.market.close`. Preview uses SPY, and unavailable observations return `None`. Portfolio mode provides the current OHLCV bar through `ctx.bar(symbol)`.

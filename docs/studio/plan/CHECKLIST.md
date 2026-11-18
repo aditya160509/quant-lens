@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 34 | 163 |
+| Build | 35 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **144** | **538** |
+| **All pages** | **145** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 34 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 35 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -173,7 +173,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [H] B-46 Pyramiding: max_entries class attribute per symbol; scale in added to the Build exits card [FP 61]
 - [x] [E] B-47 Read-only portfolio state: ctx.portfolio cash, value, leverage, exposure; ctx.pos(sym) qty, avg price, unrealised, bars held, entry date (backend done: immutable portfolio and position snapshots from the event engine) [FP 61] [PY A3]
 - [ ] [M] B-48 ctx.history(field, n, sym=None) returns numpy (pandas=True for a DataFrame); negative indexes only (partial: ctx.history returns bounded numeric windows; ndarray and DataFrame interoperability open) [PY A5]
-- [ ] [M] B-49 ctx.bar(sym) for the current bar and ctx.market for the benchmark
+- [x] [M] B-49 ctx.bar(sym) for the current bar and ctx.market for the benchmark (current close only)
 - [ ] [M] B-50 ctx.indicator(formula) with .value, .ready, .history(n), .window; LEAN-identical definitions (LEAN_PARITY row 19) (partial: ctx.value formula strings exist; objects open) [FP 43] [PY A4]
 - [ ] [M] B-51 ctx.rank(ind, top, bottom, where) and ctx.zscore(ind) across the universe, vectorised [FP 61]
 - [ ] [M] B-52 rebalance attribute (month_start, week_start, every(n), daily, None); ctx.rebalancing; is_month_start, is_week_start, is_quarter_start, is_year_start (backend done: rebalance hook uses rebalance_schedule) [FP 61] [PY A6]

@@ -295,3 +295,25 @@ def test_portfolio_history_is_bounded_and_keeps_its_original_bar():
                          bars, dates, {}, ["AAA", "BBB"], engine.Params())
     assert exc.value.line == 7
     assert "history[1] reads a future bar" in exc.value.message
+
+
+def test_benchmark_exposes_only_current_close():
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(3, 2)
+    benchmark = np.array([np.nan, 121.0, 130.0])
+    code = """class Strategy:
+    def on_data(self, ctx):
+        if ctx.market is not None:
+            ctx.plot("benchmark", ctx.market.close)
+"""
+    output = {}
+    pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], engine.Params(), benchmark=benchmark, output=output)
+    assert output["plots"]["benchmark"] == [
+        {"date": str(dates[1].date()), "symbol": None, "value": 121},
+        {"date": str(dates[2].date()), "symbol": None, "value": 130},
+    ]
+    with pytest.raises(pycode.CodeError) as exc:
+        pycode.run_event(code.replace("ctx.market.close)", "ctx.market.close[1])"),
+                         bars, dates, {}, ["AAA", "BBB"], engine.Params(), benchmark=benchmark)
+    assert exc.value.line == 4
