@@ -560,3 +560,18 @@ def test_build_completion_and_signature_use_portfolio_and_local_members(studio):
     }
     holding = studio.post(f"{base}/complete", json={"scope": "position", "prefix": "quant"}).json()
     assert holding[0]["name"] == "quantity"
+
+
+def test_build_definition_returns_local_python_declarations(studio):
+    code = """def helper(value):
+    return value + 1
+
+class Strategy:
+    def on_bar(self, ctx):
+        self.counter = helper(ctx.bar)
+"""
+    endpoint = "/api/studio-v3/build/definition"
+    result = studio.post(endpoint, json={"code": code, "line": 6, "column": 25})
+    assert result.status_code == 200
+    assert result.json() == [{"file": "main.py", "name": "helper", "line": 1, "column": 5}]
+    assert studio.post(endpoint, json={"code": code, "line": 20, "column": 1}).json() == []

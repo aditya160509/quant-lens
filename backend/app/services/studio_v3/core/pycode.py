@@ -150,6 +150,49 @@ def editor_members(scope: str, code: str, prefix: str = "") -> list[dict]:
     return [member for name, member in sorted(members.items()) if name.startswith(prefix)]
 
 
+def definitions(code: str, line: int, column: int) -> list[dict]:
+    lines = code.split("\n")
+    if not 1 <= line <= len(lines) or not 1 <= column <= len(lines[line - 1]) + 1:
+        return []
+    try:
+        import jedi
+    except ImportError:
+        return _local_definition(code, line, column)
+
+    project = jedi.Project(path="/", sys_path=[], smart_sys_path=False)
+    script = jedi.Script(code, project=project)
+    matches = script.goto(line=line, column=column - 1, follow_imports=False)
+    return [
+        {"file": "main.py", "name": item.name, "line": item.line, "column": item.column + 1}
+        for item in matches
+        if item.module_path is None and not item.in_builtin_module() and item.line is not None and item.column is not None
+    ]
+
+
+def _local_definition(code: str, line: int, column: int) -> list[dict]:
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return []
+    at = column - 1
+    reference = next((node for node in ast.walk(tree) if isinstance(node, ast.Name) and node.lineno == line
+                      and node.col_offset <= at < node.end_col_offset), None)
+    if reference is None:
+        return []
+    candidates = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name == reference.id]
+    if len(candidates) != 1:
+        return []
+    if any(
+        (isinstance(node, ast.arg) and node.arg == reference.id)
+        or (isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store) and node.id == reference.id)
+        for node in ast.walk(tree)
+    ):
+        return []
+    node = candidates[0]
+    return [{"file": "main.py", "name": node.name, "line": node.lineno,
+             "column": node.col_offset + (7 if isinstance(node, ast.ClassDef) else 5)}]
+
+
 def lint(code: str, params: dict[str, float]) -> list[dict]:
     problems = [
         {"severity": f["severity"], "line": f["line"], "column": f["start"] + 1, "end_column": f["end"] + 1,

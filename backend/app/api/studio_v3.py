@@ -208,6 +208,24 @@ def signature_python(request: BuildSignatureRequest) -> dict | None:
                  if item["name"] == request.name and item["signature"]), None)
 
 
+class BuildDefinitionRequest(BaseModel):
+    code: str = Field(max_length=200_000)
+    line: int = Field(ge=1)
+    column: int = Field(ge=1)
+
+
+class BuildDefinition(BaseModel):
+    file: str
+    name: str
+    line: int
+    column: int
+
+
+@router.post("/build/definition", response_model=list[BuildDefinition])
+def define_python(request: BuildDefinitionRequest) -> list[dict]:
+    return pycode.definitions(request.code, request.line, request.column)
+
+
 class PreviewRequest(BaseModel):
     spec: dict
     symbol: str = "SPY"

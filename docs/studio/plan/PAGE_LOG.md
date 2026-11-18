@@ -117,3 +117,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-33 advanced via `POST /api/studio-v3/build/check`. The typed result includes sandbox and formula checks, direct nonnegative OHLCV indexes, undefined names and unused locals. Ruff supplies the last two checks when available; Studio checks remain active independently. Unreachable-order lint and editor wiring are open.
 
 - B-32 advanced. `POST /api/studio-v3/build/complete` lists runner and Strategy members by scope and prefix. `POST /api/studio-v3/build/signature` returns an exact callable’s signature and documentation. Runner metadata comes from trusted classes, and local members come from static source inspection. Numerical library suggestions and editor integration remain open.
+
+- B-22 advanced. `POST /api/studio-v3/build/definition` resolves local Python declarations from one-based editor coordinates. It uses Jedi if installed and a conservative top-level function and class lookup otherwise. Cross-file navigation and editor wiring remain open.
