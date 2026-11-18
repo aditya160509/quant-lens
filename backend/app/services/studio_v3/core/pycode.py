@@ -48,11 +48,23 @@ def _finding(line: int, col: int, end: int, msg: str, token: str = "", severity:
 def _formula_args(node):
     if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
         return ()
+    if isinstance(node.func.value, ast.Name) and node.func.value.id == "ctx" and node.func.attr == "indicator":
+        expr = node.args[0] if node.args else next((kw.value for kw in node.keywords if kw.arg == "expr"), None)
+        period = node.args[2] if len(node.args) > 2 else next((kw.value for kw in node.keywords if kw.arg == "period"), None)
+        if period is None or (isinstance(period, ast.Constant) and period.value is None):
+            return (expr,)
+        if _literal_formula(expr) and isinstance(period, ast.Constant):
+            try:
+                return (ast.Constant(pyrunner.indicator_formula(expr.value, period.value)),)
+            except ValueError:
+                pass
+        return (None,)
     if node.func.attr in ("value", "rule"):
         return (node.args[0] if node.args else None,)
     if isinstance(node.func.value, ast.Name) and node.func.value.id == "ctx" and node.func.attr in ("rank", "zscore"):
         first = node.args[0] if node.args else next((kw.value for kw in node.keywords if kw.arg == "expr"), None)
-        return (first, *(kw.value for kw in node.keywords if kw.arg == "where"))
+        return (*([first] if isinstance(first, ast.Constant) else []),
+                *(kw.value for kw in node.keywords if kw.arg == "where" and not (isinstance(kw.value, ast.Constant) and kw.value.value is None)))
     return ()
 
 
@@ -121,7 +133,7 @@ def _api_members(scope: str):
         "ctx": pyrunner.Ctx, "portfolio_ctx": pyrunner.PortfolioContext,
         "portfolio": pyrunner.Portfolio, "position": pyrunner.Holding,
         "bar": pyrunner.Bar, "fill": pyrunner.Execution, "market": pyrunner.MarketBar,
-        "history": pyrunner.HistoryWindow,
+        "history": pyrunner.HistoryWindow, "indicator": pyrunner.Indicator,
     }
     cls = classes.get(scope)
     if cls is None:

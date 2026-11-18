@@ -174,7 +174,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [E] B-47 Read-only portfolio state: ctx.portfolio cash, value, leverage, exposure; ctx.pos(sym) qty, avg price, unrealised, bars held, entry date (backend done: immutable portfolio and position snapshots from the event engine) [FP 61] [PY A3]
 - [ ] [M] B-48 ctx.history(field, n, sym=None) returns numpy (pandas=True for a DataFrame); negative indexes only (partial: ctx.history returns bounded numeric windows; ndarray and DataFrame interoperability open) [PY A5]
 - [x] [M] B-49 ctx.bar(sym) for the current bar and ctx.market for the benchmark (current close only)
-- [ ] [M] B-50 ctx.indicator(formula) with .value, .ready, .history(n), .window; LEAN-identical definitions (LEAN_PARITY row 19) (partial: ctx.value formula strings exist; objects open) [FP 43] [PY A4]
+- [ ] [M] B-50 ctx.indicator(formula) with .value, .ready, .history(n), .window; LEAN-identical definitions (LEAN_PARITY row 19) (partial: indexed indicator handles and rank integration ship; LEAN golden parity remains open) [FP 43] [PY A4]
 - [x] [M] B-51 ctx.rank and ctx.zscore across the current universe, vectorised (literal formula inputs; rank supports top, bottom and where) [FP 61]
 - [x] [M] B-52 Portfolio rebalance hook, rebalance_schedule cadence, ctx.rebalancing and calendar start flags (verified across missing sessions and year boundaries) [FP 61] [PY A6]
 - [ ] [M] B-53 warmup class attribute: no orders before bar n; auto warm-up reported ("starts trading on …") (partial: explicit warm-up suppresses orders and reports first eligible dates; automatic inference open) [FP 61] [PY A10]

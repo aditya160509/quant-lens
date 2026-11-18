@@ -147,3 +147,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-70 backend now includes an equity-loss trigger. Send `event: "equity"` and a positive `loss_fraction` to the debugger. It stops at the next eligible bar whose completed account equity meets the requested loss from the preceding session and returns the exact equity change. Editor wiring remains open.
 
 - B-98 backend ships eight Python starters through the `python_templates` field of `GET /api/studio-v3/templates`. The existing formula catalogue stays available. The real-data acceptance test compiles and executes each starter with its suggested universe and verifies at least one trade. Gallery UI wiring remains open.
+
+- B-50 advanced. `ctx.indicator` creates a current-bar handle from a literal formula or a supported indicator with a literal period. Handles expose readiness, value and bounded history. A portfolio handle can also feed cross-sectional ranking. Indicator calculations reuse the formula engine. LEAN golden-value verification remains open.

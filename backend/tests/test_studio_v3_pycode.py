@@ -417,3 +417,28 @@ def test_rebalance_schedule_and_bar_flag_agree(schedule, expected):
     pycode.run_event(code, bars, dates, {}, ["SPY"], engine.Params(), output=output)
     assert [int(row["text"]) for row in output["logs"]] == expected
     assert [i for i, row in enumerate(output["plots"]["scheduled"]) if row["value"]] == expected
+
+
+def test_indicator_handle_updates_with_the_current_bar_and_supports_ranking():
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(4, 2)
+    code = """class Strategy:
+    def init(self, ctx):
+        self.fast = ctx.indicator("sma", "BBB", 2)
+        self.ranked = ctx.indicator("close")
+
+    def on_data(self, ctx):
+        if self.fast.ready:
+            ctx.plot("average", self.fast.value)
+            ctx.plot("current", self.fast.window[0])
+            ctx.log(len(self.fast.window))
+        if ctx.bar_index == 0:
+            ctx.log(ctx.rank(self.ranked, top=1)[0][0])
+"""
+    output = {}
+    pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], engine.Params(), output=output)
+    expected = [(a + b) / 2 for a, b in zip(bars["close"][:-1, 1], bars["close"][1:, 1], strict=True)]
+    assert [row["value"] for row in output["plots"]["average"]] == pytest.approx(expected)
+    assert [row["value"] for row in output["plots"]["current"]] == pytest.approx(expected)
+    assert [row["text"] for row in output["logs"]] == ["BBB", "2", "2", "2"]

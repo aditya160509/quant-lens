@@ -70,6 +70,45 @@ class HistoryWindow:
         return float(self._values[len(self) - 1 + offset])
 
 
+def indicator_formula(expr, period):
+    if period is None:
+        return expr
+    if type(period) is not int or period < 1 or expr not in {"sma", "ema", "rsi", "atr", "std", "roc", "highest", "lowest"}:
+        raise ValueError("Use a supported indicator name and a positive integer period")
+    return f"atr({period})" if expr == "atr" else f"{expr}(close, {period})"
+
+
+class Indicator:
+    """A live indicator handle bound to the strategy's current bar."""
+
+    __slots__ = ("_ctx", "_expr", "_period", "_values")
+
+    def __init__(self, ctx, expr, values, period):
+        self._ctx, self._expr, self._values, self._period = ctx, expr, values, period
+
+    @property
+    def value(self):
+        if self._values is None:
+            raise ValueError("Select a symbol to read an indicator value in portfolio mode")
+        return float(self._values[self._ctx.t])
+
+    @property
+    def ready(self):
+        return math.isfinite(self.value)
+
+    def history(self, n):
+        if type(n) is not int or n < 1:
+            raise ValueError("Indicator history requires a positive integer window")
+        if self._values is None:
+            raise ValueError("Select a symbol to read indicator history in portfolio mode")
+        end = self._ctx.t + 1
+        return HistoryWindow(self._values[max(end - n, 0):end])
+
+    @property
+    def window(self):
+        return self.history(self._period or self._ctx.t + 1)
+
+
 class Ctx:
     def __init__(self, cols, values, params, symbol, dates):
         self._t = 0
@@ -107,6 +146,13 @@ class Ctx:
             return None
         close = float(self._benchmark[self.t])
         return MarketBar(close) if math.isfinite(close) else None
+
+    def indicator(self, expr, symbol=None, period=None):
+        """Create a reusable handle for a literal formula or named indicator."""
+        if symbol is not None and symbol != self.symbol:
+            raise ValueError("Per-symbol strategies can inspect only their current symbol")
+        formula = indicator_formula(expr, period)
+        return Indicator(self, formula, self._values[formula], period)
 
     def value(self, expr):
         """A formula's value on this bar, e.g. ctx.value("rsi(close, 14)")."""
@@ -311,7 +357,15 @@ class PortfolioContext(Ctx):
     def rule(self, expr, symbol=None):
         return self.value(expr, symbol) > 0
 
+    def indicator(self, expr, symbol=None, period=None):
+        """Create an indicator for a symbol, or a portfolio-wide handle for ranking."""
+        formula = indicator_formula(expr, period)
+        values = self._matrix_values[formula]
+        return Indicator(self, formula, values[:, self._columns[symbol]] if symbol is not None else None, period)
+
     def _cross_section(self, expr):
+        if isinstance(expr, Indicator):
+            expr = expr._expr
         series = self._matrix_values[expr][self.t]
         present = np.isfinite(series) & np.isfinite(self._bars["close"][self.t])
         return series, present
