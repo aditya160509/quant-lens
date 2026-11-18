@@ -2,7 +2,8 @@
 
 import * as RT from "@radix-ui/react-tooltip";
 import { motion } from "framer-motion";
-import { useEffect, useId, useRef, type ReactElement, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export type Tone = "up" | "down" | "warn" | "accent" | "neutral";
 
@@ -88,6 +89,8 @@ if (typeof window !== "undefined") window.addEventListener("pointerdown", (e) =>
 /** A small positioned menu (right-click or button anchored). Closes on outside click, Escape and scroll. */
 export function PopMenu({ at, onClose, children, width = 220, sticky = false }: { at: MenuAt | null; onClose: () => void; children: ReactNode; width?: number; sticky?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [h, setH] = useState(0);
+  useLayoutEffect(() => { if (at && ref.current) setH(ref.current.offsetHeight); }, [at, children]);
   useEffect(() => {
     if (!at) return;
     // The button that opened the menu toggles it: its next click only closes, it doesn't reopen.
@@ -108,9 +111,11 @@ export function PopMenu({ at, onClose, children, width = 220, sticky = false }: 
     return () => { window.removeEventListener("mousedown", down); window.removeEventListener("keydown", key); window.removeEventListener("resize", onClose); };
   }, [at, onClose]);
   if (!at) return null;
-  const x = Math.min(at.x, window.innerWidth - width - 8);
-  const y = Math.min(at.y, window.innerHeight - 340);
-  return <div ref={ref} className="pop" role="menu" style={{ position: "fixed", left: x, top: Math.max(8, y), width }} onClick={sticky ? undefined : onClose}>{children}</div>;
+  const x = Math.max(8, Math.min(at.x, window.innerWidth - width - 8));
+  // Long menus stay inside the window: shift up as far as needed, then scroll. Rendered at the shell root so sticky bars never cover it.
+  const top = Math.max(8, Math.min(at.y, window.innerHeight - h - 8));
+  const menu = <div ref={ref} className="pop" role="menu" style={{ position: "fixed", left: x, top, width, maxHeight: window.innerHeight - 16, overflowY: "auto", zIndex: 95 }} onClick={sticky ? undefined : onClose}>{children}</div>;
+  return createPortal(menu, document.querySelector(".ws") ?? document.body);
 }
 
 export function MenuItem({ icon, onClick, danger, children, hint }: { icon?: ReactNode; onClick: () => void; danger?: boolean; children: ReactNode; hint?: string }) {

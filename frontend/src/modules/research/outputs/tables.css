@@ -80,3 +80,7 @@
 .dt[data-bulk="true"] .tbl td:nth-child(2), .dt[data-bulk="true"] .tbl thead tr:last-child th:nth-child(2) { position: sticky; left: 28px; background: var(--panel); z-index: 2; }
 .dt .tbl th.drop { box-shadow: inset 2px 0 0 var(--accent); }
 .dt .tbl th[draggable="true"] { cursor: grab; }
+
+/* Short tables: no toolbar row; options stay on F and in the card menu. */
+.dt-bar[data-mini] { display: none; }
+.dt .tbl tbody tr:hover td:first-child { background: var(--panel-2); }

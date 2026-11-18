@@ -318,7 +318,8 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   );
   return (
     <div className="dt" data-virtual={virtual} data-density={density} data-bulk={selectable} onKeyDown={onKey}>
-      <div className="dt-bar">
+      {/* Short tables need no search or count; their options open from the card menu or F. */}
+      <div className="dt-bar" data-mini={!sets && source.length <= 12 ? "" : undefined}>
         {sets ? (
           <div className="dt-sets" role="tablist" aria-label="Column sets">
             {[null, ...Object.keys(sets)].map((k) => <button key={k ?? "all"} role="tab" aria-selected={(view.set ?? null) === k} onClick={() => patch({ set: k })}>{k ?? "All"}</button>)}

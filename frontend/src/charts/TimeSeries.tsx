@@ -222,7 +222,7 @@ function TimeSeriesImpl({
       <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, minHeight: legendItems || notesKey || zoom || toolbar ? 24 : 0, marginBottom: 4 }}>
         {legendItems ? <Legend isolate items={legendItems} onToggle={toggle} /> : null}
         {chartScope ? <button className="btn sm ghost" aria-pressed={chartScope.linked} onClick={() => { if (chartScope.linked) setLocalZoom(chartScope.range); chartScope.setLinked(!chartScope.linked); }}>Linked zoom</button> : null}
-        <span style={{ marginLeft: "auto", display: "flex", gap: 4, alignItems: "center" }}>
+        <span className="ts-tools" style={{ marginLeft: "auto", display: "flex", gap: 4, alignItems: "center" }}>
           {toolbar}
           {zoom ? <button className="btn sm ghost" onClick={() => setZoom(null)}><RotateCcw size={11} />Reset zoom</button> : null}
           {notesKey ? (

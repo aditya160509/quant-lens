@@ -78,7 +78,9 @@ export const first = (result: FeatureResult, key: string): Row | undefined => ou
 
 const P_RE = /(^|_)(p|pvalue|p_value)$|p_value|^pr\(/i;
 const T_RE = /(^|_)t(_stat)?$|_t$|^t_|t_stat|z$|^stouffer_z$/i;
-const PCT_RE = /(return|spread|share|fraction|weight|coverage|power|survival|probability|drawdown|contribution|pnl|r2$|^r2|accuracy|exposure|^net$|^gross$|cagr|volatility)/i;
+const PCT_RE = /(return|spread|share|fraction|weight|coverage|power|survival|probability|drawdown|contribution|pnl|r2$|^r2|accuracy|exposure|^net$|^gross$|cagr|volatility|both_active|active_share|overlap)/i;
+/** Ratios read to two places: Sharpe 0.60, correlation 0.73. */
+const RATIO_RE = /(sharpe|sortino|calmar|correlation|^corr|beta|information_ratio|ratio$)/i;
 /** Fundamentals stored as fractions however large (EPS growth of 47 is 4,700%). */
 const FRAC_RE = /(^roic|^roe|^roa|margin|growth|yield|payout)/i;
 const INT_RE = /(months|periods|nobs|observations|count|^n$|_n$|^n_|replications|tests|assets|units|cohorts|events|donors|lag|rank|placebos|specifications|choices|length|window|holdings|pairs$)/i;
@@ -102,6 +104,7 @@ export function fmtKey(key: string, v: unknown): string {
   if (INT_RE.test(key) && Number.isInteger(v)) return v.toLocaleString("en-US");
   if (FRAC_RE.test(key)) return pct(v, Math.abs(v) >= 10 ? 0 : 1);
   if (PCT_RE.test(key) && Math.abs(v) <= 5) return pct(v, Math.abs(v) < 0.01 ? 2 : 1);
+  if (RATIO_RE.test(key)) return v.toFixed(2);
   return num(v, Math.abs(v) < 0.1 ? 4 : 3);
 }
 

@@ -468,7 +468,7 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
             eq = cap * np.cumprod(1 + rets.iloc[:, keep].to_numpy() @ wk)
             marginal.append({"strategy": n, "sharpe_without": M.return_metrics(eq, dates).get("sharpe"), "sharpe_with": cm.get("sharpe")})
     in_mkt = rets.ne(0)
-    overlap = [{"a": a, "b": b, "both_active": float((in_mkt[a] & in_mkt[b]).mean()), "correlation": float(rets[a].corr(rets[b]))} for i, a in enumerate(names) for b in names[i + 1:]]
+    overlap = [{"strategy": a, "paired_with": b, "both_active": float((in_mkt[a] & in_mkt[b]).mean()), "correlation": float(rets[a].corr(rets[b]))} for i, a in enumerate(names) for b in names[i + 1:]]
     corr = rets.corr()
     extra = analytics(rets, w, combined, dates, cap, prep.benchmark, results, cost2, names, method, switch, len(by_method))
     extra["warnings"] = warns + extra["warnings"]
@@ -540,7 +540,7 @@ def analytics(rets: pd.DataFrame, w: np.ndarray, combined: np.ndarray, dates: pd
     risk = [{"strategy": n, "weight": float(w[i]), "risk_share": float(rc[i] / rc.sum()) if rc.sum() > 0 else None} for i, n in enumerate(names)]
     # drawdown overlap: share of days both members are in a drawdown deeper than 5%
     dd = {n: _dd_series(np.cumprod(1 + rets[n].to_numpy())) < -0.05 for n in names}
-    dd_overlap = [{"a": a, "b": b, "both_in_drawdown": float((dd[a] & dd[b]).mean())} for i, a in enumerate(names) for b in names[i + 1:]]
+    dd_overlap = [{"strategy": a, "paired_with": b, "both_in_drawdown": float((dd[a] & dd[b]).mean())} for i, a in enumerate(names) for b in names[i + 1:]]
     # rolling 126-day correlation, averaged across pairs
     roll = rets.rolling(126).corr()
     pair_mean = []
