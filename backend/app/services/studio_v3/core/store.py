@@ -60,18 +60,72 @@ def actor_log(strategy_id: str | None = None, limit: int = 200) -> list[dict]:
 def _card(con, row) -> dict:
     v = con.execute("SELECT MAX(version) v FROM versions WHERE strategy_id = ?", (row["id"],)).fetchone()["v"]
     run = con.execute("SELECT job_id, summary, created, version FROM runs WHERE strategy_id = ? AND feature = 'st01' ORDER BY created DESC LIMIT 1", (row["id"],)).fetchone()
-    return {"id": row["id"], "name": row["name"], "folder": row["folder"], "tags": json.loads(row["tags"]), "archived": bool(row["archived"]), "created": row["created"],
-            "updated": row["updated"], "version": v or 0, "has_draft": row["draft"] is not None,
-            "last_run": {"job_id": run["job_id"], "at": run["created"], "version": run["version"], **json.loads(run["summary"])} if run else None}
+    validated = {r["version"] for r in con.execute("SELECT version FROM runs WHERE strategy_id = ? AND feature = 'st04'", (row["id"],))}
+    paper = con.execute("SELECT value FROM kv WHERE key = ?", (f"paper:{row['id']}",)).fetchone()
+    on_paper = any(x["version"] == v for x in json.loads(paper["value"])) if paper else False
+    status = "Paper" if on_paper else "Validated" if v in validated else "Backtested" if run else "Draft"  # Live needs real fills, which Studio does not hold yet
+    last = {"job_id": run["job_id"], "at": run["created"], "version": run["version"], **json.loads(run["summary"])} if run else None
+    return {"id": row["id"], "name": row["name"], "folder": row["folder"], "tags": json.loads(row["tags"]), "archived": row["archived"] == 1, "trashed": row["archived"] == 2, "created": row["created"],
+            "updated": row["updated"], "version": v or 0, "has_draft": row["draft"] is not None, "status": status, "spark": (last or {}).get("spark") or [],
+            "validation_expired": bool(validated and v not in validated), "last_run": last}
 
 
 def list_strategies(include_archived: bool = False) -> list[dict]:
     with db() as con:
-        rows = con.execute("SELECT * FROM strategies WHERE archived = 0 OR ? ORDER BY updated DESC", (int(include_archived),)).fetchall()
+        rows = con.execute("SELECT * FROM strategies WHERE archived = 0 OR (? AND archived = 1) ORDER BY updated DESC", (int(include_archived),)).fetchall()
         cards = [_card(con, r) for r in rows]
     for c in cards:
         c["trials"] = ledger(c["id"], detail=False)
     return cards
+
+
+TRASH_DAYS = 30
+
+
+def trash(sid: str, restore: bool = False) -> dict:
+    """Soft delete: kept 30 days, then purged on the next trash listing (H-10)."""
+    with db() as con:
+        con.execute("UPDATE strategies SET archived = ?, updated = ? WHERE id = ?", (0 if restore else 2, time.time(), sid))
+    return get(sid)
+
+
+def list_trash(now: float | None = None) -> list[dict]:
+    cutoff = (now or time.time()) - TRASH_DAYS * 86400
+    with db() as con:
+        for r in con.execute("SELECT id FROM strategies WHERE archived = 2 AND updated < ?", (cutoff,)).fetchall():
+            _purge(con, r["id"])
+        rows = con.execute("SELECT * FROM strategies WHERE archived = 2 ORDER BY updated DESC").fetchall()
+        return [{**_card(con, r), "purge_at": r["updated"] + TRASH_DAYS * 86400} for r in rows]
+
+
+def _purge(con, sid: str) -> None:
+    for t, col in (("versions", "strategy_id"), ("trials", "strategy_id"), ("runs", "strategy_id"), ("actor_log", "strategy_id"), ("strategies", "id")):
+        con.execute(f"DELETE FROM {t} WHERE {col} = ?", (sid,))
+    con.execute("DELETE FROM kv WHERE key LIKE ?", (f"%:{sid}",))
+
+
+def hard_delete(sid: str, confirm: str, actor: str = "human") -> None:
+    """Permanent. The typed confirmation must equal the strategy's name."""
+    name = get(sid)["name"]
+    if confirm != name:
+        raise ValueError(f"Type the strategy name ({name}) to delete it for good")
+    with db() as con:
+        _purge(con, sid)
+    log(actor, "hard_delete", None, {"id": sid, "name": name})
+
+
+def search(q: str) -> list[dict]:
+    """Case-insensitive substring over name, tags, hypothesis, rule text, code and params (so `rsi(` finds users of rsi) (H-8)."""
+    needle = q.strip().lower()
+    out = []
+    for c in list_strategies():
+        spec = get(c["id"])["spec"]
+        fields = {"name": c["name"], "tag": " ".join(c["tags"]), "hypothesis": spec.get("hypothesis", ""),
+                  "rules": " ".join([spec.get("code", ""), *(spec.get(k, "") for k in ("entry_long", "exit_long", "entry_short", "exit_short", "score", "market_filter")), *spec.get("params", {})])}
+        hit = next((k for k, v in fields.items() if needle in v.lower()), None)
+        if needle and hit:
+            out.append({**c, "match": hit})
+    return out
 
 
 def create(spec: Strategy, actor: str = "human", folder: str = "") -> dict:
@@ -148,9 +202,9 @@ def record_run(job_id: str, sid: str | None, version: int | None, feature: str, 
 
 def recent_runs(limit: int = 20) -> list[dict]:
     with db() as con:
-        rows = con.execute("SELECT r.*, s.name FROM runs r LEFT JOIN strategies s ON s.id = r.strategy_id ORDER BY r.created DESC LIMIT ?", (limit,)).fetchall()
+        rows = con.execute("SELECT r.*, s.name, (SELECT MAX(version) FROM versions WHERE strategy_id = r.strategy_id) latest FROM runs r LEFT JOIN strategies s ON s.id = r.strategy_id ORDER BY r.created DESC LIMIT ?", (limit,)).fetchall()
     return [{"job_id": r["job_id"], "strategy_id": r["strategy_id"], "strategy": r["name"], "version": r["version"], "feature": r["feature"], "at": r["created"],
-             "run_hash": r["run_hash"], "result_hash": r["result_hash"], **json.loads(r["summary"])} for r in rows]
+             "run_hash": r["run_hash"], "result_hash": r["result_hash"], "settings_changed": bool(r["latest"] and r["version"] and r["latest"] > r["version"]), **json.loads(r["summary"])} for r in rows]
 
 
 def record_trial(sid: str, run_hash: str, actor: str, kind: str, sharpe: float | None, returns: np.ndarray) -> bool:

@@ -36,7 +36,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Page | Done | Total |
 |---|---|---|
 | Portfolio | 25 | 28 |
-| Home | 1 | 26 |
+| Home | 3 | 26 |
 | Build | 29 | 162 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **128** | **538** |
+| **All pages** | **130** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -83,38 +83,38 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] P-27 Rotation to the top N by trailing 3-month return
 - [x] P-28 Weights re-estimated quarterly on the trailing year (no look-ahead, tested)
 
-## Home (`/studio`, spec §1): 1 / 26 done
+## Home (`/studio`, spec §1): 3 / 26 done
 
 ### Acceptance (PAGES)
 
 - [ ] [M] H-1 Paints 50 saved strategies in under 400 ms (Playwright)
-- [ ] [E] H-2 Needs attention lists a strategy whose paper step is older than 3 trading days (partial: needs-attention strip built; paper-age rule not checked)
-- [ ] [E] H-3 Duplicate makes version 1 with an empty trial ledger (partial: duplicate built; empty-ledger rule not tested)
-- [ ] [E] H-4 Studio JSON import recompiles and shows compile findings before saving (partial: JSON import built, first version only, never fully passed)
+- [x] [E] H-2 Needs attention lists a strategy whose paper step is older than 3 trading days
+- [x] [E] H-3 Duplicate makes version 1 with an empty trial ledger
+- [ ] [E] H-4 Studio JSON import recompiles and shows compile findings before saving (partial: backend done: import?save=false returns compile findings, tested; was: JSON import built, first version only, never fully passed)
 - [ ] [E] H-5 Screenshots at 1440 and 1024, dark and light
 
 ### Target additions (FEATURES_PEAK)
 
 - [ ] [E] H-6 Table view with sortable, toggleable columns (name, status, Sharpe, max DD, last run, equity sparkline) and a stale-run badge; card view stays the default (partial: card view only) [FP 53]
-- [ ] [E] H-7 Status chips Draft, Backtested, Validated, Paper, Live; a click filters; Validated only when a scorecard exists for the current version [FP 53]
-- [ ] [M] H-8 Search by name, tag, hypothesis, symbol, indicator and code text (typing rsi( finds strategies that use it)
+- [ ] [E] H-7 Status chips Draft, Backtested, Validated, Paper, Live; a click filters; Validated only when a scorecard exists for the current version [FP 53] (partial: backend done: card status, Validated only with a validation run for the current version, tested; chips are frontend)
+- [ ] [M] H-8 Search by name, tag, hypothesis, symbol, indicator and code text (typing rsi( finds strategies that use it) (partial: backend done: GET /search?q=, tested; search box is frontend)
 - [ ] [M] H-9 Saved filters, folders, tags and pins
-- [ ] [M] H-10 Archive; hard delete needs a typed confirmation and a 30-day trash
+- [ ] [M] H-10 Archive; hard delete needs a typed confirmation and a 30-day trash (partial: backend done: trash, restore, DELETE with confirm, 30-day purge, tested; UI is frontend)
 - [ ] [M] H-11 Bulk actions on a selection: tag, move, archive, run same range, compare, combine into a portfolio [FP 53]
 - [ ] [M] H-12 Hover actions on a row: Run, Duplicate, Open in Chart, Open Live, Share
 - [ ] [M] H-13 Create menu: blank, template, plain-English prompt, Studio bundle, trade CSV, QuantConnect Python (via shim), library strategy (partial: blank, template, duplicate and JSON import exist)
-- [ ] [E] H-14 Live strip at the top: live and paper strategies with today P&L, alert count, heartbeat and kill-all
+- [ ] [E] H-14 Live strip at the top: live and paper strategies with today P&L, alert count, heartbeat and kill-all (partial: backend done: home.live block; strip is frontend)
 - [ ] [E] H-15 Saved views, column sets, default sort, density, group by status, tag or folder
 - [ ] [E] H-16 Empty state: three one-click starters (blank, template, from a Screener screen)
 - [ ] [M] H-17 Compare 2 to 6 strategies from Home: overlaid equity, metric table, correlation, code diff; opens Portfolio
-- [ ] [E] H-18 Needs attention ranked: drift beyond band, data newer than last run, validation expired by a code change, failed run, alert fired (partial: strip exists; trigger list not verified)
+- [ ] [E] H-18 Needs attention ranked: drift beyond band, data newer than last run, validation expired by a code change, failed run, alert fired (partial: backend done: attention items carry kind and rank, tested; strip order is frontend; was: strip exists; trigger list not verified)
 - [ ] [H] H-19 Import a QuantConnect algorithm through the shim; unmapped calls listed before saving [FP 67]
 - [ ] [M] H-20 Import a CSV of signals
-- [ ] [E] H-21 Card fields: sparkline of last run, verdict chip, trial count, last edited (partial: grade, trial count and paper status shown; sparkline not verified)
-- [ ] [M] H-22 Recent runs table with a settings-changed-since marker
+- [ ] [E] H-21 Card fields: sparkline of last run, verdict chip, trial count, last edited (partial: backend done: card.spark filled from the last run; card is frontend; was: grade, trial count and paper status shown; sparkline not verified)
+- [ ] [M] H-22 Recent runs table with a settings-changed-since marker (partial: backend done: recent_runs.settings_changed, tested; table marker is frontend)
 - [ ] [E] H-23 Data freshness pill ("Daily data to 2026-02-01"), amber after 3 days, red after 10
 - [ ] [E] H-24 Customise: default view, card fields, grid columns and sort, pinned strategies
-- [ ] [M] H-25 Bulk re-run on new data and export a selection as a zip
+- [ ] [M] H-25 Bulk re-run on new data and export a selection as a zip (partial: backend done: POST /strategies/rerun and /strategies/export (zip); UI is frontend)
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
 ## Build (`/studio/build/:id?`, spec §2): 29 / 162 done

@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
+import io
 import json
+import re
 import time
+import zipfile
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, ValidationError
 
 from app.services.screener_v2.core.data_loader import BACKEND_DATA, normalize_symbol
@@ -28,6 +32,9 @@ from app.services.studio_v3.core import (
     validate,
 )
 from app.services.studio_v3.core import compile as compiler
+from app.services.studio_v3.core import (
+    home as home_rules,
+)
 from app.services.studio_v3.core import library as lib
 from app.services.studio_v3.core.spec import Strategy
 from app.services.studio_v3.features.inputs import COST_PROFILES
@@ -282,16 +289,83 @@ def actor_log(strategy_id: str | None = None) -> dict[str, Any]:
     return {"log": store.actor_log(strategy_id)}
 
 
+def _failed_runs() -> dict[str, float]:
+    """Strategy id to the time of its latest failed Studio job."""
+    out: dict[str, float] = {}
+    for j in list(JOBS._jobs.values()):  # JobStore has no listing; shortcut: reads its in-memory map
+        sid = ((j.get("params") or {}).get("payload") or {}).get("strategy_id")
+        if sid and j.get("status") == "failed" and str(j.get("type", "")).startswith("studio_v3_"):
+            out[sid] = max(out.get(sid, 0), dt.datetime.fromisoformat(j["created_at"]).timestamp())
+    return out
+
+
 @router.get("/home")
 def home() -> dict[str, Any]:
     cards, fresh = store.list_strategies(), limits.freshness()
-    attention = []
-    if fresh["tone"] != "ok":
-        attention.append({"kind": "data", "tone": fresh["tone"], "text": fresh["label"], "action": {"label": "Open data", "href": "/studio/library/data"}})
-    for c in cards:
-        if c["has_draft"]:
-            attention.append({"kind": "draft", "tone": "amber", "strategy_id": c["id"], "text": f"{c['name']}: unsaved draft", "action": {"label": "Open", "href": f"/studio/build/{c['id']}"}})
-    return {"strategies": cards, "attention": attention, "recent_runs": store.recent_runs(8), "freshness": fresh}
+    return {"strategies": cards, "attention": home_rules.attention(cards, _failed_runs(), fresh), "recent_runs": store.recent_runs(8), "freshness": fresh, "live": home_rules.live_block(cards)}
+
+
+class BulkRequest(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=100)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/strategies/rerun")
+def bulk_rerun(request: BulkRequest, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Queue one backtest per strategy over the same range (H-25). A strategy that cannot start is listed with its reason."""
+    jobs, refused = [], []
+    for sid in dict.fromkeys(request.ids):
+        try:
+            jobs.append({"id": sid, **create_job("st01", FeatureRequest(payload={**request.payload, "strategy_id": sid, "spec": None}), x_studio_actor)})
+        except HTTPException as exc:
+            refused.append({"id": sid, "reason": exc.detail})
+    return {"jobs": jobs, "refused": refused}
+
+
+@router.post("/strategies/export")
+def bulk_export(request: BulkRequest) -> Response:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for sid in dict.fromkeys(request.ids):
+            s = _known(store.get, sid)
+            z.writestr(f"{re.sub(r'[^A-Za-z0-9._-]+', '_', s['name']) or 'strategy'}-{sid}.json", json.dumps({"name": s["name"], "version": s["version"], "spec": s["spec"]}, indent=2))
+    return Response(buf.getvalue(), media_type="application/zip", headers={"Content-Disposition": 'attachment; filename="studio-strategies.zip"'})
+
+
+@router.get("/search")
+def search_strategies(q: str = "") -> dict[str, Any]:
+    return {"strategies": store.search(q)}
+
+
+@router.get("/trash")
+def trash() -> dict[str, Any]:
+    return {"strategies": store.list_trash(), "days": store.TRASH_DAYS}
+
+
+def _human_only(actor: str | None, what: str) -> str:
+    a = _actor(actor)
+    if a.startswith("agent"):
+        raise HTTPException(403, f"{what} needs a human click")
+    return a
+
+
+@router.post("/strategies/{sid}/trash")
+def trash_strategy(sid: str, restore: bool = False, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    _human_only(x_studio_actor, "Moving to trash")
+    _known(store.get, sid)
+    return store.trash(sid, restore)
+
+
+@router.delete("/strategies/{sid}")
+def delete_strategy(sid: str, confirm: str = "", x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Permanent delete: the typed `confirm` must equal the strategy name (H-10)."""
+    actor = _human_only(x_studio_actor, "Deleting")
+    _known(store.get, sid)
+    try:
+        store.hard_delete(sid, confirm, actor)
+    except ValueError as exc:
+        raise HTTPException(422, {"refused": True, "reason": str(exc)}) from exc
+    return {"deleted": sid}
 
 
 # --- jobs ------------------------------------------------------------------------
@@ -318,9 +392,12 @@ def _finish(job_id: str | None, feature_id: str, payload: dict[str, Any], result
     if job_id:
         eq = result["charts"].get("equity_curve", [])
         step = max(1, len(eq) // 60)
+        fwd = result["charts"].get("forward") or []
+        paper_day = fwd[-1]["paper"] / fwd[-2]["paper"] - 1 if len(fwd) > 1 else None
         store.record_run(job_id, sid, (meta.get("strategy") or {}).get("version"), feature_id, meta["run_hash"], meta["result_hash"],
                          {"headline": meta["headline"], "total_return": meta["total_return"], "sharpe": meta["metrics"].get("sharpe"), "trades": meta["metrics"].get("trades"),
-                          "spark": [round(r["strategy"], 2) for r in eq[::step]]})
+                          "spark": [round(r["strategy"], 2) for r in eq[::step]],
+                          **({"drift": bool((meta.get("forward") or {}).get("drift")), "paper_day": paper_day} if feature_id == "st05" else {})})
     store.log(actor, feature_id, sid, {"run_hash": meta["run_hash"], "job_id": job_id})
     return result
 
