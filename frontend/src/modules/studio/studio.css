@@ -176,3 +176,13 @@
 .sh-trash > div b { color: var(--text); font-weight: 500; }
 .sh-trash > div button:first-of-type { margin-left: auto; }
 .sh-trash-empty { margin: 0; font-size: 12.5px; color: var(--text-3); }
+.sh-pin { margin-left: 4px; opacity: 0; } .sh-card:hover .sh-pin, .sh-pin:focus-visible, .sh-pin.on { opacity: 1; } .sh-pin.on { color: var(--accent); }
+.sh-saved { display: inline-flex; align-items: center; gap: 2px; padding: 0 4px 0 10px; } .sh-saved button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 2px 4px; }
+.sh-compare { width: min(1080px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 0; border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow); }
+.sh-compare::backdrop { background: oklch(0 0 0 / 0.5); }
+.sh-compare-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.sh-compare-head b { margin-right: auto; font-size: 15px; }
+.sh-compare-body { display: grid; gap: 24px; padding: 16px; }
+.sh-compare-body h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.sh-compare-body details summary { cursor: pointer; padding: 6px 0; font-size: 13px; }
+.sh-import, .sh-compare { margin: auto; }

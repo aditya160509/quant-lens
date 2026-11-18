@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, FileJson, Play, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Copy, FileJson, Pin, PinOff, Play, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { CompareDialog } from "./Compare";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -17,6 +18,7 @@ import { FreshnessPill } from "../RunHeader";
 import { Segmented } from "@/workspace/ui";
 import "../studio.css";
 
+type SavedFilter = { name: string; q: string; status: string; tag: string; folder: string };
 const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : "Failed");
 const day = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
@@ -35,16 +37,20 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<"last" | "name">("last");
+  const prefSort = home.data?.prefs?.sort;
+  useEffect(() => { if (prefSort === "name" || prefSort === "last") setSort(prefSort); }, [prefSort]);
   const [status, setStatus] = useState<string | null>(null);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [comparing, setComparing] = useState<string[] | null>(null);
+  const filters = useQuery({ queryKey: ["studio", "filters"], queryFn: () => studio<{ filters: SavedFilter[] }>("GET", "/home/filters").then((d) => d.filters), staleTime: 60_000 });
   const term = q.trim();
   // Search reaches into rules, code, tags and hypotheses on the server; names alone filter instantly here.
   const found = useQuery({ queryKey: ["studio", "search", term], queryFn: () => studio<{ strategies: StrategyCard[] }>("GET", `/search?q=${encodeURIComponent(term)}`), enabled: term.length > 1, staleTime: 30_000 });
   const trash = useQuery({ queryKey: ["studio", "trash"], queryFn: () => studio<{ strategies: StrategyCard[]; days: number }>("GET", "/trash"), enabled: trashOpen });
   const [picked, setPicked] = useState<string | null>(null);
   const params = useSearchParams();
-  const view = params?.get("layout") === "table" ? "table" : "cards";
-  const setView = (v: "cards" | "table") => { const u = new URL(location.href); if (v === "table") u.searchParams.set("layout", "table"); else u.searchParams.delete("layout"); router.replace(u.pathname + u.search, { scroll: false }); };
+  const view = (params?.get("layout") ?? home.data?.prefs?.layout) === "table" ? "table" : "cards";
+  const setView = (v: "cards" | "table") => { const u = new URL(location.href); if (v === "table") u.searchParams.set("layout", "table"); else u.searchParams.delete("layout"); router.replace(u.pathname + u.search, { scroll: false }); savePrefs({ layout: v }); };
   const [slow, setSlow] = useState(false);
   const search = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -62,6 +68,16 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
   const open = (s: StrategyCard) => openIn(s.id, s.last_run ? `run=${s.last_run.job_id}` : "go=1");
   const fromTemplate = (t: Template) => studio<StrategyCard>("POST", "/strategies", { spec: t.spec }).then((s) => { void refresh(); openIn(s.id, "go=1"); }, fail);
   const duplicate = (id: string) => studio("POST", `/strategies/${id}/duplicate`).then(() => { void refresh(); toast.success("Duplicated"); }, fail);
+  const pin = (s: StrategyCard) => studio("PATCH", `/strategies/${s.id}`, { pinned: !s.pinned }).then(() => void refresh(), fail);
+  const saveFilter = () => {
+    const name = window.prompt("Name this filter")?.trim();
+    if (!name) return;
+    const next = [...(filters.data ?? []).filter((f) => f.name !== name), { name, q: term, status: status ?? "", tag: "", folder: "" }];
+    void studio("PUT", "/home/filters", { filters: next }).then(() => qc.invalidateQueries({ queryKey: ["studio", "filters"] }), fail);
+  };
+  const dropFilter = (name: string) => studio("PUT", "/home/filters", { filters: (filters.data ?? []).filter((f) => f.name !== name) }).then(() => qc.invalidateQueries({ queryKey: ["studio", "filters"] }), fail);
+  // Layout and sort are remembered on the server, so they follow the user to any device.
+  const savePrefs = (patch: Partial<NonNullable<typeof home.data>["prefs"]>) => { const cur = home.data?.prefs; if (cur) void studio("PUT", "/home/prefs", { ...cur, ...patch }).catch(() => undefined); };
   const toTrash = (s: StrategyCard) => studio("POST", `/strategies/${s.id}/trash`).then(() => {
     void refresh();
     toast((t) => <span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>{s.name} moved to trash<button className="btn sm" onClick={() => { toast.dismiss(t.id); void restore(s.id); }}>Undo</button></span>);
@@ -101,7 +117,7 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
   const hitIds = term.length > 1 && found.data ? new Set(found.data.strategies.map((x) => x.id)) : null;
   const counts = all.reduce<Record<string, number>>((m, s) => ({ ...m, [s.status ?? "Draft"]: (m[s.status ?? "Draft"] ?? 0) + 1 }), {});
   const list = all.filter((s) => (!status || (s.status ?? "Draft") === status) && (!term || (hitIds ? hitIds.has(s.id) : `${s.name} ${s.tags.join(" ")} ${s.folder}`.toLowerCase().includes(term.toLowerCase()))))
-    .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : (b.last_run?.at ?? b.updated) - (a.last_run?.at ?? a.updated)));
+    .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || (sort === "name" ? a.name.localeCompare(b.name) : (b.last_run?.at ?? b.updated) - (a.last_run?.at ?? a.updated)));
   const loading = home.isLoading;
 
   return (
@@ -111,7 +127,7 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
           <h1>Studio</h1>
           {home.data ? <FreshnessPill f={home.data.freshness} /> : null}
           <label className="sh-q"><Search size={13} /><input ref={search} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search strategies" /></label>
-          <select className="input" style={{ width: 120, height: 30 }} aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as "last" | "name")}><option value="last">Last run</option><option value="name">Name</option></select>
+          <select className="input" style={{ width: 120, height: 30 }} aria-label="Sort" value={sort} onChange={(e) => { setSort(e.target.value as "last" | "name"); savePrefs({ sort: e.target.value }); }}><option value="last">Last run</option><option value="name">Name</option></select>
           <Segmented<"cards" | "table"> label="Layout" value={view} onChange={setView} options={[{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }]} />
           <button className="btn" onClick={() => dialog.current?.showModal()}><FileJson size={14} />Import</button>
           <Link className="btn primary" href="/studio/build"><Plus size={14} />New</Link>
@@ -150,6 +166,13 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
                 <button key={k} type="button" className="pill" aria-pressed={status === k} onClick={() => setStatus(status === k ? null : k)}>{k}<span className="num">{counts[k]}</span></button>
               ))}
             </div>
+            {(filters.data ?? []).map((f) => (
+              <span key={f.name} className="pill sh-saved" aria-pressed={term === f.q && (status ?? "") === f.status}>
+                <button type="button" onClick={() => { setQ(f.q); setStatus(f.status || null); }}>{f.name}</button>
+                <button type="button" aria-label={`Remove filter ${f.name}`} onClick={() => void dropFilter(f.name)}>×</button>
+              </span>
+            ))}
+            {term || status ? <button type="button" className="btn sm ghost" onClick={saveFilter}>Save filter</button> : null}
             <button type="button" className="btn sm ghost" aria-pressed={trashOpen} onClick={() => setTrashOpen(!trashOpen)}><Trash2 size={12} />Trash</button>
           </div>
           {loading ? (slow ? <div className="sh-grid">{Array.from({ length: 6 }, (_, i) => <div key={i} className="skel-card" style={{ height: 168 }} />)}</div> : null) : !all.length ? (
@@ -163,6 +186,7 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
               status: s.status ?? "Draft", trend: s.last_run?.spark ?? [], last_run: s.last_run ? day(s.last_run.at) : null, raw_trials: s.trials.raw, effective_trials: s.trials.effective }))}
               opts={{ bulk: (rows: Record<string, unknown>[], clear: () => void) => { const ids = rows.map((r) => list.find((x) => x.name === r.strategy && x.version === r.version)?.id).filter((x): x is string => Boolean(x)); return (<>
                 <button className="btn sm" onClick={() => { void rerun(ids); clear(); }}>Re-run</button>
+                <button className="btn sm" disabled={ids.length < 2 || ids.length > 6} onClick={() => setComparing(ids)}>Compare</button>
                 <button className="btn sm" disabled={ids.length < 2} onClick={() => combine(ids)}>Combine</button>
                 <button className="btn sm" onClick={() => void exportZip(ids)}>Export</button>
               </>); }, rowActions: (r: Record<string, unknown>) => { const s = list.find((x) => x.name === r.strategy && x.version === r.version); return s ? (
@@ -176,7 +200,8 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
               {list.map((s) => (
                 <div key={s.id} className="sh-card" role="button" tabIndex={0} aria-pressed={picked === s.id} onClick={() => setPicked(picked === s.id ? null : s.id)} onDoubleClick={() => open(s)}
                   onKeyDown={(e) => { if (e.key === "Enter") open(s); }}>
-                  <div className="sh-name"><span>{s.name}</span><em>v{s.version}</em></div>
+                  <div className="sh-name"><span>{s.name}</span><em>v{s.version}</em>
+                    <button type="button" className={`btn sm icon ghost sh-pin${s.pinned ? " on" : ""}`} aria-label={s.pinned ? `Unpin ${s.name}` : `Pin ${s.name}`} title={s.pinned ? "Unpin" : "Pin to top"} onClick={(e) => { e.stopPropagation(); void pin(s); }}>{s.pinned ? <PinOff size={12} /> : <Pin size={12} />}</button></div>
                   {s.last_run ? (
                     <>
                       <Spark values={s.last_run.spark} />
@@ -236,40 +261,65 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
           </div>
         </section>
       </div>
+      {comparing ? <CompareDialog ids={comparing} onClose={() => setComparing(null)} onCombine={(ids) => { const f = features.find((x) => x.id === "st04"); if (f) useStudies.getState().setForm("st04", (cur) => ({ ...cur, strategy_ids: ids.join(" ") }), defaultsFor(f)); }} /> : null}
       <ImportDialog ref={dialog} onSaved={(s) => { void refresh(); dialog.current?.close(); openIn(s.id, "go=1"); }} />
     </div>
   );
 }
 
-/** Paste or load a Studio JSON spec; it is recompiled and its findings shown before anything is saved (H-4). */
+type ImportMode = "json" | "quantconnect" | "signals";
+type ImportResult = { compile?: Compiled; saved: StrategyCard | null; mapped?: { line: number; call: string; to: string }[]; unmapped?: { line: number; call: string; reason: string }[]; findings?: { severity: string; row: number; message: string }[]; ok?: boolean; rows?: number; symbols?: number };
+const PLACEHOLDER: Record<ImportMode, string> = {
+  json: '{"name": "…", "entry_long": "close > sma(close, 200)"}',
+  quantconnect: "class MyAlgo(QCAlgorithm):\n    def initialize(self):\n        self.fast = self.sma(\"SPY\", 50)\n    def on_data(self, data):\n        …",
+  signals: "date,symbol,signal\n2024-01-02,AAPL,1\n2024-03-01,AAPL,0",
+};
+
+/** Import a Studio JSON spec, a QuantConnect algorithm or a CSV of signals; each is checked and its findings shown before anything is saved. */
 function ImportDialog({ ref, onSaved }: { ref: React.RefObject<HTMLDialogElement | null>; onSaved: (s: StrategyCard) => void }) {
+  const [mode, setMode] = useState<ImportMode>("json");
   const [text, setText] = useState("");
-  const [checked, setChecked] = useState<Compiled | null>(null);
+  const [name, setName] = useState("");
+  const [res, setRes] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const send = (save: boolean) => {
+  const reset = () => { setRes(null); setError(null); };
+  const send = (save: boolean, force = false) => {
     setError(null);
-    let spec: unknown;
-    try { spec = JSON.parse(text); } catch { setError("Not valid JSON"); return; }
-    void studio<{ compile: Compiled; saved: StrategyCard | null }>("POST", `/strategies/import${save ? "?save=true" : ""}`, { spec: (spec as { spec?: unknown }).spec ?? spec }).then((d) => {
-      setChecked(d.compile);
-      if (d.saved) onSaved(d.saved);
-    }, (e: Error) => { setChecked(null); setError(e.message); });
+    let req: Promise<ImportResult>;
+    if (mode === "json") {
+      let spec: unknown;
+      try { spec = JSON.parse(text); } catch { setError("Not valid JSON"); return; }
+      req = studio<ImportResult>("POST", `/strategies/import${save ? "?save=true" : ""}`, { spec: (spec as { spec?: unknown }).spec ?? spec });
+    } else {
+      const qs = new URLSearchParams({ ...(save ? { save: "true" } : {}), ...(force ? { force: "true" } : {}) }).toString();
+      req = studio<ImportResult>("POST", `/strategies/import/${mode}${qs ? `?${qs}` : ""}`, mode === "quantconnect" ? { source: text, name: name || undefined } : { csv: text, name: name || undefined });
+    }
+    void req.then((d) => { setRes(d); if (d.saved) onSaved(d.saved); }, (e: Error) => { setRes(null); setError(e.message); });
   };
+  const ok = mode === "json" ? Boolean(res?.compile?.ok) : mode === "signals" ? Boolean(res?.ok) : Boolean(res?.compile?.ok ?? res);
+  const unmapped = res?.unmapped ?? [];
   return (
     <dialog ref={ref} className="sh-import" aria-label="Import a strategy" onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
       <b style={{ fontSize: 15 }}>Import a strategy</b>
-      <textarea className="input" value={text} onChange={(e) => { setText(e.target.value); setChecked(null); }} placeholder='{"name": "…", "entry_long": "close > sma(close, 200)"}' aria-label="Strategy JSON" spellCheck={false} />
-      <input type="file" accept="application/json,.json" aria-label="JSON file" onChange={(e) => { const f = e.target.files?.[0]; if (f) void f.text().then((t) => { setText(t); setChecked(null); }); }} />
+      <Segmented<ImportMode> label="Source" value={mode} onChange={(m) => { setMode(m); setText(""); reset(); }} options={[{ value: "json", label: "Studio JSON" }, { value: "quantconnect", label: "QuantConnect" }, { value: "signals", label: "Signals CSV" }]} />
+      {mode !== "json" ? <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" aria-label="Strategy name" /> : null}
+      <textarea className="input" value={text} onChange={(e) => { setText(e.target.value); reset(); }} placeholder={PLACEHOLDER[mode]} aria-label="Source" spellCheck={false} />
+      <input type="file" accept={mode === "json" ? "application/json,.json" : mode === "signals" ? "text/csv,.csv" : ".py,text/x-python"} aria-label="File" onChange={(e) => { const f = e.target.files?.[0]; if (f) void f.text().then((t) => { setText(t); reset(); }); }} />
       {error ? <div className="sh-find" role="alert"><b className="error">error</b>{error}</div> : null}
-      {checked ? (
-        <div style={{ display: "grid", gap: 4 }} data-testid="import-findings">
-          {checked.findings.length ? checked.findings.map((f, i) => <div key={i} className="sh-find"><b className={f.severity}>{f.severity}</b><span>{f.message}{f.token ? ` (line ${f.line}: ${f.token})` : ""}</span></div>) : <div className="sh-find"><b className="st-up">compiles</b><span style={{ whiteSpace: "pre-line" }}>{checked.description}</span></div>}
+      {res ? (
+        <div style={{ display: "grid", gap: 4, maxHeight: 260, overflow: "auto" }} data-testid="import-findings">
+          {mode === "signals" ? <div className="sh-find"><b>{res.rows ?? 0} rows</b><span>{res.symbols ?? 0} symbols</span></div> : null}
+          {res.findings?.map((f, i) => <div key={i} className="sh-find"><b className={f.severity}>{f.severity}</b><span>{f.row ? `row ${f.row}: ` : ""}{f.message}</span></div>)}
+          {res.mapped?.map((m, i) => <div key={`m${i}`} className="sh-find"><b className="st-up">line {m.line}</b><span>{m.call} → {m.to}</span></div>)}
+          {unmapped.map((m, i) => <div key={`u${i}`} className="sh-find"><b className="warning">line {m.line}</b><span>{m.call}: {m.reason}</span></div>)}
+          {res.compile ? (res.compile.findings.length ? res.compile.findings.map((f, i) => <div key={`c${i}`} className="sh-find"><b className={f.severity}>{f.severity}</b><span>{f.message}{f.token ? ` (line ${f.line}: ${f.token})` : ""}</span></div>) : <div className="sh-find"><b className="st-up">compiles</b><span style={{ whiteSpace: "pre-line" }}>{res.compile.description}</span></div>) : null}
         </div>
       ) : null}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button className="btn" onClick={() => ref.current?.close()}>Cancel</button>
         <button className="btn" disabled={!text.trim()} onClick={() => send(false)}>Check</button>
-        <button className="btn primary" disabled={!checked?.ok} onClick={() => send(true)}>Save</button>
+        {mode === "quantconnect" && unmapped.length ? <button className="btn" onClick={() => send(true, true)}>Save without {unmapped.length} unmapped</button> : null}
+        <button className="btn primary" disabled={!ok || (mode === "quantconnect" && unmapped.length > 0)} onClick={() => send(true)}>Save</button>
       </div>
     </dialog>
   );

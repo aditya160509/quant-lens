@@ -410,7 +410,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
       {selectable && picked.size ? (
         <div className="dt-bulk" role="toolbar" aria-label="Selected rows">
           <strong className="num">{picked.size}</strong> selected
-          <button className="btn sm" disabled={!canCompare} title={canCompare ? "Compare these names (C)" : `Tick 2 to ${MAX_COMPARE} names to compare`} onClick={() => openCompare(pickedTickers)}><GitCompareArrows size={11} />Compare<span className="kbd">C</span></button>
+          {rows.some((r) => typeof r.ticker === "string") ? <button className="btn sm" disabled={!canCompare} title={canCompare ? "Compare these names (C)" : `Tick 2 to ${MAX_COMPARE} names to compare`} onClick={() => openCompare(pickedTickers)}><GitCompareArrows size={11} />Compare<span className="kbd">C</span></button> : null}
           {bulk?.([...picked].map((i) => rows[i]).filter(Boolean), () => setPicked(new Set()))}
           <button className="btn sm ghost" onClick={() => setPicked(new Set())}><X size={11} />Clear</button>
         </div>
