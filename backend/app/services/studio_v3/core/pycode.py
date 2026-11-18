@@ -82,12 +82,17 @@ def check(code: str, params: dict[str, float]) -> list[dict]:
 
 
 class CodeError(Exception):
-    def __init__(self, message: str, line: int | None):
+    def __init__(self, message: str, problem: dict | None = None):
         super().__init__(message)
-        self.message, self.line = message, line
+        self.message, self.problem = message, problem or {}
+        self.line = self.problem.get("line")
 
 
-def run(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params: dict[str, float], symbols: list[str] | None = None, cache: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
+def run(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params: dict[str, float], symbols: list[str] | None = None, cache: dict | None = None, *, output: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
+    findings = check(code, params)
+    if findings:
+        first = findings[0]
+        raise CodeError(first["message"], {"file": "main.py", "line": first["line"], "column": first["start"] + 1})
     ex = exprs(code)
     vals = {f"v{i}": np.asarray(formula.evaluate(e, bars, dates, params, cache), dtype=float) for i, e in enumerate(ex)}
     n = bars["close"].shape[1]
@@ -105,9 +110,11 @@ def run(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params:
         except json.JSONDecodeError:
             res = {}
         if not res.get("ok"):
-            raise CodeError(res.get("error") or (p.stderr.strip().splitlines() or ["the strategy process died"])[-1], res.get("line"))
-        z = np.load(dst)
-        return z["entries"], z["exits"]
+            raise CodeError(res.get("error") or (p.stderr.strip().splitlines() or ["the strategy process died"])[-1], res.get("problem"))
+        if output is not None:
+            output.update(logs=res["logs"], plots=res["plots"])
+        with np.load(dst) as z:
+            return z["entries"], z["exits"]
 
 
 def _limits() -> None:

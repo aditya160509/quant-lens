@@ -376,3 +376,25 @@ def test_rule_check_passes_on_target_and_fails_on_daily_loss():
     crash = up.copy()
     crash[3:] *= 0.9  # one -10% day
     assert paths.rule_check(crash, dates, 0.10, 0.05, 0.10, 5, every=60)["fail_daily_loss"] == 1
+
+
+def test_build_preview_returns_runner_output_and_runtime_problem(studio):
+    url = "/api/studio-v3/preview"
+    code = """class Strategy:
+    warmup = 2
+    def on_bar(self, ctx):
+        if ctx.bar == 2:
+            ctx.log("ready")
+            ctx.plot("close", ctx.close[-1])
+        ctx.buy()
+"""
+    result = studio.post(url, json={"spec": {"code": code}, "symbol": "SPY"}).json()
+    assert result["logs"] == [{"date": "2015-01-05", "symbol": "SPY", "line": 5, "text": "ready", "level": "info"}]
+    assert result["plots"]["close"] == [{
+        "date": "2015-01-05", "symbol": "SPY", "value": fixture_panel().close[2, -1],
+    }]
+
+    error = studio.post(url, json={"spec": {"code": code.replace("ctx.close[-1]", "ctx.close[1]")}}).json()
+    assert error["status"] == "error"
+    assert error["problem"]["line"] == 6
+    assert error["problem"]["exception_type"] == "IndexError"

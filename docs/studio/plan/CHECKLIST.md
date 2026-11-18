@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 29 | 163 |
+| Build | 30 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **139** | **538** |
+| **All pages** | **140** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 29 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 30 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -177,13 +177,13 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-50 ctx.indicator(formula) with .value, .ready, .history(n), .window; LEAN-identical definitions (LEAN_PARITY row 19) (partial: ctx.value formula strings exist; objects open) [FP 43] [PY A4]
 - [ ] [M] B-51 ctx.rank(ind, top, bottom, where) and ctx.zscore(ind) across the universe, vectorised [FP 61]
 - [ ] [M] B-52 rebalance attribute (month_start, week_start, every(n), daily, None); ctx.rebalancing; is_month_start, is_week_start, is_quarter_start, is_year_start [FP 61] [PY A6]
-- [ ] [M] B-53 warmup class attribute: no orders before bar n; auto warm-up reported ("starts trading on …") [FP 61] [PY A10]
+- [ ] [M] B-53 warmup class attribute: no orders before bar n; auto warm-up reported ("starts trading on …") (partial: explicit warm-up suppresses orders in Python preview) [FP 61] [PY A10]
 - [ ] [M] B-54 Risk attributes: max_drawdown (flatten and stop), max_daily_loss, max_position, max_gross; each breach logged as a risk event [FP 61]
 - [ ] [M] B-55 ctx.store keeps small JSON across runs; instance attributes keep state
 - [ ] [H] B-56 ctx.feature_matrix(formulas, lookback) and ctx.fit_every(n); sklearn allowed; fits use past bars only
 - [ ] [M] B-57 Import allow-list: math, statistics, numpy, pandas, scipy.stats, scipy.optimize, sklearn, and the project files; others refused with the line and a request link (partial: math only; imports refused) [PY A7]
-- [ ] [E] B-58 print and ctx.log(msg, level) captured per bar (date, symbol), 50,000-line cap with a truncation row (partial: print allowed, output dropped) [PY A8]
-- [ ] [E] B-59 ctx.plot(name, value, chart="main" or "own"), ctx.mark(sym, label) on the price chart, ctx.table(name, row) as a sortable table [FP 29] [PY A9]
+- [x] [E] B-58 print and ctx.log(msg, level) captured per bar (date, symbol), 50,000-line cap with a truncation row (backend done: typed preview logs include source line and level) [PY A8]
+- [ ] [E] B-59 ctx.plot(name, value, chart="main" or "own"), ctx.mark(sym, label) on the price chart, ctx.table(name, row) as a sortable table (partial: preview returns named plot series) [FP 29] [PY A9]
 - [ ] [E] B-60 on_fill(ctx, fill) gets symbol, side, quantity, price, date and fee (partial: on_fill(ctx) without detail) [PY A11]
 - [ ] [M] B-61 Lifecycle hooks: on_end_of_day, on_warmup_done, on_risk_event, on_stop
 - [ ] [E] B-62 params = {"fast": (10, 5, 50, 5)} declared in code appear in Build params and the Optimise grid; ctx.param kept (partial: ctx.param exists; declared params not wired to Optimise) [FP 9] [PY A12]
@@ -211,7 +211,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [E] B-84 Three run levels: live preview (600 ms debounce, one symbol, 2 years), quick run ⌘↵ (universe, 5 years), full run ⌘⇧↵ (recorded in the ledger) (partial: preview built (300 ms, 2 years); quick and full levels not split)
 - [ ] [E] B-85 Progress in the status bar ("bar 1,240 / 2,516 · 18 symbols · 3.2 s") with partial equity streamed to Results
 - [ ] [E] B-86 Cancel with Esc; time budget shown on every run
-- [ ] [M] B-87 Runtime error: jump to the line, stack trace with user frames only, locals at the failing bar (symbol, date, self attributes) (partial: runtime error marks its line only)
+- [ ] [M] B-87 Runtime error: jump to the line, stack trace with user frames only, locals at the failing bar (symbol, date, self attributes) (partial: preview returns file, line, column, exception type and up to eight user frames)
 - [ ] [M] B-88 Delta row after each quick run against the last run (return, Sharpe, trades)
 - [ ] [E] B-89 Preview settings: symbol and window (default SPY, 2 years), auto-preview on or off; quick-run universe (top 50 by volume, 5 years) (partial: preview symbol and window exist)
 - [ ] [E] B-90 Status bar: Ln:Col, error and warning counts, saved state, run state, last run time, "trial 14 on this idea" (partial: trial chip in Build; status bar not built) [FP 68]

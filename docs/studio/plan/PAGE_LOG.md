@@ -74,3 +74,12 @@ Fixed on this page; the shared ones apply to every Studio page:
 - Sector exposure is rebuilt from trades and final weights, so it is approximate under quarterly, rotation and threshold rebalancing.
 - Custom Python allocation function skipped.
 - The netting measure without `net_execution` reads a position count, not per-symbol positions.
+
+## Build backend (2026-11-18)
+
+- B-58 shipped. B-53, B-59 and B-87 advanced. The Python preview captures per-bar logs and named plots, suppresses orders for the first `warmup` available bars per symbol, and returns source locations and user frames for runtime errors. The runner clamps history slices to the available prefix.
+- `POST /api/studio-v3/preview` adds `logs` and `plots` on a Python success and `problem` on a Python runtime error. Existing fields are preserved.
+- A 20-row compile took 0.9 ms on the local server. The real SPY Python preview took 3.07 s with 50 prefix replays, above the 300 ms target. Lint, completion and the 500-symbol backtest latency budgets remain unmeasured.
+- Output is capped at 50,000 log rows plus a truncation row and 50,000 plot points. Debugger locals, automatic warm-up reporting, chart markers and tables remain open.
+- B-60 needs actual fill events from the shared engine. The current runner calls the legacy hook as it generates signals, before real prices and quantities are known. The portfolio API, imports, language services, project files, templates, debugger, indicator objects, remaining Build checks and QuantConnect import remain open.
+- The full backend test suite stops on the missing Screener `cscv_pbo` import in `tests/test_shared_stats.py`. Repository-wide Ruff reports 1,157 findings. Ruff passes on the changed Python files.

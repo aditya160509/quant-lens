@@ -69,12 +69,13 @@ def _bool(expr: str, bars, dates, params, cache) -> np.ndarray:
     return out if out.dtype == bool else np.nan_to_num(out) > 0
 
 
-def signals(spec: Strategy, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params: dict[str, float] | None = None) -> Signals:
+def signals(spec: Strategy, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params: dict[str, float] | None = None, *,
+            symbols: list[str] | None = None, output: dict | None = None) -> Signals:
     params = {**spec.values(), **(params or {})}
     cache: dict = {}
     shape = bars["close"].shape
     if spec.code.strip():
-        entries, exits = pycode.run(spec.code, bars, dates, params, cache=cache)
+        entries, exits = pycode.run(spec.code, bars, dates, params, symbols=symbols, cache=cache, output=output)
         _gate(spec, entries, exits, bars, dates, params, cache)
         dist = spec.exits.stop_atr * formula.evaluate("atr(14)", bars, dates, params, cache) if spec.exits.stop_atr else None
         return Signals(entries, exits, None, None if dist is None else np.nan_to_num(dist), _vol(spec, bars, dates, params, cache))

@@ -160,14 +160,57 @@ class PreviewRequest(BaseModel):
     symbol: str = "SPY"
 
 
-@router.post("/preview")
+class PreviewLog(BaseModel):
+    date: str
+    symbol: str
+    line: int
+    text: str
+    level: str
+
+
+class PreviewPlotPoint(BaseModel):
+    date: str
+    symbol: str
+    value: float | None
+
+
+class StrategyFrame(BaseModel):
+    file: str
+    line: int
+    column: int
+    function: str
+
+
+class StrategyProblem(BaseModel):
+    file: str | None = None
+    line: int | None = None
+    column: int | None = None
+    exception_type: str | None = None
+    traceback: list[StrategyFrame] | None = None
+
+
+class PreviewResult(BaseModel):
+    status: str
+    reason: str | None = None
+    line: int | None = None
+    problem: StrategyProblem | None = None
+    symbol: str | None = None
+    bars: list[dict[str, Any]]
+    trades: list[dict[str, Any]]
+    total_return: float | None = None
+    repaint: dict[str, Any] | None = None
+    logs: list[PreviewLog] | None = None
+    plots: dict[str, list[PreviewPlotPoint]] | None = None
+
+
+@router.post("/preview", response_model=PreviewResult, response_model_exclude_unset=True)
 def preview(request: PreviewRequest) -> dict[str, Any]:
     try:
         return backtest.preview(_spec(request.spec), request.symbol)
     except backtest.Refusal as exc:
         return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
     except pycode.CodeError as exc:
-        return {"status": "error", "reason": exc.message, "line": exc.line, "bars": [], "trades": []}
+        return {"status": "error", "reason": exc.message, "line": exc.line, "problem": exc.problem, "bars": [], "trades": []}
 
 
 @router.get("/strategies/{sid}/holdout")

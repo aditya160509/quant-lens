@@ -33,6 +33,10 @@ def test_positive_index_is_look_ahead_and_reports_its_line():
     with pytest.raises(pycode.CodeError) as e:
         pycode.run("class Strategy:\n    def on_bar(self, ctx):\n        ctx.close[0]\n", bars, dates, {})
     assert e.value.line == 3 and "negative" in e.value.message
+    assert e.value.problem == {
+        "file": "main.py", "line": 3, "column": 9, "exception_type": "IndexError",
+        "traceback": [{"file": "main.py", "line": 3, "column": 9, "function": "on_bar"}],
+    }
 
 
 def test_signals_do_not_change_when_later_bars_are_cut():
@@ -41,3 +45,51 @@ def test_signals_do_not_change_when_later_bars_are_cut():
     full, _ = pycode.run(code, bars, dates, {})
     cut, _ = pycode.run(code, {k: v[:120] for k, v in bars.items()}, dates[:120], {})
     assert np.array_equal(full[:120], cut)
+
+
+def test_runner_output_and_warmup():
+    bars, dates = _bars(4, 1)
+    output = {}
+    entries, _ = pycode.run(
+        """class Strategy:
+    warmup = 2
+    def on_bar(self, ctx):
+        print("bar", ctx.bar)
+        ctx.log("evaluated", "info")
+        ctx.plot("close", ctx.close[-1])
+        ctx.buy()
+""",
+        bars, dates, {}, symbols=["SPY"], output=output,
+    )
+    assert entries[:, 0].tolist() == [0, 0, 1, 0]
+    assert output["logs"][:2] == [
+        {"date": "2020-01-01", "symbol": "SPY", "line": 4, "text": "bar 0", "level": "info"},
+        {"date": "2020-01-01", "symbol": "SPY", "line": 5, "text": "evaluated", "level": "info"},
+    ]
+    assert [point["value"] for point in output["plots"]["close"]] == bars["close"][:, 0].tolist()
+
+
+def test_runner_log_cap():
+    bars, dates = _bars(1, 1)
+    output = {}
+    pycode.run(
+        'class Strategy:\n    def on_bar(self, ctx):\n        for i in range(50_003):\n            print(i)\n',
+        bars, dates, {}, output=output,
+    )
+    assert len(output["logs"]) == 50_001
+    assert output["logs"][-2]["text"] == "49999"
+    assert output["logs"][-1]["text"] == "Output truncated after 50000 lines"
+
+
+@pytest.mark.parametrize(("expression", "expected"), [
+    ("ctx.close[:-50]", "[]"),
+    ("ctx.close[-3:0]", "current"),
+])
+def test_history_slice_uses_only_available_bars(expression, expected):
+    bars, dates = _bars(4, 1)
+    output = {}
+    pycode.run(
+        f"class Strategy:\n    def on_bar(self, ctx):\n        if ctx.bar == 0:\n            print({expression})\n",
+        bars, dates, {}, output=output,
+    )
+    assert output["logs"][0]["text"] == (str(bars["close"][0].tolist()) if expected == "current" else expected)

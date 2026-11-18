@@ -353,20 +353,24 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0) -> dict:
     prep = prepare(Settings(symbols=[symbol], benchmark=""))
     p = prep.panel
     lo = max(0, int(p.dates.searchsorted(p.dates[-1] - pd.DateOffset(days=int(365 * years)))))
-    r = simulate(spec, prep, Settings(symbols=[symbol], benchmark=""))
+    output: dict = {}
+    sig = C.signals(spec, prep.sig_bars, p.dates, symbols=list(p.symbols), output=output)
+    r = simulate(spec, prep, Settings(symbols=[symbol], benchmark=""), sig=sig)
     trades = [t for t in trades_table(r, p) if t["exit_date"] >= str(p.dates[lo].date())]
     bars = [{"date": str(d.date()), "close": float(c)} for d, c in zip(p.dates[lo:], p.close[lo:, 0], strict=True) if np.isfinite(c)]
     total = float(np.prod([1 + t["return"] for t in trades]) - 1) if trades else 0.0
-    return {"status": "ok", "symbol": symbol, "bars": bars, "trades": trades, "total_return": total, "repaint": repaint_check(spec, prep, lo)}
+    return {"status": "ok", "symbol": symbol, "bars": bars, "trades": trades, "total_return": total, "repaint": repaint_check(spec, prep, lo, full=sig), **output}
 
 
-def repaint_check(spec: Strategy, prep: Prepared, lo: int = 0, cuts: int = 50) -> dict:
+def repaint_check(spec: Strategy, prep: Prepared, lo: int = 0, cuts: int = 50, *, full: C.Signals | None = None) -> dict:
     """Recompute the rule on history cut at `cuts` bars; the signal on each cut bar must equal the full-history signal. Any mismatch reads the future."""
-    dates, full = prep.panel.dates, C.signals(spec, prep.sig_bars, prep.panel.dates)
+    dates = prep.panel.dates
+    symbols = list(prep.panel.symbols)
+    full = full if full is not None else C.signals(spec, prep.sig_bars, dates, symbols=symbols)
     at = np.unique(np.linspace(max(lo, 1), len(dates) - 1, cuts).astype(int))
     bad = []
     for t in at:
-        cut = C.signals(spec, {k: v[:t + 1] for k, v in prep.sig_bars.items()}, dates[:t + 1])
+        cut = C.signals(spec, {k: v[:t + 1] for k, v in prep.sig_bars.items()}, dates[:t + 1], symbols=symbols)
         same = np.array_equal(cut.entries[t], full.entries[t]) and np.array_equal(cut.exits[t], full.exits[t])
         if not same:
             bad.append(str(dates[t].date()))
