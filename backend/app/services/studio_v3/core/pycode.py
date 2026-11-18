@@ -8,6 +8,7 @@ from __future__ import annotations
 import ast
 import inspect
 import json
+import keyword
 import subprocess
 import sys
 import tempfile
@@ -187,13 +188,18 @@ def editor_members(scope: str, code: str, prefix: str = "", *, params=None, symb
     return [member for name, member in sorted(members.items()) if name.startswith(prefix)]
 
 
-def definitions(code: str, line: int, column: int, *, file: str = "main.py", files: dict[str, str] | None = None) -> list[dict]:
+def navigate(code: str, line: int, column: int, *, file: str = "main.py", files: dict[str, str] | None = None,
+             references: bool = False, new_name: str | None = None) -> list[dict] | dict[str, str]:
+    if new_name is not None and (not new_name.isidentifier() or keyword.iskeyword(new_name)):
+        raise ValueError("Use a valid Python identifier.")
     lines = code.split("\n")
     if not 1 <= line <= len(lines) or not 1 <= column <= len(lines[line - 1]) + 1:
-        return []
+        return {} if new_name is not None else []
     try:
         import jedi
     except ImportError:
+        if new_name is not None or references:
+            raise ValueError("Project references and rename require Jedi.") from None
         return [{**item, "file": file} for item in _local_definition(code, line, column)]
 
     with tempfile.TemporaryDirectory(prefix="studio-definition-") as directory:
@@ -213,7 +219,17 @@ def definitions(code: str, line: int, column: int, *, file: str = "main.py", fil
         paths[active] = file
         project = jedi.Project(path=root, sys_path=[str(root)], smart_sys_path=False)
         script = jedi.Script(code, path=active, project=project)
-        matches = script.goto(line=line, column=column - 1, follow_imports=True)
+        position = {"line": line, "column": column - 1}
+        if new_name is not None:
+            try:
+                change = script.rename(**position, new_name=new_name)
+            except jedi.RefactoringError:
+                raise ValueError("Select a Python symbol declared in this project.") from None
+            changed = change.get_changed_files()
+            if change.get_renames() or any(path not in paths for path in changed):
+                raise ValueError("Only symbol edits within project files are supported.")
+            return {paths[path]: item.get_new_code() for path, item in changed.items()}
+        matches = script.get_references(**position, scope="project") if references else script.goto(**position, follow_imports=True)
         return [
             {"file": paths[item.module_path], "name": item.name, "line": item.line, "column": item.column + 1}
             for item in matches if item.module_path in paths and item.line is not None and item.column is not None

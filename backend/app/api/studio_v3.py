@@ -227,14 +227,36 @@ class BuildDefinition(BaseModel):
     column: int
 
 
-@router.post("/build/definition", response_model=list[BuildDefinition])
-def define_python(request: BuildDefinitionRequest) -> list[dict]:
+def _navigate_python(request: BuildDefinitionRequest, *, references=False, new_name=None):
     sources = {**request.files, request.file: request.code}
     main = sources.pop("main.py", "")
     project = _spec({"code": main, "files": sources})
     if not request.file.endswith(".py"):
         raise HTTPException(422, "Select a Python file.")
-    return pycode.definitions(request.code, request.line, request.column, file=request.file, files=project.project_files())
+    try:
+        return pycode.navigate(request.code, request.line, request.column, file=request.file,
+                               files=project.project_files(), references=references, new_name=new_name)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/build/definition", response_model=list[BuildDefinition])
+def define_python(request: BuildDefinitionRequest):
+    return _navigate_python(request)
+
+
+@router.post("/build/references", response_model=list[BuildDefinition])
+def reference_python(request: BuildDefinitionRequest):
+    return _navigate_python(request, references=True)
+
+
+class BuildRenameRequest(BuildDefinitionRequest):
+    new_name: str = Field(min_length=1, max_length=100)
+
+
+@router.post("/build/rename", response_model=dict[str, str])
+def rename_python(request: BuildRenameRequest):
+    return _navigate_python(request, new_name=request.new_name)
 
 
 class PreviewRequest(BaseModel):

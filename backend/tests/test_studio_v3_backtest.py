@@ -669,3 +669,21 @@ def test_build_definition_follows_only_project_imports(studio):
     ]
     invalid = studio.post(endpoint, json=request | {"files": {"../outside.py": "x = 1"}})
     assert invalid.status_code == 422
+
+
+def test_build_references_and_rename_preview_cover_project_files(studio):
+    root = "/api/studio-v3/build"
+    request = {
+        "code": "from helper import signal\nresult = signal()\n", "line": 2, "column": 11,
+        "files": {"helper.py": "def signal():\n    return 1\n"},
+    }
+    references = studio.post(f"{root}/references", json=request).json()
+    assert {(item["file"], item["line"]) for item in references} == {
+        ("main.py", 1), ("main.py", 2), ("helper.py", 1),
+    }
+    renamed = studio.post(f"{root}/rename", json=request | {"new_name": "forecast"}).json()
+    assert renamed == {
+        "main.py": "from helper import forecast\nresult = forecast()\n",
+        "helper.py": "def forecast():\n    return 1\n",
+    }
+    assert studio.post(f"{root}/rename", json=request | {"new_name": "for"}).status_code == 422

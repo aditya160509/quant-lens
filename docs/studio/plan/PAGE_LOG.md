@@ -131,3 +131,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-92 backend now executes saved flat Python helper modules. Compile checks each source, and the worker resolves imports only against the supplied project. Formula literals in helpers participate in precomputation. Runtime diagnostics report the helper filename and line. Cross-file editor navigation and UI wiring remain open.
 
 - B-22 advanced. Go-to-definition follows imports inside the supplied project and returns the target filename and position. The backend declares Jedi directly, and the endpoint validates project filenames before staging the analysis inputs. References, rename and editor wiring remain open.
+
+- B-22 advanced. `POST /api/studio-v3/build/references` locates symbols across the supplied project. `POST /api/studio-v3/build/rename` previews the changed file contents without saving them. It accepts Python identifiers and restricts edits to supplied project files. Editor wiring and outline remain open.
