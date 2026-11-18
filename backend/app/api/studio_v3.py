@@ -23,6 +23,7 @@ from app.services.studio_v3.core import (
     book,
     data,
     formula,
+    imports,
     limits,
     live,
     plain,
@@ -260,12 +261,16 @@ class MetaRequest(BaseModel):
     folder: str | None = None
     tags: list[str] | None = None
     archived: bool | None = None
+    pinned: bool | None = None
 
 
 @router.patch("/strategies/{sid}")
 def update_strategy(sid: str, request: MetaRequest) -> dict[str, Any]:
     _known(store.get, sid)
-    return store.update_meta(sid, **request.model_dump())
+    if request.pinned is not None:
+        home_rules.pin(sid, request.pinned)
+    out = store.update_meta(sid, **request.model_dump(exclude={"pinned"}))
+    return {**out, "pinned": sid in home_rules.prefs_get()["pinned"]}
 
 
 @router.post("/strategies/{sid}/duplicate")
@@ -301,8 +306,83 @@ def _failed_runs() -> dict[str, float]:
 
 @router.get("/home")
 def home() -> dict[str, Any]:
-    cards, fresh = store.list_strategies(), limits.freshness()
-    return {"strategies": cards, "attention": home_rules.attention(cards, _failed_runs(), fresh), "recent_runs": store.recent_runs(8), "freshness": fresh, "live": home_rules.live_block(cards)}
+    prefs = home_rules.prefs_get()
+    cards, fresh = home_rules.pinned_first(store.list_strategies(), prefs["pinned"]), limits.freshness()
+    return {"strategies": cards, "prefs": prefs, "attention": home_rules.attention(cards, _failed_runs(), fresh), "recent_runs": store.recent_runs(8), "freshness": fresh, "live": home_rules.live_block(cards)}
+
+
+def _refuse(fn, *args):
+    try:
+        return fn(*args)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc).strip("'\"")) from exc
+    except ValueError as exc:
+        raise HTTPException(422, {"refused": True, "reason": str(exc)}) from exc
+
+
+class FiltersRequest(BaseModel):
+    filters: list[dict[str, Any]]
+
+
+@router.get("/home/filters")
+def get_filters() -> dict[str, Any]:
+    return {"filters": home_rules.filters_get()}
+
+
+@router.put("/home/filters")
+def put_filters(request: FiltersRequest, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    _human_only(x_studio_actor, "Saving filters")
+    return {"filters": _refuse(home_rules.filters_put, request.filters)}
+
+
+@router.get("/home/prefs")
+def get_prefs() -> dict[str, Any]:
+    return home_rules.prefs_get()
+
+
+@router.put("/home/prefs")
+def put_prefs(request: dict[str, Any], x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    _human_only(x_studio_actor, "Saving Home preferences")
+    return _refuse(home_rules.prefs_put, request)
+
+
+class CompareRequest(BaseModel):
+    ids: list[str]
+
+
+@router.post("/compare")
+def compare(request: CompareRequest) -> dict[str, Any]:
+    return _refuse(home_rules.compare, request.ids, RESULTS_DIR)
+
+
+class QuantConnectRequest(BaseModel):
+    source: str
+    name: str | None = None
+
+
+class SignalsRequest(BaseModel):
+    csv: str
+    name: str = "Imported signals"
+
+
+def _save_import(spec: dict, found: dict, save: bool, folder: str, actor: str | None, ok: bool) -> dict[str, Any]:
+    found = {**found, "compile": compiler.compile_spec(_spec(spec)) if spec else None}
+    found["saved"] = store.create(_spec(spec), _actor(actor), folder) if save and ok and found["compile"]["ok"] else None
+    return found
+
+
+@router.post("/strategies/import/quantconnect")
+def import_quantconnect(request: QuantConnectRequest, save: bool = False, force: bool = False, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Map what the shim can; every call it cannot map is listed. Saves only with save=true and nothing unmapped, or force=true (H-19)."""
+    out = _refuse(imports.quantconnect, request.source, request.name)
+    return _save_import(out["spec"], out, save, "", x_studio_actor, force or not out["unmapped"])
+
+
+@router.post("/strategies/import/signals")
+def import_signals(request: SignalsRequest, save: bool = False, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Validate the CSV against the panel and show findings first; save=true saves a strategy that trades the signals (H-20)."""
+    out = imports.signals(request.csv, request.name)
+    return _save_import(out["spec"], out, save, "", x_studio_actor, out["ok"])
 
 
 class BulkRequest(BaseModel):

@@ -9,7 +9,7 @@ import zipfile
 import pytest
 
 from app.api import studio_v3 as api
-from app.services.studio_v3.core import home, store
+from app.services.studio_v3.core import data, home, pycode, store
 from app.services.studio_v3.core.spec import Strategy
 from tests.test_studio_v3_backtest import studio  # noqa: F401  (fixture)
 
@@ -126,3 +126,97 @@ def test_live_block_and_spark(client):  # H-14, H-21
     blk = home.live_block(cards)
     assert cards[0]["spark"] == [1.0, 1.1] and blk["strategies"][0]["today_pnl"] == 0.004 and blk["heartbeat"]
     assert api.home()["live"]["alerts"] == 0
+
+
+def _run(client, sid):
+    from tests.test_studio_v3_backtest import SETTINGS, run_job
+    out = run_job(client, {**SETTINGS, "strategy_id": sid})
+    assert out["status"] == "completed", out
+
+
+def test_pins_prefs_and_saved_filters(client):  # H-9, H-15, H-24
+    a, b = _make("A"), _make("B")
+    p = client.patch(f"/api/studio-v3/strategies/{a['id']}", json={"tags": ["x"], "folder": "f", "pinned": True}).json()
+    assert p["pinned"] and p["tags"] == ["x"] and p["folder"] == "f"
+    h = client.get("/api/studio-v3/home").json()
+    assert h["strategies"][0]["id"] == a["id"] and h["prefs"]["pinned"] == [a["id"]] and h["prefs"]["layout"] == "cards"
+    prefs = client.put("/api/studio-v3/home/prefs", json={"layout": "table", "sort": "sharpe", "columns": ["name"], "density": "compact", "group_by": "status"}).json()
+    assert prefs["layout"] == "table" and client.get("/api/studio-v3/home/prefs").json()["density"] == "compact"
+    assert client.put("/api/studio-v3/home/prefs", json={"layout": "grid"}).status_code == 422
+    assert client.put("/api/studio-v3/home/prefs", json={"layout": "table"}, headers={"x-studio-actor": "agent"}).status_code == 403
+    f = {"name": "Swing", "q": "rsi(", "status": "Draft", "tag": "x", "folder": "f"}
+    assert client.put("/api/studio-v3/home/filters", json={"filters": [f]}).json()["filters"] == [f]
+    assert client.put("/api/studio-v3/home/filters", json={"filters": [f, f]}).status_code == 422
+    assert client.get("/api/studio-v3/home/filters").json()["filters"] == [f]
+    assert b["id"]
+
+
+def test_freshness_tone_amber_after_three_days_red_after_ten(client, monkeypatch):  # H-23
+    from app.services.studio_v3.core import limits
+    monkeypatch.setattr(limits, "audit", lambda: {"most_end": ["", "2026-01-01"]})
+    tone = lambda days: limits.freshness(dt.date(2026, 1, 1) + dt.timedelta(days=days))["tone"]
+    assert [tone(d) for d in (0, 3, 4, 10, 11)] == ["ok", "ok", "amber", "amber", "red"]
+
+
+def test_compare_aligns_curves_and_refuses(client):  # H-17
+    a = _make("A")
+    b = store.create(Strategy(name="B", entry_long="rsi(close, 14) < 20"))
+    c = _make("C")
+    for s in (a, b):
+        _run(client, s["id"])
+    r = client.post("/api/studio-v3/compare", json={"ids": [a["id"], b["id"]]}).json()
+    assert r["equity"][a["id"]][0] == 1.0 and len(r["dates"]) == len(r["equity"][b["id"]])
+    assert [m["id"] for m in r["metrics"]] == [a["id"], b["id"]] and r["metrics"][0]["sharpe"] is not None
+    assert r["correlation"]["matrix"][0][0] == pytest.approx(1.0) and "-" in r["diffs"][0]["diff"] and "< 20" in r["diffs"][0]["diff"]
+    for ids, why in (([a["id"]], "2 to 6"), ([a["id"], c["id"]], "no backtest"), ([a["id"]] * 2, "2 to 6"), (list("abcdefg"), "2 to 6")):
+        x = client.post("/api/studio-v3/compare", json={"ids": ids})
+        assert x.status_code == 422 and why in x.json()["detail"]["reason"]
+
+
+QC = '''
+class Algo(QCAlgorithm):
+    def initialize(self):
+        self.set_start_date(2020, 1, 1)
+        self.set_cash(100000)
+        self.add_equity("AAA")
+        self.fast = self.sma("AAA", 10)
+        self.slow = self.sma("AAA", 30)
+        self.r = self.rsi("AAA", 14)
+        self.schedule.on(self.date_rules.month_start("AAA"), self.time_rules.after_market_open("AAA", 5), self.rebalance)
+
+    def on_data(self, data):
+        if self.fast.current.value > self.slow.current.value and self.r.current.value < 70:
+            self.set_holdings("AAA", 1)
+        elif self.fast.current.value < self.slow.current.value:
+            self.liquidate("AAA")
+        self.market_on_open_order("AAA", 5)
+'''
+
+
+def test_quantconnect_shim_lists_unmapped_and_saves_only_clean(client):  # H-19
+    u = "/api/studio-v3/strategies/import/quantconnect"
+    r = client.post(u + "?save=true", json={"source": QC}).json()
+    assert r["spec"]["entry_long"] == "(((sma(close, 10)) > (sma(close, 30))) & ((rsi(close, 14)) < 70.0))"
+    assert r["spec"]["exit_long"] == "(if_else((((sma(close, 10)) > (sma(close, 30))) & ((rsi(close, 14)) < 70.0)), 0, 1) & ((sma(close, 10)) < (sma(close, 30))))"
+    assert [(x["line"], x["reason"].split(":")[0].split(" is ")[0]) for x in r["unmapped"]] == [(10, "schedule"), (17, "market_on_open_order")]
+    assert r["saved"] is None and store.list_strategies() == []
+    assert client.post(u + "?save=true&force=true", json={"source": QC}).json()["saved"]["version"] == 1
+    clean = "class A(QCAlgorithm):\n    def on_data(self, d):\n        if self.rsi('X', 2).current.value < 10:\n            self.set_holdings('X', 1)\n"
+    assert client.post(u, json={"source": "def ("}).status_code == 422
+    assert client.post(u + "?save=true", json={"source": clean.replace("self.rsi('X', 2).current.value", "self.r.current.value").replace("    def on_data", "    def initialize(self):\n        self.r = self.rsi('X', 2)\n\n    def on_data")}).json()["saved"]
+
+
+def test_signals_csv_findings_and_trades(client):  # H-20
+    u = "/api/studio-v3/strategies/import/signals"
+    bad = client.post(u + "?save=true", json={"csv": "date,symbol,signal\n2016-01-04,AAA,2\n2016-13-01,AAA,1\n2016-01-05,ZZZ,1\n2016-01-05,ZZZ,1\n"}).json()
+    msgs = " | ".join(f["message"] for f in bad["findings"])
+    assert not bad["ok"] and bad["saved"] is None and all(k in msgs for k in ("must be 1, -1 or 0", "not YYYY-MM-DD", "ZZZ is not in the data", "two signals"))
+    assert client.post(u, json={"csv": "d,s\n"}).json()["findings"][0]["message"].startswith("Columns")
+    csv_ = "date,symbol,signal\n2016-01-04,AAA,1\n2016-03-01,AAA,0\n2016-04-01,AAA,-1\n2016-05-02,AAA,0\n2016-01-02,AAA,1\n"
+    ok = client.post(u + "?save=true", json={"csv": csv_}).json()
+    assert ok["ok"] and ok["saved"] and any(f["severity"] == "warning" for f in ok["findings"])  # 2016-01-02 is a Saturday
+    # the engine does not run Python strategies or pass ctx.symbol yet, so run the saved code the way pyrunner will
+    p = data.panel(["AAA"])
+    en, ex = pycode.run(store.get(ok["saved"]["id"])["spec"]["code"], p.bars(), p.dates, {}, symbols=["AAA"])
+    fired = {str(p.dates[t].date()): (int(en[t, 0]), int(ex[t, 0])) for t in range(len(p.dates)) if en[t, 0] or ex[t, 0]}
+    assert fired == {"2016-01-04": (1, 0), "2016-03-01": (0, 1), "2016-04-01": (-1, 0), "2016-05-02": (0, 2)}

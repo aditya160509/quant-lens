@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import datetime as dt
+import difflib
 import json
 import time
+from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from . import store
 
@@ -73,3 +76,84 @@ def live_block(cards: list[dict]) -> dict:
         beats += [last["at"]] if last else []
         alerts += sum(d["at"] > time.time() - 86400 for d in store.kv_get(f"deliveries:{c['id']}", []))
     return {"strategies": rows, "alerts": alerts, "heartbeat": max(beats) if beats else None}
+
+
+# --- prefs, saved filters, pins (H-9, H-15, H-24) ----------------------------
+
+PREFS = {"layout": "cards", "sort": "updated", "columns": [], "density": "comfortable", "group_by": "", "card_fields": [], "pinned": []}
+LAYOUTS, DENSITIES, GROUPS = {"cards", "table"}, {"comfortable", "compact"}, {"", "status", "tag", "folder"}
+
+
+def prefs_get() -> dict:
+    return {**PREFS, **store.kv_get("home:prefs", {})}
+
+
+def prefs_put(p: dict) -> dict:
+    bad = [f"{k} must be one of {sorted(v)}" for k, v in (("layout", LAYOUTS), ("density", DENSITIES), ("group_by", GROUPS)) if p.get(k, PREFS[k]) not in v]
+    bad += [f"{k} must be a list of text" for k in ("columns", "card_fields", "pinned") if not all(isinstance(x, str) for x in p.get(k, []))]
+    if bad or set(p) - set(PREFS):
+        raise ValueError("; ".join(bad) or f"unknown fields: {sorted(set(p) - set(PREFS))}")
+    out = {**PREFS, **p, "pinned": list(dict.fromkeys(p.get("pinned", [])))}
+    store.kv_set("home:prefs", out)
+    return out
+
+
+def pin(sid: str, on: bool) -> None:
+    p = prefs_get()
+    prefs_put({**p, "pinned": [x for x in p["pinned"] if x != sid] + ([sid] if on else [])})
+
+
+def filters_get() -> list[dict]:
+    return store.kv_get("home:filters", [])
+
+
+def filters_put(items: list[dict]) -> list[dict]:
+    names = [f["name"].strip() for f in items]
+    if not all(names) or len(set(names)) != len(names) or len(names) > 50:
+        raise ValueError("Filter names must be unique, not empty, and at most 50")
+    out = [{"name": n, "q": f.get("q", ""), "status": f.get("status", ""), "tag": f.get("tag", ""), "folder": f.get("folder", "")} for n, f in zip(names, items, strict=True)]
+    store.kv_set("home:filters", out)
+    return out
+
+
+def pinned_first(cards: list[dict], pinned: list[str]) -> list[dict]:
+    for c in cards:
+        c["pinned"] = c["id"] in pinned
+    return sorted(cards, key=lambda c: not c["pinned"])  # stable: the rest keep their order
+
+
+# --- compare (H-17) ------------------------------------------------------------
+
+
+def _spec_text(spec: dict) -> list[str]:
+    code = spec.get("code", "")
+    return [*json.dumps({k: v for k, v in spec.items() if k != "code"}, indent=1, sort_keys=True).splitlines(), "code:", *code.splitlines()]
+
+
+def compare(ids: list[str], results_dir: Path) -> dict:
+    """Latest backtest of 2 to 6 strategies on one date axis. Raises ValueError with the reason when it cannot."""
+    ids = list(dict.fromkeys(ids))
+    if not 2 <= len(ids) <= 6:
+        raise ValueError(f"Compare needs 2 to 6 strategies, got {len(ids)}")
+    cols, rows, specs = {}, [], {}
+    for sid in ids:
+        s = store.get(sid)
+        run = s["last_run"]
+        f = results_dir / f"{run['job_id']}.json" if run else None
+        if not f or not f.exists():
+            raise ValueError(f"{s['name']} has no backtest to compare; run it first")
+        res = json.loads(f.read_text())
+        curve = res["charts"]["equity_curve"]
+        cols[sid] = pd.Series([r["strategy"] for r in curve], index=pd.to_datetime([r["date"] for r in curve]))
+        m = res["meta"]["metrics"]
+        rows.append({"id": sid, "name": s["name"], "total_return": res["meta"]["total_return"], **{k: m.get(k) for k in ("cagr", "sharpe", "max_drawdown", "trades")}})
+        specs[sid] = s
+    eq = pd.DataFrame(cols).sort_index().ffill().dropna()
+    if len(eq) < 2:
+        raise ValueError("These runs share no dates")
+    eq = eq / eq.iloc[0]
+    corr = eq.pct_change().dropna().corr().round(4)
+    base = _spec_text(specs[ids[0]]["spec"])
+    return {"ids": ids, "dates": [str(d.date()) for d in eq.index], "equity": {k: [round(float(x), 6) for x in eq[k]] for k in ids}, "metrics": rows,
+            "correlation": {"ids": ids, "matrix": [[None if pd.isna(x) else float(x) for x in corr.loc[a, ids]] for a in ids]},
+            "diffs": [{"id": k, "name": specs[k]["name"], "diff": "\n".join(difflib.unified_diff(base, _spec_text(specs[k]["spec"]), specs[ids[0]]["name"], specs[k]["name"], lineterm=""))} for k in ids[1:]]}

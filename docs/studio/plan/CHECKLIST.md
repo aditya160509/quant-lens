@@ -36,7 +36,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Page | Done | Total |
 |---|---|---|
 | Portfolio | 25 | 28 |
-| Home | 10 | 26 |
+| Home | 11 | 26 |
 | Build | 29 | 162 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **137** | **538** |
+| **All pages** | **138** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -83,7 +83,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] P-27 Rotation to the top N by trailing 3-month return
 - [x] P-28 Weights re-estimated quarterly on the trailing year (no look-ahead, tested)
 
-## Home (`/studio`, spec §1): 10 / 26 done
+## Home (`/studio`, spec §1): 11 / 26 done
 
 ### Acceptance (PAGES)
 
@@ -98,21 +98,21 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [ ] [E] H-6 Table view with sortable, toggleable columns (name, status, Sharpe, max DD, last run, equity sparkline) and a stale-run badge; card view stays the default [FP 53] (partial: table view with status, return, Sharpe, trades, trend, last run, trials; layout in the URL; max drawdown and stale badge open)
 - [x] [E] H-7 Status chips Draft, Backtested, Validated, Paper, Live; a click filters; Validated only when a scorecard exists for the current version [FP 53] (status chip on every card and table row; chips above the list filter)
 - [x] [M] H-8 Search by name, tag, hypothesis, symbol, indicator and code text (typing rsi( finds strategies that use it) (server search over name, tags, hypothesis, rules and code; rsi( finds RSI(2) dip)
-- [ ] [M] H-9 Saved filters, folders, tags and pins
+- [ ] [M] H-9 Saved filters, folders, tags and pins (backend done: PATCH tags, folder, pinned; GET/PUT /home/filters; pins sort first in /home)
 - [x] [M] H-10 Archive; hard delete needs a typed confirmation and a 30-day trash (move to trash with Undo; Trash panel with Restore and Delete now (typed name); purged after 30 days)
 - [ ] [M] H-11 Bulk actions on a selection: tag, move, archive, run same range, compare, combine into a portfolio [FP 53] (partial: table selection: Re-run, Combine into Portfolio, Export; tag, move and archive open)
 - [ ] [M] H-12 Hover actions on a row: Run, Duplicate, Open in Chart, Open Live, Share
 - [ ] [M] H-13 Create menu: blank, template, plain-English prompt, Studio bundle, trade CSV, QuantConnect Python (via shim), library strategy (partial: blank, template, duplicate and JSON import exist)
 - [ ] [E] H-14 Live strip at the top: live and paper strategies with today P&L, alert count, heartbeat and kill-all (partial: Running strip with today P&L, paper return, alerts, last check; kill-all open; Live never set (no real fills))
-- [ ] [E] H-15 Saved views, column sets, default sort, density, group by status, tag or folder
+- [ ] [E] H-15 Saved views, column sets, default sort, density, group by status, tag or folder (backend done: GET/PUT /home/prefs, /home returns prefs)
 - [ ] [E] H-16 Empty state: three one-click starters (blank, template, from a Screener screen)
-- [ ] [M] H-17 Compare 2 to 6 strategies from Home: overlaid equity, metric table, correlation, code diff; opens Portfolio
+- [ ] [M] H-17 Compare 2 to 6 strategies from Home: overlaid equity, metric table, correlation, code diff; opens Portfolio (backend done: POST /compare)
 - [x] [E] H-18 Needs attention ranked: drift beyond band, data newer than last run, validation expired by a code change, failed run, alert fired (ranked by the backend: drift, data newer, validation expired, failed run, alert, paper stale)
-- [ ] [H] H-19 Import a QuantConnect algorithm through the shim; unmapped calls listed before saving [FP 67]
-- [ ] [M] H-20 Import a CSV of signals
+- [ ] [H] H-19 Import a QuantConnect algorithm through the shim; unmapped calls listed before saving [FP 67] (backend done: POST /strategies/import/quantconnect; saved Python signals need the engine to run Python strategies)
+- [ ] [M] H-20 Import a CSV of signals (backend done: POST /strategies/import/signals; runs once the engine runs Python strategies)
 - [ ] [E] H-21 Card fields: sparkline of last run, verdict chip, trial count, last edited (partial: sparkline, status, trial count; last edited open)
 - [x] [M] H-22 Recent runs table with a settings-changed-since marker (changed_since column on Recent runs)
-- [ ] [E] H-23 Data freshness pill ("Daily data to 2026-02-01"), amber after 3 days, red after 10
+- [x] [E] H-23 Data freshness pill ("Daily data to 2026-02-01"), amber after 3 days, red after 10
 - [ ] [E] H-24 Customise: default view, card fields, grid columns and sort, pinned strategies
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
