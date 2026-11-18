@@ -214,6 +214,8 @@ def signature_python(request: BuildSignatureRequest) -> dict | None:
 
 class BuildDefinitionRequest(BaseModel):
     code: str = Field(max_length=200_000)
+    file: str = Field(default="main.py", max_length=128)
+    files: dict[str, str] = Field(default_factory=dict, max_length=50)
     line: int = Field(ge=1)
     column: int = Field(ge=1)
 
@@ -227,7 +229,12 @@ class BuildDefinition(BaseModel):
 
 @router.post("/build/definition", response_model=list[BuildDefinition])
 def define_python(request: BuildDefinitionRequest) -> list[dict]:
-    return pycode.definitions(request.code, request.line, request.column)
+    sources = {**request.files, request.file: request.code}
+    main = sources.pop("main.py", "")
+    project = _spec({"code": main, "files": sources})
+    if not request.file.endswith(".py"):
+        raise HTTPException(422, "Select a Python file.")
+    return pycode.definitions(request.code, request.line, request.column, file=request.file, files=project.project_files())
 
 
 class PreviewRequest(BaseModel):

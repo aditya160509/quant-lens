@@ -187,23 +187,37 @@ def editor_members(scope: str, code: str, prefix: str = "", *, params=None, symb
     return [member for name, member in sorted(members.items()) if name.startswith(prefix)]
 
 
-def definitions(code: str, line: int, column: int) -> list[dict]:
+def definitions(code: str, line: int, column: int, *, file: str = "main.py", files: dict[str, str] | None = None) -> list[dict]:
     lines = code.split("\n")
     if not 1 <= line <= len(lines) or not 1 <= column <= len(lines[line - 1]) + 1:
         return []
     try:
         import jedi
     except ImportError:
-        return _local_definition(code, line, column)
+        return [{**item, "file": file} for item in _local_definition(code, line, column)]
 
-    project = jedi.Project(path="/", sys_path=[], smart_sys_path=False)
-    script = jedi.Script(code, project=project)
-    matches = script.goto(line=line, column=column - 1, follow_imports=False)
-    return [
-        {"file": "main.py", "name": item.name, "line": item.line, "column": item.column + 1}
-        for item in matches
-        if item.module_path is None and not item.in_builtin_module() and item.line is not None and item.column is not None
-    ]
+    with tempfile.TemporaryDirectory(prefix="studio-definition-") as directory:
+        root = Path(directory).resolve()
+        paths = {}
+        for name, source in (files or {}).items():
+            if not name.endswith(".py"):
+                continue
+            path = root / name
+            if path.parent != root or path.name != name:
+                raise ValueError("Use a flat project filename")
+            path.write_text(source, encoding="utf-8")
+            paths[path] = name
+        active = root / file
+        if active.parent != root or active.name != file or active.suffix != ".py":
+            raise ValueError("Use a flat Python filename")
+        paths[active] = file
+        project = jedi.Project(path=root, sys_path=[str(root)], smart_sys_path=False)
+        script = jedi.Script(code, path=active, project=project)
+        matches = script.goto(line=line, column=column - 1, follow_imports=True)
+        return [
+            {"file": paths[item.module_path], "name": item.name, "line": item.line, "column": item.column + 1}
+            for item in matches if item.module_path in paths and item.line is not None and item.column is not None
+        ]
 
 
 def _local_definition(code: str, line: int, column: int) -> list[dict]:

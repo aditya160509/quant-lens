@@ -656,3 +656,16 @@ class Strategy:
     checked = studio.post("/api/studio-v3/compile", json={"spec": request["spec"]}).json()
     assert not checked["ok"]
     assert checked["findings"][0]["file"] == "signals.py"
+
+
+def test_build_definition_follows_only_project_imports(studio):
+    endpoint = "/api/studio-v3/build/definition"
+    request = {
+        "code": "from helper import signal\nresult = signal()", "line": 2, "column": 11,
+        "files": {"helper.py": "def signal():\n    return 1\n"},
+    }
+    assert studio.post(endpoint, json=request).json() == [
+        {"file": "helper.py", "name": "signal", "line": 1, "column": 5},
+    ]
+    invalid = studio.post(endpoint, json=request | {"files": {"../outside.py": "x = 1"}})
+    assert invalid.status_code == 422
