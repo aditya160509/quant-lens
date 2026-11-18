@@ -95,3 +95,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-48 advanced and B-68 shipped. History windows expose the current observation at offset zero and past observations at negative offsets. Saved windows retain their original cutoff, and a future offset reports the offending token and user line. The runner keeps raw ndarray and DataFrame objects private.
 
 - B-49 shipped. Python strategies can read the configured benchmark’s current close through `ctx.market.close`. Preview uses SPY, and unavailable observations return `None`. Portfolio mode provides the current OHLCV bar through `ctx.bar(symbol)`.
+
+- B-114 shipped. `monthly(x)` uses the last available value from the preceding closed calendar month. Prefix tests verify that adding later bars leaves every earlier value unchanged. Hourly remains data-blocked.

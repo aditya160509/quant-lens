@@ -64,12 +64,14 @@ def _rank(x):
     return _df(x).rank(axis=1, pct=True).to_numpy()
 
 
-def _weekly(x, dates: pd.DatetimeIndex):
-    """The value at the last bar of the last *closed* week, held through the following week (B-3)."""
-    s = _df(x).set_axis(dates)
-    week = dates.to_period("W-FRI")
-    last = s.groupby(week).last()
-    return last.shift(1).reindex(week).to_numpy()
+_PERIODS = {"weekly": "W-FRI", "monthly": "M"}
+
+
+def _closed_period(x, dates: pd.DatetimeIndex, frequency: str):
+    """Hold the last observed value of the preceding closed period."""
+    periods = dates.to_period(frequency)
+    last = _df(x).groupby(periods).last()
+    return last.shift(1).reindex(periods).to_numpy()
 
 
 # name -> (callable, arg names, doc, example); window args are named "n"
@@ -92,6 +94,7 @@ OPERATORS: dict[str, tuple[Any, list[str], str, str]] = {
     "if_else": (lambda c, a, b: np.where(c, a, b), ["cond", "a", "b"], "a where cond holds, else b", "if_else(close > open, 1, -1)"),
     "atr": (None, ["n"], "Average true range (Wilder) over n bars", "atr(14)"),
     "weekly": (None, ["x"], "x as of the last closed week", "weekly(sma(close, 10))"),
+    "monthly": (None, ["x"], "x as of the last closed calendar month", "monthly(close)"),
 }
 ARITY = {k: (len(v[1]), len(v[1])) for k, v in OPERATORS.items()}
 _FORWARD = {"lead", "shift_forward", "future", "center", "centered"}
@@ -176,8 +179,8 @@ class _Eval:
             args = [_window(a, name) if arg_names[i] == "n" and not (name == "delay" and a == 0) else a for i, a in enumerate(args)]
             if name == "atr":
                 return _wilder(true_range(self.bars["high"], self.bars["low"], self.bars["close"]), args[0])
-            if name == "weekly":
-                return _weekly(self._array(args[0], name), self.dates)
+            if name in _PERIODS:
+                return _closed_period(self._array(args[0], name), self.dates, _PERIODS[name])
             if "x" in arg_names:
                 args[arg_names.index("x")] = self._array(args[arg_names.index("x")], name)
             return fn(*args)

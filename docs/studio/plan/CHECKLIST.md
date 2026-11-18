@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 35 | 163 |
+| Build | 36 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **145** | **538** |
+| **All pages** | **146** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 35 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 36 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -238,7 +238,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-111 Formula inline value under each rule: true-rate and last true date
 - [ ] [M] B-112 Function reference panel for formula mode
 - [ ] [M] B-113 Named variables (fast = ema(close, 12)), user functions, comments; separate entry and exit formulas
-- [ ] B-114 Multi-timeframe calls causal only: weekly(x) built and tested; monthly open; hourly blocked by data (partial: weekly built (B-3); monthly open) [FP 42]
+- [x] B-114 Causal weekly(x) and monthly(x) built and tested (hourly blocked by data) [FP 42]
 - [ ] [H] B-115 Composer-style tree blocks: if/else branches, filter by rank, weight by method, group; nest to any depth [FP 69]
 - [ ] [M] B-116 Live true-rate on every condition block ("true on 31% of bars, last true 2026-01-28") [FP 69]
 - [ ] [M] B-117 Complexity meter: counts parameters and rules and shows degrees of freedom while building [FP 25]

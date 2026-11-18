@@ -437,3 +437,14 @@ def test_full_backtest_runs_python_without_formula_rules(studio):
     assert len(result["tables"]["trades"]) == 1
     assert result["tables"]["trades"][0]["entry_date"] == "2015-01-05"
     assert result["tables"]["trades"][0]["exit_date"] == "2015-01-06"
+
+
+def test_monthly_rule_uses_last_closed_calendar_month():
+    dates = pd.DatetimeIndex(["2024-01-30", "2024-01-31", "2024-02-01", "2024-02-29", "2024-03-01"])
+    close = np.array([[10, 20], [11, np.nan], [12, 22], [13, 23], [14, 24]], dtype=float)
+    bars = {field: close for field in data.FIELDS}
+    values = formula.evaluate("monthly(close)", bars, dates)
+    np.testing.assert_array_equal(values, [[np.nan, np.nan], [np.nan, np.nan], [11, 20], [11, 20], [13, 23]])
+    for cutoff in range(1, len(dates)):
+        prefix = {field: series[:cutoff] for field, series in bars.items()}
+        np.testing.assert_array_equal(formula.evaluate("monthly(close)", prefix, dates[:cutoff]), values[:cutoff])
