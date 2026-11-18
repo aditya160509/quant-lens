@@ -121,3 +121,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-22 advanced. `POST /api/studio-v3/build/definition` resolves local Python declarations from one-based editor coordinates. It uses Jedi if installed and a conservative top-level function and class lookup otherwise. Cross-file navigation and editor wiring remain open.
 
 - B-31 backend ships through `POST /api/studio-v3/build/complete`. Formula suggestions include catalogue signatures, documentation and tab stops. Parameter and symbol suggestions use the editor’s supplied context, and history suggestions list supported OHLCV fields. Editor wiring remains open.
+
+- B-62 backend ships. Literal Python `Strategy.params` tuples supply defaults and ranges to compile, `ctx.param` and the Optimise grid. Explicit saved parameter definitions take precedence. Optimise evaluates Python candidates through the event engine, with a real SPY test covering three distinct share quantities. Build frontend binding and nonliteral declarations remain open.

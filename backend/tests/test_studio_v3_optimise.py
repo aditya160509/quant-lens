@@ -53,3 +53,26 @@ def test_custom_objective_and_link_rule_are_checked_and_applied():
     cells = [{"a": a, "b": b, "score": float(a + b)} for a in range(5) for b in range(5)]
     st = O.stability(cells, ["a", "b"], {"a": (0, 4, 1), "b": (0, 4, 1)}, {"a": 4, "b": 4})
     assert st["cells"] == 4 and st["within_20pct"] == 0.75  # (3,3)=6 is more than 20% below the best 8
+
+
+def test_python_declared_parameters_are_used_by_preview_and_grid():
+    from app.services.studio_v3.core import backtest
+    from app.services.studio_v3.core import compile as C
+
+    spec = Strategy(code="""class Strategy:
+    params = {"shares": (2, 1, 3, 1)}
+    def on_data(self, ctx):
+        if ctx.bar_index == 10:
+            ctx.market_order("SPY", ctx.param("shares"))
+        elif ctx.bar_index == 11:
+            ctx.liquidate("SPY")
+""")
+    compiled = C.compile_spec(spec)
+    assert compiled["ok"] and compiled["parameters"]["shares"]["value"] == 2
+    assert O._ranges(spec) == {"shares": (1, 3, 1)}
+    prep = backtest.prepare(Settings(symbols=["SPY"]))
+    for quantity in (1, 2, 3):
+        result = backtest.simulate(spec, prep, Settings(symbols=["SPY"]), params={"shares": quantity})
+        assert result.trades[:, backtest.engine.T_SHARES].tolist() == [quantity]
+    result = O.run_optimise(spec, Settings(symbols=["SPY"]), "grid", "sharpe", 3)
+    assert result["meta"]["cells"] == 3

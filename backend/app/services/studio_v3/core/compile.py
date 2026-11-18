@@ -20,7 +20,8 @@ ROLE_LABEL = {"entry_long": "Buy when", "exit_long": "Sell when", "entry_short":
 def compile_spec(spec: Strategy) -> dict:
     """Findings for every rule, each with the line (role order), character span and token. `ok` is false on any error."""
     findings: list[dict] = []
-    params = spec.values()
+    definitions = spec.parameter_definitions()
+    params = {name: param.value for name, param in definitions.items()}
     used: set[str] = set()
     rule_count = 0
     for line, role in enumerate(ROLES, 1):
@@ -62,7 +63,7 @@ def compile_spec(spec: Strategy) -> dict:
         findings.append({"severity": "warning", "role": "params", "line": 0, "start": 0, "end": 0, "token": name, "message": f"Parameter '{name}' is not used by any rule"})
     block_count = len(spec.blocks)
     tunable = {
-        name for name, param in spec.params.items()
+        name for name, param in definitions.items()
         if param.min is not None and param.max is not None and param.min < param.max
     }
     if block_count > 200:
@@ -82,7 +83,8 @@ def compile_spec(spec: Strategy) -> dict:
         "degrees_of_freedom": len(used & tunable),
     }
     return {"ok": not any(f["severity"] == "error" for f in findings), "findings": findings, "hash": spec.hash(),
-            "description": describe(spec), "complexity": complexity}
+            "description": describe(spec), "complexity": complexity,
+            "parameters": {name: param.model_dump() for name, param in definitions.items()}}
 
 
 @dataclass

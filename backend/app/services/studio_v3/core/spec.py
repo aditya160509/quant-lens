@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
+import sys
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -76,8 +78,39 @@ class Strategy(_Model):
         body = self.model_dump(exclude={"name", "hypothesis", "regime_claim", "notes", "blocks", "limits"})
         return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]
 
+    def parameter_definitions(self) -> dict[str, Param]:
+        declared = {}
+        if self.code.strip():
+            try:
+                tree = ast.parse(self.code)
+            except SyntaxError:
+                return self.params
+            for strategy in tree.body:
+                if not isinstance(strategy, ast.ClassDef) or strategy.name != "Strategy":
+                    continue
+                for assignment in strategy.body:
+                    if not isinstance(assignment, ast.Assign) or not any(
+                        isinstance(target, ast.Name) and target.id == "params" for target in assignment.targets
+                    ) or not isinstance(assignment.value, ast.Dict):
+                        continue
+                    for key, item in zip(assignment.value.keys, assignment.value.values, strict=True):
+                        if not isinstance(key, ast.Constant) or not isinstance(key.value, str) or not key.value.isidentifier():
+                            continue
+                        try:
+                            values = ast.literal_eval(item)
+                        except (ValueError, SyntaxError, TypeError):
+                            continue
+                        if not isinstance(values, tuple) or len(values) != 4 or not all(
+                            type(value) in (int, float) and abs(value) <= sys.float_info.max for value in values
+                        ):
+                            continue
+                        default, minimum, maximum, step = values
+                        if minimum <= default <= maximum and step > 0:
+                            declared[key.value] = Param(value=default, min=minimum, max=maximum, step=step)
+        return {**declared, **self.params}
+
     def values(self) -> dict[str, float]:
-        return {k: p.value for k, p in self.params.items()}
+        return {k: p.value for k, p in self.parameter_definitions().items()}
 
 
 class Costs(_Model):

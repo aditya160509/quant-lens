@@ -64,7 +64,7 @@ def check_expr(expr: str, names) -> None:
 
 def _ranges(spec: Strategy) -> dict[str, tuple[float, float, float | None]]:
     out = {}
-    for k, p in spec.params.items():
+    for k, p in spec.parameter_definitions().items():
         if p.min is not None and p.max is not None and p.max > p.min:
             out[k] = (p.min, p.max, p.step)
     if not out:
@@ -191,16 +191,15 @@ def run_optimise(spec: Strategy, settings: Settings, method: str = "grid", objec
     if objective == "custom":
         check_expr(custom or "x", METRIC_NAMES)
     if link:
-        check_expr(link, list(spec.params))
-    logs = {k for k, p in spec.params.items() if p.log}
+        check_expr(link, list(spec.parameter_definitions()))
+    logs = {k for k, p in spec.parameter_definitions().items() if p.log}
     t0 = time.perf_counter()
     stage("load", 5)
     prep = prepare(settings)
     dates, cap = prep.panel.dates, settings.capital
 
     def one(params: dict[str, float]) -> dict:
-        sig = C.signals(spec, prep.sig_bars, dates, params)
-        r = simulate(spec, prep, settings, sig=sig, params=params)
+        r = simulate(spec, prep, settings, params=params)
         score, m = _score(r.equity, dates, objective, r.trades[:, engine.T_PNL] if len(r.trades) else np.zeros(0), custom)
         monthly = pd.Series(r.equity, index=dates).resample("ME").last().pct_change().dropna().to_numpy()
         excluded = "too few trades" if len(r.trades) < min_trades else "drawdown over limit" if max_dd and m.get("max_drawdown") is not None and m["max_drawdown"] < -max_dd else None
