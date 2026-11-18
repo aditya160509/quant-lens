@@ -45,6 +45,30 @@ class History:
         return self._ctx.t + 1
 
 
+class HistoryWindow:
+    """A bounded numeric snapshot. Offset zero is current and negative offsets are past."""
+
+    __slots__ = ("_values",)
+
+    def __init__(self, values):
+        self._values = values
+
+    def __len__(self):
+        return len(self._values)
+
+    def __iter__(self):
+        return (float(value) for value in self._values[::-1])
+
+    def __getitem__(self, offset):
+        if type(offset) is not int:
+            raise TypeError("History offsets must be integers")
+        if offset > 0:
+            raise IndexError(f"history[{offset}] reads a future bar; use 0 for current or a negative offset")
+        if -offset >= len(self):
+            raise IndexError(f"history[{offset}] is outside the requested window")
+        return float(self._values[len(self) - 1 + offset])
+
+
 class Ctx:
     def __init__(self, cols, values, params, symbol, dates):
         self._t = 0
@@ -64,6 +88,16 @@ class Ctx:
     @property
     def bar(self):
         return self.t
+
+    def history(self, fields, n):
+        if type(n) is not int or n < 1:
+            raise ValueError("history requires a positive integer window")
+        if not isinstance(fields, str):
+            return MappingProxyType({field: self.history(field, n) for field in fields})
+        if fields not in self._cols:
+            raise ValueError(f"Unknown history field: {fields}")
+        end = self.t + 1
+        return HistoryWindow(self._cols[fields][max(0, end - n):end])
 
     def value(self, expr):
         """A formula's value on this bar, e.g. ctx.value("rsi(close, 14)")."""
@@ -207,6 +241,13 @@ class PortfolioContext(Ctx):
         if not math.isfinite(self._bars["close"][self.t, column]):
             return None
         return Bar(*(float(self._bars[f][self.t, column]) for f in ("open", "high", "low", "close", "volume")))
+
+    def history(self, fields, n, sym=None):
+        if sym is None:
+            return MappingProxyType({symbol: self.history(fields, n, symbol) for symbol in self.symbols})
+        ctx = self._contexts[sym]
+        ctx._t = self.t
+        return ctx.history(fields, n)
 
     def value(self, expr, symbol=None):
         if symbol is None:

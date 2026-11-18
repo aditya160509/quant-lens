@@ -269,3 +269,29 @@ def test_target_weight_and_cancel_orders():
     assert result.trades[:, engine.T_SYM].tolist() == [0]
     assert result.trades[0, engine.T_SHARES] == pytest.approx(25_000 / bars["close"][0, 0])
     assert result.positions.tolist() == [0, 1, 0, 0]
+
+
+def test_portfolio_history_is_bounded_and_keeps_its_original_bar():
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(3, 2)
+    code = """class Strategy:
+    def on_data(self, ctx):
+        if ctx.bar_index == 0:
+            self.saved = ctx.history("close", 3, "BBB")
+        if ctx.bar_index == 1:
+            history = ctx.history(("close", "open"), 2)["BBB"]
+            ctx.plot("current", history["close"][0])
+            ctx.plot("previous", history["close"][-1])
+            ctx.plot("saved", self.saved[0])
+"""
+    output = {}
+    pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], engine.Params(), output=output)
+    assert {name: points[0]["value"] for name, points in output["plots"].items()} == {
+        "current": bars["close"][1, 1], "previous": bars["close"][0, 1], "saved": bars["close"][0, 1],
+    }
+    with pytest.raises(pycode.CodeError) as exc:
+        pycode.run_event(code.replace('history["close"][0]', 'history["close"][1]'),
+                         bars, dates, {}, ["AAA", "BBB"], engine.Params())
+    assert exc.value.line == 7
+    assert "history[1] reads a future bar" in exc.value.message

@@ -91,3 +91,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 
 - B-44 shipped. Portfolio Python supports explicit quantity and value orders, target weights, limit, stop and stop-limit orders, liquidation and cancellation. Orders share the event engine’s fill price and fee model. A new explicit order replaces the previous pending order for that symbol. Target weights use equity and close at submission. Intrabar stop-limit activation cannot take a same-bar limit fill when OHLC does not establish the order of touches.
 - `POST /api/studio-v3/preview` returned actual SPY buy and sell fills for four shares in 596 ms on a cold server. The 300 ms target remains open.
+
+- B-48 advanced and B-68 shipped. History windows expose the current observation at offset zero and past observations at negative offsets. Saved windows retain their original cutoff, and a future offset reports the offending token and user line. The runner keeps raw ndarray and DataFrame objects private.
