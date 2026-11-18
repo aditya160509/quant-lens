@@ -43,6 +43,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
     return id;
   }), []);
   const [maxKey, setMaxKey] = useState<string | null>(null);
+  const inspectorOpen = useLayout((s) => s.open.right);
   const [stuck, setStuck] = useState(false);
   const prefs = useFeaturePrefs(feature.id);
   const setPref = useCardPrefs((st) => st.set);
@@ -180,7 +181,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
     <GlassScene className="island results" data-lab={lab().id} material="regular" appearance={glassLook}>
     <GlassContent layout="scroll" ref={scroller} className="results-scroll">
       <div ref={hero} style={{ padding: "22px 22px 6px" }}>
-        <div className="fv-head">
+        <div className="fv-head" data-inspector={inspectorOpen ? "open" : undefined}>
           <div className="ov-icon" style={{ width: 40, height: 40, borderRadius: 11 }}><Icon size={19} strokeWidth={1.6} /></div>
           <div style={{ minWidth: 0, flex: "1 1 220px" }}>
             <div className="fv-title"><h1 style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{meta.name}</h1><RunStamp status={run.status} result={result} /><Customised feature={feature} form={run.form} setForm={run.setForm} /><PageSwitch featureId={feature.id} /></div>
@@ -195,8 +196,8 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
               {earlier.map((r) => <MenuItem key={r.jobId} icon={against === r.jobId ? <Check size={13} /> : <span style={{ width: 13 }} />} onClick={() => { setAgainst(r.jobId); setAgainstMenu(null); }}>{new Date(r.startedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}{r.headline ? ` · ${r.headline.slice(0, 28)}` : ""}</MenuItem>)}
             </PopMenu>
             {result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={(one) => setPrinting(one ? "one" : "all")} /> : null}
+            <span className="fv-run-head">{runButton}</span>
           </div>
-          {runButton}
         </div>
         <div className="fv-ctx" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           {lab().contextBar ? createElement(lab().contextBar!, { feature, run }) : <RunContext feature={feature} run={run} />}
@@ -220,7 +221,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         <Tabs value={active?.id ?? ""} onChange={(id) => { setTab(id); setMaxKey(null); scroller.current?.scrollTo({ top: Math.min(scroller.current.scrollTop, hero.current?.offsetHeight ?? 0), behavior: "smooth" }); }}
           tabs={sections.map((s) => ({ id: s.id, label: s.label, count: result ? visible(s).length : undefined }))} />
         {result ? <span style={{ marginLeft: "auto" }}>{result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={(one) => setPrinting(one ? "one" : "all")} /> : null}</span> : null}
-        <span className="sticky-run" style={{ marginLeft: result ? 0 : "auto" }} aria-hidden={!stuck} inert={!stuck}>{runButton}</span>
+        <span className="sticky-run" data-inspector={inspectorOpen ? "open" : undefined} style={{ marginLeft: result ? 0 : "auto" }} aria-hidden={!stuck} inert={!stuck}>{runButton}</span>
       </div>
 
       <div style={{ padding: "6px 18px 22px" }}>
@@ -277,7 +278,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         <Tabs value={active?.id ?? ""} onChange={(id) => { setTab(id); setMaxKey(null); scroller.current?.scrollTo({ top: Math.min(scroller.current.scrollTop, hero.current?.offsetHeight ?? 0), behavior: "smooth" }); }}
           tabs={sections.map((s) => ({ id: s.id, label: s.label, count: result ? visible(s).length : undefined }))} />
         {result ? <span style={{ marginLeft: "auto" }}>{result ? <ExportMenu feature={feature} result={result} jobId={run.jobId} form={run.form} onReport={(one) => setPrinting(one ? "one" : "all")} /> : null}</span> : null}
-        <span className="sticky-run" style={{ marginLeft: result ? 0 : "auto" }} aria-hidden={!stuck} inert={!stuck}>{runButton}</span>
+        <span className="sticky-run" data-inspector={inspectorOpen ? "open" : undefined} style={{ marginLeft: result ? 0 : "auto" }} aria-hidden={!stuck} inert={!stuck}>{runButton}</span>
     </GlassSurface> : null}
     </GlassScene>
     </ChartScope>

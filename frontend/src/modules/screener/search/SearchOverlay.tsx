@@ -1,6 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Title } from "@radix-ui/react-dialog";
 import { Command } from "cmdk";
 import { Check, ChartLine, Filter, PanelRightOpen, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -106,6 +107,7 @@ export function SearchOverlay({ open, onOpenChange, items, themeClass, className
   return (
     <Command.Dialog open={open} onOpenChange={onOpenChange} label="Search" shouldFilter={false} value={value} onValueChange={setValue} onKeyDown={onKeyDown}
       overlayClassName={`cmdk-overlay${themeClass}`} contentClassName={`cmdk so ws-tokens${themeClass} ${className}`}>
+      <Title className="sr-only">Search</Title>
       <div className="so-input">
         <Search size={16} strokeWidth={1.75} aria-hidden />
         <Command.Input value={text} onValueChange={setText} placeholder="Search names, screens, runs, actions" />

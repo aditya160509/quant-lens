@@ -26,3 +26,9 @@
 .so-menu button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
 .so-menu button[aria-selected="true"] { background: var(--raise); }
 .so-menu .so-tk { width: 64px; }
+.sp-trigger { width: 100%; display: flex; align-items: center; gap: 8px; color: var(--text-3); text-align: left; cursor: text; }
+.sp-trigger span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.so-item .sp-added { flex: none; margin-left: 8px; color: var(--up); }
+.so-item[aria-disabled="true"] { opacity: 0.6; }
+.sp-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-top: 1px solid var(--line); color: var(--text-3); font-size: 12px; }
+.so-menu .so-tk, .cmdk.so .so-tk { width: 120px; }

@@ -681,6 +681,9 @@ nav.island { container-type: inline-size; }
 .st-pill.amber { color: var(--warn); background: var(--warn-soft); }
 .st-pill.grey { color: var(--text-2); background: var(--panel-2); }
 .fv-tools { display: flex; align-items: center; gap: 2px; flex: none; }
+.fv-run-head { margin-left: 8px; }
+/* The Inspector has its own Run at its foot; one primary action per screen. */
+@media (min-width: 768px) { .fv-head[data-inspector="open"] .fv-run-head, .sticky-run[data-inspector="open"] { display: none; } }
 .fv-title .page-switch { margin: 0 0 0 6px; }
 @media (max-width: 760px) { .fv-tools { order: 3; } }
 .fv-title .page-switch .pg { display: none; }

@@ -19,7 +19,7 @@
 .dt-card > div { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
 .dt-card > div > span:first-child { color: var(--text-3); }
 .dt-card > div > span:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
-@container (max-width: 519px) {
+@container (max-width: 399px) {
   .dt .tbl-wrap, .dt > .tbl { display: none; }
   .dt-cards { display: grid; }
   .rt .tbl { font-size: 12px; }

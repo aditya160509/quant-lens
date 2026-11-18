@@ -81,12 +81,26 @@ export function Skeleton({ w = "100%", h = 12, style }: { w?: number | string; h
 
 export type MenuAt = { x: number; y: number };
 
+// Where the last press landed, so a menu knows which control opened it.
+let lastPress: Element | null = null;
+if (typeof window !== "undefined") window.addEventListener("pointerdown", (e) => { lastPress = e.target as Element; }, true);
+
 /** A small positioned menu (right-click or button anchored). Closes on outside click, Escape and scroll. */
 export function PopMenu({ at, onClose, children, width = 220, sticky = false }: { at: MenuAt | null; onClose: () => void; children: ReactNode; width?: number; sticky?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!at) return;
-    const down = (e: Event) => { if (!ref.current?.contains(e.target as Node)) onClose(); };
+    // The button that opened the menu toggles it: its next click only closes, it doesn't reopen.
+    const opener = lastPress?.closest("button, [role=button], summary");
+    const down = (e: Event) => {
+      if (ref.current?.contains(e.target as Node)) return;
+      if (opener?.contains(e.target as Node)) {
+        const eat = (c: Event) => { c.stopPropagation(); c.preventDefault(); };
+        opener.addEventListener("click", eat, { capture: true, once: true });
+        setTimeout(() => opener.removeEventListener("click", eat, true), 600);
+      }
+      onClose();
+    };
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("mousedown", down);
     window.addEventListener("keydown", key);
