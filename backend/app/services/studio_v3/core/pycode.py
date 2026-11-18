@@ -24,6 +24,16 @@ from . import engine, formula, pyrunner
 RUNNER = Path(__file__).with_name("pyrunner.py")
 TIMEOUT_S = 120
 BANNED_NAMES = {"eval", "exec", "compile", "open", "globals", "locals", "vars", "getattr", "setattr", "delattr", "input", "breakpoint", "help", "memoryview", "type"}
+# A7: the numerical libraries a strategy may import. Everything else is refused, and the runner repeats the list.
+ALLOWED_IMPORTS = {"math", "statistics", "numpy", "pandas", "scipy.stats"}
+# Defence in depth: library calls that reach the filesystem or spawn work, banned by name.
+BANNED_ATTRS = {
+    "read_csv", "read_table", "read_parquet", "read_json", "read_html", "read_excel", "read_sql", "read_sql_query",
+    "read_sql_table", "read_clipboard", "read_fwf", "read_orc", "read_feather", "read_hdf", "read_stata", "read_sas",
+    "read_spss", "read_xml", "read_gbq", "read_pickle", "to_pickle", "to_csv", "to_parquet", "to_json", "to_excel",
+    "to_sql", "to_hdf", "to_feather", "to_stata", "load", "loads", "fromfile", "memmap", "ctypeslib", "savetxt",
+    "save", "system", "popen", "spawn", "urlopen", "urlretrieve", "socket", "subprocess", "format", "format_map",
+}
 TEMPLATE = '''class Strategy:
     def init(self, ctx):
         self.bars_held = 0
@@ -48,6 +58,11 @@ def _finding(line: int, col: int, end: int, msg: str, token: str = "", severity:
 def _formula_args(node):
     if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
         return ()
+    if isinstance(node.func.value, ast.Name) and node.func.value.id == "self" and node.func.attr in pyrunner.INDICATOR_NAMES:
+        period = node.args[-1] if node.args else None
+        if isinstance(period, ast.Constant) and type(period.value) is int:
+            return (ast.Constant(pyrunner.indicator_formula(node.func.attr, period.value)),)
+        return (None,)
     if isinstance(node.func.value, ast.Name) and node.func.value.id == "ctx" and node.func.attr == "indicator":
         expr = node.args[0] if node.args else next((kw.value for kw in node.keywords if kw.arg == "expr"), None)
         period = node.args[2] if len(node.args) > 2 else next((kw.value for kw in node.keywords if kw.arg == "period"), None)
@@ -79,6 +94,26 @@ def exprs(code: str) -> list[str]:
     ))
 
 
+def _refused_imports(node: ast.Import | ast.ImportFrom, modules: set[str]) -> list[str]:
+    """Imports outside A7's allow-list and the saved project modules."""
+    if isinstance(node, ast.Import):
+        return [alias.name for alias in node.names if alias.name not in ALLOWED_IMPORTS and alias.name not in modules]
+    if node.level:
+        return [node.module or "."]
+    module = node.module or ""
+    names = [alias.name for alias in node.names]
+    if module in ALLOWED_IMPORTS or module in modules:
+        return [name for name in names if name == "*" or name.startswith("_")]
+    if names and all(f"{module}.{name}" in ALLOWED_IMPORTS for name in names):
+        return []
+    return [module or "."]
+
+
+def _import_message(name: str) -> str:
+    allowed = ", ".join(sorted(ALLOWED_IMPORTS))
+    return f"Import '{name}' is not allowed. Allowed: {allowed}, and saved project modules"
+
+
 def check(code: str, params: dict[str, float], *, modules: set[str] | None = None, entry=True) -> list[dict]:
     try:
         tree = ast.parse(code)
@@ -89,18 +124,15 @@ def check(code: str, params: dict[str, float], *, modules: set[str] | None = Non
     for n in ast.walk(tree):
         at = (getattr(n, "lineno", 1), getattr(n, "col_offset", 0), getattr(n, "end_col_offset", 0))
         if isinstance(n, (ast.Import, ast.ImportFrom)):
-            if isinstance(n, ast.Import):
-                allowed = all(alias.name in modules for alias in n.names)
-            else:
-                allowed = n.level == 0 and n.module in modules and all(
-                    alias.name != "*" and not alias.name.startswith("_") for alias in n.names
-                )
-            if not allowed or any(alias.asname and alias.asname.startswith("_") for alias in n.names):
-                found.append(_finding(*at, "Only named imports from saved project modules are allowed", "import"))
+            refused = _refused_imports(n, modules)
+            hidden = any(alias.asname and alias.asname.startswith("_") for alias in n.names)
+            if refused or hidden:
+                name = refused[0] if refused else "import"
+                found.append(_finding(*at, f"{_import_message(name)}", name))
         elif isinstance(n, ast.Name) and (n.id in BANNED_NAMES or n.id.startswith("__")):
             found.append(_finding(*at, f"'{n.id}' is not allowed in a strategy", n.id))
-        elif isinstance(n, ast.Attribute) and (n.attr.startswith("_") or n.attr in ("format", "format_map")):
-            found.append(_finding(*at, f"'.{n.attr}' is not allowed in a strategy (use f-strings)", n.attr))
+        elif isinstance(n, ast.Attribute) and (n.attr.startswith("_") or n.attr in BANNED_ATTRS or "pickle" in n.attr):
+            found.append(_finding(*at, f"'.{n.attr}' is not allowed in a strategy", n.attr))
         elif isinstance(n, (ast.Global, ast.Nonlocal)):
             found.append(_finding(*at, "global and nonlocal are not allowed", "global"))
         elif any(not _literal_formula(arg) for arg in _formula_args(n)):
@@ -154,6 +186,76 @@ def _api_members(scope: str):
     return members
 
 
+# The numerical names an editor offers after `np.` or `pd.`. Curated: the full namespace is thousands of entries.
+_LIBRARY_MEMBERS = {
+    "numpy": {
+        "array": ("array(object, dtype=None)", "Create an array from a list or nested sequence"),
+        "arange": ("arange(start, stop=None, step=1)", "Evenly spaced values in a half-open interval"),
+        "linspace": ("linspace(start, stop, num=50)", "num evenly spaced values including both ends"),
+        "zeros": ("zeros(shape)", "A new array filled with zeros"),
+        "ones": ("ones(shape)", "A new array filled with ones"),
+        "full": ("full(shape, fill_value)", "A new array filled with one value"),
+        "mean": ("mean(a)", "Arithmetic mean"),
+        "median": ("median(a)", "Median"),
+        "std": ("std(a)", "Standard deviation"),
+        "var": ("var(a)", "Variance"),
+        "cov": ("cov(m)", "Covariance matrix"),
+        "corrcoef": ("corrcoef(x, y=None)", "Pearson correlation coefficients"),
+        "sqrt": ("sqrt(x)", "Square root"),
+        "log": ("log(x)", "Natural logarithm"),
+        "exp": ("exp(x)", "Exponential"),
+        "abs": ("abs(x)", "Absolute value"),
+        "sign": ("sign(x)", "-1, 0 or 1 by sign"),
+        "where": ("where(cond, x, y)", "x where cond holds, else y"),
+        "maximum": ("maximum(x1, x2)", "Elementwise maximum that ignores NaN"),
+        "minimum": ("minimum(x1, x2)", "Elementwise minimum that ignores NaN"),
+        "clip": ("clip(a, a_min, a_max)", "Limit values to an interval"),
+        "percentile": ("percentile(a, q)", "q-th percentile"),
+        "nanmean": ("nanmean(a)", "Mean ignoring NaN"),
+        "isnan": ("isnan(x)", "True where the value is NaN"),
+        "isfinite": ("isfinite(x)", "True where the value is finite"),
+        "concatenate": ("concatenate(arrays)", "Join arrays along an existing axis"),
+        "stack": ("stack(arrays)", "Join arrays along a new axis"),
+        "diff": ("diff(a)", "Difference between neighbouring values"),
+        "cumsum": ("cumsum(a)", "Cumulative sum"),
+        "cumprod": ("cumprod(a)", "Cumulative product"),
+        "prod": ("prod(a)", "Product of values"),
+        "sum": ("sum(a)", "Sum of values"),
+        "argmax": ("argmax(a)", "Index of the largest value"),
+        "argmin": ("argmin(a)", "Index of the smallest value"),
+        "sort": ("sort(a)", "Sorted copy"),
+        "argsort": ("argsort(a)", "Indices that would sort the array"),
+        "dot": ("dot(a, b)", "Dot product"),
+        "polyfit": ("polyfit(x, y, deg)", "Least-squares polynomial fit"),
+        "polyval": ("polyval(p, x)", "Evaluate a polynomial"),
+    },
+    "pandas": {
+        "DataFrame": ("DataFrame(data=None, index=None, columns=None)", "Two-dimensional labelled table"),
+        "Series": ("Series(data=None, index=None, name=None)", "One-dimensional labelled array"),
+        "concat": ("concat(objs, axis=0)", "Concatenate tables along an axis"),
+        "merge": ("merge(left, right, how='inner', on=None)", "Join two tables on keys"),
+        "to_numeric": ("to_numeric(arg, errors='raise')", "Coerce values to numbers"),
+        "to_datetime": ("to_datetime(arg)", "Coerce values to timestamps"),
+        "date_range": ("date_range(start=None, end=None, periods=None, freq=None)", "A fixed-frequency date index"),
+        "isna": ("isna(obj)", "True where a value is missing"),
+        "notna": ("notna(obj)", "True where a value is present"),
+        "cut": ("cut(x, bins)", "Bin values into discrete intervals"),
+        "qcut": ("qcut(x, q)", "Bin values into equal-frequency buckets"),
+        "get_dummies": ("get_dummies(data)", "One-hot encode categorical columns"),
+        "rolling": ("Series.rolling(window)", "Rolling window; then .mean(), .std(), .max()"),
+        "ewm": ("Series.ewm(span)", "Exponentially weighted window; then .mean()"),
+        "pct_change": ("Series.pct_change()", "Fractional change from the previous value"),
+        "rank": ("Series.rank(pct=True)", "Percentile rank"),
+    },
+}
+
+
+def _library_members(scope: str) -> dict[str, dict]:
+    return {name: {"name": name, "kind": "function" if signature else "field", "signature": signature,
+                   "documentation": description}
+            for name, (signature, description) in _LIBRARY_MEMBERS[scope].items()}
+
+
 def _literal_members(scope: str, params: list[str], symbols: list[str]):
     if scope == "formula":
         members = {
@@ -174,6 +276,8 @@ def _literal_members(scope: str, params: list[str], symbols: list[str]):
 def editor_members(scope: str, code: str, prefix: str = "", *, params=None, symbols=None) -> list[dict]:
     if scope in {"formula", "history_field", "param", "symbol"}:
         members = _literal_members(scope, params or [], symbols or [])
+    elif scope in _LIBRARY_MEMBERS:
+        members = _library_members(scope)
     elif scope == "self":
         members = {}
         try:

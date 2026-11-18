@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from app.services.studio_v3.core import compile as C
-from app.services.studio_v3.core import pycode
+from app.services.studio_v3.core import formula, pycode
 from app.services.studio_v3.core.spec import Strategy
 
 
@@ -25,7 +25,7 @@ def test_python_matches_the_same_rule_as_formula():
 
 def test_banned_code_is_refused_before_it_runs():
     lines = {f["token"] for f in pycode.check("import os\nclass Strategy:\n    def on_bar(self, ctx):\n        open('x')\n        ctx.close.__class__\n", {})}
-    assert {"import", "open", "__class__"} <= lines
+    assert {"os", "open", "__class__"} <= lines
 
 
 def test_positive_index_is_look_ahead_and_reports_its_line():
@@ -442,3 +442,225 @@ def test_indicator_handle_updates_with_the_current_bar_and_supports_ranking():
     assert [row["value"] for row in output["plots"]["average"]] == pytest.approx(expected)
     assert [row["value"] for row in output["plots"]["current"]] == pytest.approx(expected)
     assert [row["text"] for row in output["logs"]] == ["BBB", "2", "2", "2"]
+
+
+# --- LEAN indicator definitions (LEAN_PARITY row 19) and A4 handles -----------------
+
+
+def _one(values, field="close"):
+    shape = (len(values), 1)
+    close = np.asarray(values, dtype=float).reshape(shape)
+    bars = {f: close.copy() for f in ("open", "high", "low", "close", "volume")}
+    return bars, pd.bdate_range("2020-01-01", periods=len(values))
+
+
+def test_ema_is_seeded_with_the_sma_and_smooths_with_two_over_n_plus_one():
+    bars, dates = _one([10, 12, 11, 15, 14, 16])
+    ema = formula.evaluate("ema(close, 3)", bars, dates)[:, 0]
+    expected = [np.nan, np.nan, 11.0, 13.0, 13.5, 14.75]
+    assert np.allclose(ema, expected, equal_nan=True)
+    assert np.isnan(ema[:2]).all()  # not ready before the window is full
+
+
+def test_rsi_is_wilder_seeded_with_the_mean_of_the_first_gains_and_losses():
+    bars, dates = _one([10, 11, 10, 12])
+    rsi = formula.evaluate("rsi(close, 2)", bars, dates)[:, 0]
+    assert np.allclose(rsi, [np.nan, np.nan, 50.0, 100 - 100 / (1 + 1.25 / 0.25)], equal_nan=True)
+
+
+def test_atr_is_wilder_on_true_range_seeded_with_the_first_window_mean():
+    close = np.array([[10.0], [11.0], [12.0]])
+    bars = {"open": close.copy(), "high": np.array([[10.5], [11.5], [12.5]]), "low": np.array([[9.5], [10.5], [11.5]]),
+            "close": close, "volume": np.ones((3, 1))}
+    atr = formula.evaluate("atr(2)", bars, pd.bdate_range("2020-01-01", periods=3))[:, 0]
+    assert np.allclose(atr, [np.nan, 1.25, 1.375], equal_nan=True)
+
+
+def test_indicator_handle_reads_the_same_values_as_the_formula():
+    bars, dates = _one([10, 12, 11, 15, 14, 16])
+    code = """class Strategy:
+    def init(self, ctx):
+        self.average = ctx.indicator("sma", None, 3)
+
+    def on_bar(self, ctx):
+        if self.average.ready:
+            ctx.plot("value", self.average.value)
+            ctx.plot("window", self.average.window[0])
+"""
+    from app.services.studio_v3.core import engine
+
+    output = {}
+    pycode.run_event(code, bars, dates, {}, ["SPY"], engine.Params(), output=output)
+    window = pd.Series(bars["close"][:, 0]).rolling(3, min_periods=3).mean().to_numpy()
+    assert [row["value"] for row in output["plots"]["value"]] == pytest.approx(window[2:].tolist())
+    assert [row["value"] for row in output["plots"]["window"]] == pytest.approx(window[2:].tolist())
+
+
+def test_lean_style_self_sma_builds_the_same_handle():
+    bars, dates = _one([10, 12, 11, 15, 14, 16])
+    code = """class Strategy:
+    def init(self, ctx):
+        self.fast = self.sma("SPY", 2)
+        self.own = self.sma(3)
+
+    def on_bar(self, ctx):
+        if self.fast.ready and self.own.ready:
+            ctx.plot("fast", self.fast.value)
+            ctx.plot("own", self.own.value)
+"""
+    from app.services.studio_v3.core import engine
+
+    output = {}
+    pycode.run_event(code, bars, dates, {}, ["SPY"], engine.Params(), output=output)
+    close = bars["close"][:, 0]
+    assert [row["value"] for row in output["plots"]["fast"]] == pytest.approx([(close[t - 1] + close[t]) / 2 for t in range(2, len(close))])
+
+
+def test_completion_offers_the_numerical_libraries():
+    numpy = {member["name"]: member for member in pycode.editor_members("numpy", "", "")}
+    assert {"mean", "nanmean", "where"} <= set(numpy)
+    assert numpy["mean"]["signature"] == "mean(a)" and numpy["mean"]["documentation"]
+    pandas = {member["name"] for member in pycode.editor_members("pandas", "", "")}
+    assert {"DataFrame", "Series", "rolling"} <= pandas
+
+
+def _long_strategy(hundreds=3):
+    body = ["class Strategy:", "    def on_bar(self, ctx):"]
+    i = 0
+    while len(body) < hundreds * 100:
+        body += [f"        value_{i} = ctx.close[-1] * {i}", f"        if value_{i} > {i}:", f"            ctx.log(value_{i}, \"info\")"]
+        i += 1
+    return "\n".join(body[: hundreds * 100]) + "\n"
+
+
+def test_lint_p95_under_150_ms_for_300_lines():
+    import time
+
+    code = _long_strategy(3)
+    timings = []
+    for _ in range(20):
+        started = time.perf_counter()
+        pycode.lint(code, {})
+        timings.append(time.perf_counter() - started)
+    p95 = sorted(timings)[18]
+    assert p95 < 0.15, f"p95 {p95 * 1000:.1f} ms"
+
+
+def test_completion_p95_under_50_ms():
+    import time
+
+    code = _long_strategy(3)
+    timings = []
+    for _ in range(20):
+        started = time.perf_counter()
+        pycode.editor_members("ctx", code, "p")
+        timings.append(time.perf_counter() - started)
+    p95 = sorted(timings)[18]
+    assert p95 < 0.05, f"p95 {p95 * 1000:.1f} ms"
+
+
+# --- B-163: QuantConnect import -----------------------------------------------------
+
+QC_ALGORITHM = '''from AlgorithmImports import *
+from datetime import timedelta
+
+class MyAlgorithm(QCAlgorithm):
+    def Initialize(self):
+        self.SetStartDate(2018, 1, 1)
+        self.SetCash(100000)
+        self.AddEquity("SPY", Resolution.Daily)
+        self.SetWarmUp(40)
+        self.sma = self.SMA("SPY", 50)
+
+    def OnData(self, data):
+        if not self.sma.IsReady:
+            return
+        if not self.Portfolio.Invested:
+            self.SetHoldings("SPY", 1.0)
+        elif data["SPY"].Close < self.sma.Current.Value:
+            self.Liquidate()
+
+    def OnOrderEvent(self, event):
+        self.Log(event.FillPrice)
+'''
+
+
+def test_quantconnect_import_rewrites_calls_and_keeps_user_code():
+    from app.services.studio_v3.core import qc_import
+
+    out = qc_import.convert(QC_ALGORITHM)
+    assert out["ok"] is True
+    assert "class Strategy:" in out["code"] and "def init(self, ctx):" in out["code"]
+    assert "warmup = 40" in out["code"]
+    assert 'ctx.indicator("sma", "SPY", 50)' in out["code"]
+    assert "ctx.set_holdings(\"SPY\", 1.0)" in out["code"]
+    assert 'ctx.bar("SPY").close' in out["code"]
+    assert "ctx.portfolio.invested" in out["code"]
+    assert "def on_fill(self, ctx, fill)" in out["code"] and "fill.price" in out["code"]
+    assert out["symbols"] == ["SPY"] and out["settings"]["capital"] == 100000.0
+    assert out["problems"] == []
+
+
+def test_quantconnect_import_lists_every_line_it_could_not_convert():
+    from app.services.studio_v3.core import qc_import
+
+    source = QC_ALGORITHM.replace(
+        "        self.Liquidate()",
+        "        self.Liquidate()\n        self.Schedule.On(self.DateRules.MonthStart(), self.TimeRules.AfterMarketOpen(\"SPY\"), self.Rebalance)",
+    )
+    out = qc_import.convert(source)
+    reasons = {row["source"]: row["reason"] for row in out["unconverted"]}
+    assert any("Schedule.On" in source for source in reasons)
+    assert any("rebalance" in reason for reason in reasons.values())
+    assert out["ok"] is True  # the rest still compiles
+
+
+def test_quantconnect_import_refuses_a_pasted_non_qc_file():
+    from app.services.studio_v3.core import qc_import
+
+    out = qc_import.convert("print('hello')\n")
+    assert out["ok"] is False and "QCAlgorithm" in out["problems"][0]["message"]
+
+
+def test_converted_quantconnect_algorithm_trades_in_the_event_engine():
+    from app.services.studio_v3.core import engine, qc_import
+
+    bars, _ = _bars(120, 1)
+    dates = pd.bdate_range("2020-01-01", periods=120)
+    code = qc_import.convert(QC_ALGORITHM)["code"]
+    result = pycode.run_event(code, bars, dates, {}, ["SPY"], engine.Params())
+    assert len(result.trades) >= 1
+
+
+def test_python_backtest_budget_500_symbols_by_2500_bars():  # A14, B-65
+    """Synthetic engine workload; real-data loading is measured separately in the Backtest suite."""
+    import time
+
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(2500, 500)
+    code = """class Strategy:
+    warmup = 60
+    rebalance_schedule = "month_start"
+
+    def on_data(self, ctx):
+        if not ctx.rebalancing:
+            return
+        chosen = {symbol for symbol, _ in ctx.rank("roc(close, 60)", top=20)}
+        ctx.target_weights({symbol: 0.04 if symbol in chosen else 0 for symbol in ctx.symbols})
+"""
+    started = time.perf_counter()
+    result = pycode.run_event(code, bars, dates, {}, [f"S{i}" for i in range(500)], engine.Params())
+    elapsed = time.perf_counter() - started
+    assert len(result.trades) > 0
+    assert elapsed < 20, f"{elapsed:.1f} s"
+
+
+def test_std_is_population_and_builds_lean_bollinger_bands():
+    values = [10.0, 12.0, 11.0, 15.0, 14.0, 16.0]
+    bars, dates = _one(values)
+    deviation = formula.evaluate("std(close, 3)", bars, dates)[:, 0]
+    expected = pd.Series(values).rolling(3).std(ddof=0).to_numpy()
+    assert np.allclose(deviation, expected, equal_nan=True)
+    band = formula.evaluate("sma(close, 3) + 2 * std(close, 3)", bars, dates)[:, 0]
+    assert np.allclose(band, pd.Series(values).rolling(3).mean().to_numpy() + 2 * expected, equal_nan=True)

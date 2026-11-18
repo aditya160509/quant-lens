@@ -390,6 +390,30 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
 
 
 
+def checks(spec: Strategy, settings: Settings) -> dict:
+    """Build checks card rows (B-119): warm-up, data each rule reads and survivorship exposure."""
+    prep = prepare(settings)
+    p = prep.panel
+    last_bar = engine._last_bar(p.close)
+    dead = (last_bar < len(p.dates)) & (last_bar >= 0)
+    names = [p.symbols[i] for i in np.flatnonzero(dead)]
+    warmup = C.warmup_bars(spec)
+    return {
+        "warmup_bars": warmup,
+        "first_eligible_date": str(p.dates[min(warmup, len(p.dates) - 1)].date()) if len(p.dates) else None,
+        "data_used": C.data_used(spec),
+        "period": [str(p.dates[0].date()), str(p.dates[-1].date())] if len(p.dates) else [],
+        "universe": {"symbols": len(p.symbols), "held": int((last_bar >= 0).sum()), "delisted": len(names),
+                     "delisted_names": names[:10]},
+        "survivorship": (
+            {"status": "ok", "delisted": len(names),
+             "note": "Names that stop trading inside the period are settled at their last close. Names missing from the data are not represented."}
+            if names else {"status": "skipped", "reason": "no name in this universe stops trading inside the period"}
+        ),
+        "parameters": spec.values(),
+    }
+
+
 def debug_bar(spec: Strategy, settings: Settings, symbol: str, date: str, step: int, event: str | None = None, breakpoint: dict | None = None, loss_fraction: float | None = None) -> dict:
     if not spec.code.strip():
         raise Refusal("The debugger needs Python source.", ["Switch to Python or generate Python from the formula."])

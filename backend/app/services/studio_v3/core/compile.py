@@ -112,14 +112,23 @@ def signals(spec: Strategy, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex
         dist = spec.exits.stop_atr * formula.evaluate("atr(14)", bars, dates, params, cache) if spec.exits.stop_atr else None
         return Signals(entries, exits, None, None if dist is None else np.nan_to_num(dist), _vol(spec, bars, dates, params, cache))
     entries, exits = np.zeros(shape, dtype=np.int8), np.zeros(shape, dtype=np.int8)
-    if spec.entry_short.strip():
-        entries[_bool(spec.entry_short, bars, dates, params, cache)] = -1
-    if spec.entry_long.strip():
-        entries[_bool(spec.entry_long, bars, dates, params, cache)] = 1
+    shorts = _bool(spec.entry_short, bars, dates, params, cache) if spec.entry_short.strip() else None
+    longs = _bool(spec.entry_long, bars, dates, params, cache) if spec.entry_long.strip() else None
+    if shorts is not None:
+        entries[shorts] = -1
+    if longs is not None:
+        entries[longs] = 1
     if spec.exit_long.strip():
         exits[_bool(spec.exit_long, bars, dates, params, cache)] |= 1
     if spec.exit_short.strip():
         exits[_bool(spec.exit_short, bars, dates, params, cache)] |= 2
+    if spec.exits.opposite_signal:
+        if shorts is not None:
+            exits[shorts] |= 1  # an exit bit only closes a position of its own side
+        if longs is not None:
+            exits[longs] |= 2
+    if spec.exits.end_of_week:
+        exits[_last_week_bars(dates)] |= 3
     _gate(spec, entries, exits, bars, dates, params, cache)
     score = formula.evaluate(spec.score, bars, dates, params, cache).astype(float) if spec.score.strip() else None
     dist = spec.exits.stop_atr * formula.evaluate("atr(14)", bars, dates, params, cache) if spec.exits.stop_atr else None
@@ -139,6 +148,87 @@ def _vol(spec: Strategy, bars, dates, params, cache) -> np.ndarray | None:
     return formula.evaluate("std(returns, 20)", bars, dates, params, cache) * np.sqrt(252) if spec.sizing.mode == "vol_target" else None
 
 
+def _last_week_bars(dates: pd.DatetimeIndex) -> np.ndarray:
+    """True on the last observed session of each week, which is where an end-of-week exit fires."""
+    periods = dates.to_period("W-FRI")
+    last = np.ones(len(periods), dtype=bool)
+    if len(periods):
+        last[:-1] = periods[:-1] != periods[1:]
+    return last
+
+
+_EXTRA_BARS = {"crosses_above": 1, "crosses_below": 1, "weekly": 5, "monthly": 21}
+
+
+def _bars_needed(node: ast.AST) -> int:
+    """Bars a formula needs before every operator has a value."""
+    if isinstance(node, ast.Expression):
+        return _bars_needed(node.body)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in formula.OPERATORS:
+        inner = max((_bars_needed(arg) for arg in node.args), default=0)
+        names = formula.OPERATORS[node.func.id][1]
+        window = 0
+        if "n" in names and names.index("n") < len(node.args):
+            arg = node.args[names.index("n")]
+            if isinstance(arg, ast.Constant) and type(arg.value) is int:
+                window = arg.value
+        return inner + max(window, _EXTRA_BARS.get(node.func.id, 0))
+    return max((_bars_needed(child) for child in ast.iter_child_nodes(node)), default=0)
+
+
+def warmup_bars(spec: Strategy) -> int:
+    """The bar count the strategy needs before every rule has a value (its class attribute or the longest window)."""
+    params = spec.values()
+    needs = 0
+    for role in ROLES:
+        text = getattr(spec, role).strip()
+        if text:
+            try:
+                needs = max(needs, _bars_needed(formula.parse(text, params)))
+            except SignalError:
+                continue
+    if spec.code.strip():
+        try:
+            tree = ast.parse(spec.code)
+        except SyntaxError:
+            tree = None
+        if tree is not None:
+            for node in tree.body:
+                if isinstance(node, ast.ClassDef) and node.name == "Strategy":
+                    for item in node.body:
+                        if (isinstance(item, ast.Assign) and isinstance(item.value, ast.Constant)
+                                and type(item.value.value) is int
+                                and any(isinstance(t, ast.Name) and t.id == "warmup" for t in item.targets)):
+                            needs = max(needs, item.value.value)
+        for expression in pycode.exprs(spec.code):
+            try:
+                needs = max(needs, _bars_needed(formula.parse(expression, params)))
+            except SignalError:
+                continue
+    return needs
+
+
+def data_used(spec: Strategy) -> list[dict]:
+    """Per rule: the price fields it reads and the literal windows it asks for."""
+    params = spec.values()
+    rows = []
+    for role in ROLES:
+        text = getattr(spec, role).strip()
+        if not text:
+            continue
+        try:
+            parsed = formula.parse(text, params)
+        except SignalError:
+            continue
+        names, _ = formula.tokens(parsed)
+        windows = sorted({
+            arg.value for node in ast.walk(parsed) if isinstance(node, ast.Call)
+            for arg in node.args if isinstance(arg, ast.Constant) and type(arg.value) is int
+        })
+        rows.append({"role": role, "fields": sorted(names & set(formula.FIELDS)), "windows": windows})
+    return rows
+
+
 def _pct(v: float) -> str:
     return f"{v * 100:g}%"
 
@@ -153,7 +243,9 @@ def describe(spec: Strategy) -> str:
     out += [t for t in (f"stop {e.stop_atr:g} ATR" if e.stop_atr else f"stop {_pct(e.stop)}" if e.stop else "", f"target {_pct(e.target)}" if e.target else "",
                         f"trailing stop {_pct(e.trail)}" if e.trail else "", f"time stop {e.time_stop} bars" if e.time_stop else "",
                         f"stop to entry after {_pct(e.breakeven)}" if e.breakeven else "",
-                        f"sell {_pct(e.scale_frac)} at {_pct(e.scale_at)}" if e.scale_at and e.scale_frac else "") if t]
+                        f"sell {_pct(e.scale_frac)} at {_pct(e.scale_at)}" if e.scale_at and e.scale_frac else "",
+                        "an opposite entry closes the other side" if e.opposite_signal else "",
+                        "close on the last bar of the week" if e.end_of_week else "") if t]
     size = {"shares": f"{s.value:g} shares", "cash": f"${s.value:,.0f}", "pct_equity": f"{_pct(s.value)} of equity", "risk": f"{_pct(s.value)} of equity at risk to the stop",
             "equal": "an equal share of equity", "vol_target": f"an equal share scaled to {_pct(s.value)} annual volatility",
             "score": "an equal share weighted by score", "kelly": f"the Kelly fraction of closed trades, at most {_pct(s.value)}"}[s.mode]

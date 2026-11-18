@@ -814,3 +814,60 @@ def test_build_debug_can_stop_on_an_equity_loss(studio):
     previous = studio.post(url, json={**request, "event": None, "loss_fraction": None, "date": found["previous_date"]}).json()
     assert found["equity_change"] == pytest.approx(found["context"]["total_value"] / previous["context"]["total_value"] - 1)
     assert studio.post(url, json={**request, "loss_fraction": None}).status_code == 422
+
+
+def test_quantconnect_import_endpoint_returns_code_and_leftovers(studio):  # B-163
+    source = """from AlgorithmImports import *
+
+
+class A(QCAlgorithm):
+    def Initialize(self):
+        self.AddEquity("SPY", Resolution.Daily)
+        self.SetWarmUp(10)
+
+    def OnData(self, data):
+        if not self.Portfolio.Invested:
+            self.SetHoldings("SPY", 1.0)
+
+    def OnEndOfAlgorithm(self):
+        self.Debug("done")
+"""
+    r = studio.post("/api/studio-v3/build/import-quantconnect", json={"source": source})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True and body["symbols"] == ["SPY"] and body["warmup"] == 10
+    assert "class Strategy:" in body["code"] and body["problems"] == []
+    assert any("OnEndOfAlgorithm" in row["source"] for row in body["unconverted"])
+    assert any("import" in row["source"] for row in body["unconverted"])
+
+
+def test_build_checks_reports_warmup_data_and_survivorship(studio):  # B-119
+    spec = {"symbols": ["AAA", "BBB", "DEAD"], "benchmark": "SPY", "start": "2015-06-01", "end": "2017-06-01"}
+    body = {"spec": {"name": "Checks", "entry_long": "crosses_above(sma(close, 50), sma(close, 200))"},
+            "settings": spec}
+    r = studio.post("/api/studio-v3/build/checks", json=body)
+    assert r.status_code == 200
+    out = r.json()
+    assert out["warmup_bars"] == 201  # 200 bars of the slow average, plus the cross
+    assert out["period"][0] == "2015-06-01"
+    assert out["universe"]["delisted"] == 1 and "DEAD" in out["universe"]["delisted_names"]
+    assert out["survivorship"]["status"] == "ok"
+    assert out["data_used"][0]["fields"] == ["close"]
+    assert out["data_used"][0]["windows"] == [50, 200]
+
+
+def test_opposite_signal_and_end_of_week_exits():  # B-120
+    p = fixture_panel(120)
+    bars = p.bars()
+    spec = Strategy(entry_long="close > sma(close, 5)", entry_short="close < sma(close, 5)",
+                    exits={"opposite_signal": True})
+    sig = C.signals(spec, bars, p.dates)
+    assert (sig.exits[sig.entries[:, 0] == -1, 0] & 1 == 1).all()
+    assert (sig.exits[sig.entries[:, 0] == 1, 0] & 2 == 2).all()
+    weekly = Strategy(entry_long="close > sma(close, 5)", exits={"end_of_week": True})
+    weekly_sig = C.signals(weekly, bars, p.dates)
+    periods = p.dates.to_period("W-FRI")
+    last = np.ones(len(periods), dtype=bool)
+    last[:-1] = periods[:-1] != periods[1:]
+    assert (weekly_sig.exits[last, 0] == 3).all()
+    assert (weekly_sig.exits[~last, 0] == 0).all()

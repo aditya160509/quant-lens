@@ -36,6 +36,8 @@ class Exits(_Model):
     breakeven: float = Field(0.0, ge=0)
     scale_at: float = Field(0.0, ge=0)
     scale_frac: float = Field(0.0, ge=0, le=1)
+    opposite_signal: bool = False  # a short entry closes longs and a long entry closes shorts
+    end_of_week: bool = False  # close every position on the last observed bar of the week
 
 
 class Sizing(_Model):

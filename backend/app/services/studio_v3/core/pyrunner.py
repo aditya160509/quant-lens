@@ -3,6 +3,7 @@
 The child runs user callbacks with restricted builtins. Event runs use Studio's shared fill engine.
 """
 
+import importlib
 import inspect
 import json
 import math
@@ -12,10 +13,13 @@ import traceback
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from types import MappingProxyType, ModuleType
+from types import MappingProxyType, MethodType, ModuleType
 
 import numpy as np
 
+# A7: the same allow-list pycode.check enforces, enforced again where the import actually happens.
+ALLOWED_IMPORTS = ("math", "statistics", "numpy", "pandas", "scipy.stats")
+INDICATOR_NAMES = ("sma", "ema", "rsi", "atr", "std", "roc", "highest", "lowest")
 SAFE_BUILTINS = {k: __builtins__[k] if isinstance(__builtins__, dict) else getattr(__builtins__, k) for k in (
     "abs", "all", "any", "bool", "dict", "enumerate", "float", "int", "len", "list", "max", "min", "range", "round", "set", "sorted", "str", "sum", "tuple", "zip",
     "isinstance", "print", "ValueError", "Exception", "object", "super", "property", "staticmethod", "__build_class__")}
@@ -284,6 +288,11 @@ class Portfolio:
     def __getitem__(self, symbol):
         return self.positions[symbol]
 
+    @property
+    def invested(self):
+        """True while any position is open (LEAN's `Portfolio.Invested`)."""
+        return any(position.quantity for position in self.positions.values())
+
 
 class PortfolioContext(Ctx):
     def __init__(self, contexts, bars, values):
@@ -486,7 +495,7 @@ class PortfolioContext(Ctx):
 
 class PortfolioStrategy:
     def __init__(self, cls, ctx, warmup, use_context, submitted, market_filter):
-        self.strategy = cls()
+        self.strategy = bind_indicators(cls())
         self.ctx = ctx
         self.warmup = warmup
         self.use_context = use_context
@@ -507,6 +516,7 @@ class PortfolioStrategy:
     def _context(self, engine_ctx):
         self.ctx._t = engine_ctx.t
         self.ctx._account = engine_ctx._e
+        self.strategy._studio_ctx = self.ctx
         self.ctx._rebalancing = self._scheduled(self.ctx)
         self.use_context(self.ctx)
         return self.ctx
@@ -591,7 +601,7 @@ class PortfolioStrategy:
 class EventStrategy:
     def __init__(self, cls, contexts, available, warmup, use_context, market_filter, submitted):
         self.contexts = contexts
-        self.strategies = [cls() for _ in contexts]
+        self.strategies = [bind_indicators(cls()) for _ in contexts]
         self.available = available
         self.warmup = warmup
         self.seen = [0] * len(contexts)
@@ -609,6 +619,7 @@ class EventStrategy:
     def _context(self, engine_ctx, symbol):
         ctx = self.contexts[symbol]
         ctx._t = engine_ctx.t
+        self.strategies[symbol]._studio_ctx = ctx
         qty = engine_ctx.position(symbol)
         ctx.position = int(qty > 0) - int(qty < 0)
         self.use_context(ctx)
@@ -662,6 +673,27 @@ class EventStrategy:
                 callback(ctx)
 
 
+def _indicator_method(name):
+    def indicator(self, symbol_or_period, period=None):
+        ctx = getattr(self, "_studio_ctx", None)
+        if ctx is None:
+            raise RuntimeError("Indicator helpers are available inside init, on_bar, on_data and rebalance")
+        if period is None:
+            symbol_or_period, period = None, symbol_or_period
+        return ctx.indicator(name, symbol_or_period, period)
+
+    indicator.__name__, indicator.__doc__ = name, f"A {name.upper()} handle: .value, .ready, .window, .history(n)."
+    return indicator
+
+
+def bind_indicators(strategy):
+    """LEAN's `self.sma(symbol, 50)` form next to `ctx.indicator`; a method the user wrote wins."""
+    for name in INDICATOR_NAMES:
+        if not hasattr(type(strategy), name):
+            setattr(strategy, name, MethodType(_indicator_method(name), strategy))
+    return strategy
+
+
 def _debug_value(value, depth=0):
     if type(value) is str:
         return value[:512]
@@ -680,7 +712,8 @@ def _debug_snapshot(adapter, account, submitted, bars, dates, symbols, n, captur
     t = len(submitted) - 1
     is_portfolio = isinstance(adapter, PortfolioStrategy)
     strategy = adapter.strategy if is_portfolio else adapter.strategies[n]
-    state = _debug_value(vars(strategy) if hasattr(strategy, "__dict__") else {})
+    state = _debug_value({key: value for key, value in vars(strategy).items()
+                          if not key.startswith("_") and not callable(value)} if hasattr(strategy, "__dict__") else {})
     holding = account.positions.get(n)
     equity, _, _, _ = account._mark()
     orders = []
@@ -849,9 +882,19 @@ def main():
         modules = {}
         builtins = {**SAFE_BUILTINS, "print": capture_print}
 
+        imported = {}
+
         def project_import(name, globals_=None, locals_=None, fromlist=(), level=0):
-            if level or name not in helper_code or any(item == "*" or item.startswith("_") for item in (fromlist or ())):
-                raise ImportError("Only named imports from saved project modules are allowed")
+            fromlist = tuple(fromlist or ())
+            if name in helper_code and not level:
+                if any(item == "*" or item.startswith("_") for item in fromlist):
+                    raise ImportError("Only named imports from saved project modules are allowed")
+            elif not level and (name in ALLOWED_IMPORTS or (name == "scipy" and fromlist == ("stats",))):
+                if name not in imported:
+                    imported[name] = importlib.import_module(name)
+                return imported[name]
+            else:
+                raise ImportError(f"Import '{name}' is not allowed; allowed: {', '.join(ALLOWED_IMPORTS)} and saved project modules")
             if name not in modules:
                 module = modules[name] = ModuleType(name)
                 module.__dict__.update({"__builtins__": builtins, "math": math})
@@ -862,8 +905,7 @@ def main():
                     raise
             return modules[name]
 
-        if helper_code:
-            builtins["__import__"] = project_import
+        builtins["__import__"] = project_import
         g = {"__builtins__": builtins, "__name__": "strategy", "math": math}
         exec(compiled, g)  # noqa: S102 source was checked by pycode.check
         cls = g.get("Strategy")

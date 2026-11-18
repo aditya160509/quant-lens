@@ -26,12 +26,25 @@ def _roll(fn):
     return lambda x, n: getattr(_df(x).rolling(n, min_periods=n), fn)().to_numpy()
 
 
+def _smooth(x, n, alpha, start=0):
+    """LEAN's seed: the mean of the first n observations, then exponential smoothing (LEAN_PARITY row 19)."""
+    a = np.asarray(x, dtype=float)
+    out = np.full_like(a, np.nan, dtype=float)
+    if a.shape[0] < start + n:
+        return out
+    out[start + n - 1] = a[start:start + n].mean(axis=0)
+    for t in range(start + n, a.shape[0]):
+        previous = out[t - 1]
+        out[t] = previous + alpha * (a[t] - previous)
+    return out
+
+
 def _ema(x, n):
-    return _df(x).ewm(span=n, adjust=False, min_periods=n).mean().to_numpy()
+    return _smooth(x, n, 2.0 / (n + 1))
 
 
 def _wilder(x, n):
-    return _df(x).ewm(alpha=1.0 / n, adjust=False, min_periods=n).mean().to_numpy()
+    return _smooth(x, n, 1.0 / n)
 
 
 def _delay(x, n):
@@ -43,8 +56,9 @@ def _delay(x, n):
 
 
 def _rsi(x, n):
-    d = x - _delay(x, 1)
-    up, down = _wilder(np.where(d > 0, d, 0.0) + d * 0, n), _wilder(np.where(d < 0, -d, 0.0) + d * 0, n)
+    d = np.diff(np.asarray(x, dtype=float), axis=0, prepend=np.nan)
+    up = _smooth(np.where(d > 0, d, 0.0), n, 1.0 / n, start=1)
+    down = _smooth(np.where(d < 0, -d, 0.0), n, 1.0 / n, start=1)
     with np.errstate(divide="ignore", invalid="ignore"):
         return np.where(down == 0, np.where(up == 0, 50.0, 100.0), 100.0 - 100.0 / (1.0 + up / down)) + up * 0
 
@@ -88,7 +102,8 @@ def _closed_period(x, dates: pd.DatetimeIndex, frequency: str):
 OPERATORS: dict[str, tuple[Any, list[str], str, str]] = {
     "sma": (_roll("mean"), ["x", "n"], "Simple moving average over n bars", "sma(close, 50)"),
     "ema": (_ema, ["x", "n"], "Exponential moving average, span n", "ema(close, 20)"),
-    "std": (_roll("std"), ["x", "n"], "Standard deviation over n bars", "std(returns, 20)"),
+    "std": (lambda x, n: _df(x).rolling(n, min_periods=n).std(ddof=0).to_numpy(), ["x", "n"],
+            "Population standard deviation over n bars (LEAN StandardDeviation; Bollinger width)", "std(returns, 20)"),
     "highest": (_roll("max"), ["x", "n"], "Highest value over n bars, this bar included", "highest(high, 20)"),
     "lowest": (_roll("min"), ["x", "n"], "Lowest value over n bars, this bar included", "lowest(low, 20)"),
     "sum": (_roll("sum"), ["x", "n"], "Sum over n bars", "sum(volume, 5)"),

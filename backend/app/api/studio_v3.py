@@ -30,6 +30,7 @@ from app.services.studio_v3.core import (
     live,
     plain,
     pycode,
+    qc_import,
     store,
     templates,
     validate,
@@ -284,6 +285,70 @@ class BuildSymbol(BaseModel):
 @router.post("/build/outline", response_model=list[BuildSymbol])
 def outline_python(request: BuildOutlineRequest) -> list[dict]:
     return pycode.outline(request.code)
+
+
+class BuildChecksRequest(BaseModel):
+    spec: dict[str, Any]
+    settings: Settings | None = None
+
+
+class BuildDataUse(BaseModel):
+    role: str
+    fields: list[str]
+    windows: list[int]
+
+
+class BuildChecksResult(BaseModel):
+    warmup_bars: int
+    first_eligible_date: str | None
+    data_used: list[BuildDataUse]
+    period: list[str]
+    universe: dict[str, Any]
+    survivorship: dict[str, Any]
+    parameters: dict[str, float]
+
+
+@router.post("/build/checks", response_model=BuildChecksResult)
+def build_checks(request: BuildChecksRequest) -> dict[str, Any]:
+    """Warm-up bars, the data each rule reads and survivorship exposure for the Build checks card (B-119)."""
+    try:
+        return backtest.checks(_spec(request.spec), request.settings or Settings(symbols=[], benchmark="SPY"))
+    except backtest.Refusal as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+class QuantConnectImportRequest(BaseModel):
+    source: str = Field(min_length=1, max_length=400_000)
+
+
+class QuantConnectRewrite(BaseModel):
+    line: int
+    before: str
+    after: str
+    reason: str | None = None
+
+
+class QuantConnectLeftover(BaseModel):
+    line: int
+    source: str
+    reason: str
+
+
+class QuantConnectImportResult(BaseModel):
+    ok: bool
+    code: str
+    symbols: list[str]
+    settings: dict[str, Any]
+    warmup: int | None = None
+    converted: list[QuantConnectRewrite]
+    unconverted: list[QuantConnectLeftover]
+    problems: list[BuildProblem]
+
+
+@router.post("/build/import-quantconnect", response_model=QuantConnectImportResult)
+def import_quantconnect(request: QuantConnectImportRequest) -> dict[str, Any]:
+    """Keep the user's QuantConnect algorithm, rewrite the calls Studio can run, list every line left behind (B-163)."""
+    return qc_import.convert(request.source)
 
 
 class PreviewRequest(BaseModel):

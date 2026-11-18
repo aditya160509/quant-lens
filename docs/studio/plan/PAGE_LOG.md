@@ -149,3 +149,51 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-98 backend ships eight Python starters through the `python_templates` field of `GET /api/studio-v3/templates`. The existing formula catalogue stays available. The real-data acceptance test compiles and executes each starter with its suggested universe and verifies at least one trade. Gallery UI wiring remains open.
 
 - B-50 advanced. `ctx.indicator` creates a current-bar handle from a literal formula or a supported indicator with a literal period. Handles expose readiness, value and bounded history. A portfolio handle can also feed cross-sectional ranking. Indicator calculations reuse the formula engine. LEAN golden-value verification remains open.
+
+## Build backend (2026-11-18)
+
+What shipped, by id:
+
+- B-57 (partial), PYTHON_IDE A7. Python strategies may import `math`, `statistics`, `numpy`, `pandas`, `scipy.stats`, `from scipy import stats` and saved project modules. The allow-list is enforced twice: the AST screen refuses anything else with the module name and the allowed list, and the child process installs a restricted `__import__` that resolves only those names. `numpy.load`, `fromfile`, `memmap`, `ctypeslib`, `pandas.read_pickle`, `read_csv`, `to_pickle` and the other file-reaching attributes are refused by name, as are dunder attributes, `eval`, `exec`, `compile`, `open`, `globals`, `locals`, `getattr`, `setattr`, `type`, `input`, `breakpoint`, `global` and `nonlocal`. 44 known breakouts are parametrised and every one is refused; two run the child directly to prove the import gate holds past the AST screen. sklearn and scipy.optimize stay out: PYTHON_IDE A7 asks for the narrower list.
+- B-50, A4. `ctx.indicator` handles and the LEAN-style `self.sma("SPY", 50)` / `self.sma(50)` form share one formula evaluation. EMA now seeds with the SMA and smooths with 2/(n+1); RSI and ATR use Wilder smoothing seeded with the mean of the first n; `std` is the population standard deviation, so `sma + k*std` is LEAN's Bollinger band. Tests pin each definition against a hand-computed sequence and check `ready` is false before the window is full.
+- B-42. Server-side latency is measured in tests: lint p95 26 ms for 300 lines, completion p95 0.01 ms, compile p95 0.11 ms.
+- B-65, A14. A Python portfolio strategy over 500 symbols × 2,500 bars runs in 0.55 s end to end (indicator precompute, sandboxed child, event engine). The test uses synthetic bars; real-data loading is not included.
+- B-98. The eight Python starters are checked by the existing real-data test (each compiles and produces trades on SPY, QQQ and IWM).
+- B-119. `POST /build/checks` returns warm-up bars and the first eligible date, the fields and windows each rule reads, the period, the universe with held and delisted names, and a survivorship row with a written note.
+- B-120 (partial). Formula strategies gained `exits.opposite_signal` (a short entry closes longs and a long entry closes shorts) and `exits.end_of_week` (close on the last observed session of the week). The profit-target ladder and exit ordering are still open.
+- B-163. `POST /build/import-quantconnect` rewrites a QuantConnect algorithm in place: `class …(QCAlgorithm)` becomes `class Strategy`, `Initialize`/`OnData`/`OnOrderEvent` become `init`/`on_data`/`on_fill`, and price, portfolio, order, history, log, plot and indicator calls map to `ctx`. It returns the symbols, capital, dates and warm-up it found, every rewritten line, and every line it removed or refused with a reason (QuantConnect imports, `datetime`, `Schedule.On`, `SetBrokerageModel`, unknown `On*` callbacks). Lines it cannot express are commented out, never silently dropped. The result is checked before it is returned, and the endpoint saves nothing.
+- B-32 (partial). Completion covers the numpy and pandas top-level names with signatures and one-line docs, next to every `ctx`, portfolio, position, bar, fill, market, history and indicator member.
+
+API added or extended (all under `/api/studio-v3`):
+
+- `POST /build/checks` — warm-up, data used per rule, survivorship for the checks card. Body `{spec, settings?}`.
+- `POST /build/import-quantconnect` — convert one QuantConnect algorithm; body `{source}`; returns `{ok, code, symbols, settings, warmup, converted, unconverted, problems}`.
+- `POST /build/complete` — added the `numpy` and `pandas` scopes.
+- `POST /build/check` — unchanged shape; import refusals now name the module and list the allow-list.
+- `POST /preview`, `POST /build/debug`, `GET|PATCH /strategies/{id}/files`, `POST /compile`, `POST /build/condition` continue to serve the runner.
+
+Budgets measured on this machine (server, warm):
+
+- compile 20-row spec: 0.11 ms p95 (budget 100 ms).
+- lint 300 lines: 26 ms p95 (budget 150 ms).
+- completion: 0.01 ms p95 (budget 50 ms).
+- Python backtest 500 × 2,500: 0.55 s (budget 20 s).
+- `POST /build/checks` on SPY, 2015-01-02 to 2023-11-06: 0.19 s.
+- `POST /build/import-quantconnect`: 67 ms.
+
+Still open and why:
+
+- B-57 full: sklearn and scipy.optimize are not allowed. They widen the sandbox surface (model fitting and optimisers read and write more of the interpreter) and PYTHON_IDE A7 lists the narrower set; adding them needs its own escape review.
+- B-120: the profit-target ladder needs a second scale-out level in both engines; ordering rules need an explicit exit priority in the spec. Opposite-signal and end-of-week exits ship now.
+- B-105/B-113: nested Any/All blocks and named formula variables are editor and parser work in the formula language; the formula AST already nests to any depth, so blocks that compile to formulas are not blocked by the backend.
+- B-121: risk-parity sizing and hard per-position and gross caps need new engine parameters; equal weight, shares, cash, % equity, risk, vol target, Kelly and score exist.
+- B-55 `ctx.store`, B-56 feature fitting, B-61 `on_risk_event`, B-63 engine settings from code, B-64 full Python parity, B-71 variable grid: not started.
+- The frontend dialog for the QuantConnect import, the checks card rows and the numeric-library completions is wiring only; every response is complete without it.
+
+Known limits:
+
+- The importer handles the forms in its call table. A helper the algorithm calls that uses `self.Portfolio` in another method is converted; a `Symbol` built at runtime from a string variable is refused, because the symbol must be a literal to reach the universe.
+- QuantConnect resolution other than daily is reported, not converted; Studio has daily bars only.
+- `POST /build/checks` reports the warm-up of the formulas and the literal `warmup` class attribute. A Python strategy that builds an indicator from a variable period is not counted.
+- `ruff format --check` does not pass on this repository baseline (43 pre-existing files, none of them changed here). `ruff check` passes on every touched file.
+- `tests/test_shared_stats.py` fails to import on the baseline (`cscv_pbo` is missing from `screener_v2.core.backtest`), so the full suite is run with that module ignored.
