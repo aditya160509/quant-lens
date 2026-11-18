@@ -70,7 +70,8 @@ function portfolioHero(r: FeatureResult): HeroSpec | null {
   if (rows.length < 2 || !m.names) return null;
   const step = Math.max(1, Math.floor(rows.length / 320));
   const thin = (k: string) => rows.filter((_, i) => i % step === 0 || i === rows.length - 1).map((x) => x[k]);
-  return { figure: sign(m.total_return ?? 0), tone: (m.total_return ?? 0) >= 0 ? "up" : "down",
+  const g = (r.meta as { grade?: { grade: string } }).grade;
+  return { figure: sign(m.total_return ?? 0), tone: (m.total_return ?? 0) >= 0 ? "up" : "down", versus: g ? `grade ${g.grade}` : undefined,
     lines: [{ label: "Combined", values: thin("combined"), color: "var(--accent)" }, ...m.names.map((n, i) => ({ label: n, values: thin(n), color: `var(--c${(i % 6) + 2})` }))] };
 }
 
@@ -95,7 +96,7 @@ const BV = group(() => import("./views/BacktestViews") as Promise<Record<string,
 const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string, unknown>>);
 registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto, stStabilityOpt: OV.Stability, stSpread: OV.Spread }, ["stParamMap", "stPareto", "stSpread"]);
 const PV = group(() => import("./views/PortfolioViews") as Promise<Record<string, unknown>>);
-registerViews({ stTree: PV.Tree, stWeightsTime: PV.WeightsOverTime }, ["stWeightsTime"]);
+registerViews({ stTree: PV.Tree, stWeightsTime: PV.WeightsOverTime, stFrontier: PV.FrontierView, stPfRisk: PV.RiskStats }, ["stWeightsTime", "stFrontier"]);
 const VV = group(() => import("./views/ValidateViews") as Promise<Record<string, unknown>>);
 registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout, stCertificate: VV.Certificate, stWfMatrix: VV.WfMatrix, stCpcv: VV.Cpcv, stPower: VV.Power, stPboLogits: VV.PboLogits, stPboRanks: VV.PboRanks }, ["stTiles", "stStitched"]);
 const LV = group(() => import("./views/LiveViews") as Promise<Record<string, unknown>>);
@@ -219,7 +220,17 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["correlation"], span: 12, view: "stTree", title: "Clusters" },
           { keys: ["marginal"], span: 6, view: "dataTable", title: "Marginal contribution" },
           { keys: ["members"], span: 6, view: "dataTable", title: "Members" },
+          { keys: ["rolling_correlation"], span: 7, view: "lineChart", title: "Average pair correlation, 6-month rolling" },
+          { keys: ["drawdown_overlap"], span: 5, view: "dataTable", title: "In drawdown together (deeper than 5%)" },
         ] },
+        { id: "risk", label: "Risk", items: [
+          { keys: ["risk_share"], span: 5, view: "stPfRisk", title: "Diversification and stress" },
+          { keys: ["risk_share"], span: 7, view: "stFrontier", title: "Efficient frontier" },
+          { keys: ["risk_share"], span: 6, view: "dataTable", title: "Share of risk" },
+          { keys: ["crises"], span: 6, view: "dataTable", title: "Crisis windows" },
+          { keys: ["dropout"], span: 12, view: "dataTable", title: "Without each member" },
+        ] },
+        { id: "grade", label: "Grade", items: [{ keys: ["risk_share"], span: 12, view: "stTiles", title: "Combined grade" }] },
       ],
     },
     st05: {

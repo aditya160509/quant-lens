@@ -127,7 +127,8 @@ function MemberChips({ run }: { run: FeatureRun }) {
   const raw = run.form.strategy_ids;
   const picked = new Set(typeof raw === "string" ? raw.split(/[\s,]+/).filter(Boolean) : []);
   const toggle = (id: string) => run.setForm((cur) => {
-    const next = new Set(picked);
+    const was = cur.strategy_ids;
+    const next = new Set(typeof was === "string" ? was.split(/[\s,]+/).filter(Boolean) : []); // read the latest form, not this render's copy
     if (next.has(id)) next.delete(id); else if (next.size < 12) next.add(id);
     return { ...cur, strategy_ids: [...next].join(" ") };
   });
