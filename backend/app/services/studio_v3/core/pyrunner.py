@@ -398,6 +398,9 @@ class PortfolioStrategy:
         self.market_filter = market_filter
         self.rebalance = getattr(self.strategy, "rebalance", None)
         self.schedule = getattr(self.strategy, "rebalance_schedule", "daily")
+        self.end_of_day = getattr(self.strategy, "on_end_of_day", None)
+        self.warmup_done = getattr(self.strategy, "on_warmup_done", None)
+        self.stop = getattr(self.strategy, "on_stop", None)
         self.callback = getattr(self.strategy, "on_fill", None)
         self.legacy_fill = self.callback is not None and len(inspect.signature(self.callback).parameters) == 1
 
@@ -413,9 +416,13 @@ class PortfolioStrategy:
         if ctx.t == 0 and hasattr(self.strategy, "init"):
             self.strategy.init(ctx)
             ctx.orders.clear()
+        if ctx.t == self.warmup and self.warmup_done is not None:
+            self.warmup_done(ctx)
         if self.rebalance is not None and ctx.rebalancing:
             self.rebalance(ctx)
         self.strategy.on_data(ctx)
+        if self.end_of_day is not None:
+            self.end_of_day(ctx)
         if ctx.t >= self.warmup:
             for symbol, action in ctx.orders:
                 n = ctx._columns[symbol]
@@ -452,6 +459,11 @@ class PortfolioStrategy:
                     engine_ctx.exit(n)
         ctx.orders.clear()
 
+    def finish(self):
+        if self.stop is not None:
+            self.use_context(self.ctx)
+            self.stop(self.ctx)
+
     def _scheduled(self, ctx):
         if self.schedule is None:
             return False
@@ -482,6 +494,9 @@ class EventStrategy:
         self.use_context = use_context
         self.market_filter = market_filter
         self.submitted = submitted
+        self.end_of_day = [getattr(strategy, "on_end_of_day", None) for strategy in self.strategies]
+        self.warmup_done = [getattr(strategy, "on_warmup_done", None) for strategy in self.strategies]
+        self.stops = [getattr(strategy, "on_stop", None) for strategy in self.strategies]
         self.callbacks = []
         for strategy in self.strategies:
             callback = getattr(strategy, "on_fill", None)
@@ -512,7 +527,11 @@ class EventStrategy:
             if self.seen[n] == 0 and hasattr(strategy, "init"):
                 strategy.init(ctx)
                 ctx.orders.clear()
+            if self.seen[n] == self.warmup and self.warmup_done[n] is not None:
+                self.warmup_done[n](ctx)
             strategy.on_bar(ctx)
+            if self.end_of_day[n] is not None:
+                self.end_of_day[n](ctx)
             can_order = self.seen[n] >= self.warmup
             self.seen[n] += 1
             if self.market_filter is not None and not self.market_filter[t, n]:
@@ -530,6 +549,13 @@ class EventStrategy:
                         engine_ctx.exit(n)
                         self.submitted[t, n, 1] = 1 if action == 2 else 2
             ctx.orders.clear()
+
+    def finish(self):
+        for n, callback in enumerate(self.stops):
+            if callback is not None and self.seen[n]:
+                ctx = self.contexts[n]
+                self.use_context(ctx)
+                callback(ctx)
 
 
 def event_run(z, meta, load_strategy, make_contexts, use_context, values):
@@ -555,6 +581,8 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values):
         else:
             adapter = EventStrategy(cls, contexts, available, warmup, use_context, gate, submitted)
         result = engine.EventEngine({k: v[:end] for k, v in bars.items()}, params, stop_dist=stop_dist, size_vol=size_vol).run(adapter)
+        if collect:
+            adapter.finish()
         return engine.Result(*result[:7], unfilled=int(result[7])), submitted
 
     result, submitted = run_to(shape[0], True)

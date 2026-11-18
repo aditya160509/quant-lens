@@ -339,3 +339,34 @@ def test_portfolio_rank_and_zscore_use_observed_symbols_only():
     with pytest.raises(pycode.CodeError, match="Look-ahead"):
         pycode.run_event(code.replace('where="close > 10"', 'where="future(close)"'),
                          bars, dates, {}, ["AAA", "BBB", "CCC"], engine.Params())
+
+
+@pytest.mark.parametrize(
+    ("callback", "order"),
+    [("on_bar", "ctx.buy()"), ("on_data", 'ctx.market_order("SPY", 1)')],
+)
+def test_python_lifecycle_hooks_follow_warmup_and_run_order(callback, order):
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(4, 1)
+    code = f"""class Strategy:
+    warmup = 2
+    def on_warmup_done(self, ctx):
+        ctx.log("warmup done")
+    def {callback}(self, ctx):
+        ctx.log("bar")
+    def on_end_of_day(self, ctx):
+        ctx.log("end of day")
+        {order}
+    def on_stop(self, ctx):
+        ctx.log("stop")
+"""
+    output = {}
+    result = pycode.run_event(code, bars, dates, {}, ["SPY"], engine.Params(), output=output)
+    assert [row["text"] for row in output["logs"]] == [
+        "bar", "end of day", "bar", "end of day", "warmup done",
+        "bar", "end of day", "bar", "end of day", "stop",
+    ]
+    assert result.trades[0, engine.T_ENTRY_BAR] == 3
+    assert output["logs"][4]["date"] == str(dates[2].date())
+    assert output["logs"][-1]["date"] == str(dates[-1].date())
