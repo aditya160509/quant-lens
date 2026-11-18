@@ -64,6 +64,16 @@ def _rank(x):
     return _df(x).rank(axis=1, pct=True).to_numpy()
 
 
+def _for_bars(x, n):
+    truth = np.isfinite(x) & (x > 0)
+    return _df(truth).rolling(n, min_periods=n).sum().to_numpy() == n
+
+
+def _zscore(x):
+    rows = _df(x)
+    return rows.sub(rows.mean(axis=1), axis=0).div(rows.std(axis=1, ddof=0).replace(0, np.nan), axis=0).to_numpy()
+
+
 _PERIODS = {"weekly": "W-FRI", "monthly": "M"}
 
 
@@ -93,6 +103,12 @@ OPERATORS: dict[str, tuple[Any, list[str], str, str]] = {
     "max": (np.fmax, ["a", "b"], "Larger of two values", "max(open, close)"),
     "if_else": (lambda c, a, b: np.where(c, a, b), ["cond", "a", "b"], "a where cond holds, else b", "if_else(close > open, 1, -1)"),
     "atr": (None, ["n"], "Average true range (Wilder) over n bars", "atr(14)"),
+    "for_bars": (_for_bars, ["x", "n"], "Condition is true for n consecutive bars", "for_bars(close > open, 3)"),
+    "rising": (lambda x, n: _for_bars(x > _delay(x, 1), n), ["x", "n"], "Series rose on each of the last n transitions", "rising(close, 3)"),
+    "falling": (lambda x, n: _for_bars(x < _delay(x, 1), n), ["x", "n"], "Series fell on each of the last n transitions", "falling(close, 3)"),
+    "zscore": (_zscore, ["x"], "Cross-sectional z-score on this bar", "zscore(roc(close, 20))"),
+    "week_start": (None, [], "First observed bar of the week", "week_start()"),
+    "month_start": (None, [], "First observed bar of the calendar month", "month_start()"),
     "weekly": (None, ["x"], "x as of the last closed week", "weekly(sma(close, 10))"),
     "monthly": (None, ["x"], "x as of the last closed calendar month", "monthly(close)"),
 }
@@ -179,6 +195,11 @@ class _Eval:
             args = [_window(a, name) if arg_names[i] == "n" and not (name == "delay" and a == 0) else a for i, a in enumerate(args)]
             if name == "atr":
                 return _wilder(true_range(self.bars["high"], self.bars["low"], self.bars["close"]), args[0])
+            if name in {"week_start", "month_start"}:
+                periods = self.dates.to_period("W-FRI" if name == "week_start" else "M")
+                starts = np.ones(len(periods), dtype=bool)
+                starts[1:] = periods[1:] != periods[:-1]
+                return np.broadcast_to(starts[:, None], self.bars["close"].shape)
             if name in _PERIODS:
                 return _closed_period(self._array(args[0], name), self.dates, _PERIODS[name])
             if "x" in arg_names:

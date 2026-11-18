@@ -103,3 +103,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-117 backend ships in `POST /api/studio-v3/compile`. Complexity reports declared parameters, parsed formula conditions and independent referenced parameters with a variable optimisation range. Formula rules count Boolean leaves across entry, exit and market conditions. Score formulas and arbitrary Python control flow are excluded from the rule count.
 
 - B-99 backend ships through the existing compile endpoint. It warns above 200 saved block rows or eight parameters with nonconstant optimisation ranges and rejects more than 1,000 block rows. Frontend wiring remains open.
+
+- B-106 advanced. The formula catalogue exposes `for_bars`, `rising`, `falling`, `week_start`, `month_start` and cross-sectional `zscore`. All use the current and earlier observed bars. Earnings and fundamental filters remain open.

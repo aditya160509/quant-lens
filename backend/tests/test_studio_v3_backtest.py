@@ -503,3 +503,21 @@ def test_build_compile_checks_strategy_limits(studio, blocks, params, expected):
     limits = {item["token"]: item["severity"] for item in result["findings"] if item["token"] in {"blocks", "params"}}
     assert limits == expected
     assert result["ok"] is ("error" not in expected.values())
+
+
+def test_formula_condition_kinds_are_causal():
+    dates = pd.DatetimeIndex(["2024-01-30", "2024-01-31", "2024-02-01", "2024-02-02", "2024-02-05"])
+    close = np.array([[10, 20], [11, 21], [12, 22], [11, 20], [10, 19]], dtype=float)
+    bars = {field: close for field in data.FIELDS}
+    expected = {
+        "for_bars(close > 10, 2)": [False, False, True, True, False],
+        "rising(close, 2)": [False, False, True, False, False],
+        "falling(close, 2)": [False, False, False, False, True],
+        "month_start()": [True, False, True, False, False],
+        "week_start()": [True, False, False, False, True],
+        "zscore(close) < 0": [True, True, True, True, True],
+    }
+    for expression, result in expected.items():
+        np.testing.assert_array_equal(formula.evaluate(expression, bars, dates)[:, 0], result)
+        prefix = {field: series[:-1] for field, series in bars.items()}
+        np.testing.assert_array_equal(formula.evaluate(expression, prefix, dates[:-1])[:, 0], result[:-1])
