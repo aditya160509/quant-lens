@@ -146,10 +146,10 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [E] B-19 Editing keys: ⌘/ comment, ⌥↑↓ move line, ⌘D next match, ⌘⇧K delete line, ⇧⌥-drag column select, go to line ⌃G (partial: ⌘S format and save and ⌘↵ run exist) [PY B5]
 - [x] B-20 Format Python on save with ruff
 - [ ] [H] B-21 Format selection (⌘K ⌘F) and organise imports
-- [ ] [H] B-22 Go to symbol ⌘⇧O, go to line ⌃G, definition F12, references ⇧F12, peek ⌥F12, rename F2 across files (partial: cross-file definition, references and rename preview APIs ship; editor wiring and outline open)
+- [ ] [H] B-22 Go to symbol ⌘⇧O, go to line ⌃G, definition F12, references ⇧F12, peek ⌥F12, rename F2 across files (partial: cross-file definition, references, rename preview and symbol outline APIs ship; editor wiring open)
 - [ ] [H] B-23 Find and replace across all project files: regex, case, whole word, preview before replacing
 - [ ] [H] B-24 Code actions ⌘.: extract formula string to parameter, convert ctx.rule to indicator object, wrap selection in if ctx.position == 0, add missing on_fill
-- [ ] [M] B-25 Outline of classes, methods and indicators for the open file
+- [ ] [M] B-25 Outline of classes, methods and indicators for the open file (backend done: typed outline endpoint; editor wiring open)
 - [ ] [E] B-26 Undo history survives reload, per file (partial: undo and redo built; survives reload not built)
 - [ ] [M] B-27 Save state indicator (Saved, Saving, Conflict) and local draft recovery from IndexedDB (partial: autosave exists; indicator and conflict state open)
 - [ ] [M] B-28 Read-only banner when the editor code differs from the code that produced the visible result

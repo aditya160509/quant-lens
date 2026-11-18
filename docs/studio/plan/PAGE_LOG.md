@@ -133,3 +133,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-22 advanced. Go-to-definition follows imports inside the supplied project and returns the target filename and position. The backend declares Jedi directly, and the endpoint validates project filenames before staging the analysis inputs. References, rename and editor wiring remain open.
 
 - B-22 advanced. `POST /api/studio-v3/build/references` locates symbols across the supplied project. `POST /api/studio-v3/build/rename` previews the changed file contents without saving them. It accepts Python identifiers and restricts edits to supplied project files. Editor wiring and outline remain open.
+
+- B-25 backend ships through `POST /api/studio-v3/build/outline`. It returns the active file’s classes, functions, nested methods and assignments from indicator or formula calls, with source spans. It uses static parsing and returns an empty outline while the file has a syntax error. Editor wiring remains open.

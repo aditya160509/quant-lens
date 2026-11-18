@@ -259,6 +259,25 @@ def rename_python(request: BuildRenameRequest):
     return _navigate_python(request, new_name=request.new_name)
 
 
+class BuildOutlineRequest(BaseModel):
+    code: str = Field(max_length=200_000)
+
+
+class BuildSymbol(BaseModel):
+    name: str
+    kind: Literal["class", "method", "function", "indicator"]
+    line: int
+    column: int
+    end_line: int
+    end_column: int
+    children: list[BuildSymbol]
+
+
+@router.post("/build/outline", response_model=list[BuildSymbol])
+def outline_python(request: BuildOutlineRequest) -> list[dict]:
+    return pycode.outline(request.code)
+
+
 class PreviewRequest(BaseModel):
     spec: dict
     symbol: str = "SPY"

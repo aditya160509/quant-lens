@@ -687,3 +687,24 @@ def test_build_references_and_rename_preview_cover_project_files(studio):
         "helper.py": "def forecast():\n    return 1\n",
     }
     assert studio.post(f"{root}/rename", json=request | {"new_name": "for"}).status_code == 422
+
+
+def test_build_outline_lists_nested_methods_and_indicators(studio):
+    code = """def helper():
+    pass
+
+class Strategy:
+    def on_bar(self, ctx):
+        if ctx.bar > 2:
+            self.fast = ctx.value("sma(close, 3)")
+        price = ctx.close[-1]
+"""
+    endpoint = "/api/studio-v3/build/outline"
+    helper, strategy = studio.post(endpoint, json={"code": code}).json()
+    assert (helper["name"], helper["kind"], helper["line"]) == ("helper", "function", 1)
+    assert (strategy["name"], strategy["kind"], strategy["line"]) == ("Strategy", "class", 4)
+    method, = strategy["children"]
+    indicator, = method["children"]
+    assert method["kind"] == "method" and method["name"] == "on_bar"
+    assert (indicator["name"], indicator["kind"], indicator["line"]) == ("self.fast", "indicator", 7)
+    assert studio.post(endpoint, json={"code": "class"}).json() == []

@@ -188,6 +188,38 @@ def editor_members(scope: str, code: str, prefix: str = "", *, params=None, symb
     return [member for name, member in sorted(members.items()) if name.startswith(prefix)]
 
 
+def outline(code: str) -> list[dict]:
+    """Return the symbols in one document without importing it."""
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, RecursionError):
+        return []
+
+    def walk(node, in_class=False):
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            kind = "class" if isinstance(node, ast.ClassDef) else "method" if in_class else "function"
+            return [{
+                "name": node.name, "kind": kind, "line": node.lineno, "column": node.col_offset + 1,
+                "end_line": node.end_lineno, "end_column": node.end_col_offset + 1,
+                "children": [item for statement in node.body for item in walk(statement, kind == "class")],
+            }]
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and isinstance(node.value, ast.Call):
+            callee = node.value.func
+            if (isinstance(callee, ast.Attribute) and isinstance(callee.value, ast.Name) and callee.value.id == "ctx"
+                    and callee.attr in {"indicator", "value", "rule"}):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                return [{
+                    "name": ast.unparse(target), "kind": "indicator", "line": node.lineno, "column": node.col_offset + 1,
+                    "end_line": node.end_lineno, "end_column": node.end_col_offset + 1, "children": [],
+                } for target in targets if isinstance(target, (ast.Name, ast.Attribute))]
+        return [item for child in ast.iter_child_nodes(node) for item in walk(child, in_class)]
+
+    try:
+        return walk(tree)
+    except RecursionError:
+        return []
+
+
 def navigate(code: str, line: int, column: int, *, file: str = "main.py", files: dict[str, str] | None = None,
              references: bool = False, new_name: str | None = None) -> list[dict] | dict[str, str]:
     if new_name is not None and (not new_name.isidentifier() or keyword.iskeyword(new_name)):
