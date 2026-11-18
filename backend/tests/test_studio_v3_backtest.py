@@ -757,3 +757,21 @@ def test_build_debug_steps_between_observed_bars_and_reports_orders_and_fills(st
     assert second["fills"][0]["side"] == "buy"
     assert second["context"]["quantity"] == second["fills"][0]["quantity"]
     assert studio.post(path, json=payload).json() == snapshot
+
+
+def test_build_debug_jumps_to_the_next_order_or_fill(studio):
+    source = """class Strategy:
+    def on_bar(self, ctx):
+        if ctx.bar == 3:
+            ctx.buy()
+"""
+    path = "/api/studio-v3/build/debug"
+    payload = {"symbol": "SPY", "date": "2015-01-01", "spec": {"code": source}}
+    order = studio.post(path, json=payload | {"event": "order"}).json()
+    assert order["bar_index"] == 3 and order["orders"][0]["symbol"] == "SPY"
+    assert order["fills"] == []
+    fill = studio.post(path, json=payload | {"event": "fill"}).json()
+    assert fill["bar_index"] == 4 and fill["fills"][0]["side"] == "buy"
+    assert fill["previous_date"] == order["date"]
+    assert studio.post(path, json=payload | {"date": fill["date"], "event": "fill"}).status_code == 422
+    assert studio.post(path, json=payload | {"event": "order", "step": 1}).status_code == 422

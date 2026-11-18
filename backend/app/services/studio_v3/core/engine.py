@@ -499,7 +499,7 @@ class EventEngine:
                 if size < remaining - 1e-9:
                     self.unfilled += 1
 
-    def run(self, strategy) -> tuple:
+    def run(self, strategy, *, stop_after=None) -> tuple:
         p, b = self.p, self.bars
         o, h, l, c = b["open"], b["high"], b["low"], b["close"]
         T, N = c.shape
@@ -601,6 +601,10 @@ class EventEngine:
                     on_fill(ctx, fill)
                 self._fills.clear()
             out[:, t] = eq, eq + self.costs, gx / eq, nx / eq, npos, self.traded
+            if stop_after is not None and stop_after(t):
+                T = t + 1
+                out = out[:, :T]
+                break
         for n in sorted(self.positions):
             pos = self.positions[n]
             d = 1.0 if pos.shares > 0 else -1.0

@@ -668,23 +668,46 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values):
             adapter = EventStrategy(cls, contexts, available, warmup, use_context, gate, submitted)
         account = engine.EventEngine({k: v[:end] for k, v in bars.items()}, params, stop_dist=stop_dist, size_vol=size_vol)
         target = meta["debug_symbol"]
-        captured_fills = []
+        after, event = meta["debug_after"], meta["debug_event"]
+        captured_fills = {}
+        paused = None
+
+        def stop_at_event(t):
+            nonlocal paused
+            executions = captured_fills.pop(t, [])
+            if t <= after or column not in available[t]:
+                return False
+            if event == "fill":
+                matched = any(fill["symbol"] == target for fill in executions)
+            else:
+                quantity, exit_side = submitted[t, column, :2]
+                matched = bool(quantity or exit_side in (1, 2))
+            if matched:
+                paused = (t, executions)
+            return matched
+
         if target is not None:
+            column = meta["symbols"].index(target)
             on_fill = adapter.on_fill
 
             def capture_fill(ctx, fill):
-                if fill.bar == end - 1:
-                    captured_fills.append({"symbol": meta["symbols"][fill.symbol], "side": fill.side,
-                                           "quantity": float(fill.quantity), "price": float(fill.price), "fee": float(fill.fee)})
+                if (after is None and fill.bar == end - 1) or (after is not None and fill.bar > after):
+                    captured_fills.setdefault(fill.bar, []).append({
+                        "symbol": meta["symbols"][fill.symbol], "side": fill.side,
+                        "quantity": float(fill.quantity), "price": float(fill.price), "fee": float(fill.fee),
+                    })
                 on_fill(ctx, fill)
 
             adapter.on_fill = capture_fill
-        result = account.run(adapter)
+        result = account.run(adapter, stop_after=stop_at_event if event else None)
         if collect and target is None:
             adapter.finish()
-        debug = None if target is None else _debug_snapshot(
-            adapter, account, submitted, bars, meta["dates"], meta["symbols"], meta["symbols"].index(target), captured_fills,
-        )
+        if target is not None and event is None:
+            paused = (end - 1, captured_fills.get(end - 1, []))
+        debug = None
+        if paused is not None:
+            t, executions = paused
+            debug = _debug_snapshot(adapter, account, submitted[:t + 1], bars, meta["dates"], meta["symbols"], column, executions)
         return engine.Result(*result[:7], unfilled=int(result[7])), submitted, warmup, isinstance(adapter, PortfolioStrategy), debug
 
     result, submitted, warmup, is_portfolio, debug = run_to(shape[0], True)

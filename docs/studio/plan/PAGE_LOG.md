@@ -139,3 +139,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-33 advanced. The check endpoint accepts the active project document and validates imports against supplied helpers. Diagnostics carry the active filename. It flags direct context orders in literal dead branches and after unconditional control flow in the same block. Dynamic reachability and frontend debounce remain open.
 
 - B-69 advanced. `POST /api/studio-v3/build/debug` replays Python source through the requested date and symbol, or steps one observed session forward or backward. The result includes bounded scalar state, current OHLCV, account values, accepted order intents and executed fills for the paused bar. It creates no saved run. Breakpoints, jumps to order or fill, and editor wiring remain open.
+
+- B-69 backend now also jumps to the next order or fill for the selected symbol. The event engine stops after processing that bar and returns the same debugger snapshot as a date selection. Requests with no later activity return a 422 with a fix hint. Editor wiring and breakpoint controls remain open.

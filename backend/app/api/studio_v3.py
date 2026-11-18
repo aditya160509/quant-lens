@@ -401,6 +401,7 @@ class PreviewResult(BaseModel):
 class BuildDebugRequest(PreviewRequest):
     date: dt.date
     step: Literal[-1, 0, 1] = 0
+    event: Literal["order", "fill"] | None = None
     settings: Settings | None = None
 
 
@@ -437,8 +438,10 @@ class BuildDebugResult(BaseModel):
 def debug_python(request: BuildDebugRequest) -> dict:
     symbol = normalize_symbol(request.symbol)
     settings = request.settings or Settings(symbols=[symbol], benchmark="")
+    if request.step and request.event:
+        raise HTTPException(422, "Choose either a session step or an event jump.")
     try:
-        return backtest.debug_bar(_spec(request.spec), settings, symbol, request.date.isoformat(), request.step)
+        return backtest.debug_bar(_spec(request.spec), settings, symbol, request.date.isoformat(), request.step, request.event)
     except backtest.Refusal as exc:
         raise HTTPException(422, str(exc)) from exc
     except pycode.CodeError as exc:

@@ -371,7 +371,7 @@ def run_event(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, p
               signal_bars: dict[str, np.ndarray] | None = None, stop_dist: np.ndarray | None = None,
               size_vol: np.ndarray | None = None, market_filter: np.ndarray | None = None, repaint_bars: list[int] | None = None,
               benchmark: np.ndarray | None = None, files: dict[str, str] | None = None,
-              debug_symbol: str | None = None) -> engine.Result:
+              debug_symbol: str | None = None, debug_after: int | None = None, debug_event: str | None = None) -> engine.Result:
     extras = {}
     for name, array in (("stop_dist", stop_dist), ("size_vol", size_vol), ("market_filter", market_filter)):
         if array is not None:
@@ -381,13 +381,13 @@ def run_event(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, p
     if benchmark is not None:
         extras["benchmark"] = benchmark
     arrays = _execute(code, signal_bars if signal_bars is not None else bars, dates, params, symbols, None, output,
-                      event_settings=asdict(settings), files=files, debug_symbol=debug_symbol, repaint_bars=repaint_bars, extras={**extras, **{f"raw_{k}": v for k, v in bars.items()}})
+                      event_settings=asdict(settings), files=files, debug_symbol=debug_symbol, debug_after=debug_after, debug_event=debug_event, repaint_bars=repaint_bars, extras={**extras, **{f"raw_{k}": v for k, v in bars.items()}})
     return engine.Result(*(arrays[name] for name in (
         "trades", "equity", "gross_equity", "gross_exposure", "net_exposure", "positions", "traded",
     )), unfilled=int(arrays["unfilled"].item()))
 
 
-def _execute(code, bars, dates, params, symbols, cache, output, *, event_settings=None, repaint_bars=None, extras=None, files=None, debug_symbol=None):
+def _execute(code, bars, dates, params, symbols, cache, output, *, event_settings=None, repaint_bars=None, extras=None, files=None, debug_symbol=None, debug_after=None, debug_event=None):
     modules = {name: source for name, source in (files or {}).items() if name.endswith(".py") and name != "main.py"}
     findings = check_project(code, params, modules)
     if findings:
@@ -397,7 +397,7 @@ def _execute(code, bars, dates, params, symbols, cache, output, *, event_setting
     vals = {f"v{i}": np.asarray(formula.evaluate(e, bars, dates, params, cache), dtype=float) for i, e in enumerate(ex)}
     n = bars["close"].shape[1]
     meta = {"exprs": ex, "params": params, "symbols": symbols or [str(i) for i in range(n)], "dates": [str(d.date()) for d in dates],
-            "event_settings": event_settings, "repaint_bars": repaint_bars or [], "modules": modules, "debug_symbol": debug_symbol}
+            "event_settings": event_settings, "repaint_bars": repaint_bars or [], "modules": modules, "debug_symbol": debug_symbol, "debug_after": debug_after, "debug_event": debug_event}
     with tempfile.TemporaryDirectory() as d:
         src, dst = Path(d) / "in.npz", Path(d) / "out.npz"
         np.savez(src, meta=np.array(json.dumps(meta)), **{f: np.asarray(bars[f], dtype=float) for f in ("open", "high", "low", "close", "volume")}, **vals, **(extras or {}))

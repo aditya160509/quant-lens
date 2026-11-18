@@ -193,7 +193,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-66 Default mode for new strategies (simple or portfolio) in Customise
 - [ ] B-67 Refuse formulas or Python that read fundamentals for dates before 2021 (blocked by data: fundamentals held from 2021 only)
 - [x] [E] B-68 Runtime guard: positive history index raises in backtest (verified with source line and offending offset)
-- [ ] [H] B-69 Bar stepper: pause at a date and symbol, inspect self and ctx, step one bar, step to the next order or fill, run to a date, step back one bar (deterministic re-run) [FP 27] [PY B8] (partial: backend date and symbol replay, step and snapshot ship; jump to next order or fill and editor wiring open)
+- [ ] [H] B-69 Bar stepper: pause at a date and symbol, inspect self and ctx, step one bar, step to the next order or fill, run to a date, step back one bar (deterministic re-run) [FP 27] [PY B8] (backend done: date and symbol replay, stepping, snapshots and next order or fill; editor wiring open)
 - [ ] [M] B-70 Breakpoints with conditions (ctx.symbol == "AAPL" and ctx.date >= …) and hit counts; data breakpoints (first order; equity down 5% in a day) [FP 27, 65]
 - [ ] [H] B-71 Variables (self, ctx, locals); arrays and DataFrames in a grid viewer; watch expressions with history; read-only debug console
 - [ ] [M] B-72 Preview chart follows the paused bar, with position and pending orders drawn
