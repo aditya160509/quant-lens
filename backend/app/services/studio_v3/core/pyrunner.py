@@ -6,6 +6,7 @@ The child runs user callbacks with restricted builtins. Event runs use Studio's 
 import inspect
 import json
 import math
+import operator
 import sys
 import traceback
 from dataclasses import dataclass
@@ -644,7 +645,7 @@ def _debug_snapshot(adapter, account, submitted, bars, dates, symbols, n, captur
     }
 
 
-def event_run(z, meta, load_strategy, make_contexts, use_context, values):
+def event_run(z, meta, load_strategy, make_contexts, use_context, values, current_context):
     # Isolated mode excludes the repository from sys.path.
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
     try:
@@ -671,13 +672,35 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values):
         after, event = meta["debug_after"], meta["debug_event"]
         captured_fills = {}
         paused = None
+        hit = None
+        hit_count = 0
+        bp = meta["debug_breakpoint"]
+        comparisons = {"Eq": operator.eq, "NotEq": operator.ne, "Lt": operator.lt, "LtE": operator.le,
+                       "Gt": operator.gt, "GtE": operator.ge}
+
+        def trace(frame, trace_event, arg):
+            nonlocal hit, hit_count
+            if frame.f_code.co_filename != f"<studio:{bp['file']}>":
+                return None
+            if trace_event == "line" and frame.f_lineno == bp["line"]:
+                ctx = current_context()
+                if ctx is not None and (ctx.symbol is None or ctx.symbol == target) and column in available[ctx.t]:
+                    values = {"date": ctx.date, "symbol": ctx.symbol or target}
+                    if all(comparisons[op](values[name], expected) for name, op, expected in bp["condition"]):
+                        hit_count += 1
+                        if ctx.t > after and hit is None:
+                            hit = {"file": bp["file"], "line": bp["line"], "hit_count": hit_count, "bar": ctx.t,
+                                   "locals": _debug_value(frame.f_locals)}
+            return trace
 
         def stop_at_event(t):
             nonlocal paused
             executions = captured_fills.pop(t, [])
             if t <= after or column not in available[t]:
                 return False
-            if event == "fill":
+            if event == "breakpoint":
+                matched = hit is not None and hit["bar"] == t
+            elif event == "fill":
                 matched = any(fill["symbol"] == target for fill in executions)
             else:
                 quantity, exit_side = submitted[t, column, :2]
@@ -699,7 +722,13 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values):
                 on_fill(ctx, fill)
 
             adapter.on_fill = capture_fill
-        result = account.run(adapter, stop_after=stop_at_event if event else None)
+        if bp:
+            sys.settrace(trace)
+        try:
+            result = account.run(adapter, stop_after=stop_at_event if event else None)
+        finally:
+            if bp:
+                sys.settrace(None)
         if collect and target is None:
             adapter.finish()
         if target is not None and event is None:
@@ -708,6 +737,8 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values):
         if paused is not None:
             t, executions = paused
             debug = _debug_snapshot(adapter, account, submitted[:t + 1], bars, meta["dates"], meta["symbols"], column, executions)
+            if hit is not None:
+                debug["breakpoint"] = {key: value for key, value in hit.items() if key != "bar"}
         return engine.Result(*result[:7], unfilled=int(result[7])), submitted, warmup, isinstance(adapter, PortfolioStrategy), debug
 
     result, submitted, warmup, is_portfolio, debug = run_to(shape[0], True)
@@ -807,7 +838,7 @@ def main():
         compiled = compile(src, "<studio:main.py>", "exec")
         helper_code = {name[:-3]: compile(source, f"<studio:{name}>", "exec") for name, source in meta["modules"].items()}
         if meta["event_settings"] is not None:
-            arrays, repaint, entry_signals, warmup_report, debug = event_run(z, meta, load_strategy, make_contexts, use_context, values)
+            arrays, repaint, entry_signals, warmup_report, debug = event_run(z, meta, load_strategy, make_contexts, use_context, values, lambda: ctx)
         else:
             cls, warmup = load_strategy()
             entries, exits = np.zeros((T, N), np.int8), np.zeros((T, N), np.int8)

@@ -366,12 +366,32 @@ def run(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params:
     return arrays["entries"], arrays["exits"]
 
 
+def breakpoint_condition(expression: str | None) -> list[tuple[str, str, str]]:
+    if not expression:
+        return []
+    try:
+        test = ast.parse(expression, mode="eval").body
+    except SyntaxError:
+        raise ValueError("Use comparisons like ctx.date >= '2025-01-01'.") from None
+    terms = test.values if isinstance(test, ast.BoolOp) and isinstance(test.op, ast.And) else [test]
+    conditions = []
+    for term in terms:
+        if (not isinstance(term, ast.Compare) or len(term.ops) != 1
+                or not isinstance(term.left, ast.Attribute) or not isinstance(term.left.value, ast.Name)
+                or term.left.value.id != "ctx" or term.left.attr not in {"date", "symbol"}
+                or not isinstance(term.comparators[0], ast.Constant) or type(term.comparators[0].value) is not str
+                or type(term.ops[0]).__name__ not in {"Eq", "NotEq", "Lt", "LtE", "Gt", "GtE"}):
+            raise ValueError("Use comparisons of ctx.date or ctx.symbol with strings, joined with and.")
+        conditions.append((term.left.attr, type(term.ops[0]).__name__, term.comparators[0].value))
+    return conditions
+
+
 def run_event(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params: dict[str, float],
               symbols: list[str], settings: engine.Params, *, output: dict | None = None,
               signal_bars: dict[str, np.ndarray] | None = None, stop_dist: np.ndarray | None = None,
               size_vol: np.ndarray | None = None, market_filter: np.ndarray | None = None, repaint_bars: list[int] | None = None,
               benchmark: np.ndarray | None = None, files: dict[str, str] | None = None,
-              debug_symbol: str | None = None, debug_after: int | None = None, debug_event: str | None = None) -> engine.Result:
+              debug_symbol: str | None = None, debug_after: int | None = None, debug_event: str | None = None, debug_breakpoint: dict | None = None) -> engine.Result:
     extras = {}
     for name, array in (("stop_dist", stop_dist), ("size_vol", size_vol), ("market_filter", market_filter)):
         if array is not None:
@@ -381,13 +401,13 @@ def run_event(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, p
     if benchmark is not None:
         extras["benchmark"] = benchmark
     arrays = _execute(code, signal_bars if signal_bars is not None else bars, dates, params, symbols, None, output,
-                      event_settings=asdict(settings), files=files, debug_symbol=debug_symbol, debug_after=debug_after, debug_event=debug_event, repaint_bars=repaint_bars, extras={**extras, **{f"raw_{k}": v for k, v in bars.items()}})
+                      event_settings=asdict(settings), files=files, debug_symbol=debug_symbol, debug_after=debug_after, debug_event=debug_event, debug_breakpoint=debug_breakpoint, repaint_bars=repaint_bars, extras={**extras, **{f"raw_{k}": v for k, v in bars.items()}})
     return engine.Result(*(arrays[name] for name in (
         "trades", "equity", "gross_equity", "gross_exposure", "net_exposure", "positions", "traded",
     )), unfilled=int(arrays["unfilled"].item()))
 
 
-def _execute(code, bars, dates, params, symbols, cache, output, *, event_settings=None, repaint_bars=None, extras=None, files=None, debug_symbol=None, debug_after=None, debug_event=None):
+def _execute(code, bars, dates, params, symbols, cache, output, *, event_settings=None, repaint_bars=None, extras=None, files=None, debug_symbol=None, debug_after=None, debug_event=None, debug_breakpoint=None):
     modules = {name: source for name, source in (files or {}).items() if name.endswith(".py") and name != "main.py"}
     findings = check_project(code, params, modules)
     if findings:
@@ -397,7 +417,7 @@ def _execute(code, bars, dates, params, symbols, cache, output, *, event_setting
     vals = {f"v{i}": np.asarray(formula.evaluate(e, bars, dates, params, cache), dtype=float) for i, e in enumerate(ex)}
     n = bars["close"].shape[1]
     meta = {"exprs": ex, "params": params, "symbols": symbols or [str(i) for i in range(n)], "dates": [str(d.date()) for d in dates],
-            "event_settings": event_settings, "repaint_bars": repaint_bars or [], "modules": modules, "debug_symbol": debug_symbol, "debug_after": debug_after, "debug_event": debug_event}
+            "event_settings": event_settings, "repaint_bars": repaint_bars or [], "modules": modules, "debug_symbol": debug_symbol, "debug_after": debug_after, "debug_event": debug_event, "debug_breakpoint": debug_breakpoint}
     with tempfile.TemporaryDirectory() as d:
         src, dst = Path(d) / "in.npz", Path(d) / "out.npz"
         np.savez(src, meta=np.array(json.dumps(meta)), **{f: np.asarray(bars[f], dtype=float) for f in ("open", "high", "low", "close", "volume")}, **vals, **(extras or {}))

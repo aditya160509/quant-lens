@@ -398,10 +398,17 @@ class PreviewResult(BaseModel):
     warmup: PreviewWarmup | None = None
 
 
+class DebugBreakpointRequest(BaseModel):
+    file: str = Field(default="main.py", max_length=128)
+    line: int = Field(ge=1)
+    condition: str | None = Field(default=None, max_length=500)
+
+
 class BuildDebugRequest(PreviewRequest):
     date: dt.date
     step: Literal[-1, 0, 1] = 0
     event: Literal["order", "fill"] | None = None
+    breakpoint: DebugBreakpointRequest | None = None
     settings: Settings | None = None
 
 
@@ -422,6 +429,13 @@ class DebugFill(BaseModel):
     fee: float
 
 
+class DebugBreakpointHit(BaseModel):
+    file: str
+    line: int
+    hit_count: int
+    locals: dict[str, Any]
+
+
 class BuildDebugResult(BaseModel):
     date: str
     symbol: str
@@ -432,16 +446,29 @@ class BuildDebugResult(BaseModel):
     fills: list[DebugFill]
     previous_date: str | None
     next_date: str | None
+    breakpoint: DebugBreakpointHit | None = None
 
 
-@router.post("/build/debug", response_model=BuildDebugResult)
+@router.post("/build/debug", response_model=BuildDebugResult, response_model_exclude_unset=True)
 def debug_python(request: BuildDebugRequest) -> dict:
     symbol = normalize_symbol(request.symbol)
     settings = request.settings or Settings(symbols=[symbol], benchmark="")
-    if request.step and request.event:
-        raise HTTPException(422, "Choose either a session step or an event jump.")
+    if sum(bool(item) for item in (request.step, request.event, request.breakpoint)) > 1:
+        raise HTTPException(422, "Choose a session step, event jump or breakpoint.")
+    spec = _spec(request.spec)
+    breakpoint = None
+    if request.breakpoint:
+        source = spec.project_files().get(request.breakpoint.file)
+        if source is None or not request.breakpoint.file.endswith(".py") or request.breakpoint.line > len(source.splitlines()):
+            raise HTTPException(422, "Choose an existing line in a Python project file.")
+        try:
+            condition = pycode.breakpoint_condition(request.breakpoint.condition)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        breakpoint = {"file": request.breakpoint.file, "line": request.breakpoint.line, "condition": condition}
     try:
-        return backtest.debug_bar(_spec(request.spec), settings, symbol, request.date.isoformat(), request.step, request.event)
+        return backtest.debug_bar(spec, settings, symbol, request.date.isoformat(), request.step,
+                                  "breakpoint" if breakpoint else request.event, breakpoint)
     except backtest.Refusal as exc:
         raise HTTPException(422, str(exc)) from exc
     except pycode.CodeError as exc:

@@ -141,3 +141,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-69 advanced. `POST /api/studio-v3/build/debug` replays Python source through the requested date and symbol, or steps one observed session forward or backward. The result includes bounded scalar state, current OHLCV, account values, accepted order intents and executed fills for the paused bar. It creates no saved run. Breakpoints, jumps to order or fill, and editor wiring remain open.
 
 - B-69 backend now also jumps to the next order or fill for the selected symbol. The event engine stops after processing that bar and returns the same debugger snapshot as a date selection. Requests with no later activity return a 422 with a fix hint. Editor wiring and breakpoint controls remain open.
+
+- B-70 advanced. The debugger accepts a file and line with an optional conjunction of date and symbol comparisons. It captures bounded locals before that line executes and returns the account and order snapshot after the same bar. Hit counts are computed by replay. Arbitrary expressions, equity breakpoints and editor wiring remain open.

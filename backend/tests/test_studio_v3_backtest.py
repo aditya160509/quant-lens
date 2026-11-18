@@ -775,3 +775,27 @@ def test_build_debug_jumps_to_the_next_order_or_fill(studio):
     assert fill["previous_date"] == order["date"]
     assert studio.post(path, json=payload | {"date": fill["date"], "event": "fill"}).status_code == 422
     assert studio.post(path, json=payload | {"event": "order", "step": 1}).status_code == 422
+
+
+def test_build_debug_finds_a_conditional_breakpoint_in_a_helper(studio):
+    source = """from helper import check
+
+class Strategy:
+    def on_bar(self, ctx):
+        check(ctx)
+"""
+    path = "/api/studio-v3/build/debug"
+    body = {
+        "symbol": "SPY", "date": "2015-01-01",
+        "spec": {"code": source, "files": {"helper.py": "def check(ctx):\n    local_value = ctx.bar * 2\n    return local_value\n"}},
+        "breakpoint": {"file": "helper.py", "line": 3, "condition": "ctx.symbol == 'SPY' and ctx.date >= '2015-01-05'"},
+    }
+    result = studio.post(path, json=body)
+    assert result.status_code == 200
+    result = result.json()
+    assert result["date"] == "2015-01-05"
+    assert result["breakpoint"]["file"] == "helper.py" and result["breakpoint"]["line"] == 3
+    assert result["breakpoint"]["hit_count"] == 1
+    assert result["breakpoint"]["locals"]["local_value"] == 4
+    invalid = {"file": "helper.py", "line": 3, "condition": "ctx.buy()"}
+    assert studio.post(path, json=body | {"breakpoint": invalid}).status_code == 422
