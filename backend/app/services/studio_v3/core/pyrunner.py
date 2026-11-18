@@ -230,6 +230,66 @@ class PortfolioContext(Ctx):
     def cover(self, symbol):
         self.orders.append((symbol, 3))
 
+    def market_order(self, symbol, quantity):
+        self._submit(symbol, quantity)
+
+    def limit_order(self, symbol, quantity, price):
+        self._submit(symbol, quantity, limit=float(price))
+
+    def stop_order(self, symbol, quantity, price):
+        self._submit(symbol, quantity, stop=float(price))
+
+    def stop_limit_order(self, symbol, quantity, stop_price, limit_price):
+        self._submit(symbol, quantity, limit=float(limit_price), stop=float(stop_price))
+
+    def order_value(self, symbol, value):
+        current = self.bar(symbol)
+        if current is not None:
+            self.market_order(symbol, float(value) / current.close)
+
+    def target_weights(self, weights):
+        for symbol, weight in weights.items():
+            self.set_holdings(symbol, weight)
+
+    order = market_order
+    limit = limit_order
+    stop = stop_order
+    stop_limit = stop_limit_order
+
+    def _submit(self, symbol, quantity, *, limit=None, stop=None):
+        self._columns[symbol]
+        quantity = float(quantity)
+        if not math.isfinite(quantity):
+            raise ValueError("Order quantity must be finite")
+        if any(price is not None and (not math.isfinite(price) or price <= 0) for price in (limit, stop)):
+            raise ValueError("Order price must be positive and finite")
+        if quantity:
+            self.orders.append((symbol, (quantity, limit, stop)))
+
+    def set_holdings(self, symbol, weight):
+        weight = float(weight)
+        if not math.isfinite(weight):
+            raise ValueError("Target weight must be finite")
+        current = self.bar(symbol)
+        if current is not None:
+            total, _, _, _ = self._account._mark()
+            self.market_order(symbol, weight * total / current.close - self.pos(symbol).quantity)
+
+    set_weight = set_holdings
+
+    def liquidate(self, symbol=None):
+        for name in (self.symbols if symbol is None else (symbol,)):
+            self.cancel(name)
+            self.market_order(name, -self.pos(name).quantity)
+
+    def cancel(self, symbol):
+        self._columns[symbol]
+        self.orders.append((symbol, None))
+
+    def cancel_all(self):
+        for symbol in self.symbols:
+            self.cancel(symbol)
+
     def pos(self, symbol):
         pos = self._account.positions.get(self._columns[symbol])
         if pos is None:
@@ -277,9 +337,21 @@ class PortfolioStrategy:
             for symbol, action in ctx.orders:
                 n = ctx._columns[symbol]
                 qty = engine_ctx.position(n)
+                if action is None:
+                    engine_ctx._e.orders.pop(n, None)
+                    self.submitted[ctx.t, n, 4] = 1
+                    continue
                 if self.market_filter is not None and not self.market_filter[ctx.t, n]:
                     continue
-                if action == 1 and qty <= 0:
+                if isinstance(action, tuple):
+                    quantity, limit, stop = action
+                    engine_ctx._e.pending.pop(n, None)
+                    engine_ctx._e.wants.pop(n, None)
+                    engine_ctx._e.orders[n] = (quantity, math.nan if limit is None else limit, math.nan if stop is None else stop, ctx.t)
+                    self.submitted[ctx.t, n, [0, 2, 3]] = quantity, limit or 0, stop or 0
+                elif n in engine_ctx._e.orders:
+                    continue
+                elif action == 1 and qty <= 0:
                     engine_ctx.enter(n, 1)
                     self.submitted[ctx.t, n, 0] = 1
                 elif action == -1 and qty >= 0:
@@ -289,6 +361,9 @@ class PortfolioStrategy:
                     engine_ctx.exit(n)
                     self.submitted[ctx.t, n, 1] = 1 if qty > 0 else 2
         if self.market_filter is not None:
+            for n in tuple(engine_ctx._e.orders):
+                if not self.market_filter[ctx.t, n]:
+                    del engine_ctx._e.orders[n]
             for n in engine_ctx._e.positions:
                 if not self.market_filter[ctx.t, n]:
                     engine_ctx.exit(n)
@@ -390,7 +465,7 @@ def event_run(z, meta, load_strategy, make_contexts, use_context):
     def run_to(end, collect):
         use_context(None)
         cls, warmup = load_strategy()
-        submitted = np.zeros((end, shape[1], 2), dtype=np.int8)
+        submitted = np.zeros((end, shape[1], 5))
         contexts = make_contexts(collect)
         if hasattr(cls, "on_data"):
             adapter = PortfolioStrategy(cls, PortfolioContext(contexts, bars), warmup, use_context, submitted, gate)

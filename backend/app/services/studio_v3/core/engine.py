@@ -360,15 +360,18 @@ class EventEngine:
         self.positions: dict[int, Position] = {}
         self.pending: dict[int, tuple[int, float, int]] = {}  # symbol -> (direction, shares, signal bar)
         self.wants: dict[int, int] = {}
+        self.orders: dict[int, tuple[float, float, float, int]] = {}
         self.cash, self.costs, self.unfilled, self.traded = params.capital, 0.0, 0, 0.0
         self.trades: list[tuple] = []
         self._fills: list[Fill] | None = None
 
-    def _close(self, n: int, t: int, raw: float, reason: int, frac: float, bar_range: float) -> None:
+    def _close(self, n: int, t: int, raw: float, reason: int, frac: float, bar_range: float, *, limit: float = math.nan) -> None:
         p, pos = self.p, self.positions[n]
         d = 1.0 if pos.shares > 0 else -1.0
         sh = abs(pos.shares) * frac
         px = fills.fill_price(raw, -d, p.slippage_bps, p.slippage_range, bar_range)
+        if math.isfinite(limit):
+            px = max(px, limit) if d > 0 else min(px, limit)
         comm = fills.commission(sh, px, p.commission_bps, p.commission_share, p.commission_min)
         slip = sh * abs(px - raw)
         ecost, eslip, risk = pos.cost * frac, pos.slip * frac, pos.risk * frac
@@ -419,20 +422,82 @@ class EventEngine:
                 self.unfilled += 1
             if sh <= 1e-9:
                 continue
-            comm = fills.commission(sh, price, p.commission_bps, p.commission_share, p.commission_min)
-            slip = sh * abs(price - px[n])
-            self.cash -= d * sh * price + comm
-            self.costs += comm + slip
-            self.traded += sh * price
             gross += sh * price
-            dist = self.stop_dist[sigbar, n] if self.stop_dist is not None else price * p.stop
+            self._open(n, t, sigbar, d, sh, px[n], price)
+
+    def _open(self, n, t, sigbar, direction, shares, raw, price):
+        p = self.p
+        comm = fills.commission(shares, price, p.commission_bps, p.commission_share, p.commission_min)
+        slip = shares * abs(price - raw)
+        self.cash -= direction * shares * price + comm
+        self.costs += comm + slip
+        self.traded += shares * price
+        dist = self.stop_dist[sigbar, n] if self.stop_dist is not None else price * p.stop
+        pos = self.positions.get(n)
+        if pos is None:
             self.positions[n] = Position(
-                shares=d * sh, entry_px=price, entry_bar=t, signal_bar=sigbar, stop=price - d * dist if dist > 0 else math.nan,
-                target=price * (1 + d * p.target) if p.target > 0 else math.nan,
-                scale=price * (1 + d * p.scale_at) if p.scale_at > 0 and p.scale_frac > 0 else math.nan,
-                high_water=price, lo=price, hi=price, cost=comm, slip=slip, risk=sh * dist if dist > 0 else math.nan, last=price)
-            if self._fills is not None:
-                self._fills.append(Fill(n, t, "buy" if d > 0 else "sell", sh, price, comm))
+                shares=direction * shares, entry_px=price, entry_bar=t, signal_bar=sigbar,
+                stop=price - direction * dist if dist > 0 else math.nan,
+                target=price * (1 + direction * p.target) if p.target > 0 else math.nan,
+                scale=price * (1 + direction * p.scale_at) if p.scale_at > 0 and p.scale_frac > 0 else math.nan,
+                high_water=price, lo=price, hi=price, cost=comm, slip=slip, risk=shares * dist if dist > 0 else math.nan, last=price)
+        else:
+            pos.entry_px = (abs(pos.shares) * pos.entry_px + shares * price) / (abs(pos.shares) + shares)
+            pos.shares += direction * shares
+            pos.cost += comm
+            pos.slip += slip
+            pos.risk += shares * dist
+        if self._fills is not None:
+            self._fills.append(Fill(n, t, "buy" if direction > 0 else "sell", shares, price, comm))
+
+    def _execute_orders(self, t, prices, high, low, rng, *, closing=False):
+        p = self.p
+        def increases_exposure(n):
+            pos = self.positions.get(n)
+            return pos is None or pos.shares * self.orders[n][0] >= 0
+
+        for n in sorted(self.orders, key=lambda n: (increases_exposure(n), n)):
+            quantity, limit, stop, sigbar = self.orders[n]
+            raw = prices[n]
+            if not math.isfinite(raw) or (closing and sigbar != t):
+                continue
+            direction = 1 if quantity > 0 else -1
+            if math.isfinite(limit) and math.isfinite(stop):
+                triggered, trigger_price = fills.exit_check(-direction, raw, high[n], low[n], stop, math.nan)
+                if not triggered:
+                    continue
+                self.orders[n] = (quantity, limit, math.nan, sigbar)
+                # OHLC cannot establish whether an intrabar stop preceded the limit.
+                if trigger_price != raw:
+                    continue
+                stop = math.nan
+            if math.isfinite(limit) or math.isfinite(stop):
+                reason, raw = fills.exit_check(-direction, raw, high[n], low[n], stop, limit)
+                if not reason:
+                    continue
+            del self.orders[n]
+            pos = self.positions.get(n)
+            remaining = abs(quantity)
+            volume = self.bars["volume"][t, n]
+            allowance = p.volume_cap * volume if p.volume_cap > 0 and math.isfinite(volume) else math.inf
+            if pos is not None and pos.shares * direction < 0:
+                reduction = min(abs(pos.shares), remaining, allowance)
+                if reduction > 1e-9:
+                    self._close(n, t, raw, R_SIGNAL, reduction / abs(pos.shares), rng[n], limit=limit)
+                    remaining -= reduction
+                    allowance -= reduction
+            if remaining > 1e-9:
+                eq, gross, _, count = self._mark()
+                price = fills.fill_price(raw, direction, p.slippage_bps, p.slippage_range, rng[n])
+                if math.isfinite(limit):
+                    price = min(price, limit) if direction > 0 else max(price, limit)
+                size = min(remaining, allowance, max(eq * p.leverage - gross, 0.0) / price)
+                if n not in self.positions and 0 < p.max_positions <= count:
+                    size = 0.0
+                if size > 1e-9:
+                    self._open(n, t, sigbar, direction, size, raw, price)
+                if size < remaining - 1e-9:
+                    self.unfilled += 1
 
     def run(self, strategy) -> tuple:
         p, b = self.p, self.bars
@@ -448,6 +513,8 @@ class EventEngine:
             rng = h[t] - l[t]
             if p.fill == 0:
                 self._execute(t, o[t], rng)
+            if self.orders:
+                self._execute_orders(t, o[t], o[t], o[t], rng)
             for n in sorted(self.positions):
                 pos = self.positions[n]
                 if not math.isfinite(c[t, n]):
@@ -480,6 +547,11 @@ class EventEngine:
                     ts = pos.high_water * (1.0 - d * p.trail)
                     if not d * (pos.stop - ts) >= 0:
                         pos.stop, pos.stop_kind = ts, R_TRAIL
+            if self.orders:
+                self._execute_orders(t, o[t], h[t], l[t], rng)
+                for n, pos in self.positions.items():
+                    if math.isfinite(c[t, n]):
+                        pos.last = c[t, n]
             ctx.t = t
             self.wants = {}
             # Deliver open and intrabar fills at the close, when this bar's OHLC is observable.
@@ -521,6 +593,8 @@ class EventEngine:
                         self.pending[n] = (self.wants[n], sh, t)
             if p.fill != 0:
                 self._execute(t, c[t], rng)
+                if self.orders:
+                    self._execute_orders(t, c[t], c[t], c[t], rng, closing=True)
                 eq, gx, nx, npos = self._mark()
             if self._fills:
                 for fill in self._fills:

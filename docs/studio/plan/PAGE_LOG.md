@@ -88,3 +88,6 @@ Fixed on this page; the shared ones apply to every Studio page:
 
 - B-47 shipped. `on_data(ctx)` sees the run universe with current bars, immutable holdings and marked account state. B-43 advanced. The `rebalance` hook supports daily, week and month starts, every N observed sessions, and disabling the schedule. Calendar properties use observed sessions. Portfolio buy, sell, short and cover still use the sizing card. Explicit quantities, weights, limit and stop orders, and NumPy history remain open.
 - The portfolio preview returned HTTP 200 on SPY in 755 ms from a cold server. The Studio suite passed all 128 tests.
+
+- B-44 shipped. Portfolio Python supports explicit quantity and value orders, target weights, limit, stop and stop-limit orders, liquidation and cancellation. Orders share the event engine’s fill price and fee model. A new explicit order replaces the previous pending order for that symbol. Target weights use equity and close at submission. Intrabar stop-limit activation cannot take a same-bar limit fill when OHLC does not establish the order of touches.
+- `POST /api/studio-v3/preview` returned actual SPY buy and sell fills for four shares in 596 ms on a cold server. The 300 ms target remains open.

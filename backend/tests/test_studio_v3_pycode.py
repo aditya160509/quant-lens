@@ -195,3 +195,77 @@ def test_portfolio_current_bar_refuses_indexing_future_sessions():
         pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], engine.Params())
     assert error.value.line == 3
     assert error.value.problem["exception_type"] == "TypeError"
+
+
+def test_portfolio_order_quantity_and_conditional_fills():
+    from app.services.studio_v3.core import engine
+
+    dates = pd.bdate_range("2020-01-01", periods=6)
+    bars = {field: np.array(values, dtype=float)[:, None] for field, values in {
+        "open": [100, 101, 102, 95, 99, 103], "high": [100, 105, 105, 100, 104, 105],
+        "low": [100, 99, 100, 92, 97, 102], "close": [100, 104, 102, 97, 103, 104], "volume": [1e6] * 6,
+    }.items()}
+    code = """class Strategy:
+    def on_data(self, ctx):
+        if ctx.bar_index == 0:
+            ctx.market_order("SPY", 3)
+        if ctx.bar_index == 1:
+            ctx.limit_order("SPY", 2, 98)
+        if ctx.bar_index == 3:
+            ctx.stop_order("SPY", -2, 97)
+        if ctx.bar_index == 4:
+            ctx.liquidate()
+
+    def on_fill(self, ctx, fill):
+        ctx.log((fill.side, fill.quantity, fill.price))
+"""
+    output = {}
+    result = pycode.run_event(code, bars, dates, {}, ["SPY"], engine.Params(commission_bps=0, slippage_bps=0), output=output)
+    assert [row["text"] for row in output["logs"]] == [
+        "('buy', 3.0, 101.0)", "('buy', 2.0, 95.0)", "('sell', 2.0, 97.0)", "('sell', 3.0, 103.0)",
+    ]
+    assert result.equity[-1] == pytest.approx(100_000 + result.trades[:, engine.T_PNL].sum())
+    assert result.positions[-1] == 0
+
+
+def test_stop_limit_waits_when_intrabar_order_is_unknown():
+    from app.services.studio_v3.core import engine
+
+    dates = pd.bdate_range("2020-01-01", periods=4)
+    bars = {field: np.array(values, dtype=float)[:, None] for field, values in {
+        "open": [100, 100, 104, 100], "high": [100, 110, 105, 100],
+        "low": [100, 99, 103, 100], "close": [100, 108, 104, 100], "volume": [1e6] * 4,
+    }.items()}
+    code = """class Strategy:
+    def on_data(self, ctx):
+        if ctx.bar_index == 0:
+            ctx.stop_limit_order("SPY", 5, 105, 102)
+
+    def on_fill(self, ctx, fill):
+        ctx.plot("fill", fill.price)
+"""
+    output = {}
+    pycode.run_event(code, bars, dates, {}, ["SPY"], engine.Params(), output=output)
+    assert output["plots"]["fill"] == [{"date": "2020-01-06", "symbol": None, "value": pytest.approx(100.02)}]
+
+
+def test_target_weight_and_cancel_orders():
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(4, 2)
+    code = """class Strategy:
+    def on_data(self, ctx):
+        if ctx.bar_index == 0:
+            ctx.target_weights({"AAA": 0.25})
+            ctx.limit("BBB", 1, 1)
+        elif ctx.bar_index == 1:
+            ctx.cancel_all()
+            ctx.set_weight("AAA", 0)
+        elif ctx.bar_index == 2:
+            ctx.order_value("BBB", ctx.bar("BBB").close * 2)
+            ctx.cancel("BBB")
+"""
+    result = pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], engine.Params())
+    assert result.trades[:, engine.T_SYM].tolist() == [0]
+    assert result.trades[0, engine.T_SHARES] == pytest.approx(25_000 / bars["close"][0, 0])
+    assert result.positions.tolist() == [0, 1, 0, 0]
