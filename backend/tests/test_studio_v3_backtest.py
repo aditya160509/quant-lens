@@ -606,3 +606,24 @@ def test_python_preview_returns_chart_markers_and_structured_tables(studio):
     assert result["tables"]["signals"] == [
         {"date": "2015-01-02", "symbol": "SPY", "cells": {"count": 2, "confirmed": True}},
     ]
+
+
+def test_project_files_keep_immutable_versions_and_reject_stale_changes(studio):
+    strategy = studio.post("/api/studio-v3/strategies", json={"spec": {"name": "Project", "code": "class Strategy: pass\n"}}).json()
+    url = f"/api/studio-v3/strategies/{strategy['id']}/files"
+    assert studio.get(url).json() == {"version": 1, "files": {"main.py": "class Strategy: pass\n"}}
+
+    def change(operation, name, base_version, **extra):
+        return studio.patch(url, json={"operation": operation, "name": name, "base_version": base_version, **extra})
+
+    assert change("create", "../bad.py", 1).status_code == 422
+    assert change("create", "helpers.py", 1, source="value = 1\n").json()["version"] == 2
+    assert change("save", "helpers.py", 1, source="value = 2\n").status_code == 409
+    assert change("rename", "helpers.py", 2, new_name="signals.py").json()["version"] == 3
+    assert change("save", "signals.py", 3, source="value = 2\n").json()["version"] == 4
+    assert change("delete", "main.py", 4).status_code == 422
+    assert change("delete", "signals.py", 4).json()["version"] == 5
+    old = studio.get(url, params={"version": 4, "base_version": 3}).json()
+    assert old["files"]["signals.py"] == "value = 2\n"
+    assert "-value = 1\n+value = 2" in old["diffs"]["signals.py"]
+    assert studio.get(url).json()["files"] == {"main.py": "class Strategy: pass\n"}

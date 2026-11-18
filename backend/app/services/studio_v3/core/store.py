@@ -156,16 +156,28 @@ def get(sid: str, version: int | None = None) -> dict:
             "versions": [dict(r) for r in versions], "trials": ledger(sid, detail=False)}
 
 
-def save_version(sid: str, spec: Strategy, actor: str = "human") -> dict:
+class VersionConflict(ValueError):
+    pass
+
+
+def save_version(sid: str, spec: Strategy, actor: str = "human", *, base_version: int | None = None) -> dict:
     """A new immutable version; saving an unchanged rule returns the latest instead of adding a copy."""
     now = time.time()
     with db() as con:
+        con.execute("BEGIN IMMEDIATE")
         last = con.execute("SELECT version, spec FROM versions WHERE strategy_id = ? ORDER BY version DESC LIMIT 1", (sid,)).fetchone()
         if not last:
             raise KeyError(f"Unknown strategy {sid}")
-        if json.loads(last["spec"]) != json.loads(spec.model_dump_json()):
+        if base_version is not None and last["version"] != base_version:
+            raise VersionConflict(f"Strategy is at version {last['version']}. Reload before saving.")
+        previous = json.loads(last["spec"])
+        previous.setdefault("files", {})
+        if previous != json.loads(spec.model_dump_json()):
             con.execute("INSERT INTO versions VALUES (?,?,?,?,?,?)", (sid, last["version"] + 1, spec.model_dump_json(), spec.hash(), actor, now))
-        con.execute("UPDATE strategies SET name = ?, updated = ?, draft = NULL WHERE id = ?", (spec.name, now, sid))
+        if base_version is None:
+            con.execute("UPDATE strategies SET name = ?, updated = ?, draft = NULL WHERE id = ?", (spec.name, now, sid))
+        else:
+            con.execute("UPDATE strategies SET updated = ? WHERE id = ?", (now, sid))
     log(actor, "save_version", sid)
     return get(sid)
 

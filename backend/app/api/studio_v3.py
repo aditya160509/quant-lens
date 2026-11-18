@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import difflib
 import io
 import json
 import re
 import time
 import zipfile
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -428,6 +429,69 @@ def get_strategy(sid: str, version: int | None = None) -> dict[str, Any]:
 @router.put("/strategies/{sid}")
 def save_version(sid: str, request: SpecRequest, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
     return _known(store.save_version, sid, _spec(request.spec), _actor(x_studio_actor))
+
+
+class ProjectFileUpdate(BaseModel):
+    operation: Literal["create", "save", "rename", "delete"]
+    name: str = Field(min_length=1, max_length=128)
+    source: str | None = Field(default=None, max_length=200_000)
+    new_name: str | None = Field(default=None, max_length=128)
+    base_version: int = Field(ge=1)
+
+
+@router.get("/strategies/{sid}/files")
+def get_project_files(sid: str, version: int | None = None, base_version: int | None = None) -> dict[str, Any]:
+    saved = _known(store.get, sid, version)
+    files = _spec(saved["spec"]).project_files()
+    result: dict[str, Any] = {"version": saved["version"], "files": files}
+    if base_version is not None:
+        base = _spec(_known(store.get, sid, base_version)["spec"]).project_files()
+        result["diffs"] = {
+            name: "".join(difflib.unified_diff(base.get(name, "").splitlines(keepends=True), files.get(name, "").splitlines(keepends=True),
+                                               fromfile=name if name in base else "/dev/null", tofile=name if name in files else "/dev/null"))
+            for name in sorted(set(base) | set(files)) if base.get(name) != files.get(name)
+        }
+    return result
+
+
+@router.patch("/strategies/{sid}/files")
+def update_project_file(sid: str, request: ProjectFileUpdate, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    saved = _known(store.get, sid)
+    if saved["version"] != request.base_version:
+        raise HTTPException(409, f"Strategy is at version {saved['version']}. Reload before saving.")
+    spec = _spec(saved["spec"])
+    files = spec.project_files()
+    name, operation = request.name, request.operation
+    if operation == "create":
+        if name in files:
+            raise HTTPException(409, "That filename already exists.")
+        files[name] = request.source or ""
+    elif name not in files:
+        raise HTTPException(404, "File not found.")
+    elif operation == "save":
+        if request.source is None:
+            raise HTTPException(422, "Include source to save this file.")
+        files[name] = request.source
+    elif name == "main.py":
+        raise HTTPException(422, "main.py is the project entry point.")
+    elif operation == "delete":
+        del files[name]
+    else:
+        new_name = request.new_name
+        if not new_name:
+            raise HTTPException(422, "Provide a new filename.")
+        if new_name in files:
+            raise HTTPException(409, "That filename already exists.")
+        files[new_name] = files.pop(name)
+    code = files.pop("main.py")
+    if len(code.encode("utf-8")) > 200_000:
+        raise HTTPException(422, "main.py exceeds 200 KB.")
+    updated = _spec({**spec.model_dump(), "code": code, "files": files})
+    try:
+        versioned = _known(store.save_version, sid, updated, _actor(x_studio_actor), base_version=request.base_version)
+    except store.VersionConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"version": versioned["version"], "files": _spec(versioned["spec"]).project_files()}
 
 
 @router.put("/strategies/{sid}/draft")

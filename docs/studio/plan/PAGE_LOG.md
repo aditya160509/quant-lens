@@ -125,3 +125,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-62 backend ships. Literal Python `Strategy.params` tuples supply defaults and ranges to compile, `ctx.param` and the Optimise grid. Explicit saved parameter definitions take precedence. Optimise evaluates Python candidates through the event engine, with a real SPY test covering three distinct share quantities. Build frontend binding and nonliteral declarations remain open.
 
 - B-59 backend ships. Python preview and Backtest expose plot placement, price-chart marks and structured table rows. Preview keeps its existing plot series and adds `plot_charts`, `marks` and `tables`. Marks and rows are capped at 5,000 each. Frontend rendering and sorting remain open.
+
+- B-92 advanced. `GET /api/studio-v3/strategies/{id}/files` returns a saved project snapshot and optional per-file unified diffs. `PATCH` on the same route creates, saves, renames or deletes a file against an explicit base version. Existing code is exposed as main.py, and earlier versions retain their files. Helper imports, project execution and editor wiring remain open.

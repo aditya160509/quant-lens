@@ -5,10 +5,11 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import re
 import sys
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from . import fills
 from .engine import Params
@@ -68,14 +69,30 @@ class Strategy(_Model):
     sizing: Sizing = Field(default_factory=Sizing)
     limits: Limits = Field(default_factory=Limits)
     code: str = ""  # Python source when the strategy was written as code
+    files: dict[str, str] = Field(default_factory=dict, max_length=49)
     blocks: list[dict] = Field(default_factory=list)  # the editor's block rows, kept so Blocks reopens as written
     hypothesis: str = ""
     regime_claim: str = ""
     notes: str = ""
 
+    @field_validator("files")
+    @classmethod
+    def validate_files(cls, files: dict[str, str]) -> dict[str, str]:
+        for name, source in files.items():
+            if name == "main.py" or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,119}\.py|README\.md|params\.json", name):
+                raise ValueError(f"Invalid helper filename: {name}")
+            if len(source.encode("utf-8")) > 200_000:
+                raise ValueError(f"{name} exceeds 200 KB")
+        return files
+
+    def project_files(self) -> dict[str, str]:
+        return {"main.py": self.code, **self.files}
+
     def hash(self) -> str:
         """Identity of the trading rule: text fields that do not trade are left out."""
         body = self.model_dump(exclude={"name", "hypothesis", "regime_claim", "notes", "blocks", "limits"})
+        if not self.files:
+            body.pop("files")
         return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]
 
     def parameter_definitions(self) -> dict[str, Param]:
