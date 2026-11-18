@@ -36,8 +36,8 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Page | Done | Total |
 |---|---|---|
 | Portfolio | 25 | 28 |
-| Home | 11 | 26 |
-| Build | 29 | 162 |
+| Home | 12 | 25 |
+| Build | 29 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **138** | **538** |
+| **All pages** | **139** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -83,7 +83,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] P-27 Rotation to the top N by trailing 3-month return
 - [x] P-28 Weights re-estimated quarterly on the trailing year (no look-ahead, tested)
 
-## Home (`/studio`, spec §1): 11 / 26 done
+## Home (`/studio`, spec §1): 12 / 25 done
 
 ### Acceptance (PAGES)
 
@@ -102,13 +102,12 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-10 Archive; hard delete needs a typed confirmation and a 30-day trash (move to trash with Undo; Trash panel with Restore and Delete now (typed name); purged after 30 days)
 - [ ] [M] H-11 Bulk actions on a selection: tag, move, archive, run same range, compare, combine into a portfolio [FP 53] (partial: table selection: Re-run, Combine into Portfolio, Export; tag, move and archive open)
 - [ ] [M] H-12 Hover actions on a row: Run, Duplicate, Open in Chart, Open Live, Share
-- [ ] [M] H-13 Create menu: blank, template, plain-English prompt, Studio bundle, trade CSV, QuantConnect Python (via shim), library strategy (partial: blank, template, duplicate and JSON import exist)
+- [ ] [M] H-13 Create menu: blank, template, plain-English prompt, Studio bundle, trade CSV, library strategy (partial: blank, template, duplicate and JSON import exist)
 - [ ] [E] H-14 Live strip at the top: live and paper strategies with today P&L, alert count, heartbeat and kill-all (partial: Running strip with today P&L, paper return, alerts, last check; kill-all open; Live never set (no real fills))
 - [ ] [E] H-15 Saved views, column sets, default sort, density, group by status, tag or folder (backend done: GET/PUT /home/prefs, /home returns prefs)
 - [ ] [E] H-16 Empty state: three one-click starters (blank, template, from a Screener screen)
-- [ ] [M] H-17 Compare 2 to 6 strategies from Home: overlaid equity, metric table, correlation, code diff; opens Portfolio (backend done: POST /compare)
+- [x] [M] H-17 Compare 2 to 6 strategies from Home: overlaid equity, metric table, correlation, code diff; opens Portfolio (Compare dialog from the table selection: growth of 1, metrics, correlation, spec diffs, Combine in Portfolio)
 - [x] [E] H-18 Needs attention ranked: drift beyond band, data newer than last run, validation expired by a code change, failed run, alert fired (ranked by the backend: drift, data newer, validation expired, failed run, alert, paper stale)
-- [x] [H] H-19 Dropped 2026-11-18: no competitor-specific import on Home; Studio JSON and Signals CSV cover imports
 - [ ] [M] H-20 Import a CSV of signals (backend done: POST /strategies/import/signals; runs once the engine runs Python strategies)
 - [ ] [E] H-21 Card fields: sparkline of last run, verdict chip, trial count, last edited (partial: sparkline, status, trial count; last edited open)
 - [x] [M] H-22 Recent runs table with a settings-changed-since marker (changed_since column on Recent runs)
@@ -117,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 29 / 162 done
+## Build (`/studio/build/:id?`, spec §2): 29 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -288,6 +287,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] B-160 Stated regime claim marked "written after" when added after a backtest
 - [x] B-161 Trial chip opens the ledger drawer
 - [x] B-162 Backtest results side by side in the version diff
+- [ ] [H] B-163 Open a QuantConnect algorithm in the Python editor: keep the user's code, swap QuantConnect calls for Studio ones, list every line not converted before saving (moved from Home H-19; an AST shim to rules was built and removed 2026-11-18, see PAGE_LOG)
 
 ## Backtest (`/studio/backtest`, spec §3): 18 / 57 done
 

@@ -177,7 +177,7 @@ Every ranked item maps to at least one id in [CHECKLIST.md](CHECKLIST.md). Statu
 | 64 | CodeLens run and debug from a line, a date or a symbol. | B-76 | open |
 | 65 | Data breakpoints (pause on the first order, or on an equity drop) and step back one bar. | B-70 | open |
 | 66 | Single editing session per strategy with take-over (fixes QuantConnect's two-tab desync). | B-132 | open |
-| 67 | QuantConnect-algorithm import shim mapping `QCAlgorithm` calls to `ctx`, with the unmapped calls listed. | H-19 | dropped |
+| 67 | QuantConnect-algorithm import shim mapping `QCAlgorithm` calls to `ctx`, with the unmapped calls listed. | B-163 | open |
 | 68 | Trial counter in the IDE status bar ("trial 14 on this idea"). | B-90 | partial |
 | 69 | Composer-style tree blocks (if/else, filter, weight) with a live true-rate on each block. | B-115, B-116 | open |
 | 70 | Rule generation (SQX / Build Alpha) where every candidate counts in the trial ledger. | B-118 | open |

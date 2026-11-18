@@ -2,6 +2,12 @@
 
 One entry per page when it closes: what shipped, what was checked, what is still open. Newest first. Counts come from `CHECKLIST.md`.
 
+## Home (`/studio`): 12 / 25, in progress
+
+### Decisions
+
+- **QuantConnect import moved to Build (B-163).** An AST shim turned simple QuantConnect algorithms into Studio rules (indicators, set_holdings, liquidate; unconverted lines listed). Removed from Home on 2026-11-18: it covered only simple rule strategies, exits came out as `if_else(cond, 0, 1)`, and a competitor's name on Home was not worth a half-working feature. Comes back in the Python editor once Python strategies run, keeping the user's code instead of converting it to rules. The removed version is in commit `4651300`.
+
 ## Portfolio (`/studio/portfolio`): 25 / 28, closed 2026-11-18
 
 ### Shipped
