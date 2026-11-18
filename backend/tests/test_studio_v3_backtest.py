@@ -448,3 +448,22 @@ def test_monthly_rule_uses_last_closed_calendar_month():
     for cutoff in range(1, len(dates)):
         prefix = {field: series[:cutoff] for field, series in bars.items()}
         np.testing.assert_array_equal(formula.evaluate("monthly(close)", prefix, dates[:cutoff]), values[:cutoff])
+
+
+def test_build_condition_explains_when_a_rule_fired(studio):
+    endpoint = "/api/studio-v3/build/condition"
+    request = {"symbol": "SPY", "spec": {"params": {"limit": {"value": 0}}}}
+    false = studio.post(endpoint, json=request | {"expression": "close < limit"}).json()
+    assert false["observations"] > 0 and false["constant"] is False
+    assert false["true_rate"] == 0 and false["fired_dates"] == [] and false["last_true_date"] is None
+
+    true = studio.post(endpoint, json=request | {"expression": "close > limit"}).json()
+    assert true["true_count"] == true["observations"] and true["constant"] is True
+    assert true["true_rate"] == 1 and true["last_true_date"] == true["fired_dates"][-1]
+
+    mixed = studio.post(endpoint, json=request | {"expression": "close > open"}).json()
+    assert 0 < mixed["true_rate"] < 1 and mixed["constant"] is None
+    assert mixed["true_count"] == len(mixed["fired_dates"])
+
+    error = studio.post(endpoint, json=request | {"expression": "future(close)"})
+    assert error.status_code == 422 and "Look-ahead" in error.json()["detail"]["message"]

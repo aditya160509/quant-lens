@@ -17,6 +17,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, ValidationError
 
 from app.services.screener_v2.core.data_loader import BACKEND_DATA, normalize_symbol
+from app.services.shared.formula import SignalError
 from app.services.studio.jobs import JobStore
 from app.services.studio_v3.core import (
     backtest,
@@ -37,7 +38,7 @@ from app.services.studio_v3.core import (
     home as home_rules,
 )
 from app.services.studio_v3.core import library as lib
-from app.services.studio_v3.core.spec import Strategy
+from app.services.studio_v3.core.spec import Settings, Strategy
 from app.services.studio_v3.features.inputs import COST_PROFILES
 from app.services.studio_v3.features.inputs import parse as parse_payload
 from app.services.studio_v3.registry import feature_manifest, get_feature, run_feature
@@ -158,6 +159,48 @@ def format_python(request: CodeRequest) -> dict[str, str]:
 class PreviewRequest(BaseModel):
     spec: dict
     symbol: str = "SPY"
+
+
+class ConditionRequest(PreviewRequest):
+    expression: str = Field(min_length=1, max_length=8192)
+
+
+class ConditionResult(BaseModel):
+    symbol: str
+    observations: int
+    true_count: int
+    true_rate: float | None
+    last_true_date: str | None
+    fired_dates: list[str]
+    constant: bool | None
+
+
+@router.post("/build/condition", response_model=ConditionResult)
+def inspect_condition(request: ConditionRequest) -> ConditionResult:
+    params = _spec(request.spec).values()
+    try:
+        formula.parse(request.expression, params)
+        prepared = backtest.prepare(Settings(symbols=[request.symbol], benchmark=""))
+        panel = prepared.panel
+        dates = panel.dates
+        values = formula.evaluate(request.expression, prepared.sig_bars, dates, params)[:, 0]
+    except SignalError as exc:
+        raise HTTPException(422, {"message": exc.message, "start": exc.start, "end": exc.end,
+                                  "hint": "Correct the condition before inspecting it."}) from exc
+    except backtest.Refusal as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+    visible = dates >= dates[-1] - pd.DateOffset(days=730)
+    observed = visible & np.isfinite(panel.close[:, 0]) & np.isfinite(values)
+    fired = observed & (values > 0)
+    fired_dates = dates[fired].strftime("%Y-%m-%d").tolist()
+    count, observations = len(fired_dates), int(observed.sum())
+    return ConditionResult(
+        symbol=panel.symbols[0], observations=observations, true_count=count,
+        true_rate=count / observations if observations else None,
+        last_true_date=fired_dates[-1] if fired_dates else None, fired_dates=fired_dates,
+        constant=(count == observations) if observations and count in (0, observations) else None,
+    )
 
 
 class PreviewLog(BaseModel):

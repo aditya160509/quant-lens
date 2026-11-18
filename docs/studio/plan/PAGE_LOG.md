@@ -97,3 +97,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-49 shipped. Python strategies can read the configured benchmark’s current close through `ctx.market.close`. Preview uses SPY, and unavailable observations return `None`. Portfolio mode provides the current OHLCV bar through `ctx.bar(symbol)`.
 
 - B-114 shipped. `monthly(x)` uses the last available value from the preceding closed calendar month. Prefix tests verify that adding later bars leaves every earlier value unchanged. Hourly remains data-blocked.
+
+- B-108, B-109, B-111 and B-116 backend diagnostics ship through `POST /api/studio-v3/build/condition`. It evaluates one formula or block expression over the symbol’s development data and returns true rate, most recent true date, all matching preview dates and a constant-condition flag. The visible interval is the last 730 days of development data. Frontend wiring remains open.

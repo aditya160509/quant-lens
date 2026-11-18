@@ -232,15 +232,15 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [E] B-105 Any and All groups, nested to any depth (partial: rows joined by and or; nesting open) [FP 24]
 - [ ] [E] B-106 Condition kinds: cross above and below, for N bars, rising, falling, earnings filter, fundamentals, calendar, cross-sectional (partial: crosses and higher-timeframe rules exist; others open)
 - [ ] [E] B-107 Inline parameter editor with an optimisation range per parameter; plain-language summary line; colour by role; collapse, disable, comment, duplicate, copy as code; undo 50 steps [FP 9]
-- [ ] [M] B-108 Red marker on incomplete blocks; detector for conditions that are always true or always false on your data
-- [ ] [M] B-109 Click a condition block: the preview shows the bars where it fired (no full backtest) [FP 24]
+- [ ] [M] B-108 Red marker on incomplete blocks; detector for conditions that are always true or always false on your data (backend done: POST /build/condition; frontend wiring open)
+- [ ] [M] B-109 Click a condition block: the preview shows the bars where it fired (no full backtest) [FP 24] (backend done: POST /build/condition; frontend wiring open)
 - [ ] [M] B-110 Trading frequency: calendar (daily, weekly, monthly, on bar close) or threshold corridor (X% drift)
-- [ ] [M] B-111 Formula inline value under each rule: true-rate and last true date
+- [ ] [M] B-111 Formula inline value under each rule: true-rate and last true date (backend done: POST /build/condition; frontend wiring open)
 - [ ] [M] B-112 Function reference panel for formula mode
 - [ ] [M] B-113 Named variables (fast = ema(close, 12)), user functions, comments; separate entry and exit formulas
 - [x] B-114 Causal weekly(x) and monthly(x) built and tested (hourly blocked by data) [FP 42]
 - [ ] [H] B-115 Composer-style tree blocks: if/else branches, filter by rank, weight by method, group; nest to any depth [FP 69]
-- [ ] [M] B-116 Live true-rate on every condition block ("true on 31% of bars, last true 2026-01-28") [FP 69]
+- [ ] [M] B-116 Live true-rate on every condition block ("true on 31% of bars, last true 2026-01-28") [FP 69] (backend done: POST /build/condition; frontend wiring open)
 - [ ] [M] B-117 Complexity meter: counts parameters and rules and shows degrees of freedom while building [FP 25]
 - [ ] [H] B-118 Find rules: grammar search of entries and exits with an out-of-sample split; every candidate counts in the trial ledger; results go to the Home databank grid [FP 70]
 - [ ] [E] B-119 Checks card adds warm-up bars needed, data each rule uses, survivorship exposure (partial: checks card exists; three rows open)
