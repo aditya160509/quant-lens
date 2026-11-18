@@ -5,7 +5,7 @@ import "@glass-sdk/liquid-glass/styles.css";
 import { ChartScope } from "@/charts/ChartScope";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { createElement, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Bookmark, Braces, GitCompareArrows, Check, ChevronDown, Copy, Download, FileText, Hash, Link2, Loader2, Play, Square } from "lucide-react";
 import { downloadText } from "@/charts/export";
 import toast from "react-hot-toast";
@@ -35,7 +35,13 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
   const layout = useMemo(() => layoutFor(feature), [feature]);
   const meta = metaFor(feature.id, feature.name);
   const Icon = meta.icon;
-  const [tab, setTab] = useState(layout.sections[0]?.id ?? "");
+  const [tab, setTabState] = useState(() => (typeof window !== "undefined" && new URLSearchParams(location.search).get("tab")) || layout.sections[0]?.id || "");
+  // The open tab lives in the URL so refresh and shared links restore it.
+  const setTab = useCallback((u: string | ((cur: string) => string)) => setTabState((cur) => {
+    const id = typeof u === "function" ? u(cur) : u;
+    const url = new URL(location.href); url.searchParams.set("tab", id); history.replaceState(history.state, "", url);
+    return id;
+  }), []);
   const [maxKey, setMaxKey] = useState<string | null>(null);
   const [stuck, setStuck] = useState(false);
   const prefs = useFeaturePrefs(feature.id);
@@ -198,7 +204,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
         </div>
         <AnimatePresence initial={false}>
           {result ? (
-            <motion.div key={run.jobId ?? "r"} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: DUR.slow, ease: [0.2, 0, 0, 1] }}>
+            <motion.div key={run.jobId ?? "r"} initial={false}>
               {layout.hero?.(result) ? <HeroResult spec={layout.hero(result)!} /> : null}
               <VerdictStrip feature={feature} result={result} jobId={run.jobId} />
               {result.meta.research_caveats?.length ? <Limits items={result.meta.research_caveats} /> : null}
@@ -242,7 +248,7 @@ export function FeatureView({ feature, run }: { feature: FeatureSpec; run: Featu
               <OutputCard item={{ ...maxItem, span: 12 }} feature={feature} result={result} maximized onToggleMax={() => setMaxKey(null)} scope={scope} />
             </motion.div>
           ) : (
-            <motion.div key={`${active.id}-${run.jobId}`} className="out-grid" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.035 } } }}>
+            <motion.div key={`${active.id}-${run.jobId}`} className="out-grid" initial={false} animate="show" variants={{ show: { transition: { staggerChildren: 0.035 } } }}>
               {active.intro ? <div className="section-h"><p>{active.intro}</p></div> : null}
               {hiddenIn(active).length ? (
                 <div style={{ gridColumn: "1 / -1" }}><button className="btn sm ghost" onClick={() => hiddenIn(active).forEach((i) => setPref(feature.id, cardId(i), { hidden: false }))}>Show {hiddenIn(active).length} hidden</button></div>

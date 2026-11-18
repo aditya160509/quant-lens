@@ -83,7 +83,7 @@ export function DeployBook({ result }: ViewProps) {
   };
   const orders = b?.orders.map((o) => `${o.action.toUpperCase()} ${o.shares} ${o.symbol}`).join("\n") ?? "";
   return (
-    <div style={{ display: "grid", gap: 10 }}>
+    <div style={{ display: "grid", gap: 12 }}>
       <table className="pf-stats"><tbody>{members.map((m) => <tr key={m.strategy_id}><th>{m.name}</th><td>{pct(m.weight)}</td></tr>)}</tbody></table>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <input className="input" type="date" aria-label="Backdate start" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -93,9 +93,9 @@ export function DeployBook({ result }: ViewProps) {
         <>
           {b.stale ? <span className="chip down" style={{ justifySelf: "start" }}>data ends {b.as_of}</span> : null}
           {b.status === "ok" && b.paper_return != null
-            ? <div className="st-fig"><b>{(b.paper_return * 100).toFixed(1)}%</b><span>paper since {b.book.from} · Sharpe {b.paper_sharpe?.toFixed(2) ?? "—"}</span></div>
+            ? <div className="st-fig"><b>{(b.paper_return * 100).toFixed(1)}%</b><span>paper since {b.book.from}</span></div>
             : <Skipped reason={b.reason ?? "waiting"} />}
-          {b.attribution.length ? <table className="pf-stats"><tbody>{b.attribution.map((a) => <tr key={a.strategy}><th>{a.strategy}</th><td>{(a.contribution * 100).toFixed(1)}%</td></tr>)}</tbody></table> : null}
+          {b.attribution.length ? <table className="pf-stats"><tbody><tr><th>Paper Sharpe</th><td>{b.paper_sharpe?.toFixed(2) ?? "—"}</td></tr>{b.attribution.map((a) => <tr key={a.strategy}><th>{a.strategy}</th><td>{(a.contribution * 100).toFixed(1)}%</td></tr>)}</tbody></table> : null}
           {orders ? <pre className="bd-code" style={{ margin: 0 }}>{orders}</pre> : <Skipped reason={`no orders on ${b.as_of}`} />}
           {orders && b.netting_saves > 0.005 ? <p className="bd-find"><b>Netting</b>saves {(b.netting_saves * 100).toFixed(0)}% of shares</p> : null}
         </>

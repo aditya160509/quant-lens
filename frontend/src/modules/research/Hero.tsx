@@ -1,7 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { useId } from "react";
 import { openQuickLook } from "@/kit/QuickLook";
 import type { Tone } from "./layouts";
 
@@ -18,27 +16,23 @@ export type HeroSpec = {
 
 const TONE: Record<string, string> = { up: "var(--up)", down: "var(--down)", warn: "var(--warn)" };
 const STACK = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)", "var(--c6)", "var(--c7)", "var(--c8)"];
-const ease = [0.2, 0, 0, 1] as const;
 
 export function HeroResult({ spec }: { spec: HeroSpec }) {
-  // The workspace's Reduce motion switch (.rm) shows the finished picture at once.
-  const still = typeof document !== "undefined" && Boolean(document.querySelector(".rm"));
-  const t = (d: number, delay = 0) => (still ? { duration: 0 } : { duration: d, delay, ease });
   return (
     <div className="hero-r">
       <div className="hero-fig">
-        <motion.b className="num" style={{ color: TONE[spec.tone ?? ""] ?? "var(--text)" }} initial={still ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={t(0.5)}>{spec.figure}</motion.b>
+        <b className="num" style={{ color: TONE[spec.tone ?? ""] ?? "var(--text)" }}>{spec.figure}</b>
         {spec.versus ? <span className="num">{spec.versus}</span> : null}
       </div>
       {spec.line ? <p className="hero-line">{spec.line}</p> : null}
-      {spec.lines?.length ? <Lines lines={spec.lines} t={t} still={still} /> : null}
+      {spec.lines?.length ? <Lines lines={spec.lines} /> : null}
       {spec.bars?.length ? (
         <div className="hero-bars">
           {spec.bars.map((b, i) => {
             const top = Math.max(...spec.bars!.map((x) => x.value), 1e-9);
             return (
               <button key={b.label} type="button" onClick={() => openQuickLook(b.label)} title={`${b.label} ${b.value.toFixed(1)}`}>
-                <motion.i style={{ height: `${Math.max(2, (b.value / top) * 100)}%`, transformOrigin: "bottom" }} initial={still ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={t(0.6, i * 0.03)} />
+                <i style={{ height: `${Math.max(2, (b.value / top) * 100)}%`, transformOrigin: "bottom" }} />
                 <span>{b.label}</span>
               </button>
             );
@@ -48,7 +42,7 @@ export function HeroResult({ spec }: { spec: HeroSpec }) {
       {spec.stack?.length ? (
         <div className="hero-stack">
           <div className="hero-stack-bar">
-            {spec.stack.map((s, i) => <motion.i key={s.label} style={{ flexGrow: s.value, background: STACK[i % STACK.length], transformOrigin: "left" }} initial={still ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={t(0.6, i * 0.05)} title={`${s.label} ${s.value}`} />)}
+            {spec.stack.map((s, i) => <i key={s.label} style={{ flexGrow: s.value, background: STACK[i % STACK.length], transformOrigin: "left" }} title={`${s.label} ${s.value}`} />)}
           </div>
           <div className="hero-stack-key">{spec.stack.map((s, i) => <span key={s.label}><i style={{ background: STACK[i % STACK.length] }} />{s.label} <b className="num">{s.value}</b></span>)}</div>
         </div>
@@ -57,20 +51,15 @@ export function HeroResult({ spec }: { spec: HeroSpec }) {
   );
 }
 
-function Lines({ lines, t, still }: { lines: NonNullable<HeroSpec["lines"]>; t: (d: number, delay?: number) => object; still: boolean }) {
+function Lines({ lines }: { lines: NonNullable<HeroSpec["lines"]> }) {
   const all = lines.flatMap((l) => l.values);
   const lo = Math.min(...all), hi = Math.max(...all), n = Math.max(...lines.map((l) => l.values.length));
   const y = (v: number) => 100 - ((v - lo) / (hi - lo || 1)) * 92 - 4;
   const d = (v: number[]) => v.map((p, i) => `${i ? "L" : "M"}${(i / Math.max(1, n - 1)) * 1000},${y(p).toFixed(2)}`).join("");
-  const clip = useId();
   return (
     <div className="hero-lines">
       <svg viewBox="0 0 1000 100" preserveAspectRatio="none" role="img" aria-label={lines.map((l) => l.label).join(" against ")}>
-        {/* A clip reveal, not pathLength: Chrome cuts dashed paths short under non-scaling-stroke. */}
-        <clipPath id={clip}><motion.rect x={0} y={-10} height={120} initial={still ? false : { width: 0 }} animate={{ width: 1000 }} transition={t(1.4)} /></clipPath>
-        <g clipPath={`url(#${clip})`}>
-          {lines.map((l, i) => <path key={l.label} d={d(l.values)} fill="none" stroke={l.color} strokeWidth={i ? 1.25 : 2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />)}
-        </g>
+        {lines.map((l, i) => <path key={l.label} d={d(l.values)} fill="none" stroke={l.color} strokeWidth={i ? 1.25 : 2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />)}
       </svg>
       <div className="hero-key">{lines.map((l) => <span key={l.label}><i style={{ background: l.color }} />{l.label}</span>)}</div>
     </div>

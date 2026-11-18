@@ -72,7 +72,7 @@ export function StudioContext({ feature, run }: { feature: FeatureSpec; run: Fea
           </details> : null}
           {m.freshness ? <FreshnessPill f={m.freshness} /> : null}
           {m.ledger && feature.id !== "st04" ? <TrialChip ledger={m.ledger} strategyId={m.strategy?.id} /> : null}
-          <Link className="chip" href="/studio/validate" data-testid="verdict-chip">{m.verdict_chip ?? "not validated"}</Link>
+          {feature.id !== "st04" ? <Link className="chip" href="/studio/validate" data-testid="verdict-chip">{m.verdict_chip ?? "not validated"}</Link> : null}
         </div>
       ) : null}
     </>
