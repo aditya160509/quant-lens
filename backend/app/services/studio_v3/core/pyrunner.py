@@ -131,14 +131,46 @@ class Ctx:
         text = str(message)[:1024] if len(self._logs) < 50_000 else "Output truncated after 50000 lines"
         self._logs.append({"date": self.date, "symbol": self.symbol, "line": line, "text": text, "level": str(level)[:32]})
 
-    def plot(self, name, value):
+    def plot(self, name, value, chart="own"):
+        """Record a value in a named plot on the main chart or in a separate pane."""
+        if chart not in ("main", "own"):
+            raise ValueError("Plot chart must be main or own")
         value = float(value)
         name = str(name)[:128]
         if self._plots is not None and self._plot_count[0] < 50_000:
+            if self._plot_charts.setdefault(name, chart) != chart:
+                raise ValueError("A named plot must keep the same chart")
             self._plots.setdefault(name, []).append({
                 "date": self.date, "symbol": self.symbol, "value": value if math.isfinite(value) else None,
             })
             self._plot_count[0] += 1
+
+    def mark(self, symbol, label):
+        """Attach a labeled marker to a symbol on the current bar."""
+        if symbol not in self._symbols:
+            raise ValueError("Marker symbol must be in the strategy universe")
+        if self._marks is not None and len(self._marks) < 5_000:
+            self._marks.append({"date": self.date, "symbol": symbol, "label": str(label)[:256]})
+
+    def table(self, name, row):
+        """Append a dictionary of scalar cells to a named results table."""
+        if not isinstance(row, dict) or len(row) > 32:
+            raise ValueError("Table rows must be dictionaries with at most 32 columns")
+        cells = {}
+        for key, value in row.items():
+            if type(key) is not str or len(key) > 128:
+                raise ValueError("Table column names must be strings up to 128 characters")
+            if value is None or type(value) is bool:
+                cells[key] = value
+            elif type(value) is str:
+                cells[key] = value[:512]
+            elif type(value) in (int, float):
+                cells[key] = value if -sys.float_info.max <= value <= sys.float_info.max else None
+            else:
+                raise ValueError("Table cells must be strings, numbers, booleans or None")
+        if self._tables is not None and self._table_count[0] < 5_000:
+            self._tables.setdefault(str(name)[:128], []).append({"date": self.date, "symbol": self.symbol, "cells": cells})
+            self._table_count[0] += 1
 
     def _order(self, action):
         self.orders.append((self.t, action))
@@ -211,6 +243,9 @@ class PortfolioContext(Ctx):
         first = contexts[0]
         super().__init__(first._cols, first._values, first.params.copy(), None, first._dates)
         self._benchmark = first._benchmark
+        self._symbols, self._marks = first._symbols, first._marks
+        self._tables, self._table_count = first._tables, first._table_count
+        self._plot_charts = first._plot_charts
         self._logs, self._plots, self._plot_count = first._logs, first._plots, first._plot_count
         self._contexts = {ctx.symbol: ctx for ctx in contexts}
         self._columns = {symbol: i for i, symbol in enumerate(self._contexts)}
@@ -627,7 +662,7 @@ def main():
     values = {e: z[f"v{i}"] for i, e in enumerate(meta["exprs"])}
     benchmark = z.get("benchmark")
     T, N = fields["close"].shape
-    logs, plots = [], {}
+    logs, plots, plot_charts, marks, tables = [], {}, {}, [], {}
     ctx = None
 
     def use_context(value):
@@ -658,12 +693,17 @@ def main():
                 meta["params"].copy(), symbol, meta["dates"])
             for j, symbol in enumerate(meta["symbols"])
         ]
-        plot_count = [0]
+        plot_count, table_count = [0], [0]
         for item in contexts:
             item._benchmark = benchmark
             item._logs = logs if collect else None
             item._plots = plots if collect else None
             item._plot_count = plot_count
+            item._plot_charts = plot_charts
+            item._symbols = meta["symbols"]
+            item._marks = marks if collect else None
+            item._tables = tables if collect else None
+            item._table_count = table_count
         return contexts
 
     repaint = None
@@ -714,7 +754,7 @@ def main():
         }}))
         return
     np.savez(sys.argv[2], **arrays)
-    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report}))
+    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report}))
 
 
 if __name__ == "__main__":

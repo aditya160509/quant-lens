@@ -183,7 +183,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [H] B-56 ctx.feature_matrix(formulas, lookback) and ctx.fit_every(n); sklearn allowed; fits use past bars only
 - [ ] [M] B-57 Import allow-list: math, statistics, numpy, pandas, scipy.stats, scipy.optimize, sklearn, and the project files; others refused with the line and a request link (partial: math only; imports refused) [PY A7]
 - [x] [E] B-58 print and ctx.log(msg, level) captured per bar (date, symbol), 50,000-line cap with a truncation row (backend done: typed preview logs include source line and level) [PY A8]
-- [ ] [E] B-59 ctx.plot(name, value, chart="main" or "own"), ctx.mark(sym, label) on the price chart, ctx.table(name, row) as a sortable table (partial: preview returns named plot series) [FP 29] [PY A9]
+- [ ] [E] B-59 ctx.plot(name, value, chart="main" or "own"), ctx.mark(sym, label) on the price chart, ctx.table(name, row) as a sortable table (backend done: preview and Backtest return chart placement, marks and structured rows; frontend rendering open) [FP 29] [PY A9]
 - [x] [E] B-60 on_fill(ctx, fill) gets symbol, side, quantity, price, date and fee (preview and Backtest receive actual event-engine fills; one-argument callback remains supported) [PY A11]
 - [ ] [M] B-61 Lifecycle hooks: on_end_of_day, on_warmup_done, on_risk_event, on_stop (partial: risk-event hook open)
 - [ ] [E] B-62 params = {"fast": (10, 5, 50, 5)} declared in code appear in Build params and the Optimise grid; ctx.param kept (backend done: compile exposes literal declarations and Optimise evaluates them through the event engine; frontend Build binding open) [FP 9] [PY A12]

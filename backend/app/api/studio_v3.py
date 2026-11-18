@@ -311,6 +311,18 @@ class PreviewWarmup(BaseModel):
     first_eligible_by_symbol: dict[str, str | None]
 
 
+class PreviewMark(BaseModel):
+    date: str
+    symbol: str
+    label: str
+
+
+class PreviewTableRow(BaseModel):
+    date: str
+    symbol: str | None
+    cells: dict[str, str | bool | int | float | None]
+
+
 class PreviewResult(BaseModel):
     status: str
     reason: str | None = None
@@ -323,6 +335,9 @@ class PreviewResult(BaseModel):
     repaint: dict[str, Any] | None = None
     logs: list[PreviewLog] | None = None
     plots: dict[str, list[PreviewPlotPoint]] | None = None
+    plot_charts: dict[str, str] | None = None
+    marks: list[PreviewMark] | None = None
+    tables: dict[str, list[PreviewTableRow]] | None = None
     warmup: PreviewWarmup | None = None
 
 

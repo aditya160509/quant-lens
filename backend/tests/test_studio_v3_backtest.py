@@ -589,3 +589,20 @@ def test_build_completion_suggests_formula_inputs_and_snippets(studio):
     ]:
         choices = studio.post(endpoint, json={"scope": scope, "prefix": prefix, **extra}).json()
         assert [item["name"] for item in choices] == [expected]
+
+
+def test_python_preview_returns_chart_markers_and_structured_tables(studio):
+    code = """class Strategy:
+    def on_bar(self, ctx):
+        if ctx.bar == 1:
+            ctx.plot("price", ctx.close[-1], chart="main")
+            ctx.mark(ctx.symbol, "review")
+            ctx.table("signals", {"count": 2, "confirmed": True})
+"""
+    result = studio.post("/api/studio-v3/preview", json={"symbol": "SPY", "spec": {"code": code}}).json()
+    assert result["status"] == "ok"
+    assert result["plot_charts"] == {"price": "main"}
+    assert result["marks"] == [{"date": "2015-01-02", "symbol": "SPY", "label": "review"}]
+    assert result["tables"]["signals"] == [
+        {"date": "2015-01-02", "symbol": "SPY", "cells": {"count": 2, "confirmed": True}},
+    ]
