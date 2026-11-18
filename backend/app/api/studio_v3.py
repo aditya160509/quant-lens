@@ -27,6 +27,7 @@ from app.services.studio_v3.core import (
     validate,
 )
 from app.services.studio_v3.core import compile as compiler
+from app.services.studio_v3.core import library as lib
 from app.services.studio_v3.core.spec import Strategy
 from app.services.studio_v3.features.inputs import COST_PROFILES
 from app.services.studio_v3.features.inputs import parse as parse_payload
@@ -505,3 +506,163 @@ async def mcp(request: Request, x_studio_actor: str | None = Header(None)) -> di
         except (KeyError, ValueError, TypeError, ValidationError) as exc:
             return ok({"content": [{"type": "text", "text": str(exc)}], "isError": True})
     return {"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": f"Unknown method {method}"}}
+
+
+# --- Library (page 9) ---------------------------------------------------------------
+
+
+class LibraryItem(BaseModel):
+    type: lib.ItemType
+    name: str = Field(min_length=1, max_length=120)
+    body: dict[str, Any]
+
+
+class LibraryVersion(BaseModel):
+    body: dict[str, Any]
+    name: str | None = Field(None, max_length=120)
+
+
+class CostCompare(BaseModel):
+    payload: dict[str, Any]  # a st01 payload: strategy_id and version (or spec), symbols, period
+    a: dict[str, Any] = Field(examples=[{"item_id": "cost-us-retail", "version": 1}])
+    b: dict[str, Any]
+
+
+class UniversePreview(BaseModel):
+    item_id: str | None = None
+    version: int | None = None
+    body: dict[str, Any] | None = None
+    start: str | None = None
+    end: str | None = None
+
+
+class BenchmarkRequest(BaseModel):
+    weights: dict[str, float] | None = None
+    item_id: str | None = None
+    start: str | None = None
+    end: str | None = None
+
+
+class RegimeRequest(BaseModel):
+    item_id: str | None = None
+    body: dict[str, Any] | None = None
+    start: str | None = None
+    end: str | None = None
+
+
+class MetricRequest(BaseModel):
+    item_id: str | None = None
+    formula: str | None = None
+    metrics: dict[str, Any] | None = None  # a finished run's metrics dict
+    payload: dict[str, Any] | None = None  # or a st01 payload to run now
+
+
+def _lib(fn, *args, **kw):
+    try:
+        return fn(*args, **kw)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+    except (ValueError, ValidationError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+def _lib_body(item_id: str | None, body: dict | None, kind: str, version: int | None = None) -> dict:
+    if body is not None:
+        return lib._validate(kind, body)
+    if not item_id:
+        raise ValueError("Give item_id or body")
+    it = lib.get(item_id, version)
+    if it["type"] != kind:
+        raise ValueError(f"{item_id} is a {it['type']}, not a {kind}")
+    return it["body"]
+
+
+@router.get("/library")
+def library_list(type: str | None = None, include_archived: bool = False) -> dict[str, Any]:
+    return {"items": lib.list_items(type, include_archived)}
+
+
+@router.post("/library")
+def library_create(req: LibraryItem) -> dict[str, Any]:
+    return _lib(lib.create, req.type, req.name, req.body)
+
+
+@router.get("/library/data/audit")
+def library_data_audit() -> dict[str, Any]:
+    return {"freshness": limits.freshness(), **limits.audit()}
+
+
+@router.get("/library/data/catalog")
+def library_catalog(offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=1000), q: str = "") -> dict[str, Any]:
+    return lib.catalog(offset, limit, q)
+
+
+@router.post("/library/cost-compare")
+def library_cost_compare(req: CostCompare) -> dict[str, Any]:
+    def run():
+        spec, settings, _, _ = parse_payload(req.payload)
+        return lib.compare_costs(spec, settings, req.a, req.b)
+
+    try:
+        return _lib(run)
+    except backtest.Refusal as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/library/universe/preview")
+def library_universe_preview(req: UniversePreview) -> dict[str, Any]:
+    return _lib(lambda: lib.universe_preview(lib.UniverseBody(**_lib_body(req.item_id, req.body, "universe", req.version)), req.start, req.end))
+
+
+@router.post("/library/benchmark/series")
+def library_benchmark(req: BenchmarkRequest) -> dict[str, Any]:
+    return _lib(lambda: lib.benchmark_series(req.weights or _lib_body(req.item_id, None, "benchmark")["weights"], req.start, req.end))
+
+
+@router.post("/library/regime/evaluate")
+def library_regime(req: RegimeRequest) -> dict[str, Any]:
+    return _lib(lambda: lib.regime_spans(lib.RegimeBody(**_lib_body(req.item_id, req.body, "regime")), req.start, req.end))
+
+
+@router.post("/library/metric/evaluate")
+def library_metric(req: MetricRequest) -> dict[str, Any]:
+    def run():
+        expr = req.formula or _lib_body(req.item_id, None, "metric")["formula"]
+        lib.MetricBody(formula=expr)
+        metrics = req.metrics
+        if metrics is None:
+            if req.payload is None:
+                raise ValueError("Give metrics or payload")
+            spec, settings, _, _ = parse_payload(req.payload)
+            metrics = backtest.run_backtest(spec, settings)["meta"]["metrics"]
+        return {"formula": expr, "value": lib.eval_metric(expr, metrics)}
+
+    try:
+        return _lib(run)
+    except backtest.Refusal as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/library/profile/import")
+def library_profile_import(doc: dict[str, Any]) -> dict[str, Any]:
+    return _lib(lib.import_profile, doc)
+
+
+@router.get("/library/{item_id}/export")
+def library_profile_export(item_id: str, version: int | None = None) -> dict[str, Any]:
+    return _lib(lib.export_profile, item_id, version)
+
+
+@router.get("/library/{item_id}")
+def library_get(item_id: str, version: int | None = None) -> dict[str, Any]:
+    return _lib(lib.get, item_id, version)
+
+
+@router.post("/library/{item_id}/versions")
+def library_version(item_id: str, req: LibraryVersion) -> dict[str, Any]:
+    return _lib(lib.add_version, item_id, req.body, req.name)
+
+
+@router.delete("/library/{item_id}")
+def library_archive(item_id: str) -> dict[str, Any]:
+    return _lib(lib.archive, item_id)
