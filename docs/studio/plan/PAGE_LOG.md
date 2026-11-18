@@ -162,7 +162,7 @@ What shipped, by id:
 - B-119. `POST /build/checks` returns warm-up bars and the first eligible date, the fields and windows each rule reads, the period, the universe with held and delisted names, and a survivorship row with a written note.
 - B-120 (partial). Formula strategies gained `exits.opposite_signal` (a short entry closes longs and a long entry closes shorts) and `exits.end_of_week` (close on the last observed session of the week). The profit-target ladder and exit ordering are still open.
 - B-163. `POST /build/import-quantconnect` rewrites a QuantConnect algorithm in place: `class …(QCAlgorithm)` becomes `class Strategy`, `Initialize`/`OnData`/`OnOrderEvent` become `init`/`on_data`/`on_fill`, and price, portfolio, order, history, log, plot and indicator calls map to `ctx`. It returns the symbols, capital, dates and warm-up it found, every rewritten line, and every line it removed or refused with a reason (QuantConnect imports, `datetime`, `Schedule.On`, `SetBrokerageModel`, unknown `On*` callbacks). Lines it cannot express are commented out, never silently dropped. The result is checked before it is returned, and the endpoint saves nothing.
-- B-32 (partial). Completion covers the numpy and pandas top-level names with signatures and one-line docs, next to every `ctx`, portfolio, position, bar, fill, market, history and indicator member.
+- B-32 (partial). Completion covers the numpy and pandas top-level names with signatures and one-line docs, next to every `ctx`, portfolio, position, bar, fill, market, history and indicator member, and the eight LEAN-style indicator helpers in the `self` scope.
 
 API added or extended (all under `/api/studio-v3`):
 

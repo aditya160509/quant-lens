@@ -555,9 +555,9 @@ def test_build_completion_and_signature_use_portfolio_and_local_members(studio):
     signature = studio.post(f"{base}/signature", json={"scope": "ctx", "code": code, "name": "market_order"}).json()
     assert signature["signature"] == "market_order(symbol, quantity)"
     local = studio.post(f"{base}/complete", json={"scope": "self", "code": code}).json()
-    assert {item["name"]: item["signature"] for item in local} == {
-        "counter": None, "on_data": "on_data(ctx)", "threshold": "threshold(level=5)",
-    }
+    members = {item["name"]: item["signature"] for item in local}
+    assert {"counter": None, "on_data": "on_data(ctx)", "threshold": "threshold(level=5)"}.items() <= members.items()
+    assert {"sma", "ema", "rsi", "atr", "std", "roc", "highest", "lowest"} <= set(members)
     holding = studio.post(f"{base}/complete", json={"scope": "position", "prefix": "quant"}).json()
     assert holding[0]["name"] == "quantity"
 

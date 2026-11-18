@@ -297,6 +297,10 @@ def editor_members(scope: str, code: str, prefix: str = "", *, params=None, symb
             if (isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Store)
                     and isinstance(node.value, ast.Name) and node.value.id == "self" and not node.attr.startswith("_")):
                 members.setdefault(node.attr, {"name": node.attr, "kind": "field", "signature": None, "documentation": None})
+        for name in pyrunner.INDICATOR_NAMES:
+            members.setdefault(name, {"name": name, "kind": "method",
+                                       "signature": f"{name}(symbol_or_period, period=None)",
+                                       "documentation": f"A {name.upper()} handle with .value, .ready, .window and .history(n)"})
     else:
         if scope == "ctx" and "def on_data(" in code:
             scope = "portfolio_ctx"

@@ -664,3 +664,9 @@ def test_std_is_population_and_builds_lean_bollinger_bands():
     assert np.allclose(deviation, expected, equal_nan=True)
     band = formula.evaluate("sma(close, 3) + 2 * std(close, 3)", bars, dates)[:, 0]
     assert np.allclose(band, pd.Series(values).rolling(3).mean().to_numpy() + 2 * expected, equal_nan=True)
+
+
+def test_self_completion_offers_the_indicator_helpers():
+    members = {item["name"]: item for item in pycode.editor_members("self", "class Strategy:\n    def on_bar(self, ctx):\n        pass\n", "sm")}
+    assert members["sma"]["signature"] == "sma(symbol_or_period, period=None)"
+    assert "ready" in members["sma"]["documentation"]
