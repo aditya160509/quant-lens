@@ -154,6 +154,8 @@ def _execute(code, bars, dates, params, symbols, cache, output, *, event_setting
             output.update(logs=res["logs"], plots=res["plots"])
             if res.get("entry_signals") is not None:
                 output["entry_signals"] = res["entry_signals"]
+            if res.get("warmup") is not None:
+                output["warmup"] = res["warmup"]
             if res.get("repaint") is not None:
                 output["repaint"] = res["repaint"]
         with np.load(dst) as z:

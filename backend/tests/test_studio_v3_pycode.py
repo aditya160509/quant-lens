@@ -370,3 +370,21 @@ def test_python_lifecycle_hooks_follow_warmup_and_run_order(callback, order):
     assert result.trades[0, engine.T_ENTRY_BAR] == 3
     assert output["logs"][4]["date"] == str(dates[2].date())
     assert output["logs"][-1]["date"] == str(dates[-1].date())
+
+
+def test_warmup_reports_first_observed_trading_eligible_date():
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(4, 2)
+    bars["close"][:2, 1] = np.nan
+    code = """class Strategy:
+    warmup = 2
+    def on_bar(self, ctx):
+        ctx.buy()
+"""
+    output = {}
+    pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], engine.Params(), output=output)
+    assert output["warmup"] == {
+        "bars": 2, "first_eligible_date": str(dates[2].date()),
+        "first_eligible_by_symbol": {"AAA": str(dates[2].date()), "BBB": None},
+    }

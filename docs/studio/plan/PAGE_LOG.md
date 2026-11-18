@@ -109,3 +109,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-51 shipped. Python portfolio strategies can rank a literal formula over observed symbols, filter by another formula, and choose top or bottom. `ctx.zscore` returns population z-scores by symbol, with no scores for a zero-variance or empty cross-section. The formula checker refuses future references before execution.
 
 - B-61 advanced. Python event runs call `on_warmup_done` before the first eligible bar, `on_end_of_day` after the strategy’s bar handler and before order submission, and `on_stop` after the full run finishes. Shutdown orders cannot execute after the run. Risk-event callbacks remain open.
+
+- B-53 advanced. Python preview and full Backtest report the configured warm-up and first order-eligible date. Per-symbol mode counts observed bars separately and returns a null date for an insufficient history. Portfolio mode counts run sessions. Automatic inference remains open.

@@ -232,6 +232,12 @@ class StrategyProblem(BaseModel):
     traceback: list[StrategyFrame] | None = None
 
 
+class PreviewWarmup(BaseModel):
+    bars: int
+    first_eligible_date: str | None
+    first_eligible_by_symbol: dict[str, str | None]
+
+
 class PreviewResult(BaseModel):
     status: str
     reason: str | None = None
@@ -244,6 +250,7 @@ class PreviewResult(BaseModel):
     repaint: dict[str, Any] | None = None
     logs: list[PreviewLog] | None = None
     plots: dict[str, list[PreviewPlotPoint]] | None = None
+    warmup: PreviewWarmup | None = None
 
 
 @router.post("/preview", response_model=PreviewResult, response_model_exclude_unset=True)

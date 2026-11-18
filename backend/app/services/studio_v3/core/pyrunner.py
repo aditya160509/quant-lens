@@ -583,16 +583,26 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values):
         result = engine.EventEngine({k: v[:end] for k, v in bars.items()}, params, stop_dist=stop_dist, size_vol=size_vol).run(adapter)
         if collect:
             adapter.finish()
-        return engine.Result(*result[:7], unfilled=int(result[7])), submitted
+        return engine.Result(*result[:7], unfilled=int(result[7])), submitted, warmup, isinstance(adapter, PortfolioStrategy)
 
-    result, submitted = run_to(shape[0], True)
+    result, submitted, warmup, is_portfolio = run_to(shape[0], True)
+    dates = meta["dates"]
+    start_dates = {}
+    if is_portfolio:
+        starts = dates[warmup] if warmup < len(dates) else None
+    else:
+        for n, symbol in enumerate(meta["symbols"]):
+            observed = np.flatnonzero(np.isfinite(bars["close"][:, n]))
+            start_dates[symbol] = dates[int(observed[warmup])] if warmup < len(observed) else None
+        starts = min((day for day in start_dates.values() if day is not None), default=None)
+    warmup_report = {"bars": warmup, "first_eligible_date": starts, "first_eligible_by_symbol": start_dates}
     cuts, changed = meta["repaint_bars"], []
     for t in cuts:
-        _, cut = run_to(t + 1, False)
+        _, cut, _, _ = run_to(t + 1, False)
         if not np.array_equal(cut[-1], submitted[t]):
             changed.append(meta["dates"][t])
     repaint = {"cuts": len(cuts), "changed": len(changed), "dates": changed[:5]} if cuts else None
-    return vars(result), repaint, int(np.count_nonzero(submitted[:, :, 0]))
+    return vars(result), repaint, int(np.count_nonzero(submitted[:, :, 0])), warmup_report
 
 
 def main():
@@ -644,10 +654,11 @@ def main():
 
     repaint = None
     entry_signals = None
+    warmup_report = None
     try:
         compiled = compile(src, "<strategy>", "exec")
         if meta["event_settings"] is not None:
-            arrays, repaint, entry_signals = event_run(z, meta, load_strategy, make_contexts, use_context, values)
+            arrays, repaint, entry_signals, warmup_report = event_run(z, meta, load_strategy, make_contexts, use_context, values)
         else:
             cls, warmup = load_strategy()
             entries, exits = np.zeros((T, N), np.int8), np.zeros((T, N), np.int8)
@@ -689,7 +700,7 @@ def main():
         }}))
         return
     np.savez(sys.argv[2], **arrays)
-    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "repaint": repaint, "entry_signals": entry_signals}))
+    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report}))
 
 
 if __name__ == "__main__":
