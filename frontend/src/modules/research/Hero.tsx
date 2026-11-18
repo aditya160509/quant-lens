@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useId } from "react";
 import { openQuickLook } from "@/kit/QuickLook";
 import type { Tone } from "./layouts";
 
@@ -61,10 +62,15 @@ function Lines({ lines, t, still }: { lines: NonNullable<HeroSpec["lines"]>; t: 
   const lo = Math.min(...all), hi = Math.max(...all), n = Math.max(...lines.map((l) => l.values.length));
   const y = (v: number) => 100 - ((v - lo) / (hi - lo || 1)) * 92 - 4;
   const d = (v: number[]) => v.map((p, i) => `${i ? "L" : "M"}${(i / Math.max(1, n - 1)) * 1000},${y(p).toFixed(2)}`).join("");
+  const clip = useId();
   return (
     <div className="hero-lines">
       <svg viewBox="0 0 1000 100" preserveAspectRatio="none" role="img" aria-label={lines.map((l) => l.label).join(" against ")}>
-        {lines.map((l, i) => <motion.path key={l.label} d={d(l.values)} fill="none" stroke={l.color} strokeWidth={i ? 1.25 : 2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" initial={still ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={t(1.4, i * 0.15)} />)}
+        {/* A clip reveal, not pathLength: Chrome cuts dashed paths short under non-scaling-stroke. */}
+        <clipPath id={clip}><motion.rect x={0} y={-10} height={120} initial={still ? false : { width: 0 }} animate={{ width: 1000 }} transition={t(1.4)} /></clipPath>
+        <g clipPath={`url(#${clip})`}>
+          {lines.map((l, i) => <path key={l.label} d={d(l.values)} fill="none" stroke={l.color} strokeWidth={i ? 1.25 : 2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />)}
+        </g>
       </svg>
       <div className="hero-key">{lines.map((l) => <span key={l.label}><i style={{ background: l.color }} />{l.label}</span>)}</div>
     </div>

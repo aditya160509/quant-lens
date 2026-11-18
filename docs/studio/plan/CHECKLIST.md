@@ -35,7 +35,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 
 | Page | Done | Total |
 |---|---|---|
-| Portfolio | 23 | 28 |
+| Portfolio | 24 | 28 |
 | Home | 1 | 26 |
 | Build | 29 | 162 |
 | Backtest | 18 | 57 |
@@ -45,16 +45,16 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **126** | **538** |
+| **All pages** | **127** | **538** |
 
-## Portfolio (`/studio/portfolio`, spec §6): 23 / 28 done
+## Portfolio (`/studio/portfolio`, spec §6): 24 / 28 done
 
 ### Acceptance (PAGES)
 
 - [x] P-1 Equal-weight combination of two fixtures equals the hand-computed series
 - [x] P-2 Meta rule "SPY above 200d" switches on the next open with no look-ahead
 - [x] P-3 Combined strategy sent to Validate returns a verdict (grade on Portfolio, not a Validate run)
-- [ ] [E] P-4 Screenshots at 1440 and 1024
+- [x] [E] P-4 Screenshots at 1440 and 1024 (`docs/studio/screens/portfolio-*.png`)
 
 ### Target additions (FEATURES_PEAK)
 

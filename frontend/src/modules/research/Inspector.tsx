@@ -97,7 +97,7 @@ function Outline({ feature, run }: { feature: FeatureSpec; run: FeatureRun }) {
   const setPref = useCardPrefs((st) => st.set);
   const resetPrefs = useCardPrefs((st) => st.reset);
   return (
-    <details style={{ padding: "14px 8px" }}>
+    <details open style={{ padding: "14px 8px" }}>
       <summary className="insp-h" style={{ padding: "0 8px", display: "flex", alignItems: "center", cursor: "pointer" }}>Outputs
         {Object.keys(prefs).length ? <button className="btn sm ghost" style={{ marginLeft: "auto", height: 22 }} onClick={(e) => { e.preventDefault(); resetPrefs(feature.id); }}>Reset layout</button> : null}
       </summary>
