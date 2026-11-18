@@ -39,7 +39,7 @@ export function FrontierView({ result }: ViewProps) {
 
 type Stats = { effective_bets?: number | null; diversification_ratio?: number | null; vol?: number | null; vol_at_corr_08?: number | null; rebalance_turnover?: number | null;
   rebalance_cost?: number | null; beta?: number | null; alpha?: number | null; information_ratio?: number | null; tracking_error?: number | null;
-  netting?: { saved: number } | null; oos?: { in_sample_sharpe: number | null; out_of_sample_sharpe: number | null } | null };
+  netting?: { saved: number } | null; book_gross?: number | null; book_net?: number | null; book_beta?: number | null; oos?: { in_sample_sharpe: number | null; out_of_sample_sharpe: number | null } | null };
 
 /** Diversification, stress and benchmark numbers for the chosen mix, with any warnings first. */
 export function RiskStats({ result }: ViewProps) {
@@ -53,6 +53,7 @@ export function RiskStats({ result }: ViewProps) {
     ["Rebalance turnover a year", f(s.rebalance_turnover, "pct")], ["Rebalance cost a year (10 bps)", f(s.rebalance_cost, "pct")],
     ["Netting saves (traded notional)", f(s.netting?.saved, "pct")],
     ["Sharpe, weights set on past year only", f(s.oos?.out_of_sample_sharpe, "n")], ["Sharpe, weights from whole period", f(s.oos?.in_sample_sharpe, "n")],
+    ["Gross exposure, last bar", f(s.book_gross, "pct")], ["Net exposure, last bar", f(s.book_net, "pct")], ["Beta of names held", f(s.book_beta, "n")],
     ["Beta to benchmark", f(s.beta, "n")], ["Alpha a year", f(s.alpha, "pct")], ["Information ratio", f(s.information_ratio, "n")], ["Tracking error", f(s.tracking_error, "pct")],
   ];
   return (

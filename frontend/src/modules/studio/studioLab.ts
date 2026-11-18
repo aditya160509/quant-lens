@@ -229,6 +229,8 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["risk_share"], span: 6, view: "dataTable", title: "Share of risk" },
           { keys: ["crises"], span: 6, view: "dataTable", title: "Crisis windows" },
           { keys: ["dropout"], span: 12, view: "dataTable", title: "Without each member" },
+          { keys: ["capacity"], span: 6, view: "dataTable", title: "Capacity by sleeve" },
+          { keys: ["exposure"], span: 6, view: "dataTable", title: "Sector exposure, last bar" },
         ] },
         { id: "grade", label: "Grade", items: [{ keys: ["risk_share"], span: 12, view: "stTiles", title: "Combined grade" }] },
         { id: "paper", label: "Paper", items: [{ keys: ["risk_share"], span: 12, view: "stPfBook", title: "One paper book" }] },
