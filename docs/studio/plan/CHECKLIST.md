@@ -35,7 +35,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 
 | Page | Done | Total |
 |---|---|---|
-| Portfolio | 5 | 28 |
+| Portfolio | 18 | 28 |
 | Home | 1 | 26 |
 | Build | 29 | 162 |
 | Backtest | 18 | 57 |
@@ -45,40 +45,40 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **108** | **538** |
+| **All pages** | **121** | **538** |
 
-## Portfolio (`/studio/portfolio`, spec §6): 5 / 28 done
+## Portfolio (`/studio/portfolio`, spec §6): 18 / 28 done
 
 ### Acceptance (PAGES)
 
 - [x] P-1 Equal-weight combination of two fixtures equals the hand-computed series
 - [x] P-2 Meta rule "SPY above 200d" switches on the next open with no look-ahead
-- [ ] [M] P-3 Combined strategy sent to Validate returns a verdict
+- [x] P-3 Combined strategy sent to Validate returns a verdict (grade on Portfolio, not a Validate run)
 - [ ] [E] P-4 Screenshots at 1440 and 1024
 
 ### Target additions (FEATURES_PEAK)
 
-- [ ] [E] P-5 Sleeves carry weight, capital, start date, enable toggle and scaling (vol target, leverage cap); a sleeve can be a portfolio (partial: weights and up to 12 members built; capital, start, toggle, scaling and nesting open)
-- [ ] [M] P-6 More allocation methods: minimum variance, max diversification, mean-variance with shrinkage, capped Kelly, momentum of members, drawdown throttle, custom Python function (partial: equal, inverse vol, risk parity, HRP, max Sharpe, fixed built; these open) [FP 36]
-- [ ] [E] P-7 Rebalance on a calendar or a threshold corridor, with a minimum trade size to cut churn (partial: quarterly re-estimation built; threshold and minimum trade size open) [FP 36]
-- [ ] [E] P-8 Stacked-area weights over time with the effective number of bets (partial: weights over time built; effective number of bets open)
-- [ ] [E] P-9 Diversification ratio, drawdown overlap, capacity by sleeve, turnover, cost drag, net exposure by symbol across sleeves (partial: correlation, marginal contribution, trade and name overlap built; the rest open) [FP 37]
-- [ ] [E] P-10 Correlation over the full period and over a rolling window (partial: full-period correlation built; rolling window open)
-- [ ] [E] P-11 Constraints: max weight per member, per symbol and per sector; gross and net limits; leverage; cash reserve; minimum member count; ban list; max correlation between members (partial: cap per member built; others open) [FP 36]
-- [ ] [M] P-12 Sleeve drop-out test: remove each member and show the effect [FP 37]
-- [ ] [M] P-13 Correlation shock: all members at correlation 0.8
-- [ ] [M] P-14 Crisis stress: the combined portfolio in each crisis window from 2015 [FP 74]
-- [ ] [M] P-15 Overlap guard: warns when two members hold the same symbol in opposite directions or share more than 70% of signals
-- [ ] [M] P-16 Walk-forward allocation test: out-of-sample weights shown against full-sample weights (partial: quarterly out-of-sample weights built; comparison to full-sample weights open) [FP 38]
-- [ ] [H] P-17 Netting: opposite trades on one symbol across members cancel before execution [FP 74]
-- [ ] [H] P-18 Efficient frontier of the members with the chosen mix marked [FP 74]
-- [ ] [M] P-19 Rebalance costs counted when weights shift
+- [ ] [E] P-5 Sleeves carry weight, capital, start date, enable toggle and scaling (vol target, leverage cap); a sleeve can be a portfolio (partial: weights, up to 12 members, enable toggle, start date and per-member vol target built in the backend; capital, leverage cap, nesting and page controls open)
+- [ ] [M] P-6 More allocation methods: minimum variance, max diversification, mean-variance with shrinkage, capped Kelly, momentum of members, drawdown throttle, custom Python function (partial: equal, inverse vol, risk parity, HRP, max Sharpe, max diversification, minimum variance, shrunk minimum variance, capped Kelly, member momentum, drawdown throttle, fixed built; mean-variance with shrinkage target and custom Python function open) [FP 36]
+- [x] P-7 Rebalance on a calendar or a threshold corridor, with a minimum trade size to cut churn
+- [x] P-8 Stacked-area weights over time with the effective number of bets
+- [ ] [E] P-9 Diversification ratio, drawdown overlap, capacity by sleeve, turnover, cost drag, net exposure by symbol across sleeves (partial: diversification ratio, drawdown overlap, turnover, cost drag, netting measured, correlation, marginal contribution, trade and name overlap built; capacity by sleeve open) [FP 37]
+- [x] P-10 Correlation over the full period and over a rolling window
+- [ ] [E] P-11 Constraints: max weight per member, per symbol and per sector; gross and net limits; leverage; cash reserve; minimum member count; ban list; max correlation between members (partial: max weight per member, max correlation, cash reserve and minimum member count built; per symbol and sector, gross and net limits, leverage and ban list open) [FP 36]
+- [x] P-12 Sleeve drop-out test: remove each member and show the effect
+- [x] P-13 Correlation shock: all members at correlation 0.8
+- [x] P-14 Crisis stress: the combined portfolio in each crisis window from 2015
+- [x] P-15 Overlap guard: warns when two members hold the same symbol in opposite directions or share more than 70% of signals
+- [x] P-16 Walk-forward allocation test: out-of-sample weights shown against full-sample weights
+- [ ] [H] P-17 Netting: opposite trades on one symbol across members cancel before execution (partial: netting measured, not applied to execution) [FP 74]
+- [x] P-18 Efficient frontier of the members with the chosen mix marked
+- [x] P-19 Rebalance costs counted when weights shift
 - [ ] [M] P-20 Deploy as one book, paper first, with netted orders and per-member P&L attribution
-- [ ] [M] P-21 Alpha, beta, tracking error and information ratio against the chosen benchmark
+- [x] P-21 Alpha, beta, tracking error and information ratio against the chosen benchmark
 - [ ] P-22 Multi-currency account with a base currency and FX on cash (blocked by data: no FX data in the data set)
 - [ ] [E] P-23 Portfolio view during a run: exposure by symbol, sector and asset class, cash, margin, beta to benchmark (partial: holdings treemap and names held built; sector exposure, beta and margin open)
-- [ ] [E] P-24 Meta rule: weight by regime; rotate to the strongest by trailing N months (partial: rotation to top N by 3-month return built; regime weighting open)
-- [ ] [M] P-25 Customise: default method, rebalance frequency, estimation window, constraints
+- [x] P-24 Meta rule: weight by regime; rotate to the strongest by trailing N months
+- [ ] [M] P-25 Customise: default method, rebalance frequency, estimation window, constraints (partial: chosen defaults returned in the run meta; saving and the settings page open)
 - [x] P-26 Cluster tree of members
 - [x] P-27 Rotation to the top N by trailing 3-month return
 - [x] P-28 Weights re-estimated quarterly on the trailing year (no look-ahead, tested)

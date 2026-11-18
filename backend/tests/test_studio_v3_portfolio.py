@@ -68,3 +68,57 @@ def test_analytics_netting_dropout_and_grade():
     assert out["stats"]["netting"]["saved"] == 1.0
     assert abs(out["stats"]["effective_bets"] - 3) < 1e-9 and len(out["tables"]["dropout"]) == 3
     assert out["grade"]["grade"] in "ABCDF" and {t["test"] for t in out["tiles"]} >= {"dsr", "walk_forward"}
+
+
+def _r(n=300, seed=3, k=3):
+    return pd.DataFrame(np.random.default_rng(seed).standard_normal((n, k)) * 0.01 + 0.0003, columns=list("abcd")[:k], index=pd.bdate_range("2020-01-01", periods=n))
+
+
+def test_new_methods_are_long_only_and_sum_to_one():  # P-6
+    r = _r(400)
+    for m in ("min_variance_shrunk", "capped_kelly", "member_momentum", "drawdown_throttle"):
+        w = P._weights(r, m)
+        assert (w >= 0).all() and abs(w.sum() - 1) < 1e-9, m
+    assert P._weights(_r(400, k=4), "capped_kelly").max() <= 0.25 + 1e-9
+    r["a"] = -0.001
+    assert P._weights(r, "member_momentum")[0] == 0  # negative trailing return gets nothing
+
+
+def test_drawdown_throttle_is_causal_and_cuts_exposure():  # P-6
+    r = pd.DataFrame({"a": [0.0, -0.5, 0.0, 0.0], "b": [0.0, 0.0, 0.0, 0.0]})
+    out, _ = P.rolling(r, "drawdown_throttle")
+    # bar 1 uses the weights known after bar 0 (full); bar 2 sees a at -50% and holds half of 1/2
+    assert np.allclose(out, [0.0, -0.25, 0.0, 0.0]) and np.allclose(P._weights(r, "drawdown_throttle"), [1 / 3, 2 / 3])
+
+
+def test_threshold_never_trades_inside_the_corridor():  # P-7
+    r = pd.DataFrame({"a": [0.001] * 20, "b": [0.0] * 20})
+    out, n, turn = P.threshold(r, np.array([0.5, 0.5]))
+    assert n == 0 and turn == 0 and out[0] == 0.0005
+    big = pd.DataFrame({"a": [0.2] * 5, "b": [0.0] * 5})
+    _, n, turn = P.threshold(big, np.array([0.5, 0.5]))
+    assert n >= 1 and turn > 0
+    _, n, _ = P.threshold(big, np.array([0.5, 0.5]), min_trade=0.9)
+    assert n == 0  # every trade is below the minimum
+
+
+def test_sleeves_disable_start_and_scale():  # P-5
+    r = _r(200, k=2)
+    out = P.apply_sleeves(r, {"a": "x", "b": "y"}, {"x": {"enabled": False}, "y": {"start": str(r.index[100].date())}})
+    assert (out["a"] == 0).all() and (out["b"][:100] == 0).all() and np.allclose(out["b"][100:], r["b"][100:])
+    sc = P.apply_sleeves(r, {"a": "x", "b": "y"}, {"x": {"vol_target": 0.05}})
+    assert np.allclose(sc["a"][:63], r["a"][:63]) and not np.allclose(sc["a"], r["a"]) and np.allclose(sc["b"], r["b"])
+
+
+def test_sleeve_bad_date_is_refused():
+    import pytest
+
+    from app.services.studio_v3.core.backtest import Refusal
+    with pytest.raises(Refusal):
+        P.apply_sleeves(_r(50, k=2), {"a": "x"}, {"x": {"start": "not a date"}})
+
+
+def test_run_exposes_member_ids_for_deploy():
+    from app.services.studio_v3.features import feature_04 as F
+    m = F.run({"strategy_ids": "6a211f9e020a 3713c9254031"})["meta"]
+    assert [d["name"] for d in m["member_ids"]] == m["names"] and abs(sum(d["weight"] for d in m["member_ids"]) - 1) < 1e-9

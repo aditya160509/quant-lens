@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from ..core import backtest, portfolio
@@ -11,10 +12,19 @@ FEATURE_ID = "st04"
 FEATURE_NAME = "Portfolio"
 INPUTS = [field("strategy_ids", "Strategies", "text", None, "Strategy"), *[f for f in shared_inputs() if f["key"] not in ("strategy_id", "version", "spec")],
           field("method", "Allocation", "select", "equal", "Allocation", options=[*portfolio.METHODS, "fixed"]),
-          field("rebalance", "Weights", "select", "in_sample", "Allocation", options=["in_sample", "quarterly"]),
+          field("rebalance", "Weights", "select", "in_sample", "Allocation", options=["in_sample", "quarterly", "threshold"]),
+          field("corridor", "Rebalance when a weight drifts by (pts)", "number", 5, "Allocation"),
+          field("min_trade", "Skip trades smaller than (pts)", "number", 1, "Allocation"),
           field("fixed", "Fixed weights (name=weight, …)", "text", "", "Allocation"),
           field("rotate_top", "Rotate: hold the top N by 3-month return (0 = off)", "number", 0, "Allocation"),
           field("max_weight", "Max weight per member (0 = none)", "number", 0, "Allocation"),
+          field("max_correlation", "Drop later member above correlation (0 = off)", "number", 0, "Allocation"),
+          field("cash_reserve", "Cash reserve (0-0.9)", "number", 0, "Allocation"),
+          field("min_members", "Minimum members (0 = off)", "number", 0, "Allocation"),
+          field("regime_rule", "Regime rule (on the benchmark)", "text", "", "Allocation"),
+          field("regime_on", "Allocation when the rule is true", "select", "", "Allocation", options=["", *portfolio.METHODS]),
+          field("regime_off", "Allocation when false", "select", "", "Allocation", options=["", *portfolio.METHODS]),
+          field("sleeves", 'Sleeves {id: {enabled, start, vol_target}}', "text", "", "Allocation"),
           field("switch", "Switch rule (on the benchmark)", "text", "", "Allocation"),
           field("switch_off", "Hold when the rule is false", "text", "", "Allocation")]
 OUTPUTS = [
@@ -44,8 +54,16 @@ def run(payload: dict[str, Any] | None = None, progress=None) -> dict[str, Any]:
     fixed = payload.get("fixed") or {}
     if isinstance(fixed, str):
         fixed = {k.strip(): float(v) for k, v in (x.split("=", 1) for x in fixed.split(",") if "=" in x)}
+    sleeves = payload.get("sleeves") or {}
+    if isinstance(sleeves, str):
+        try:
+            sleeves = json.loads(sleeves) if sleeves.strip() else {}
+        except ValueError:
+            raise backtest.Refusal("Sleeves must be JSON.", ['{"id": {"enabled": false}}']) from None
+    opts = {"corridor": float(payload.get("corridor") or 5) / 100, "min_trade": float(payload.get("min_trade") if payload.get("min_trade") is not None else 1) / 100, "sleeves": sleeves,
+            **{k: payload.get(k) for k in ("max_correlation", "cash_reserve", "min_members", "regime_rule", "regime_on", "regime_off")}}
     out = portfolio.run_portfolio(portfolio.members_from(ids), settings, str(payload.get("method") or "equal"), str(payload.get("switch") or ""), payload.get("switch_off") or None, progress,
                                   str(payload.get("rebalance") or "in_sample"), fixed, int(payload.get("rotate_top") or 0),
-                                  float(payload.get("max_weight") or 0) or None)
+                                  float(payload.get("max_weight") or 0) or None, opts)
     out["meta"]["strategy"] = {"id": None, "version": None, "name": "Portfolio"}
     return backtest._clean(out)

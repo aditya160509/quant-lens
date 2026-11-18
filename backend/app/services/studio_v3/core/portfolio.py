@@ -16,7 +16,7 @@ from . import formula, limits, store
 from .backtest import Refusal, prepare, simulate
 from .spec import Settings, Strategy
 
-METHODS = ("equal", "inverse_vol", "min_variance", "risk_parity", "hrp", "max_sharpe", "max_diversification")
+METHODS = ("equal", "inverse_vol", "min_variance", "risk_parity", "hrp", "max_sharpe", "max_diversification", "min_variance_shrunk", "capped_kelly", "member_momentum", "drawdown_throttle")
 MAX_MEMBERS = 12
 
 
@@ -45,6 +45,19 @@ def _weights(r: pd.DataFrame, method: str) -> np.ndarray:
         cov = r.cov().to_numpy() + np.eye(n) * 1e-10
         w = np.linalg.solve(cov, np.ones(n))
         w = np.clip(w, 0, None)  # long-only
+    elif method == "min_variance_shrunk":  # Ledoit-Wolf shrinkage towards a scaled identity, long-only
+        from sklearn.covariance import LedoitWolf
+        cov = LedoitWolf().fit(r.to_numpy()).covariance_ + np.eye(n) * 1e-10
+        w = np.clip(np.linalg.solve(cov, np.ones(n)), 0, None)
+    elif method == "capped_kelly":  # mean / variance per member, shares capped at 25%
+        var, mu = r.var().to_numpy(), r.mean().to_numpy()
+        k = np.clip(np.where(var > 0, mu / np.where(var > 0, var, 1), 0), 0, None)
+        w = _cap(k / k.sum(), 0.25) if k.sum() > 0 else k
+    elif method == "member_momentum":  # weight by positive trailing 6-month return
+        w = np.clip((1 + r.iloc[-126:]).prod().to_numpy() - 1, 0, None)
+    elif method == "drawdown_throttle":  # equal weight scaled by each member's current drawdown (static view; the rolling path keeps the cash)
+        g = (1 + r).cumprod()
+        w = np.clip(1 + (g.iloc[-1] / g.max() - 1).to_numpy(), 0, None)
     elif method == "risk_parity":  # equal risk contribution, fixed-point iteration
         cov = r.cov().to_numpy() + np.eye(n) * 1e-10
         w = np.ones(n) / n
@@ -109,11 +122,55 @@ def rolling(rets: pd.DataFrame, method: str, every: int = 63, lookback: int = 25
     T, n = rets.shape
     W = np.full((T, n), 1 / n)
     hist = []
+    if method == "drawdown_throttle":  # per bar, from the drawdown known at the previous close; the throttled share sits in cash
+        g = (1 + rets).cumprod().to_numpy()
+        W[1:] = (1 + g / np.maximum.accumulate(g) - 1)[:-1] / n
+        return (rets.to_numpy() * W).sum(1), hist
     for t in range(lookback, T, every):
         w = _weights(rets.iloc[t - lookback:t], method)
         W[t + 1:] = w
         hist.append({"date": str(rets.index[min(t + 1, T - 1)].date()), **{c: float(w[i]) for i, c in enumerate(rets.columns)}})
     return (rets.to_numpy() * W).sum(1), hist
+
+
+def threshold(rets: pd.DataFrame, target: np.ndarray, corridor: float = 0.05, min_trade: float = 0.01, cost: float = 0.001) -> tuple[np.ndarray, int, float]:
+    """Let weights drift; at a close where any weight is more than `corridor` off target, trade back (skipping trades under `min_trade`), applied from the next bar."""
+    R, h = rets.to_numpy(), target.copy()
+    out, count, turn = np.zeros(len(R)), 0, 0.0
+    for t in range(len(R)):
+        ret = float(h @ R[t])
+        out[t] = ret
+        d = h * (1 + R[t]) / (1 + ret) if 1 + ret > 0 else h
+        if np.abs(d - target).max() > corridor:
+            x = target - d
+            x[np.abs(x) < min_trade] = 0
+            if x.any():
+                h = (d + x) / (d + x).sum()
+                out[t] -= np.abs(x).sum() * cost
+                count, turn = count + 1, turn + float(np.abs(x).sum())
+                continue
+        h = d
+    return out, count, turn
+
+
+def apply_sleeves(rets: pd.DataFrame, ids: dict[str, str], sleeves: dict) -> pd.DataFrame:
+    """Per-member switches keyed by strategy id: enabled=false or a date before `start` contribute 0; `vol_target` scales by target / trailing 63-bar vol, shifted one bar, capped at 3x."""
+    r = rets.copy()
+    for n, sid in ids.items():
+        s = sleeves.get(sid) or {}
+        if s.get("enabled") is False:
+            r[n] = 0.0
+            continue
+        if s.get("start"):
+            try:
+                r.loc[r.index < pd.Timestamp(s["start"]), n] = 0.0
+            except ValueError:
+                raise Refusal("Bad sleeve start date.", [f"{n}: {s['start']}"]) from None
+        vt = float(s.get("vol_target") or 0)
+        if vt > 0:
+            vol = r[n].rolling(63).std().shift(1) * sqrt(252)
+            r[n] = r[n] * (vt / vol).where(vol > 0, 1.0).clip(upper=3.0).fillna(1.0)
+    return r
 
 
 def rotate(rets: pd.DataFrame, top: int, every: int = 21, lookback: int = 63) -> tuple[np.ndarray, list[dict]]:
@@ -148,7 +205,7 @@ def switch_series(rule: str, bench_close: np.ndarray, dates: pd.DatetimeIndex) -
 
 
 def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, method: str = "equal", switch: str = "", switch_off: str | None = None, progress=None,
-                  rebalance: str = "in_sample", fixed: dict | None = None, rotate_top: int = 0, max_weight: float | None = None) -> dict:
+                  rebalance: str = "in_sample", fixed: dict | None = None, rotate_top: int = 0, max_weight: float | None = None, opts: dict | None = None) -> dict:
     """members: (strategy id, version, spec). With `switch`, the first member is held while the rule is true and `switch_off` (an id among members) otherwise."""
     stage = progress or (lambda *_: None)
     if len(members) < (1 if switch else 2):
@@ -175,6 +232,27 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
     names = list(curves)
     rets = pd.DataFrame({n: pd.Series(eq, index=dates).pct_change().fillna(0.0) for n, (_, eq) in curves.items()})
 
+    o = opts or {}
+    corridor, min_trade, cash_res, max_corr, min_mem = (float(o.get(k) or d) for k, d in (("corridor", 0.05), ("min_trade", 0.01), ("cash_reserve", 0), ("max_correlation", 0), ("min_members", 0)))
+    if not (0 < corridor < 1 and 0 <= min_trade < 1 and 0 <= cash_res < 0.9 and 0 <= max_corr <= 1):
+        raise Refusal("Bad portfolio setting.", ["corridor 0-100 pts, minimum trade 0-100 pts, cash reserve 0-90%, max correlation 0-1"])
+    warns = []
+    if max_corr:
+        keep: list[str] = []
+        for n in names:
+            twin = next((k for k in keep if rets[k].corr(rets[n]) > max_corr), None)
+            if twin:
+                warns.append(f"{n} dropped: correlation with {twin} above {max_corr:.2f}")
+            else:
+                keep.append(n)
+        names, rets = keep, rets[keep]
+        curves, results, cost2 = ({n: v[n] for n in names if n in v} for v in (curves, results, cost2))
+    if len(names) < min_mem:
+        raise Refusal("Fewer members than the minimum.", [f"{len(names)} left, need {min_mem}"] + warns)
+    rets = apply_sleeves(rets, {n: curves[n][0] for n in names}, o.get("sleeves") or {})
+    if cash_res:
+        rets = rets * (1 - cash_res)  # the reserve earns nothing
+
     stage("combine", 75)
     by_method = {}
     for m in METHODS:
@@ -194,6 +272,25 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
     elif rebalance == "quarterly" and method in METHODS and len(dates) > 300:
         r, over_time = rolling(rets, method)
         combined = cap * np.cumprod(1 + r)
+    reb = None
+    if rebalance == "threshold" and not rotate_top:
+        r, cnt, turn = threshold(rets, w, corridor, min_trade)
+        combined = cap * np.cumprod(1 + r)
+        reb = {"count": cnt, "turnover": turn, "corridor": corridor, "min_trade": min_trade}
+    regime = None
+    if o.get("regime_rule") and not switch:
+        on_m, off_m = o.get("regime_on") or method, o.get("regime_off") or "equal"
+        if on_m not in by_method or off_m not in by_method:
+            raise Refusal("Unknown regime method.", [f"{on_m} / {off_m}"])
+        if prep.benchmark is None:
+            raise Refusal("The regime rule needs a benchmark.", ["set a benchmark symbol"])
+        state = switch_series(o["regime_rule"], prep.benchmark, dates)
+        R = rets.to_numpy()
+        combined = cap * np.cumprod(1 + np.where(state, R @ by_method[on_m][0], R @ by_method[off_m][0]))
+        regime = {"rule": o["regime_rule"], "on": on_m, "off": off_m, "share_on": float(state.mean())}
+    last = np.array([over_time[-1][n] for n in names]) if over_time else w
+    ver = {sid: v for sid, v, _ in members}
+    member_ids = [{"name": n, "strategy_id": curves[n][0], "version": ver[curves[n][0]], "weight": float(last[i])} for i, n in enumerate(names)]
     tree = None
     if len(names) > 2:
         _, link, order = _hrp(rets)
@@ -223,6 +320,9 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
     overlap = [{"a": a, "b": b, "both_active": float((in_mkt[a] & in_mkt[b]).mean()), "correlation": float(rets[a].corr(rets[b]))} for i, a in enumerate(names) for b in names[i + 1:]]
     corr = rets.corr()
     extra = analytics(rets, w, combined, dates, cap, prep.benchmark, results, cost2, names, method, switch, len(by_method))
+    extra["warnings"] = warns + extra["warnings"]
+    defaults = {"method": method, "rebalance": rebalance, "corridor": corridor * 100, "min_trade": min_trade * 100, "max_weight": max_weight or 0, "max_correlation": max_corr,
+                "cash_reserve": cash_res, "min_members": min_mem, "rotate_top": rotate_top, "regime_rule": o.get("regime_rule") or "", "regime_on": o.get("regime_on") or "", "regime_off": o.get("regime_off") or ""}
     curve = pd.DataFrame({"date": [str(d.date()) for d in dates], "combined": combined, **{n: eq for n, (_, eq) in curves.items()}})
     step = max(1, len(curve) // 1500)
     sh = cm.get("sharpe")
@@ -238,10 +338,10 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
                    "members": [{"strategy": n, "weight": float(w[i]), **{k: each[n].get(k) for k in ("sharpe", "cagr", "max_drawdown")}} for i, n in enumerate(names)],
                    "correlation": [{"strategy": a, **{b: float(corr.loc[a, b]) for b in names}} for a in names],
                    "marginal": marginal, "overlap": overlap, "failed": failed, **extra["tables"]},
-        "meta": {"headline": head, "grade": extra["grade"], "tiles": extra["tiles"], "warnings": extra["warnings"], "stats": extra["stats"], "frontier": extra["frontier"], "method": "rotate" if rotate_top else method, "rebalance": rebalance, "tree": tree, "names": names, "switch": switch_info, "total_return": float(combined[-1] / cap - 1), "metrics": {"sharpe": sh, "trades": None},
-                 "run_hash": hashlib.sha256(f"st04:{[m[0] for m in members]}:{[m[2].hash() for m in members]}:{settings.hash()}:{method}:{switch}:{switch_off}:{rebalance}:{fixed}:{rotate_top}:{max_weight}".encode()).hexdigest()[:16],
+        "meta": {"headline": head, "grade": extra["grade"], "tiles": extra["tiles"], "warnings": extra["warnings"], "stats": extra["stats"], "frontier": extra["frontier"], "method": "rotate" if rotate_top else method, "rebalance": rebalance, "tree": tree, "names": names, "switch": switch_info, "regime": regime, "member_ids": member_ids, "rebalances": reb, "defaults": defaults, "total_return": float(combined[-1] / cap - 1), "metrics": {"sharpe": sh, "trades": None},
+                 "run_hash": hashlib.sha256(f"st04:{[m[0] for m in members]}:{[m[2].hash() for m in members]}:{settings.hash()}:{method}:{switch}:{switch_off}:{rebalance}:{fixed}:{rotate_top}:{max_weight}:{sorted(o.items())}".encode()).hexdigest()[:16],
                  "result_hash": hashlib.sha256(np.round(combined, 6).tobytes()).hexdigest()[:16], "freshness": limits.freshness(), "verdict_chip": f"grade {extra['grade']['grade']}",
-                 "weights_note": None if rebalance == "quarterly" or rotate_top else "weights use the whole development period (in-sample)",
+                 "weights_note": None if rebalance in ("quarterly", "threshold") or rotate_top else "weights use the whole development period (in-sample)",
                  "period": [str(dates[0].date()), str(dates[-1].date())], "settings": settings.model_dump()},
     }
 
