@@ -113,3 +113,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-53 advanced. Python preview and full Backtest report the configured warm-up and first order-eligible date. Per-symbol mode counts observed bars separately and returns a null date for an insufficient history. Portfolio mode counts run sessions. Automatic inference remains open.
 
 - B-52 verified. The portfolio rebalance hook accepts daily, week, month, quarter and year starts, a positive number of observed bars, or None. Tests verify the hook and `ctx.rebalancing` agree across gaps and calendar boundaries.
+
+- B-33 advanced via `POST /api/studio-v3/build/check`. The typed result includes sandbox and formula checks, direct nonnegative OHLCV indexes, undefined names and unused locals. Ruff supplies the last two checks when available; Studio checks remain active independently. Unreachable-order lint and editor wiring are open.

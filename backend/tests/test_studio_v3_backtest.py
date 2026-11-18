@@ -521,3 +521,21 @@ def test_formula_condition_kinds_are_causal():
         np.testing.assert_array_equal(formula.evaluate(expression, bars, dates)[:, 0], result)
         prefix = {field: series[:-1] for field, series in bars.items()}
         np.testing.assert_array_equal(formula.evaluate(expression, prefix, dates[:-1])[:, 0], result[:-1])
+
+
+def test_build_check_reports_python_problems_with_editor_locations(studio):
+    code = """import os
+class Strategy:
+    def on_bar(self, ctx):
+        unused = 2
+        print(missing, math.sqrt(4))
+        print(ctx.close[+1])
+"""
+    response = studio.post("/api/studio-v3/build/check", json={"code": code})
+    assert response.status_code == 200
+    problems = response.json()["problems"]
+    assert [(item["line"], item["code"]) for item in problems] == [
+        (1, "studio-check"), (4, "F841"), (5, "F821"), (6, "look-ahead"),
+    ]
+    assert problems[1]["severity"] == "warning"
+    assert problems[2]["file"] == "main.py" and problems[2]["column"] == 15

@@ -94,6 +94,42 @@ def check(code: str, params: dict[str, float]) -> list[dict]:
     return found
 
 
+def lint(code: str, params: dict[str, float]) -> list[dict]:
+    problems = [
+        {"severity": f["severity"], "line": f["line"], "column": f["start"] + 1, "end_column": f["end"] + 1,
+         "code": "studio-check", "message": f["message"]}
+        for f in check(code, params)
+    ]
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return problems
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute) and node.value.attr in {"open", "high", "low", "close", "volume"}:
+            index = node.slice
+            if isinstance(index, ast.UnaryOp) and isinstance(index.op, ast.UAdd):
+                index = index.operand
+            if isinstance(index, ast.Constant) and type(index.value) is int and index.value >= 0:
+                problems.append({"severity": "error", "line": node.lineno, "column": node.col_offset + 1,
+                                 "end_column": node.end_col_offset + 1, "code": "look-ahead",
+                                 "message": "Use a negative offset for OHLCV series, with -1 for the current bar."})
+    try:
+        result = subprocess.run(
+            [str(Path(sys.executable).with_name("ruff")), "check", "--isolated", "--ignore-noqa",
+             "--config", 'builtins = ["math"]', "--select", "F821,F841", "--output-format", "json",
+             "--stdin-filename", "main.py", "-"], input=code, capture_output=True, text=True, check=False, timeout=0.1,
+        )
+        rows = json.loads(result.stdout) if result.returncode in (0, 1) else []
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        rows = []
+    for row in rows:
+        location, end = row["location"], row["end_location"]
+        problems.append({"severity": "warning" if row["code"] == "F841" else "error", "line": location["row"],
+                         "column": location["column"], "end_column": end["column"],
+                         "code": row["code"], "message": row["message"]})
+    return sorted(problems, key=lambda problem: (problem["line"], problem["column"], problem["code"]))
+
+
 class CodeError(Exception):
     def __init__(self, message: str, problem: dict | None = None):
         super().__init__(message)

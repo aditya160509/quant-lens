@@ -156,6 +156,30 @@ def format_python(request: CodeRequest) -> dict[str, str]:
     return {"code": p.stdout if p.returncode == 0 and p.stdout else request.code}
 
 
+class BuildCheckRequest(BaseModel):
+    code: str = Field(max_length=200_000)
+    params: dict[str, float] = Field(default_factory=dict)
+
+
+class BuildProblem(BaseModel):
+    severity: str
+    file: str = "main.py"
+    line: int
+    column: int
+    end_column: int
+    code: str
+    message: str
+
+
+class BuildCheckResult(BaseModel):
+    problems: list[BuildProblem]
+
+
+@router.post("/build/check", response_model=BuildCheckResult)
+def check_python(request: BuildCheckRequest) -> BuildCheckResult:
+    return BuildCheckResult(problems=pycode.lint(request.code, request.params))
+
+
 class PreviewRequest(BaseModel):
     spec: dict
     symbol: str = "SPY"
