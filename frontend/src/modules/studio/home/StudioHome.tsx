@@ -1,7 +1,7 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { Archive, Copy, FileJson, Play, Plus, Search } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy, FileJson, Play, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -11,6 +11,7 @@ import { pct } from "@/modules/research/format";
 import { defaultsFor } from "@/modules/research/StudyForm";
 import { useStudies } from "@/modules/research/store";
 import type { FeatureSpec } from "@/modules/research/types";
+import { STUDIO_BASE } from "../base";
 import { studio, useHome, useTemplates, type Compiled, type StrategyCard, type Template } from "../api";
 import { FreshnessPill } from "../RunHeader";
 import { Segmented } from "@/workspace/ui";
@@ -34,6 +35,12 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<"last" | "name">("last");
+  const [status, setStatus] = useState<string | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
+  const term = q.trim();
+  // Search reaches into rules, code, tags and hypotheses on the server; names alone filter instantly here.
+  const found = useQuery({ queryKey: ["studio", "search", term], queryFn: () => studio<{ strategies: StrategyCard[] }>("GET", `/search?q=${encodeURIComponent(term)}`), enabled: term.length > 1, staleTime: 30_000 });
+  const trash = useQuery({ queryKey: ["studio", "trash"], queryFn: () => studio<{ strategies: StrategyCard[]; days: number }>("GET", "/trash"), enabled: trashOpen });
   const [picked, setPicked] = useState<string | null>(null);
   const params = useSearchParams();
   const view = params?.get("layout") === "table" ? "table" : "cards";
@@ -55,7 +62,25 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
   const open = (s: StrategyCard) => openIn(s.id, s.last_run ? `run=${s.last_run.job_id}` : "go=1");
   const fromTemplate = (t: Template) => studio<StrategyCard>("POST", "/strategies", { spec: t.spec }).then((s) => { void refresh(); openIn(s.id, "go=1"); }, fail);
   const duplicate = (id: string) => studio("POST", `/strategies/${id}/duplicate`).then(() => { void refresh(); toast.success("Duplicated"); }, fail);
-  const archive = (id: string) => studio("PATCH", `/strategies/${id}`, { archived: true }).then(() => { void refresh(); toast.success("Archived"); }, fail);
+  const toTrash = (s: StrategyCard) => studio("POST", `/strategies/${s.id}/trash`).then(() => {
+    void refresh();
+    toast((t) => <span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>{s.name} moved to trash<button className="btn sm" onClick={() => { toast.dismiss(t.id); void restore(s.id); }}>Undo</button></span>);
+  }, fail);
+  const restore = (id: string) => studio("POST", `/strategies/${id}/trash?restore=true`).then(() => { void refresh(); void qc.invalidateQueries({ queryKey: ["studio", "trash"] }); }, fail);
+  const purge = (s: StrategyCard) => {
+    const typed = window.prompt(`Delete ${s.name} for good? Type its name to confirm.`);
+    if (typed === null) return;
+    void studio("DELETE", `/strategies/${s.id}?confirm=${encodeURIComponent(typed)}`).then(() => { void qc.invalidateQueries({ queryKey: ["studio", "trash"] }); toast.success("Deleted"); }, fail);
+  };
+  const rerun = (ids: string[]) => studio<{ jobs: unknown[]; refused: { reason: string }[] }>("POST", "/strategies/rerun", { ids, payload: {} }).then((r) => toast.success(`${r.jobs.length} queued${r.refused.length ? `, ${r.refused.length} refused` : ""}`), fail);
+  const exportZip = (ids: string[]) => fetch(`${STUDIO_BASE}/strategies/export`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) })
+    .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`Export failed (${r.status})`))))
+    .then((b) => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "strategies.zip"; a.click(); URL.revokeObjectURL(a.href); }, fail);
+  const combine = (ids: string[]) => {
+    const f = features.find((x) => x.id === "st04");
+    if (f) useStudies.getState().setForm("st04", (cur) => ({ ...cur, strategy_ids: ids.join(" ") }), defaultsFor(f));
+    router.push("/studio/portfolio");
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -72,8 +97,10 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
   if (home.isError && !home.data) {
     return <div className="island"><div className="st-skip" role="alert">Strategy list failed: {(home.error as Error).message}<button className="btn sm" style={{ marginTop: 10 }} onClick={() => home.refetch()}>Retry</button></div></div>;
   }
-  const all = home.data?.strategies ?? [];
-  const list = all.filter((s) => !q || `${s.name} ${s.tags.join(" ")} ${s.folder}`.toLowerCase().includes(q.toLowerCase()))
+  const all = (home.data?.strategies ?? []).filter((s) => !s.trashed && !s.archived);
+  const hitIds = term.length > 1 && found.data ? new Set(found.data.strategies.map((x) => x.id)) : null;
+  const counts = all.reduce<Record<string, number>>((m, s) => ({ ...m, [s.status ?? "Draft"]: (m[s.status ?? "Draft"] ?? 0) + 1 }), {});
+  const list = all.filter((s) => (!status || (s.status ?? "Draft") === status) && (!term || (hitIds ? hitIds.has(s.id) : `${s.name} ${s.tags.join(" ")} ${s.folder}`.toLowerCase().includes(term.toLowerCase()))))
     .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : (b.last_run?.at ?? b.updated) - (a.last_run?.at ?? a.updated)));
   const loading = home.isLoading;
 
@@ -99,8 +126,32 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
           </section>
         ) : null}
 
+        {home.data?.live?.strategies.length ? (
+          <section>
+            <h2>Running</h2>
+            <div className="sh-live" data-testid="live-strip">
+              {home.data.live.strategies.map((l) => (
+                <Link key={l.id} href="/studio/live" className="sh-live-item">
+                  <b>{l.name}</b><span className="chip">{l.status}</span>
+                  {l.today_pnl != null ? <span className={l.today_pnl >= 0 ? "st-up" : "st-down"}>today {l.today_pnl > 0 ? "+" : ""}{pct(l.today_pnl, 2)}</span> : null}
+                  {l.paper_return != null ? <span>paper {pct(l.paper_return, 1)}</span> : null}
+                </Link>
+              ))}
+              <span className="sh-live-meta">{home.data.live.alerts} alerts today{home.data.live.heartbeat ? <>, last check {day(home.data.live.heartbeat)}</> : null}</span>
+            </div>
+          </section>
+        ) : null}
+
         <section>
-          <h2>Strategies</h2>
+          <div className="sh-head">
+            <h2>Strategies</h2>
+            <div className="sh-status" role="group" aria-label="Filter by status">
+              {(["Draft", "Backtested", "Validated", "Paper", "Live"] as const).filter((k) => counts[k]).map((k) => (
+                <button key={k} type="button" className="pill" aria-pressed={status === k} onClick={() => setStatus(status === k ? null : k)}>{k}<span className="num">{counts[k]}</span></button>
+              ))}
+            </div>
+            <button type="button" className="btn sm ghost" aria-pressed={trashOpen} onClick={() => setTrashOpen(!trashOpen)}><Trash2 size={12} />Trash</button>
+          </div>
           {loading ? (slow ? <div className="sh-grid">{Array.from({ length: 6 }, (_, i) => <div key={i} className="skel-card" style={{ height: 168 }} />)}</div> : null) : !all.length ? (
             <div className="sh-empty" data-testid="home-empty">
               <Link href="/studio/build"><Plus size={18} />Blank strategy</Link>
@@ -109,8 +160,12 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
             </div>
           ) : view === "table" ? (
             <DataTable rows={list.map((s) => ({ strategy: s.name, version: s.version, total_return: s.last_run?.total_return ?? null, sharpe: s.last_run?.sharpe ?? null, trades: s.last_run?.trades ?? null,
-              trend: s.last_run?.spark ?? [], last_run: s.last_run ? day(s.last_run.at) : null, raw_trials: s.trials.raw, effective_trials: s.trials.effective }))}
-              opts={{ rowActions: (r: Record<string, unknown>) => { const s = list.find((x) => x.name === r.strategy && x.version === r.version); return s ? (
+              status: s.status ?? "Draft", trend: s.last_run?.spark ?? [], last_run: s.last_run ? day(s.last_run.at) : null, raw_trials: s.trials.raw, effective_trials: s.trials.effective }))}
+              opts={{ bulk: (rows: Record<string, unknown>[], clear: () => void) => { const ids = rows.map((r) => list.find((x) => x.name === r.strategy && x.version === r.version)?.id).filter((x): x is string => Boolean(x)); return (<>
+                <button className="btn sm" onClick={() => { void rerun(ids); clear(); }}>Re-run</button>
+                <button className="btn sm" disabled={ids.length < 2} onClick={() => combine(ids)}>Combine</button>
+                <button className="btn sm" onClick={() => void exportZip(ids)}>Export</button>
+              </>); }, rowActions: (r: Record<string, unknown>) => { const s = list.find((x) => x.name === r.strategy && x.version === r.version); return s ? (
                 <span style={{ display: "inline-flex", gap: 4 }}>
                   <button className="btn sm" onClick={() => (s.last_run ? open(s) : openIn(s.id, "go=1"))}><Play size={12} />{s.last_run ? "Open" : "Run"}</button>
                   <Link className="btn sm ghost" href={`/studio/build/${s.id}`}>Edit</Link>
@@ -130,7 +185,7 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
                     </>
                   ) : <div className="st-skip" style={{ minHeight: 76 }}>not run</div>}
                   <div className="sh-chips">
-                    <span className="chip">not validated</span>
+                    <span className={`chip${s.validation_expired ? " warn" : ""}`}>{s.validation_expired ? "validation expired" : (s.status ?? "Draft")}</span>
                     <span className="chip">{s.trials.raw} raw / {s.trials.effective} effective trials</span>
                     {s.has_draft ? <span className="chip warn">draft</span> : null}
                   </div>
@@ -138,7 +193,7 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
                     <button className="btn sm" onClick={() => (s.last_run ? open(s) : openIn(s.id, "go=1"))}><Play size={12} />{s.last_run ? "Open" : "Run"}</button>
                     <Link className="btn sm ghost" href={`/studio/build/${s.id}`}>Edit</Link>
                     <button className="btn sm ghost" onClick={() => duplicate(s.id)}><Copy size={12} />Duplicate</button>
-                    <button className="btn sm ghost icon" aria-label={`Archive ${s.name}`} title="Archive" style={{ marginLeft: "auto" }} onClick={() => archive(s.id)}><Archive size={12} /></button>
+                    <button className="btn sm ghost icon" aria-label={`Move ${s.name} to trash`} title="Move to trash" style={{ marginLeft: "auto" }} onClick={() => toTrash(s)}><Trash2 size={12} /></button>
                   </div>
                 </div>
               ))}
@@ -146,10 +201,26 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
           )}
         </section>
 
+        {trashOpen ? (
+          <section>
+            <h2>Trash</h2>
+            {trash.data?.strategies.length ? (
+              <div className="sh-trash">
+                {trash.data.strategies.map((s) => (
+                  <div key={s.id}><b>{s.name}</b><span>v{s.version}</span>{s.purge_at ? <span>deleted for good {day(s.purge_at)}</span> : null}
+                    <button className="btn sm" onClick={() => void restore(s.id)}><RotateCcw size={12} />Restore</button>
+                    <button className="btn sm ghost" onClick={() => purge(s)}>Delete now</button>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="sh-trash-empty">{trash.isLoading ? "Loading…" : `Empty. Strategies stay here ${trash.data?.days ?? 30} days.`}</p>}
+          </section>
+        ) : null}
+
         {home.data?.recent_runs.length ? (
           <section>
             <h2>Recent runs</h2>
-            <DataTable rows={home.data.recent_runs.map((r) => ({ strategy: r.strategy ?? (r.feature === "st04" ? "Portfolio" : "Unsaved draft"), version: r.version, result: r.headline, run: new Date(r.at * 1000).toLocaleString() }))} opts={{ maxHeight: 260 }} />
+            <DataTable rows={home.data.recent_runs.map((r) => ({ strategy: r.strategy ?? (r.feature === "st04" ? "Portfolio" : "Unsaved draft"), version: r.version, result: r.headline, run: new Date(r.at * 1000).toLocaleString(), changed_since: r.settings_changed ? "yes" : "" }))} opts={{ maxHeight: 260 }} />
           </section>
         ) : null}
 

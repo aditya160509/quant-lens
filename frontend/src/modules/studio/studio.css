@@ -163,3 +163,16 @@
 .pf-stats { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
 .pf-stats th { text-align: left; font-weight: 400; color: var(--text-2); padding: 6px 0; border-bottom: 1px solid var(--line); }
 .pf-stats td { text-align: right; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.sh-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.sh-head h2 { margin: 0 8px 0 0; }
+.sh-status { display: flex; gap: 6px; flex-wrap: wrap; margin-right: auto; }
+.sh-status .pill .num { margin-left: 6px; font-size: 11px; opacity: 0.7; }
+.sh-live { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sh-live-item { display: inline-flex; gap: 8px; align-items: center; height: 36px; padding: 0 12px; border-radius: 8px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line); font-size: 12.5px; color: var(--text-2); }
+.sh-live-item b { color: var(--text); font-weight: 600; }
+.sh-live-meta { margin-left: auto; font-size: 12px; color: var(--text-3); }
+.sh-trash { display: grid; gap: 4px; }
+.sh-trash > div { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; border-radius: 8px; background: var(--panel-2); font-size: 13px; color: var(--text-3); }
+.sh-trash > div b { color: var(--text); font-weight: 500; }
+.sh-trash > div button:first-of-type { margin-left: auto; }
+.sh-trash-empty { margin: 0; font-size: 12.5px; color: var(--text-3); }
