@@ -300,6 +300,8 @@ class BuildDataUse(BaseModel):
 
 class BuildChecksResult(BaseModel):
     warmup_bars: int
+    warmup_share: float | None = None
+    warnings: list[str] = Field(default_factory=list)
     first_eligible_date: str | None
     data_used: list[BuildDataUse]
     period: list[str]
@@ -461,6 +463,8 @@ class PreviewResult(BaseModel):
     marks: list[PreviewMark] | None = None
     tables: dict[str, list[PreviewTableRow]] | None = None
     warmup: PreviewWarmup | None = None
+    risk_events: list[dict[str, Any]] | None = None
+    settings_overrides: dict[str, Any] | None = None
 
 
 class DebugBreakpointRequest(BaseModel):

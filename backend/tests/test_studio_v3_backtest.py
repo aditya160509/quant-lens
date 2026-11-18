@@ -535,10 +535,11 @@ class Strategy:
     assert response.status_code == 200
     problems = response.json()["problems"]
     assert [(item["line"], item["code"]) for item in problems] == [
-        (1, "studio-check"), (4, "F841"), (5, "F821"), (6, "look-ahead"),
+        (1, "studio-check"), (4, "F841"), (5, "print-in-loop"), (5, "F821"),
+        (6, "print-in-loop"), (6, "look-ahead"),
     ]
     assert problems[1]["severity"] == "warning"
-    assert problems[2]["file"] == "main.py" and problems[2]["column"] == 15
+    assert problems[3]["file"] == "main.py" and problems[3]["column"] == 15
 
 
 def test_build_completion_and_signature_use_portfolio_and_local_members(studio):
@@ -871,3 +872,103 @@ def test_opposite_signal_and_end_of_week_exits():  # B-120
     last[:-1] = periods[:-1] != periods[1:]
     assert (weekly_sig.exits[last, 0] == 3).all()
     assert (weekly_sig.exits[~last, 0] == 0).all()
+
+
+def test_risk_drawdown_flattens_everything_and_stops(studio):
+    spec = Strategy(entry_long="close > 0", risk={"max_drawdown": 0.02})
+    settings = Settings(**SETTINGS)
+    prep = backtest.prepare(settings)
+    sig = C.signals(spec, prep.sig_bars, prep.panel.dates)
+    bars = prep.panel.bars()
+    entries = np.where(np.isfinite(prep.panel.close), sig.entries, 0).astype(np.int8)
+    params = backtest.engine_params(spec, settings)
+    vector = engine.run(bars, entries, sig.exits, params)
+    event = engine.run(bars, entries, sig.exits, params, engine="event")
+    assert vector.risk_events and vector.risk_events[0]["kind"] == "drawdown"
+    assert vector.risk_events[0]["value"] <= -0.02 and vector.risk_events[0]["limit"] == 0.02
+    assert event.risk_events[0]["bar"] == vector.risk_events[0]["bar"]
+    assert np.array_equal(vector.equity, event.equity) and np.array_equal(vector.trades, event.trades, equal_nan=True)
+    bar = vector.risk_events[0]["bar"]
+    assert np.allclose(vector.equity[bar + 1:], vector.equity[bar + 1])
+    assert all(x[engine.T_ENTRY_BAR] <= bar for x in vector.trades)
+    assert engine.REASONS[int(vector.trades[-1][engine.T_REASON])] in {"risk stop", "open at end"}
+    out = backtest.run_backtest(spec, settings)
+    assert out["meta"]["risk_events"][0]["kind"] == "drawdown" and out["meta"]["risk_events"][0]["date"]
+    assert "Risk:" in out["meta"]["description"]
+
+
+def test_position_and_gross_caps_hold_at_entry():
+    close = np.full((3, 4), 100.0)
+    bars = {k: close for k in ("open", "high", "low", "close")} | {"volume": np.full((3, 4), 1e9)}
+    entries = np.zeros((3, 4), dtype=np.int8)
+    entries[0] = 1
+    exits = np.zeros((3, 4), dtype=np.int8)
+    per_name = engine.run(bars, entries, exits, engine.Params(commission_bps=0, slippage_bps=0, max_position=0.1))
+    free = engine.run(bars, entries, exits, engine.Params(commission_bps=0, slippage_bps=0))
+    assert len(per_name.trades) == 4
+    assert np.allclose(per_name.trades[:, engine.T_SHARES] * per_name.trades[:, engine.T_ENTRY_PX], 10_000)
+    assert np.allclose(free.trades[:, engine.T_SHARES] * free.trades[:, engine.T_ENTRY_PX], 25_000)
+    gross = engine.run(bars, entries, exits, engine.Params(commission_bps=0, slippage_bps=0, max_gross=0.25))
+    event = engine.run(bars, entries, exits, engine.Params(commission_bps=0, slippage_bps=0, max_gross=0.25), engine="event")
+    assert np.allclose(gross.gross_exposure[1:], 0.25) and np.allclose(event.gross_exposure[1:], 0.25)
+    assert np.array_equal(gross.trades, event.trades, equal_nan=True) and gross.unfilled == event.unfilled == 3
+
+
+def test_daily_loss_stop_halts_both_engines_on_the_same_bar():
+    close = np.array([[100.0], [100.0], [96.0], [92.0], [90.0]])
+    bars = {k: close for k in ("open", "high", "low", "close")} | {"volume": np.ones_like(close)}
+    entries = np.zeros((5, 1), dtype=np.int8)
+    entries[0, 0] = 1
+    exits = np.zeros((5, 1), dtype=np.int8)
+    params = engine.Params(commission_bps=0, slippage_bps=0, max_daily_loss=0.03)
+    vector = engine.run(bars, entries, exits, params)
+    event = engine.run(bars, entries, exits, params, engine="event")
+    assert vector.risk_events == [{"bar": 2, "kind": "daily_loss", "value": pytest.approx(-0.04), "limit": 0.03}]
+    assert event.risk_events[0]["bar"] == 2 and event.risk_events[0]["kind"] == "daily_loss"
+    assert np.array_equal(vector.equity, event.equity) and np.array_equal(vector.trades, event.trades, equal_nan=True)
+    assert np.allclose(vector.equity[3:], 92_000)
+
+
+def test_python_engine_settings_from_code_beat_the_card(studio):
+    from app.services.studio_v3.core import pycode
+
+    code = """class Strategy:
+    fill = "same_close"
+    commission_bps = 0
+    slippage_bps = 0
+    max_positions = 1
+
+    def on_data(self, ctx):
+        for symbol in ctx.symbols:
+            if ctx.pos(symbol).quantity == 0:
+                ctx.set_holdings(symbol, 0.5)
+"""
+    assert pycode.engine_overrides(code) == {"fill": "same_close", "commission_bps": 0, "slippage_bps": 0, "max_positions": 1}
+    assert pycode.engine_overrides('class Strategy:\n    fill = "soon"\n    max_positions = -1\n') == {}
+    spec = Strategy(code=code)
+    out = backtest.run_backtest(spec, Settings(**SETTINGS))
+    assert out["meta"]["settings_overrides"] == {"fill": "same_close", "commission_bps": 0, "slippage_bps": 0, "max_positions": 1}
+    assert out["meta"]["costs_off"] is True and out["meta"]["fill_model"] == "same_close"
+    assert max(row["positions"] for row in out["charts"]["exposure"]) <= 1
+    trades = out["tables"]["trades"]
+    assert trades and all(t["signal_date"] == t["entry_date"] for t in trades)
+    preview = studio.post("/api/studio-v3/preview", json={"spec": spec.model_dump(), "symbol": "AAA"}).json()
+    assert preview["settings_overrides"]["fill"] == "same_close"
+    assert all(t["signal_date"] == t["entry_date"] for t in preview["trades"])
+
+
+def test_profit_target_ladder_takes_two_rungs_then_the_rest():
+    close = np.array([[100.0], [100.0], [115.0], [125.0], [140.0]])
+    bars = {k: close for k in ("open", "high", "low", "close")} | {"volume": np.ones_like(close)}
+    entries = np.zeros((5, 1), dtype=np.int8)
+    entries[0, 0] = 1
+    exits = np.zeros((5, 1), dtype=np.int8)
+    params = engine.Params(commission_bps=0, slippage_bps=0, scale_at=0.1, scale_frac=0.3, scale_at2=0.2, scale_frac2=0.5, target=0.3)
+    rows = {}
+    for name in ("vector", "event"):
+        result = engine.run(bars, entries, exits, params, engine=name)
+        rows[name] = [(engine.REASONS[int(x[engine.T_REASON])], round(x[engine.T_SHARES], 1), int(x[engine.T_EXIT_BAR])) for x in result.trades]
+    assert rows["vector"] == [("scale out", 300.0, 2), ("scale out", 350.0, 3), ("target", 350.0, 4)]
+    assert rows["event"] == rows["vector"]
+    spec = Strategy(entry_long="close > 0", exits={"scale_at": 0.1, "scale_frac": 0.3, "scale_at2": 0.2, "scale_frac2": 0.5})
+    assert "then 50% at 20%" in C.describe(spec)

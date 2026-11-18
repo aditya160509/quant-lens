@@ -36,6 +36,8 @@ class Exits(_Model):
     breakeven: float = Field(0.0, ge=0)
     scale_at: float = Field(0.0, ge=0)
     scale_frac: float = Field(0.0, ge=0, le=1)
+    scale_at2: float = Field(0.0, ge=0)  # second rung, above the first
+    scale_frac2: float = Field(0.0, ge=0, le=1)
     opposite_signal: bool = False  # a short entry closes longs and a long entry closes shorts
     end_of_week: bool = False  # close every position on the last observed bar of the week
 
@@ -44,6 +46,15 @@ class Sizing(_Model):
     mode: Literal["shares", "cash", "pct_equity", "risk", "equal", "vol_target", "score", "kelly"] = "equal"
     value: float = Field(0.0, ge=0)
     max_positions: int = Field(10, ge=0)
+
+
+class Risk(_Model):
+    """Account-level stops (B-54) and exposure caps (B-121); zero means off. Studio holds daily bars, so one bar is one session."""
+
+    max_drawdown: float = Field(0.0, ge=0, le=1)  # flatten every position and stop trading at this fall from the peak
+    max_daily_loss: float = Field(0.0, ge=0, le=1)  # same, at this fall from the previous session's close
+    max_position: float = Field(0.0, ge=0, le=10)  # share of equity per name; 0 = off
+    max_gross: float = Field(0.0, ge=0, le=10)  # share of equity across all names; 0 = off
 
 
 class Limits(_Model):
@@ -69,6 +80,7 @@ class Strategy(_Model):
     params: dict[str, Param] = Field(default_factory=dict)
     exits: Exits = Field(default_factory=Exits)
     sizing: Sizing = Field(default_factory=Sizing)
+    risk: Risk = Field(default_factory=Risk)
     limits: Limits = Field(default_factory=Limits)
     code: str = ""  # Python source when the strategy was written as code
     files: dict[str, str] = Field(default_factory=dict, max_length=49)
@@ -179,10 +191,12 @@ _SIZE = {"shares": fills.SHARES, "cash": fills.CASH, "pct_equity": fills.PCT_EQU
 
 
 def engine_params(spec: Strategy, settings: Settings, cost_multiple: float = 1.0) -> Params:
-    e, c = spec.exits, settings.costs
+    e, c, r = spec.exits, settings.costs, spec.risk
     return Params(
         fill=float(settings.fill == "same_close"), stop=e.stop, target=e.target, trail=e.trail, time_stop=e.time_stop, breakeven=e.breakeven,
         scale_at=e.scale_at, scale_frac=e.scale_frac, size_mode=_SIZE[spec.sizing.mode], size=spec.sizing.value, max_positions=spec.sizing.max_positions,
+        scale_at2=e.scale_at2, scale_frac2=e.scale_frac2,
         commission_bps=c.commission_bps * cost_multiple, commission_share=c.commission_share * cost_multiple, commission_min=c.commission_min * cost_multiple,
         slippage_bps=c.slippage_bps * cost_multiple, slippage_range=c.slippage_range * cost_multiple, borrow_bps=c.borrow_bps * cost_multiple,
-        volume_cap=c.volume_cap, delist_haircut=settings.delist_haircut, leverage=settings.leverage, capital=settings.capital)
+        volume_cap=c.volume_cap, delist_haircut=settings.delist_haircut, leverage=settings.leverage, capital=settings.capital,
+        max_dd=r.max_drawdown, max_daily_loss=r.max_daily_loss, max_position=r.max_position, max_gross=r.max_gross)

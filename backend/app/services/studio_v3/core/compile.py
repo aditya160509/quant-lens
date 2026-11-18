@@ -59,6 +59,10 @@ def compile_spec(spec: Strategy) -> dict:
             findings.append({"severity": "error", "role": "sizing", "line": 0, "start": 0, "end": 0, "token": spec.sizing.mode, "message": "Position size is zero"})
         if e.scale_at and not e.scale_frac:
             findings.append({"severity": "warning", "role": "exits", "line": 0, "start": 0, "end": 0, "token": "scale_at", "message": "Scale-out level set without a share to sell"})
+        if e.scale_at2 and not e.scale_frac2:
+            findings.append({"severity": "warning", "role": "exits", "line": 0, "start": 0, "end": 0, "token": "scale_at2", "message": "Second scale-out level set without a share to sell"})
+        if e.scale_at2 and e.scale_at and e.scale_at2 <= e.scale_at:
+            findings.append({"severity": "warning", "role": "exits", "line": 0, "start": 0, "end": 0, "token": "scale_at2", "message": "The second scale-out level must be above the first"})
     for name in sorted(set(params) - used):
         findings.append({"severity": "warning", "role": "params", "line": 0, "start": 0, "end": 0, "token": name, "message": f"Parameter '{name}' is not used by any rule"})
     block_count = len(spec.blocks)
@@ -244,12 +248,19 @@ def describe(spec: Strategy) -> str:
                         f"trailing stop {_pct(e.trail)}" if e.trail else "", f"time stop {e.time_stop} bars" if e.time_stop else "",
                         f"stop to entry after {_pct(e.breakeven)}" if e.breakeven else "",
                         f"sell {_pct(e.scale_frac)} at {_pct(e.scale_at)}" if e.scale_at and e.scale_frac else "",
+                        f"then {_pct(e.scale_frac2)} at {_pct(e.scale_at2)}" if e.scale_at2 and e.scale_frac2 else "",
                         "an opposite entry closes the other side" if e.opposite_signal else "",
                         "close on the last bar of the week" if e.end_of_week else "") if t]
+    risk = spec.risk
+    guard = [t for t in (f"stop everything at {_pct(risk.max_drawdown)} drawdown" if risk.max_drawdown else "",
+                         f"stop everything at {_pct(risk.max_daily_loss)} in one session" if risk.max_daily_loss else "",
+                         f"at most {_pct(risk.max_position)} of equity per name" if risk.max_position else "",
+                         f"at most {_pct(risk.max_gross)} of equity invested" if risk.max_gross else "") if t]
     size = {"shares": f"{s.value:g} shares", "cash": f"${s.value:,.0f}", "pct_equity": f"{_pct(s.value)} of equity", "risk": f"{_pct(s.value)} of equity at risk to the stop",
             "equal": "an equal share of equity", "vol_target": f"an equal share scaled to {_pct(s.value)} annual volatility",
             "score": "an equal share weighted by score", "kelly": f"the Kelly fraction of closed trades, at most {_pct(s.value)}"}[s.mode]
     cap = f", at most {s.max_positions} positions" if s.max_positions else ""
     rank = f", best {spec.score.strip()} first" if spec.score.strip() else ""
     rank += f". Only while {spec.market_filter.strip()}, else cash" if spec.market_filter.strip() else ""
-    return "\n".join([("; ".join(entry) or "No entry rule") + ".", "Exit: " + ("; ".join(out) or "none, held to the end") + ".", f"Size: {size} per trade{cap}{rank}."])
+    return "\n".join([("; ".join(entry) or "No entry rule") + ".", "Exit: " + ("; ".join(out) or "none, held to the end") + ".",
+                      f"Size: {size} per trade{cap}{rank}." + (f" Risk: {'; '.join(guard)}." if guard else "")])

@@ -197,3 +197,39 @@ Known limits:
 - `POST /build/checks` reports the warm-up of the formulas and the literal `warmup` class attribute. A Python strategy that builds an indicator from a variable period is not counted.
 - `ruff format --check` does not pass on this repository baseline (43 pre-existing files, none of them changed here). `ruff check` passes on every touched file.
 - `tests/test_shared_stats.py` fails to import on the baseline (`cscv_pbo` is missing from `screener_v2.core.backtest`), so the full suite is run with that module ignored.
+
+## Build backend: risk, sizing and diagnostics (2026-11-18)
+
+What shipped, by id:
+
+- B-54, B-61. `spec.risk` carries `max_drawdown`, `max_daily_loss`, `max_position` and `max_gross`, each off at 0. Both engines check the drawdown against the running peak and the loss against the previous session at each close; on a breach every position is flattened at the next fill, working orders are cancelled, no new entry is taken and one risk event `{bar, kind, value, limit}` is recorded. `max_position` caps one name's notional at entry and `max_gross` caps total notional at entry. A Python strategy gets `on_risk_event(self, ctx, event)` once, with `kind`, `date`, `value` and `limit`. The vector and event engines are compared trade for trade on a breach.
+- B-63. `Strategy` class attributes `fill`, `commission_bps`, `commission_share`, `commission_min`, `slippage_bps`, `slippage_range`, `borrow_bps`, `max_positions` and `leverage` override the run card. Only literals pass, ranges are checked and an unknown value is ignored. Preview and the Backtest report return `settings_overrides`, and the report's `fill_model` and `costs_off` describe the values actually used. The cost ladder still multiplies the code's cost values.
+- B-120. A second profit rung: `exits.scale_at2` / `exits.scale_frac2` sells a fraction of what is left at its own level, then the final target closes the rest. Each rung fills at its own price when a bar gaps through both. Compile warns when the second level is set without a share or when it is not above the first; "What it does" names both rungs.
+- B-38, B-40. Lint gained `hard-coded-symbol` (a literal ticker in a portfolio strategy that reads `ctx.symbols`), `print-in-loop`, `mutable-default`, `wall-clock` (`datetime.now`, `today`, `utcnow`), `network` (an `http://` or `https://` literal) and `unseeded-random` (`np.random` without a seeded `seed` or `default_rng`). `/build/checks` now returns `warmup_share` and `warnings`, including a warning when the warm-up needs the whole period.
+- B-121 (partial). `max_position` and `max_gross` ship; an explicit inverse-vol risk-parity sizing mode is still open.
+
+API changes (all under `/api/studio-v3`):
+
+- `POST /preview` — adds `risk_events` and `settings_overrides`.
+- `POST /build/checks` — adds `warmup_share` and `warnings`.
+- `POST /build/check` — adds the six diagnostic codes above; shape unchanged.
+- `POST /feature/st01/jobs` (Backtest) — `meta.risk_events` and `meta.settings_overrides`; `meta.fill_model` and `meta.costs_off` follow the code when it overrides the card.
+
+Budgets measured on this machine (server, warm):
+
+- lint 300 lines: 31 ms p95 (budget 150 ms), after the new diagnostics.
+- compile 300-line strategy: unchanged, well under 100 ms.
+- The risk checks are two comparisons per bar in both engines; the 500 × 2,500 Python run stays at 0.55 s.
+
+Still open and why:
+
+- B-121: inverse-vol risk parity across the candidates needs a new sizing mode in `fills.size_shares` and a volatility vector per candidate in both engines.
+- B-105/B-113: nested block groups and named formula variables are formula-language and editor work; not started.
+- B-55 `ctx.store`, B-56 feature fitting and sklearn, B-64 full Python parity, B-71 variables grid: not started (sklearn stays out of the sandbox on purpose).
+- The frontend badge for `settings_overrides`, the risk card rows and the new problem codes is wiring only.
+
+Known limits:
+
+- One bar is one session: `max_daily_loss` compares consecutive bars, which is exact for the daily bars Studio holds.
+- Exposure caps are applied when a position is opened, not rebalanced every bar, so marked gross can drift above the cap with price moves.
+- A risk breach stops the run permanently; re-entering after a cool-down is not modelled.

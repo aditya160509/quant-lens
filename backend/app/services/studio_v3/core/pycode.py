@@ -9,6 +9,7 @@ import ast
 import inspect
 import json
 import keyword
+import math
 import subprocess
 import sys
 import tempfile
@@ -85,6 +86,38 @@ def _formula_args(node):
 
 def _literal_formula(node):
     return isinstance(node, ast.Constant) and isinstance(node.value, str)
+
+
+ENGINE_SETTINGS = {"fill", "commission_bps", "commission_share", "commission_min", "slippage_bps", "slippage_range",
+                   "borrow_bps", "max_positions", "leverage"}
+
+
+def engine_overrides(code: str) -> dict[str, float | str]:
+    """Engine settings written as Strategy class attributes (B-63). Literals only, range-checked; the code wins over the card."""
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, ValueError):
+        return {}
+    out: dict[str, float | str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef) or node.name != "Strategy":
+            continue
+        for item in node.body:
+            if not isinstance(item, ast.Assign) or len(item.targets) != 1 or not isinstance(item.targets[0], ast.Name):
+                continue
+            name = item.targets[0].id
+            if name not in ENGINE_SETTINGS:
+                continue
+            try:
+                value = ast.literal_eval(item.value)
+            except (ValueError, SyntaxError, TypeError):
+                continue
+            if name == "fill":
+                if value in ("next_open", "same_close"):
+                    out[name] = value
+            elif type(value) in (int, float) and math.isfinite(value) and 0 <= value <= (1000 if name == "max_positions" else 10 if name == "leverage" else 1000):
+                out[name] = value
+    return out
 
 
 def exprs(code: str) -> list[str]:
@@ -414,6 +447,49 @@ def _local_definition(code: str, line: int, column: int) -> list[dict]:
 
 _ORDER_CALLS = {"buy", "sell", "short", "cover", "market_order", "limit_order", "stop_order", "stop_limit_order",
                 "order", "order_value", "limit", "stop", "stop_limit", "target_weights", "set_holdings", "set_weight", "liquidate"}
+_SYMBOL_CALLS = _ORDER_CALLS | {"bar", "pos", "quote"}
+
+def _np_random(node: ast.AST) -> bool:
+    return (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Attribute) and node.value.attr == "random"
+            and isinstance(node.value.value, ast.Name) and node.value.value.id == "np")
+
+
+def _domain_problems(tree: ast.AST) -> list[dict]:
+    """Domain findings in lint (B-38, B-40): hard-coded symbols, print in the bar loop, mutable defaults,
+    wall-clock reads, network URLs and unseeded randomness."""
+    problems: list[dict] = []
+
+    def add(node: ast.AST, code: str, message: str) -> None:
+        problems.append({"severity": "warning", "line": getattr(node, "lineno", 1),
+                         "column": getattr(node, "col_offset", 0) + 1, "end_column": getattr(node, "end_col_offset", 0) + 1,
+                         "code": code, "message": message})
+
+    functions = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    hot = {id(n) for f in functions if f.name in {"on_bar", "on_data"} for n in ast.walk(f)}
+    portfolio = any(f.name == "on_data" for f in functions)
+    universe = any(isinstance(n, ast.Attribute) and n.attr == "symbols" for n in ast.walk(tree))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if id(node) in hot and isinstance(node.func, ast.Name) and node.func.id == "print":
+                add(node, "print-in-loop", "print runs on every bar; use ctx.log while debugging.")
+            if isinstance(node.func, ast.Attribute) and node.func.attr in {"now", "today", "utcnow"}:
+                add(node, "wall-clock", "Wall-clock time makes a run differ from the next; use ctx.date.")
+            if (isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) and node.func.value.id == "ctx"
+                    and node.func.attr in _SYMBOL_CALLS and node.args and portfolio and universe
+                    and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str) and node.args[0].value.isupper()):
+                add(node, "hard-coded-symbol", f"'{node.args[0].value}' is fixed while the universe is a parameter; use ctx.symbol or ctx.symbols.")
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value.lower().startswith(("http://", "https://")):
+            add(node, "network", "Network addresses cannot be read in a backtest; data comes from the saved parquets.")
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for default in [*node.args.defaults, *[d for d in node.args.kw_defaults if d is not None]]:
+                if isinstance(default, (ast.List, ast.Dict, ast.Set)):
+                    add(default, "mutable-default", "A mutable default is shared between calls; build it inside the function.")
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and _np_random(n.func) and n.func.attr != "seed"]
+    seeded = any(isinstance(n, ast.Call) and _np_random(n.func) and n.func.attr in {"seed", "default_rng", "RandomState"} and n.args
+                 for n in ast.walk(tree))
+    if calls and not seeded:
+        add(calls[0], "unseeded-random", "Unseeded randomness makes runs differ; call np.random.seed(7) or np.random.default_rng(7).")
+    return problems
 
 
 def _unreachable_orders(tree):
@@ -448,6 +524,7 @@ def lint(code: str, params: dict[str, float], *, file: str = "main.py", modules:
         problems.append({"severity": "warning", "line": node.lineno, "column": node.col_offset + 1,
                          "end_column": node.end_col_offset + 1, "code": "unreachable-order",
                          "message": "This order cannot be reached."})
+    problems.extend(_domain_problems(tree))
     for node in ast.walk(tree):
         if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute) and node.value.attr in {"open", "high", "low", "close", "volume"}:
             index = node.slice
@@ -521,11 +598,12 @@ def run_event(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, p
         benchmark = signal_bars["market"][:, 0]
     if benchmark is not None:
         extras["benchmark"] = benchmark
-    arrays = _execute(code, signal_bars if signal_bars is not None else bars, dates, params, symbols, None, output,
+    info = {} if output is None else output
+    arrays = _execute(code, signal_bars if signal_bars is not None else bars, dates, params, symbols, None, info,
                       event_settings=asdict(settings), files=files, debug_symbol=debug_symbol, debug_after=debug_after, debug_event=debug_event, debug_breakpoint=debug_breakpoint, debug_loss=debug_loss, repaint_bars=repaint_bars, extras={**extras, **{f"raw_{k}": v for k, v in bars.items()}})
     return engine.Result(*(arrays[name] for name in (
         "trades", "equity", "gross_equity", "gross_exposure", "net_exposure", "positions", "traded",
-    )), unfilled=int(arrays["unfilled"].item()))
+    )), unfilled=int(arrays["unfilled"].item()), risk_events=info.get("risk_events") or [])
 
 
 def _execute(code, bars, dates, params, symbols, cache, output, *, event_settings=None, repaint_bars=None, extras=None, files=None, debug_symbol=None, debug_after=None, debug_event=None, debug_breakpoint=None, debug_loss=None):
@@ -554,7 +632,7 @@ def _execute(code, bars, dates, params, symbols, cache, output, *, event_setting
         if not res.get("ok"):
             raise CodeError(res.get("error") or (p.stderr.strip().splitlines() or ["the strategy process died"])[-1], res.get("problem"))
         if output is not None:
-            output.update({field: res[field] for field in ("logs", "plots", "plot_charts", "marks", "tables")})
+            output.update({field: res[field] for field in ("logs", "plots", "plot_charts", "marks", "tables", "risk_events")})
             if res.get("entry_signals") is not None:
                 output["entry_signals"] = res["entry_signals"]
             if res.get("debug") is not None:

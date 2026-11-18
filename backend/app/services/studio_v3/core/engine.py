@@ -10,12 +10,13 @@ Bar order (both engines):
 3. close: time stop, breakeven, trailing stop, exit signal, delisting settle; borrow; mark equity
 4. close: entry signals take free slots by score, sized on the equity just marked
 5. same-close mode: the orders of steps 3 and 4 fill at this close instead of the next open
+6. close: risk stops. A breach of max_drawdown or max_daily_loss flats every position at the next fill and blocks new orders.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import astuple, dataclass, fields
+from dataclasses import astuple, dataclass, field, fields
 
 import numpy as np
 
@@ -53,15 +54,22 @@ class Params:
     delist_haircut: float = 0.0
     leverage: float = 1.0
     capital: float = 100_000.0
+    max_dd: float = 0.0  # flatten and stop trading at this fall from the equity peak
+    max_daily_loss: float = 0.0  # the same, from the previous session's close
+    max_position: float = 0.0  # share of equity per name; 0 = off
+    max_gross: float = 0.0  # share of equity across all names; 0 = off
+    scale_at2: float = 0.0  # second profit rung, above `scale_at`
+    scale_frac2: float = 0.0
 
 
 (P_FILL, P_STOP, P_TGT, P_TRAIL, P_TIME, P_BE, P_SCALE_AT, P_SCALE_FRAC, P_SIZE_MODE, P_SIZE, P_MAXPOS, P_COMM_BPS, P_COMM_SHARE,
- P_COMM_MIN, P_SLIP_BPS, P_SLIP_RANGE, P_BORROW, P_VOLCAP, P_HAIRCUT, P_LEV, P_CAPITAL) = range(len(fields(Params)))
+ P_COMM_MIN, P_SLIP_BPS, P_SLIP_RANGE, P_BORROW, P_VOLCAP, P_HAIRCUT, P_LEV, P_CAPITAL, P_MAXDD, P_MAXDAY, P_MAXPOSW, P_MAXGROSS,
+ P_SCALE_AT2, P_SCALE_FRAC2) = range(len(fields(Params)))
 
 # exit reasons
-R_SIGNAL, R_STOP, R_TARGET, R_TRAIL, R_TIME, R_DELISTED, R_OPEN, R_BREAKEVEN, R_SCALE = 1, 2, 3, 4, 5, 6, 7, 8, 9
+R_SIGNAL, R_STOP, R_TARGET, R_TRAIL, R_TIME, R_DELISTED, R_OPEN, R_BREAKEVEN, R_SCALE, R_RISK = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 REASONS = {R_SIGNAL: "signal", R_STOP: "stop", R_TARGET: "target", R_TRAIL: "trailing stop", R_TIME: "time stop", R_DELISTED: "delisted",
-           R_OPEN: "open at end", R_BREAKEVEN: "breakeven stop", R_SCALE: "scale out"}
+           R_OPEN: "open at end", R_BREAKEVEN: "breakeven stop", R_SCALE: "scale out", R_RISK: "risk stop"}
 
 # trade columns
 (T_SYM, T_DIR, T_ENTRY_BAR, T_EXIT_BAR, T_ENTRY_PX, T_EXIT_PX, T_SHARES, T_PNL, T_RET, T_MAE, T_MFE, T_REASON, T_COSTS, T_SIGNAL_BAR,
@@ -69,8 +77,8 @@ REASONS = {R_SIGNAL: "signal", R_STOP: "stop", R_TARGET: "target", R_TRAIL: "tra
 NT = 15
 
 # vector-engine state columns per symbol
-SH, EPX, EBAR, STOP, TGT, SCL, HW, LO, HI, ECOST, ESLIP, SKIND, PDIR, PSH, PEXIT, SIGBAR, LAST, RISK = range(18)
-NS = 18
+SH, EPX, EBAR, STOP, TGT, SCL, HW, LO, HI, ECOST, ESLIP, SKIND, PDIR, PSH, PEXIT, SIGBAR, LAST, RISK, SCL2 = range(19)
+NS = 19
 CASH, COSTS, NTR, UNFILLED, TRADED = range(5)
 
 _fill_price = njit(cache=True)(fills.fill_price)
@@ -112,6 +120,27 @@ def _close(S, acct, trades, P, n, t, raw, reason, frac, bar_range):
 
 
 @njit(cache=True)
+def _take(S, acct, trades, P, n, t, o, h, l, px, rng):
+    """Take profit in order: the first scale rung, the second, then the rest at the target. Each rung sells a
+    fraction of what is left and is priced at its own level, so a gap through both is not split at one price."""
+    d = 1.0 if S[n, SH] > 0.0 else -1.0
+    for k in range(2):
+        col = SCL if k == 0 else SCL2
+        frac = P[P_SCALE_FRAC] if k == 0 else P[P_SCALE_FRAC2]
+        if S[n, SH] == 0.0:
+            return
+        if np.isfinite(S[n, col]):
+            _close(S, acct, trades, P, n, t, px, R_SCALE, frac, rng)
+            S[n, col] = np.nan
+            level = S[n, SCL] if np.isfinite(S[n, SCL]) else (S[n, SCL2] if np.isfinite(S[n, SCL2]) else S[n, TGT])
+            reason, px = _exit_check(d, o, h, l, np.nan, level)
+            if reason != F_TARGET:
+                return
+    if S[n, SH] != 0.0:
+        _close(S, acct, trades, P, n, t, px, R_TARGET, 1.0, rng)
+
+
+@njit(cache=True)
 def _mark(S, acct):
     eq, gross, net, npos = acct[CASH], 0.0, 0.0, 0
     for n in range(S.shape[0]):
@@ -141,6 +170,10 @@ def _execute(S, acct, trades, P, t, px, rng, vol, stop_dist, has_dist):
             sh = P[P_VOLCAP] * vol[n]
         p = _fill_price(px[n], d, P[P_SLIP_BPS], P[P_SLIP_RANGE], rng[n])
         avail = eq * P[P_LEV] - gross
+        if P[P_MAXGROSS] > 0.0:
+            avail = min(avail, eq * P[P_MAXGROSS] - gross)
+        if P[P_MAXPOSW] > 0.0:
+            avail = min(avail, eq * P[P_MAXPOSW])
         if sh * p > avail:
             sh = max(avail, 0.0) / p
         S[n, PDIR] = 0.0
@@ -159,6 +192,7 @@ def _execute(S, acct, trades, P, t, px, rng, vol, stop_dist, has_dist):
         S[n, STOP] = p - d * dist if dist > 0.0 else np.nan
         S[n, TGT] = p * (1.0 + d * P[P_TGT]) if P[P_TGT] > 0.0 else np.nan
         S[n, SCL] = p * (1.0 + d * P[P_SCALE_AT]) if P[P_SCALE_AT] > 0.0 and P[P_SCALE_FRAC] > 0.0 else np.nan
+        S[n, SCL2] = p * (1.0 + d * P[P_SCALE_AT2]) if P[P_SCALE_AT2] > 0.0 and P[P_SCALE_FRAC2] > 0.0 else np.nan
         S[n, HW], S[n, LO], S[n, HI] = p, p, p
         S[n, ECOST], S[n, ESLIP], S[n, SKIND], S[n, PEXIT] = comm, slip, R_STOP, 0.0
         S[n, RISK] = sh * dist if dist > 0.0 else np.nan
@@ -173,6 +207,8 @@ def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist
     trades = np.empty((2 * np.count_nonzero(entries) + N + 1, NT))
     net, gross_eq, gross_x, net_x, npos_t, traded = np.empty(T), np.empty(T), np.empty(T), np.empty(T), np.empty(T), np.empty(T)
     cand = np.empty(N, dtype=np.int64)
+    peak, prev_eq, halted = P[P_CAPITAL], P[P_CAPITAL], 0
+    risk_bar, risk_kind, risk_value = -1.0, 0.0, 0.0
     for t in range(T):
         acct[TRADED] = 0.0
         rng = h[t] - l[t]
@@ -183,19 +219,12 @@ def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist
                 continue
             d = 1.0 if S[n, SH] > 0 else -1.0
             if S[n, EBAR] < t or P[P_FILL] == 0.0:  # a same-close entry has not lived through this bar
-                level = S[n, SCL] if np.isfinite(S[n, SCL]) else S[n, TGT]
+                level = S[n, SCL] if np.isfinite(S[n, SCL]) else (S[n, SCL2] if np.isfinite(S[n, SCL2]) else S[n, TGT])
                 reason, px = _exit_check(d, o[t, n], h[t, n], l[t, n], S[n, STOP], level)
                 if reason == F_STOP:
                     _close(S, acct, trades, P, n, t, px, S[n, SKIND], 1.0, rng[n])
                 elif reason == F_TARGET:
-                    if np.isfinite(S[n, SCL]):
-                        _close(S, acct, trades, P, n, t, px, R_SCALE, P[P_SCALE_FRAC], rng[n])
-                        S[n, SCL] = np.nan
-                        r2, px2 = _exit_check(d, o[t, n], h[t, n], l[t, n], np.nan, S[n, TGT])
-                        if r2 == F_TARGET and S[n, SH] != 0.0:
-                            _close(S, acct, trades, P, n, t, px2, R_TARGET, 1.0, rng[n])
-                    else:
-                        _close(S, acct, trades, P, n, t, px, R_TARGET, 1.0, rng[n])
+                    _take(S, acct, trades, P, n, t, o[t, n], h[t, n], l[t, n], px, rng[n])
             if S[n, SH] == 0.0:
                 continue
             S[n, LO], S[n, HI], S[n, LAST] = min(S[n, LO], l[t, n]), max(S[n, HI], h[t, n]), c[t, n]
@@ -233,7 +262,7 @@ def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist
             if entries[t, n] != 0 and S[n, SH] == 0.0 and S[n, PDIR] == 0.0 and t < last_bar[n] and np.isfinite(c[t, n]):
                 cand[k] = n
                 k += 1
-        if k > 0:
+        if k > 0 and halted == 0:
             slots = k if P[P_MAXPOS] <= 0.0 else min(k, max(int(P[P_MAXPOS]) - held, 0))
             order = cand[:k]
             if has_score and slots < k:
@@ -266,6 +295,20 @@ def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist
             _execute(S, acct, trades, P, t, c[t], rng, v[t], stop_dist, has_dist)
             eq, gx, nx, npos = _mark(S, acct)
         net[t], gross_eq[t], gross_x[t], net_x[t], npos_t[t], traded[t] = eq, eq + acct[COSTS], gx / eq, nx / eq, npos, acct[TRADED]
+        if halted == 0:
+            peak = max(peak, eq)
+            kind, value = 0.0, 0.0
+            if P[P_MAXDD] > 0.0 and peak > 0.0 and eq / peak - 1.0 <= -P[P_MAXDD]:
+                kind, value = 1.0, eq / peak - 1.0
+            elif P[P_MAXDAY] > 0.0 and prev_eq > 0.0 and eq / prev_eq - 1.0 <= -P[P_MAXDAY]:
+                kind, value = 2.0, eq / prev_eq - 1.0
+            if kind != 0.0:
+                halted, risk_bar, risk_kind, risk_value = 1, float(t), kind, value
+                for n in range(N):
+                    S[n, PDIR] = 0.0
+                    if S[n, SH] != 0.0:
+                        S[n, PEXIT] = R_RISK
+        prev_eq = eq
     for n in range(N):  # still open at the end: marked, not sold
         if S[n, SH] != 0.0:
             d = 1.0 if S[n, SH] > 0 else -1.0
@@ -278,7 +321,7 @@ def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist
             trades[k, T_MFE] = (S[n, HI] / S[n, EPX] - 1.0) if d > 0 else -(S[n, LO] / S[n, EPX] - 1.0)
             trades[k, T_REASON], trades[k, T_COSTS], trades[k, T_SIGNAL_BAR], trades[k, T_RISK] = R_OPEN, S[n, ECOST] + S[n, ESLIP], S[n, SIGBAR], S[n, RISK]
             acct[NTR] += 1
-    return trades[: int(acct[NTR])], net, gross_eq, gross_x, net_x, npos_t, traded, acct[UNFILLED]
+    return trades[: int(acct[NTR])], net, gross_eq, gross_x, net_x, npos_t, traded, acct[UNFILLED], risk_bar, risk_kind, risk_value
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +337,7 @@ class Position:
     stop: float
     target: float
     scale: float
+    scale2: float
     high_water: float
     lo: float
     hi: float
@@ -364,6 +408,9 @@ class EventEngine:
         self.cash, self.costs, self.unfilled, self.traded = params.capital, 0.0, 0, 0.0
         self.trades: list[tuple] = []
         self._fills: list[Fill] | None = None
+        self.peak, self.prev_eq = params.capital, params.capital
+        self.halted = False
+        self.risk_events: list[dict] = []
 
     def _close(self, n: int, t: int, raw: float, reason: int, frac: float, bar_range: float, *, limit: float = math.nan) -> None:
         p, pos = self.p, self.positions[n]
@@ -401,6 +448,23 @@ class EventEngine:
             eq, gross, net = eq + val, gross + abs(val), net + val
         return eq, gross, net, len(self.positions)
 
+    def _take(self, n: int, t: int, o: float, h: float, low: float, px: float, rng: float) -> None:
+        pos = self.positions[n]
+        d = 1.0 if pos.shares > 0 else -1.0
+        for attribute, frac in (("scale", self.p.scale_frac), ("scale2", self.p.scale_frac2)):
+            if n not in self.positions:
+                return
+            level = getattr(pos, attribute)
+            if math.isfinite(level):
+                self._close(n, t, px, R_SCALE, frac, rng)
+                setattr(pos, attribute, math.nan)
+                following = pos.scale if math.isfinite(pos.scale) else pos.scale2 if math.isfinite(pos.scale2) else pos.target
+                reason, px = fills.exit_check(d, o, h, low, math.nan, following)
+                if reason != fills.TARGET:
+                    return
+        if n in self.positions:
+            self._close(n, t, px, R_TARGET, 1.0, rng)
+
     def _execute(self, t: int, px: np.ndarray, rng: np.ndarray) -> None:
         p, vol = self.p, self.bars["volume"][t]
         for n in sorted(self.positions):
@@ -416,6 +480,10 @@ class EventEngine:
                 sh = p.volume_cap * vol[n]
             price = fills.fill_price(px[n], d, p.slippage_bps, p.slippage_range, rng[n])
             avail = eq * p.leverage - gross
+            if p.max_gross > 0:
+                avail = min(avail, eq * p.max_gross - gross)
+            if p.max_position > 0:
+                avail = min(avail, eq * p.max_position)
             if sh * price > avail:
                 sh = max(avail, 0.0) / price
             if sh < want - 1e-9:
@@ -440,6 +508,7 @@ class EventEngine:
                 stop=price - direction * dist if dist > 0 else math.nan,
                 target=price * (1 + direction * p.target) if p.target > 0 else math.nan,
                 scale=price * (1 + direction * p.scale_at) if p.scale_at > 0 and p.scale_frac > 0 else math.nan,
+                scale2=price * (1 + direction * p.scale_at2) if p.scale_at2 > 0 and p.scale_frac2 > 0 else math.nan,
                 high_water=price, lo=price, hi=price, cost=comm, slip=slip, risk=shares * dist if dist > 0 else math.nan, last=price)
         else:
             pos.entry_px = (abs(pos.shares) * pos.entry_px + shares * price) / (abs(pos.shares) + shares)
@@ -452,6 +521,9 @@ class EventEngine:
 
     def _execute_orders(self, t, prices, high, low, rng, *, closing=False):
         p = self.p
+        if self.halted:  # a risk stop cancels every working order; exits still go through _execute
+            return
+
         def increases_exposure(n):
             pos = self.positions.get(n)
             return pos is None or pos.shares * self.orders[n][0] >= 0
@@ -521,19 +593,12 @@ class EventEngine:
                     continue
                 d = 1.0 if pos.shares > 0 else -1.0
                 if pos.entry_bar < t or p.fill == 0:
-                    level = pos.scale if math.isfinite(pos.scale) else pos.target
+                    level = pos.scale if math.isfinite(pos.scale) else pos.scale2 if math.isfinite(pos.scale2) else pos.target
                     reason, px = fills.exit_check(d, o[t, n], h[t, n], l[t, n], pos.stop, level)
                     if reason == fills.STOP:
                         self._close(n, t, px, pos.stop_kind, 1.0, rng[n])
                     elif reason == fills.TARGET:
-                        if math.isfinite(pos.scale):
-                            self._close(n, t, px, R_SCALE, p.scale_frac, rng[n])
-                            pos.scale = math.nan
-                            r2, px2 = fills.exit_check(d, o[t, n], h[t, n], l[t, n], math.nan, pos.target)
-                            if r2 == fills.TARGET and n in self.positions:
-                                self._close(n, t, px2, R_TARGET, 1.0, rng[n])
-                        else:
-                            self._close(n, t, px, R_TARGET, 1.0, rng[n])
+                        self._take(n, t, o[t, n], h[t, n], l[t, n], px, rng[n])
                 if n not in self.positions:
                     continue
                 pos.lo, pos.hi, pos.last = min(pos.lo, l[t, n]), max(pos.hi, h[t, n]), c[t, n]
@@ -573,7 +638,7 @@ class EventEngine:
                         pos.cost += fee
             eq, gx, nx, npos = self._mark()
             cands = [n for n in sorted(self.wants) if n not in self.positions and n not in self.pending and t < last_bar[n] and math.isfinite(c[t, n])]
-            if cands:
+            if cands and not self.halted:
                 held = sum(1 for q in self.positions.values() if not q.exit_reason) + len(self.pending)
                 slots = len(cands) if p.max_positions <= 0 else min(len(cands), max(int(p.max_positions) - held, 0))
                 if self.score is not None and slots < len(cands):
@@ -600,6 +665,26 @@ class EventEngine:
                 for fill in self._fills:
                     on_fill(ctx, fill)
                 self._fills.clear()
+            if not self.halted:
+                self.peak = max(self.peak, eq)
+                kind, value, bound = "", 0.0, 0.0
+                if p.max_dd > 0 and self.peak > 0 and eq / self.peak - 1 <= -p.max_dd:
+                    kind, value, bound = "drawdown", eq / self.peak - 1.0, p.max_dd
+                elif p.max_daily_loss > 0 and self.prev_eq > 0 and eq / self.prev_eq - 1 <= -p.max_daily_loss:
+                    kind, value, bound = "daily_loss", eq / self.prev_eq - 1.0, p.max_daily_loss
+                if kind:
+                    self.halted = True
+                    event = {"bar": t, "kind": kind, "value": float(value), "limit": float(bound)}
+                    self.risk_events.append(event)
+                    self.orders.clear()
+                    self.pending.clear()
+                    for pos in self.positions.values():
+                        if not pos.exit_reason:
+                            pos.exit_reason = R_RISK
+                    hook = getattr(strategy, "on_risk_event", None)
+                    if hook is not None:
+                        hook(ctx, event)
+            self.prev_eq = eq
             out[:, t] = eq, eq + self.costs, gx / eq, nx / eq, npos, self.traded
             if stop_after is not None and stop_after(t, eq):
                 T = t + 1
@@ -631,6 +716,7 @@ class Result:
     positions: np.ndarray
     traded: np.ndarray  # notional traded per bar
     unfilled: int
+    risk_events: list[dict] = field(default_factory=list)  # account-level breaches, with the bar they happened on
 
 
 def _last_bar(close: np.ndarray) -> np.ndarray:
@@ -653,9 +739,14 @@ def run(bars: dict[str, np.ndarray], entries: np.ndarray, exits: np.ndarray, par
     if engine == "event" or strategy is not None:
         eng = EventEngine({"open": o, "high": h, "low": l, "close": c, "volume": v}, params, score, stop_dist, size_vol)
         out = eng.run(strategy or SignalStrategy(entries, exits))
-    else:
-        out = _vector(o, h, l, c, v, entries, exits, score if score is not None else _EMPTY2, score is not None,
-                      stop_dist if stop_dist is not None else _EMPTY2, stop_dist is not None,
-                      np.ascontiguousarray(size_vol, dtype=np.float64) if size_vol is not None else _EMPTY2, size_vol is not None,
-                      _last_bar(c), np.array(astuple(params), dtype=np.float64))
-    return Result(*out[:7], unfilled=int(out[7]))
+        return Result(*out[:7], unfilled=int(out[7]), risk_events=eng.risk_events)
+    out = _vector(o, h, l, c, v, entries, exits, score if score is not None else _EMPTY2, score is not None,
+                  stop_dist if stop_dist is not None else _EMPTY2, stop_dist is not None,
+                  np.ascontiguousarray(size_vol, dtype=np.float64) if size_vol is not None else _EMPTY2, size_vol is not None,
+                  _last_bar(c), np.array(astuple(params), dtype=np.float64))
+    risk = []
+    if out[8] >= 0:
+        drawdown = out[9] == 1
+        risk = [{"bar": int(out[8]), "kind": "drawdown" if drawdown else "daily_loss", "value": float(out[10]),
+                 "limit": float(params.max_dd if drawdown else params.max_daily_loss)}]
+    return Result(*out[:7], unfilled=int(out[7]), risk_events=risk)

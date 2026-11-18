@@ -670,3 +670,46 @@ def test_self_completion_offers_the_indicator_helpers():
     members = {item["name"]: item for item in pycode.editor_members("self", "class Strategy:\n    def on_bar(self, ctx):\n        pass\n", "sm")}
     assert members["sma"]["signature"] == "sma(symbol_or_period, period=None)"
     assert "ready" in members["sma"]["documentation"]
+
+
+def test_python_on_risk_event_runs_once_and_stops_trading():
+    from app.services.studio_v3.core import engine
+
+    close = np.array([[100.0], [100.0], [96.0], [92.0], [90.0]])
+    bars = {k: close for k in ("open", "high", "low", "close")} | {"volume": np.ones_like(close)}
+    dates = pd.bdate_range("2021-01-04", periods=len(close))
+    output = {}
+    code = """class Strategy:
+    def on_data(self, ctx):
+        if ctx.position == 0:
+            ctx.set_holdings(ctx.symbols[0], 1.0)
+
+    def on_risk_event(self, ctx, event):
+        ctx.log((event["kind"], event["date"], round(event["value"], 4)))
+"""
+    result = pycode.run_event(code, bars, dates, {}, ["SPY"], engine.Params(max_daily_loss=0.03, commission_bps=0, slippage_bps=0), output=output)
+    assert [row["text"] for row in output["logs"]] == [f"('daily_loss', '{dates[2].date()}', -0.04)"]
+    assert result.risk_events and result.risk_events[0]["bar"] == 2
+    assert np.allclose(result.equity[3:], 92_000)
+
+
+def test_lint_flags_domain_and_determinism_problems():
+    code = """import numpy as np
+
+class Strategy:
+    def __init__(self, tags=[]):
+        self.tags = tags
+
+    def on_data(self, ctx):
+        if ctx.symbols:
+            ctx.buy("SPY")
+        print("checking")
+        ctx.plot("noise", np.random.rand())
+        ctx.log("at", ctx.history("close", 5))
+"""
+    codes = {problem["code"] for problem in pycode.lint(code, {})}
+    assert {"hard-coded-symbol", "print-in-loop", "mutable-default", "unseeded-random"} <= codes
+    seeded = code.replace("np.random.rand()", "np.random.default_rng(7).random()")
+    assert "unseeded-random" not in {problem["code"] for problem in pycode.lint(seeded, {})}
+    network = pycode.lint("class Strategy:\n    def on_bar(self, ctx):\n        ctx.value('close')\n        x = 'https://example.com/a.csv'\n", {})
+    assert "network" in {problem["code"] for problem in network}

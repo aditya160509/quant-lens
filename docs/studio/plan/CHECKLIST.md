@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 44 | 163 |
+| Build | 50 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **154** | **538** |
+| **All pages** | **160** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 38 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 50 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -162,9 +162,9 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [E] B-35 Look-ahead detector in the editor: close[0], close[1:], history without a negative index, ctx.date against future literals, next_* reads; marked before the run (partial: AST screen refuses positive indexes; inline editor markers open) [FP 8]
 - [ ] [M] B-36 Docs panel: ⌘-click or F1 opens the reference beside the editor; searchable (API, indicators, recipes); offline and versioned
 - [ ] [M] B-37 Strictness setting (basic or strict) and severity per rule (error, warning, off); defaults: basic, all layers, look-ahead as error
-- [ ] [M] B-38 Domain diagnostics: unused parameter, warm-up longer than data, order with no stop in live, hard-coded symbol in a parameterised strategy, print in hot loop, mutable default in params [FP 26]
+- [x] [M] B-38 Domain diagnostics: unused parameter, warm-up longer than data, order with no stop in live, hard-coded symbol in a parameterised strategy, print in hot loop, mutable default in params [FP 26] (lint flags hard-coded symbols, print in the bar loop and mutable defaults; /build/checks reports warm-up against the period; the live no-stop rule sits in the Live lab)
 - [ ] [M] B-39 ctx.assert_invariant(cond, msg) puts red markers on the chart and fails the Validate step
-- [ ] [M] B-40 Lint flags wall-clock time, network calls and unseeded random, so one code runs in backtest, paper and live
+- [x] [M] B-40 Lint flags wall-clock time, network calls and unseeded random, so one code runs in backtest, paper and live (lint codes wall-clock, network, unseeded-random)
 - [ ] [M] B-41 API version header (# studio-api: 1) with an automatic migrator and a quick fix
 - [x] [M] B-42 Latency budget: completions under 100 ms, diagnostics under 500 ms after typing stops (server p95 measured in tests: completion 0.3 ms, lint 10 to 50 ms for 300 lines; the browser debounce is frontend)
 - [ ] [H] B-43 Portfolio mode: on_data(ctx) sees every symbol in the bar; universe set by a class attribute (list, index, or screen id); per-symbol on_bar kept as the simple mode (partial: on_data receives the settings universe in preview and Backtest) [FP 61] [PY A1]
@@ -178,16 +178,16 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [M] B-51 ctx.rank and ctx.zscore across the current universe, vectorised (literal formula inputs; rank supports top, bottom and where) [FP 61]
 - [x] [M] B-52 Portfolio rebalance hook, rebalance_schedule cadence, ctx.rebalancing and calendar start flags (verified across missing sessions and year boundaries) [FP 61] [PY A6]
 - [ ] [M] B-53 warmup class attribute: no orders before bar n; auto warm-up reported ("starts trading on …") (partial: explicit warm-up suppresses orders and reports first eligible dates; automatic inference open) [FP 61] [PY A10]
-- [ ] [M] B-54 Risk attributes: max_drawdown (flatten and stop), max_daily_loss, max_position, max_gross; each breach logged as a risk event [FP 61]
+- [x] [M] B-54 Risk attributes: max_drawdown (flatten and stop), max_daily_loss, max_position, max_gross; each breach logged as a risk event [FP 61] (spec.risk; both engines flatten at the next fill and stop, caps applied at entry, breach returns bar, kind, value and limit; on_risk_event fires once)
 - [ ] [M] B-55 ctx.store keeps small JSON across runs; instance attributes keep state
 - [ ] [H] B-56 ctx.feature_matrix(formulas, lookback) and ctx.fit_every(n); sklearn allowed; fits use past bars only
 - [ ] [M] B-57 Import allow-list: math, statistics, numpy, pandas, scipy.stats, scipy.optimize, sklearn, and the project files; others refused with the line and a request link (partial: math, statistics, numpy, pandas, scipy.stats and saved project modules allowed, enforced in the AST and again through a restricted `__import__`; 44 escape cases refused; sklearn and scipy.optimize stay out per PYTHON_IDE A7) [PY A7]
 - [x] [E] B-58 print and ctx.log(msg, level) captured per bar (date, symbol), 50,000-line cap with a truncation row (backend done: typed preview logs include source line and level) [PY A8]
 - [ ] [E] B-59 ctx.plot(name, value, chart="main" or "own"), ctx.mark(sym, label) on the price chart, ctx.table(name, row) as a sortable table (backend done: preview and Backtest return chart placement, marks and structured rows; frontend rendering open) [FP 29] [PY A9]
 - [x] [E] B-60 on_fill(ctx, fill) gets symbol, side, quantity, price, date and fee (preview and Backtest receive actual event-engine fills; one-argument callback remains supported) [PY A11]
-- [ ] [M] B-61 Lifecycle hooks: on_end_of_day, on_warmup_done, on_risk_event, on_stop (partial: risk-event hook open)
+- [x] [M] B-61 Lifecycle hooks: on_end_of_day, on_warmup_done, on_risk_event, on_stop (on_risk_event receives kind, date, value and limit)
 - [ ] [E] B-62 params = {"fast": (10, 5, 50, 5)} declared in code appear in Build params and the Optimise grid; ctx.param kept (backend done: compile exposes literal declarations and Optimise evaluates them through the event engine; frontend Build binding open) [FP 9] [PY A12]
-- [ ] [E] B-63 Per-strategy engine settings as class attributes (fill timing, costs, sizing); code wins over the card and a badge says so
+- [x] [E] B-63 Per-strategy engine settings as class attributes (fill timing, costs, sizing); code wins over the card and a badge says so (fill, commission, slippage, borrow, max_positions and leverage read from the Strategy class; preview and backtest return settings_overrides and the report's fill and costs reflect the code)
 - [ ] [H] B-64 Python orders feed the event engine directly, so LEAN parity applies to Python strategies (partial: simple Python preview and Backtest use the event engine) [PY A13]
 - [x] [M] B-65 Budget: 500 symbols × 2,500 bars in under 20 s (measured 0.55 s for the Python engine workload; real-data load excluded) [PY A14]
 - [ ] [M] B-66 Default mode for new strategies (simple or portfolio) in Customise
@@ -244,8 +244,8 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-117 Complexity meter: counts parameters and rules and shows degrees of freedom while building [FP 25] (backend done: compile returns complexity; frontend wiring open)
 - [ ] [H] B-118 Find rules: grammar search of entries and exits with an out-of-sample split; every candidate counts in the trial ledger; results go to the Home databank grid [FP 70]
 - [x] [E] B-119 Checks card adds warm-up bars needed, data each rule uses, survivorship exposure (POST /build/checks returns warm-up bars and first eligible date, per-rule fields and windows, delisted names and the survivorship note)
-- [ ] [E] B-120 Exits library additions: profit-target ladder, exit on opposite signal, end-of-week exit; exits combinable and ordered (partial: stop, target, trailing, time, breakeven, scale out, opposite-signal and end-of-week exits exist; the profit-target ladder and ordering open)
-- [ ] [M] B-121 Sizing additions: equal weight, risk parity, max position and gross limits (partial: shares, cash, % equity, risk, vol target, Kelly, score exist)
+- [x] [E] B-120 Exits library additions: profit-target ladder, exit on opposite signal, end-of-week exit; exits combinable and ordered (two scale rungs then the final target, each priced at its own level; opposite-signal and end-of-week exits; bar order documented in engine.py and matched trade for trade by both engines)
+- [ ] [M] B-121 Sizing additions: equal weight, risk parity, max position and gross limits (partial: shares, cash, % equity, risk, vol target, Kelly, score and equal weight exist; max_position and max_gross caps ship; an explicit inverse-vol risk-parity mode is open)
 - [ ] [M] B-122 Allocate: if/else on a condition (regime, trend); hold bonds or cash when off (partial: market rule (trade only when) exists; if/else branch and bonds open)
 - [ ] B-123 Entry filters: fundamentals, calendar, cross-sectional, earnings-date filter (blocked by data: fundamentals from 2021 only; earnings dates where held)
 - [ ] [M] B-124 Indicator exit and scale in as exit-card rows

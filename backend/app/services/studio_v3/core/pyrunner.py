@@ -597,6 +597,12 @@ class PortfolioStrategy:
             else:
                 self.callback(ctx, Execution(ctx.symbols[fill.symbol], fill.side, float(fill.quantity), float(fill.price), ctx.date, float(fill.fee)))
 
+    def on_risk_event(self, engine_ctx, event):
+        callback = getattr(self.strategy, "on_risk_event", None)
+        if callback is not None:
+            ctx = self._context(engine_ctx)
+            callback(ctx, {**event, "date": ctx.date})
+
 
 class EventStrategy:
     def __init__(self, cls, contexts, available, warmup, use_context, market_filter, submitted):
@@ -633,6 +639,13 @@ class EventStrategy:
                 callback(ctx)
             else:
                 callback(ctx, Execution(ctx.symbol, fill.side, float(fill.quantity), float(fill.price), ctx.date, float(fill.fee)))
+
+    def on_risk_event(self, engine_ctx, event):
+        for n, strategy in enumerate(self.strategies):
+            callback = getattr(strategy, "on_risk_event", None)
+            if callback is not None:
+                ctx = self._context(engine_ctx, n)
+                callback(ctx, {**event, "date": ctx.date})
 
     def on_bar(self, engine_ctx):
         t = engine_ctx.t
@@ -834,7 +847,7 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
                 debug["equity_change"] = equity_change
             if hit is not None:
                 debug["breakpoint"] = {key: value for key, value in hit.items() if key != "bar"}
-        return engine.Result(*result[:7], unfilled=int(result[7])), submitted, warmup, isinstance(adapter, PortfolioStrategy), debug
+        return engine.Result(*result[:7], unfilled=int(result[7]), risk_events=account.risk_events), submitted, warmup, isinstance(adapter, PortfolioStrategy), debug
 
     result, submitted, warmup, is_portfolio, debug = run_to(shape[0], True)
     dates = meta["dates"]
@@ -985,8 +998,9 @@ def main():
             "file": source_file, "line": line, "column": column, "exception_type": type(e).__name__, "traceback": frames,
         }}))
         return
+    risk_events = arrays.pop("risk_events", [])
     np.savez(sys.argv[2], **arrays)
-    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report, "debug": debug}))
+    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report, "debug": debug, "risk_events": risk_events}))
 
 
 if __name__ == "__main__":

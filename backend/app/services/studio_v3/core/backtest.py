@@ -83,6 +83,24 @@ def prepare(settings: Settings, *, include_holdout: bool = False) -> Prepared:
     return Prepared(p, sig_bars, bench, holdout_from, len(symbols), all_dates)
 
 
+COST_OVERRIDES = ("commission_bps", "commission_share", "commission_min", "slippage_bps", "slippage_range", "borrow_bps")
+
+
+def _override_params(values: dict, cost_multiple: float = 1.0) -> dict:
+    """Class attributes from the code as engine parameters (B-63); cost values still climb the ladder."""
+    out = {k: (v * cost_multiple if k in COST_OVERRIDES else v) for k, v in values.items() if k != "fill"}
+    if "fill" in values:
+        out["fill"] = float(values["fill"] == "same_close")
+    return out
+
+
+def _effective(spec: Strategy, settings: Settings, cost_multiple: float = 1.0) -> engine.Params:
+    """The engine parameters the run actually uses: the card, then the code's class attributes."""
+    params = engine_params(spec, settings, cost_multiple)
+    overrides = pycode.engine_overrides(spec.code) if spec.code.strip() else {}
+    return replace(params, **_override_params(overrides, cost_multiple)) if overrides else params
+
+
 def _simulate_python(spec, prep, settings, *, cost_multiple=1.0, lo=0, mask=None, params=None, exits_override=None,
                      output=None, repaint_from=None, debug_symbol=None, debug_after=None, debug_event=None, debug_breakpoint=None, debug_loss=None):
     params = {**spec.values(), **(params or {})}
@@ -100,7 +118,10 @@ def _simulate_python(spec, prep, settings, *, cost_multiple=1.0, lo=0, mask=None
     stop_dist = spec.exits.stop_atr * formula.evaluate("atr(14)", *args) if spec.exits.stop_atr else None
     market_filter = C._bool(spec.market_filter, *args) if spec.market_filter.strip() else None
     size_vol = C._vol(spec, *args)
-    engine_settings = engine_params(spec, settings, cost_multiple)
+    overrides = pycode.engine_overrides(spec.code)
+    engine_settings = _effective(spec, settings, cost_multiple)
+    if overrides and output is not None:
+        output["settings_overrides"] = overrides
     if exits_override:
         engine_settings = replace(engine_settings, **exits_override)
     repaint_bars = None
@@ -125,7 +146,7 @@ def simulate(spec: Strategy, prep: Prepared, settings: Settings, *, sig: C.Signa
     sig = sig or C.signals(spec, prep.sig_bars, prep.panel.dates, params)
     traded = np.isfinite(prep.panel.close)
     entries = np.where(traded if mask is None else traded & mask[None, :], sig.entries, 0).astype(np.int8)
-    p = engine_params(spec, settings, cost_multiple)
+    p = _effective(spec, settings, cost_multiple)
     if exits_override:
         p = replace(p, **exits_override)
     if lo:
@@ -233,6 +254,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     sig = None if spec.code.strip() else C.signals(spec, prep.sig_bars, p.dates)
     stage("simulate", 50)
     output: dict = {}
+    effective = _effective(spec, settings)
     if sig is None:
         try:
             r = _simulate_python(spec, prep, settings, output=output)
@@ -370,7 +392,8 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
             **output,
             "headline": headline, "verdict_chip": "not validated", "metrics": {**ret, **tr, **bm, **ext}, "total_return": total, "years": years, "benchmark": settings.benchmark if bm else None,
             "rule_check": {**rules, "target": settings.rule_target, "daily_loss": settings.rule_daily_loss, "max_dd": settings.rule_max_dd, "min_days": settings.rule_min_days},
-            "costs_off": settings.costs.off(), "few_trades": few, "open_trades": len(r.trades) - len(closed), "unfilled": r.unfilled, "entry_signals": n_entries,
+            "costs_off": not (effective.commission_bps or effective.commission_share or effective.commission_min or effective.slippage_bps or effective.slippage_range),
+            "few_trades": few, "open_trades": len(r.trades) - len(closed), "unfilled": r.unfilled, "entry_signals": n_entries,
             "trade_split": trade_split, "distribution": M.return_distribution(r.equity, dates),
             "costs": {"total": costs_total, "share_of_gross": cost_share, "gross_return": float(r.gross_equity[-1] / cap - 1), "net_return": total, "turnover_per_year": turnover},
             "exposure": {"time_in_market": float((r.positions > 0).mean()), "avg_gross": float(r.gross_exposure.mean()), "avg_net": float(r.net_exposure.mean())},
@@ -380,7 +403,8 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
             "without_best_months": without_best, "thirds_sharpe": thirds, "capacity": capacity,
             "my_limits": {"passed": sum(x["pass"] for x in judged), "of": len(judged), "closest": closest},
             "holdout_from": prep.holdout_from, "period": [str(dates[0].date()), str(dates[-1].date())], "universe": {"requested": prep.requested, "held": held, "delisted": int(dead.sum())},
-            "fill_model": settings.fill, "data_version": data.data_version(), "freshness": limits.freshness(), "run_hash": run_hash, "result_hash": result_hash,
+            "fill_model": "same_close" if effective.fill else "next_open", "data_version": data.data_version(), "freshness": limits.freshness(), "run_hash": run_hash, "result_hash": result_hash,
+            "risk_events": [{"bar": e["bar"], "date": str(dates[e["bar"]].date()), "kind": e["kind"], "value": e["value"], "limit": e["limit"]} for e in r.risk_events],
             "spec": spec.model_dump(), "settings": settings.model_dump(), "description": found["description"], "findings": found["findings"],
             "limitations": [x["detail"] for x in []],
         },
@@ -398,8 +422,15 @@ def checks(spec: Strategy, settings: Settings) -> dict:
     dead = (last_bar < len(p.dates)) & (last_bar >= 0)
     names = [p.symbols[i] for i in np.flatnonzero(dead)]
     warmup = C.warmup_bars(spec)
+    warnings = []
+    if warmup and len(p.dates) and warmup >= len(p.dates):
+        warnings.append(f"Warm-up needs {warmup} bars and the period holds {len(p.dates)}; no bar is eligible.")
+    elif warmup and len(p.dates) and warmup > len(p.dates) / 2:
+        warnings.append(f"Warm-up uses {warmup} of the {len(p.dates)} bars in the period.")
     return {
         "warmup_bars": warmup,
+        "warmup_share": warmup / len(p.dates) if len(p.dates) else None,
+        "warnings": warnings,
         "first_eligible_date": str(p.dates[min(warmup, len(p.dates) - 1)].date()) if len(p.dates) else None,
         "data_used": C.data_used(spec),
         "period": [str(p.dates[0].date()), str(p.dates[-1].date())] if len(p.dates) else [],
@@ -465,7 +496,9 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0) -> dict:
     trades = [t for t in trades_table(r, p) if t["exit_date"] >= str(p.dates[lo].date())]
     bars = [{"date": str(d.date()), "close": float(c)} for d, c in zip(p.dates[lo:], p.close[lo:, 0], strict=True) if np.isfinite(c)]
     total = float(np.prod([1 + t["return"] for t in trades]) - 1) if trades else 0.0
-    return {"status": "ok", "symbol": symbol, "bars": bars, "trades": trades, "total_return": total, **output}
+    risk = [{"date": str(p.dates[e["bar"]].date()), "kind": e["kind"], "value": e["value"], "limit": e["limit"]} for e in r.risk_events]
+    output.pop("risk_events", None)
+    return {"status": "ok", "symbol": symbol, "bars": bars, "trades": trades, "total_return": total, **output, "risk_events": risk}
 
 
 def repaint_check(spec: Strategy, prep: Prepared, lo: int = 0, cuts: int = 50, *, full: C.Signals | None = None) -> dict:
