@@ -165,13 +165,19 @@ def start_dates(spec: Strategy, prep: Prepared, settings: Settings, sig: C.Signa
 
 
 def _rolling(eq: np.ndarray, bench: np.ndarray | None, dates: pd.DatetimeIndex) -> list[dict]:
-    r = pd.Series(eq, index=dates).pct_change()
-    out = pd.DataFrame({"sharpe_6m": r.rolling(126).mean() / r.rolling(126).std() * math.sqrt(M.ANN), "sharpe_12m": r.rolling(252).mean() / r.rolling(252).std() * math.sqrt(M.ANN),
-                        "vol_6m": r.rolling(126).std() * math.sqrt(M.ANN)})
+    e = pd.Series(eq, index=dates)
+    r = e.pct_change()
+    cols = {}
+    for w, k in ((126, "6m"), (252, "12m"), (756, "36m")):
+        cols[f"return_{k}"], cols[f"vol_{k}"] = e / e.shift(w) - 1, r.rolling(w).std() * math.sqrt(M.ANN)
+        cols[f"sharpe_{k}"] = r.rolling(w).mean() / r.rolling(w).std() * math.sqrt(M.ANN)
     if bench is not None:
         b = pd.Series(bench, index=dates).pct_change()
-        out["beta_12m"], out["correlation_12m"] = r.rolling(252).cov(b) / b.rolling(252).var(), r.rolling(252).corr(b)
-    out = out.dropna(how="all").iloc[:: max(1, len(out) // 500)]
+        for w, k in ((126, "6m"), (252, "12m"), (756, "36m")):
+            cols[f"beta_{k}"] = r.rolling(w).cov(b) / b.rolling(w).var()
+        cols["correlation_12m"] = r.rolling(252).corr(b)
+    out = pd.DataFrame(cols).replace([np.inf, -np.inf], np.nan).dropna(how="all")
+    out = out.iloc[:: max(1, len(out) // 500)]
     return [{"date": str(i.date()), **{k: (float(v) if math.isfinite(v) else None) for k, v in row.items()}} for i, row in out.iterrows()]
 
 
@@ -209,7 +215,13 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
         b = pd.Series(prep.benchmark).bfill().to_numpy()
         bench_eq = b / b[0] * cap
     bm = M.benchmark_metrics(r.equity, bench_eq) if bench_eq is not None else {}
+    ext = M.extra_metrics(r.equity, bench_eq, dates)
+    ext["psr_benchmark_sharpe"] = 1.0
     costs_total = float(r.gross_equity[-1] - r.equity[-1])
+    base = cap + np.concatenate(([0.0], np.cumsum(closed[:, engine.T_PNL])[:-1]))
+    side = closed[:, engine.T_DIR]
+    trade_split = {k: M.lean_trade_stats(closed[m, engine.T_PNL], base[m]) for k, m in (("all", side != 0), ("long", side > 0), ("short", side < 0))}
+    ext.update(profit_loss_ratio=trade_split["all"].get("profit_loss_ratio"), lean_expectancy=trade_split["all"].get("expectancy"), fees_total=costs_total, volume_traded=float(r.traded.sum()))
     gross_profit = float(r.gross_equity[-1] - cap)
     cost_share = costs_total / gross_profit if gross_profit > 0 else None
     turnover = float(r.traded.sum() / r.equity.mean() / years)
@@ -309,11 +321,12 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
                    "limits": limits.run_limits(start=str(dates[0].date()), end=str(dates[-1].date()), requested=prep.requested, held=held, delisted=int(dead.sum()), fill=settings.fill,
                                                costs=settings.costs.model_dump(), haircut=settings.delist_haircut,
                                                holdout_from=prep.holdout_from, top_n=None if settings.symbols else settings.top_n),
-                   "statistics": [{"metric": k, "value": v} for k, v in {**ret, **tr, **bm}.items()]},
+                   "statistics": [{"metric": k, "value": v} for k, v in {**ret, **tr, **bm, **ext}.items()]},
         "meta": {
-            "headline": headline, "verdict_chip": "not validated", "metrics": {**ret, **tr, **bm}, "total_return": total, "years": years, "benchmark": settings.benchmark if bm else None,
+            "headline": headline, "verdict_chip": "not validated", "metrics": {**ret, **tr, **bm, **ext}, "total_return": total, "years": years, "benchmark": settings.benchmark if bm else None,
             "rule_check": {**rules, "target": settings.rule_target, "daily_loss": settings.rule_daily_loss, "max_dd": settings.rule_max_dd, "min_days": settings.rule_min_days},
             "costs_off": settings.costs.off(), "few_trades": few, "open_trades": len(r.trades) - len(closed), "unfilled": r.unfilled, "entry_signals": n_entries,
+            "trade_split": trade_split, "distribution": M.return_distribution(r.equity, dates),
             "costs": {"total": costs_total, "share_of_gross": cost_share, "gross_return": float(r.gross_equity[-1] / cap - 1), "net_return": total, "turnover_per_year": turnover},
             "exposure": {"time_in_market": float((r.positions > 0).mean()), "avg_gross": float(r.gross_exposure.mean()), "avg_net": float(r.net_exposure.mean())},
             "start_dates": {"positive": int(sum(c > 0 for c in cagrs)), "of": len(cagrs), "cagr_low": min(cagrs) if cagrs else None, "cagr_high": max(cagrs) if cagrs else None, "pass_share": sd_pass},

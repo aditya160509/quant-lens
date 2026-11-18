@@ -79,6 +79,15 @@ def test_hero_numbers_equal_metrics_py(studio):  # K-1
     assert out["meta"]["total_return"] == pytest.approx(r.equity[-1] / settings.capital - 1, abs=1e-9)
 
 
+def test_payload_carries_lean_stats(studio):  # K-15, K-16, K-19, K-20, K-21
+    out = backtest.run_backtest(Strategy(**SMA), Settings(**SETTINGS))
+    m, meta = out["meta"]["metrics"], out["meta"]
+    for k in ("psr", "var_99", "cvar_99", "var_95_normal", "fees_total", "volume_traded", "jensen_alpha", "treynor", "beta", "tracking_error"):
+        assert k in m
+    assert set(meta["trade_split"]) == {"all", "long", "short"} and meta["trade_split"]["all"]["count"] == meta["trade_split"]["long"]["count"] + meta["trade_split"]["short"]["count"]
+    assert len(meta["distribution"]["best"]) == 10 and {"return_36m", "sharpe_36m", "beta_6m"} <= set(out["charts"]["rolling"][-1])
+
+
 def test_same_run_twice_has_the_same_hash(studio):  # K-2
     a, b = (backtest.run_backtest(Strategy(**SMA), Settings(**SETTINGS)) for _ in range(2))
     assert a["meta"]["result_hash"] == b["meta"]["result_hash"] and a["tables"]["trades"] == b["tables"]["trades"]

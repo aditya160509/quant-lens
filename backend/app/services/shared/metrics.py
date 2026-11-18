@@ -184,3 +184,57 @@ def min_track_record(returns: np.ndarray, benchmark_sharpe: float = 0.0, confide
         return None
     var = 1 - stats.skew(r, bias=False) * sr + (stats.kurtosis(r, fisher=False, bias=False) - 1) * sr * sr / 4
     return float(1 + var * (stats.norm.ppf(confidence) / (sr - sr0)) ** 2)
+
+
+def extra_metrics(equity: np.ndarray, benchmark: np.ndarray | None = None, dates: pd.DatetimeIndex | None = None, ann: float = ANN) -> dict[str, Any]:
+    """Backtest stat-strip additions. VaR/CVaR are daily returns (negative = loss); *_normal is the parametric normal approximation."""
+    eq = np.asarray(equity, dtype=np.float64)
+    if len(eq) < 3 or not np.isfinite(eq).all() or (eq <= 0).any():
+        return {}
+    r = eq[1:] / eq[:-1] - 1
+    mu, sd = r.mean(), r.std(ddof=1)
+    out: dict[str, Any] = {"psr": psr(r, 1.0, ann)}  # LEAN: SR* = annual Sharpe 1
+    for pct, z in ((95, 1.6448536269514722), (99, 2.3263478740408408)):
+        q = np.quantile(r, 1 - pct / 100)
+        out[f"var_{pct}"], out[f"cvar_{pct}"] = _num(q), _num(r[r <= q].mean())
+        out[f"var_{pct}_normal"] = _num(mu - z * sd) if sd > 1e-12 else None
+    if dates is not None and len(dates) == len(eq):
+        days = [(dates[e["recovery"]] - dates[max(e["peak"], 0)]).days for e in drawdowns(eq) if e["recovery"] is not None]
+        out["longest_recovery_days"] = max(days) if days else None
+    if benchmark is not None:
+        bm = np.asarray(benchmark, dtype=np.float64)
+        if len(bm) == len(eq) and np.isfinite(bm).all() and (bm > 0).all():
+            b = bm[1:] / bm[:-1] - 1
+            beta = np.cov(r, b, ddof=1)[0, 1] / b.var(ddof=1) if b.var(ddof=1) > 1e-18 else None
+            cagr, bcagr = (eq[-1] / eq[0]) ** (ann / len(r)) - 1, (bm[-1] / bm[0]) ** (ann / len(r)) - 1
+            out["jensen_alpha"] = _num(cagr - beta * bcagr) if beta is not None else None  # LEAN, rf = 0
+            out["treynor"] = _div(cagr, beta) if beta is not None else None
+    return out
+
+
+def lean_trade_stats(pnl: np.ndarray, base: np.ndarray) -> dict[str, Any]:
+    """LEAN trade stats. `base` is the capital before each trade, so win/loss rates are P&L over running capital."""
+    pnl, base = np.asarray(pnl, dtype=np.float64), np.asarray(base, dtype=np.float64)
+    n = len(pnl)
+    if n == 0:
+        return {"count": 0}
+    win, loss, pct = pnl > 0, pnl < 0, pnl / base
+    wr, lr = win.mean(), loss.mean()
+    plr = _div(pct[win].mean(), abs(pct[loss].mean())) if win.any() and loss.any() else None
+    return {"count": n, "win_rate": _num(wr), "avg_win": _num(pnl[win].mean()) if win.any() else None, "avg_loss": _num(pnl[loss].mean()) if loss.any() else None,
+            "profit_factor": _div(pnl[win].sum(), -pnl[loss].sum()), "profit_loss_ratio": plr, "expectancy": _num(wr * plr - lr) if plr is not None else None}
+
+
+def return_distribution(equity: np.ndarray, dates: pd.DatetimeIndex, bins: int = 41, top: int = 10) -> dict[str, Any]:
+    """Daily return histogram with the fitted normal's expected counts, plus the best and worst days."""
+    eq = np.asarray(equity, dtype=np.float64)
+    if len(eq) < 3 or not np.isfinite(eq).all() or (eq <= 0).any():
+        return {}
+    r = eq[1:] / eq[:-1] - 1
+    mu, sd = float(r.mean()), float(r.std(ddof=1))
+    counts, edges = np.histogram(r, bins=bins)
+    cdf = stats.norm.cdf(edges, mu, sd) if sd > 1e-12 else np.zeros_like(edges)
+    rows = [{"lo": float(edges[i]), "hi": float(edges[i + 1]), "count": int(c), "normal": float(len(r) * (cdf[i + 1] - cdf[i]))} for i, c in enumerate(counts)]
+    day = lambda i: {"date": str(dates[i + 1].date()), "return": float(r[i])}
+    order = np.argsort(r)
+    return {"mean": mu, "std": sd, "bins": rows, "best": [day(i) for i in order[::-1][:top]], "worst": [day(i) for i in order[:top]]}
