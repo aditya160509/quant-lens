@@ -175,7 +175,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const scrollRef = useRef<HTMLDivElement>(null);
   const numeric = useMemo(() => new Set(cols.filter((c) => rows.some((r) => isNum(r[c])))), [rows, cols]);
   // The footer's medians: computed once per data change, not on every scroll frame.
-  const medians = useMemo(() => Object.fromEntries([...numeric].filter((c) => !isPKey(c)).map((c) => [c, reduce(rows.map((r) => r[c]).filter(isNum), "median")])), [rows, numeric]);
+  const medians = useMemo(() => Object.fromEntries([...numeric].filter((c) => !isPKey(c) && !/(^|_)(version|year|id)$/i.test(c)).map((c) => [c, reduce(rows.map((r) => r[c]).filter(isNum), "median")])), [rows, numeric]);
   const bound = useMemo(() => {
     const m: Record<string, number> = {};
     cols.forEach((c) => { if (numeric.has(c) && !isPKey(c)) m[c] = Math.max(1e-12, ...rows.map((r) => (isNum(r[c]) ? Math.abs(r[c]) : 0))); });
@@ -454,7 +454,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
             })}
             {virtual && windowRows.length ? <tr aria-hidden="true"><td colSpan={cols.length + (rowActions ? 1 : 0) + (selectable ? 1 : 0)} style={{ height: Math.max(0, virtualizer.getTotalSize() - windowRows[windowRows.length - 1].end), padding: 0, border: 0 }} /></tr> : null}
           </tbody>
-          {rows.length > 3 && numeric.size ? (
+          {rows.length > 3 && Object.keys(medians).length ? (
             <tfoot>
               <tr className="dt-foot">
                 {selectable ? <td /> : null}

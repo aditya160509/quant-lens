@@ -105,6 +105,7 @@ export function fmtKey(key: string, v: unknown): string {
   if (FRAC_RE.test(key)) return pct(v, Math.abs(v) >= 10 ? 0 : 1);
   if (PCT_RE.test(key) && Math.abs(v) <= 5) return pct(v, Math.abs(v) < 0.01 ? 2 : 1);
   if (RATIO_RE.test(key)) return v.toFixed(2);
+  if (/trials/i.test(key)) return Number.isInteger(v) ? v.toLocaleString("en-US") : v.toFixed(1);
   return num(v, Math.abs(v) < 0.1 ? 4 : 3);
 }
 

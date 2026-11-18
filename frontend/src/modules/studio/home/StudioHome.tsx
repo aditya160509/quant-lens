@@ -3,7 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Archive, Copy, FileJson, Play, Plus, Search } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { DataTable } from "@/kit/DataTable";
@@ -13,6 +13,7 @@ import { useStudies } from "@/modules/research/store";
 import type { FeatureSpec } from "@/modules/research/types";
 import { studio, useHome, useTemplates, type Compiled, type StrategyCard, type Template } from "../api";
 import { FreshnessPill } from "../RunHeader";
+import { Segmented } from "@/workspace/ui";
 import "../studio.css";
 
 const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : "Failed");
@@ -34,6 +35,9 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<"last" | "name">("last");
   const [picked, setPicked] = useState<string | null>(null);
+  const params = useSearchParams();
+  const view = params?.get("layout") === "table" ? "table" : "cards";
+  const setView = (v: "cards" | "table") => { const u = new URL(location.href); if (v === "table") u.searchParams.set("layout", "table"); else u.searchParams.delete("layout"); router.replace(u.pathname + u.search, { scroll: false }); };
   const [slow, setSlow] = useState(false);
   const search = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -81,6 +85,7 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
           {home.data ? <FreshnessPill f={home.data.freshness} /> : null}
           <label className="sh-q"><Search size={13} /><input ref={search} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search strategies" /></label>
           <select className="input" style={{ width: 120, height: 30 }} aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as "last" | "name")}><option value="last">Last run</option><option value="name">Name</option></select>
+          <Segmented<"cards" | "table"> label="Layout" value={view} onChange={setView} options={[{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }]} />
           <button className="btn" onClick={() => dialog.current?.showModal()}><FileJson size={14} />Import</button>
           <Link className="btn primary" href="/studio/build"><Plus size={14} />New</Link>
         </div>
@@ -102,6 +107,15 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
               <a href="#templates"><Copy size={18} />From a template</a>
               <button type="button" onClick={() => dialog.current?.showModal()}><FileJson size={18} />Import a JSON spec</button>
             </div>
+          ) : view === "table" ? (
+            <DataTable rows={list.map((s) => ({ strategy: s.name, version: s.version, total_return: s.last_run?.total_return ?? null, sharpe: s.last_run?.sharpe ?? null, trades: s.last_run?.trades ?? null,
+              trend: s.last_run?.spark ?? [], last_run: s.last_run ? day(s.last_run.at) : null, raw_trials: s.trials.raw, effective_trials: s.trials.effective }))}
+              opts={{ rowActions: (r: Record<string, unknown>) => { const s = list.find((x) => x.name === r.strategy && x.version === r.version); return s ? (
+                <span style={{ display: "inline-flex", gap: 4 }}>
+                  <button className="btn sm" onClick={() => (s.last_run ? open(s) : openIn(s.id, "go=1"))}><Play size={12} />{s.last_run ? "Open" : "Run"}</button>
+                  <Link className="btn sm ghost" href={`/studio/build/${s.id}`}>Edit</Link>
+                  <button className="btn sm ghost icon" aria-label={`Duplicate ${s.name}`} title="Duplicate" onClick={() => duplicate(s.id)}><Copy size={12} /></button>
+                </span>) : null; } }} />
           ) : (
             <div className="sh-grid" data-testid="strategy-cards">
               {list.map((s) => (
@@ -112,7 +126,7 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
                     <>
                       <Spark values={s.last_run.spark} />
                       <div className="sh-fig"><b className={s.last_run.total_return >= 0 ? "st-up" : "st-down"}>{s.last_run.total_return > 0 ? "+" : ""}{pct(s.last_run.total_return, 0)}</b>
-                        <span>Sharpe {s.last_run.sharpe?.toFixed(2) ?? "—"} · {s.last_run.trades} trades · {day(s.last_run.at)}</span></div>
+                        <span>Sharpe {s.last_run.sharpe?.toFixed(2) ?? "—"}</span><span>{s.last_run.trades} trades</span><span>{day(s.last_run.at)}</span></div>
                     </>
                   ) : <div className="st-skip" style={{ minHeight: 76 }}>not run</div>}
                   <div className="sh-chips">
@@ -135,7 +149,7 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
         {home.data?.recent_runs.length ? (
           <section>
             <h2>Recent runs</h2>
-            <DataTable rows={home.data.recent_runs.map((r) => ({ strategy: r.strategy ?? "Unsaved draft", version: r.version, result: r.headline, run: new Date(r.at * 1000).toLocaleString() }))} opts={{ maxHeight: 260 }} />
+            <DataTable rows={home.data.recent_runs.map((r) => ({ strategy: r.strategy ?? (r.feature === "st04" ? "Portfolio" : "Unsaved draft"), version: r.version, result: r.headline, run: new Date(r.at * 1000).toLocaleString() }))} opts={{ maxHeight: 260 }} />
           </section>
         ) : null}
 
