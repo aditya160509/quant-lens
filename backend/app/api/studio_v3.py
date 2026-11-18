@@ -355,11 +355,6 @@ def compare(request: CompareRequest) -> dict[str, Any]:
     return _refuse(home_rules.compare, request.ids, RESULTS_DIR)
 
 
-class QuantConnectRequest(BaseModel):
-    source: str
-    name: str | None = None
-
-
 class SignalsRequest(BaseModel):
     csv: str
     name: str = "Imported signals"
@@ -369,13 +364,6 @@ def _save_import(spec: dict, found: dict, save: bool, folder: str, actor: str | 
     found = {**found, "compile": compiler.compile_spec(_spec(spec)) if spec else None}
     found["saved"] = store.create(_spec(spec), _actor(actor), folder) if save and ok and found["compile"]["ok"] else None
     return found
-
-
-@router.post("/strategies/import/quantconnect")
-def import_quantconnect(request: QuantConnectRequest, save: bool = False, force: bool = False, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
-    """Map what the shim can; every call it cannot map is listed. Saves only with save=true and nothing unmapped, or force=true (H-19)."""
-    out = _refuse(imports.quantconnect, request.source, request.name)
-    return _save_import(out["spec"], out, save, "", x_studio_actor, force or not out["unmapped"])
 
 
 @router.post("/strategies/import/signals")

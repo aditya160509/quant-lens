@@ -173,39 +173,6 @@ def test_compare_aligns_curves_and_refuses(client):  # H-17
         assert x.status_code == 422 and why in x.json()["detail"]["reason"]
 
 
-QC = '''
-class Algo(QCAlgorithm):
-    def initialize(self):
-        self.set_start_date(2020, 1, 1)
-        self.set_cash(100000)
-        self.add_equity("AAA")
-        self.fast = self.sma("AAA", 10)
-        self.slow = self.sma("AAA", 30)
-        self.r = self.rsi("AAA", 14)
-        self.schedule.on(self.date_rules.month_start("AAA"), self.time_rules.after_market_open("AAA", 5), self.rebalance)
-
-    def on_data(self, data):
-        if self.fast.current.value > self.slow.current.value and self.r.current.value < 70:
-            self.set_holdings("AAA", 1)
-        elif self.fast.current.value < self.slow.current.value:
-            self.liquidate("AAA")
-        self.market_on_open_order("AAA", 5)
-'''
-
-
-def test_quantconnect_shim_lists_unmapped_and_saves_only_clean(client):  # H-19
-    u = "/api/studio-v3/strategies/import/quantconnect"
-    r = client.post(u + "?save=true", json={"source": QC}).json()
-    assert r["spec"]["entry_long"] == "(((sma(close, 10)) > (sma(close, 30))) & ((rsi(close, 14)) < 70.0))"
-    assert r["spec"]["exit_long"] == "(if_else((((sma(close, 10)) > (sma(close, 30))) & ((rsi(close, 14)) < 70.0)), 0, 1) & ((sma(close, 10)) < (sma(close, 30))))"
-    assert [(x["line"], x["reason"].split(":")[0].split(" is ")[0]) for x in r["unmapped"]] == [(10, "schedule"), (17, "market_on_open_order")]
-    assert r["saved"] is None and store.list_strategies() == []
-    assert client.post(u + "?save=true&force=true", json={"source": QC}).json()["saved"]["version"] == 1
-    clean = "class A(QCAlgorithm):\n    def on_data(self, d):\n        if self.rsi('X', 2).current.value < 10:\n            self.set_holdings('X', 1)\n"
-    assert client.post(u, json={"source": "def ("}).status_code == 422
-    assert client.post(u + "?save=true", json={"source": clean.replace("self.rsi('X', 2).current.value", "self.r.current.value").replace("    def on_data", "    def initialize(self):\n        self.r = self.rsi('X', 2)\n\n    def on_data")}).json()["saved"]
-
-
 def test_signals_csv_findings_and_trades(client):  # H-20
     u = "/api/studio-v3/strategies/import/signals"
     bad = client.post(u + "?save=true", json={"csv": "date,symbol,signal\n2016-01-04,AAA,2\n2016-13-01,AAA,1\n2016-01-05,ZZZ,1\n2016-01-05,ZZZ,1\n"}).json()

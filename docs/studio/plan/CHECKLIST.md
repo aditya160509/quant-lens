@@ -108,7 +108,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [ ] [E] H-16 Empty state: three one-click starters (blank, template, from a Screener screen)
 - [ ] [M] H-17 Compare 2 to 6 strategies from Home: overlaid equity, metric table, correlation, code diff; opens Portfolio (backend done: POST /compare)
 - [x] [E] H-18 Needs attention ranked: drift beyond band, data newer than last run, validation expired by a code change, failed run, alert fired (ranked by the backend: drift, data newer, validation expired, failed run, alert, paper stale)
-- [ ] [H] H-19 Import a QuantConnect algorithm through the shim; unmapped calls listed before saving [FP 67] (backend done: POST /strategies/import/quantconnect; saved Python signals need the engine to run Python strategies)
+- [x] [H] H-19 Dropped 2026-11-18: no competitor-specific import on Home; Studio JSON and Signals CSV cover imports
 - [ ] [M] H-20 Import a CSV of signals (backend done: POST /strategies/import/signals; runs once the engine runs Python strategies)
 - [ ] [E] H-21 Card fields: sparkline of last run, verdict chip, trial count, last edited (partial: sparkline, status, trial count; last edited open)
 - [x] [M] H-22 Recent runs table with a settings-changed-since marker (changed_since column on Recent runs)

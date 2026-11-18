@@ -267,15 +267,14 @@ export default function StudioHome({ features }: { features: FeatureSpec[] }) {
   );
 }
 
-type ImportMode = "json" | "quantconnect" | "signals";
-type ImportResult = { compile?: Compiled; saved: StrategyCard | null; mapped?: { line: number; call: string; to: string }[]; unmapped?: { line: number; call: string; reason: string }[]; findings?: { severity: string; row: number; message: string }[]; ok?: boolean; rows?: number; symbols?: number };
+type ImportMode = "json" | "signals";
+type ImportResult = { compile?: Compiled; saved: StrategyCard | null; findings?: { severity: string; row: number; message: string }[]; ok?: boolean; rows?: number; symbols?: number };
 const PLACEHOLDER: Record<ImportMode, string> = {
   json: '{"name": "…", "entry_long": "close > sma(close, 200)"}',
-  quantconnect: "class MyAlgo(QCAlgorithm):\n    def initialize(self):\n        self.fast = self.sma(\"SPY\", 50)\n    def on_data(self, data):\n        …",
   signals: "date,symbol,signal\n2024-01-02,AAPL,1\n2024-03-01,AAPL,0",
 };
 
-/** Import a Studio JSON spec, a QuantConnect algorithm or a CSV of signals; each is checked and its findings shown before anything is saved. */
+/** Import a Studio JSON spec or a CSV of signals; each is checked and its findings shown before anything is saved. */
 function ImportDialog({ ref, onSaved }: { ref: React.RefObject<HTMLDialogElement | null>; onSaved: (s: StrategyCard) => void }) {
   const [mode, setMode] = useState<ImportMode>("json");
   const [text, setText] = useState("");
@@ -283,7 +282,7 @@ function ImportDialog({ ref, onSaved }: { ref: React.RefObject<HTMLDialogElement
   const [res, setRes] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const reset = () => { setRes(null); setError(null); };
-  const send = (save: boolean, force = false) => {
+  const send = (save: boolean) => {
     setError(null);
     let req: Promise<ImportResult>;
     if (mode === "json") {
@@ -291,35 +290,30 @@ function ImportDialog({ ref, onSaved }: { ref: React.RefObject<HTMLDialogElement
       try { spec = JSON.parse(text); } catch { setError("Not valid JSON"); return; }
       req = studio<ImportResult>("POST", `/strategies/import${save ? "?save=true" : ""}`, { spec: (spec as { spec?: unknown }).spec ?? spec });
     } else {
-      const qs = new URLSearchParams({ ...(save ? { save: "true" } : {}), ...(force ? { force: "true" } : {}) }).toString();
-      req = studio<ImportResult>("POST", `/strategies/import/${mode}${qs ? `?${qs}` : ""}`, mode === "quantconnect" ? { source: text, name: name || undefined } : { csv: text, name: name || undefined });
+      req = studio<ImportResult>("POST", `/strategies/import/signals${save ? "?save=true" : ""}`, { csv: text, name: name || undefined });
     }
     void req.then((d) => { setRes(d); if (d.saved) onSaved(d.saved); }, (e: Error) => { setRes(null); setError(e.message); });
   };
-  const ok = mode === "json" ? Boolean(res?.compile?.ok) : mode === "signals" ? Boolean(res?.ok) : Boolean(res?.compile?.ok ?? res);
-  const unmapped = res?.unmapped ?? [];
+  const ok = mode === "json" ? Boolean(res?.compile?.ok) : Boolean(res?.ok);
   return (
     <dialog ref={ref} className="sh-import" aria-label="Import a strategy" onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
       <b style={{ fontSize: 15 }}>Import a strategy</b>
-      <Segmented<ImportMode> label="Source" value={mode} onChange={(m) => { setMode(m); setText(""); reset(); }} options={[{ value: "json", label: "Studio JSON" }, { value: "quantconnect", label: "QuantConnect" }, { value: "signals", label: "Signals CSV" }]} />
+      <Segmented<ImportMode> label="Source" value={mode} onChange={(m) => { setMode(m); setText(""); reset(); }} options={[{ value: "json", label: "Studio JSON" }, { value: "signals", label: "Signals CSV" }]} />
       {mode !== "json" ? <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" aria-label="Strategy name" /> : null}
       <textarea className="input" value={text} onChange={(e) => { setText(e.target.value); reset(); }} placeholder={PLACEHOLDER[mode]} aria-label="Source" spellCheck={false} />
-      <input type="file" accept={mode === "json" ? "application/json,.json" : mode === "signals" ? "text/csv,.csv" : ".py,text/x-python"} aria-label="File" onChange={(e) => { const f = e.target.files?.[0]; if (f) void f.text().then((t) => { setText(t); reset(); }); }} />
+      <input type="file" accept={mode === "json" ? "application/json,.json" : "text/csv,.csv"} aria-label="File" onChange={(e) => { const f = e.target.files?.[0]; if (f) void f.text().then((t) => { setText(t); reset(); }); }} />
       {error ? <div className="sh-find" role="alert"><b className="error">error</b>{error}</div> : null}
       {res ? (
         <div style={{ display: "grid", gap: 4, maxHeight: 260, overflow: "auto" }} data-testid="import-findings">
           {mode === "signals" ? <div className="sh-find"><b>{res.rows ?? 0} rows</b><span>{res.symbols ?? 0} symbols</span></div> : null}
           {res.findings?.map((f, i) => <div key={i} className="sh-find"><b className={f.severity}>{f.severity}</b><span>{f.row ? `row ${f.row}: ` : ""}{f.message}</span></div>)}
-          {res.mapped?.map((m, i) => <div key={`m${i}`} className="sh-find"><b className="st-up">line {m.line}</b><span>{m.call} → {m.to}</span></div>)}
-          {unmapped.map((m, i) => <div key={`u${i}`} className="sh-find"><b className="warning">line {m.line}</b><span>{m.call}: {m.reason}</span></div>)}
           {res.compile ? (res.compile.findings.length ? res.compile.findings.map((f, i) => <div key={`c${i}`} className="sh-find"><b className={f.severity}>{f.severity}</b><span>{f.message}{f.token ? ` (line ${f.line}: ${f.token})` : ""}</span></div>) : <div className="sh-find"><b className="st-up">compiles</b><span style={{ whiteSpace: "pre-line" }}>{res.compile.description}</span></div>) : null}
         </div>
       ) : null}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button className="btn" onClick={() => ref.current?.close()}>Cancel</button>
         <button className="btn" disabled={!text.trim()} onClick={() => send(false)}>Check</button>
-        {mode === "quantconnect" && unmapped.length ? <button className="btn" onClick={() => send(true, true)}>Save without {unmapped.length} unmapped</button> : null}
-        <button className="btn primary" disabled={!ok || (mode === "quantconnect" && unmapped.length > 0)} onClick={() => send(true)}>Save</button>
+        <button className="btn primary" disabled={!ok} onClick={() => send(true)}>Save</button>
       </div>
     </dialog>
   );
