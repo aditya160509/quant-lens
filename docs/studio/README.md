@@ -7,6 +7,7 @@ Build a trading strategy (blocks, formula, Python or plain English), test it unt
 | File | Holds |
 |---|---|
 | [CHECKLIST.md](plan/CHECKLIST.md) | Build order, phases 0–9, the only progress tracker |
+| [PAGE_LOG.md](plan/PAGE_LOG.md) | Per page when it closes: shipped, checked, open |
 | [PAGES.md](plan/PAGES.md) | The spec: 9 pages, inputs, outputs, acceptance ids |
 | [PLAN.md](plan/PLAN.md) | Principles, backend architecture, engine, data |
 | [DECISIONS.md](plan/DECISIONS.md) | Data limits and decisions taken |
