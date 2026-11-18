@@ -388,3 +388,32 @@ def test_warmup_reports_first_observed_trading_eligible_date():
         "bars": 2, "first_eligible_date": str(dates[2].date()),
         "first_eligible_by_symbol": {"AAA": str(dates[2].date()), "BBB": None},
     }
+
+
+@pytest.mark.parametrize(("schedule", "expected"), [
+    ("daily", [0, 1, 2, 3, 4]),
+    ("week_start", [0, 2, 4]),
+    ("month_start", [0, 1, 2, 3]),
+    ("quarter_start", [0, 1, 3]),
+    ("year_start", [0, 1]),
+    (2, [0, 2, 4]),
+    (None, []),
+])
+def test_rebalance_schedule_and_bar_flag_agree(schedule, expected):
+    from app.services.studio_v3.core import engine
+
+    bars, _ = _bars(5, 1)
+    dates = pd.DatetimeIndex(["2025-12-31", "2026-01-02", "2026-03-31", "2026-04-01", "2026-04-06"])
+    code = f"""class Strategy:
+    rebalance_schedule = {schedule!r}
+
+    def rebalance(self, ctx):
+        ctx.log(ctx.bar_index)
+
+    def on_data(self, ctx):
+        ctx.plot("scheduled", ctx.rebalancing)
+"""
+    output = {}
+    pycode.run_event(code, bars, dates, {}, ["SPY"], engine.Params(), output=output)
+    assert [int(row["text"]) for row in output["logs"]] == expected
+    assert [i for i, row in enumerate(output["plots"]["scheduled"]) if row["value"]] == expected

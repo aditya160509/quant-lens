@@ -111,3 +111,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-61 advanced. Python event runs call `on_warmup_done` before the first eligible bar, `on_end_of_day` after the strategy’s bar handler and before order submission, and `on_stop` after the full run finishes. Shutdown orders cannot execute after the run. Risk-event callbacks remain open.
 
 - B-53 advanced. Python preview and full Backtest report the configured warm-up and first order-eligible date. Per-symbol mode counts observed bars separately and returns a null date for an insufficient history. Portfolio mode counts run sessions. Automatic inference remains open.
+
+- B-52 verified. The portfolio rebalance hook accepts daily, week, month, quarter and year starts, a positive number of observed bars, or None. Tests verify the hook and `ctx.rebalancing` agree across gaps and calendar boundaries.

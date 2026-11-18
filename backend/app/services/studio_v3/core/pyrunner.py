@@ -398,6 +398,10 @@ class PortfolioStrategy:
         self.market_filter = market_filter
         self.rebalance = getattr(self.strategy, "rebalance", None)
         self.schedule = getattr(self.strategy, "rebalance_schedule", "daily")
+        if self.schedule not in (None, "daily", "week_start", "month_start", "quarter_start", "year_start") and (
+            type(self.schedule) is not int or self.schedule < 1
+        ):
+            raise ValueError("rebalance_schedule needs a calendar interval, a positive bar count, or None")
         self.end_of_day = getattr(self.strategy, "on_end_of_day", None)
         self.warmup_done = getattr(self.strategy, "on_warmup_done", None)
         self.stop = getattr(self.strategy, "on_stop", None)
@@ -473,6 +477,10 @@ class PortfolioStrategy:
             return ctx.is_month_start
         if self.schedule == "week_start":
             return ctx.is_week_start
+        if self.schedule == "quarter_start":
+            return ctx.is_quarter_start
+        if self.schedule == "year_start":
+            return ctx.is_year_start
         return ctx.every(self.schedule)
 
     def on_fill(self, engine_ctx, fill):
