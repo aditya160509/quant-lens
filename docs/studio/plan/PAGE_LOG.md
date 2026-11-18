@@ -99,3 +99,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-114 shipped. `monthly(x)` uses the last available value from the preceding closed calendar month. Prefix tests verify that adding later bars leaves every earlier value unchanged. Hourly remains data-blocked.
 
 - B-108, B-109, B-111 and B-116 backend diagnostics ship through `POST /api/studio-v3/build/condition`. It evaluates one formula or block expression over the symbol’s development data and returns true rate, most recent true date, all matching preview dates and a constant-condition flag. The visible interval is the last 730 days of development data. Frontend wiring remains open.
+
+- B-117 backend ships in `POST /api/studio-v3/compile`. Complexity reports declared parameters, parsed formula conditions and independent referenced parameters with a variable optimisation range. Formula rules count Boolean leaves across entry, exit and market conditions. Score formulas and arbitrary Python control flow are excluded from the rule count.

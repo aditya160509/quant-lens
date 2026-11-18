@@ -467,3 +467,20 @@ def test_build_condition_explains_when_a_rule_fired(studio):
 
     error = studio.post(endpoint, json=request | {"expression": "future(close)"})
     assert error.status_code == 422 and "Look-ahead" in error.json()["detail"]["message"]
+
+
+def test_compile_counts_rules_and_independent_tunable_parameters(studio):
+    spec = {
+        "entry_long": "(close > sma(close, period)) & ((volume > 0) | (open < close))",
+        "exit_long": "close < sma(close, period)",
+        "market_filter": "market > floor",
+        "score": "roc(close, period)",
+        "params": {
+            "period": {"value": 10, "min": 5, "max": 20, "step": 1},
+            "floor": {"value": 100},
+            "unused": {"value": 1, "min": 0, "max": 2},
+        },
+    }
+    result = studio.post("/api/studio-v3/compile", json={"spec": spec}).json()
+    assert result["ok"]
+    assert result["complexity"] == {"parameter_count": 3, "formula_rule_count": 5, "degrees_of_freedom": 1}

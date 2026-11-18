@@ -241,7 +241,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] B-114 Causal weekly(x) and monthly(x) built and tested (hourly blocked by data) [FP 42]
 - [ ] [H] B-115 Composer-style tree blocks: if/else branches, filter by rank, weight by method, group; nest to any depth [FP 69]
 - [ ] [M] B-116 Live true-rate on every condition block ("true on 31% of bars, last true 2026-01-28") [FP 69] (backend done: POST /build/condition; frontend wiring open)
-- [ ] [M] B-117 Complexity meter: counts parameters and rules and shows degrees of freedom while building [FP 25]
+- [ ] [M] B-117 Complexity meter: counts parameters and rules and shows degrees of freedom while building [FP 25] (backend done: compile returns complexity; frontend wiring open)
 - [ ] [H] B-118 Find rules: grammar search of entries and exits with an out-of-sample split; every candidate counts in the trial ledger; results go to the Home databank grid [FP 70]
 - [ ] [E] B-119 Checks card adds warm-up bars needed, data each rule uses, survivorship exposure (partial: checks card exists; three rows open)
 - [ ] [E] B-120 Exits library additions: profit-target ladder, exit on opposite signal, end-of-week exit; exits combinable and ordered (partial: stop, target, trailing, time, breakeven, scale out exist; these open)

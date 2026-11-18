@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 
 import numpy as np
@@ -21,13 +22,20 @@ def compile_spec(spec: Strategy) -> dict:
     findings: list[dict] = []
     params = spec.values()
     used: set[str] = set()
+    rule_count = 0
     for line, role in enumerate(ROLES, 1):
         text = getattr(spec, role)
         if not text.strip():
             continue
         try:
-            names, _ = formula.tokens(formula.parse(text, params))
+            parsed = formula.parse(text, params)
+            names, _ = formula.tokens(parsed)
             used |= names
+            if role != "score":
+                rule_count += 1 + sum(
+                    isinstance(node, ast.BinOp) and isinstance(node.op, (ast.BitAnd, ast.BitOr))
+                    for node in ast.walk(parsed)
+                )
         except SignalError as e:
             findings.append({"severity": "error", "role": role, "line": line, "start": e.start, "end": e.end, "token": text[e.start:e.end], "message": e.message,
                              "lookahead": e.message.startswith("Look-ahead")})
@@ -52,7 +60,16 @@ def compile_spec(spec: Strategy) -> dict:
             findings.append({"severity": "warning", "role": "exits", "line": 0, "start": 0, "end": 0, "token": "scale_at", "message": "Scale-out level set without a share to sell"})
     for name in sorted(set(params) - used):
         findings.append({"severity": "warning", "role": "params", "line": 0, "start": 0, "end": 0, "token": name, "message": f"Parameter '{name}' is not used by any rule"})
-    return {"ok": not any(f["severity"] == "error" for f in findings), "findings": findings, "hash": spec.hash(), "description": describe(spec)}
+    complexity = {
+        "parameter_count": len(params),
+        "formula_rule_count": rule_count,
+        "degrees_of_freedom": sum(
+            name in used and p.min is not None and p.max is not None and p.min < p.max
+            for name, p in spec.params.items()
+        ),
+    }
+    return {"ok": not any(f["severity"] == "error" for f in findings), "findings": findings, "hash": spec.hash(),
+            "description": describe(spec), "complexity": complexity}
 
 
 @dataclass
