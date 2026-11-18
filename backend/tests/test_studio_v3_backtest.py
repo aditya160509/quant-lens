@@ -539,3 +539,24 @@ class Strategy:
     ]
     assert problems[1]["severity"] == "warning"
     assert problems[2]["file"] == "main.py" and problems[2]["column"] == 15
+
+
+def test_build_completion_and_signature_use_portfolio_and_local_members(studio):
+    code = """class Strategy:
+    def on_data(self, ctx):
+        self.counter = 1
+
+    def threshold(self, level=5):
+        return self.counter > level
+"""
+    base = "/api/studio-v3/build"
+    result = studio.post(f"{base}/complete", json={"scope": "ctx", "code": code, "prefix": "market"}).json()
+    assert {item["name"] for item in result} == {"market", "market_order"}
+    signature = studio.post(f"{base}/signature", json={"scope": "ctx", "code": code, "name": "market_order"}).json()
+    assert signature["signature"] == "market_order(symbol, quantity)"
+    local = studio.post(f"{base}/complete", json={"scope": "self", "code": code}).json()
+    assert {item["name"]: item["signature"] for item in local} == {
+        "counter": None, "on_data": "on_data(ctx)", "threshold": "threshold(level=5)",
+    }
+    holding = studio.post(f"{base}/complete", json={"scope": "position", "prefix": "quant"}).json()
+    assert holding[0]["name"] == "quantity"

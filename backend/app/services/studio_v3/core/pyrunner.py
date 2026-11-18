@@ -90,6 +90,7 @@ class Ctx:
         return self.t
 
     def history(self, fields, n):
+        """Read a bounded history window. Offset zero is the current bar."""
         if type(n) is not int or n < 1:
             raise ValueError("history requires a positive integer window")
         if not isinstance(fields, str):
@@ -257,6 +258,7 @@ class PortfolioContext(Ctx):
         return Bar(*(float(self._bars[f][self.t, column]) for f in ("open", "high", "low", "close", "volume")))
 
     def history(self, fields, n, sym=None):
+        """Read bounded history for one symbol or for the entire universe."""
         if sym is None:
             return MappingProxyType({symbol: self.history(fields, n, symbol) for symbol in self.symbols})
         ctx = self._contexts[sym]
@@ -279,6 +281,7 @@ class PortfolioContext(Ctx):
         return series, present
 
     def rank(self, expr, *, top=None, bottom=None, where=None):
+        """Rank observed symbols on a formula, optionally filtered by another formula."""
         if top is not None and bottom is not None:
             raise ValueError("Choose either top or bottom")
         count = top if bottom is None else bottom
@@ -294,6 +297,7 @@ class PortfolioContext(Ctx):
         return [(self.symbols[columns[i]], float(scores[i])) for i in order]
 
     def zscore(self, expr):
+        """Return population z-scores by symbol for this bar."""
         values, present = self._cross_section(expr)
         samples = values[present]
         if not len(samples) or (spread := samples.std()) == 0:
@@ -314,6 +318,7 @@ class PortfolioContext(Ctx):
         self.orders.append((symbol, 3))
 
     def market_order(self, symbol, quantity):
+        """Submit a signed share quantity. Positive buys and negative sells."""
         self._submit(symbol, quantity)
 
     def limit_order(self, symbol, quantity, price):
@@ -382,6 +387,7 @@ class PortfolioContext(Ctx):
 
     @property
     def portfolio(self):
+        """Read the marked cash, equity, exposure and positions for this bar."""
         equity, gross, net, _ = self._account._mark()
         positions = {symbol: self.pos(symbol) for symbol in self.symbols}
         return Portfolio(float(self._account.cash), float(equity), float(gross / equity) if equity else 0,

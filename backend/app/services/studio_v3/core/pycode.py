@@ -6,17 +6,19 @@ shortcut: subprocess + resource limits + AST allow-list, not a container; switch
 from __future__ import annotations
 
 import ast
+import inspect
 import json
 import subprocess
 import sys
 import tempfile
 from dataclasses import asdict
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from . import engine, formula
+from . import engine, formula, pyrunner
 
 RUNNER = Path(__file__).with_name("pyrunner.py")
 TIMEOUT_S = 120
@@ -92,6 +94,60 @@ def check(code: str, params: dict[str, float]) -> list[dict]:
             col = code.splitlines()[line - 1].find(e)
             found.append(_finding(line, col, col + len(e), f"Formula: {getattr(x, 'message', x)}", e))
     return found
+
+
+@lru_cache(maxsize=16)
+def _api_members(scope: str):
+    classes = {
+        "ctx": pyrunner.Ctx, "portfolio_ctx": pyrunner.PortfolioContext,
+        "portfolio": pyrunner.Portfolio, "position": pyrunner.Holding,
+        "bar": pyrunner.Bar, "fill": pyrunner.Execution, "market": pyrunner.MarketBar,
+        "history": pyrunner.HistoryWindow,
+    }
+    cls = classes.get(scope)
+    if cls is None:
+        return {}
+    members = {}
+    for name, member in inspect.getmembers_static(cls):
+        if name.startswith("_"):
+            continue
+        sig = None
+        if inspect.isfunction(member):
+            call = inspect.signature(member)
+            sig = f"{name}{call.replace(parameters=list(call.parameters.values())[1:])}"
+        docs = inspect.getdoc(member) if inspect.isfunction(member) or isinstance(member, property) else None
+        members[name] = {"name": name, "kind": "method" if sig else "field", "signature": sig, "documentation": docs}
+    if scope in {"ctx", "portfolio_ctx"}:
+        for name in ("open", "high", "low", "close", "volume", "symbol", "position", "params"):
+            members.setdefault(name, {"name": name, "kind": "field", "signature": None, "documentation": None})
+    return members
+
+
+def editor_members(scope: str, code: str, prefix: str = "") -> list[dict]:
+    if scope == "self":
+        members = {}
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return []
+        strategy = next((node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "Strategy"), None)
+        if strategy is None:
+            return []
+        for method in strategy.body:
+            if isinstance(method, ast.FunctionDef) and not method.name.startswith("_"):
+                args = ast.unparse(method.args)
+                args = args.removeprefix("self, ") if args != "self" else ""
+                members[method.name] = {"name": method.name, "kind": "method", "signature": f"{method.name}({args})",
+                                        "documentation": ast.get_docstring(method)}
+        for node in ast.walk(strategy):
+            if (isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Store)
+                    and isinstance(node.value, ast.Name) and node.value.id == "self" and not node.attr.startswith("_")):
+                members.setdefault(node.attr, {"name": node.attr, "kind": "field", "signature": None, "documentation": None})
+    else:
+        if scope == "ctx" and "def on_data(" in code:
+            scope = "portfolio_ctx"
+        members = _api_members(scope)
+    return [member for name, member in sorted(members.items()) if name.startswith(prefix)]
 
 
 def lint(code: str, params: dict[str, float]) -> list[dict]:

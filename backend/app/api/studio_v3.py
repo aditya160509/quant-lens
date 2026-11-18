@@ -180,6 +180,34 @@ def check_python(request: BuildCheckRequest) -> BuildCheckResult:
     return BuildCheckResult(problems=pycode.lint(request.code, request.params))
 
 
+class BuildCompleteRequest(BaseModel):
+    scope: str = Field(max_length=40)
+    code: str = Field(default="", max_length=200_000)
+    prefix: str = Field(default="", max_length=100)
+
+
+class BuildMember(BaseModel):
+    name: str
+    kind: str
+    signature: str | None
+    documentation: str | None
+
+
+class BuildSignatureRequest(BuildCompleteRequest):
+    name: str = Field(min_length=1, max_length=100)
+
+
+@router.post("/build/complete", response_model=list[BuildMember])
+def complete_python(request: BuildCompleteRequest) -> list[dict]:
+    return pycode.editor_members(request.scope, request.code, request.prefix)
+
+
+@router.post("/build/signature", response_model=BuildMember | None)
+def signature_python(request: BuildSignatureRequest) -> dict | None:
+    return next((item for item in pycode.editor_members(request.scope, request.code, request.name)
+                 if item["name"] == request.name and item["signature"]), None)
+
+
 class PreviewRequest(BaseModel):
     spec: dict
     symbol: str = "SPY"

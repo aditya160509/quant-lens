@@ -115,3 +115,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-52 verified. The portfolio rebalance hook accepts daily, week, month, quarter and year starts, a positive number of observed bars, or None. Tests verify the hook and `ctx.rebalancing` agree across gaps and calendar boundaries.
 
 - B-33 advanced via `POST /api/studio-v3/build/check`. The typed result includes sandbox and formula checks, direct nonnegative OHLCV indexes, undefined names and unused locals. Ruff supplies the last two checks when available; Studio checks remain active independently. Unreachable-order lint and editor wiring are open.
+
+- B-32 advanced. `POST /api/studio-v3/build/complete` lists runner and Strategy members by scope and prefix. `POST /api/studio-v3/build/signature` returns an exact callable’s signature and documentation. Runner metadata comes from trusted classes, and local members come from static source inspection. Numerical library suggestions and editor integration remain open.
