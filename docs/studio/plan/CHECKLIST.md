@@ -287,7 +287,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] B-160 Stated regime claim marked "written after" when added after a backtest
 - [x] B-161 Trial chip opens the ledger drawer
 - [x] B-162 Backtest results side by side in the version diff
-- [x] [H] B-163 Open a QuantConnect algorithm in the Python editor: keep the user's code, swap QuantConnect calls for Studio ones, list every line not converted before saving (POST /build/import-quantconnect rewrites in place, returns made-up symbols, capital, dates and warm-up, and lists every removed or refused line with a reason; the editor dialog is frontend)
+- [x] [H] B-163 Open a QuantConnect algorithm in the Python editor: keep the user's code, swap QuantConnect calls for Studio ones, list every line not converted before saving (POST /build/import-quantconnect rewrites in place, returns the symbols, capital, dates and warm-up it found, and lists every removed or refused line with a reason; the editor dialog is frontend)
 
 ## Backtest (`/studio/backtest`, spec §3): 18 / 57 done
 
