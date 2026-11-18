@@ -240,7 +240,7 @@ def run_portfolio(members: list[tuple[str, int, Strategy]], settings: Settings, 
                    "marginal": marginal, "overlap": overlap, "failed": failed, **extra["tables"]},
         "meta": {"headline": head, "grade": extra["grade"], "tiles": extra["tiles"], "warnings": extra["warnings"], "stats": extra["stats"], "frontier": extra["frontier"], "method": "rotate" if rotate_top else method, "rebalance": rebalance, "tree": tree, "names": names, "switch": switch_info, "total_return": float(combined[-1] / cap - 1), "metrics": {"sharpe": sh, "trades": None},
                  "run_hash": hashlib.sha256(f"st04:{[m[0] for m in members]}:{[m[2].hash() for m in members]}:{settings.hash()}:{method}:{switch}:{switch_off}:{rebalance}:{fixed}:{rotate_top}:{max_weight}".encode()).hexdigest()[:16],
-                 "result_hash": hashlib.sha256(np.round(combined, 6).tobytes()).hexdigest()[:16], "freshness": limits.freshness(), "verdict_chip": "not validated",
+                 "result_hash": hashlib.sha256(np.round(combined, 6).tobytes()).hexdigest()[:16], "freshness": limits.freshness(), "verdict_chip": f"grade {extra['grade']['grade']}",
                  "weights_note": None if rebalance == "quarterly" or rotate_top else "weights use the whole development period (in-sample)",
                  "period": [str(dates[0].date()), str(dates[-1].date())], "settings": settings.model_dump()},
     }
@@ -327,7 +327,7 @@ def analytics(rets: pd.DataFrame, w: np.ndarray, combined: np.ndarray, dates: pd
         seg = cr[(cr.index >= a) & (cr.index <= z)]
         if len(seg) > 5:
             each = {n: float((1 + rets[n][(rets.index >= a) & (rets.index <= z)]).prod() - 1) for n in names}
-            crises.append({"crisis": nm, "from": a, "to": z, "combined": float((1 + seg).prod() - 1), "worst_member": min(each, key=each.get), "worst_member_return": min(each.values())})
+            crises.append({"crisis": nm, "from": a, "to": z, "combined_return": float((1 + seg).prod() - 1), "worst_member": min(each, key=each.get), "worst_member_return": min(each.values())})
     # drop-out (P-12): CAGR and drawdown with each member removed
     dropout = []
     if len(names) > 2 and not switch:
@@ -357,7 +357,7 @@ def analytics(rets: pd.DataFrame, w: np.ndarray, combined: np.ndarray, dates: pd
             both = float((rets[a].ne(0) & rets[b].ne(0)).mean())
             act = max(float(rets[a].ne(0).mean()), 1e-9)
             if both / act > 0.7 and c > 0.7:
-                warnings.append(f"{a} and {b} are active on the same days {both / act:.0%} of the time")
+                warnings.append(f"{a} and {b} are both invested on {both / act:.0%} of {a}'s days and correlate {c:.2f}")
     if netting and netting["saved"] > 0.2:
         warnings.append(f"members trade against each other: netting would cut traded notional by {netting['saved']:.0%}")
     # combined grade (P-3): tests that apply to a combined return series
@@ -383,9 +383,9 @@ def analytics(rets: pd.DataFrame, w: np.ndarray, combined: np.ndarray, dates: pd
         tiles.append(_tile("parameters", "pass" if ok else "fail", worst["sharpe"], "≥ 60% of the full Sharpe", f"without {worst['removed']} the Sharpe is {worst['sharpe'] or 0:.2f} vs {base:.2f}: {'no single member carries it' if ok else 'one member carries the result'}"))
         tiles[-1]["name"] = "Drop one member"
     if crises:
-        worst_c = min(crises, key=lambda c: c["combined"])
-        ok = worst_c["combined"] > -0.25
-        tiles.append(_tile("noise", "pass" if ok else "fail", worst_c["combined"], "> −25% in any crisis", f"worst crisis: {worst_c['crisis']} {worst_c['combined']:.0%}"))
+        worst_c = min(crises, key=lambda c: c["combined_return"])
+        ok = worst_c["combined_return"] > -0.25
+        tiles.append(_tile("noise", "pass" if ok else "fail", worst_c["combined_return"], "> −25% in any crisis", f"worst crisis: {worst_c['crisis']} {worst_c['combined_return']:.0%}"))
         tiles[-1]["name"] = "Crisis stress"
     g = grade(tiles, False)
     g["psr"] = psr
