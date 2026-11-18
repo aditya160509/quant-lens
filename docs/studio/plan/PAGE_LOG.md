@@ -45,6 +45,17 @@ Fixed on this page; the shared ones apply to every Studio page:
 - Tables stay tables down to 400px; label-value cards are for phones only.
 - Symbol search is a full popup: company, type and exchange per row, exchange filters, several adds without closing, ticks on names already added.
 - CAGR and volatility columns format as percent.
+- Menus (View, More, dropdowns) measure themselves, stay inside the window and render at the shell root, so sticky bars never cover them (shared `PopMenu`).
+- Cluster tree drawn sideways: names on the left, distance along the bottom, height from the leaf count (shared `Dendrogram`).
+- Tables of 12 rows or fewer have no toolbar row; row hover covers the first column (shared `DataTable`).
+- Sharpe, correlation and beta to 2 places; share columns (both active, overlap) as percent (shared `format.ts`).
+- Chart drawing tools show on hover, focus or while in use (shared `TimeSeries`).
+- Pair tables say Strategy and Paired with, not A and B.
+
+### Next: table and chart pass on every card
+
+- Line charts, bars and heatmaps against `UI_GUIDE.md` §5: axis ticks, legend placement, card spacing, chart heights; check each in the browser.
+- Rolling correlation starts at 0 in 2016 because members have not traded yet; decide whether to start it at the first bar where every member has a position.
 
 ### Open
 
