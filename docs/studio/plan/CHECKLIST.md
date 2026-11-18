@@ -35,7 +35,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 
 | Page | Done | Total |
 |---|---|---|
-| Portfolio | 20 | 28 |
+| Portfolio | 23 | 28 |
 | Home | 1 | 26 |
 | Build | 29 | 162 |
 | Backtest | 18 | 57 |
@@ -45,9 +45,9 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **123** | **538** |
+| **All pages** | **126** | **538** |
 
-## Portfolio (`/studio/portfolio`, spec §6): 20 / 28 done
+## Portfolio (`/studio/portfolio`, spec §6): 23 / 28 done
 
 ### Acceptance (PAGES)
 
@@ -58,13 +58,13 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 
 ### Target additions (FEATURES_PEAK)
 
-- [ ] [E] P-5 Sleeves carry weight, capital, start date, enable toggle and scaling (vol target, leverage cap); a sleeve can be a portfolio (partial: weights, up to 12 members, enable toggle, start date and per-member vol target built in the backend; capital, leverage cap, nesting and page controls open)
-- [ ] [M] P-6 More allocation methods: minimum variance, max diversification, mean-variance with shrinkage, capped Kelly, momentum of members, drawdown throttle, custom Python function (partial: equal, inverse vol, risk parity, HRP, max Sharpe, max diversification, minimum variance, shrunk minimum variance, capped Kelly, member momentum, drawdown throttle, fixed built; mean-variance with shrinkage target and custom Python function open) [FP 36]
+- [ ] [E] P-5 Sleeves carry weight, capital, start date, enable toggle and scaling (vol target, leverage cap); a sleeve can be a portfolio (partial: weights, up to 12 members, enable toggle, start date, per-member vol target, per-sleeve capital share (deploys that share, rest cash) and portfolio leverage_cap built in the backend; nesting and page controls open)
+- [x] [M] P-6 More allocation methods: minimum variance, max diversification, mean-variance with shrinkage, capped Kelly, momentum of members, drawdown throttle, custom Python function (partial: equal, inverse vol, risk parity, HRP, max Sharpe, max diversification, minimum variance, shrunk minimum variance, mean-variance with Ledoit-Wolf shrinkage, capped Kelly, member momentum, drawdown throttle, fixed built; custom Python function skipped; backend only) [FP 36]
 - [x] P-7 Rebalance on a calendar or a threshold corridor, with a minimum trade size to cut churn
 - [x] P-8 Stacked-area weights over time with the effective number of bets
-- [ ] [E] P-9 Diversification ratio, drawdown overlap, capacity by sleeve, turnover, cost drag, net exposure by symbol across sleeves (partial: diversification ratio, drawdown overlap, turnover, cost drag, netting measured, correlation, marginal contribution, trade and name overlap built; capacity by sleeve open) [FP 37]
+- [x] [E] P-9 Diversification ratio, drawdown overlap, capacity by sleeve, turnover, cost drag, net exposure by symbol across sleeves (partial: diversification ratio, drawdown overlap, turnover, cost drag, netting measured, correlation, marginal contribution, trade and name overlap, capacity by sleeve built: avg trade = 1% of 20-day median dollar volume of names traded, null without trades) [FP 37]
 - [x] P-10 Correlation over the full period and over a rolling window
-- [ ] [E] P-11 Constraints: max weight per member, per symbol and per sector; gross and net limits; leverage; cash reserve; minimum member count; ban list; max correlation between members (partial: max weight per member, max correlation, cash reserve and minimum member count built; per symbol and sector, gross and net limits, leverage and ban list open) [FP 36]
+- [x] [E] P-11 Constraints: max weight per member, per symbol and per sector; gross and net limits; leverage; cash reserve; minimum member count; ban list; max correlation between members (partial: max weight per member, max correlation, cash reserve, minimum member count, per symbol and per sector caps, gross and net limits, leverage cap and ban list built in the backend; limits scale the combined return from the next bar and do not re-pick trades; sector = latest fundamentals sector; page controls open) [FP 36]
 - [x] P-12 Sleeve drop-out test: remove each member and show the effect
 - [x] P-13 Correlation shock: all members at correlation 0.8
 - [x] P-14 Crisis stress: the combined portfolio in each crisis window from 2015
@@ -76,7 +76,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] P-20 Deploy as one book, paper first, with netted orders and per-member P&L attribution (Paper tab; netting measured on today's orders)
 - [x] P-21 Alpha, beta, tracking error and information ratio against the chosen benchmark
 - [ ] P-22 Multi-currency account with a base currency and FX on cash (blocked by data: no FX data in the data set)
-- [ ] [E] P-23 Portfolio view during a run: exposure by symbol, sector and asset class, cash, margin, beta to benchmark (partial: holdings treemap and names held built; sector exposure, beta and margin open)
+- [ ] [E] P-23 Portfolio view during a run: exposure by symbol, sector and asset class, cash, margin, beta to benchmark (partial: holdings treemap and names held built; backend last-bar gross, net, beta to benchmark and sector exposure built; asset class, cash, margin and page view open)
 - [x] P-24 Meta rule: weight by regime; rotate to the strongest by trailing N months
 - [x] [M] P-25 Customise: default method, rebalance frequency, estimation window, constraints (Study rail › Defaults › Make these my defaults; chosen settings also in run meta)
 - [x] P-26 Cluster tree of members
