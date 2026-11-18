@@ -398,3 +398,42 @@ def test_build_preview_returns_runner_output_and_runtime_problem(studio):
     assert error["status"] == "error"
     assert error["problem"]["line"] == 6
     assert error["problem"]["exception_type"] == "IndexError"
+
+
+def test_python_preview_fills_match_formula_trades(studio):
+    url = "/api/studio-v3/preview"
+    base = {"sizing": {"mode": "shares", "value": 5}}
+    formula_spec = base | SMA
+    expected = studio.post(url, json={"spec": formula_spec}).json()
+    code = C.pycode.from_formulas(Strategy(**formula_spec)) + '''
+    def on_fill(self, ctx, fill):
+        ctx.log((fill.symbol, fill.side, fill.quantity, fill.price, fill.date, fill.fee))
+'''
+    actual = studio.post(url, json={"spec": formula_spec | {"code": code}}).json()
+    assert actual["trades"]
+    assert len(actual["trades"]) == len(expected["trades"])
+    for got, want in zip(actual["trades"], expected["trades"], strict=True):
+        assert {k: got[k] for k in ("entry_date", "exit_date", "side")} == {k: want[k] for k in ("entry_date", "exit_date", "side")}
+        assert [got[k] for k in ("entry", "exit", "shares", "pnl")] == pytest.approx([want[k] for k in ("entry", "exit", "shares", "pnl")])
+    assert all(row["symbol"] == "SPY" and "'SPY'" in row["text"] for row in actual["logs"])
+    assert actual["logs"]
+
+
+def test_full_backtest_runs_python_without_formula_rules(studio):
+    spec = Strategy(code="""class Strategy:
+    def on_bar(self, ctx):
+        if ctx.bar == 1:
+            ctx.buy()
+
+    def on_fill(self, ctx, fill):
+        ctx.log(fill.side)
+        if fill.side == "buy":
+            ctx.sell()
+""")
+    result = backtest.run_backtest(spec, Settings(symbols=["SPY"], benchmark=""))
+    assert result["meta"]["entry_signals"] == 1
+    assert result["meta"]["logs"][0]["text"] == "buy"
+    assert result["meta"]["logs"][1]["text"] == "sell"
+    assert len(result["tables"]["trades"]) == 1
+    assert result["tables"]["trades"][0]["entry_date"] == "2015-01-05"
+    assert result["tables"]["trades"][0]["exit_date"] == "2015-01-06"

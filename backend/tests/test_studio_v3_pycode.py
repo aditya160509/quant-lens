@@ -93,3 +93,29 @@ def test_history_slice_uses_only_available_bars(expression, expected):
         bars, dates, {}, output=output,
     )
     assert output["logs"][0]["text"] == (str(bars["close"][0].tolist()) if expected == "current" else expected)
+
+
+def test_python_event_runner_receives_actual_fill_and_can_exit_from_it():
+    from app.services.studio_v3.core import engine, fills
+
+    bars, dates = _bars(4, 1)
+    output = {}
+    code = """class Strategy:
+    def on_bar(self, ctx):
+        if ctx.bar == 0:
+            ctx.buy()
+
+    def on_fill(self, ctx, fill):
+        ctx.log((fill.symbol, fill.side, fill.quantity, fill.price, fill.date, fill.fee))
+        if fill.side == "buy":
+            ctx.sell()
+"""
+    settings = engine.Params(size_mode=fills.SHARES, size=2, commission_bps=0,
+                             slippage_bps=0, commission_share=0.25)
+    result = pycode.run_event(code, bars, dates, {}, ["SPY"], settings, output=output)
+    assert [row["date"] for row in output["logs"]] == [str(d.date()) for d in dates[1:3]]
+    for i, side in enumerate(("buy", "sell"), 1):
+        assert output["logs"][i - 1]["text"] == str(
+            ("SPY", side, 2.0, float(bars["open"][i, 0]), str(dates[i].date()), 0.5)
+        )
+    assert result.trades[0, [engine.T_ENTRY_BAR, engine.T_EXIT_BAR, engine.T_SHARES]].tolist() == [1, 2, 2]

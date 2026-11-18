@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 30 | 163 |
+| Build | 31 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **140** | **538** |
+| **All pages** | **141** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 30 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 31 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -184,11 +184,11 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-57 Import allow-list: math, statistics, numpy, pandas, scipy.stats, scipy.optimize, sklearn, and the project files; others refused with the line and a request link (partial: math only; imports refused) [PY A7]
 - [x] [E] B-58 print and ctx.log(msg, level) captured per bar (date, symbol), 50,000-line cap with a truncation row (backend done: typed preview logs include source line and level) [PY A8]
 - [ ] [E] B-59 ctx.plot(name, value, chart="main" or "own"), ctx.mark(sym, label) on the price chart, ctx.table(name, row) as a sortable table (partial: preview returns named plot series) [FP 29] [PY A9]
-- [ ] [E] B-60 on_fill(ctx, fill) gets symbol, side, quantity, price, date and fee (partial: on_fill(ctx) without detail) [PY A11]
+- [x] [E] B-60 on_fill(ctx, fill) gets symbol, side, quantity, price, date and fee (preview and Backtest receive actual event-engine fills; one-argument callback remains supported) [PY A11]
 - [ ] [M] B-61 Lifecycle hooks: on_end_of_day, on_warmup_done, on_risk_event, on_stop
 - [ ] [E] B-62 params = {"fast": (10, 5, 50, 5)} declared in code appear in Build params and the Optimise grid; ctx.param kept (partial: ctx.param exists; declared params not wired to Optimise) [FP 9] [PY A12]
 - [ ] [E] B-63 Per-strategy engine settings as class attributes (fill timing, costs, sizing); code wins over the card and a badge says so
-- [ ] [H] B-64 Python orders feed the event engine directly, so LEAN parity applies to Python strategies [PY A13]
+- [ ] [H] B-64 Python orders feed the event engine directly, so LEAN parity applies to Python strategies (partial: simple Python preview and Backtest use the event engine) [PY A13]
 - [ ] [M] B-65 Budget: 500 symbols × 2,500 bars in under 20 s [PY A14]
 - [ ] [M] B-66 Default mode for new strategies (simple or portfolio) in Customise
 - [ ] B-67 Refuse formulas or Python that read fundamentals for dates before 2021 (blocked by data: fundamentals held from 2021 only)

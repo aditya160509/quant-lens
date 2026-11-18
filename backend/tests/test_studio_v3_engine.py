@@ -165,3 +165,54 @@ def test_sma_cross_500_names_10_years_speed():  # K-9: measured, budget 5 s cold
     print(f"\nK-9 {len(p.symbols)} names x {len(p.dates)} bars: load+signals {load:.2f}s, engine {run:.3f}s (incl. JIT if cold), {len(r.trades)} trades")
     assert len(p.symbols) >= 400 and len(r.trades) > 100
     assert load + run < 5.0
+
+
+def test_on_fill_delivers_executed_orders_before_the_bar_callback():
+    b = bars([100, 101, 101], [100, 101, 114], [100, 101, 88], [100, 101, 101])
+    entries, exits = sig(3, [0])
+    events = []
+
+    class Strategy(engine.SignalStrategy):
+        def on_fill(self, ctx, fill):
+            events.append(("fill", ctx.t, fill))
+
+        def on_bar(self, ctx):
+            events.append(("bar", ctx.t))
+            super().on_bar(ctx)
+
+    params = Params(stop=0.10, target=0.10, size_mode=fills.SHARES, size=2, commission_share=0.25,
+                    volume_cap=1e-9, **FREE)
+    result = engine.run(b, entries, exits, params, strategy=Strategy(entries, exits))
+    assert events == [
+        ("bar", 0),
+        ("fill", 1, engine.Fill(0, 1, "buy", 1, 101, 0.25)),
+        ("bar", 1),
+        ("fill", 2, engine.Fill(0, 2, "sell", 1, 90.9, 0.25)),
+        ("bar", 2),
+    ]
+    assert result.trades[0, engine.T_REASON] == engine.R_STOP
+    assert result.unfilled == 1
+
+
+def test_on_fill_delivers_same_close_entry_and_delisting():
+    b = bars([10, 11, np.nan], [10, 11, np.nan], [10, 11, np.nan], [10, 11, np.nan])
+    entries, exits = sig(3, [0])
+    events = []
+
+    class Strategy(engine.SignalStrategy):
+        def on_fill(self, ctx, fill):
+            events.append(("fill", ctx.t, fill))
+
+        def on_bar(self, ctx):
+            events.append(("bar", ctx.t))
+            super().on_bar(ctx)
+
+    p = Params(fill=1, size_mode=fills.SHARES, size=2, **FREE)
+    engine.run(b, entries, exits, p, strategy=Strategy(entries, exits))
+    assert events == [
+        ("bar", 0),
+        ("fill", 0, engine.Fill(0, 0, "buy", 2, 10, 0)),
+        ("bar", 1),
+        ("fill", 1, engine.Fill(0, 1, "sell", 2, 11, 0)),
+        ("bar", 2),
+    ]

@@ -305,6 +305,16 @@ class Position:
     exit_reason: int = 0  # pending exit at the next fill
 
 
+@dataclass(frozen=True, slots=True)
+class Fill:
+    symbol: int
+    bar: int
+    side: str
+    quantity: float
+    price: float
+    fee: float
+
+
 class Context:
     """What a strategy sees at the close of bar t: data up to t only, and two order calls."""
 
@@ -352,6 +362,7 @@ class EventEngine:
         self.wants: dict[int, int] = {}
         self.cash, self.costs, self.unfilled, self.traded = params.capital, 0.0, 0, 0.0
         self.trades: list[tuple] = []
+        self._fills: list[Fill] | None = None
 
     def _close(self, n: int, t: int, raw: float, reason: int, frac: float, bar_range: float) -> None:
         p, pos = self.p, self.positions[n]
@@ -377,6 +388,8 @@ class EventEngine:
             pos.cost -= ecost
             pos.slip -= eslip
             pos.risk -= risk
+        if self._fills is not None:
+            self._fills.append(Fill(n, t, "sell" if d > 0 else "buy", sh, px, comm))
 
     def _mark(self) -> tuple[float, float, float, int]:
         eq, gross, net = self.cash, 0.0, 0.0
@@ -418,6 +431,8 @@ class EventEngine:
                 target=price * (1 + d * p.target) if p.target > 0 else math.nan,
                 scale=price * (1 + d * p.scale_at) if p.scale_at > 0 and p.scale_frac > 0 else math.nan,
                 high_water=price, lo=price, hi=price, cost=comm, slip=slip, risk=sh * dist if dist > 0 else math.nan, last=price)
+            if self._fills is not None:
+                self._fills.append(Fill(n, t, "buy" if d > 0 else "sell", sh, price, comm))
 
     def run(self, strategy) -> tuple:
         p, b = self.p, self.bars
@@ -425,6 +440,8 @@ class EventEngine:
         T, N = c.shape
         last_bar = _last_bar(c)
         ctx = Context(self)
+        on_fill = getattr(strategy, "on_fill", None)
+        self._fills = [] if on_fill is not None else None
         out = np.empty((6, T))
         for t in range(T):
             self.traded = 0.0
@@ -465,6 +482,11 @@ class EventEngine:
                         pos.stop, pos.stop_kind = ts, R_TRAIL
             ctx.t = t
             self.wants = {}
+            # Deliver open and intrabar fills at the close, when this bar's OHLC is observable.
+            if self._fills:
+                for fill in self._fills:
+                    on_fill(ctx, fill)
+                self._fills.clear()
             strategy.on_bar(ctx)
             for n in sorted(self.positions):
                 if t == last_bar[n]:
@@ -500,6 +522,10 @@ class EventEngine:
             if p.fill != 0:
                 self._execute(t, c[t], rng)
                 eq, gx, nx, npos = self._mark()
+            if self._fills:
+                for fill in self._fills:
+                    on_fill(ctx, fill)
+                self._fills.clear()
             out[:, t] = eq, eq + self.costs, gx / eq, nx / eq, npos, self.traded
         for n in sorted(self.positions):
             pos = self.positions[n]

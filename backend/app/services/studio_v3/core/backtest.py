@@ -14,7 +14,7 @@ from app.services.screener_v2.core import data_loader
 from app.services.shared import metrics as M
 
 from . import compile as C
-from . import data, engine, limits, paths
+from . import data, engine, formula, limits, paths, pycode
 from .spec import Settings, Strategy, engine_params
 
 FEW_TRADES = 30
@@ -83,8 +83,43 @@ def prepare(settings: Settings, *, include_holdout: bool = False) -> Prepared:
     return Prepared(p, sig_bars, bench, holdout_from, len(symbols), all_dates)
 
 
+def _simulate_python(spec, prep, settings, *, cost_multiple=1.0, lo=0, mask=None, params=None, exits_override=None,
+                     output=None, repaint_from=None):
+    params = {**spec.values(), **(params or {})}
+    panel = prep.panel
+    symbols = panel.symbols
+    dates = panel.dates[lo:]
+    bars = {k: v[lo:] for k, v in panel.bars().items()}
+    signal_bars = prep.sig_bars
+    if mask is not None:
+        symbols = tuple(s for s, keep in zip(symbols, mask, strict=True) if keep)
+        bars = {k: v[:, mask] for k, v in bars.items()}
+        signal_bars = {k: v[:, mask] for k, v in signal_bars.items()}
+    cache: dict = {}
+    args = (signal_bars, panel.dates, params, cache)
+    stop_dist = spec.exits.stop_atr * formula.evaluate("atr(14)", *args) if spec.exits.stop_atr else None
+    market_filter = C._bool(spec.market_filter, *args) if spec.market_filter.strip() else None
+    size_vol = C._vol(spec, *args)
+    engine_settings = engine_params(spec, settings, cost_multiple)
+    if exits_override:
+        engine_settings = replace(engine_settings, **exits_override)
+    repaint_bars = None
+    if repaint_from is not None:
+        last = len(dates) - 1
+        repaint_bars = np.unique(np.linspace(min(max(repaint_from, 1), last), last, 50).astype(int)).tolist()
+    return pycode.run_event(
+        spec.code, bars, dates, params, list(symbols), engine_settings, output=output, repaint_bars=repaint_bars,
+        signal_bars={k: v[lo:] for k, v in signal_bars.items()},
+        stop_dist=None if stop_dist is None else np.nan_to_num(stop_dist[lo:]),
+        size_vol=None if size_vol is None else size_vol[lo:],
+        market_filter=None if market_filter is None else market_filter[lo:],
+    )
+
+
 def simulate(spec: Strategy, prep: Prepared, settings: Settings, *, sig: C.Signals | None = None, cost_multiple: float = 1.0, lo: int = 0,
              mask: np.ndarray | None = None, params: dict[str, float] | None = None, exits_override: dict | None = None) -> engine.Result:
+    if spec.code.strip() and sig is None:
+        return _simulate_python(spec, prep, settings, cost_multiple=cost_multiple, lo=lo, mask=mask, params=params, exits_override=exits_override)
     sig = sig or C.signals(spec, prep.sig_bars, prep.panel.dates, params)
     traded = np.isfinite(prep.panel.close)
     entries = np.where(traded if mask is None else traded & mask[None, :], sig.entries, 0).astype(np.int8)
@@ -153,7 +188,7 @@ def check_limits(spec: Strategy, ret: dict, trade: dict, bench: dict, cost_share
     return rows
 
 
-def start_dates(spec: Strategy, prep: Prepared, settings: Settings, sig: C.Signals, starts: list[int]) -> list[dict]:
+def start_dates(spec: Strategy, prep: Prepared, settings: Settings, sig: C.Signals | None, starts: list[int]) -> list[dict]:
     """The same strategy begun on other dates, each run to the end of the development period (K-5)."""
     out, lim = [], spec.limits.max_drawdown
     for lo in starts:
@@ -189,19 +224,26 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
         first = next(f for f in found["findings"] if f["severity"] == "error")
         raise Refusal(f"The strategy does not compile: {first['message']}" + (f" (line {first['line']}, '{first['token']}')" if first["token"] else "") + ".",
                       ["a rule has a typo", "a rule reads a future bar", "a setting is missing"])
-    if spec.code.strip() and not (spec.entry_long.strip() or spec.entry_short.strip()):
-        raise Refusal("Python strategies cannot run yet.", ["the sandbox is not built", "write the rule as a formula", "or as blocks"])
     stage("load", 10)
     prep = prepare(settings)
     p, cap = prep.panel, settings.capital
     stage("signals", 30)
-    sig = C.signals(spec, prep.sig_bars, p.dates)
-    n_entries = int(np.count_nonzero(sig.entries[np.isfinite(p.close)]))
+    sig = None if spec.code.strip() else C.signals(spec, prep.sig_bars, p.dates)
+    stage("simulate", 50)
+    output: dict = {}
+    if sig is None:
+        try:
+            r = _simulate_python(spec, prep, settings, output=output)
+        except pycode.CodeError as exc:
+            location = f" on line {exc.line}" if exc.line else ""
+            raise Refusal(f"Python strategy failed{location}: {exc.message}", ["check the failing line in the Build preview"]) from exc
+        n_entries = output.pop("entry_signals")
+    else:
+        n_entries = int(np.count_nonzero(sig.entries[np.isfinite(p.close)]))
+        r = simulate(spec, prep, settings, sig=sig)
     if n_entries == 0:
         raise Refusal("0 entries: the rule is never true on this universe.",
                       ["a threshold is never reached on these names", f"the period is too short for the longest window ({len(p.dates)} bars)", "an entry needs data these names do not have"])
-    stage("simulate", 50)
-    r = simulate(spec, prep, settings, sig=sig)
     closed = r.trades[r.trades[:, engine.T_REASON] != engine.R_OPEN]
     if len(r.trades) == 0:
         raise Refusal(f"{n_entries} entry signals but 0 fills.", ["the position size rounds to nothing", "the volume cap leaves no room", "signals fall on a name's last bar"])
@@ -323,6 +365,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
                                                holdout_from=prep.holdout_from, top_n=None if settings.symbols else settings.top_n),
                    "statistics": [{"metric": k, "value": v} for k, v in {**ret, **tr, **bm, **ext}.items()]},
         "meta": {
+            **output,
             "headline": headline, "verdict_chip": "not validated", "metrics": {**ret, **tr, **bm, **ext}, "total_return": total, "years": years, "benchmark": settings.benchmark if bm else None,
             "rule_check": {**rules, "target": settings.rule_target, "daily_loss": settings.rule_daily_loss, "max_dd": settings.rule_max_dd, "min_days": settings.rule_min_days},
             "costs_off": settings.costs.off(), "few_trades": few, "open_trades": len(r.trades) - len(closed), "unfilled": r.unfilled, "entry_signals": n_entries,
@@ -350,16 +393,22 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0) -> dict:
     if not found["ok"]:
         return {"status": "skipped", "reason": "the rule does not compile", "bars": [], "trades": []}
     # load extra history so long windows are warm before the visible span
-    prep = prepare(Settings(symbols=[symbol], benchmark=""))
+    settings = Settings(symbols=[symbol], benchmark="")
+    prep = prepare(settings)
     p = prep.panel
     lo = max(0, int(p.dates.searchsorted(p.dates[-1] - pd.DateOffset(days=int(365 * years)))))
     output: dict = {}
-    sig = C.signals(spec, prep.sig_bars, p.dates, symbols=list(p.symbols), output=output)
-    r = simulate(spec, prep, Settings(symbols=[symbol], benchmark=""), sig=sig)
+    if spec.code.strip():
+        r = _simulate_python(spec, prep, settings, output=output, repaint_from=lo)
+        output.pop("entry_signals")
+    else:
+        sig = C.signals(spec, prep.sig_bars, p.dates)
+        r = simulate(spec, prep, settings, sig=sig)
+        output["repaint"] = repaint_check(spec, prep, lo, full=sig)
     trades = [t for t in trades_table(r, p) if t["exit_date"] >= str(p.dates[lo].date())]
     bars = [{"date": str(d.date()), "close": float(c)} for d, c in zip(p.dates[lo:], p.close[lo:, 0], strict=True) if np.isfinite(c)]
     total = float(np.prod([1 + t["return"] for t in trades]) - 1) if trades else 0.0
-    return {"status": "ok", "symbol": symbol, "bars": bars, "trades": trades, "total_return": total, "repaint": repaint_check(spec, prep, lo, full=sig), **output}
+    return {"status": "ok", "symbol": symbol, "bars": bars, "trades": trades, "total_return": total, **output}
 
 
 def repaint_check(spec: Strategy, prep: Prepared, lo: int = 0, cuts: int = 50, *, full: C.Signals | None = None) -> dict:

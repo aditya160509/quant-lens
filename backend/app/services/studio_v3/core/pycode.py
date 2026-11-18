@@ -10,12 +10,13 @@ import json
 import subprocess
 import sys
 import tempfile
+from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from . import formula
+from . import engine, formula
 
 RUNNER = Path(__file__).with_name("pyrunner.py")
 TIMEOUT_S = 120
@@ -89,6 +90,26 @@ class CodeError(Exception):
 
 
 def run(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params: dict[str, float], symbols: list[str] | None = None, cache: dict | None = None, *, output: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
+    arrays = _execute(code, bars, dates, params, symbols, cache, output)
+    return arrays["entries"], arrays["exits"]
+
+
+def run_event(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params: dict[str, float],
+              symbols: list[str], settings: engine.Params, *, output: dict | None = None,
+              signal_bars: dict[str, np.ndarray] | None = None, stop_dist: np.ndarray | None = None,
+              size_vol: np.ndarray | None = None, market_filter: np.ndarray | None = None, repaint_bars: list[int] | None = None) -> engine.Result:
+    extras = {}
+    for name, array in (("stop_dist", stop_dist), ("size_vol", size_vol), ("market_filter", market_filter)):
+        if array is not None:
+            extras[name] = array
+    arrays = _execute(code, signal_bars if signal_bars is not None else bars, dates, params, symbols, None, output,
+                      event_settings=asdict(settings), repaint_bars=repaint_bars, extras={**extras, **{f"raw_{k}": v for k, v in bars.items()}})
+    return engine.Result(*(arrays[name] for name in (
+        "trades", "equity", "gross_equity", "gross_exposure", "net_exposure", "positions", "traded",
+    )), unfilled=int(arrays["unfilled"].item()))
+
+
+def _execute(code, bars, dates, params, symbols, cache, output, *, event_settings=None, repaint_bars=None, extras=None):
     findings = check(code, params)
     if findings:
         first = findings[0]
@@ -96,10 +117,11 @@ def run(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params:
     ex = exprs(code)
     vals = {f"v{i}": np.asarray(formula.evaluate(e, bars, dates, params, cache), dtype=float) for i, e in enumerate(ex)}
     n = bars["close"].shape[1]
-    meta = {"exprs": ex, "params": params, "symbols": symbols or [str(i) for i in range(n)], "dates": [str(d.date()) for d in dates]}
+    meta = {"exprs": ex, "params": params, "symbols": symbols or [str(i) for i in range(n)], "dates": [str(d.date()) for d in dates],
+            "event_settings": event_settings, "repaint_bars": repaint_bars or []}
     with tempfile.TemporaryDirectory() as d:
         src, dst = Path(d) / "in.npz", Path(d) / "out.npz"
-        np.savez(src, meta=np.array(json.dumps(meta)), **{f: np.asarray(bars[f], dtype=float) for f in ("open", "high", "low", "close", "volume")}, **vals)
+        np.savez(src, meta=np.array(json.dumps(meta)), **{f: np.asarray(bars[f], dtype=float) for f in ("open", "high", "low", "close", "volume")}, **vals, **(extras or {}))
         try:
             p = subprocess.run([sys.executable, "-I", str(RUNNER), str(src), str(dst)], check=False, input=code, capture_output=True, text=True, timeout=TIMEOUT_S,
                                preexec_fn=_limits, cwd=d, env={"PATH": "/usr/bin:/bin"})
@@ -113,8 +135,12 @@ def run(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params:
             raise CodeError(res.get("error") or (p.stderr.strip().splitlines() or ["the strategy process died"])[-1], res.get("problem"))
         if output is not None:
             output.update(logs=res["logs"], plots=res["plots"])
+            if res.get("entry_signals") is not None:
+                output["entry_signals"] = res["entry_signals"]
+            if res.get("repaint") is not None:
+                output["repaint"] = res["repaint"]
         with np.load(dst) as z:
-            return z["entries"], z["exits"]
+            return dict(z)
 
 
 def _limits() -> None:
