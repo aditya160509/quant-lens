@@ -16,6 +16,7 @@ from app.services.screener_v2.core.data_loader import BACKEND_DATA, normalize_sy
 from app.services.studio.jobs import JobStore
 from app.services.studio_v3.core import (
     backtest,
+    book,
     data,
     formula,
     limits,
@@ -666,3 +667,44 @@ def library_version(item_id: str, req: LibraryVersion) -> dict[str, Any]:
 @router.delete("/library/{item_id}")
 def library_archive(item_id: str) -> dict[str, Any]:
     return _lib(lib.archive, item_id)
+
+
+# ── Paper book: a Portfolio deployed as one book (P-20) ──────────────────────
+class BookMember(BaseModel):
+    strategy_id: str
+    version: int
+    weight: float = Field(ge=0)
+
+
+class BookRequest(BaseModel):
+    name: str = ""
+    members: list[BookMember] = Field(min_length=2, max_length=12)
+    as_of: str | None = None
+
+
+@router.post("/books")
+def freeze_book(request: BookRequest, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Deploy a Portfolio to paper as one book. Needs a human click, like freezing a strategy."""
+    actor = _actor(x_studio_actor)
+    if actor.startswith("agent"):
+        raise HTTPException(403, "Deploying to paper needs a human click")
+    for m in request.members:
+        _known(store.get, m.strategy_id, m.version)
+    try:
+        return book.freeze([m.model_dump() for m in request.members], request.name, request.as_of, actor)
+    except backtest.Refusal as exc:
+        raise HTTPException(422, exc.reason) from exc
+
+
+@router.get("/books")
+def list_books() -> dict[str, Any]:
+    return {"books": book.books()}
+
+
+@router.post("/books/{bid}/today")
+def book_today(bid: str, req: FeatureRequest) -> dict[str, Any]:
+    _, settings, _, _ = parse_payload({**req.payload, "spec": {"entry_long": "close > 0"}})
+    try:
+        return backtest._clean(book.run(bid, settings))
+    except backtest.Refusal as exc:
+        raise HTTPException(404 if "No such" in exc.reason else 422, exc.reason) from exc
