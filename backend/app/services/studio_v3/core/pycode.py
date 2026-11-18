@@ -123,8 +123,27 @@ def _api_members(scope: str):
     return members
 
 
-def editor_members(scope: str, code: str, prefix: str = "") -> list[dict]:
-    if scope == "self":
+def _literal_members(scope: str, params: list[str], symbols: list[str]):
+    if scope == "formula":
+        members = {
+            name: {"name": name, "kind": "formula", "signature": f"{name}({', '.join(args)})",
+                   "documentation": description, "insert_text": f"{name}({', '.join(f'${{{i}:{arg}}}' for i, arg in enumerate(args, 1))})"}
+            for name, (_, args, description, _) in formula.OPERATORS.items()
+        }
+        members.update({name: {"name": name, "kind": "field", "signature": None, "documentation": description}
+                        for name, description in formula.FIELDS.items()})
+        return members
+    if scope == "history_field":
+        return {name: {"name": name, "kind": "field", "signature": None, "documentation": formula.FIELDS[name]}
+                for name in ("open", "high", "low", "close", "volume")}
+    names = params if scope == "param" else symbols
+    return {name: {"name": name, "kind": scope, "signature": None, "documentation": None} for name in names}
+
+
+def editor_members(scope: str, code: str, prefix: str = "", *, params=None, symbols=None) -> list[dict]:
+    if scope in {"formula", "history_field", "param", "symbol"}:
+        members = _literal_members(scope, params or [], symbols or [])
+    elif scope == "self":
         members = {}
         try:
             tree = ast.parse(code)

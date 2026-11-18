@@ -575,3 +575,17 @@ class Strategy:
     assert result.status_code == 200
     assert result.json() == [{"file": "main.py", "name": "helper", "line": 1, "column": 5}]
     assert studio.post(endpoint, json={"code": code, "line": 20, "column": 1}).json() == []
+
+
+def test_build_completion_suggests_formula_inputs_and_snippets(studio):
+    endpoint = "/api/studio-v3/build/complete"
+    result = studio.post(endpoint, json={"scope": "formula", "prefix": "sma"}).json()
+    assert result[0]["insert_text"] == "sma(${1:x}, ${2:n})"
+    assert result[0]["signature"] == "sma(x, n)"
+    for scope, extra, prefix, expected in [
+        ("history_field", {}, "cl", "close"),
+        ("param", {"params": ["fast", "slow"]}, "fa", "fast"),
+        ("symbol", {"symbols": ["SPY", "QQQ"]}, "SP", "SPY"),
+    ]:
+        choices = studio.post(endpoint, json={"scope": scope, "prefix": prefix, **extra}).json()
+        assert [item["name"] for item in choices] == [expected]

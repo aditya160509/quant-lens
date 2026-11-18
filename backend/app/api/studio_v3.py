@@ -184,6 +184,8 @@ class BuildCompleteRequest(BaseModel):
     scope: str = Field(max_length=40)
     code: str = Field(default="", max_length=200_000)
     prefix: str = Field(default="", max_length=100)
+    params: list[str] = Field(default_factory=list, max_length=1000)
+    symbols: list[str] = Field(default_factory=list, max_length=5000)
 
 
 class BuildMember(BaseModel):
@@ -191,6 +193,7 @@ class BuildMember(BaseModel):
     kind: str
     signature: str | None
     documentation: str | None
+    insert_text: str | None = None
 
 
 class BuildSignatureRequest(BuildCompleteRequest):
@@ -199,7 +202,7 @@ class BuildSignatureRequest(BuildCompleteRequest):
 
 @router.post("/build/complete", response_model=list[BuildMember])
 def complete_python(request: BuildCompleteRequest) -> list[dict]:
-    return pycode.editor_members(request.scope, request.code, request.prefix)
+    return pycode.editor_members(request.scope, request.code, request.prefix, params=request.params, symbols=request.symbols)
 
 
 @router.post("/build/signature", response_model=BuildMember | None)
