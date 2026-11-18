@@ -96,7 +96,7 @@ const BV = group(() => import("./views/BacktestViews") as Promise<Record<string,
 const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string, unknown>>);
 registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto, stStabilityOpt: OV.Stability, stSpread: OV.Spread }, ["stParamMap", "stPareto", "stSpread"]);
 const PV = group(() => import("./views/PortfolioViews") as Promise<Record<string, unknown>>);
-registerViews({ stTree: PV.Tree, stWeightsTime: PV.WeightsOverTime, stFrontier: PV.FrontierView, stPfRisk: PV.RiskStats }, ["stWeightsTime", "stFrontier"]);
+registerViews({ stTree: PV.Tree, stWeightsTime: PV.WeightsOverTime, stFrontier: PV.FrontierView, stPfRisk: PV.RiskStats, stPfBook: PV.DeployBook }, ["stWeightsTime", "stFrontier"]);
 const VV = group(() => import("./views/ValidateViews") as Promise<Record<string, unknown>>);
 registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout, stCertificate: VV.Certificate, stWfMatrix: VV.WfMatrix, stCpcv: VV.Cpcv, stPower: VV.Power, stPboLogits: VV.PboLogits, stPboRanks: VV.PboRanks }, ["stTiles", "stStitched"]);
 const LV = group(() => import("./views/LiveViews") as Promise<Record<string, unknown>>);
@@ -231,6 +231,7 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["dropout"], span: 12, view: "dataTable", title: "Without each member" },
         ] },
         { id: "grade", label: "Grade", items: [{ keys: ["risk_share"], span: 12, view: "stTiles", title: "Combined grade" }] },
+        { id: "paper", label: "Paper", items: [{ keys: ["risk_share"], span: 12, view: "stPfBook", title: "One paper book" }] },
       ],
     },
     st05: {

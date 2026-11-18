@@ -35,7 +35,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 
 | Page | Done | Total |
 |---|---|---|
-| Portfolio | 18 | 28 |
+| Portfolio | 19 | 28 |
 | Home | 1 | 26 |
 | Build | 29 | 162 |
 | Backtest | 18 | 57 |
@@ -45,9 +45,9 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **121** | **538** |
+| **All pages** | **122** | **538** |
 
-## Portfolio (`/studio/portfolio`, spec §6): 18 / 28 done
+## Portfolio (`/studio/portfolio`, spec §6): 19 / 28 done
 
 ### Acceptance (PAGES)
 
@@ -73,7 +73,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [ ] [H] P-17 Netting: opposite trades on one symbol across members cancel before execution (partial: netting measured, not applied to execution) [FP 74]
 - [x] P-18 Efficient frontier of the members with the chosen mix marked
 - [x] P-19 Rebalance costs counted when weights shift
-- [ ] [M] P-20 Deploy as one book, paper first, with netted orders and per-member P&L attribution
+- [x] [M] P-20 Deploy as one book, paper first, with netted orders and per-member P&L attribution (Paper tab; netting measured on today's orders)
 - [x] P-21 Alpha, beta, tracking error and information ratio against the chosen benchmark
 - [ ] P-22 Multi-currency account with a base currency and FX on cash (blocked by data: no FX data in the data set)
 - [ ] [E] P-23 Portfolio view during a run: exposure by symbol, sector and asset class, cash, margin, beta to benchmark (partial: holdings treemap and names held built; sector exposure, beta and margin open)

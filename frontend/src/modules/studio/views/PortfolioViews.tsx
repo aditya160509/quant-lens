@@ -2,8 +2,11 @@
 
 import { Dendrogram } from "@/charts/Dendrogram";
 import { StackedArea } from "@/charts/StackedArea";
+import { useState } from "react";
+import toast from "react-hot-toast";
 import { XYPlot } from "@/charts/XYPlot";
 import type { ViewProps } from "@/modules/research/outputs/types";
+import { studio } from "../api";
 import { Skipped } from "./BacktestViews";
 
 type PMeta = { names: string[]; tree: { link: number[][]; order: number[] } | null };
@@ -56,6 +59,46 @@ export function RiskStats({ result }: ViewProps) {
     <div>
       {m.warnings?.map((w) => <p key={w} className="bd-find warning"><b>Check</b>{w}</p>)}
       <table className="pf-stats"><tbody>{rows.map(([k, v]) => <tr key={k}><th>{k}</th><td>{v}</td></tr>)}</tbody></table>
+    </div>
+  );
+}
+
+type Member = { name: string; strategy_id: string; version: number; weight: number };
+type Book = { book: { id: string; from: string }; as_of: string; stale: boolean; status: string; reason: string | null; orders: { symbol: string; action: string; shares: number }[];
+  netting_saves: number; attribution: { strategy: string; weight: number; return: number; contribution: number }[]; paper_return: number | null; paper_sharpe: number | null };
+
+/** Freeze this mix as one paper book; today's orders netted by symbol and paper P&L by member. */
+export function DeployBook({ result }: ViewProps) {
+  const members = (result.meta as { member_ids?: Member[] }).member_ids;
+  const [from, setFrom] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [b, setB] = useState<Book | null>(null);
+  if (!members?.length) return <Skipped reason="run the portfolio again to deploy it" />;
+  const deploy = () => {
+    setBusy(true);
+    void studio<{ id: string }>("POST", "/books", { members: members.map(({ strategy_id, version, weight }) => ({ strategy_id, version, weight })), as_of: from || null })
+      .then((k) => studio<Book>("POST", `/books/${k.id}/today`, { payload: {} }))
+      .then(setB, (e) => toast.error(e instanceof Error ? e.message : "Failed")).finally(() => setBusy(false));
+  };
+  const orders = b?.orders.map((o) => `${o.action.toUpperCase()} ${o.shares} ${o.symbol}`).join("\n") ?? "";
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <table className="pf-stats"><tbody>{members.map((m) => <tr key={m.strategy_id}><th>{m.name}</th><td>{pct(m.weight)}</td></tr>)}</tbody></table>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <input className="input" type="date" aria-label="Backdate start" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <button className="btn" disabled={busy} onClick={deploy}>{busy ? "Deploying…" : "Deploy to paper"}</button>
+      </div>
+      {b ? (
+        <>
+          {b.stale ? <span className="chip down" style={{ justifySelf: "start" }}>data ends {b.as_of}</span> : null}
+          {b.status === "ok" && b.paper_return != null
+            ? <div className="st-fig"><b>{(b.paper_return * 100).toFixed(1)}%</b><span>paper since {b.book.from} · Sharpe {b.paper_sharpe?.toFixed(2) ?? "—"}</span></div>
+            : <Skipped reason={b.reason ?? "waiting"} />}
+          {b.attribution.length ? <table className="pf-stats"><tbody>{b.attribution.map((a) => <tr key={a.strategy}><th>{a.strategy}</th><td>{(a.contribution * 100).toFixed(1)}%</td></tr>)}</tbody></table> : null}
+          {orders ? <pre className="bd-code" style={{ margin: 0 }}>{orders}</pre> : <Skipped reason={`no orders on ${b.as_of}`} />}
+          {orders && b.netting_saves > 0.005 ? <p className="bd-find"><b>Netting</b>saves {(b.netting_saves * 100).toFixed(0)}% of shares</p> : null}
+        </>
+      ) : null}
     </div>
   );
 }
