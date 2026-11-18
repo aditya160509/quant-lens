@@ -206,7 +206,7 @@ class Portfolio:
 
 
 class PortfolioContext(Ctx):
-    def __init__(self, contexts, bars):
+    def __init__(self, contexts, bars, values):
         first = contexts[0]
         super().__init__(first._cols, first._values, first.params.copy(), None, first._dates)
         self._benchmark = first._benchmark
@@ -214,6 +214,7 @@ class PortfolioContext(Ctx):
         self._contexts = {ctx.symbol: ctx for ctx in contexts}
         self._columns = {symbol: i for i, symbol in enumerate(self._contexts)}
         self._bars = bars
+        self._matrix_values = values
         self._weeks = [date.fromisoformat(d).isocalendar()[:2] for d in self._dates]
         self.symbols = tuple(self._contexts)
 
@@ -271,6 +272,34 @@ class PortfolioContext(Ctx):
 
     def rule(self, expr, symbol=None):
         return self.value(expr, symbol) > 0
+
+    def _cross_section(self, expr):
+        series = self._matrix_values[expr][self.t]
+        present = np.isfinite(series) & np.isfinite(self._bars["close"][self.t])
+        return series, present
+
+    def rank(self, expr, *, top=None, bottom=None, where=None):
+        if top is not None and bottom is not None:
+            raise ValueError("Choose either top or bottom")
+        count = top if bottom is None else bottom
+        if count is not None and (type(count) is not int or count < 1):
+            raise ValueError("Rank count must be a positive integer")
+        values, present = self._cross_section(expr)
+        if where is not None:
+            condition = self._matrix_values[where][self.t]
+            present &= np.isfinite(condition) & (condition > 0)
+        columns = np.flatnonzero(present)
+        scores = values[columns]
+        order = np.argsort(-scores if bottom is None else scores, kind="stable")[:count]
+        return [(self.symbols[columns[i]], float(scores[i])) for i in order]
+
+    def zscore(self, expr):
+        values, present = self._cross_section(expr)
+        samples = values[present]
+        if not len(samples) or (spread := samples.std()) == 0:
+            return MappingProxyType({})
+        scores = (samples - samples.mean()) / spread
+        return MappingProxyType({self.symbols[i]: float(score) for i, score in zip(np.flatnonzero(present), scores, strict=True)})
 
     def buy(self, symbol):
         self.orders.append((symbol, 1))
@@ -503,7 +532,7 @@ class EventStrategy:
             ctx.orders.clear()
 
 
-def event_run(z, meta, load_strategy, make_contexts, use_context):
+def event_run(z, meta, load_strategy, make_contexts, use_context, values):
     # Isolated mode excludes the repository from sys.path.
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
     try:
@@ -522,7 +551,7 @@ def event_run(z, meta, load_strategy, make_contexts, use_context):
         submitted = np.zeros((end, shape[1], 5))
         contexts = make_contexts(collect)
         if hasattr(cls, "on_data"):
-            adapter = PortfolioStrategy(cls, PortfolioContext(contexts, bars), warmup, use_context, submitted, gate)
+            adapter = PortfolioStrategy(cls, PortfolioContext(contexts, bars, values), warmup, use_context, submitted, gate)
         else:
             adapter = EventStrategy(cls, contexts, available, warmup, use_context, gate, submitted)
         result = engine.EventEngine({k: v[:end] for k, v in bars.items()}, params, stop_dist=stop_dist, size_vol=size_vol).run(adapter)
@@ -590,7 +619,7 @@ def main():
     try:
         compiled = compile(src, "<strategy>", "exec")
         if meta["event_settings"] is not None:
-            arrays, repaint, entry_signals = event_run(z, meta, load_strategy, make_contexts, use_context)
+            arrays, repaint, entry_signals = event_run(z, meta, load_strategy, make_contexts, use_context, values)
         else:
             cls, warmup = load_strategy()
             entries, exits = np.zeros((T, N), np.int8), np.zeros((T, N), np.int8)

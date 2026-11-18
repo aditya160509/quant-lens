@@ -317,3 +317,25 @@ def test_benchmark_exposes_only_current_close():
         pycode.run_event(code.replace("ctx.market.close)", "ctx.market.close[1])"),
                          bars, dates, {}, ["AAA", "BBB"], engine.Params(), benchmark=benchmark)
     assert exc.value.line == 4
+
+
+def test_portfolio_rank_and_zscore_use_observed_symbols_only():
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(3, 3)
+    bars["close"] = np.array([[10, 20, np.nan], [20, 10, 100], [30, 10, 200]], dtype=float)
+    code = """class Strategy:
+    def on_data(self, ctx):
+        if ctx.bar_index == 0:
+            ctx.log(ctx.rank("close", top=1))
+            ctx.log(ctx.rank("close", bottom=1, where="close > 10"))
+            ctx.log(tuple(ctx.zscore("close").items()))
+"""
+    output = {}
+    pycode.run_event(code, bars, dates, {}, ["AAA", "BBB", "CCC"], engine.Params(), output=output)
+    assert [row["text"] for row in output["logs"]] == [
+        "[('BBB', 20.0)]", "[('BBB', 20.0)]", "(('AAA', -1.0), ('BBB', 1.0))",
+    ]
+    with pytest.raises(pycode.CodeError, match="Look-ahead"):
+        pycode.run_event(code.replace('where="close > 10"', 'where="future(close)"'),
+                         bars, dates, {}, ["AAA", "BBB", "CCC"], engine.Params())

@@ -105,3 +105,5 @@ Fixed on this page; the shared ones apply to every Studio page:
 - B-99 backend ships through the existing compile endpoint. It warns above 200 saved block rows or eight parameters with nonconstant optimisation ranges and rejects more than 1,000 block rows. Frontend wiring remains open.
 
 - B-106 advanced. The formula catalogue exposes `for_bars`, `rising`, `falling`, `week_start`, `month_start` and cross-sectional `zscore`. All use the current and earlier observed bars. Earnings and fundamental filters remain open.
+
+- B-51 shipped. Python portfolio strategies can rank a literal formula over observed symbols, filter by another formula, and choose top or bottom. `ctx.zscore` returns population z-scores by symbol, with no scores for a zero-variance or empty cross-section. The formula checker refuses future references before execution.

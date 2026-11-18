@@ -42,14 +42,26 @@ def _finding(line: int, col: int, end: int, msg: str, token: str = "", severity:
     return {"severity": severity, "role": "code", "line": line, "start": col, "end": end, "token": token, "message": msg}
 
 
+def _formula_args(node):
+    if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+        return ()
+    if node.func.attr in ("value", "rule"):
+        return (node.args[0] if node.args else None,)
+    if isinstance(node.func.value, ast.Name) and node.func.value.id == "ctx" and node.func.attr in ("rank", "zscore"):
+        first = node.args[0] if node.args else next((kw.value for kw in node.keywords if kw.arg == "expr"), None)
+        return (first, *(kw.value for kw in node.keywords if kw.arg == "where"))
+    return ()
+
+
+def _literal_formula(node):
+    return isinstance(node, ast.Constant) and isinstance(node.value, str)
+
+
 def exprs(code: str) -> list[str]:
-    """Literal strings passed to ctx.value / ctx.rule: evaluated once, ahead of the bar loop."""
-    out = []
-    for n in ast.walk(ast.parse(code)):
-        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in ("value", "rule") and n.args and isinstance(n.args[0], ast.Constant)
-                and isinstance(n.args[0].value, str) and n.args[0].value not in out):
-                out.append(n.args[0].value)
-    return out
+    """Literal strategy formulas evaluated once before the event loop."""
+    return list(dict.fromkeys(
+        arg.value for node in ast.walk(ast.parse(code)) for arg in _formula_args(node) if _literal_formula(arg)
+    ))
 
 
 def check(code: str, params: dict[str, float]) -> list[dict]:
@@ -68,7 +80,7 @@ def check(code: str, params: dict[str, float]) -> list[dict]:
             found.append(_finding(*at, f"'.{n.attr}' is not allowed in a strategy (use f-strings)", n.attr))
         elif isinstance(n, (ast.Global, ast.Nonlocal)):
             found.append(_finding(*at, "global and nonlocal are not allowed", "global"))
-        elif isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in ("value", "rule") and not (n.args and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str)):
+        elif any(not _literal_formula(arg) for arg in _formula_args(n)):
             found.append(_finding(*at, f"ctx.{n.func.attr}() needs a literal formula string", n.func.attr))
     if not any(isinstance(n, ast.ClassDef) and n.name == "Strategy" for n in tree.body):
         found.append(_finding(1, 0, 0, "Define class Strategy with on_bar(self, ctx)"))
