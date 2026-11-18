@@ -41,7 +41,7 @@ def compile_spec(spec: Strategy) -> dict:
             findings.append({"severity": "error", "role": role, "line": line, "start": e.start, "end": e.end, "token": text[e.start:e.end], "message": e.message,
                              "lookahead": e.message.startswith("Look-ahead")})
     if spec.code.strip():
-        findings += pycode.check(spec.code, params)
+        findings += pycode.check_project(spec.code, params, spec.files)
         used |= {n for n in params if f'"{n}"' in spec.code or f"'{n}'" in spec.code}
     else:
         if not (spec.entry_long.strip() or spec.entry_short.strip()):
@@ -107,7 +107,7 @@ def signals(spec: Strategy, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex
     cache: dict = {}
     shape = bars["close"].shape
     if spec.code.strip():
-        entries, exits = pycode.run(spec.code, bars, dates, params, symbols=symbols, cache=cache, output=output)
+        entries, exits = pycode.run(spec.code, bars, dates, params, symbols=symbols, cache=cache, output=output, files=spec.files)
         _gate(spec, entries, exits, bars, dates, params, cache)
         dist = spec.exits.stop_atr * formula.evaluate("atr(14)", bars, dates, params, cache) if spec.exits.stop_atr else None
         return Signals(entries, exits, None, None if dist is None else np.nan_to_num(dist), _vol(spec, bars, dates, params, cache))

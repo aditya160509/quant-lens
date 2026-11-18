@@ -216,7 +216,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [E] B-89 Preview settings: symbol and window (default SPY, 2 years), auto-preview on or off; quick-run universe (top 50 by volume, 5 years) (partial: preview symbol and window exist)
 - [ ] [E] B-90 Status bar: Ln:Col, error and warning counts, saved state, run state, last run time, "trial 14 on this idea" (partial: trial chip in Build; status bar not built) [FP 68]
 - [ ] [M] B-91 Yellow banner on a result when the editor code differs from the run
-- [ ] [M] B-92 Strategy is a project: main.py plus modules, README.md and params.json; file tree with create, rename, move, delete, duplicate and drag; limits 50 files and 200 KB per file [PY B3] (partial: versioned file CRUD and diffs ship; helper execution and editor wiring open)
+- [ ] [M] B-92 Strategy is a project: main.py plus modules, README.md and params.json; file tree with create, rename, move, delete, duplicate and drag; limits 50 files and 200 KB per file [PY B3] (backend done: versioned file CRUD, diffs and checked helper execution; editor wiring open)
 - [ ] [E] B-93 Any project can be marked a library and imported by others with a pinned version; "v3 available, review diff" badge; updates never change saved strategies silently [FP 58]
 - [ ] [M] B-94 Zip import and export of a project
 - [ ] [M] B-95 User snippets: save a selection with tab stops and a prefix trigger; shareable through Library

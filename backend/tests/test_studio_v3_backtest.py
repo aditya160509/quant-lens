@@ -627,3 +627,32 @@ def test_project_files_keep_immutable_versions_and_reject_stale_changes(studio):
     assert old["files"]["signals.py"] == "value = 2\n"
     assert "-value = 1\n+value = 2" in old["diffs"]["signals.py"]
     assert studio.get(url).json()["files"] == {"main.py": "class Strategy: pass\n"}
+
+
+def test_project_preview_runs_saved_helper_modules_and_locates_errors(studio):
+    code = """from signals import calculate
+
+class Strategy:
+    def on_bar(self, ctx):
+        if ctx.bar == 1:
+            ctx.plot("signal", calculate(ctx))
+"""
+    request = {"symbol": "SPY", "spec": {
+        "code": code,
+        "files": {
+            "signals.py": "from inputs import threshold\ndef calculate(ctx):\n    return ctx.value('close') > threshold\n",
+            "inputs.py": "threshold = 0\n",
+        },
+    }}
+    endpoint = "/api/studio-v3/preview"
+    result = studio.post(endpoint, json=request).json()
+    assert result["status"] == "ok"
+    assert result["plots"]["signal"][0]["value"] == 1
+    request["spec"]["files"]["signals.py"] = "def calculate(ctx):\n    return 1 / 0\n"
+    error = studio.post(endpoint, json=request).json()
+    assert error["problem"]["file"] == "signals.py" and error["problem"]["line"] == 2
+    assert [frame["file"] for frame in error["problem"]["traceback"]] == ["main.py", "signals.py"]
+    request["spec"]["files"]["signals.py"] = "import os\n"
+    checked = studio.post("/api/studio-v3/compile", json={"spec": request["spec"]}).json()
+    assert not checked["ok"]
+    assert checked["findings"][0]["file"] == "signals.py"

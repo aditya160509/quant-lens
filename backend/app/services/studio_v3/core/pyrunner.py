@@ -11,7 +11,7 @@ import traceback
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from types import MappingProxyType
+from types import MappingProxyType, ModuleType
 
 import numpy as np
 
@@ -677,7 +677,25 @@ def main():
                     break
 
     def load_strategy():
-        g = {"__builtins__": {**SAFE_BUILTINS, "print": capture_print}, "__name__": "strategy", "math": math}
+        modules = {}
+        builtins = {**SAFE_BUILTINS, "print": capture_print}
+
+        def project_import(name, globals_=None, locals_=None, fromlist=(), level=0):
+            if level or name not in helper_code or any(item == "*" or item.startswith("_") for item in (fromlist or ())):
+                raise ImportError("Only named imports from saved project modules are allowed")
+            if name not in modules:
+                module = modules[name] = ModuleType(name)
+                module.__dict__.update({"__builtins__": builtins, "math": math})
+                try:
+                    exec(helper_code[name], module.__dict__)  # noqa: S102 project source was checked by pycode.check_project
+                except BaseException:
+                    del modules[name]
+                    raise
+            return modules[name]
+
+        if helper_code:
+            builtins["__import__"] = project_import
+        g = {"__builtins__": builtins, "__name__": "strategy", "math": math}
         exec(compiled, g)  # noqa: S102 source was checked by pycode.check
         cls = g.get("Strategy")
         if cls is None:
@@ -710,7 +728,8 @@ def main():
     entry_signals = None
     warmup_report = None
     try:
-        compiled = compile(src, "<strategy>", "exec")
+        compiled = compile(src, "<studio:main.py>", "exec")
+        helper_code = {name[:-3]: compile(source, f"<studio:{name}>", "exec") for name, source in meta["modules"].items()}
         if meta["event_settings"] is not None:
             arrays, repaint, entry_signals, warmup_report = event_run(z, meta, load_strategy, make_contexts, use_context, values)
         else:
@@ -745,12 +764,14 @@ def main():
                             s.on_fill(ctx)
             arrays = {"entries": entries, "exits": exits}
     except BaseException as e:  # noqa: BLE001 report to the parent with the user's line
-        tb = [f for f in traceback.extract_tb(e.__traceback__) if f.filename == "<strategy>"]
+        tb = [f for f in traceback.extract_tb(e.__traceback__) if f.filename.startswith("<studio:")]
         line = tb[-1].lineno if tb else getattr(e, "lineno", None)
         column = ((tb[-1].colno or 0) + 1) if tb else getattr(e, "offset", None)
-        frames = [{"file": "main.py", "line": f.lineno, "column": (f.colno or 0) + 1, "function": f.name} for f in tb[-8:]]
+        frames = [{"file": f.filename[8:-1], "line": f.lineno, "column": (f.colno or 0) + 1, "function": f.name} for f in tb[-8:]]
+        filename = getattr(e, "filename", "") or ""
+        source_file = frames[-1]["file"] if frames else filename[8:-1] if filename.startswith("<studio:") else "main.py"
         sys.stdout.write(json.dumps({"error": f"{type(e).__name__}: {e}"[:1024], "problem": {
-            "file": "main.py", "line": line, "column": column, "exception_type": type(e).__name__, "traceback": frames,
+            "file": source_file, "line": line, "column": column, "exception_type": type(e).__name__, "traceback": frames,
         }}))
         return
     np.savez(sys.argv[2], **arrays)

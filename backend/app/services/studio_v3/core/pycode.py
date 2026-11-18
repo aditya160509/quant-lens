@@ -66,16 +66,24 @@ def exprs(code: str) -> list[str]:
     ))
 
 
-def check(code: str, params: dict[str, float]) -> list[dict]:
+def check(code: str, params: dict[str, float], *, modules: set[str] | None = None, entry=True) -> list[dict]:
     try:
         tree = ast.parse(code)
     except SyntaxError as e:
         return [_finding(e.lineno or 1, (e.offset or 1) - 1, (e.end_offset or e.offset or 1) - 1, f"Syntax: {e.msg}")]
     found = []
+    modules = modules or set()
     for n in ast.walk(tree):
         at = (getattr(n, "lineno", 1), getattr(n, "col_offset", 0), getattr(n, "end_col_offset", 0))
         if isinstance(n, (ast.Import, ast.ImportFrom)):
-            found.append(_finding(*at, "Imports are not allowed: math is already there, formulas come from ctx.value()", "import"))
+            if isinstance(n, ast.Import):
+                allowed = all(alias.name in modules for alias in n.names)
+            else:
+                allowed = n.level == 0 and n.module in modules and all(
+                    alias.name != "*" and not alias.name.startswith("_") for alias in n.names
+                )
+            if not allowed or any(alias.asname and alias.asname.startswith("_") for alias in n.names):
+                found.append(_finding(*at, "Only named imports from saved project modules are allowed", "import"))
         elif isinstance(n, ast.Name) and (n.id in BANNED_NAMES or n.id.startswith("__")):
             found.append(_finding(*at, f"'{n.id}' is not allowed in a strategy", n.id))
         elif isinstance(n, ast.Attribute) and (n.attr.startswith("_") or n.attr in ("format", "format_map")):
@@ -84,7 +92,7 @@ def check(code: str, params: dict[str, float]) -> list[dict]:
             found.append(_finding(*at, "global and nonlocal are not allowed", "global"))
         elif any(not _literal_formula(arg) for arg in _formula_args(n)):
             found.append(_finding(*at, f"ctx.{n.func.attr}() needs a literal formula string", n.func.attr))
-    if not any(isinstance(n, ast.ClassDef) and n.name == "Strategy" for n in tree.body):
+    if entry and not any(isinstance(n, ast.ClassDef) and n.name == "Strategy" for n in tree.body):
         found.append(_finding(1, 0, 0, "Define class Strategy with on_bar(self, ctx)"))
     for e in exprs(code):
         try:
@@ -94,6 +102,16 @@ def check(code: str, params: dict[str, float]) -> list[dict]:
             col = code.splitlines()[line - 1].find(e)
             found.append(_finding(line, col, col + len(e), f"Formula: {getattr(x, 'message', x)}", e))
     return found
+
+
+def check_project(code: str, params: dict[str, float], files: dict[str, str]) -> list[dict]:
+    modules = {name[:-3] for name in files if name.endswith(".py")}
+    sources = {"main.py": code, **{name: source for name, source in files.items() if name.endswith(".py") and name != "main.py"}}
+    return [
+        {**finding, "file": name}
+        for name, source in sources.items()
+        for finding in check(source, params, modules=modules - {"main"}, entry=name == "main.py")
+    ]
 
 
 @lru_cache(maxsize=16)
@@ -255,8 +273,8 @@ class CodeError(Exception):
         self.line = self.problem.get("line")
 
 
-def run(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params: dict[str, float], symbols: list[str] | None = None, cache: dict | None = None, *, output: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
-    arrays = _execute(code, bars, dates, params, symbols, cache, output)
+def run(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, params: dict[str, float], symbols: list[str] | None = None, cache: dict | None = None, *, output: dict | None = None, files: dict[str, str] | None = None) -> tuple[np.ndarray, np.ndarray]:
+    arrays = _execute(code, bars, dates, params, symbols, cache, output, files=files)
     return arrays["entries"], arrays["exits"]
 
 
@@ -264,7 +282,7 @@ def run_event(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, p
               symbols: list[str], settings: engine.Params, *, output: dict | None = None,
               signal_bars: dict[str, np.ndarray] | None = None, stop_dist: np.ndarray | None = None,
               size_vol: np.ndarray | None = None, market_filter: np.ndarray | None = None, repaint_bars: list[int] | None = None,
-              benchmark: np.ndarray | None = None) -> engine.Result:
+              benchmark: np.ndarray | None = None, files: dict[str, str] | None = None) -> engine.Result:
     extras = {}
     for name, array in (("stop_dist", stop_dist), ("size_vol", size_vol), ("market_filter", market_filter)):
         if array is not None:
@@ -274,22 +292,23 @@ def run_event(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, p
     if benchmark is not None:
         extras["benchmark"] = benchmark
     arrays = _execute(code, signal_bars if signal_bars is not None else bars, dates, params, symbols, None, output,
-                      event_settings=asdict(settings), repaint_bars=repaint_bars, extras={**extras, **{f"raw_{k}": v for k, v in bars.items()}})
+                      event_settings=asdict(settings), files=files, repaint_bars=repaint_bars, extras={**extras, **{f"raw_{k}": v for k, v in bars.items()}})
     return engine.Result(*(arrays[name] for name in (
         "trades", "equity", "gross_equity", "gross_exposure", "net_exposure", "positions", "traded",
     )), unfilled=int(arrays["unfilled"].item()))
 
 
-def _execute(code, bars, dates, params, symbols, cache, output, *, event_settings=None, repaint_bars=None, extras=None):
-    findings = check(code, params)
+def _execute(code, bars, dates, params, symbols, cache, output, *, event_settings=None, repaint_bars=None, extras=None, files=None):
+    modules = {name: source for name, source in (files or {}).items() if name.endswith(".py") and name != "main.py"}
+    findings = check_project(code, params, modules)
     if findings:
         first = findings[0]
-        raise CodeError(first["message"], {"file": "main.py", "line": first["line"], "column": first["start"] + 1})
-    ex = exprs(code)
+        raise CodeError(first["message"], {"file": first["file"], "line": first["line"], "column": first["start"] + 1})
+    ex = list(dict.fromkeys(expression for source in (code, *modules.values()) for expression in exprs(source)))
     vals = {f"v{i}": np.asarray(formula.evaluate(e, bars, dates, params, cache), dtype=float) for i, e in enumerate(ex)}
     n = bars["close"].shape[1]
     meta = {"exprs": ex, "params": params, "symbols": symbols or [str(i) for i in range(n)], "dates": [str(d.date()) for d in dates],
-            "event_settings": event_settings, "repaint_bars": repaint_bars or []}
+            "event_settings": event_settings, "repaint_bars": repaint_bars or [], "modules": modules}
     with tempfile.TemporaryDirectory() as d:
         src, dst = Path(d) / "in.npz", Path(d) / "out.npz"
         np.savez(src, meta=np.array(json.dumps(meta)), **{f: np.asarray(bars[f], dtype=float) for f in ("open", "high", "low", "close", "volume")}, **vals, **(extras or {}))
