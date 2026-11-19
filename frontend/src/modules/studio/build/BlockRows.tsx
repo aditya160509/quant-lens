@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, FolderPlus, Plus, X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { fromFormula, OPS, toFormula, type Group, type Item, type Leaf } from "./blocks";
 
@@ -18,10 +18,14 @@ export function GroupEditor({ id, group, onChange, suggestions, depth = 0, onRem
   id: string; group: Group; onChange: (g: Group) => void; suggestions: string[]; depth?: number; onRemove?: () => void;
 }) {
   const [open, setOpen] = useState(true);
+  const addRef = useRef<HTMLSelectElement>(null);
   const set = (i: number, next: Item | null) => onChange({ ...group, items: next === null ? group.items.filter((_, k) => k !== i) : group.items.map((x, k) => (k === i ? next : x)) });
   const add = (item: Item) => onChange({ ...group, items: [...group.items, item] });
   return (
-    <div className="gx" data-depth={depth}>
+    <div className="gx" data-depth={depth} tabIndex={depth === 0 ? -1 : undefined} onKeyDown={(e) => {
+      if (e.key !== "/" || (e.target as HTMLElement).closest("input,select,textarea")) return;
+      e.preventDefault(); e.stopPropagation(); setOpen(true); requestAnimationFrame(() => addRef.current?.focus());
+    }}>
       {depth === 0 ? <datalist id={`${id}-dl`}>{suggestions.map((s) => <option key={s} value={s} />)}</datalist> : null}
       <div className="gx-head">
         <button className="icon-btn" aria-label={open ? "Collapse" : "Expand"} onClick={() => setOpen(!open)}>{open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}</button>
@@ -40,7 +44,7 @@ export function GroupEditor({ id, group, onChange, suggestions, depth = 0, onRem
             ? <GroupEditor key={i} id={id} group={item} depth={depth + 1} suggestions={suggestions} onChange={(g) => set(i, g)} onRemove={() => set(i, null)} />
             : <Condition key={i} id={id} item={leaf(item)} onChange={(l) => set(i, l)} onRemove={() => set(i, null)} onDuplicate={() => onChange({ ...group, items: [...group.items.slice(0, i + 1), leaf(item), ...group.items.slice(i + 1)] })} />)}
           <div className="gx-add">
-            <select className="input" aria-label="Add condition" value="" onChange={(e) => { if (e.target.value !== "-") add({ rule: e.target.value, enabled: true }); }}>
+            <select ref={addRef} className="input" aria-label="Add condition" aria-keyshortcuts="/" value="" onChange={(e) => { if (e.target.value !== "-") add({ rule: e.target.value, enabled: true }); }}>
               <option value="" disabled hidden>Condition</option>
               {KINDS.map(([v, l]) => <option key={l} value={v}>{l}</option>)}
             </select>
