@@ -1016,3 +1016,19 @@ def test_restore_branch_and_blame_never_delete_versions(studio):
     branch = studio.post(f"{base}/{sid}/versions/2/branch").json()
     assert branch["id"] != sid and branch["spec"]["code"] == "a = 1\nb = 3\nc = 4\n" and branch["version"] == 1
     assert studio.post(f"{base}/{sid}/versions/9/restore").status_code == 404
+
+
+def test_on_data_preview_covers_only_the_window_and_describes_on_data(studio):
+    from app.services.studio_v3.core import templates
+
+    spec = next(t["spec"] for t in templates.list_python_templates() if t["name"] == "Python momentum rotation")
+    result = studio.post("/api/studio-v3/preview", json={"symbol": "SPY", "spec": spec}).json()
+    assert result["status"] == "ok"
+    start = result["window"]["start"]
+    assert start == result["bars"][0]["date"] and result["window"]["end"] == result["bars"][-1]["date"]
+    assert all(t["entry_date"] >= start for t in result["trades"])
+    assert result["total_return"] < 5
+    checked = studio.post("/api/studio-v3/compile", json={"spec": spec}).json()
+    assert "on_data" in checked["description"]
+    bad = studio.post("/api/studio-v3/build/debug", json={"spec": spec, "symbol": "SPY", "date": "1990-01-02"})
+    assert bad.status_code == 422 and "Valid dates run from" in str(bad.json()) and result["window"]["end"] in str(bad.json())

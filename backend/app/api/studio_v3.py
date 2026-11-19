@@ -454,6 +454,7 @@ class PreviewResult(BaseModel):
     line: int | None = None
     problem: StrategyProblem | None = None
     symbol: str | None = None
+    window: dict[str, str] | None = None
     bars: list[dict[str, Any]]
     trades: list[dict[str, Any]]
     total_return: float | None = None

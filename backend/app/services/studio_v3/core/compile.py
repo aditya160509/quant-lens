@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from dataclasses import dataclass
 
 import numpy as np
@@ -253,7 +254,8 @@ def _pct(v: float) -> str:
 def describe(spec: Strategy) -> str:
     """"What it does": three plain lines built from the spec alone (B-9)."""
     if spec.code.strip() and not spec.entry_long.strip() and not spec.entry_short.strip():
-        return "Python strategy: orders come from on_bar."
+        hook = "on_data" if re.search(r"def\s+on_data\s*\(", spec.code) else "on_bar"
+        return f"Python strategy: orders come from {hook}."
     e, s = spec.exits, spec.sizing
     entry = [f"{ROLE_LABEL[r]} {getattr(spec, r).strip()}" for r in ("entry_long", "entry_short") if getattr(spec, r).strip()]
     out = [f"{ROLE_LABEL[r]} {getattr(spec, r).strip()}" for r in ("exit_long", "exit_short") if getattr(spec, r).strip()]

@@ -456,7 +456,7 @@ def debug_bar(spec: Strategy, settings: Settings, symbol: str, date: str, step: 
     dates = panel.dates[available]
     target = int(dates.searchsorted(pd.Timestamp(date)))
     if target >= len(dates) or dates[target] != pd.Timestamp(date) or not 0 <= target + step < len(dates):
-        raise Refusal(f"No selected bar for {symbol} on {date} with step {step}.", ["Select an observed session within the development window."])
+        raise Refusal(f"No selected bar for {symbol} on {date} with step {step}. Valid dates run from {dates[0].date()} to {dates[-1].date()}.", ["Select an observed session within the development window."])
     target += step
     bar = int(available[target])
     output: dict = {}
@@ -487,18 +487,25 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0) -> dict:
     lo = max(0, int(p.dates.searchsorted(p.dates[-1] - pd.DateOffset(days=int(365 * years)))))
     output: dict = {}
     if spec.code.strip():
-        r = _simulate_python(spec, prep, settings, output=output, repaint_from=lo)
+        # Start a year before the window so history-based code is warm, then shift the bar indexes back to the full panel.
+        run_from = max(0, lo - 252)
+        r = _simulate_python(spec, prep, settings, lo=run_from, output=output, repaint_from=lo - run_from)
         output.pop("entry_signals")
+        for col in (engine.T_ENTRY_BAR, engine.T_EXIT_BAR, engine.T_SIGNAL_BAR):
+            r.trades[:, col] += run_from
+        for event in r.risk_events:
+            event["bar"] += run_from
     else:
         sig = C.signals(spec, prep.sig_bars, p.dates)
         r = simulate(spec, prep, settings, sig=sig)
         output["repaint"] = repaint_check(spec, prep, lo, full=sig)
-    trades = [t for t in trades_table(r, p) if t["exit_date"] >= str(p.dates[lo].date())]
+    start = str(p.dates[lo].date())
+    trades = [t for t in trades_table(r, p) if t["entry_date"] >= start]
     bars = [{"date": str(d.date()), "close": float(c)} for d, c in zip(p.dates[lo:], p.close[lo:, 0], strict=True) if np.isfinite(c)]
     total = float(np.prod([1 + t["return"] for t in trades]) - 1) if trades else 0.0
     risk = [{"date": str(p.dates[e["bar"]].date()), "kind": e["kind"], "value": e["value"], "limit": e["limit"]} for e in r.risk_events]
     output.pop("risk_events", None)
-    return {"status": "ok", "symbol": symbol, "bars": bars, "trades": trades, "total_return": total, **output, "risk_events": risk}
+    return {"status": "ok", "symbol": symbol, "window": {"start": start, "end": str(p.dates[-1].date())}, "bars": bars, "trades": trades, "total_return": total, **output, "risk_events": risk}
 
 
 def repaint_check(spec: Strategy, prep: Prepared, lo: int = 0, cuts: int = 50, *, full: C.Signals | None = None) -> dict:
