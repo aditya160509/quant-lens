@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 121 | 163 | 21 | 70 |
+| Build | 122 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 121 | 163 |
+| Build | 122 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **231** | **538** |
+| **All pages** | **232** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 121 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 122 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -203,7 +203,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [H] B-76 CodeLens above on_bar ("Run on SPY · Run on universe · Debug from 2020-03-01"); above ctx.rule ("true on 34% of bars") [FP 64] (backend done: POST /build/codelens returns run and debug lenses and the true-rate of each ctx.rule; frontend wiring open)
 - [x] [H] B-77 Time travel on a finished backtest: pick any bar, see a variable snapshot, arrow keys step back and forward; snapshots only for chosen date ranges [FP 27] (backend done: /build/debug replays to any date with step -1, 0 or 1 and returns the variable snapshot, orders and fills; arrow-key UI is frontend)
 - [x] [M] B-78 Profiler: time per function and per line, slowest 10 lines, flame graph, memory chart (backend done: POST /build/profile returns the 10 slowest strategy lines and time per function; flame graph and memory chart open)
-- [ ] [H] B-79 Logs tab: virtual list (level, date, symbol, message, code line); filters for level, symbol, date, text, regex, case, whole word; click row jumps chart and editor; CSV export [FP 28] (partial: virtual list (only rows in view rendered); level, text, regex, case and word filters; click jumps to the line; date and symbol columns)
+- [x] [H] B-79 Logs tab: virtual list (level, date, symbol, message, code line); filters for level, symbol, date, text, regex, case, whole word; click row jumps chart and editor; CSV export [FP 28]; level, text, regex, case and word filters; click jumps to the line; date and symbol columns) (virtual list with level, date, symbol, message, line; filters for level, symbol, from date, text, regex, case, whole word; click jumps editor and marks the bar on the chart; CSV export)
 - [ ] [M] B-80 Structured logs: ctx.log.info("entry", symbol=s, rsi=r) stored as key values, searchable [FP 28] (backend done: ctx.log, ctx.log.info/warning/error store clean key values on each log row; filtering and search are frontend)
 - [ ] [E] B-81 Plots tab: each ctx.plot series overlays the price or sits in its own pane on a shared time axis; toggle each; compare across two runs [FP 29] [PY B2] (partial: overlay or own pane, toggle per series; compare across runs open)
 - [x] [E] B-82 Problems tab: static and runtime errors, click to jump to the line [PY B2] (Problems tab: lint, compile and runtime, click jumps; traceback frames listed)
@@ -224,14 +224,14 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-97 Gallery of 12 starters with a one-line description, last backtest on the default universe and "use as start" (trend 50/200, RSI(2), momentum top 10, dual momentum, pairs z-score, vol target, ATR breakout, turn of month, gap fade, sector rotation, ML ranking, risk parity) (partial: 20 starters with SPY preview return and trades; default-universe stats and the named 12 open)
 - [x] [M] B-98 Python starters: trend, mean reversion, momentum rotation, pairs, vol target, breakout, seasonality, ML score [PY B10] (eight starters compile and trade on real data, tested; gallery UI open)
 - [x] [M] B-99 Warn above 200 blocks, hard stop above 1,000; warn above 8 optimisable parameters (block and parameter warnings shown under the rules)
-- [ ] [E] B-100 Customise: personal templates, parameter ranges per strategy, default sizing and costs per user, editor font and keymap (partial: Customise: default exits and sizing for new strategies, editor font size; personal templates and keymap open)
+- [ ] [E] B-100 Customise: personal templates, parameter ranges per strategy, default sizing and costs per user, editor font and keymap (partial: default exits and sizing, editor font size, personal templates (save, list first, delete); keymap open)
 - [x] [M] B-101 Monaco palette and the app palette merged into one list, grouped Editor, Run, View, Studio (one palette (⌘⇧P) lists Strategy, Mode, Run, Debug, View and Editor commands; Dev commands run in the editor)
 - [x] [E] B-102 Four authoring modes on one spec: blocks, formula, Python, plain English; the mode switch never loses work [FP 22] (Blocks, Formula, Plain English and Python tabs on one spec; Python tab marked when code runs)
 - [x] [E] B-103 Blocks and formula show generated Python side by side (read only); formula to Python is one way, original kept; hand edits that cannot be represented set a code-only badge [FP 22], Python runs badge; side-by-side open) (open Python view sits beside the rules on wide screens, read only)
 - [x] [M] B-104 Plain English shows the interpreted rules as blocks before any run; ambiguous words highlighted ("oversold" = RSI(14) < 30); restated "what it does" paragraph; original prompt kept in version history (partial: phrase rules, ignored words listed, review then use; highlights and history open) [FP 23] (backend done: POST /plain-english also returns assumptions [{word, start, end, meaning, formula}] for oversold, overbought, uptrend, downtrend, breakout, pullback, golden cross, death cross and volume spike with offsets into the input, plus restated from compile.describe; unmatched keeps the rest; highlight UI is frontend)
 - [x] [E] B-105 Any and All groups, nested to any depth (partial: rows joined by and or; nesting open) [FP 24] (backend done: spec.groups maps entry_long, exit_long, entry_short, exit_short or market_filter to an Any/All tree up to 10 deep with disabled rules; the role formula is generated from it and trades identically; block editor wiring open)
 - [ ] [E] B-106 Condition kinds: cross above and below, for N bars, rising, falling, earnings filter, fundamentals, calendar, cross-sectional (partial: crosses, consecutive bars, rising, falling, week and month starts, percentile rank and z-score exist; earnings and fundamentals open) (partial: calendar kinds weekday(), month(), day_of_month(), quarter_start(), year_start() and between(x, low, high) added to formulas; earnings and fundamentals blocked by data)
-- [ ] [E] B-107 Inline parameter editor with an optimisation range per parameter; plain-language summary line; colour by role; collapse, disable, comment, duplicate, copy as code; undo 50 steps [FP 9] (partial: conditions switch off, duplicate, collapse, copy as code; parameter ranges inline; colour by role and 50-step undo open)
+- [ ] [E] B-107 Inline parameter editor with an optimisation range per parameter; plain-language summary line; colour by role; collapse, disable, comment, duplicate, copy as code; undo 50 steps [FP 9] (partial: conditions switch off, duplicate, collapse, copy as code; parameter ranges inline; colour by role; 50-step undo open)
 - [x] [M] B-108 Red marker on incomplete blocks; detector for conditions that are always true or always false on your data (always or never true flagged under the rule)
 - [x] [M] B-109 Click a condition block: the preview shows the bars where it fired (no full backtest) [FP 24] (Show on chart marks the bars where a rule fired)
 - [ ] [M] B-110 Trading frequency: calendar (daily, weekly, monthly, on bar close) or threshold corridor (X% drift) (partial: spec.frequency gates entries to daily, week_start or month_start; the X% drift corridor is open) (partial: Python ctx.target_weights(weights, corridor=0.05) skips names within the drift corridor; formula strategies still use calendar frequency only)
@@ -259,7 +259,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [H] B-132 Single editing session per strategy with take-over; the second tab is read-only (no QuantConnect-style desync) [FP 66] (same lease: a second tab is read-only until Take over)
 - [ ] [M] B-133 Notes (hypothesis, what was tried, decisions) exported with the certificate
 - [ ] [M] B-134 Saved rule groups reusable as blocks; custom indicators by formula shared with Chart and Screener
-- [ ] [M] B-135 Customise: default mode, default exits and sizing profile from Library, blocks palette order, block colours and compact or expanded view (partial: Customise: default interface and mode, default exits and sizing; palette order and block colours open)
+- [ ] [M] B-135 Customise: default mode, default exits and sizing profile from Library, blocks palette order, block colours and compact or expanded view (partial: default interface and mode, exits and sizing, compact or expanded blocks, colour by role; palette order open)
 - [ ] [M] B-136 Keyboard-first block insertion (type "/") and snap grid (partial: / in a rule focuses Add condition; snap grid open)
 - [ ] [M] B-137 Shared undo across views; Explain on any selection; convert to library block; one parameter table across all views
 - [x] [M] B-138 Python keys: F5 debug and Run, ⌘⇧↵ full run (quick run ⌘↵) (F5 debug, ⌘↵ quick run, ⌘⇧↵ full run recorded in the ledger)
