@@ -20,7 +20,11 @@ export type DevPreview = {
   trades: Record<string, unknown>[]; bars?: { date: string; close: number }[]; logs?: Log[] | null; plots?: Record<string, Point[]> | null; plot_charts?: Record<string, string> | null;
   marks?: { date: string; symbol: string; label: string }[] | null; tables?: Record<string, { date: string; symbol: string | null; cells: Record<string, unknown> }[]> | null;
   warmup?: { bars: number; first_eligible_date: string | null } | null; settings_overrides?: Record<string, unknown> | null;
+  order_lines?: { file: string; line: number; count: number; dates: string[] }[] | null; locals?: Record<string, unknown> | null;
 };
+type Profile = { lines?: { file?: string; line: number; seconds: number; hits?: number; source?: string }[]; functions?: { function?: string; name?: string; seconds: number; calls?: number }[] };
+export type QuickRun = { job_id: string; level: "quick" | "full"; status: string; progress?: { percent?: number; message?: string; partial?: { symbols?: number; bars?: number; elapsed_seconds?: number; budget_seconds?: number } } | null;
+  error?: string | null; delta?: { total_return: number | null; sharpe: number | null; trades: number | null } | null; result?: { meta?: { headline?: string; total_return?: number; metrics?: Record<string, number | null> } } };
 type Sym = { name: string; kind: string; line: number; column: number; children: Sym[] };
 type Debug = { date: string; symbol: string; bar_index: number; state: Record<string, unknown>; context: Record<string, number | null>; orders: Record<string, unknown>[]; fills: Record<string, unknown>[];
   previous_date: string | null; next_date: string | null; breakpoint?: { file: string; line: number; hit_count: number; locals: Record<string, unknown> } | null; equity_change?: number | null };
@@ -63,10 +67,11 @@ function finder(query: string, opt: { regex: boolean; caseSensitive: boolean; wo
 }
 
 /** Build › Dev: a project rail, the editor in tabs, Problems / Output / Plots / Trades / Debug below, preview and checks on the right, a status bar. */
-export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font }: {
+export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel }: {
   spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode;
   onSave: () => void; onRun: () => void; onFullRun: () => void; compileProblems: Problem[];
   strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null) => void; font?: number;
+  quick?: QuickRun | null; onQuickRun?: (level: "quick" | "full") => void; onCancel?: () => void;
 }) {
   const files = useMemo(() => ({ "main.py": spec.code, ...(spec.files ?? {}) }), [spec.code, spec.files]);
   const [open, setOpen] = useState<string[]>(["main.py"]);
@@ -95,6 +100,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [lastPreview, setLastPreview] = useState<string | null>(null);
   const [qc, setQc] = useState<QC | null>(null);
   const [split, setSplit] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile | "loading" | null>(null);
   const [strict, setStrict] = useState(() => { try { return localStorage.getItem("studio:dev:strict") === "1"; } catch { return false; } });
   const [timeline, setTimeline] = useState<Timeline[]>([]);
   const [snaps, setSnaps] = useState<Snapshot[]>([]);
@@ -192,6 +198,15 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     if (!strategyId) return;
     void studio<{ files: Record<string, string> }>("GET", `/strategies/${strategyId}/files?version=${v}`).then((r) => setDiff({ version: v, files: r.files }), (e: Error) => toast.error(e.message));
   };
+  const runProfile = () => {
+    setTab("results"); setPanelOpen(true); setProfile("loading");
+    void studio<{ profile?: Profile }>("POST", "/build/profile", { spec, symbol }).then((r) => setProfile(r.profile ?? {}), (e: Error) => { setProfile(null); toast.error(e.message); });
+  };
+  useEffect(() => {
+    if (!quick || !["queued", "running"].includes(quick.status)) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel?.(); };
+    window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc);
+  }, [quick, onCancel]);
   const drag = (e: React.PointerEvent) => {
     const y0 = e.clientY, h0 = panel;
     const move = (m: PointerEvent) => setPanel(Math.min(Math.max(h0 - (m.clientY - y0), 120), window.innerHeight * 0.7));
@@ -209,7 +224,10 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     { id: "studio.files", label: "Go to file", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyP], run: () => { setRailOpen(true); setRail("files"); } },
     { id: "studio.search", label: "Search project", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyF], run: () => { setRailOpen(true); setRail("search"); } },
     { id: "studio.docs", label: "Docs: open reference", keys: (m) => [m.KeyCode.F1], run: () => { setRailOpen(true); setRail("docs"); } },
-    { id: "studio.fullrun", label: "Run: full backtest", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => onFullRun() },
+    { id: "studio.fullrun", label: "Run: full backtest (recorded)", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => { setTab("results"); setPanelOpen(true); if (onQuickRun) onQuickRun("full"); else onFullRun(); } },
+    { id: "studio.quickrun", label: "Run: quick (top 50, 5 years)", run: () => { setTab("results"); setPanelOpen(true); if (onQuickRun) onQuickRun("quick"); else onRun(); } },
+    { id: "studio.cancel", label: "Run: cancel", run: () => onCancel?.() },
+    { id: "studio.profile", label: "Run: profile the preview", run: () => runProfile() },
     { id: "studio.save", label: "Strategy: save version", run: () => onSave() },
     { id: "studio.newfile", label: "File: new", run: () => addFile() },
     { id: "studio.split", label: "View: split editor", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.Backslash], run: () => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active)) },
@@ -343,8 +361,8 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
             <DiffEditor language="python" original={diff.files[active] ?? ""} modified={source} theme="studio" height="100%"
               options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, fontSize: 13, lineHeight: 20, scrollBeyondLastLine: false, automaticLayout: true, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace" }} />
           ) : (
-            <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={onSave} onRun={onRun} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
-              font={font} actions={actions} breakpoints={bps[active] ?? []} onGutter={toggleBp} readOnly={readOnly} snippets={snippets}
+            <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={onSave} onRun={() => { setTab("results"); setPanelOpen(true); if (onQuickRun) onQuickRun("quick"); else onRun(); }} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
+              font={font} actions={actions} breakpoints={bps[active] ?? []} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} onGutter={toggleBp} readOnly={readOnly} snippets={snippets}
               onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
               project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles, paramSpecs: spec.params, problems,
                 addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
@@ -365,6 +383,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
                 {problems.map((p, i) => (
                   <button key={i} className="dv-prob" onClick={() => goto(p.file, p.line, p.column)}><b className={p.severity}>{p.severity}</b><span>{p.message}</span><i>{p.file}:{p.line}:{p.column}{p.code ? ` ${p.code}` : ""}</i></button>
                 ))}
+                {prev?.locals ? <div className="dv-trace"><h4 className="dv-sub">At the failing bar</h4><KV rows={prev.locals} /></div> : null}
                 {prev?.problem?.traceback?.length ? <div className="dv-trace">{prev.problem.traceback.map((f, i) => <button key={i} className="dv-item" onClick={() => goto(f.file, f.line, f.column)}>{f.function}<span>{f.file}:{f.line}</span></button>)}</div> : null}
               </> : <p className="dv-empty">No problems</p>) : null}
               {tab === "output" ? (
@@ -396,17 +415,45 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
               {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades" }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
               {tab === "results" ? (() => {
                 const r = version ? runs[version] : undefined;
-                return r ? (
+                const m = quick?.result?.meta;
+                const running = quick && ["queued", "running"].includes(quick.status);
+                const d = quick?.delta;
+                const sign = (v: number | null | undefined, f: (x: number) => string) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${f(v)}`);
+                return (
                   <div className="dv-results">
-                    <div className="kpis">
-                      <div className="kpi"><span>Return</span><b>{pct(r.total_return)}</b></div>
-                      <div className="kpi"><span>Sharpe</span><b>{r.sharpe?.toFixed(2) ?? "—"}</b></div>
-                      <div className="kpi"><span>Trades</span><b>{r.trades ?? "—"}</b></div>
+                    <div className="dv-dbar">
+                      <button className="btn sm primary" disabled={!!running} onClick={() => onQuickRun?.("quick")}>Quick run<kbd>⌘↵</kbd></button>
+                      <button className="btn sm" disabled={!!running} onClick={() => onQuickRun?.("full")}>Full run<kbd>⌘⇧↵</kbd></button>
+                      <button className="btn sm" onClick={runProfile}>Profile</button>
+                      {running ? <button className="btn sm" onClick={onCancel}>Cancel<kbd>Esc</kbd></button> : null}
+                      {quick ? <span className="dv-count">{quick.level === "quick" ? "Top 50 names, 5 years, not in the ledger" : "Full period, recorded in the ledger"}</span> : null}
                     </div>
-                    {stale ? <p className="bd-find warning"><b>Edited</b>the code differs from v{version}, which produced this result</p> : null}
-                    <Link className="btn sm" href="/studio/backtest">Open in Backtest</Link>
+                    {running ? <div className="dv-prog"><i style={{ width: `${quick!.progress?.percent ?? 2}%` }} /><span>{quick!.progress?.message ?? "Queued"}</span></div> : null}
+                    {quick?.status === "failed" ? <p className="bd-find error"><b>Failed</b>{quick.error}</p> : null}
+                    {quick?.status === "cancelled" ? <p className="dv-empty">Cancelled</p> : null}
+                    {m ? <>
+                      <div className="kpis">
+                        <div className="kpi"><span>Return</span><b>{pct(m.total_return)}</b>{d ? <i className="dv-delta">{sign(d.total_return, (x) => `${(x * 100).toFixed(1)} pts`)}</i> : null}</div>
+                        <div className="kpi"><span>Sharpe</span><b>{m.metrics?.sharpe?.toFixed(2) ?? "—"}</b>{d ? <i className="dv-delta">{sign(d.sharpe, (x) => x.toFixed(2))}</i> : null}</div>
+                        <div className="kpi"><span>Max drawdown</span><b>{m.metrics?.max_drawdown != null ? pct(m.metrics.max_drawdown) : "—"}</b></div>
+                        <div className="kpi"><span>Trades</span><b>{m.metrics?.trades ?? "—"}</b>{d ? <i className="dv-delta">{sign(d.trades, (x) => String(x))}</i> : null}</div>
+                      </div>
+                      {m.headline ? <p className="bd-desc">{m.headline}</p> : null}
+                      {quick?.level === "full" ? <Link className="btn sm" href="/studio/backtest">Open in Backtest</Link> : null}
+                    </> : !quick && r ? (
+                      <div className="kpis">
+                        <div className="kpi"><span>v{version} return</span><b>{pct(r.total_return)}</b></div>
+                        <div className="kpi"><span>Sharpe</span><b>{r.sharpe?.toFixed(2) ?? "—"}</b></div>
+                        <div className="kpi"><span>Trades</span><b>{r.trades ?? "—"}</b></div>
+                      </div>
+                    ) : null}
+                    {stale && (m || r) ? <p className="bd-find warning"><b>Edited</b>the code differs from the run shown</p> : null}
+                    {profile === "loading" ? <p className="dv-empty">Profiling…</p> : profile ? <div className="dv-dgrid">
+                      <div><h4>Slowest lines</h4>{profile.lines?.length ? <DataTable rows={profile.lines.map((l) => ({ line: l.line, file: l.file ?? "main.py", seconds: l.seconds, hits: l.hits ?? null, source: l.source ?? "" }))} /> : <p className="dv-empty">No data</p>}</div>
+                      <div><h4>Time per function</h4>{profile.functions?.length ? <DataTable rows={profile.functions.map((f) => ({ function: f.function ?? f.name ?? "", seconds: f.seconds, calls: f.calls ?? null }))} /> : <p className="dv-empty">No data</p>}</div>
+                    </div> : null}
                   </div>
-                ) : <p className="dv-empty">No backtest of v{version ?? 1} yet · ⌘↵ runs one</p>;
+                );
               })() : null}
               {tab === "debug" ? (
                 <div className="dv-debug">
@@ -449,6 +496,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
         {prev?.settings_overrides && Object.keys(prev.settings_overrides).length ? <span className="dv-over" title={Object.entries(prev.settings_overrides).map(([k, v]) => `${k} = ${String(v)}`).join("\n")}>code sets {Object.keys(prev.settings_overrides).join(", ")}</span> : null}
         {Object.values(bps).flat().length ? <span>{Object.values(bps).flat().length} breakpoint{Object.values(bps).flat().length === 1 ? "" : "s"}</span> : null}
         <span style={{ flex: 1 }} />
+        {quick && ["queued", "running"].includes(quick.status) ? <span className="dv-run">{quick.progress?.partial ? `bar ${quick.progress.partial.bars?.toLocaleString() ?? "…"} · ${quick.progress.partial.symbols ?? "…"} symbols · ${quick.progress.partial.elapsed_seconds?.toFixed(1) ?? "0"} s of ${quick.progress.partial.budget_seconds ?? "…"} s` : `${quick.level} run ${quick.progress?.percent ?? 0}%`}</span> : null}
         {trial}
         <span>{prev ? `${prev.status === "ok" ? `preview ${symbol}` : prev.status}${lastPreview ? ` · ${lastPreview}` : ""}` : "no preview"}</span><span>Python 3.12</span>
       </footer>

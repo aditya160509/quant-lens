@@ -14,7 +14,7 @@ import { BlockRows } from "./BlockRows";
 import { MenuItem, PopMenu, Segmented, type MenuAt } from "@/workspace/ui";
 import { STUDIO_BASE } from "../base";
 import type { Problem } from "./CodeEditor";
-import { DevIDE, type DevPreview, type Saved } from "./DevIDE";
+import { DevIDE, type DevPreview, type QuickRun, type Saved } from "./DevIDE";
 import { Palette, type Command } from "./Palette";
 import { fromFormula, toFormula, type Row } from "./blocks";
 import "../studio.css";
@@ -91,6 +91,24 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const [nudge, setNudge] = useState(0);
   const [recover, setRecover] = useState<{ spec: Spec; at: number } | null>(null);
   const [pausedAt, setPausedAt] = useState<string | null>(null);
+  const [quick, setQuick] = useState<QuickRun | null>(null);
+  const quickRun = async (level: "quick" | "full") => {
+    let sid: string | null = loaded?.id ?? null;
+    if (level === "full") { sid = await save(); if (!sid) return; }
+    try {
+      const j = await studio<QuickRun>("POST", "/build/run", level === "full" ? { level, strategy_id: sid } : { level, spec, ...(sid ? { strategy_id: sid } : {}) });
+      setQuick({ ...j, level, status: "queued" });
+      const poll = async () => {
+        const st = await studio<QuickRun>("GET", `/build/run/${j.job_id}`).catch(() => null);
+        if (!st) return;
+        setQuick((q) => (q?.job_id === j.job_id ? { ...st, level } : q));
+        if (["queued", "running"].includes(st.status)) setTimeout(() => void poll(), 700);
+        else if (level === "full" && loaded) void load(loaded.id);
+      };
+      setTimeout(() => void poll(), 400);
+    } catch (e) { fail(e); }
+  };
+  const cancelRun = () => { if (quick) void studio("POST", `/jobs/${quick.job_id}/cancel`).then(() => setQuick((q) => (q ? { ...q, status: "cancelled" } : q)), fail); };
   const [font, setFont] = useState(() => { try { return Number(localStorage.getItem("studio:dev:font")) || 13; } catch { return 13; } });
   type Preview = Omit<DevPreview, "trades"> & { bars: { date: string; close: number }[]; trades: { entry_date: string; exit_date: string; side: string; return: number }[]; total_return?: number; repaint?: { cuts: number; changed: number; dates: string[] } };
   const [prev, setPrev] = useState<Preview | null>(null);
@@ -424,7 +442,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         </section>
       ) : null}
       {ui === "dev" ? <DevIDE spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} onRun={() => void run()} onFullRun={() => void run()} compileProblems={compileProblems}
-        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={setPausedAt} font={font} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid">
+        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={setPausedAt} font={font} quick={quick} onQuickRun={(l) => void quickRun(l)} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid">
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
             {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m} className={`btn sm${mode === m ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}

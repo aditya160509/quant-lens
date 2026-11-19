@@ -336,3 +336,8 @@
 .dv-over { color: var(--warn); }
 .dv-doc summary .icon-btn { width: 20px; height: 20px; opacity: 0; }
 .dv-doc summary:hover .icon-btn { opacity: 1; }
+.dv-prog { position: relative; height: 22px; border-radius: 6px; background: var(--line); overflow: hidden; width: 100%; }
+.dv-prog i { position: absolute; inset: 0 auto 0 0; background: color-mix(in oklch, var(--accent) 40%, transparent); transition: width .3s; }
+.dv-prog span { position: relative; padding: 0 8px; font: 11.5px/22px var(--mono); color: var(--text); }
+.dv-delta { font-style: normal; font: 11px var(--mono); color: var(--text-3); margin-top: 2px; }
+.dv-run { color: var(--accent); }
