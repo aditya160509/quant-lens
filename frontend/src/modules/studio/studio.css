@@ -374,3 +374,6 @@
   .bd-rules:has(> .bd-py[open]) > * { grid-column: 1; }
   .bd-rules > .bd-py[open] { grid-column: 2; grid-row: 1 / span 40; align-self: start; position: sticky; top: 12px; }
 }
+.bd-tpl-mine { position: relative; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent); cursor: pointer; }
+.bd-tpl-mine .icon-btn { position: absolute; top: 6px; right: 6px; opacity: 0; }
+.bd-tpl-mine:hover .icon-btn, .bd-tpl-mine:focus-within .icon-btn { opacity: 1; }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Command as CommandIcon, Download, GitBranch, GitMerge, Settings2, Link2, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
+import { Command as CommandIcon, BookmarkPlus, Download, GitBranch, GitMerge, Settings2, Link2, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
@@ -276,6 +276,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     edit({ [f.role]: text.slice(0, a) + name + text.slice(b), params: { ...spec.params, [name]: { value: v, min: +(v / 2).toPrecision(4), max: +(v * 2).toPrecision(4), step } } });
     toast.success(`${raw} is now ${name}`);
   };
+  const [mine, setMine] = useState<{ name: string; rule: string; spec: Record<string, unknown> }[]>(() => { try { return JSON.parse(localStorage.getItem("studio:build:mytemplates") ?? "[]"); } catch { return []; } });
+  const saveMine = (next: typeof mine) => { setMine(next); try { localStorage.setItem("studio:build:mytemplates", JSON.stringify(next)); } catch { /* private window */ } };
   const applyTemplate = (t: { spec: Record<string, unknown> }) => { edit({ ...BLANK, ...(t.spec as Partial<Spec>) }); setMode("formula"); };
 
   const findings = (role: string) => (blank ? [] : compiled?.findings.filter((f) => f.role === role) ?? []);
@@ -402,6 +404,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           <MenuItem icon={<Download size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) window.location.assign(`${STUDIO_BASE}/strategies/${loaded.id}/export.zip`); }}>Export project (.zip)</MenuItem>
           <MenuItem icon={<Upload size={13} />} onClick={() => { setMore(null); zipInput.current?.click(); }}>Import project (.zip)</MenuItem>
           <MenuItem icon={<GitMerge size={13} />} disabled={!loaded} onClick={() => { setMore(null); setDialog("branches"); }}>Compare and merge…</MenuItem>
+          <MenuItem icon={<BookmarkPlus size={13} />} disabled={blank} onClick={() => { setMore(null); const name = spec.name || "Untitled"; saveMine([{ name, rule: String(spec.entry ?? ""), spec: { ...spec } }, ...mine.filter((t) => t.name !== name)].slice(0, 24)); toast.success(`Saved "${name}" as a template`); }}>Save as my template</MenuItem>
           <MenuItem icon={<Settings2 size={13} />} onClick={() => { setMore(null); setDialog("customise"); }}>Customise…</MenuItem>
           <div className="hd">Editor font</div>
           <div style={{ padding: "2px 8px 8px" }}><Segmented<number> label="Editor font size" value={font} onChange={(v) => { setFont(v); try { localStorage.setItem("studio:dev:font", String(v)); } catch { /* blocked */ } }} options={[12, 13, 14, 15].map((v) => ({ value: v, label: String(v) }))} /></div>
@@ -433,6 +436,10 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         <section className="bd-card">
           <h3>Start from</h3>
           <div className="bd-tpls">
+            {mine.map((t) => (
+              <div key={`m-${t.name}`} className="bd-tpl bd-tpl-mine" role="button" tabIndex={0} onClick={() => applyTemplate(t)} onKeyDown={(e) => { if (e.key === "Enter") applyTemplate(t); }}><b>{t.name}</b><span>{t.rule}</span>
+                <button className="icon-btn" aria-label={`Delete template ${t.name}`} onClick={(e) => { e.stopPropagation(); saveMine(mine.filter((x) => x !== t)); }}><Trash2 size={12} /></button></div>
+            ))}
             {templates.data.map((t) => (
               <button key={t.name} className="bd-tpl" onClick={() => applyTemplate(t)}><b>{t.name}</b><span>{t.rule}</span><TplStat spec={t.spec} /></button>
             ))}
