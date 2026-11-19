@@ -356,3 +356,10 @@
 .dv-cards span { display: grid; gap: 1px; }
 .dv-cards i { font-style: normal; font-size: 11px; color: var(--text-3); }
 .dv-cards b { font-size: 13px; font-weight: 600; }
+.dv-logs { position: relative; }
+.dv-logs .dv-log { position: absolute; left: 0; right: 0; height: 24px; overflow: hidden; }
+.dv-logs .dv-log code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dv-tab[data-preview] { font-style: italic; }
+.dv-tab .icon-btn[aria-label^="Pin"] { opacity: 0; }
+.dv-tab:hover .icon-btn[aria-label^="Pin"], .dv-tab[data-pinned] .icon-btn { opacity: .7; }
+.dv-dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--text-2); display: inline-block; }

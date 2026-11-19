@@ -2,7 +2,7 @@
 
 import { DiffEditor } from "@monaco-editor/react";
 import Link from "next/link";
-import { BookOpen, Bug, CaseSensitive, Columns2, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
+import { BookOpen, Bug, CaseSensitive, Columns2, Pin, PinOff, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { SERIES } from "@/charts/core";
@@ -71,10 +71,10 @@ function finder(query: string, opt: { regex: boolean; caseSensitive: boolean; wo
 }
 
 /** Build › Dev: a project rail, the editor in tabs, Problems / Output / Plots / Trades / Debug below, preview and checks on the right, a status bar. */
-export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel }: {
+export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel, savedFiles }: {
   spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode;
   onSave: () => void; onRun: () => void; onFullRun: () => void; compileProblems: Problem[];
-  strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null) => void; font?: number;
+  strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null) => void; font?: number; savedFiles?: Record<string, string>;
   quick?: QuickRun | null; onQuickRun?: (level: "quick" | "full") => void; onCancel?: () => void;
 }) {
   const files = useMemo(() => ({ "main.py": spec.code, ...(spec.files ?? {}) }), [spec.code, spec.files]);
@@ -104,6 +104,9 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [lastPreview, setLastPreview] = useState<string | null>(null);
   const [qc, setQc] = useState<QC | null>(null);
   const [split, setSplit] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string[]>([]);
+  const [logTop, setLogTop] = useState(0);
   const [profile, setProfile] = useState<Profile | "loading" | null>(null);
   const [strict, setStrict] = useState(() => { try { return localStorage.getItem("studio:dev:strict") === "1"; } catch { return false; } });
   const [timeline, setTimeline] = useState<Timeline[]>([]);
@@ -115,13 +118,16 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const pyTemplates = usePyTemplates();
   const source = files[active] ?? "";
 
-  const setFile = (name: string, text: string) => (name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
+  const setFile = (name: string, text: string) => (keep(name), name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
   const replaceFiles = (next: Record<string, string>) => {
     const all = { ...files, ...next };
     const { "main.py": code, ...rest } = all;
     edit({ code, files: rest });
   };
   const goto = (file: string, line: number, column?: number) => { if (!(file in files)) return; setDiff(null); setOpen((o) => (o.includes(file) ? o : [...o, file])); setActive(file); setReveal({ line, column, n: Date.now() }); };
+  // Single click opens a preview tab that the next single click replaces; double click or an edit keeps it (B-13).
+  const peek = (f: string) => { if (!(f in files)) return; setDiff(null); setOpen((o) => (o.includes(f) ? o : [...o.filter((x) => x !== preview || pinned.includes(x)), f])); if (!open.includes(f)) setPreview(f); setActive(f); };
+  const keep = (f: string) => { if (preview === f) setPreview(null); };
   const close = (f: string) => { const rest = open.filter((x) => x !== f); setOpen(rest.length ? rest : ["main.py"]); if (active === f) setActive(rest.at(-1) ?? "main.py"); };
   const toggleBp = (line: number) => setBps((b) => { const cur = b[active] ?? []; return { ...b, [active]: cur.includes(line) ? cur.filter((x) => x !== line) : [...cur, line].sort((x, y) => x - y) }; });
 
@@ -152,6 +158,11 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     const prefix = window.prompt("Trigger prefix", name.toLowerCase().replace(/\W+/g, "_").slice(0, 20))?.trim(); if (!prefix) return;
     void studio<Snippet>("POST", "/snippets", { name, prefix, body }).then((sn) => { setSnippets((x) => [...x, sn]); toast.success(`Saved ${name}`); }, (e: Error) => toast.error(e.message));
   };
+  const actionsRef = useRef<EditorAction[]>([]);
+  useEffect(() => {
+    const on = (e: Event) => actionsRef.current.find((a) => a.id === (e as CustomEvent<string>).detail)?.run(cursor.line);
+    window.addEventListener("studio:dev", on); return () => window.removeEventListener("studio:dev", on);
+  }, [cursor.line]);
   useEffect(() => { if (prev) setLastPreview(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })); }, [prev]);
   useEffect(() => {
     if (rail !== "docs" || docs) return;
@@ -239,6 +250,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     { id: "studio.snippet", label: "Snippet: save selection", run: () => saveSnippet() },
     { id: "studio.snippets", label: "Snippet: insert", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyS], run: () => { setRailOpen(true); setRail("templates"); } },
   ];
+  actionsRef.current = actions;
   const outlineRows = (items: Sym[], depth = 0): ReactNode => items.map((s) => (
     <div key={`${s.name}${s.line}`}>
       <button className="dv-item" style={{ paddingLeft: 10 + depth * 14 }} onClick={() => goto(active, s.line, s.column)}><i className={`dv-k dv-k-${s.kind}`}>{s.kind[0]}</i>{s.name}<span>{s.line}</span></button>
@@ -267,7 +279,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
             <div className="dv-list">
               {Object.keys(files).map((f) => (
                 <div key={f} className="dv-file" data-on={f === active || undefined}>
-                  <button className="dv-item" onClick={() => goto(f, 1)}><FileCode2 size={13} />{f}</button>
+                  <button className="dv-item" onClick={() => peek(f)} onDoubleClick={() => { goto(f, 1); keep(f); }}><FileCode2 size={13} />{f}</button>
                   <button className="icon-btn" title="Duplicate" aria-label={`Duplicate ${f}`} onClick={() => dupFile(f)}><FilePlus2 size={12} /></button>
                   {f !== "main.py" ? <><button className="icon-btn" title="Rename" aria-label={`Rename ${f}`} onClick={() => renameFile(f)}><Pencil size={12} /></button><button className="icon-btn" title="Delete" aria-label={`Delete ${f}`} onClick={() => dropFile(f)}><Trash2 size={12} /></button></> : null}
                 </div>
@@ -338,8 +350,12 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
       <section className="dv-main">
         <div className="dv-tabs" role="tablist">
           {open.map((f) => (
-            <div key={f} role="tab" aria-selected={!diff && f === active} className="dv-tab" onClick={() => { setDiff(null); setActive(f); }} onAuxClick={(e) => { if (e.button === 1) close(f); }}>
-              {f}{open.length > 1 ? <button className="icon-btn" aria-label={`Close ${f}`} onClick={(e) => { e.stopPropagation(); close(f); }}><X size={11} /></button> : null}
+            <div key={f} role="tab" aria-selected={!diff && f === active} className="dv-tab" data-preview={preview === f || undefined} data-pinned={pinned.includes(f) || undefined}
+              onClick={() => { setDiff(null); setActive(f); }} onDoubleClick={() => keep(f)} onAuxClick={(e) => { if (e.button === 1) close(f); }}>
+              {pinned.includes(f) ? <Pin size={10} aria-label="Pinned" /> : null}{f}
+              {savedFiles && (savedFiles[f] ?? "") !== (files[f] ?? "") ? <i className="dv-dirty" aria-label="Unsaved" /> : null}
+              <button className="icon-btn" aria-label={pinned.includes(f) ? `Unpin ${f}` : `Pin ${f}`} title={pinned.includes(f) ? "Unpin" : "Pin"} onClick={(e) => { e.stopPropagation(); keep(f); setPinned((p) => (p.includes(f) ? p.filter((x) => x !== f) : [...p, f])); }}>{pinned.includes(f) ? <PinOff size={11} /> : <Pin size={11} />}</button>
+              {open.length > 1 && !pinned.includes(f) ? <button className="icon-btn" aria-label={`Close ${f}`} onClick={(e) => { e.stopPropagation(); close(f); }}><X size={11} /></button> : null}
             </div>
           ))}
           <span style={{ flex: 1 }} />
@@ -382,7 +398,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
               <span style={{ flex: 1 }} />
               <button className="icon-btn" aria-label="Hide panel" title="Hide panel ⌘J" onClick={() => setPanelOpen(false)}><X size={13} /></button>
             </div>
-            <div className="dv-pbody">
+            <div className="dv-pbody" onScroll={(e) => { if (tab === "output") setLogTop(e.currentTarget.scrollTop); }}>
               {tab === "problems" ? <label className="dv-strict"><input type="checkbox" checked={strict} onChange={(e) => { setStrict(e.target.checked); try { localStorage.setItem("studio:dev:strict", e.target.checked ? "1" : "0"); } catch { /* blocked */ } }} />Strict</label> : null}
               {tab === "problems" ? (problems.length ? <>
                 {problems.map((p, i) => (
@@ -398,10 +414,15 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
                     <div className="seg" role="group" aria-label="Level">{["all", "info", "warning", "error"].map((l) => <button key={l} type="button" aria-pressed={logLevel === l} onClick={() => setLogLevel(l)}>{l}</button>)}</div>
                     <span className="dv-count">{logs.length.toLocaleString()} of {(prev?.logs?.length ?? 0).toLocaleString()}</span>
                   </div>
-                  {logs.length ? <div className="dv-logs">{logs.slice(0, 2000).map((l, i) => (
-                    <button key={i} className="dv-log" data-level={l.level} onClick={() => goto("main.py", l.line)}><time>{l.date}</time><span>{l.symbol ?? ""}</span>
-                      <code>{l.text}{l.fields ? <em>{Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("")}</em> : null}</code><i>:{l.line}</i></button>
-                  ))}</div> : <p className="dv-empty">{prev?.logs?.length ? "Nothing matches" : "No output"}</p>}
+                  {logs.length ? (() => {
+                    // Virtual list: only the rows in view (plus a margin) are in the page, so 5,000 lines scroll smoothly (B-79).
+                    const ROW = 24, first = Math.max(0, Math.floor(logTop / ROW) - 20), rows = logs.slice(first, first + 80);
+                    return <div className="dv-logs" style={{ height: logs.length * ROW }}>
+                      {rows.map((l, i) => (
+                        <button key={first + i} className="dv-log" data-level={l.level} style={{ top: (first + i) * ROW }} onClick={() => goto("main.py", l.line)}><time>{l.date}</time><span>{l.symbol ?? ""}</span>
+                          <code>{l.text}{l.fields ? <em>{Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("")}</em> : null}</code><i>:{l.line}</i></button>
+                      ))}</div>;
+                  })() : <p className="dv-empty">{prev?.logs?.length ? "Nothing matches" : "No output"}</p>}
                 </>
               ) : null}
               {tab === "plots" ? (

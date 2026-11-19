@@ -286,6 +286,11 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     { id: "param", group: "Edit", label: "Add parameter", ask: "Parameter name", run: (n) => { if (n && /^[a-z_][a-z0-9_]*$/i.test(n)) edit({ params: { ...spec.params, [n]: { value: 0 } } }); } },
     ...(["blocks", "formula", "english"] as const).map((m) => ({ id: `mode-${m}`, group: "Mode", label: { blocks: "Blocks", formula: "Formula", english: "Plain English" }[m], run: () => { switchUi("simple"); switchMode(m); } })),
     { id: "ui-dev", group: "Mode", label: "Dev: Python IDE", run: () => switchUi("dev") },
+    ...(ui === "dev" ? ([["studio.quickrun", "Run", "Quick run (top 50, 5 years)", "⌘↵"], ["studio.fullrun", "Run", "Full run (recorded)", "⌘⇧↵"], ["studio.profile", "Run", "Profile the preview", ""], ["studio.cancel", "Run", "Cancel run", "Esc"],
+      ["studio.debug", "Debug", "Start debugging", "F5"], ["studio.bp", "Debug", "Toggle breakpoint", "F9"], ["studio.step", "Debug", "Step one bar", "F10"], ["studio.stepback", "Debug", "Step back one bar", "⇧F10"],
+      ["studio.panel", "View", "Toggle panel", "⌘J"], ["studio.rail", "View", "Toggle side bar", "⌘B"], ["studio.split", "View", "Split editor", "⌘\\"], ["studio.files", "View", "Go to file", "⌘P"], ["studio.search", "View", "Search project", "⌘⇧F"], ["studio.docs", "View", "Docs", "F1"],
+      ["studio.newfile", "Editor", "New file", ""], ["studio.snippet", "Editor", "Save selection as snippet", ""], ["studio.snippets", "Editor", "Insert snippet", "⌘⇧S"]] as const)
+      .map(([cid, group, label, hint]) => ({ id: cid, group, label, hint: hint || undefined, run: () => window.dispatchEvent(new CustomEvent("studio:dev", { detail: cid })) })) : []),
     { id: "save", group: "Strategy", label: "Save version", hint: "⌘S", run: () => void save() },
     { id: "run", group: "Strategy", label: "Run backtest", hint: "⌘↵", run: () => void run() },
     { id: "new", group: "Strategy", label: "New blank strategy", run: () => router.push("/studio/build") },
@@ -444,7 +449,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         </section>
       ) : null}
       {ui === "dev" ? <DevIDE spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} onRun={() => void run()} onFullRun={() => void run()} compileProblems={compileProblems}
-        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={setPausedAt} font={font} quick={quick} onQuickRun={(l) => void quickRun(l)} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid">
+        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={setPausedAt} font={font} savedFiles={loaded ? { "main.py": (loaded.spec as Spec).code ?? "", ...(((loaded.spec as Spec).files as Record<string, string>) ?? {}) } : undefined} quick={quick} onQuickRun={(l) => void quickRun(l)} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid">
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
             {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m} className={`btn sm${mode === m ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}
