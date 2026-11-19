@@ -363,3 +363,6 @@
 .dv-tab .icon-btn[aria-label^="Pin"] { opacity: 0; }
 .dv-tab:hover .icon-btn[aria-label^="Pin"], .dv-tab[data-pinned] .icon-btn { opacity: .7; }
 .dv-dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--text-2); display: inline-block; }
+.dv-watch { display: flex; align-items: center; gap: 8px; padding: 3px 0; font: 12px var(--mono); }
+.dv-watch code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
+.dv-watch b { font-weight: 600; } .dv-watch b.error { color: var(--down); font-weight: 400; }

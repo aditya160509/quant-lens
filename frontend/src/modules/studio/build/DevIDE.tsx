@@ -94,6 +94,9 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [plotsOn, setPlotsOn] = useState<Record<string, boolean>>({});
   const [dbg, setDbg] = useState<Debug | null>(null);
   const [dbgDate, setDbgDate] = useState("");
+  const [watches, setWatches] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("studio:watch") ?? "[]"); } catch { return []; } });
+  const [watchRows, setWatchRows] = useState<{ expression: string; error: string | null; value: unknown; history: { date: string; value: number }[] }[]>([]);
+  const [watchIn, setWatchIn] = useState("");
   const [cond, setCond] = useState("");
   const [bps, setBps] = useState<Record<string, number[]>>({});
   const [q, setQ] = useState(""); const [rep, setRep] = useState("");
@@ -179,6 +182,10 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const re = finder(q, opt);
   const hits = re ? Object.entries(files).flatMap(([f, text]) => text.split("\n").flatMap((line, i) => { re.lastIndex = 0; return re.test(line) ? [{ file: f, line: i + 1, text: line }] : []; })) : [];
 
+  useEffect(() => {
+    if (!dbg || !watches.length) { setWatchRows([]); return; }
+    void studio<typeof watchRows>("POST", "/build/watch", { spec, symbol: dbg.symbol, date: dbg.date, expressions: watches }).then(setWatchRows, () => undefined);
+  }, [dbg, watches]); // eslint-disable-line react-hooks/exhaustive-deps
   const debug = (body: Record<string, unknown>) => {
     const date = String(body.date || dbg?.date || dbgDate || (prev?.trades.at(-1)?.entry_date ?? ""));
     if (!date) return toast.error("Pick a date to stop at");
@@ -509,6 +516,12 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
                         <KV rows={dbg.context} /></div>
                       <div><h4>{dbg.breakpoint ? "Locals and self" : "self"}</h4>
                         {Object.keys({ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }).length ? <KV rows={{ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }} /> : <p className="dv-empty">No attributes</p>}</div>
+                      <div><h4>Watch</h4>
+                        <form className="dv-dbar" onSubmit={(e) => { e.preventDefault(); if (!watchIn.trim()) return; const w = [...watches, watchIn.trim()]; setWatches(w); setWatchIn(""); try { localStorage.setItem("studio:watch", JSON.stringify(w)); } catch { /* private window */ } }}>
+                          <input className="input" aria-label="Watch expression" placeholder="rsi(close, 14)" value={watchIn} onChange={(e) => setWatchIn(e.target.value)} />
+                        </form>
+                        {watchRows.map((r, i) => <div key={r.expression} className="dv-watch"><code>{r.expression}</code><b className={r.error ? "error" : undefined} title={r.error ?? r.history.map((h) => `${h.date}  ${h.value}`).join("\n")}>{r.error ?? (typeof r.value === "number" ? +r.value.toFixed(4) : String(r.value))}</b>
+                          <button className="icon-btn" aria-label="Remove watch" onClick={() => { const w = watches.filter((_, k) => k !== i); setWatches(w); try { localStorage.setItem("studio:watch", JSON.stringify(w)); } catch { /* private window */ } }}>×</button></div>)}</div>
                       <div><h4>Orders</h4>{dbg.orders.length ? <DataTable rows={dbg.orders} /> : <p className="dv-empty">None this bar</p>}
                         <h4>Fills</h4>{dbg.fills.length ? <DataTable rows={dbg.fills} /> : <p className="dv-empty">None this bar</p>}</div>
                     </div>
