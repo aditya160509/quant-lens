@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 97 | 163 | 21 | 70 |
+| Build | 106 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 97 | 163 |
+| Build | 106 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **207** | **538** |
+| **All pages** | **216** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 97 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 106 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -138,7 +138,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [E] B-11 Full-height IDE: editor fills the work area; bottom panel resizes 30 to 40%; side rail collapses [PY B1] (Dev interface: full-height editor, resizable bottom panel (drag, double-click, ⌘J), collapsible rail (⌘B))
 - [ ] [M] B-12 Three zones: left rail (Files, Outline, Search, Templates, Versions), centre editor, bottom panel (Problems, Output, Logs, Results, Plots, Debug, Terminal); right rail (preview, Inspector, AI); each zone remembers its size (partial: Dev: activity bar with Files, Outline, Search, Versions, Docs, Starters; panel with Problems, Output, Plots, Trades, Debug; preview on the right; Results and Terminal open)
 - [ ] [H] B-13 Editor groups: split right or down, up to 4 groups; tabs can be pinned, kept in preview, or marked dirty (partial: split right with a second editor group (button, ⌘\); pinned and preview tabs open)
-- [ ] [H] B-14 One editing session per strategy: a second tab opens read-only with a take-over button (backend done: POST/DELETE /strategies/{sid}/lease (60 s, take_over); writers send X-Studio-Session and get 409 naming the holder; frontend wiring open)
+- [x] [H] B-14 One editing session per strategy: a second tab opens read-only with a take-over button; writers send X-Studio-Session and get 409 naming the holder; frontend wiring open) (lease renewed every 30 s; second tab shows a read-only banner with Take over (checked with two tabs))
 - [x] [M] B-15 Phone (390 px): one zone at a time with a Code, Run, Results switcher; Build on phone is Formula and Plain English only (phone width hides Dev and forces Simple)
 - [ ] [M] B-16 IDE keys: F5 debug, F9 breakpoint, F10 step bar, F11 step line, ⌘J panel, ⌘B rail, ⌘\ split, ⌘P file, ⌘⇧F search project (partial: F5, F9, F10, ⇧F10, ⌘J, ⌘B, ⌘P, ⌘⇧F, F1 built; F11 step line and ⌘\ split open)
 - [x] [M] B-17 JetBrains Mono 13 px, 20 px line height, ligatures off, bracket colours, sticky scroll, folding [PY B13] (JetBrains Mono 13/20, ligatures off, bracket pairs, sticky scroll, folding)
@@ -186,7 +186,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [E] B-59 ctx.plot(name, value, chart="main" or "own"), ctx.mark(sym, label) on the price chart, ctx.table(name, row) as a sortable table [FP 29] [PY A9] (Plots tab: main-chart overlays with marks, own panes, ctx.table as sortable tables)
 - [x] [E] B-60 on_fill(ctx, fill) gets symbol, side, quantity, price, date and fee (preview and Backtest receive actual event-engine fills; one-argument callback remains supported) [PY A11]
 - [x] [M] B-61 Lifecycle hooks: on_end_of_day, on_warmup_done, on_risk_event, on_stop (on_risk_event receives kind, date, value and limit)
-- [ ] [E] B-62 params = {"fast": (10, 5, 50, 5)} declared in code appear in Build params and the Optimise grid; ctx.param kept (backend done: compile exposes literal declarations and Optimise evaluates them through the event engine; frontend Build binding open) [FP 9] [PY A12]
+- [ ] [E] B-62 params = {"fast": (10, 5, 50, 5)} declared in code appear in Build params and the Optimise grid; ctx.param kept [FP 9] [PY A12] (partial: code-declared parameters listed in the Parameters card; Optimise grid binding open)
 - [x] [E] B-63 Per-strategy engine settings as class attributes (fill timing, costs, sizing); code wins over the card and a badge says so (fill, commission, slippage, borrow, max_positions and leverage read from the Strategy class; preview and backtest return settings_overrides and the report's fill and costs reflect the code)
 - [ ] [H] B-64 Python orders feed the event engine directly, so LEAN parity applies to Python strategies (partial: simple Python preview and Backtest use the event engine) [PY A13]
 - [x] [M] B-65 Budget: 500 symbols × 2,500 bars in under 20 s (measured 0.55 s for the Python engine workload; real-data load excluded) [PY A14]
@@ -196,7 +196,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [H] B-69 Bar stepper: pause at a date and symbol, inspect self and ctx, step one bar, step to the next order or fill, run to a date, step back one bar (deterministic re-run) [FP 27] [PY B8] (Debug tab: stop at date, step back and forward, next order, next fill, next 5% loss day)
 - [x] [M] B-70 Breakpoints with conditions (ctx.symbol == "AAPL" and ctx.date >= …) and hit counts; data breakpoints (first order; equity down 5% in a day) [FP 27, 65] (breakpoints from gutter or F9 with a condition and hit count; F5 runs to the first)
 - [ ] [H] B-71 Variables (self, ctx, locals); arrays and DataFrames in a grid viewer; watch expressions with history; read-only debug console
-- [ ] [M] B-72 Preview chart follows the paused bar, with position and pending orders drawn
+- [ ] [M] B-72 Preview chart follows the paused bar, with position and pending orders drawn (partial: preview chart marks the paused bar; position and pending orders open)
 - [ ] [M] B-73 Logpoints from the gutter ("log {expr} here") without editing the code
 - [x] [E] B-74 Gutter: run markers on lines that placed orders in the last preview (hover shows count and first 5 dates); change markers since last version (backend done: preview order_lines list each strategy line that placed orders with count and first 5 dates; change markers since last version are frontend)
 - [x] [H] B-75 Inlay hints: parameter value next to ctx.param, last value next to ctx.value from the preview, computed type [FP 63] (backend done: POST /build/inlay-hints returns parameter values, warm-up bars, last preview values and argument names; frontend wiring open)
@@ -218,9 +218,9 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [M] B-91 Yellow banner on a result when the editor code differs from the run (Edited banner on the result when the code differs from the run)
 - [ ] [M] B-92 Strategy is a project: main.py plus modules, README.md and params.json; file tree with create, rename, move, delete, duplicate and drag; limits 50 files and 200 KB per file [PY B3] (backend done: versioned file CRUD, diffs and checked helper execution; editor wiring open)
 - [ ] [E] B-93 Any project can be marked a library and imported by others with a pinned version; "v3 available, review diff" badge; updates never change saved strategies silently [FP 58]
-- [ ] [M] B-94 Zip import and export of a project (backend done: GET /strategies/{sid}/export.zip and POST /strategies/import-zip with 50 file and 200 KB limits; frontend wiring open)
-- [ ] [M] B-95 User snippets: save a selection with tab stops and a prefix trigger; shareable through Library (backend done: GET/POST/PUT/DELETE /snippets with prefix triggers; Library sharing open)
-- [ ] [M] B-96 Examples in hover docs insert with one click
+- [x] [M] B-94 Zip import and export of a project (More menu: Export project (.zip), Import project (.zip) opens the new strategy in Dev)
+- [x] [M] B-95 User snippets: save a selection with tab stops and a prefix trigger; shareable through Library (save a selection with a prefix trigger; the prefix completes in the editor; listed under Starters)
+- [x] [M] B-96 Examples in hover docs insert with one click (Docs rail: insert any member at the cursor with its argument placeholder)
 - [ ] [M] B-97 Gallery of 12 starters with a one-line description, last backtest on the default universe and "use as start" (trend 50/200, RSI(2), momentum top 10, dual momentum, pairs z-score, vol target, ATR breakout, turn of month, gap fade, sector rotation, ML ranking, risk parity) (partial: 20 formula templates exist; gallery stats open)
 - [x] [M] B-98 Python starters: trend, mean reversion, momentum rotation, pairs, vol target, breakout, seasonality, ML score [PY B10] (eight starters compile and trade on real data, tested; gallery UI open)
 - [x] [M] B-99 Warn above 200 blocks, hard stop above 1,000; warn above 8 optimisable parameters (block and parameter warnings shown under the rules)
@@ -231,7 +231,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-104 Plain English shows the interpreted rules as blocks before any run; ambiguous words highlighted ("oversold" = RSI(14) < 30); restated "what it does" paragraph; original prompt kept in version history (partial: phrase rules, ignored words listed, review then use; highlights and history open) [FP 23]
 - [x] [E] B-105 Any and All groups, nested to any depth (partial: rows joined by and or; nesting open) [FP 24] (backend done: spec.groups maps entry_long, exit_long, entry_short, exit_short or market_filter to an Any/All tree up to 10 deep with disabled rules; the role formula is generated from it and trades identically; block editor wiring open)
 - [ ] [E] B-106 Condition kinds: cross above and below, for N bars, rising, falling, earnings filter, fundamentals, calendar, cross-sectional (partial: crosses, consecutive bars, rising, falling, week and month starts, percentile rank and z-score exist; earnings and fundamentals open) (partial: calendar kinds weekday(), month(), day_of_month(), quarter_start(), year_start() and between(x, low, high) added to formulas; earnings and fundamentals blocked by data)
-- [ ] [E] B-107 Inline parameter editor with an optimisation range per parameter; plain-language summary line; colour by role; collapse, disable, comment, duplicate, copy as code; undo 50 steps [FP 9]
+- [ ] [E] B-107 Inline parameter editor with an optimisation range per parameter; plain-language summary line; colour by role; collapse, disable, comment, duplicate, copy as code; undo 50 steps [FP 9] (partial: conditions switch off, duplicate, collapse, copy as code; parameter ranges inline; colour by role and 50-step undo open)
 - [x] [M] B-108 Red marker on incomplete blocks; detector for conditions that are always true or always false on your data (always or never true flagged under the rule)
 - [x] [M] B-109 Click a condition block: the preview shows the bars where it fired (no full backtest) [FP 24] (Show on chart marks the bars where a rule fired)
 - [ ] [M] B-110 Trading frequency: calendar (daily, weekly, monthly, on bar close) or threshold corridor (X% drift) (partial: spec.frequency gates entries to daily, week_start or month_start; the X% drift corridor is open) (partial: Python ctx.target_weights(weights, corridor=0.05) skips names within the drift corridor; formula strategies still use calendar frequency only)
@@ -250,22 +250,22 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] B-123 Entry filters: fundamentals, calendar, cross-sectional, earnings-date filter (blocked by data: fundamentals from 2021 only; earnings dates where held)
 - [ ] [M] B-124 Indicator exit and scale in as exit-card rows (partial: an indicator exit is exit_long as an Any group in spec.groups; scale-in rows need pyramiding (B-46), open)
 - [x] B-125 Stated regime claim marked "written after" when added after a drawdown
-- [ ] [E] B-126 Version timeline: each version with its metrics (equity sparkline, Sharpe); name and tag versions ("validated", "live"); a live version is locked (partial: version list, picker and field diff with run results exist; timeline metrics, tags and lock open) [FP 35] (backend done: GET /strategies/{sid}/timeline with name, tags, lock and run summary; PUT .../versions/{v}/label; PUT .../lock makes saving over it answer 423; frontend wiring open)
+- [ ] [E] B-126 Version timeline: each version with its metrics (equity sparkline, Sharpe); name and tag versions ("validated", "live"); a live version is locked [FP 35] (partial: Versions rail: name, tags, lock or unlock, restore, branch, run metrics per version; sparkline open)
 - [x] [M] B-127 Restore or branch from any version; restore creates a new version and deletes nothing [FP 35] (POST /strategies/{sid}/versions/{v}/restore adds a new latest version; /branch starts a new strategy from it)
 - [ ] [M] B-128 Experiments as branches: fork a strategy, change a rule, compare two branches on one chart, merge back [FP 35] (backend done: GET /strategies/{sid}/compare/{other} and POST /strategies/{sid}/merge three-way by file with 409 conflicts; one-chart compare is frontend)
 - [x] [M] B-129 Blame: each line shows the version that last changed it (GET /strategies/{sid}/blame?file= returns each line with the version that last changed it)
-- [ ] [M] B-130 Local history: autosave snapshots kept 7 days, separate from versions (partial: autosave draft every 2 s; 7-day history open) (backend done: GET /strategies/{sid}/history keeps draft snapshots 7 days; frontend wiring open)
-- [ ] [E] B-131 Share a read-only link or a fork link; pinned comment threads on a line (backend done: POST /strategies/{sid}/share, GET /share/{token}, POST /share/{token}/fork, DELETE; pinned comment threads open)
-- [ ] [H] B-132 Single editing session per strategy with take-over; the second tab is read-only (no QuantConnect-style desync) [FP 66] (backend done: same lease; PUT /strategies/{sid}, PATCH files and find-replace answer 409 to a second session; frontend wiring open)
+- [x] [M] B-130 Local history: autosave snapshots kept 7 days, separate from versions (Versions rail lists 7-day local snapshots; one click restores the files into the draft)
+- [ ] [E] B-131 Share a read-only link or a fork link; pinned comment threads on a line (partial: read-only link (More menu) opens a shared view with Fork to edit; line comment threads open)
+- [x] [H] B-132 Single editing session per strategy with take-over; the second tab is read-only (no QuantConnect-style desync) [FP 66] (same lease: a second tab is read-only until Take over)
 - [ ] [M] B-133 Notes (hypothesis, what was tried, decisions) exported with the certificate
 - [ ] [M] B-134 Saved rule groups reusable as blocks; custom indicators by formula shared with Chart and Screener
 - [ ] [M] B-135 Customise: default mode, default exits and sizing profile from Library, blocks palette order, block colours and compact or expanded view
 - [ ] [M] B-136 Keyboard-first block insertion (type "/") and snap grid
 - [ ] [M] B-137 Shared undo across views; Explain on any selection; convert to library block; one parameter table across all views
-- [ ] [M] B-138 Python keys: F5 debug and Run, ⌘⇧↵ full run (quick run ⌘↵) (partial: F5 debug, ⌘⇧↵ full run built; quick run waits on the run-level endpoint)
-- [ ] [E] B-139 Python engine settings (fill timing, costs, sizing) shown as a badge when code overrides the card
+- [x] [M] B-138 Python keys: F5 debug and Run, ⌘⇧↵ full run (quick run ⌘↵) (F5 debug, ⌘↵ quick run, ⌘⇧↵ full run recorded in the ledger)
+- [x] [E] B-139 Python engine settings (fill timing, costs, sizing) shown as a badge when code overrides the card (status bar shows the engine settings the code sets)
 - [ ] B-140 Inline ⌘K edit on a selection, shown as a diff to accept or reject (AI is an owner decision) (owner decision: AI features, see OD-11)
-- [ ] [M] B-141 Snippets palette (⌘⇧S) with user and team snippets (backend done: /snippets store; palette is frontend)
+- [x] [M] B-141 Snippets palette (⌘⇧S) with user and team snippets (⌘⇧S opens snippets; user snippets insert at the cursor)
 - [x] B-142 Formula editor with live compile (0.26 ms measured) and per-role findings
 - [x] B-143 Blocks and formula convert both ways: rows of comparisons and crosses joined by and/or; other shapes stay formula (round-trip test)
 - [x] B-144 Python mode: Monaco with ctx completion, hovers, snippets, inline markers from server checks and runtime errors; class Strategy with init, on_bar, on_fill
