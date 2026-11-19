@@ -348,3 +348,4 @@
 .gx-add { display: flex; gap: 6px; align-items: center; }
 .gx-add .input { width: auto; height: 26px; font-size: 12px; }
 .gx-folded { font: 11.5px var(--mono); color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bd-udiff span[data-k="add"] { color: var(--up); } .bd-udiff span[data-k="del"] { color: var(--down); } .bd-udiff span[data-k="hunk"] { color: var(--text-3); }

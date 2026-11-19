@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 106 | 163 | 21 | 70 |
+| Build | 107 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 106 | 163 |
+| Build | 107 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **216** | **538** |
+| **All pages** | **217** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 106 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 107 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -190,7 +190,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [E] B-63 Per-strategy engine settings as class attributes (fill timing, costs, sizing); code wins over the card and a badge says so (fill, commission, slippage, borrow, max_positions and leverage read from the Strategy class; preview and backtest return settings_overrides and the report's fill and costs reflect the code)
 - [ ] [H] B-64 Python orders feed the event engine directly, so LEAN parity applies to Python strategies (partial: simple Python preview and Backtest use the event engine) [PY A13]
 - [x] [M] B-65 Budget: 500 symbols × 2,500 bars in under 20 s (measured 0.55 s for the Python engine workload; real-data load excluded) [PY A14]
-- [ ] [M] B-66 Default mode for new strategies (simple or portfolio) in Customise
+- [x] [M] B-66 Default mode for new strategies (simple or portfolio) in Customise (Customise: Build opens in Simple or Dev, Simple starts in Blocks, Formula or Plain English)
 - [ ] B-67 Refuse formulas or Python that read fundamentals for dates before 2021 (blocked by data: fundamentals held from 2021 only)
 - [x] [E] B-68 Runtime guard: positive history index raises in backtest (verified with source line and offending offset)
 - [x] [H] B-69 Bar stepper: pause at a date and symbol, inspect self and ctx, step one bar, step to the next order or fill, run to a date, step back one bar (deterministic re-run) [FP 27] [PY B8] (Debug tab: stop at date, step back and forward, next order, next fill, next 5% loss day)
@@ -224,7 +224,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-97 Gallery of 12 starters with a one-line description, last backtest on the default universe and "use as start" (trend 50/200, RSI(2), momentum top 10, dual momentum, pairs z-score, vol target, ATR breakout, turn of month, gap fade, sector rotation, ML ranking, risk parity) (partial: 20 formula templates exist; gallery stats open)
 - [x] [M] B-98 Python starters: trend, mean reversion, momentum rotation, pairs, vol target, breakout, seasonality, ML score [PY B10] (eight starters compile and trade on real data, tested; gallery UI open)
 - [x] [M] B-99 Warn above 200 blocks, hard stop above 1,000; warn above 8 optimisable parameters (block and parameter warnings shown under the rules)
-- [ ] [E] B-100 Customise: personal templates, parameter ranges per strategy, default sizing and costs per user, editor font and keymap
+- [ ] [E] B-100 Customise: personal templates, parameter ranges per strategy, default sizing and costs per user, editor font and keymap (partial: Customise: default exits and sizing for new strategies, editor font size; personal templates and keymap open)
 - [ ] [M] B-101 Monaco palette and the app palette merged into one list, grouped Editor, Run, View, Studio (partial: Studio commands added to the Monaco palette; app palette not merged)
 - [ ] [E] B-102 Four authoring modes on one spec: blocks, formula, Python, plain English; the mode switch never loses work (partial: all four exist; code-only badge and switch marking open) [FP 22]
 - [ ] [E] B-103 Blocks and formula show generated Python side by side (read only); formula to Python is one way, original kept; hand edits that cannot be represented set a code-only badge [FP 22] (partial: Python view under the rules (read only), Python runs badge; side-by-side open)
@@ -252,14 +252,14 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] B-125 Stated regime claim marked "written after" when added after a drawdown
 - [ ] [E] B-126 Version timeline: each version with its metrics (equity sparkline, Sharpe); name and tag versions ("validated", "live"); a live version is locked [FP 35] (partial: Versions rail: name, tags, lock or unlock, restore, branch, run metrics per version; sparkline open)
 - [x] [M] B-127 Restore or branch from any version; restore creates a new version and deletes nothing [FP 35] (POST /strategies/{sid}/versions/{v}/restore adds a new latest version; /branch starts a new strategy from it)
-- [ ] [M] B-128 Experiments as branches: fork a strategy, change a rule, compare two branches on one chart, merge back [FP 35] (backend done: GET /strategies/{sid}/compare/{other} and POST /strategies/{sid}/merge three-way by file with 409 conflicts; one-chart compare is frontend)
+- [ ] [M] B-128 Experiments as branches: fork a strategy, change a rule, compare two branches on one chart, merge back [FP 35] (partial: More › Compare and merge: rule and file diffs, latest results side by side, merge a branch back with ours or theirs on conflicts; one shared chart open)
 - [x] [M] B-129 Blame: each line shows the version that last changed it (GET /strategies/{sid}/blame?file= returns each line with the version that last changed it)
 - [x] [M] B-130 Local history: autosave snapshots kept 7 days, separate from versions (Versions rail lists 7-day local snapshots; one click restores the files into the draft)
 - [ ] [E] B-131 Share a read-only link or a fork link; pinned comment threads on a line (partial: read-only link (More menu) opens a shared view with Fork to edit; line comment threads open)
 - [x] [H] B-132 Single editing session per strategy with take-over; the second tab is read-only (no QuantConnect-style desync) [FP 66] (same lease: a second tab is read-only until Take over)
 - [ ] [M] B-133 Notes (hypothesis, what was tried, decisions) exported with the certificate
 - [ ] [M] B-134 Saved rule groups reusable as blocks; custom indicators by formula shared with Chart and Screener
-- [ ] [M] B-135 Customise: default mode, default exits and sizing profile from Library, blocks palette order, block colours and compact or expanded view
+- [ ] [M] B-135 Customise: default mode, default exits and sizing profile from Library, blocks palette order, block colours and compact or expanded view (partial: Customise: default interface and mode, default exits and sizing; palette order and block colours open)
 - [ ] [M] B-136 Keyboard-first block insertion (type "/") and snap grid
 - [ ] [M] B-137 Shared undo across views; Explain on any selection; convert to library block; one parameter table across all views
 - [x] [M] B-138 Python keys: F5 debug and Run, ⌘⇧↵ full run (quick run ⌘↵) (F5 debug, ⌘↵ quick run, ⌘⇧↵ full run recorded in the ledger)

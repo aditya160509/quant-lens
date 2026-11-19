@@ -65,3 +65,11 @@ export function fromFormula(text: string): Row[] | null {
 export type Leaf = { rule: string; enabled?: boolean };
 export type Group = { op: "all" | "any"; items: Item[] };
 export type Item = Leaf | Group | string;
+
+/** Field-by-field changes between two specs, flattened to dotted keys. */
+export function specDiff(a: Record<string, unknown>, b: Record<string, unknown>): [string, string, string][] {
+  const flat = (o: unknown, pre = ""): Record<string, string> => (o && typeof o === "object" && !Array.isArray(o)
+    ? Object.assign({}, ...Object.entries(o).map(([k, v]) => flat(v, pre ? `${pre}.${k}` : k))) : { [pre]: o === null || o === undefined ? "" : typeof o === "object" ? JSON.stringify(o) : String(o) });
+  const fa = flat(a), fb = flat(b);
+  return [...new Set([...Object.keys(fa), ...Object.keys(fb)])].filter((k) => k !== "blocks" && (fa[k] ?? "") !== (fb[k] ?? "")).map((k) => [k, fa[k] ?? "", fb[k] ?? ""]);
+}

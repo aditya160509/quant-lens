@@ -1,6 +1,6 @@
 "use client";
 
-import { Command as CommandIcon, Download, GitBranch, Link2, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
+import { Command as CommandIcon, Download, GitBranch, GitMerge, Settings2, Link2, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
@@ -11,12 +11,13 @@ import { studio, useTemplates, type Compiled, type Ledger } from "../api";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { TrialChip } from "../RunHeader";
 import { GroupEditor, groupFormula, toGroup } from "./BlockRows";
+import { BranchDialog } from "./Branches";
 import { MenuItem, PopMenu, Segmented, type MenuAt } from "@/workspace/ui";
 import { STUDIO_BASE } from "../base";
 import type { Problem } from "./CodeEditor";
 import { DevIDE, type DevPreview, type QuickRun, type Saved } from "./DevIDE";
 import { Palette, type Command } from "./Palette";
-import type { Group } from "./blocks";
+import { specDiff, type Group } from "./blocks";
 import "../studio.css";
 
 type Param = { value: number; min?: number | null; max?: number | null; step?: number | null; log?: boolean };
@@ -42,6 +43,8 @@ const EXITS: [string, string, boolean][] = [["stop", "Stop", true], ["stop_atr",
   ["breakeven", "Breakeven at", true], ["scale_at", "Scale out at", true], ["scale_frac", "Scale out share", true]];
 const LIMITS: [string, string, boolean][] = [["max_drawdown", "Max drawdown", true], ["max_drawdown_months", "Max drawdown months", false], ["min_trades", "Min trades", false],
   ["min_years", "Min years", false], ["max_beta", "Max beta", false], ["max_cost_share", "Max cost share", true], ["min_start_pass", "Min start dates passing", true]];
+type Defaults = { ui: "simple" | "dev"; mode: "blocks" | "formula" | "english"; exits: Record<string, number>; sizing: Spec["sizing"] };
+const readDefaults = (): Partial<Defaults> => { try { return JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as Partial<Defaults>; } catch { return {}; } };
 const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : "Failed");
 
 /** Percent fields are typed as percent and stored as fractions. */
@@ -54,14 +57,6 @@ function Num({ label, value, pct, onChange, empty }: { label: string; value: num
       {pct ? <i>%</i> : null}
     </label>
   );
-}
-
-/** Field-by-field changes between two specs, flattened to dotted keys. */
-function specDiff(a: Spec, b: Spec): [string, string, string][] {
-  const flat = (o: unknown, pre = ""): Record<string, string> => (o && typeof o === "object" && !Array.isArray(o)
-    ? Object.assign({}, ...Object.entries(o).map(([k, v]) => flat(v, pre ? `${pre}.${k}` : k))) : { [pre]: o === null || o === undefined ? "" : typeof o === "object" ? JSON.stringify(o) : String(o) });
-  const fa = flat(a), fb = flat(b);
-  return [...new Set([...Object.keys(fa), ...Object.keys(fb)])].filter((k) => k !== "blocks" && (fa[k] ?? "") !== (fb[k] ?? "")).map((k) => [k, fa[k] ?? "", fb[k] ?? ""]);
 }
 
 /** Build: write the rule, see it compile as you type, save immutable versions, run. */
@@ -77,12 +72,13 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const [more, setMore] = useState<MenuAt | null>(null);
   const session = useRef(typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random()));
   const zipInput = useRef<HTMLInputElement>(null);
-  const [mode, setMode] = useState<"blocks" | "formula" | "english">("formula");
+  const [mode, setMode] = useState<"blocks" | "formula" | "english">(() => (typeof window === "undefined" ? "formula" : readDefaults().mode ?? "formula"));
+  const [dialog, setDialog] = useState<"branches" | "customise" | null>(null);
   const [ui, setUiState] = useState<"simple" | "dev">(() => {
     if (typeof window === "undefined") return "simple";
     const q = new URLSearchParams(window.location.search).get("ui");
     if (q === "dev" || q === "simple") return q;
-    try { return localStorage.getItem("studio:build:ui") === "dev" ? "dev" : "simple"; } catch { return "simple"; }
+    try { return (localStorage.getItem("studio:build:ui") ?? readDefaults().ui) === "dev" ? "dev" : "simple"; } catch { return "simple"; }
   });
   const [english, setEnglish] = useState("");
   const [symbol, setSymbol] = useState("SPY");
@@ -138,7 +134,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
       void studio<{ name: string; files: Record<string, string> }>("GET", `/share/${token}`).then((r) => { const { "main.py": code = "", ...files } = r.files; setSpec({ ...BLANK, name: r.name, code, files }); setReadOnly({ kind: "share", token }); setUi("dev"); }, fail);
       return;
     }
-    if (id) void load(id); else { setLoaded(null); setSpec(BLANK); }
+    if (id) void load(id); else { const d = readDefaults(); setLoaded(null); setSpec({ ...BLANK, exits: { ...BLANK.exits, ...d.exits }, sizing: { ...BLANK.sizing, ...d.sizing } }); }
   }, [id, load]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // One editing session per strategy (B-14, B-132): renew a 60 s lease every 30 s; a second tab opens read-only.
@@ -396,6 +392,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           <MenuItem icon={<GitBranch size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) void studio<{ id: string }>("POST", `/strategies/${loaded.id}/versions/${loaded.version}/branch`).then((b) => router.push(`/studio/build/${b.id}`), fail); }}>Branch from v{loaded?.version ?? 1}</MenuItem>
           <MenuItem icon={<Download size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) window.location.assign(`${STUDIO_BASE}/strategies/${loaded.id}/export.zip`); }}>Export project (.zip)</MenuItem>
           <MenuItem icon={<Upload size={13} />} onClick={() => { setMore(null); zipInput.current?.click(); }}>Import project (.zip)</MenuItem>
+          <MenuItem icon={<GitMerge size={13} />} disabled={!loaded} onClick={() => { setMore(null); setDialog("branches"); }}>Compare and merge…</MenuItem>
+          <MenuItem icon={<Settings2 size={13} />} onClick={() => { setMore(null); setDialog("customise"); }}>Customise…</MenuItem>
           <div className="hd">Editor font</div>
           <div style={{ padding: "2px 8px 8px" }}><Segmented<number> label="Editor font size" value={font} onChange={(v) => { setFont(v); try { localStorage.setItem("studio:dev:font", String(v)); } catch { /* blocked */ } }} options={[12, 13, 14, 15].map((v) => ({ value: v, label: String(v) }))} /></div>
         </PopMenu>
@@ -409,6 +407,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
       </header>
 
       <Palette open={palette} onClose={() => setPalette(false)} commands={commands} />
+      {dialog === "branches" && loaded ? <BranchDialog id={loaded.id} name={spec.name} spec={spec} onClose={() => setDialog(null)} onMerged={(t) => router.push(`/studio/build/${t}`)} /> : null}
+      {dialog === "customise" ? <CustomiseDialog spec={spec} onClose={() => setDialog(null)} /> : null}
       {recover ? (
         <div className="bd-ro" role="status"><b>Unsaved edits</b><span>from this browser, {new Date(recover.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
           <button className="btn sm primary" onClick={() => { edit(recover.spec); setRecover(null); }}>Restore</button>
@@ -546,5 +546,37 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         </section>
       </div>}
     </div>
+  );
+}
+
+/** Defaults for new strategies and how Build opens (B-66, B-100, B-135). Kept in this browser. */
+function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const [d, setD] = useState<Partial<Defaults>>(readDefaults);
+  useEffect(() => { ref.current?.showModal(); }, []);
+  const save = () => { try { localStorage.setItem("studio:build:defaults", JSON.stringify(d)); localStorage.removeItem("studio:build:ui"); } catch { /* blocked */ } toast.success("Defaults saved"); ref.current?.close(); };
+  const exits = { ...BLANK.exits, ...d.exits }, sizing = { ...BLANK.sizing, ...d.sizing };
+  return (
+    <dialog ref={ref} className="sh-import" aria-label="Customise Build" onClose={onClose} onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
+      <b style={{ fontSize: 15 }}>Customise Build</b>
+      <div className="bd-nums">
+        <label className="bd-num"><span>Open in</span><Segmented<"simple" | "dev"> label="Default interface" value={d.ui ?? "simple"} onChange={(ui) => setD({ ...d, ui })} options={[{ value: "simple", label: "Simple" }, { value: "dev", label: "Dev" }]} /></label>
+        <label className="bd-num"><span>Simple starts in</span><select className="input" value={d.mode ?? "formula"} onChange={(e) => setD({ ...d, mode: e.target.value as Defaults["mode"] })}><option value="blocks">Blocks</option><option value="formula">Formula</option><option value="english">Plain English</option></select></label>
+      </div>
+      <h3 style={{ margin: 0, fontSize: 13 }}>New strategy exits</h3>
+      <div className="bd-nums">{EXITS.map(([k, l, p]) => <Num key={k} label={l} pct={p} value={exits[k]} onChange={(v) => setD({ ...d, exits: { ...exits, [k]: v ?? 0 } })} />)}</div>
+      <h3 style={{ margin: 0, fontSize: 13 }}>New strategy sizing</h3>
+      <div className="bd-nums">
+        <label className="bd-num"><span>Mode</span><select className="input" value={sizing.mode} onChange={(e) => setD({ ...d, sizing: { ...sizing, mode: e.target.value } })}>
+          <option value="equal">Equal</option><option value="pct_equity">% of equity</option><option value="risk">Risk per trade</option><option value="vol_target">Vol target</option><option value="score">Weight by score</option><option value="kelly">Kelly (capped)</option></select></label>
+        <Num label="Value" value={sizing.value} onChange={(v) => setD({ ...d, sizing: { ...sizing, value: v ?? 0 } })} />
+        <Num label="Max positions" value={sizing.max_positions} onChange={(v) => setD({ ...d, sizing: { ...sizing, max_positions: v ?? 0 } })} />
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button className="btn" onClick={() => setD({ ...d, exits: spec.exits, sizing: spec.sizing })}>Use this strategy's</button>
+        <button className="btn" onClick={() => ref.current?.close()}>Cancel</button>
+        <button className="btn primary" onClick={save}>Save</button>
+      </div>
+    </dialog>
   );
 }
