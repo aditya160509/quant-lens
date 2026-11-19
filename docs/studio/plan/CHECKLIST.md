@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 129 | 163 | 21 | 70 |
+| Build | 130 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 129 | 163 |
+| Build | 130 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **239** | **538** |
+| **All pages** | **240** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 129 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 130 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -231,7 +231,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [M] B-104 Plain English shows the interpreted rules as blocks before any run; ambiguous words highlighted ("oversold" = RSI(14) < 30); restated "what it does" paragraph; original prompt kept in version history (partial: phrase rules, ignored words listed, review then use; highlights and history open) [FP 23] (backend done: POST /plain-english also returns assumptions [{word, start, end, meaning, formula}] for oversold, overbought, uptrend, downtrend, breakout, pullback, golden cross, death cross and volume spike with offsets into the input, plus restated from compile.describe; unmatched keeps the rest; highlight UI is frontend)
 - [x] [E] B-105 Any and All groups, nested to any depth (partial: rows joined by and or; nesting open) [FP 24] (backend done: spec.groups maps entry_long, exit_long, entry_short, exit_short or market_filter to an Any/All tree up to 10 deep with disabled rules; the role formula is generated from it and trades identically; block editor wiring open)
 - [ ] [E] B-106 Condition kinds: cross above and below, for N bars, rising, falling, earnings filter, fundamentals, calendar, cross-sectional (partial: crosses, consecutive bars, rising, falling, week and month starts, percentile rank and z-score exist; earnings and fundamentals open) (partial: calendar kinds weekday(), month(), day_of_month(), quarter_start(), year_start() and between(x, low, high) added to formulas; earnings and fundamentals blocked by data)
-- [ ] [E] B-107 Inline parameter editor with an optimisation range per parameter; plain-language summary line; colour by role; collapse, disable, comment, duplicate, copy as code; undo 50 steps [FP 9] (partial: conditions switch off, duplicate, collapse, copy as code; parameter ranges inline; colour by role; 50-step undo open)
+- [x] [E] B-107 Inline parameter editor with an optimisation range per parameter; plain-language summary line; colour by role; collapse, disable, comment, duplicate, copy as code; undo 50 steps [FP 9] (conditions switch off, duplicate, collapse, copy as code; parameter ranges inline; colour by role; ⌘Z / ⇧⌘Z over the last 50 steps)
 - [x] [M] B-108 Red marker on incomplete blocks; detector for conditions that are always true or always false on your data (always or never true flagged under the rule)
 - [x] [M] B-109 Click a condition block: the preview shows the bars where it fired (no full backtest) [FP 24] (Show on chart marks the bars where a rule fired)
 - [ ] [M] B-110 Trading frequency: calendar (daily, weekly, monthly, on bar close) or threshold corridor (X% drift) (partial: spec.frequency gates entries to daily, week_start or month_start; the X% drift corridor is open) (partial: Python ctx.target_weights(weights, corridor=0.05) skips names within the drift corridor; formula strategies still use calendar frequency only)
