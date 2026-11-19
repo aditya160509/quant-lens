@@ -701,6 +701,24 @@ def update_project_file(sid: str, request: ProjectFileUpdate, x_studio_actor: st
     return {"version": versioned["version"], "files": _spec(versioned["spec"]).project_files()}
 
 
+@router.post("/strategies/{sid}/versions/{version}/restore")
+def restore_version(sid: str, version: int, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Copy an old version to a new latest one; nothing is deleted."""
+    return _known(store.restore, sid, version, _actor(x_studio_actor))
+
+
+@router.post("/strategies/{sid}/versions/{version}/branch")
+def branch_version(sid: str, version: int, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Start a new strategy from an old version."""
+    return _known(store.branch, sid, version, _actor(x_studio_actor))
+
+
+@router.get("/strategies/{sid}/blame")
+def blame_file(sid: str, file: str = "main.py") -> list[dict[str, Any]]:
+    """Each line of the latest file with the version that last changed it."""
+    return _known(store.blame, sid, file)
+
+
 @router.put("/strategies/{sid}/draft")
 def save_draft(sid: str, request: SpecRequest) -> dict[str, Any]:
     _known(store.get, sid)

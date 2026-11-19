@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import sqlite3
 import threading
@@ -202,6 +203,32 @@ def duplicate(sid: str, actor: str = "human") -> dict:
     out = create(spec, actor, src["folder"])
     log(actor, "duplicate", out["id"], {"from": sid})
     return out
+
+
+def restore(sid: str, version: int, actor: str = "human") -> dict:
+    """Restore an old version as a new latest one; nothing is deleted (B-127)."""
+    return save_version(sid, Strategy(**get(sid, version)["spec"]), actor)
+
+
+def branch(sid: str, version: int, actor: str = "human") -> dict:
+    """A new strategy whose version 1 is `version` of this one."""
+    src = get(sid, version)
+    out = create(Strategy(**{**src["spec"], "name": f"{src['name']} branch"}), actor, src["folder"])
+    log(actor, "branch", out["id"], {"from": sid, "version": version})
+    return out
+
+
+def blame(sid: str, name: str = "main.py") -> list[dict]:
+    """For each line of the latest file, the version that last changed it (B-129)."""
+    owners: list[int] = []
+    previous: list[str] = []
+    for row in get(sid)["versions"]:
+        lines = (Strategy(**get(sid, row["version"])["spec"]).project_files().get(name) or "").splitlines()
+        merged: list[int] = []
+        for tag, a0, a1, b0, b1 in difflib.SequenceMatcher(None, previous, lines, autojunk=False).get_opcodes():
+            merged += owners[a0:a1] if tag == "equal" else [row["version"]] * (b1 - b0)
+        owners, previous = merged, lines
+    return [{"line": i + 1, "text": text, "version": v} for i, (text, v) in enumerate(zip(previous, owners))]
 
 
 # --- runs and the trial ledger -----------------------------------------------

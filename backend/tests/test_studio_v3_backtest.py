@@ -1004,3 +1004,15 @@ def test_entry_frequency_gates_entries_to_period_starts(studio):
     periods = prep.panel.dates.to_period("W-FRI")
     assert len(fired) > 50 and all(periods[t] != periods[t - 1] for t in fired if t)
     assert "Entries only on the first bar of each week" in C.describe(spec)
+
+
+def test_restore_branch_and_blame_never_delete_versions(studio):
+    base = "/api/studio-v3/strategies"
+    sid = studio.post(base, json={"spec": {"name": "V", "code": "a = 1\nb = 2\n"}}).json()["id"]
+    studio.put(f"{base}/{sid}", json={"spec": {"name": "V", "code": "a = 1\nb = 3\nc = 4\n"}})
+    assert [(r["line"], r["version"]) for r in studio.get(f"{base}/{sid}/blame").json()] == [(1, 1), (2, 2), (3, 2)]
+    restored = studio.post(f"{base}/{sid}/versions/1/restore").json()
+    assert restored["version"] == 3 and restored["spec"]["code"] == "a = 1\nb = 2\n" and len(restored["versions"]) == 3
+    branch = studio.post(f"{base}/{sid}/versions/2/branch").json()
+    assert branch["id"] != sid and branch["spec"]["code"] == "a = 1\nb = 3\nc = 4\n" and branch["version"] == 1
+    assert studio.post(f"{base}/{sid}/versions/9/restore").status_code == 404

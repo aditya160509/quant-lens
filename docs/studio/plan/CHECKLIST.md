@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 51 | 163 |
+| Build | 54 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **161** | **538** |
+| **All pages** | **164** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 51 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 54 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -237,7 +237,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-110 Trading frequency: calendar (daily, weekly, monthly, on bar close) or threshold corridor (X% drift) (partial: spec.frequency gates entries to daily, week_start or month_start; the X% drift corridor is open)
 - [ ] [M] B-111 Formula inline value under each rule: true-rate and last true date (backend done: POST /build/condition; frontend wiring open)
 - [ ] [M] B-112 Function reference panel for formula mode
-- [ ] [M] B-113 Named variables (fast = ema(close, 12)), user functions, comments; separate entry and exit formulas
+- [x] [M] B-113 Named variables (fast = ema(close, 12)), user functions, comments; separate entry and exit formulas (named variables `x = expr` lines, `;` separators and # comments expand before parsing; user functions and separate entry/exit editors open)
 - [x] B-114 Causal weekly(x) and monthly(x) built and tested (hourly blocked by data) [FP 42]
 - [ ] [H] B-115 Composer-style tree blocks: if/else branches, filter by rank, weight by method, group; nest to any depth [FP 69]
 - [ ] [M] B-116 Live true-rate on every condition block ("true on 31% of bars, last true 2026-01-28") [FP 69] (backend done: POST /build/condition; frontend wiring open)
@@ -251,9 +251,9 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-124 Indicator exit and scale in as exit-card rows
 - [x] B-125 Stated regime claim marked "written after" when added after a drawdown
 - [ ] [E] B-126 Version timeline: each version with its metrics (equity sparkline, Sharpe); name and tag versions ("validated", "live"); a live version is locked (partial: version list, picker and field diff with run results exist; timeline metrics, tags and lock open) [FP 35]
-- [ ] [M] B-127 Restore or branch from any version; restore creates a new version and deletes nothing [FP 35]
+- [x] [M] B-127 Restore or branch from any version; restore creates a new version and deletes nothing [FP 35] (POST /strategies/{sid}/versions/{v}/restore adds a new latest version; /branch starts a new strategy from it)
 - [ ] [M] B-128 Experiments as branches: fork a strategy, change a rule, compare two branches on one chart, merge back [FP 35]
-- [ ] [M] B-129 Blame: each line shows the version that last changed it
+- [x] [M] B-129 Blame: each line shows the version that last changed it (GET /strategies/{sid}/blame?file= returns each line with the version that last changed it)
 - [ ] [M] B-130 Local history: autosave snapshots kept 7 days, separate from versions (partial: autosave draft every 2 s; 7-day history open)
 - [ ] [E] B-131 Share a read-only link or a fork link; pinned comment threads on a line
 - [ ] [H] B-132 Single editing session per strategy with take-over; the second tab is read-only (no QuantConnect-style desync) [FP 66]

@@ -6,6 +6,7 @@ Every operator at bar t reads bars up to t only. Anything that could read a late
 from __future__ import annotations
 
 import ast
+import re
 from typing import Any
 
 import numpy as np
@@ -131,8 +132,33 @@ ARITY = {k: (len(v[1]), len(v[1])) for k, v in OPERATORS.items()}
 _FORWARD = {"lead", "shift_forward", "future", "center", "centered"}
 
 
+_ASSIGN = re.compile(r"\s*([A-Za-z_]\w*)\s*=(?!=)\s*(.+)")
+
+
+def expand(expr: str) -> str:
+    """Named variables (B-113): `fast = ema(close, 12)` lines, then one result line. Comments start with #.
+    A single-line formula comes back unchanged, so token spans in the common case do not move."""
+    if not isinstance(expr, str) or not re.search(r"[\n;#]", expr):
+        return expr
+    names: dict[str, str] = {}
+    result = ""
+    for raw in re.split(r"[\n;]", expr):
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        for name, body in names.items():
+            line = re.sub(rf"\b{name}\b", f"({body})", line)
+        match = _ASSIGN.fullmatch(line)
+        if match and match.group(1) not in OPERATORS and match.group(1) not in FIELDS:
+            names[match.group(1)] = match.group(2)
+        else:
+            result = line
+    return result
+
+
 def parse(expr: str, params: dict[str, float] | None = None) -> ast.Expression:
     """Validate one formula. Look-ahead is refused with the offending token's span."""
+    expr = expand(expr)
     try:
         tree = ast.parse(expr.strip(), mode="eval") if isinstance(expr, str) and expr.strip() else None
     except SyntaxError:

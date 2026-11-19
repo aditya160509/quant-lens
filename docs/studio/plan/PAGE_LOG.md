@@ -245,3 +245,14 @@ API changes:
 - `POST /preview` — log rows may carry `fields`; `settings_overrides` and `risk_events` unchanged from the entry above.
 
 Budgets: the risk-parity multiplier adds one pass over the day's entries in each engine; the 500 × 2,500 Python run and the 31 ms lint p95 are unchanged.
+
+## Build backend: review fixes, version tools and formula variables (2026-11-19)
+
+- Review fix (B-57): the AST allow-list let numpy and pandas reach files and eval through names the ban list missed (`np.loadtxt`, `np.genfromtxt`, `np.savez`, `arr.tofile`, `np.DataSource().open`, `df.to_latex/to_html/to_string(path)`, `df.query`, `pd.eval`, `np.lib`, `np.sys`, `np.os`, `pd.io`). They are refused by name now; the escape suite has 17 more cases (61 total).
+- B-113 (partial). A formula may hold `name = expr` lines (newline or `;`) and `#` comments; names expand before parsing, so look-ahead checks still apply. User functions and separate entry/exit editors are open.
+- B-127. `POST /strategies/{sid}/versions/{version}/restore` adds the old version as a new latest one (an unchanged spec adds nothing); `POST .../branch` starts a new strategy from it.
+- B-129. `GET /strategies/{sid}/blame?file=main.py` returns `[{line, text, version}]` for the latest file.
+
+Build API (all under `/api/studio-v3`): `POST /build/check` problems; `/build/complete` completions; `/build/signature` signature help; `/build/definition`, `/build/references`, `/build/rename`, `/build/outline` symbols; `/build/checks` warm-up, data used, survivorship; `/build/condition` true-rate, last true, always-true or false, fired bars; `/build/debug` bar stepper and breakpoints; `/build/preview` live preview; `/build/import-quantconnect` QuantConnect rewrite; `GET/PATCH /strategies/{sid}/files` project files; `PUT /strategies/{sid}` save version; `PUT /strategies/{sid}/draft` draft; plus the three version routes above.
+
+Known limits: the sandbox ban list is by attribute name, so a new numpy or pandas file reader added in a later release must be added to `BANNED_ATTRS`.

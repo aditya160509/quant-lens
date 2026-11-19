@@ -734,3 +734,11 @@ def test_ctx_log_levels_carry_key_values():
     assert rows[2]["fields"] == {"code": "E1", "retries": 2.0}
     assert "fields" not in rows[3] and rows[3]["text"] == "plain"
     assert len(output["logs"]) == 8  # the strategy runs the four lines on each of the two bars
+
+
+def test_formula_named_variables_and_comments_expand_to_the_plain_formula():
+    bars, dates = _bars(120, 2)
+    text = "# trend\nfast = ema(close, 12)\nslow = sma(close, 50)  # base\nfast > slow"
+    assert np.array_equal(formula.evaluate(text, bars, dates), formula.evaluate("ema(close, 12) > sma(close, 50)", bars, dates))
+    with pytest.raises(Exception, match="(?i)look-ahead"):
+        formula.parse("x = close\nx[1]")
