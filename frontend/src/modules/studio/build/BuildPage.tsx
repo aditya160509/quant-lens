@@ -10,13 +10,13 @@ import type { FeatureSpec } from "@/modules/research/types";
 import { studio, useTemplates, type Compiled, type Ledger } from "../api";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { TrialChip } from "../RunHeader";
-import { BlockRows } from "./BlockRows";
+import { GroupEditor, groupFormula, toGroup } from "./BlockRows";
 import { MenuItem, PopMenu, Segmented, type MenuAt } from "@/workspace/ui";
 import { STUDIO_BASE } from "../base";
 import type { Problem } from "./CodeEditor";
 import { DevIDE, type DevPreview, type QuickRun, type Saved } from "./DevIDE";
 import { Palette, type Command } from "./Palette";
-import { fromFormula, toFormula, type Row } from "./blocks";
+import type { Group } from "./blocks";
 import "../studio.css";
 
 type Param = { value: number; min?: number | null; max?: number | null; step?: number | null; log?: boolean };
@@ -469,14 +469,14 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           ) : null}
           {ROLES.map(([role, label]) => {
             if (mode === "english") return null;
-            const rows = mode === "blocks" && role !== "score" ? fromFormula(spec[role] as string) : null;
+            const groups = (spec.groups ?? {}) as Record<string, Group>;
+            const tree: Group | null = mode === "blocks" && role !== "score" ? groups[role] ?? toGroup(spec[role] as string) ?? { op: "all", items: [{ rule: spec[role] as string, enabled: true }] } : null;
+            const dropGroup = () => { const { [role]: _, ...rest } = groups; return rest; };
             return (
             <div key={role} className="bd-rule">
               <label htmlFor={`r-${role}`}>{label}</label>
-              {rows ? <BlockRows id={`b-${role}`} rows={rows.length ? rows : [{ left: "", op: ">", right: "", join: "&" } as Row]} suggestions={catalogue}
-                onChange={(r) => edit({ [role]: toFormula(r) })} /> : null}
-              {mode === "blocks" && role !== "score" && !rows ? <p className="bd-find warning"><b>Formula only</b>This rule is not a list of comparisons, so it stays as a formula.</p> : null}
-              {rows ? null : <textarea id={`r-${role}`} className="input" spellCheck={false} rows={role === "score" || role === "market_filter" ? 1 : 2} placeholder={role === "market_filter" ? "market > sma(market, 200)" : undefined} value={spec[role] as string} onSelect={track(role)} onFocus={track(role)} onChange={(e) => edit({ [role]: e.target.value })} />}
+              {tree ? <GroupEditor id={`b-${role}`} group={tree} suggestions={catalogue} onChange={(g) => edit({ [role]: groupFormula(g), groups: { ...groups, [role]: g } })} /> : null}
+              {tree ? null : <textarea id={`r-${role}`} className="input" spellCheck={false} rows={role === "score" || role === "market_filter" ? 1 : 2} placeholder={role === "market_filter" ? "market > sma(market, 200)" : undefined} value={spec[role] as string} onSelect={track(role)} onFocus={track(role)} onChange={(e) => edit({ [role]: e.target.value, ...(role in groups ? { groups: dropGroup() } : {}) })} />}
               {findings(role).map((f, i) => <p key={i} className={`bd-find ${f.severity}`}><b>{f.severity === "error" ? "Error" : "Warning"}</b>{f.token ? <code>{f.token}</code> : null}{f.message}</p>)}
               {(() => {
                 const c = conds[role];

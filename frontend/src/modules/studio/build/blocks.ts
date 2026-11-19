@@ -60,3 +60,8 @@ export function fromFormula(text: string): Row[] | null {
   }
   return rows;
 }
+
+/** The server's Any/All tree (spec.groups[role]): a condition is a formula string or {rule, enabled}; a group nests to 10 deep. */
+export type Leaf = { rule: string; enabled?: boolean };
+export type Group = { op: "all" | "any"; items: Item[] };
+export type Item = Leaf | Group | string;
