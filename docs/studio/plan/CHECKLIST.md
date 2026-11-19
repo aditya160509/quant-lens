@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 122 | 163 | 21 | 70 |
+| Build | 124 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 122 | 163 |
+| Build | 124 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **232** | **538** |
+| **All pages** | **234** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 122 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 124 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -196,7 +196,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [H] B-69 Bar stepper: pause at a date and symbol, inspect self and ctx, step one bar, step to the next order or fill, run to a date, step back one bar (deterministic re-run) [FP 27] [PY B8] (Debug tab: stop at date, step back and forward, next order, next fill, next 5% loss day)
 - [x] [M] B-70 Breakpoints with conditions (ctx.symbol == "AAPL" and ctx.date >= …) and hit counts; data breakpoints (first order; equity down 5% in a day) [FP 27, 65] (breakpoints from gutter or F9 with a condition and hit count; F5 runs to the first)
 - [x] [H] B-71 Variables (self, ctx, locals); arrays and DataFrames in a grid viewer; watch expressions with history; read-only debug console (backend done: POST /build/watch evaluates formula watches at a paused bar with recent history, causal and read-only; variables and arrays come from /build/debug state; grid viewer and debug console are frontend)
-- [ ] [M] B-72 Preview chart follows the paused bar, with position and pending orders drawn (partial: preview chart marks the paused bar; position and pending orders open)
+- [x] [M] B-72 Preview chart follows the paused bar, with position and pending orders drawn (preview chart marks the paused bar with shares held and pending orders)
 - [ ] [M] B-73 Logpoints from the gutter ("log {expr} here") without editing the code
 - [x] [E] B-74 Gutter: run markers on lines that placed orders in the last preview (hover shows count and first 5 dates); change markers since last version (backend done: preview order_lines list each strategy line that placed orders with count and first 5 dates; change markers since last version are frontend)
 - [x] [H] B-75 Inlay hints: parameter value next to ctx.param, last value next to ctx.value from the preview, computed type [FP 63] (backend done: POST /build/inlay-hints returns parameter values, warm-up bars, last preview values and argument names; frontend wiring open)
@@ -252,7 +252,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] B-125 Stated regime claim marked "written after" when added after a drawdown
 - [x] [E] B-126 Version timeline: each version with its metrics (equity sparkline, Sharpe); name and tag versions ("validated", "live"); a live version is locked [FP 35] (Versions rail: name, tags, lock, restore, branch, metrics and equity sparkline per version)
 - [x] [M] B-127 Restore or branch from any version; restore creates a new version and deletes nothing [FP 35] (POST /strategies/{sid}/versions/{v}/restore adds a new latest version; /branch starts a new strategy from it)
-- [ ] [M] B-128 Experiments as branches: fork a strategy, change a rule, compare two branches on one chart, merge back [FP 35] (partial: More › Compare and merge: rule and file diffs, latest results side by side, merge a branch back with ours or theirs on conflicts; one shared chart open)
+- [x] [M] B-128 Experiments as branches: fork a strategy, change a rule, compare two branches on one chart, merge back [FP 35] (More › Compare and merge: rule and file diffs, latest results side by side, both equity curves on one chart, merge back with ours or theirs)
 - [x] [M] B-129 Blame: each line shows the version that last changed it (GET /strategies/{sid}/blame?file= returns each line with the version that last changed it)
 - [x] [M] B-130 Local history: autosave snapshots kept 7 days, separate from versions (Versions rail lists 7-day local snapshots; one click restores the files into the draft)
 - [ ] [E] B-131 Share a read-only link or a fork link; pinned comment threads on a line (partial: read-only link (More menu) opens a shared view with Fork to edit; line comment threads open)
