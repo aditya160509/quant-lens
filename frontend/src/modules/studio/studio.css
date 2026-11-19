@@ -384,3 +384,10 @@
 .bd-grid[data-compact] .gx-body { gap: 3px; } .bd-grid[data-compact] .bd-rule { gap: 4px; }
 .dv-editor[data-split="down"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
 .dv-editor[data-split="down"] > .dv-split { border-left: 0; border-top: 1px solid var(--line); }
+.dv-console { height: 100%; overflow: auto; padding: 8px 12px; font: 12.5px var(--mono); cursor: text; }
+.dv-console > div { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; padding: 3px 0; }
+.dv-console i { color: var(--text-4); font-style: normal; font-size: 11px; }
+.dv-console pre { grid-column: 1 / -1; margin: 0; color: var(--text); white-space: pre-wrap; } .dv-console pre[data-err] { color: var(--down); }
+.dv-con-q { color: var(--text-3); }
+.dv-console form { display: flex; gap: 8px; align-items: center; color: var(--accent); }
+.dv-console form input { flex: 1; border: 0; outline: 0; background: none; color: var(--text); font: inherit; }

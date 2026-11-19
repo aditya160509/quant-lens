@@ -40,7 +40,7 @@ type Timeline = Version & { name: string; tags: string[]; locked: boolean; sharp
 type Snapshot = { at: number; files: Record<string, string> };
 type Snippet = { id: string; name: string; prefix: string; body: string; description: string };
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
-type Tab = "problems" | "output" | "plots" | "trades" | "results" | "debug";
+type Tab = "problems" | "output" | "plots" | "trades" | "results" | "debug" | "console";
 type Rail = "files" | "outline" | "search" | "versions" | "docs" | "templates";
 type Spec = { code: string; files?: Record<string, string>; params: Record<string, { value: number; min?: number | null; max?: number | null; step?: number | null }>; [k: string]: unknown };
 export type Saved = "saved" | "draft" | "saving" | "conflict" | "new";
@@ -101,6 +101,16 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [watches, setWatches] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("studio:watch") ?? "[]"); } catch { return []; } });
   const [watchRows, setWatchRows] = useState<{ expression: string; error: string | null; value: unknown; history: { date: string; value: number }[] }[]>([]);
   const [watchIn, setWatchIn] = useState("");
+  const [con, setCon] = useState<{ q: string; at: string; out: string; err?: boolean }[]>([]);
+  const [conIn, setConIn] = useState("");
+  const conHist = useRef(-1);
+  const runCon = (q: string) => {
+    const date = dbg?.date || prev?.bars?.at(-1)?.date;
+    if (!q.trim() || !date) return;
+    setConIn(""); conHist.current = -1;
+    void studio<{ error: string | null; value: unknown }[]>("POST", "/build/watch", { spec, symbol: dbg?.symbol ?? symbol, date, expressions: [q], history: 1 })
+      .then(([r]) => setCon((c) => [...c, { q, at: date, out: r.error ?? (typeof r.value === "number" ? String(+r.value.toFixed(6)) : JSON.stringify(r.value)), err: !!r.error }]), (e: Error) => setCon((c) => [...c, { q, at: date, out: e.message, err: true }]));
+  };
   const [cond, setCond] = useState("");
   const [bps, setBps] = useState<Record<string, number[]>>({});
   const [q, setQ] = useState(""); const [rep, setRep] = useState("");
@@ -276,7 +286,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     </div>
   ));
   const docRows = (docs ?? []).filter((d) => !docQ || `${d.scope}.${d.name} ${d.documentation ?? ""}`.toLowerCase().includes(docQ.toLowerCase()));
-  const TABS: [Tab, string, number | null][] = [["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["results", "Results", null], ["debug", "Debug", null]];
+  const TABS: [Tab, string, number | null][] = [["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["results", "Results", null], ["debug", "Debug", null], ["console", "Console", null]];
   const toggles = <span className="dv-toggles">
     <button className="icon-btn" aria-pressed={opt.caseSensitive} title="Match case" onClick={() => setOpt((o) => ({ ...o, caseSensitive: !o.caseSensitive }))}><CaseSensitive size={14} /></button>
     <button className="icon-btn" aria-pressed={opt.word} title="Whole word" onClick={() => setOpt((o) => ({ ...o, word: !o.word }))}><WholeWord size={14} /></button>
@@ -521,6 +531,17 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
                   </div>
                 );
               })() : null}
+              {tab === "console" ? (
+                <div className="dv-console" onClick={(e) => (e.currentTarget.querySelector("input") as HTMLInputElement | null)?.focus()}>
+                  {con.map((c, i) => <div key={i}><span className="dv-con-q">› {c.q}</span><i>{c.at}</i><pre data-err={c.err || undefined}>{c.out}</pre></div>)}
+                  <form onSubmit={(e) => { e.preventDefault(); runCon(conIn); }}><span>›</span>
+                    <input aria-label="Console" spellCheck={false} autoComplete="off" value={conIn} onChange={(e) => setConIn(e.target.value)} onKeyDown={(e) => {
+                      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                      e.preventDefault(); const qs = con.map((c) => c.q); const n = conHist.current === -1 ? qs.length : conHist.current; const k = Math.max(0, Math.min(qs.length, n + (e.key === "ArrowUp" ? -1 : 1)));
+                      conHist.current = k; setConIn(qs[k] ?? "");
+                    }} /></form>
+                </div>
+              ) : null}
               {tab === "debug" ? (
                 <div className="dv-debug">
                   <div className="dv-dbar">
