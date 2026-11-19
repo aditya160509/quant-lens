@@ -1050,3 +1050,24 @@ def test_preview_trades_several_symbols_from_the_universe_attribute(studio):
     explicit = studio.post("/api/studio-v3/preview", json={"symbol": "SPY", "symbols": ["AAA", "BBB"], "spec": {"code": spread}}).json()
     assert explicit["symbols"] == ["AAA", "BBB"]
     assert {t["symbol"] for t in result["trades"]} <= {"AAA", "BBB", "CCC"}
+
+
+def test_nested_any_all_groups_generate_the_formula_and_trade_like_it(studio):
+    tree = {"op": "all", "items": [
+        "close > sma(close, 20)",
+        {"op": "any", "items": ["rsi(close, 14) < 40", {"rule": "close > delay(close, 5)", "enabled": False}, {"op": "all", "items": ["rsi(close, 14) < 60", "volume > 0"]}]},
+    ]}
+    grouped = Strategy(**{**SMA, "entry_long": "", "groups": {"entry_long": tree}})
+    assert grouped.entry_long == "((close > sma(close, 20)) & ((rsi(close, 14) < 40) | ((rsi(close, 14) < 60) & (volume > 0))))"
+    plain = Strategy(**{**SMA, "entry_long": grouped.entry_long})
+    prep = backtest.prepare(Settings(**SETTINGS))
+    a, b = C.signals(grouped, prep.sig_bars, prep.panel.dates), C.signals(plain, prep.sig_bars, prep.panel.dates)
+    assert np.array_equal(a.entries, b.entries) and a.entries.any()
+    assert Strategy(**SMA).hash() == Strategy(**{**SMA, "groups": {}}).hash()
+    deep = "close > 0"
+    for _ in range(11):
+        deep = {"op": "any", "items": [deep]}
+    for bad in ({"entry_long": deep}, {"entry_long": {"op": "xor", "items": []}}, {"score": "close"}, {"entry_long": {"op": "all", "items": [""]}}):
+        with pytest.raises(ValueError):
+            Strategy(**{**SMA, "groups": bad})
+    assert Strategy(**{**SMA, "groups": {"exit_long": {"op": "all", "items": [{"rule": "close > 0", "enabled": False}]}}}).exit_long == ""

@@ -69,6 +69,32 @@ class Limits(_Model):
     min_start_pass: float | None = Field(None, ge=0, le=1)
 
 
+MAX_GROUP_DEPTH, MAX_GROUP_RULES = 10, 200
+GROUP_ROLES = ("entry_long", "exit_long", "entry_short", "exit_short", "market_filter")
+
+
+def group_formula(node, depth: int = 1, count: list[int] | None = None) -> str:
+    """An Any/All group as one formula: a rule is a string or {"rule", "enabled"}; a group is {"op": "all"|"any", "items": [...]}, nested to 10 deep.
+    Disabled rules and groups left empty by them drop out (B-105, B-107)."""
+    count = count if count is not None else [0]
+    if isinstance(node, str) or (isinstance(node, dict) and "rule" in node):
+        if isinstance(node, dict) and node.get("enabled") is False:
+            return ""
+        text = (node if isinstance(node, str) else str(node["rule"])).strip()
+        if not text:
+            raise ValueError("A group holds an empty rule")
+        count[0] += 1
+        if count[0] > MAX_GROUP_RULES:
+            raise ValueError(f"A group holds at most {MAX_GROUP_RULES} rules")
+        return f"({text})"
+    if not isinstance(node, dict) or node.get("op") not in {"all", "any"} or not isinstance(node.get("items"), list):
+        raise ValueError('A group is {"op": "all" or "any", "items": [...]}')
+    if depth > MAX_GROUP_DEPTH:
+        raise ValueError(f"Groups nest at most {MAX_GROUP_DEPTH} deep")
+    parts = [part for item in node["items"] if (part := group_formula(item, depth + 1, count))]
+    return "(" + (" & " if node["op"] == "all" else " | ").join(parts) + ")" if parts else ""
+
+
 class Strategy(_Model):
     name: str = "Untitled"
     entry_long: str = ""
@@ -85,10 +111,19 @@ class Strategy(_Model):
     limits: Limits = Field(default_factory=Limits)
     code: str = ""  # Python source when the strategy was written as code
     files: dict[str, str] = Field(default_factory=dict, max_length=49)
+    groups: dict[str, dict | str] = Field(default_factory=dict)  # role -> Any/All tree; the role's formula is generated from it
     blocks: list[dict] = Field(default_factory=list)  # the editor's block rows, kept so Blocks reopens as written
     hypothesis: str = ""
     regime_claim: str = ""
     notes: str = ""
+
+    @model_validator(mode="after")
+    def _generate_group_formulas(self):
+        for role, node in self.groups.items():
+            if role not in GROUP_ROLES:
+                raise ValueError(f"Groups apply to {', '.join(GROUP_ROLES)}, not {role}")
+            setattr(self, role, group_formula(node))
+        return self
 
     @field_validator("files")
     @classmethod
@@ -108,6 +143,8 @@ class Strategy(_Model):
         body = self.model_dump(exclude={"name", "hypothesis", "regime_claim", "notes", "blocks", "limits"})
         if not self.files:
             body.pop("files")
+        if not self.groups:
+            body.pop("groups")
         return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]
 
     def parameter_definitions(self) -> dict[str, Param]:

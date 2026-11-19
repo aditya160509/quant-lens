@@ -743,3 +743,39 @@ def test_formula_named_variables_and_comments_expand_to_the_plain_formula():
     assert np.array_equal(formula.evaluate(text, bars, dates), formula.evaluate("ema(close, 12) > sma(close, 50)", bars, dates))
     with pytest.raises(Exception, match="(?i)look-ahead"):
         formula.parse("x = close\nx[1]")
+
+
+def test_calendar_operators_and_between_read_only_the_bars_own_date():
+    bars, dates = _bars(300, 2)
+    friday = formula.evaluate("weekday() == 4", bars, dates)
+    assert np.array_equal(friday[:, 0], dates.weekday == 4)
+    assert np.array_equal(formula.evaluate("month() == 12", bars, dates)[:, 1], dates.month == 12)
+    assert formula.evaluate("day_of_month() <= 3", bars, dates)[:, 0].tolist() == (dates.day <= 3).tolist()
+    for name, freq in (("quarter_start", "Q"), ("year_start", "Y")):
+        expected = np.r_[True, dates.to_period(freq)[1:] != dates.to_period(freq)[:-1]]
+        assert np.array_equal(formula.evaluate(f"{name}()", bars, dates)[:, 0], expected)
+    inside = formula.evaluate("between(rsi(close, 14), 30, 70)", bars, dates)
+    rsi = formula.evaluate("rsi(close, 14)", bars, dates)
+    assert np.array_equal(inside, (rsi >= 30) & (rsi <= 70))
+    cut = formula.evaluate("weekday() == 4", {k: v[:100] for k, v in bars.items()}, dates[:100])
+    assert np.array_equal(cut, friday[:100])
+
+
+def test_target_weights_corridor_skips_small_drift_but_always_closes():
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(8, 2)
+    code = """class Strategy:
+    def on_data(self, ctx):
+        if ctx.bar_index == 0:
+            ctx.target_weights({"AAA": 0.25})
+        elif ctx.bar_index in (2, 4):
+            ctx.target_weights({"AAA": 0.25}, corridor=0.5)
+        elif ctx.bar_index == 6:
+            ctx.target_weights({"AAA": 0}, corridor=0.9)
+"""
+    result = pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], engine.Params())
+    assert len(result.trades) == 1 and result.positions[-1] == 0  # one entry held through two skipped rebalances, then closed
+    assert result.trades[0, engine.T_EXIT_BAR] == 7
+    with pytest.raises(pycode.CodeError, match="corridor"):
+        pycode.run_event(code.replace("corridor=0.9", "corridor=-1"), bars, dates, {}, ["AAA", "BBB"], engine.Params())

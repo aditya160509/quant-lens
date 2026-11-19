@@ -542,8 +542,17 @@ class PortfolioContext(Ctx):
         if current is not None:
             self.market_order(symbol, float(value) / current.close)
 
-    def target_weights(self, weights):
+    def target_weights(self, weights, corridor=0.0):
+        """Set each name to its target share of equity. With `corridor`, a name whose current weight is within that distance of its target is left alone (threshold rebalancing)."""
+        if corridor < 0 or not math.isfinite(corridor):
+            raise ValueError("corridor must be a nonnegative number")
+        total = self._account._mark()[0] if corridor else 0.0
         for symbol, weight in weights.items():
+            if corridor and total:
+                current = self.bar(symbol)
+                held = self.pos(symbol).quantity * (current.close if current else 0.0) / total
+                if abs(held - float(weight)) <= corridor and not (float(weight) == 0 and held):
+                    continue
             self.set_holdings(symbol, weight)
 
     order = market_order

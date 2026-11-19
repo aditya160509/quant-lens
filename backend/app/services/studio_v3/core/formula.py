@@ -125,9 +125,17 @@ OPERATORS: dict[str, tuple[Any, list[str], str, str]] = {
     "zscore": (_zscore, ["x"], "Cross-sectional z-score on this bar", "zscore(roc(close, 20))"),
     "week_start": (None, [], "First observed bar of the week", "week_start()"),
     "month_start": (None, [], "First observed bar of the calendar month", "month_start()"),
+    "quarter_start": (None, [], "First observed bar of the calendar quarter", "quarter_start()"),
+    "year_start": (None, [], "First observed bar of the calendar year", "year_start()"),
+    "weekday": (None, [], "Day of the week, 0 Monday to 4 Friday", "weekday() == 4"),
+    "month": (None, [], "Calendar month, 1 to 12", "month() == 12"),
+    "day_of_month": (None, [], "Calendar day of the month, 1 to 31", "day_of_month() <= 3"),
+    "between": (lambda x, low, high: (x >= low) & (x <= high), ["x", "low", "high"], "x is from low to high, both included", "between(rsi(close, 14), 30, 70)"),
     "weekly": (None, ["x"], "x as of the last closed week", "weekly(sma(close, 10))"),
     "monthly": (None, ["x"], "x as of the last closed calendar month", "monthly(close)"),
 }
+_STARTS = {"week_start": "W-FRI", "month_start": "M", "quarter_start": "Q", "year_start": "Y"}
+_CALENDAR = {"weekday": "weekday", "month": "month", "day_of_month": "day"}
 ARITY = {k: (len(v[1]), len(v[1])) for k, v in OPERATORS.items()}
 _FORWARD = {"lead", "shift_forward", "future", "center", "centered"}
 
@@ -236,11 +244,14 @@ class _Eval:
             args = [_window(a, name) if arg_names[i] == "n" and not (name == "delay" and a == 0) else a for i, a in enumerate(args)]
             if name == "atr":
                 return _wilder(true_range(self.bars["high"], self.bars["low"], self.bars["close"]), args[0])
-            if name in {"week_start", "month_start"}:
-                periods = self.dates.to_period("W-FRI" if name == "week_start" else "M")
+            if name in _STARTS:
+                periods = self.dates.to_period(_STARTS[name])
                 starts = np.ones(len(periods), dtype=bool)
                 starts[1:] = periods[1:] != periods[:-1]
                 return np.broadcast_to(starts[:, None], self.bars["close"].shape)
+            if name in _CALENDAR:  # a function of the bar's own date, so it never reads another bar
+                column = np.asarray(getattr(self.dates, _CALENDAR[name]), dtype=float)
+                return np.broadcast_to(column[:, None], self.bars["close"].shape)
             if name in _PERIODS:
                 return _closed_period(self._array(args[0], name), self.dates, _PERIODS[name])
             if "x" in arg_names:
