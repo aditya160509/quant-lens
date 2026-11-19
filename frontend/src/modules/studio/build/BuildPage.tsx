@@ -10,7 +10,7 @@ import type { FeatureSpec } from "@/modules/research/types";
 import { studio, useTemplates, type Compiled, type Ledger } from "../api";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { TrialChip } from "../RunHeader";
-import { GroupEditor, groupFormula, toGroup } from "./BlockRows";
+import { GroupEditor, groupFormula, paletteOrder, toGroup } from "./BlockRows";
 import { BranchDialog } from "./Branches";
 import { MenuItem, PopMenu, Segmented, type MenuAt } from "@/workspace/ui";
 import { STUDIO_BASE } from "../base";
@@ -43,7 +43,7 @@ const EXITS: [string, string, boolean][] = [["stop", "Stop", true], ["stop_atr",
   ["breakeven", "Breakeven at", true], ["scale_at", "Scale out at", true], ["scale_frac", "Scale out share", true]];
 const LIMITS: [string, string, boolean][] = [["max_drawdown", "Max drawdown", true], ["max_drawdown_months", "Max drawdown months", false], ["min_trades", "Min trades", false],
   ["min_years", "Min years", false], ["max_beta", "Max beta", false], ["max_cost_share", "Max cost share", true], ["min_start_pass", "Min start dates passing", true]];
-type Defaults = { ui: "simple" | "dev"; mode: "blocks" | "formula" | "english"; exits: Record<string, number>; sizing: Spec["sizing"]; compact: boolean; plain: boolean };
+type Defaults = { ui: "simple" | "dev"; mode: "blocks" | "formula" | "english"; exits: Record<string, number>; sizing: Spec["sizing"]; compact: boolean; plain: boolean; palette: string[] };
 const readDefaults = (): Partial<Defaults> => { try { return JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as Partial<Defaults>; } catch { return {}; } };
 const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : "Failed");
 
@@ -598,6 +598,8 @@ function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void })
         <label className="bd-num"><span>Simple starts in</span><select className="input" value={d.mode ?? "formula"} onChange={(e) => setD({ ...d, mode: e.target.value as Defaults["mode"] })}><option value="blocks">Blocks</option><option value="formula">Formula</option><option value="english">Plain English</option></select></label>
         <label className="bd-num"><span>Blocks</span><Segmented<"full" | "compact"> label="Block density" value={d.compact ? "compact" : "full"} onChange={(v) => setD({ ...d, compact: v === "compact" })} options={[{ value: "full", label: "Expanded" }, { value: "compact", label: "Compact" }]} /></label>
         <label className="bd-num"><span>Colour by role</span><input type="checkbox" checked={!d.plain} onChange={(e) => setD({ ...d, plain: !e.target.checked })} /></label>
+        <div className="bd-num"><span>Condition order</span><ol className="bd-palette">{(d.palette?.length ? paletteOrder().sort((a, b) => d.palette!.indexOf(a[1]) - d.palette!.indexOf(b[1])) : paletteOrder()).map(([, l], i, all) => (
+          <li key={l}>{l}<button type="button" className="icon-btn" aria-label={`Move ${l} up`} disabled={!i} onClick={() => { const n = all.map(([, x]) => x); [n[i - 1], n[i]] = [n[i], n[i - 1]]; setD({ ...d, palette: n }); }}>↑</button></li>))}</ol></div>
       </div>
       <h3 style={{ margin: 0, fontSize: 13 }}>New strategy exits</h3>
       <div className="bd-nums">{EXITS.map(([k, l, p]) => <Num key={k} label={l} pct={p} value={exits[k]} onChange={(v) => setD({ ...d, exits: { ...exits, [k]: v ?? 0 } })} />)}</div>

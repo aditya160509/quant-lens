@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { fromFormula, OPS, toFormula, type Group, type Item, type Leaf } from "./blocks";
 
-const KINDS: [string, string][] = [
+export const KINDS: [string, string][] = [
   ["close > sma(close, 200)", "Compare"], ["crosses_above(sma(close, 50), sma(close, 200))", "Crosses"], ["between(rsi(close, 14), 30, 70)", "Between"],
   ["for_bars(close > open, 3)", "For N bars"], ["rising(close, 3)", "Rising"], ["falling(close, 3)", "Falling"],
   ["month_start()", "Month start"], ["weekday() == 4", "Weekday"], ["", "Formula"],
@@ -46,7 +46,7 @@ export function GroupEditor({ id, group, onChange, suggestions, depth = 0, onRem
           <div className="gx-add">
             <select ref={addRef} className="input" aria-label="Add condition" aria-keyshortcuts="/" value="" onChange={(e) => { if (e.target.value !== "-") add({ rule: e.target.value, enabled: true }); }}>
               <option value="" disabled hidden>Condition</option>
-              {KINDS.map(([v, l]) => <option key={l} value={v}>{l}</option>)}
+              {paletteOrder().map(([v, l]) => <option key={l} value={v}>{l}</option>)}
             </select>
             <button className="btn sm ghost" onClick={() => add({ op: group.op === "all" ? "any" : "all", items: [{ rule: "", enabled: true }] })}><FolderPlus size={12} />Group</button>
           </div>
@@ -92,4 +92,12 @@ export function toGroup(text: string): Group | null {
   const any = rows.length > 1 && rows.slice(1).every((r) => r.join === "|");
   if (rows.length > 1 && !any && rows.slice(1).some((r) => r.join === "|")) return null;
   return { op: any ? "any" : "all", items: rows.map((r) => ({ rule: toFormula([{ ...r, join: "&" }]), enabled: true })) };
+}
+
+/** Condition kinds in the order set in Customise (B-135). */
+export function paletteOrder(): [string, string][] {
+  let order: string[] = [];
+  try { order = (JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as { palette?: string[] }).palette ?? []; } catch { /* blocked */ }
+  const at = (l: string) => { const i = order.indexOf(l); return i === -1 ? order.length + KINDS.findIndex(([, x]) => x === l) : i; };
+  return [...KINDS].sort((a, b) => at(a[1]) - at(b[1]));
 }

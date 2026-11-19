@@ -391,3 +391,5 @@
 .dv-con-q { color: var(--text-3); }
 .dv-console form { display: flex; gap: 8px; align-items: center; color: var(--accent); }
 .dv-console form input { flex: 1; border: 0; outline: 0; background: none; color: var(--text); font: inherit; }
+.bd-palette { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; }
+.bd-palette li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 6px; border-radius: 6px; background: var(--line); }
