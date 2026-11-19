@@ -74,7 +74,7 @@ function finder(query: string, opt: { regex: boolean; caseSensitive: boolean; wo
 export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel, savedFiles }: {
   spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode;
   onSave: () => void; onRun: () => void; onFullRun: () => void; compileProblems: Problem[];
-  strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null) => void; font?: number; savedFiles?: Record<string, string>;
+  strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null, label?: string) => void; font?: number; savedFiles?: Record<string, string>;
   quick?: QuickRun | null; onQuickRun?: (level: "quick" | "full") => void; onCancel?: () => void;
 }) {
   const files = useMemo(() => ({ "main.py": spec.code, ...(spec.files ?? {}) }), [spec.code, spec.files]);
@@ -192,7 +192,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     const date = String(body.date || dbg?.date || dbgDate || (prev?.trades.at(-1)?.entry_date ?? ""));
     if (!date) return toast.error("Pick a date to stop at");
     setTab("debug"); setPanelOpen(true);
-    void studio<Debug>("POST", "/build/debug", { spec, symbol, date, ...body }).then((d) => { setDbg(d); setDbgDate(d.date); onPause?.(d.date); if (d.breakpoint) goto(d.breakpoint.file, d.breakpoint.line); }, (e: Error) => toast.error(e.message));
+    void studio<Debug>("POST", "/build/debug", { spec, symbol, date, ...body }).then((d) => { setDbg(d); setDbgDate(d.date); onPause?.(d.date, `❚❚ ${Math.round(Number(d.context.quantity ?? 0))} held${d.orders.length ? ` · ${d.orders.length} pending` : ""}`); if (d.breakpoint) goto(d.breakpoint.file, d.breakpoint.line); }, (e: Error) => toast.error(e.message));
   };
   const startDebug = () => {
     const bp = Object.entries(bps).flatMap(([file, lines]) => lines.map((line) => ({ file, line })))[0];
