@@ -85,6 +85,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [panelOpen, setPanelOpen] = useState(true);
   const [tab, setTab] = useState<Tab>("problems");
   const [lint, setLint] = useState<Problem[]>([]);
+  const [types, setTypes] = useState<Problem[]>([]);
   const [outline, setOutline] = useState<Sym[]>([]);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [reveal, setReveal] = useState<{ line: number; column?: number; n: number } | null>(null);
@@ -138,10 +139,11 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const toggleBp = (line: number) => setBps((b) => { const cur = b[active] ?? []; return { ...b, [active]: cur.includes(line) ? cur.filter((x) => x !== line) : [...cur, line].sort((x, y) => x - y) }; });
 
   useEffect(() => {
-    if (!source.trim()) { setLint([]); setOutline([]); return; }
+    if (!source.trim()) { setLint([]); setTypes([]); setOutline([]); return; }
     const t = setTimeout(() => {
       void studio<{ problems: Problem[] }>("POST", "/build/check", { code: source, file: active, files, strictness: strict ? "strict" : "basic", params: Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, p.value])) }).then((r) => setLint(r.problems), () => undefined);
       void studio<Sym[]>("POST", "/build/outline", { code: source }).then(setOutline, () => undefined);
+      void studio<{ problems: Problem[] }>("POST", "/build/typecheck", { code: source, file: active, files }).then((r) => setTypes(r.problems), () => setTypes([]));
     }, 300);
     return () => clearTimeout(t);
   }, [source, active, files, spec.params, strict]);
@@ -177,7 +179,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
 
   const runtime: Problem[] = prev?.status === "error" ? [{ severity: "error", file: prev.problem?.file ?? "main.py", line: prev.problem?.line ?? prev.line ?? 1, column: prev.problem?.column ?? 1, end_column: 200, code: prev.problem?.exception_type ?? "runtime", message: prev.reason ?? "Run failed" }] : [];
   const broken: Problem[] = (prev?.invariants?.rows ?? []).filter((r) => r.file === active).slice(0, 50).map((r) => ({ severity: "error", file: r.file, line: r.line, column: 1, end_column: 200, code: "invariant", message: `${r.text} (${r.symbol ?? ""} ${r.date})` }));
-  const problems = [...lint, ...compileProblems.filter((p) => p.file === active), ...runtime, ...broken];
+  const problems = [...lint, ...types, ...compileProblems.filter((p) => p.file === active), ...runtime, ...broken];
   const errors = problems.filter((p) => p.severity === "error").length, warnings = problems.length - errors;
   const logRe = finder(logQ, opt);
   const logs = (prev?.logs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logSym || l.symbol === logSym) && (!logFrom || l.date >= logFrom) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}`))));

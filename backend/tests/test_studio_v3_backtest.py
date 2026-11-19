@@ -1086,3 +1086,9 @@ def test_plain_english_maps_ambiguous_words_and_says_so(studio):
     for phrase in ("breakout", "pullback", "volume spike", "downtrend", "death cross"):
         got = studio.post("/api/studio-v3/plain-english", json={"text": f"buy on a {phrase}"}).json()
         assert got["assumptions"][0]["word"] == phrase and got["unmatched"] == [] and got["fields"]["entry_long"] == got["assumptions"][0]["formula"]
+
+
+def test_typecheck_reports_type_errors_and_leaves_undefined_names_to_the_linter(studio):
+    code = "import numpy as np\nclass Strategy:\n    def on_bar(self, ctx):\n        x: int = 'a'\n        np.foo_bar()\n        print(nope)\n"
+    problems = studio.post("/api/studio-v3/build/typecheck", json={"code": code}).json()["problems"]
+    assert [(p["line"], p["code"]) for p in problems] == [(4, "ty-invalid-assignment"), (5, "ty-missing-attribute")]

@@ -203,6 +203,13 @@ def check_python(request: BuildCheckRequest) -> BuildCheckResult:
     return BuildCheckResult(problems=pycode.lint(request.code, request.params, file=request.file, modules=modules, strictness=request.strictness, severity=request.severity))
 
 
+@router.post("/build/typecheck", response_model=BuildCheckResult)
+def typecheck_python(request: BuildCheckRequest) -> BuildCheckResult:
+    """Type errors from ty over the project files (B-33). Names the linter already reports are left to it."""
+    project = _editor_project(request)
+    return BuildCheckResult(problems=pycode.typecheck({"main.py": project.code, **project.files}, request.file))
+
+
 class BuildCompleteRequest(BaseModel):
     scope: str = Field(max_length=40)
     code: str = Field(default="", max_length=200_000)

@@ -782,3 +782,36 @@ def from_formulas(spec) -> str:
         if t:
             body.append(f"        {'if' if not body else 'elif'} {cond} and ctx.rule({json.dumps(t)}):\n            ctx.{act}()")
     return "\n".join(lines + (body or ["        pass"])) + "\n"
+
+
+_TY_LINE = re.compile(r"^(?P<file>[^:]+):(?P<line>\d+):(?P<col>\d+): (?P<sev>error|warning)\[(?P<code>[\w-]+)\] (?P<msg>.*)$")
+_TY_SKIP = {"unresolved-reference", "unresolved-import"}  # the Studio linter owns undefined names and the import allow-list
+
+
+def typecheck(files: dict[str, str], file: str = "main.py") -> list[dict]:
+    """Run ty on a temp copy of the project; only `file`'s diagnostics come back. A missing or slow ty answers nothing."""
+    import shutil
+    import subprocess
+    import sys
+    import tempfile
+    from pathlib import Path
+
+    ty = shutil.which("ty", path=str(Path(sys.executable).parent)) or shutil.which("ty")
+    if not ty:
+        return []
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, text in files.items():
+            if name.endswith(".py") and "/" not in name and ".." not in name:
+                (Path(tmp) / name).write_text(text)
+        try:
+            out = subprocess.run([ty, "check", "--output-format", "concise", "--color", "never", "--python", sys.prefix, tmp], capture_output=True, text=True, timeout=5, check=False).stdout
+        except subprocess.TimeoutExpired:
+            return []
+    problems = []
+    for raw in out.splitlines():
+        m = _TY_LINE.match(raw)
+        if not m or Path(m["file"]).name != file or m["code"] in _TY_SKIP:
+            continue
+        col = int(m["col"]) - 1
+        problems.append({"severity": m["sev"], "file": file, "line": int(m["line"]), "column": col, "end_column": col + 1, "code": f"ty-{m['code']}", "message": m["msg"]})
+    return problems
