@@ -91,6 +91,8 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [panel, setPanel] = useState(() => store.get("studio:dev:panel", 260));
   const [logQ, setLogQ] = useState("");
   const [logLevel, setLogLevel] = useState<string>("all");
+  const [logSym, setLogSym] = useState("");
+  const [logFrom, setLogFrom] = useState("");
   const [plotsOn, setPlotsOn] = useState<Record<string, boolean>>({});
   const [dbg, setDbg] = useState<Debug | null>(null);
   const [dbgDate, setDbgDate] = useState("");
@@ -177,7 +179,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const problems = [...lint, ...compileProblems.filter((p) => p.file === active), ...runtime, ...broken];
   const errors = problems.filter((p) => p.severity === "error").length, warnings = problems.length - errors;
   const logRe = finder(logQ, opt);
-  const logs = (prev?.logs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}`))));
+  const logs = (prev?.logs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logSym || l.symbol === logSym) && (!logFrom || l.date >= logFrom) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}`))));
   const plots = Object.entries(prev?.plots ?? {});
   const re = finder(q, opt);
   const hits = re ? Object.entries(files).flatMap(([f, text]) => text.split("\n").flatMap((line, i) => { re.lastIndex = 0; return re.test(line) ? [{ file: f, line: i + 1, text: line }] : []; })) : [];
@@ -420,6 +422,9 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
                   <div className="dv-search dv-logbar">
                     <input className="input" placeholder="Filter" aria-label="Filter output" value={logQ} onChange={(e) => setLogQ(e.target.value)} />{toggles}
                     <div className="seg" role="group" aria-label="Level">{["all", "info", "warning", "error"].map((l) => <button key={l} type="button" aria-pressed={logLevel === l} onClick={() => setLogLevel(l)}>{l}</button>)}</div>
+                    {(() => { const syms = [...new Set((prev?.logs ?? []).map((l) => l.symbol).filter(Boolean))] as string[]; return syms.length > 1 ? <select className="input" aria-label="Symbol" style={{ width: "auto" }} value={logSym} onChange={(e) => setLogSym(e.target.value)}><option value="">All symbols</option>{syms.map((x) => <option key={x}>{x}</option>)}</select> : null; })()}
+                    <input className="input" type="date" aria-label="From date" style={{ width: "auto" }} value={logFrom} onChange={(e) => setLogFrom(e.target.value)} />
+                    <button className="btn sm ghost" disabled={!logs.length} onClick={() => { const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`; const csv = ["level,date,symbol,line,message", ...logs.map((l) => [l.level, l.date, l.symbol, l.line, l.text].map(q).join(","))].join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "output.csv"; a.click(); URL.revokeObjectURL(a.href); }}>CSV</button>
                     <span className="dv-count">{logs.length.toLocaleString()} of {(prev?.logs?.length ?? 0).toLocaleString()}</span>
                   </div>
                   {logs.length ? (() => {
@@ -427,7 +432,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
                     const ROW = 24, first = Math.max(0, Math.floor(logTop / ROW) - 20), rows = logs.slice(first, first + 80);
                     return <div className="dv-logs" style={{ height: logs.length * ROW }}>
                       {rows.map((l, i) => (
-                        <button key={first + i} className="dv-log" data-level={l.level} style={{ top: (first + i) * ROW }} onClick={() => goto("main.py", l.line)}><time>{l.date}</time><span>{l.symbol ?? ""}</span>
+                        <button key={first + i} className="dv-log" data-level={l.level} style={{ top: (first + i) * ROW }} onClick={() => { goto("main.py", l.line); onPause?.(l.date); }}><time>{l.date}</time><span>{l.symbol ?? ""}</span>
                           <code>{l.text}{l.fields ? <em>{Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("")}</em> : null}</code><i>:{l.line}</i></button>
                       ))}</div>;
                   })() : <p className="dv-empty">{prev?.logs?.length ? "Nothing matches" : "No output"}</p>}
