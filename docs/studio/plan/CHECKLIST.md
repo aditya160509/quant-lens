@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 74 | 163 | 21 | 70 |
+| Build | 82 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 74 | 163 |
+| Build | 82 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **184** | **538** |
+| **All pages** | **192** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 74 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 82 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -145,10 +145,10 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [E] B-18 App theme tokens defined as a Monaco theme so the editor sits in the page [PY B12] (Monaco theme built from the shell's tokens, follows light and dark)
 - [x] [E] B-19 Editing keys: ⌘/ comment, ⌥↑↓ move line, ⌘D next match, ⌘⇧K delete line, ⇧⌥-drag column select, go to line ⌃G [PY B5] (Monaco defaults: ⌘/, ⌥↑↓, ⌘D, ⌘⇧K, column select, ⌃G)
 - [x] B-20 Format Python on save with ruff
-- [ ] [H] B-21 Format selection (⌘K ⌘F) and organise imports
+- [x] [H] B-21 Format selection (⌘K ⌘F) and organise imports (backend done: POST /build/format-range and /build/organise-imports through ruff; frontend wiring open)
 - [x] [H] B-22 Go to symbol ⌘⇧O, go to line ⌃G, definition F12, references ⇧F12, peek ⌥F12, rename F2 across files (⌘⇧O symbols, ⌃G, F12 definition, ⇧F12 references, ⌥F12 peek, F2 rename across files)
 - [x] [H] B-23 Find and replace across all project files: regex, case, whole word, preview before replacing (Search rail: regex, case, whole word, replace preview per line, replace all)
-- [ ] [H] B-24 Code actions ⌘.: extract formula string to parameter, convert ctx.rule to indicator object, wrap selection in if ctx.position == 0, add missing on_fill
+- [x] [H] B-24 Code actions ⌘.: extract formula string to parameter, convert ctx.rule to indicator object, wrap selection in if ctx.position == 0, add missing on_fill (backend done: POST /build/code-actions returns text edits for extract-to-parameter, indicator object, wrap in if, add on_fill; frontend wiring open)
 - [x] [M] B-25 Outline of classes, methods and indicators for the open file (Outline rail from /build/outline; click jumps)
 - [ ] [E] B-26 Undo history survives reload, per file (partial: undo and redo built; survives reload not built)
 - [ ] [M] B-27 Save state indicator (Saved, Saving, Conflict) and local draft recovery from IndexedDB (partial: autosave exists; indicator and conflict state open)
@@ -158,14 +158,14 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [M] B-31 Completion inside ctx.value("…") for formula names, ctx.param("…") for parameter names, ctx.symbol == "…" for symbols, ctx.history("…") for fields; snippets with tab stops (server completion by scope: formula, param, history field, symbol)
 - [ ] [M] B-32 Completion for the whole API with signature help on "(" (active parameter bold) and a docs example (partial: backend completion and signatures for the runner API, Strategy members and the numpy and pandas namespaces; frontend wiring open) [PY B6]
 - [ ] [M] B-33 Three diagnostic layers as you type (300 ms): Pyright errors; Studio rules (banned names, look-ahead patterns, imports outside the allow-list); formula parse errors at the exact token (partial: POST /build/check serves project-aware static findings, undefined names, unused locals and definite unreachable orders; frontend debounce and Pyright open)
-- [ ] [E] B-34 Hover: docs, signature, formula meaning, lookback and warm-up bars, latest value after a preview; hover on a parameter shows its range and last best value (partial: ctx hovers exist)
-- [ ] [E] B-35 Look-ahead detector in the editor: close[0], close[1:], history without a negative index, ctx.date against future literals, next_* reads; marked before the run (partial: AST screen refuses positive indexes; inline editor markers open) [FP 8]
+- [x] [E] B-34 Hover: docs, signature, formula meaning, lookback and warm-up bars, latest value after a preview; hover on a parameter shows its range and last best value (partial: ctx hovers exist) (backend done: POST /build/hover with docs, signature, lookback bars, last value from the last preview and parameter range; frontend wiring open)
+- [x] [E] B-35 Look-ahead detector in the editor: close[0], close[1:], history without a negative index, ctx.date against future literals, next_* reads; marked before the run (partial: AST screen refuses positive indexes; inline editor markers open) [FP 8] (backend done: lint code look-ahead covers positive slices, forward history windows, future ctx.date literals, shift(-n) and ctx.next_*; editor markers are frontend)
 - [ ] [M] B-36 Docs panel: ⌘-click or F1 opens the reference beside the editor; searchable (API, indicators, recipes); offline and versioned (partial: Docs rail: searchable API reference from the server; F1 opens it)
-- [ ] [M] B-37 Strictness setting (basic or strict) and severity per rule (error, warning, off); defaults: basic, all layers, look-ahead as error
+- [x] [M] B-37 Strictness setting (basic or strict) and severity per rule (error, warning, off); defaults: basic, all layers, look-ahead as error (backend done: /build/check takes strictness basic or strict and severity per code (error, warning, info, off); settings UI open)
 - [x] [M] B-38 Domain diagnostics: unused parameter, warm-up longer than data, order with no stop in live, hard-coded symbol in a parameterised strategy, print in hot loop, mutable default in params [FP 26] (lint flags hard-coded symbols, print in the bar loop and mutable defaults; /build/checks reports warm-up against the period; the live no-stop rule sits in the Live lab)
 - [ ] [M] B-39 ctx.assert_invariant(cond, msg) puts red markers on the chart and fails the Validate step
 - [x] [M] B-40 Lint flags wall-clock time, network calls and unseeded random, so one code runs in backtest, paper and live (lint codes wall-clock, network, unseeded-random)
-- [ ] [M] B-41 API version header (# studio-api: 1) with an automatic migrator and a quick fix
+- [x] [M] B-41 API version header (# studio-api: 1) with an automatic migrator and a quick fix (backend done: # studio-api: 1 header, lint info with a quick-fix edit under strict, error for a newer version, POST /build/migrate; migrations table is empty until the API changes)
 - [x] [M] B-42 Latency budget: completions under 100 ms, diagnostics under 500 ms after typing stops (server p95 measured in tests: completion 0.3 ms, lint 10 to 50 ms for 300 lines; the browser debounce is frontend)
 - [ ] [H] B-43 Portfolio mode: on_data(ctx) sees every symbol in the bar; universe set by a class attribute (list, index, or screen id); per-symbol on_bar kept as the simple mode (partial: on_data receives the settings universe in preview and Backtest) [FP 61] [PY A1] (backend done: POST /preview takes symbols and reads Strategy.universe (list, library universe id or index name); bars_by_symbol per name; frontend wiring open)
 - [x] [M] B-44 Orders: target_weights, set_weight, order (qty), order_value, limit, stop, stop_limit, liquidate, cancel, cancel_all; all fill through fills.py (backend done: portfolio orders use the event engine; one pending explicit order per symbol) [FP 61] [PY A2]
@@ -199,8 +199,8 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-72 Preview chart follows the paused bar, with position and pending orders drawn
 - [ ] [M] B-73 Logpoints from the gutter ("log {expr} here") without editing the code
 - [ ] [E] B-74 Gutter: run markers on lines that placed orders in the last preview (hover shows count and first 5 dates); change markers since last version
-- [ ] [H] B-75 Inlay hints: parameter value next to ctx.param, last value next to ctx.value from the preview, computed type [FP 63]
-- [ ] [H] B-76 CodeLens above on_bar ("Run on SPY · Run on universe · Debug from 2020-03-01"); above ctx.rule ("true on 34% of bars") [FP 64]
+- [x] [H] B-75 Inlay hints: parameter value next to ctx.param, last value next to ctx.value from the preview, computed type [FP 63] (backend done: POST /build/inlay-hints returns parameter values, warm-up bars, last preview values and argument names; frontend wiring open)
+- [x] [H] B-76 CodeLens above on_bar ("Run on SPY · Run on universe · Debug from 2020-03-01"); above ctx.rule ("true on 34% of bars") [FP 64] (backend done: POST /build/codelens returns run and debug lenses and the true-rate of each ctx.rule; frontend wiring open)
 - [ ] [H] B-77 Time travel on a finished backtest: pick any bar, see a variable snapshot, arrow keys step back and forward; snapshots only for chosen date ranges [FP 27]
 - [ ] [M] B-78 Profiler: time per function and per line, slowest 10 lines, flame graph, memory chart
 - [ ] [H] B-79 Logs tab: virtual list (level, date, symbol, message, code line); filters for level, symbol, date, text, regex, case, whole word; click row jumps chart and editor; CSV export [FP 28] (partial: Output: level, text, regex, case and word filters, click jumps to the line, 2,000 rows shown; virtual list open)

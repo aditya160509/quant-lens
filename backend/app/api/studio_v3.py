@@ -25,6 +25,7 @@ from app.services.studio_v3.core import (
     backtest,
     book,
     data,
+    editor,
     formula,
     imports,
     limits,
@@ -176,6 +177,8 @@ def _editor_project(request: BuildProjectDocument) -> Strategy:
 
 class BuildCheckRequest(BuildProjectDocument):
     params: dict[str, float] = Field(default_factory=dict)
+    strictness: Literal["basic", "strict"] = "basic"  # strict adds unused imports and the studio-api header
+    severity: dict[str, Literal["error", "warning", "info", "off"]] = Field(default_factory=dict)  # per problem code
 
 
 class BuildProblem(BaseModel):
@@ -186,6 +189,7 @@ class BuildProblem(BaseModel):
     end_column: int
     code: str
     message: str
+    fix: dict[str, Any] | None = None  # {title, edits[{line, column, end_line, end_column, text}]}
 
 
 class BuildCheckResult(BaseModel):
@@ -196,7 +200,7 @@ class BuildCheckResult(BaseModel):
 def check_python(request: BuildCheckRequest) -> BuildCheckResult:
     project = _editor_project(request)
     modules = {name[:-3] for name in project.files if name.endswith(".py")}
-    return BuildCheckResult(problems=pycode.lint(request.code, request.params, file=request.file, modules=modules))
+    return BuildCheckResult(problems=pycode.lint(request.code, request.params, file=request.file, modules=modules, strictness=request.strictness, severity=request.severity))
 
 
 class BuildCompleteRequest(BaseModel):
@@ -375,15 +379,13 @@ class ConditionResult(BaseModel):
     constant: bool | None
 
 
-@router.post("/build/condition", response_model=ConditionResult)
-def inspect_condition(request: ConditionRequest) -> ConditionResult:
-    params = _spec(request.spec).values()
+def _condition_stats(expression: str, params: dict[str, float], symbol: str) -> ConditionResult:
     try:
-        formula.parse(request.expression, params)
-        prepared = backtest.prepare(Settings(symbols=[request.symbol], benchmark=""))
+        formula.parse(expression, params)
+        prepared = backtest.prepare(Settings(symbols=[symbol], benchmark=""))
         panel = prepared.panel
         dates = panel.dates
-        values = formula.evaluate(request.expression, prepared.sig_bars, dates, params)[:, 0]
+        values = formula.evaluate(expression, prepared.sig_bars, dates, params)[:, 0]
     except SignalError as exc:
         raise HTTPException(422, {"message": exc.message, "start": exc.start, "end": exc.end,
                                   "hint": "Correct the condition before inspecting it."}) from exc
@@ -401,6 +403,97 @@ def inspect_condition(request: ConditionRequest) -> ConditionResult:
         last_true_date=fired_dates[-1] if fired_dates else None, fired_dates=fired_dates,
         constant=(count == observations) if observations and count in (0, observations) else None,
     )
+
+
+@router.post("/build/condition", response_model=ConditionResult)
+def inspect_condition(request: ConditionRequest) -> ConditionResult:
+    return _condition_stats(request.expression, _spec(request.spec).values(), request.symbol)
+
+
+class EditorPosition(BaseModel):
+    code: str = Field(max_length=200_000)
+    line: int = Field(ge=1)
+    column: int = Field(ge=1)
+    params: dict[str, dict[str, Any]] = Field(default_factory=dict)  # name -> {value, min, max, step}
+    last_values: dict[str, float] = Field(default_factory=dict)  # formula text -> value from the last preview
+
+
+class HoverResult(BaseModel):
+    contents: str
+    lookback_bars: int | None
+    last_value: float | None
+    range: dict[str, int]
+
+
+@router.post("/build/hover", response_model=HoverResult | None)
+def hover_python(request: EditorPosition) -> dict | None:
+    """Markdown docs for the symbol at the cursor, with lookback bars for a formula and the parameter range for a parameter."""
+    return editor.hover(request.code, request.line, request.column, request.params, request.last_values)
+
+
+class InlayRequest(BaseModel):
+    code: str = Field(max_length=200_000)
+    params: dict[str, float] = Field(default_factory=dict)
+    last_values: dict[str, float] = Field(default_factory=dict)
+
+
+@router.post("/build/inlay-hints")
+def inlay_python(request: InlayRequest) -> list[dict[str, Any]]:
+    return editor.inlay_hints(request.code, request.params, request.last_values)
+
+
+class LensRequest(BaseModel):
+    code: str = Field(max_length=200_000)
+    symbol: str = "SPY"
+    params: dict[str, float] = Field(default_factory=dict)
+    debug_from: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
+@router.post("/build/codelens")
+def codelens_python(request: LensRequest) -> list[dict[str, Any]]:
+    """Run and debug lenses above on_bar and on_data, and the true-rate of each literal ctx.rule on the symbol's last 2 years."""
+    symbol = normalize_symbol(request.symbol)
+    rates = {}
+    for _, expression in editor.formula_literals(request.code):
+        try:
+            rates[expression] = _condition_stats(expression, request.params, symbol).model_dump()
+        except HTTPException:
+            continue  # a rule that does not parse is lint's job
+    return editor.code_lens(request.code, symbol, rates, request.debug_from)
+
+
+class CodeActionRequest(BaseModel):
+    code: str = Field(max_length=200_000)
+    line: int = Field(ge=1)
+    column: int = Field(ge=1)
+    end_line: int | None = Field(default=None, ge=1)
+    end_column: int | None = Field(default=None, ge=1)
+
+
+@router.post("/build/code-actions")
+def code_actions_python(request: CodeActionRequest) -> list[dict[str, Any]]:
+    return editor.code_actions(request.code, request.line, request.column, request.end_line, request.end_column)
+
+
+@router.post("/build/organise-imports")
+def organise_imports_python(request: CodeRequest) -> dict[str, str]:
+    return {"code": editor.organise_imports(request.code)}
+
+
+class FormatRangeRequest(CodeRequest):
+    start_line: int = Field(ge=1)
+    end_line: int = Field(ge=1)
+
+
+@router.post("/build/format-range")
+def format_range_python(request: FormatRangeRequest) -> dict[str, str]:
+    return {"code": editor.format_range(request.code, request.start_line, request.end_line)}
+
+
+@router.post("/build/migrate")
+def migrate_python(request: CodeRequest) -> dict[str, Any]:
+    """Bring code to the current `# studio-api` version; returns the new code and what changed."""
+    return editor.migrate(request.code)
 
 
 class PreviewLog(BaseModel):

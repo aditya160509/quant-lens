@@ -6,10 +6,12 @@ shortcut: subprocess + resource limits + AST allow-list, not a container; switch
 from __future__ import annotations
 
 import ast
+import datetime as dt
 import inspect
 import json
 import keyword
 import math
+import re
 import subprocess
 import sys
 import tempfile
@@ -537,7 +539,65 @@ def _unreachable_orders(tree):
     }
 
 
-def lint(code: str, params: dict[str, float], *, file: str = "main.py", modules: set[str] | None = None) -> list[dict]:
+STUDIO_API = 1  # B-41: the Python API version a strategy is written against, as `# studio-api: 1` in its first lines
+_SERIES = {"open", "high", "low", "close", "volume"}
+
+
+def api_version(code: str) -> int | None:
+    for line in code.splitlines()[:5]:
+        match = re.fullmatch(r"#\s*studio-api:\s*(\d+)\s*", line)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _positive(node: ast.AST | None, strict: bool) -> bool:
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.UAdd):
+        node = node.operand
+    return isinstance(node, ast.Constant) and type(node.value) is int and (node.value > 0 if strict else node.value >= 0)
+
+
+def _lookahead_patterns(tree: ast.AST) -> list[tuple[ast.AST, str]]:
+    """B-35 beyond positive OHLCV indexes: slices that start now or later, history windows read forward, future date literals, negative shifts, next_* reads."""
+    found: list[tuple[ast.AST, str]] = []
+    windows = {t.id for n in ast.walk(tree) if isinstance(n, ast.Assign) and isinstance(n.value, ast.Call) and isinstance(n.value.func, ast.Attribute)
+               and n.value.func.attr == "history" for t in n.targets if isinstance(t, ast.Name)}
+    today = dt.date.today().isoformat()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Slice) and isinstance(node.value, ast.Attribute) and node.value.attr in _SERIES:
+            if _positive(node.slice.lower, False) or _positive(node.slice.upper, True):
+                found.append((node, "This slice reads the current or a later bar; use negative bounds like close[-20:]."))
+        elif isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and node.value.id in windows and _positive(node.slice, True):
+            found.append((node, "A history window is indexed 0 for now and negative for the past; a positive index reads a future bar."))
+        elif isinstance(node, ast.Compare) and any(isinstance(x, ast.Attribute) and x.attr == "date" and isinstance(x.value, ast.Name) and x.value.id == "ctx"
+                                                    for x in (node.left, *node.comparators)):
+            for x in (node.left, *node.comparators):
+                if isinstance(x, ast.Constant) and isinstance(x.value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", x.value) and x.value > today:
+                    found.append((x, f"{x.value} is in the future; a rule keyed to a later date uses information from after the run."))
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "shift" and node.args:
+            arg = node.args[0]
+            if isinstance(arg, ast.UnaryOp) and isinstance(arg.op, ast.USub) and isinstance(arg.operand, ast.Constant):
+                found.append((node, "shift with a negative lag moves later bars onto this one."))
+        elif isinstance(node, ast.Attribute) and node.attr.startswith("next_") and isinstance(node.value, ast.Name) and node.value.id == "ctx":
+            found.append((node, f"ctx.{node.attr} reads a later bar; strategies see the current bar and the past only."))
+    return found
+
+
+_LEVELS = {"error", "warning", "info", "off"}
+
+
+def lint(code: str, params: dict[str, float], *, file: str = "main.py", modules: set[str] | None = None,
+         strictness: str = "basic", severity: dict[str, str] | None = None) -> list[dict]:
+    """strictness "strict" adds unused imports and the API header; `severity` maps a problem code to error, warning, info or off (B-37)."""
+    problems = _lint(code, params, file=file, modules=modules, strict=strictness == "strict")
+    for code_name, level in (severity or {}).items():
+        if level not in _LEVELS:
+            raise ValueError(f"Severity for {code_name} must be one of {', '.join(sorted(_LEVELS))}")
+    levels = severity or {}
+    return [{**p, "severity": levels.get(p["code"], p["severity"])} for p in problems if levels.get(p["code"]) != "off"]
+
+
+def _lint(code: str, params: dict[str, float], *, file: str = "main.py", modules: set[str] | None = None, strict: bool = False) -> list[dict]:
     problems = [
         {"severity": f["severity"], "line": f["line"], "column": f["start"] + 1, "end_column": f["end"] + 1,
          "code": "studio-check", "message": f["message"]}
@@ -552,6 +612,17 @@ def lint(code: str, params: dict[str, float], *, file: str = "main.py", modules:
                          "end_column": node.end_col_offset + 1, "code": "unreachable-order",
                          "message": "This order cannot be reached."})
     problems.extend(_domain_problems(tree))
+    for node, message in _lookahead_patterns(tree):
+        problems.append({"severity": "error", "line": node.lineno, "column": node.col_offset + 1, "end_column": (node.end_col_offset or node.col_offset) + 1,
+                         "code": "look-ahead", "message": message})
+    version = api_version(code)
+    if version is not None and version > STUDIO_API:
+        problems.append({"severity": "error", "line": 1, "column": 1, "end_column": 1, "code": "studio-api",
+                         "message": f"This code targets studio-api {version}; this server speaks {STUDIO_API}."})
+    elif version is None and strict and file == "main.py":
+        problems.append({"severity": "info", "line": 1, "column": 1, "end_column": 1, "code": "studio-api",
+                         "message": f"Add # studio-api: {STUDIO_API} so a future API change can migrate this file.",
+                         "fix": {"title": f"Add # studio-api: {STUDIO_API}", "edits": [{"line": 1, "column": 1, "end_line": 1, "end_column": 1, "text": f"# studio-api: {STUDIO_API}\n"}]}})
     for node in ast.walk(tree):
         if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute) and node.value.attr in {"open", "high", "low", "close", "volume"}:
             index = node.slice
@@ -564,7 +635,7 @@ def lint(code: str, params: dict[str, float], *, file: str = "main.py", modules:
     try:
         result = subprocess.run(
             [str(Path(sys.executable).with_name("ruff")), "check", "--isolated", "--ignore-noqa",
-             "--config", 'builtins = ["math"]', "--select", "F821,F841", "--output-format", "json",
+             "--config", 'builtins = ["math"]', "--select", "F821,F841,F401" if strict else "F821,F841", "--output-format", "json",
              "--stdin-filename", "main.py", "-"], input=code, capture_output=True, text=True, check=False, timeout=0.1,
         )
         rows = json.loads(result.stdout) if result.returncode in (0, 1) else []
@@ -572,7 +643,7 @@ def lint(code: str, params: dict[str, float], *, file: str = "main.py", modules:
         rows = []
     for row in rows:
         location, end = row["location"], row["end_location"]
-        problems.append({"severity": "warning" if row["code"] == "F841" else "error", "line": location["row"],
+        problems.append({"severity": "warning" if row["code"] in {"F841", "F401"} else "error", "line": location["row"],
                          "column": location["column"], "end_column": end["column"],
                          "code": row["code"], "message": row["message"]})
     return [{**problem, "file": file} for problem in sorted(problems, key=lambda p: (p["line"], p["column"], p["code"]))]
