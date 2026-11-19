@@ -181,6 +181,11 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const logRe = finder(logQ, opt);
   const logs = (prev?.logs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logSym || l.symbol === logSym) && (!logFrom || l.date >= logFrom) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}`))));
   const plots = Object.entries(prev?.plots ?? {});
+  // B-81: the plots of the preview before this one, overlaid dashed when "Previous run" is on.
+  const [before, setBefore] = useState<Record<string, Point[]> | null>(null);
+  const [showBefore, setShowBefore] = useState(false);
+  const lastPlots = useRef(prev?.plots);
+  useEffect(() => { if (lastPlots.current && prev?.plots && lastPlots.current !== prev.plots) setBefore(lastPlots.current); if (prev?.plots) lastPlots.current = prev.plots; }, [prev?.plots]);
   const re = finder(q, opt);
   const hits = re ? Object.entries(files).flatMap(([f, text]) => text.split("\n").flatMap((line, i) => { re.lastIndex = 0; return re.test(line) ? [{ file: f, line: i + 1, text: line }] : []; })) : [];
 
@@ -440,12 +445,16 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
               ) : null}
               {tab === "plots" ? (
                 <div className="dv-plots">
-                  {plots.length ? <div className="dv-chips">{plots.map(([n], i) => <button key={n} className="pill" aria-pressed={plotsOn[n] !== false} onClick={() => setPlotsOn((o) => ({ ...o, [n]: o[n] === false }))}><i style={{ background: SERIES[i % SERIES.length] }} />{n}</button>)}</div> : null}
+                  {plots.length ? <div className="dv-chips">{plots.map(([n], i) => <button key={n} className="pill" aria-pressed={plotsOn[n] !== false} onClick={() => setPlotsOn((o) => ({ ...o, [n]: o[n] === false }))}><i style={{ background: SERIES[i % SERIES.length] }} />{n}</button>)}{before ? <button className="pill" aria-pressed={showBefore} onClick={() => setShowBefore(!showBefore)}>Previous run</button> : null}</div> : null}
                   {mainPlots.length && priceRows.length ? <div className="dv-plot"><b>Price · {symbol}</b><TimeSeries data={priceRows} height={200} legend={false}
                     series={[{ key: "close", label: symbol, color: "var(--text-3)" }, ...mainPlots.filter(([n]) => plotsOn[n] !== false).map(([n]) => ({ key: n, label: n, color: SERIES[plots.findIndex(([x]) => x === n) % SERIES.length] }))]}
                     markers={(prev?.marks ?? []).filter((m) => m.symbol === symbol).map((m) => ({ date: m.date, label: m.label, color: "var(--accent)" }))} /></div> : null}
                   {plots.filter(([n]) => prev?.plot_charts?.[n] !== "main" && plotsOn[n] !== false).map(([name, pts]) => (
-                    <div key={name} className="dv-plot"><b>{name}</b><TimeSeries data={pts.filter((p) => p.value !== null).map((p) => ({ date: p.date, v: p.value }))} series={[{ key: "v", label: name, color: SERIES[plots.findIndex(([x]) => x === name) % SERIES.length] }]} height={140} legend={false} /></div>
+                    <div key={name} className="dv-plot"><b>{name}</b>{(() => {
+                      const old = showBefore ? new Map((before?.[name] ?? []).map((p) => [p.date, p.value])) : null;
+                      const color = SERIES[plots.findIndex(([x]) => x === name) % SERIES.length];
+                      return <TimeSeries data={pts.filter((p) => p.value !== null).map((p) => ({ date: p.date, v: p.value, ...(old ? { b: old.get(p.date) ?? null } : {}) }))} series={[{ key: "v", label: name, color }, ...(old?.size ? [{ key: "b", label: `${name} (previous)`, color: "var(--text-4)" }] : [])]} height={140} legend={!!old?.size} />;
+                    })()}</div>
                   ))}
                   {Object.entries(prev?.tables ?? {}).map(([name, rows]) => <div key={name} className="dv-plot"><b>{name}</b><DataTable rows={rows.map((r) => ({ date: r.date, symbol: r.symbol, ...r.cells }))} opts={{ viewKey: `studio:dev:table:${name}` }} /></div>)}
                   {!plots.length && !Object.keys(prev?.tables ?? {}).length ? <p className="dv-empty">No plots</p> : null}
