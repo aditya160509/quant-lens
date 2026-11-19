@@ -202,6 +202,11 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
       if (JSON.stringify({ ...BLANK, ...b.spec }) !== JSON.stringify({ ...BLANK, ...(loaded.draft ?? loaded.spec) })) setRecover(b); else localStorage.removeItem(`studio:draft:${loaded.id}`);
     } catch { /* blocked */ }
   }, [loaded?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A new strategy has no server copy, so its browser draft comes back as it was (B-6).
+  useEffect(() => {
+    if (id || new URLSearchParams(location.search).has("share")) return;
+    try { const raw = localStorage.getItem("studio:draft:new"); if (raw) edit((JSON.parse(raw) as { spec: Spec }).spec); } catch { /* blocked */ }
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // True-rate and last true date of every rule on the preview name, 600 ms after typing stops (B-108, B-111, B-116).
   useEffect(() => {
