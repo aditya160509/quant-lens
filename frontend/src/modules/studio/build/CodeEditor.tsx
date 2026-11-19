@@ -5,10 +5,13 @@ import { useEffect, useRef } from "react";
 import { studio } from "../api";
 
 type Ed = Parameters<OnMount>[0];
-export type Problem = { severity: string; file: string; line: number; column: number; end_column: number; code: string; message: string };
+type TextEdit = { line: number; column: number; end_line: number; end_column: number; text: string };
+export type Problem = { severity: string; file: string; line: number; column: number; end_column: number; code: string; message: string; fix?: { title: string; edits: TextEdit[] } | null };
 type Member = { name: string; kind: string; signature: string | null; documentation: string | null; insert_text?: string | null };
 type UserSnippet = { name: string; prefix: string; body: string; description: string };
-type Project = { file: string; files: Record<string, string>; params: string[]; symbols: string[]; goto: (file: string, line: number, column?: number) => void; replace: (files: Record<string, string>) => void; snippets?: UserSnippet[] };
+type Project = { file: string; files: Record<string, string>; params: string[]; symbols: string[]; goto: (file: string, line: number, column?: number) => void; replace: (files: Record<string, string>) => void; snippets?: UserSnippet[];
+  paramSpecs?: Record<string, { value: number; min?: number | null; max?: number | null; step?: number | null }>; problems?: Problem[];
+  lens?: (command: string, args: Record<string, unknown>) => void; addParam?: (name: string, value: number) => void };
 export type EditorAction = { id: string; label: string; keys?: (m: Monaco) => number[]; run: (line: number) => void };
 type Sym = { name: string; kind: string; line: number; column: number; end_line: number; end_column: number; children: Sym[] };
 
@@ -99,6 +102,40 @@ function register(monaco: Monaco) {
       return items.map(map);
     },
   });
+  const values = () => Object.fromEntries(Object.entries(live.current?.paramSpecs ?? {}).map(([k, v]) => [k, v.value]));
+  monaco.languages.registerHoverProvider("python", {
+    provideHover: async (model, pos) => {
+      const h = await studio<{ contents: string; range: { line: number; column: number; end_line: number; end_column: number } } | null>("POST", "/build/hover", { code: model.getValue(), line: pos.lineNumber, column: pos.column, params: live.current?.paramSpecs ?? {} }).catch(() => null);
+      return h ? { contents: [{ value: h.contents }], range: new monaco.Range(h.range.line, h.range.column, h.range.end_line ?? h.range.line, h.range.end_column ?? h.range.column) } : null;
+    },
+  });
+  monaco.languages.registerInlayHintsProvider("python", {
+    provideInlayHints: async (model) => {
+      const hints = await studio<{ line: number; column: number; label: string; kind: string }[]>("POST", "/build/inlay-hints", { code: model.getValue(), params: values() }).catch(() => []);
+      return { hints: hints.map((h) => ({ position: { lineNumber: h.line, column: h.column }, label: h.kind === "name" ? h.label : ` ${h.label}`, kind: h.kind === "name" ? monaco.languages.InlayHintKind.Parameter : monaco.languages.InlayHintKind.Type, paddingLeft: h.kind !== "name" })), dispose: () => undefined };
+    },
+  });
+  const lensCmd = monaco.editor.registerCommand("studio.lens", (_a, command: string, args: Record<string, unknown>) => live.current?.lens?.(command, args));
+  const paramCmd = monaco.editor.registerCommand("studio.addParam", (_a, name: string, value: number) => live.current?.addParam?.(name, value));
+  void lensCmd; void paramCmd;
+  monaco.languages.registerCodeLensProvider("python", {
+    provideCodeLenses: async (model) => {
+      const lenses = await studio<{ line: number; title: string; command: string; arguments: Record<string, unknown> }[]>("POST", "/build/codelens", { code: model.getValue(), symbol: live.current?.symbols[0] ?? "SPY", params: values() }).catch(() => []);
+      return { lenses: lenses.map((l, i) => ({ range: new monaco.Range(l.line, 1, l.line, 1), id: `lens${i}`, command: { id: "studio.lens", title: l.title, arguments: [l.command, l.arguments] } })), dispose: () => undefined };
+    },
+  });
+  const edits = (model: { uri: unknown }, list: TextEdit[]) => list.map((e) => ({ resource: model.uri as never, versionId: undefined, textEdit: { range: new monaco.Range(e.line, e.column, e.end_line, e.end_column), text: e.text } }));
+  monaco.languages.registerCodeActionProvider("python", {
+    provideCodeActions: async (model, range) => {
+      const found = await studio<{ title: string; kind: string; edits: TextEdit[]; parameter?: { name: string; value: number } }[]>("POST", "/build/code-actions", { code: model.getValue(), line: range.startLineNumber, column: range.startColumn,
+        ...(range.isEmpty() ? {} : { end_line: range.endLineNumber, end_column: range.endColumn }) }).catch(() => []);
+      const fixes = (live.current?.problems ?? []).filter((p) => p.fix && p.line >= range.startLineNumber && p.line <= range.endLineNumber);
+      return { actions: [
+        ...fixes.map((p) => ({ title: p.fix!.title, kind: "quickfix", isPreferred: true, edit: { edits: edits(model, p.fix!.edits) } })),
+        ...found.map((a) => ({ title: a.title, kind: a.kind, edit: { edits: edits(model, a.edits) }, command: a.parameter ? { id: "studio.addParam", title: "Add parameter", arguments: [a.parameter.name, a.parameter.value] } : undefined })),
+      ], dispose: () => undefined };
+    },
+  });
   monaco.languages.registerDefinitionProvider("python", {
     provideDefinition: async (model, pos) => {
       const p = live.current;
@@ -182,6 +219,14 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     const c = editor.createDecorationsCollection();
     deco.current = { clear: () => c.clear(), set: (d) => c.set(d) };
     editor.onMouseDown((e) => { if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && e.target.position) keys.current.onGutter?.(e.target.position.lineNumber); });
+    const rewrite = (path: string, extra: Record<string, unknown> = {}) => void studio<{ code: string }>("POST", path, { code: editor.getValue(), ...extra }).then((r) => {
+      const model = editor.getModel(); if (!model || r.code === model.getValue()) return;
+      editor.executeEdits("studio", [{ range: model.getFullModelRange(), text: r.code }]);
+    }, () => undefined);
+    editor.addAction({ id: "studio.formatSelection", label: "Format selection", keybindings: [monaco.KeyMod.chord(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF)],
+      run: (x) => { const r = x.getSelection(); if (r) rewrite("/build/format-range", { start_line: r.startLineNumber, end_line: r.endLineNumber }); } });
+    editor.addAction({ id: "studio.organiseImports", label: "Organise imports", keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyO], run: () => rewrite("/build/organise-imports") });
+    editor.addAction({ id: "studio.migrate", label: "Migrate to the current Studio API", run: () => rewrite("/build/migrate") });
     for (const a of acts.current) editor.addAction({ id: a.id, label: a.label, keybindings: a.keys?.(monaco), run: (x) => acts.current.find((y) => y.id === a.id)?.run(x.getPosition()?.lineNumber ?? 1) });
   };
 

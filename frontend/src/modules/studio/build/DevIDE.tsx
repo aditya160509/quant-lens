@@ -33,7 +33,7 @@ type Snippet = { id: string; name: string; prefix: string; body: string; descrip
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 type Tab = "problems" | "output" | "plots" | "trades" | "results" | "debug";
 type Rail = "files" | "outline" | "search" | "versions" | "docs" | "templates";
-type Spec = { code: string; files?: Record<string, string>; params: Record<string, { value: number }>; [k: string]: unknown };
+type Spec = { code: string; files?: Record<string, string>; params: Record<string, { value: number; min?: number | null; max?: number | null; step?: number | null }>; [k: string]: unknown };
 export type Saved = "saved" | "draft" | "saving" | "conflict" | "new";
 
 const store = {
@@ -95,6 +95,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [lastPreview, setLastPreview] = useState<string | null>(null);
   const [qc, setQc] = useState<QC | null>(null);
   const [split, setSplit] = useState<string | null>(null);
+  const [strict, setStrict] = useState(() => { try { return localStorage.getItem("studio:dev:strict") === "1"; } catch { return false; } });
   const [timeline, setTimeline] = useState<Timeline[]>([]);
   const [snaps, setSnaps] = useState<Snapshot[]>([]);
   const [snippets, setSnippets] = useState<Snippet[]>([]);
@@ -117,11 +118,11 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   useEffect(() => {
     if (!source.trim()) { setLint([]); setOutline([]); return; }
     const t = setTimeout(() => {
-      void studio<{ problems: Problem[] }>("POST", "/build/check", { code: source, file: active, files, params: Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, p.value])) }).then((r) => setLint(r.problems), () => undefined);
+      void studio<{ problems: Problem[] }>("POST", "/build/check", { code: source, file: active, files, strictness: strict ? "strict" : "basic", params: Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, p.value])) }).then((r) => setLint(r.problems), () => undefined);
       void studio<Sym[]>("POST", "/build/outline", { code: source }).then(setOutline, () => undefined);
     }, 300);
     return () => clearTimeout(t);
-  }, [source, active, files, spec.params]);
+  }, [source, active, files, spec.params, strict]);
   useEffect(() => {
     if (rail !== "versions" || !strategyId) return;
     void studio<Timeline[]>("GET", `/strategies/${strategyId}/timeline`).then(setTimeline, () => undefined);
@@ -344,7 +345,9 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
             <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={onSave} onRun={onRun} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
               actions={actions} breakpoints={bps[active] ?? []} onGutter={toggleBp} readOnly={readOnly} snippets={snippets}
               onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
-              project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles }} />
+              project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles, paramSpecs: spec.params, problems,
+                addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
+                lens: (command, args) => { if (command === "debug") debug({ date: String(args.date ?? "") }); else if (command === "inspect_condition") { setTab("output"); toast(`${String(args.expression)} on ${String(args.symbol)}`); } else onRun(); } }} />
           )}
         </div>
         <div className="dv-grip" role="separator" aria-orientation="horizontal" aria-label="Resize panel" onPointerDown={drag} onDoubleClick={() => setPanelOpen((o) => !o)} />
@@ -356,6 +359,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
               <button className="icon-btn" aria-label="Hide panel" title="Hide panel ⌘J" onClick={() => setPanelOpen(false)}><X size={13} /></button>
             </div>
             <div className="dv-pbody">
+              {tab === "problems" ? <label className="dv-strict"><input type="checkbox" checked={strict} onChange={(e) => { setStrict(e.target.checked); try { localStorage.setItem("studio:dev:strict", e.target.checked ? "1" : "0"); } catch { /* blocked */ } }} />Strict</label> : null}
               {tab === "problems" ? (problems.length ? <>
                 {problems.map((p, i) => (
                   <button key={i} className="dv-prob" onClick={() => goto(p.file, p.line, p.column)}><b className={p.severity}>{p.severity}</b><span>{p.message}</span><i>{p.file}:{p.line}:{p.column}{p.code ? ` ${p.code}` : ""}</i></button>
