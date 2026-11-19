@@ -315,6 +315,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
                     <b>v{v.version}{v.name ? ` ${v.name}` : ""}{v.locked ? <Lock size={11} style={{ marginLeft: 5 }} aria-label="Locked" /> : null} <span className="dv-muted">{new Date(v.created * 1000).toLocaleDateString()} · {v.actor}</span></b>
                     {v.tags.length ? <span className="dv-tags">{v.tags.map((t) => <i key={t}>{t}</i>)}</span> : null}
                     <span>{v.total_return != null ? `${pct(v.total_return)} · Sharpe ${v.sharpe?.toFixed(2) ?? "—"}` : "not run"}</span>
+                    {v.spark?.length > 1 ? <Spark values={v.spark} /> : null}
                   </button>
                   <div className="dv-vact">
                     <button className="icon-btn" title="Name and tags" aria-label={`Name v${v.version}`} onClick={() => labelVersion(v)}><Tag size={12} /></button>
@@ -565,4 +566,10 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
       </dialog>
     </div>
   );
+}
+
+function Spark({ values }: { values: number[] }) {
+  const lo = Math.min(...values), hi = Math.max(...values), w = 120, h = 22;
+  const d = values.map((v, i) => `${i ? "L" : "M"}${(i / (values.length - 1)) * w},${h - ((v - lo) / (hi - lo || 1)) * h}`).join("");
+  return <svg className="dv-spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden><path d={d} fill="none" stroke={values.at(-1)! >= values[0] ? "var(--up)" : "var(--down)"} strokeWidth="1.5" /></svg>;
 }

@@ -368,3 +368,4 @@
 .dv-watch b { font-weight: 600; } .dv-watch b.error { color: var(--down); font-weight: 400; }
 .bd-tpl-stat { margin-top: 4px; font: 11px var(--mono); font-style: normal; color: var(--up); }
 .bd-tpl-stat[data-neg] { color: var(--down); }
+.dv-spark { display: block; margin-top: 4px; }
