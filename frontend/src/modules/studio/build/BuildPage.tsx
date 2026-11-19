@@ -109,7 +109,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   type Preview = Omit<DevPreview, "trades"> & { bars: { date: string; close: number }[]; trades: { entry_date: string; exit_date: string; side: string; return: number }[]; total_return?: number; repaint?: { cuts: number; changed: number; dates: string[] } };
   const [prev, setPrev] = useState<Preview | null>(null);
   const [diff, setDiff] = useState<{ version: number; rows: [string, string, string][] } | null>(null);
-  const [proposal, setProposal] = useState<{ fields: Record<string, string>; exits: Record<string, number>; unmatched: string[] } | { error: string } | null>(null);
+  type Proposal = { fields: Record<string, string>; exits: Record<string, number>; unmatched: string[]; assumptions?: { word: string; start: number; end: number; meaning: string; formula: string }[]; restated?: string };
+  const [proposal, setProposal] = useState<Proposal | { error: string } | null>(null);
   const [catalogue, setCatalogue] = useState<string[]>([]);
   type Ref = { name: string; doc: string; example?: string; args?: string[] };
   const [reference, setReference] = useState<Ref[]>([]);
@@ -461,7 +462,16 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
               {proposal && "error" in proposal ? <p className="bd-find error"><b>Not understood</b>{proposal.error}</p> : null}
               {proposal && !("error" in proposal) ? (
                 <div className="bd-proposal">
-                  {Object.entries(proposal.fields).map(([k, v]) => <p key={k}><span>{ROLES.find((r) => r[0] === k)?.[1]}</span><code>{v}</code></p>)}
+                  <p className="bd-said">{(() => {
+                    const marks = [...(proposal.assumptions ?? []).map((a) => ({ ...a, kind: "assumed" })), ...proposal.unmatched.flatMap((w) => { const i = english.toLowerCase().indexOf(w.toLowerCase()); return i < 0 ? [] : [{ word: w, start: i, end: i + w.length, meaning: "not understood", formula: "", kind: "ignored" }]; })].sort((a, b) => a.start - b.start);
+                    const out: React.ReactNode[] = []; let at = 0;
+                    for (const m of marks) { if (m.start < at) continue; out.push(english.slice(at, m.start)); out.push(<mark key={m.start} data-kind={m.kind} title={m.formula ? `${m.meaning}: ${m.formula}` : m.meaning}>{english.slice(m.start, m.end)}</mark>); at = m.end; }
+                    out.push(english.slice(at)); return out;
+                  })()}</p>
+                  {proposal.assumptions?.length ? proposal.assumptions.map((a) => <p key={a.start}><span>“{a.word}” read as</span><code>{a.formula}</code></p>) : null}
+                  {Object.entries(proposal.fields).map(([k, v]) => <div key={k} className="bd-rule"><span>{ROLES.find((r) => r[0] === k)?.[1]}</span>
+                    <GroupEditor id={`p-${k}`} group={toGroup(v) ?? { op: "all", items: [{ rule: v, enabled: true }] }} suggestions={catalogue} onChange={(g) => setProposal({ ...proposal, fields: { ...proposal.fields, [k]: groupFormula(g) } })} /></div>)}
+                  {proposal.restated ? <p className="bd-desc">{proposal.restated}</p> : null}
                   {Object.entries(proposal.exits).map(([k, v]) => <p key={k}><span>{EXITS.find((r) => r[0] === k)?.[1]}</span><code>{k === "time_stop" ? `${v} bars` : `${+(v * 100).toFixed(2)}%`}</code></p>)}
                   {proposal.unmatched.length ? <p className="bd-find warning"><b>Ignored</b>{proposal.unmatched.join(", ")}</p> : null}
                 </div>

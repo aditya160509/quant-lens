@@ -349,3 +349,6 @@
 .gx-add .input { width: auto; height: 26px; font-size: 12px; }
 .gx-folded { font: 11.5px var(--mono); color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bd-udiff span[data-k="add"] { color: var(--up); } .bd-udiff span[data-k="del"] { color: var(--down); } .bd-udiff span[data-k="hunk"] { color: var(--text-3); }
+.bd-said { display: block !important; font-size: 13px !important; color: var(--text) !important; line-height: 1.6; }
+.bd-said mark { background: color-mix(in oklch, var(--accent) 22%, transparent); color: var(--text); border-radius: 3px; padding: 0 2px; }
+.bd-said mark[data-kind="ignored"] { background: color-mix(in oklch, var(--warn) 25%, transparent); text-decoration: underline wavy var(--warn); }
