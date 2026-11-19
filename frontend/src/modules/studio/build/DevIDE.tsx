@@ -6,6 +6,7 @@ import { BookOpen, Bug, CaseSensitive, Columns2, Lock, RotateCcw, Tag, Unlock, F
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { SERIES } from "@/charts/core";
+import { Distribution } from "@/charts/Distribution";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { DataTable } from "@/kit/DataTable";
 import { studio, usePyTemplates } from "../api";
@@ -25,7 +26,9 @@ export type DevPreview = {
 };
 type Profile = { lines?: { file?: string; line: number; seconds: number; hits?: number; source?: string }[]; functions?: { function?: string; name?: string; seconds: number; calls?: number }[] };
 export type QuickRun = { job_id: string; level: "quick" | "full"; status: string; progress?: { percent?: number; message?: string; partial?: { symbols?: number; bars?: number; elapsed_seconds?: number; budget_seconds?: number } } | null;
-  error?: string | null; delta?: { total_return: number | null; sharpe: number | null; trades: number | null } | null; result?: { meta?: { headline?: string; total_return?: number; metrics?: Record<string, number | null> } } };
+  error?: string | null; delta?: { total_return: number | null; sharpe: number | null; trades: number | null } | null;
+  result?: { summary_cards?: { label: string; value: number | null }[]; charts?: { equity_curve?: { date: string; strategy: number; benchmark: number | null }[] }; tables?: { trades?: Record<string, unknown>[] };
+    meta?: { headline?: string; total_return?: number; metrics?: Record<string, number | null>; trade_split?: Record<string, Record<string, number>> } } };
 type Sym = { name: string; kind: string; line: number; column: number; children: Sym[] };
 type Debug = { date: string; symbol: string; bar_index: number; state: Record<string, unknown>; context: Record<string, number | null>; orders: Record<string, unknown>[]; fills: Record<string, unknown>[];
   previous_date: string | null; next_date: string | null; breakpoint?: { file: string; line: number; hit_count: number; locals: Record<string, unknown> } | null; equity_change?: number | null };
@@ -441,6 +444,14 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
                         <div className="kpi"><span>Trades</span><b>{m.metrics?.trades ?? "—"}</b>{d ? <i className="dv-delta">{sign(d.trades, (x) => String(x))}</i> : null}</div>
                       </div>
                       {m.headline ? <p className="bd-desc">{m.headline}</p> : null}
+                      {quick?.result?.summary_cards?.length ? <div className="dv-cards">{quick.result.summary_cards.filter((c) => !/^(sharpe|max drawdown|trades)$/i.test(c.label)).map((c) => <span key={c.label}><i>{c.label}</i><b>{c.value == null ? "—" : /win/i.test(c.label) ? `${(c.value * 100).toFixed(1)}%` : /drawdown|cagr/i.test(c.label) ? pct(c.value) : c.value.toFixed(2)}</b></span>)}</div> : null}
+                      {quick?.result?.charts?.equity_curve?.length ? <div className="dv-plot"><b>Equity vs benchmark</b><TimeSeries data={quick.result.charts.equity_curve} height={200}
+                        series={[{ key: "strategy", label: "Strategy", color: SERIES[0] }, { key: "benchmark", label: "Benchmark", color: "var(--text-3)" }]} /></div> : null}
+                      {m.trade_split ? <div className="dv-plot"><b>All, long and short</b><DataTable rows={Object.entries(m.trade_split).map(([side, v]) => ({ side, trades: v.count ?? 0, win_rate: v.win_rate ?? null, profit_factor: v.profit_factor ?? null, avg_win: v.avg_win ?? null, avg_loss: v.avg_loss ?? null, expectancy: v.expectancy ?? null }))} /></div> : null}
+                      {quick?.result?.tables?.trades?.length ? <div className="dv-dgrid">
+                        <div className="dv-plot"><b>Trade returns</b><Distribution values={quick.result.tables.trades.map((t) => Number(t.return)).filter(Number.isFinite)} xLabel="Return per trade" height={180} format={(v) => `${(v * 100).toFixed(1)}%`} /></div>
+                        <div className="dv-plot"><b>Trades</b><DataTable rows={quick.result.tables.trades} opts={{ viewKey: "studio:dev:quicktrades" }} /></div>
+                      </div> : null}
                       {quick?.level === "full" ? <Link className="btn sm" href="/studio/backtest">Open in Backtest</Link> : null}
                     </> : !quick && r ? (
                       <div className="kpis">

@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 112 | 163 | 21 | 70 |
+| Build | 113 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 112 | 163 |
+| Build | 113 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **222** | **538** |
+| **All pages** | **223** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 112 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 113 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -207,7 +207,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-80 Structured logs: ctx.log.info("entry", symbol=s, rsi=r) stored as key values, searchable [FP 28] (backend done: ctx.log, ctx.log.info/warning/error store clean key values on each log row; filtering and search are frontend)
 - [ ] [E] B-81 Plots tab: each ctx.plot series overlays the price or sits in its own pane on a shared time axis; toggle each; compare across two runs [FP 29] [PY B2] (partial: overlay or own pane, toggle per series; compare across runs open)
 - [x] [E] B-82 Problems tab: static and runtime errors, click to jump to the line [PY B2] (Problems tab: lint, compile and runtime, click jumps; traceback frames listed)
-- [ ] [M] B-83 Results tab: compact Backtest report (KPI strip with All, Long, Short; equity vs benchmark; trade list; trade histogram; Properties block); Open in Backtest without recompute [PY B2] (partial: Results tab: return, Sharpe, trades for this version and Open in Backtest; full report open)
+- [x] [M] B-83 Results tab: compact Backtest report (KPI strip with All, Long, Short; equity vs benchmark; trade list; trade histogram; Properties block); Open in Backtest without recompute [PY B2] (Results tab after a quick or full run: KPIs with change since the last run, CAGR, win rate, profit factor, equity vs benchmark, all/long/short table, trade-return histogram, trade list; Open in Backtest)
 - [x] [E] B-84 Three run levels: live preview (600 ms debounce, one symbol, 2 years), quick run ⌘↵ (universe, 5 years), full run ⌘⇧↵ (recorded in the ledger) (partial: preview built (300 ms, 2 years); quick and full levels not split) (backend done: POST /build/run with level quick (top 50 by liquidity, last 5 years, not in the ledger) or full (saved version, recorded in the ledger); frontend wiring open)
 - [x] [E] B-85 Progress in the status bar ("bar 1,240 / 2,516 · 18 symbols · 3.2 s") with partial equity streamed to Results (backend done: job progress carries partial {symbols, bars, elapsed_seconds, budget_seconds} per stage; a per-bar counter needs streaming from the sandbox and is open)
 - [x] [E] B-86 Cancel with Esc; time budget shown on every run (backend done: DELETE /jobs/{id} stops a run at the next stage; budget_seconds is returned on every run; Esc key is frontend)

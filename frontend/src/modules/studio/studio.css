@@ -352,3 +352,7 @@
 .bd-said { display: block !important; font-size: 13px !important; color: var(--text) !important; line-height: 1.6; }
 .bd-said mark { background: color-mix(in oklch, var(--accent) 22%, transparent); color: var(--text); border-radius: 3px; padding: 0 2px; }
 .bd-said mark[data-kind="ignored"] { background: color-mix(in oklch, var(--warn) 25%, transparent); text-decoration: underline wavy var(--warn); }
+.dv-cards { display: flex; flex-wrap: wrap; gap: 6px 18px; font-variant-numeric: tabular-nums; }
+.dv-cards span { display: grid; gap: 1px; }
+.dv-cards i { font-style: normal; font-size: 11px; color: var(--text-3); }
+.dv-cards b { font-size: 13px; font-weight: 600; }
