@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 133 | 163 | 21 | 70 |
+| Build | 134 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 133 | 163 |
+| Build | 134 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **243** | **538** |
+| **All pages** | **244** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 133 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 134 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -136,7 +136,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 ### Target additions (FEATURES_PEAK)
 
 - [x] [E] B-11 Full-height IDE: editor fills the work area; bottom panel resizes 30 to 40%; side rail collapses [PY B1] (Dev interface: full-height editor, resizable bottom panel (drag, double-click, ⌘J), collapsible rail (⌘B))
-- [ ] [M] B-12 Three zones: left rail (Files, Outline, Search, Templates, Versions), centre editor, bottom panel (Problems, Output, Logs, Results, Plots, Debug, Terminal); right rail (preview, Inspector, AI); each zone remembers its size (partial: Dev: activity bar with Files, Outline, Search, Versions, Docs, Starters; panel with Problems, Output, Plots, Trades, Debug; preview on the right; Results and Terminal open)
+- [x] [M] B-12 Three zones: left rail (Files, Outline, Search, Templates, Versions), centre editor, bottom panel (Problems, Output, Logs, Results, Plots, Debug, Terminal); right rail (preview, Inspector, AI); each zone remembers its size (Dev: activity bar (Files, Outline, Search, Versions, Docs, Starters); panel with Problems, Output, Plots, Trades, Results, Debug and Console; preview on the right)
 - [ ] [H] B-13 Editor groups: split right or down, up to 4 groups; tabs can be pinned, kept in preview, or marked dirty; pinned and preview tabs open) become kept on double click or edit; pin and unpin; unsaved dot per file; split down and 4 groups open) (partial: split right or down; preview, pinned and unsaved tabs; two groups (up to 4 open))
 - [x] [H] B-14 One editing session per strategy: a second tab opens read-only with a take-over button; writers send X-Studio-Session and get 409 naming the holder; frontend wiring open) (lease renewed every 30 s; second tab shows a read-only banner with Take over (checked with two tabs))
 - [x] [M] B-15 Phone (390 px): one zone at a time with a Code, Run, Results switcher; Build on phone is Formula and Plain English only (phone width hides Dev and forces Simple)
