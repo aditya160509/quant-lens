@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 130 | 163 | 21 | 70 |
+| Build | 131 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 130 | 163 |
+| Build | 131 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **240** | **538** |
+| **All pages** | **241** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 130 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 131 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -157,7 +157,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [H] B-30 In-browser Pyright in a web worker with Studio stubs (ctx, portfolio, orders, indicators, numpy, pandas, math, typed Bar, Fill, Order, Position); covers the user own classes [FP 26, 62]
 - [x] [M] B-31 Completion inside ctx.value("…") for formula names, ctx.param("…") for parameter names, ctx.symbol == "…" for symbols, ctx.history("…") for fields; snippets with tab stops (server completion by scope: formula, param, history field, symbol)
 - [x] [M] B-32 Completion for the whole API with signature help on "(" (active parameter bold) and a docs example [PY B6] (Monaco completion and signature help from /build/complete and /build/signature for the runner API, Strategy members, numpy and pandas, plus user snippets)
-- [ ] [M] B-33 Three diagnostic layers as you type (300 ms): Pyright errors; Studio rules (banned names, look-ahead patterns, imports outside the allow-list); formula parse errors at the exact token (partial: POST /build/check serves project-aware static findings, undefined names, unused locals and definite unreachable orders; frontend debounce and Pyright open)
+- [x] [M] B-33 Three diagnostic layers as you type (300 ms): Pyright errors; Studio rules (banned names, look-ahead patterns, imports outside the allow-list); formula parse errors at the exact token (300 ms after typing: ty type errors (POST /build/typecheck, ty in place of Pyright), Studio rules from /build/check, formula parse errors at the token from /compile)
 - [x] [E] B-34 Hover: docs, signature, formula meaning, lookback and warm-up bars, latest value after a preview; hover on a parameter shows its range and last best value (partial: ctx hovers exist) (backend done: POST /build/hover with docs, signature, lookback bars, last value from the last preview and parameter range; frontend wiring open)
 - [x] [E] B-35 Look-ahead detector in the editor: close[0], close[1:], history without a negative index, ctx.date against future literals, next_* reads; marked before the run (partial: AST screen refuses positive indexes; inline editor markers open) [FP 8] (backend done: lint code look-ahead covers positive slices, forward history windows, future ctx.date literals, shift(-n) and ctx.next_*; editor markers are frontend)
 - [ ] [M] B-36 Docs panel: ⌘-click or F1 opens the reference beside the editor; searchable (API, indicators, recipes); offline and versioned (partial: Docs rail: searchable API reference from the server; F1 opens it)
