@@ -406,6 +406,7 @@ class PreviewLog(BaseModel):
     line: int
     text: str
     level: str
+    fields: dict[str, Any] | None = None
 
 
 class PreviewPlotPoint(BaseModel):

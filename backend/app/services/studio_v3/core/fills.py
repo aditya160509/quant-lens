@@ -44,13 +44,14 @@ def exit_check(d: float, o: float, h: float, low: float, stop: float, target: fl
 
 
 # Sizing modes
-SHARES, CASH, PCT_EQUITY, RISK, EQUAL, VOL, SCORE, KELLY = 0, 1, 2, 3, 4, 5, 6, 7
+SHARES, CASH, PCT_EQUITY, RISK, EQUAL, VOL, SCORE, KELLY, PARITY = 0, 1, 2, 3, 4, 5, 6, 7, 8
 
 
 def size_shares(mode: int, value: float, equity: float, price: float, stop_distance: float, slots: float, vol: float = math.nan, mult: float = math.nan) -> float:
     """Shares to order, decided at the signal bar's close. Risk sizing needs a stop; without one it orders nothing.
     SCORE: the slot's share times `mult` (this name's score over the mean score of today's entries, 0 to 3).
     KELLY: `mult` (the Kelly fraction from trades closed so far) capped at `value`, of equity; an equal share until 20 trades have closed.
+    PARITY: the slot's equal share times `mult` (this name's inverse volatility over the mean of today's entries), so each position risks the same.
     VOL: each slot's share of equity scaled so the position's annual volatility is `value` (vol = annualised stdev of daily returns)."""
     if price <= 0 or equity <= 0:
         return 0.0
@@ -66,6 +67,8 @@ def size_shares(mode: int, value: float, equity: float, price: float, stop_dista
         return equity / slots * (mult if math.isfinite(mult) else 1.0) / price
     if mode == KELLY:
         return equity * min(max(mult, 0.0), value) / price if math.isfinite(mult) else equity / slots / price
+    if mode == PARITY:
+        return equity / slots * (mult if math.isfinite(mult) else 1.0) / price
     if mode == VOL:
         return equity / slots * min(value / vol, 1.0) / price if vol > 0 else 0.0
     return equity / slots / price

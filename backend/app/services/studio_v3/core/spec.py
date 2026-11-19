@@ -43,7 +43,7 @@ class Exits(_Model):
 
 
 class Sizing(_Model):
-    mode: Literal["shares", "cash", "pct_equity", "risk", "equal", "vol_target", "score", "kelly"] = "equal"
+    mode: Literal["shares", "cash", "pct_equity", "risk", "equal", "vol_target", "score", "kelly", "risk_parity"] = "equal"
     value: float = Field(0.0, ge=0)
     max_positions: int = Field(10, ge=0)
 
@@ -78,6 +78,7 @@ class Strategy(_Model):
     score: str = ""  # which candidates take the free slots first (higher first)
     market_filter: str = ""  # trade only while true; when it turns false every position is closed and the book sits in cash
     params: dict[str, Param] = Field(default_factory=dict)
+    frequency: Literal["daily", "week_start", "month_start"] = "daily"  # entries only on these bars; exits always run
     exits: Exits = Field(default_factory=Exits)
     sizing: Sizing = Field(default_factory=Sizing)
     risk: Risk = Field(default_factory=Risk)
@@ -187,7 +188,7 @@ class Settings(_Model):
         return hashlib.sha256(json.dumps(self.model_dump(), sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]
 
 
-_SIZE = {"shares": fills.SHARES, "cash": fills.CASH, "pct_equity": fills.PCT_EQUITY, "risk": fills.RISK, "equal": fills.EQUAL, "vol_target": fills.VOL, "score": fills.SCORE, "kelly": fills.KELLY}
+_SIZE = {"shares": fills.SHARES, "cash": fills.CASH, "pct_equity": fills.PCT_EQUITY, "risk": fills.RISK, "equal": fills.EQUAL, "vol_target": fills.VOL, "score": fills.SCORE, "kelly": fills.KELLY, "risk_parity": fills.PARITY}
 
 
 def engine_params(spec: Strategy, settings: Settings, cost_multiple: float = 1.0) -> Params:

@@ -713,3 +713,24 @@ class Strategy:
     assert "unseeded-random" not in {problem["code"] for problem in pycode.lint(seeded, {})}
     network = pycode.lint("class Strategy:\n    def on_bar(self, ctx):\n        ctx.value('close')\n        x = 'https://example.com/a.csv'\n", {})
     assert "network" in {problem["code"] for problem in network}
+
+
+def test_ctx_log_levels_carry_key_values():
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(2, 1)
+    output = {}
+    code = """class Strategy:
+    def on_bar(self, ctx):
+        ctx.log.info("entry", symbol="SPY", rsi=41.5)
+        ctx.log.warning("thin", volume=1)
+        ctx.log.error("bad", code="E1", retries=2)
+        ctx.log("plain")
+"""
+    pycode.run_event(code, bars, dates, {}, ["SPY"], engine.Params(), output=output)
+    rows = output["logs"][:4]
+    assert [row["level"] for row in rows] == ["info", "warning", "error", "info"]
+    assert rows[0]["fields"] == {"symbol": "SPY", "rsi": 41.5}
+    assert rows[2]["fields"] == {"code": "E1", "retries": 2.0}
+    assert "fields" not in rows[3] and rows[3]["text"] == "plain"
+    assert len(output["logs"]) == 8  # the strategy runs the four lines on each of the two bars

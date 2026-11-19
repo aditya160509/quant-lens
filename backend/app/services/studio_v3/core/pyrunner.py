@@ -113,6 +113,25 @@ class Indicator:
         return self.history(self._period or self._ctx.t + 1)
 
 
+class _Log:
+    """ctx.log(...) plus ctx.log.info/warning/error with key values (B-80)."""
+
+    def __init__(self, ctx):
+        self._ctx = ctx
+
+    def __call__(self, message, level="info", **fields):
+        self._ctx._log(message, level, sys._getframe(1).f_lineno, fields)
+
+    def info(self, message, **fields):
+        self._ctx._log(message, "info", sys._getframe(1).f_lineno, fields)
+
+    def warning(self, message, **fields):
+        self._ctx._log(message, "warning", sys._getframe(1).f_lineno, fields)
+
+    def error(self, message, **fields):
+        self._ctx._log(message, "error", sys._getframe(1).f_lineno, fields)
+
+
 class Ctx:
     def __init__(self, cols, values, params, symbol, dates):
         self._t = 0
@@ -120,6 +139,7 @@ class Ctx:
         self._cols, self._values, self._dates = cols, values, dates
         self.open, self.high, self.low, self.close, self.volume = (History(cols[f], self) for f in ("open", "high", "low", "close", "volume"))
         self.orders = []
+        self.log = _Log(self)
 
     @property
     def t(self):
@@ -173,14 +193,21 @@ class Ctx:
     def param(self, name):
         return self.params[name]
 
-    def log(self, message, level="info"):
-        self._log(message, level, sys._getframe(1).f_lineno)
-
-    def _log(self, message, level, line):
+    def _log(self, message, level, line, fields=None):
         if self._logs is None or len(self._logs) > 50_000:
             return
         text = str(message)[:1024] if len(self._logs) < 50_000 else "Output truncated after 50000 lines"
-        self._logs.append({"date": self.date, "symbol": self.symbol, "line": line, "text": text, "level": str(level)[:32]})
+        row = {"date": self.date, "symbol": self.symbol, "line": line, "text": text, "level": str(level)[:32]}
+        clean = {}
+        for key, value in list((fields or {}).items())[:32]:
+            name = str(key)[:64]
+            if isinstance(value, (bool, str)):
+                clean[name] = value[:256] if isinstance(value, str) else value
+            elif isinstance(value, (int, float)) and math.isfinite(float(value)):
+                clean[name] = float(value)
+        if clean:
+            row["fields"] = clean
+        self._logs.append(row)
 
     def plot(self, name, value, chart="own"):
         """Record a value in a named plot on the main chart or in a separate pane."""
@@ -478,6 +505,10 @@ class PortfolioContext(Ctx):
             self.cancel(symbol)
 
     def pos(self, symbol):
+        if symbol not in self._columns:
+            raise ValueError(
+                f"Unknown symbol {symbol!r}; in on_data use ctx.symbols or one name from the run universe"
+            )
         pos = self._account.positions.get(self._columns[symbol])
         if pos is None:
             return Holding()

@@ -55,7 +55,7 @@ def compile_spec(spec: Strategy) -> dict:
             findings.append({"severity": "error", "role": "sizing", "line": 0, "start": 0, "end": 0, "token": "risk", "message": "Risk per trade needs a stop"})
         if spec.sizing.mode == "score" and not spec.score.strip():
             findings.append({"severity": "error", "role": "sizing", "line": 0, "start": 0, "end": 0, "token": "score", "message": "Weight by score needs a Rank by rule"})
-        if spec.sizing.mode not in ("equal", "score") and not spec.sizing.value:
+        if spec.sizing.mode not in ("equal", "score", "risk_parity") and not spec.sizing.value:
             findings.append({"severity": "error", "role": "sizing", "line": 0, "start": 0, "end": 0, "token": spec.sizing.mode, "message": "Position size is zero"})
         if e.scale_at and not e.scale_frac:
             findings.append({"severity": "warning", "role": "exits", "line": 0, "start": 0, "end": 0, "token": "scale_at", "message": "Scale-out level set without a share to sell"})
@@ -133,6 +133,8 @@ def signals(spec: Strategy, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex
             exits[longs] |= 2
     if spec.exits.end_of_week:
         exits[_last_week_bars(dates)] |= 3
+    if spec.frequency != "daily":
+        entries[~_period_starts(dates, "W-FRI" if spec.frequency == "week_start" else "M")] = 0
     _gate(spec, entries, exits, bars, dates, params, cache)
     score = formula.evaluate(spec.score, bars, dates, params, cache).astype(float) if spec.score.strip() else None
     dist = spec.exits.stop_atr * formula.evaluate("atr(14)", bars, dates, params, cache) if spec.exits.stop_atr else None
@@ -149,7 +151,18 @@ def _gate(spec: Strategy, entries, exits, bars, dates, params, cache) -> None:
 
 
 def _vol(spec: Strategy, bars, dates, params, cache) -> np.ndarray | None:
-    return formula.evaluate("std(returns, 20)", bars, dates, params, cache) * np.sqrt(252) if spec.sizing.mode == "vol_target" else None
+    if spec.sizing.mode not in {"vol_target", "risk_parity"}:
+        return None
+    return formula.evaluate("std(returns, 20)", bars, dates, params, cache) * np.sqrt(252)
+
+
+def _period_starts(dates: pd.DatetimeIndex, frequency: str) -> np.ndarray:
+    """True on the first observed bar of each week or month."""
+    periods = dates.to_period(frequency)
+    starts = np.ones(len(periods), dtype=bool)
+    if len(periods):
+        starts[1:] = periods[1:] != periods[:-1]
+    return starts
 
 
 def _last_week_bars(dates: pd.DatetimeIndex) -> np.ndarray:
@@ -258,9 +271,11 @@ def describe(spec: Strategy) -> str:
                          f"at most {_pct(risk.max_gross)} of equity invested" if risk.max_gross else "") if t]
     size = {"shares": f"{s.value:g} shares", "cash": f"${s.value:,.0f}", "pct_equity": f"{_pct(s.value)} of equity", "risk": f"{_pct(s.value)} of equity at risk to the stop",
             "equal": "an equal share of equity", "vol_target": f"an equal share scaled to {_pct(s.value)} annual volatility",
-            "score": "an equal share weighted by score", "kelly": f"the Kelly fraction of closed trades, at most {_pct(s.value)}"}[s.mode]
+            "score": "an equal share weighted by score", "kelly": f"the Kelly fraction of closed trades, at most {_pct(s.value)}",
+            "risk_parity": "an equal-risk share weighted by inverse volatility"}[s.mode]
     cap = f", at most {s.max_positions} positions" if s.max_positions else ""
     rank = f", best {spec.score.strip()} first" if spec.score.strip() else ""
     rank += f". Only while {spec.market_filter.strip()}, else cash" if spec.market_filter.strip() else ""
-    return "\n".join([("; ".join(entry) or "No entry rule") + ".", "Exit: " + ("; ".join(out) or "none, held to the end") + ".",
+    when = "" if spec.frequency == "daily" else f" Entries only on the first bar of each {'week' if spec.frequency == 'week_start' else 'month'}."
+    return "\n".join([("; ".join(entry) or "No entry rule") + "." + when, "Exit: " + ("; ".join(out) or "none, held to the end") + ".",
                       f"Size: {size} per trade{cap}{rank}." + (f" Risk: {'; '.join(guard)}." if guard else "")])

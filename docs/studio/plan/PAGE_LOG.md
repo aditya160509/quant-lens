@@ -233,3 +233,15 @@ Known limits:
 - One bar is one session: `max_daily_loss` compares consecutive bars, which is exact for the daily bars Studio holds.
 - Exposure caps are applied when a position is opened, not rebalanced every bar, so marked gross can drift above the cap with price moves.
 - A risk breach stops the run permanently; re-entering after a cool-down is not modelled.
+
+## Build backend: risk parity, entry frequency and structured logs (2026-11-18)
+
+- B-121. `sizing.mode = "risk_parity"` weights each slot's equal share by inverse 20-day volatility against the mean of that bar's entries, capped at 3x. The vector and event engines compute the same multiplier and are compared trade for trade.
+- B-110 (partial). `spec.frequency` takes `daily`, `week_start` or `month_start`; entries are masked to the first observed bar of each period and exits still run every bar. "What it does" names the schedule. A drift corridor (act after X% move) is not built.
+- B-80 (backend). `ctx.log(message, level, **fields)` and `ctx.log.info/warning/error(message, **fields)` store clean key values (bool, string up to 256 characters, finite numbers) on the log row as `fields`. `/preview` returns them; filtering and search are the Logs tab's job.
+
+API changes:
+
+- `POST /preview` — log rows may carry `fields`; `settings_overrides` and `risk_events` unchanged from the entry above.
+
+Budgets: the risk-parity multiplier adds one pass over the day's entries in each engine; the 500 × 2,500 Python run and the 31 ms lint p95 are unchanged.

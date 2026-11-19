@@ -34,6 +34,12 @@ BANNED_ATTRS = {
     "read_spss", "read_xml", "read_gbq", "read_pickle", "to_pickle", "to_csv", "to_parquet", "to_json", "to_excel",
     "to_sql", "to_hdf", "to_feather", "to_stata", "load", "loads", "fromfile", "memmap", "ctypeslib", "savetxt",
     "save", "system", "popen", "spawn", "urlopen", "urlretrieve", "socket", "subprocess", "format", "format_map",
+    # file IO and eval reached through numpy and pandas objects
+    "loadtxt", "genfromtxt", "fromregex", "savez", "savez_compressed", "tofile", "dump", "dumps", "DataSource",
+    "to_clipboard", "to_latex", "to_markdown", "to_xml", "to_html", "to_string", "to_orc", "ExcelWriter", "ExcelFile",
+    "HDFStore", "eval", "query", "show_config", "source", "lookfor",
+    # submodules that expose os, sys or file readers
+    "lib", "io", "testing", "f2py", "distutils", "sys", "os", "compat", "util", "core",
 }
 TEMPLATE = '''class Strategy:
     def init(self, ctx):

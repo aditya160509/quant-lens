@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 50 | 163 |
+| Build | 51 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **160** | **538** |
+| **All pages** | **161** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 50 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 51 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -204,7 +204,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [H] B-77 Time travel on a finished backtest: pick any bar, see a variable snapshot, arrow keys step back and forward; snapshots only for chosen date ranges [FP 27]
 - [ ] [M] B-78 Profiler: time per function and per line, slowest 10 lines, flame graph, memory chart
 - [ ] [H] B-79 Logs tab: virtual list (level, date, symbol, message, code line); filters for level, symbol, date, text, regex, case, whole word; click row jumps chart and editor; CSV export [FP 28]
-- [ ] [M] B-80 Structured logs: ctx.log.info("entry", symbol=s, rsi=r) stored as key values, searchable [FP 28]
+- [ ] [M] B-80 Structured logs: ctx.log.info("entry", symbol=s, rsi=r) stored as key values, searchable [FP 28] (backend done: ctx.log, ctx.log.info/warning/error store clean key values on each log row; filtering and search are frontend)
 - [ ] [E] B-81 Plots tab: each ctx.plot series overlays the price or sits in its own pane on a shared time axis; toggle each; compare across two runs [FP 29] [PY B2]
 - [ ] [E] B-82 Problems tab: static and runtime errors, click to jump to the line (partial: markers only, no Problems list) [PY B2]
 - [ ] [M] B-83 Results tab: compact Backtest report (KPI strip with All, Long, Short; equity vs benchmark; trade list; trade histogram; Properties block); Open in Backtest without recompute [PY B2]
@@ -234,7 +234,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [E] B-107 Inline parameter editor with an optimisation range per parameter; plain-language summary line; colour by role; collapse, disable, comment, duplicate, copy as code; undo 50 steps [FP 9]
 - [ ] [M] B-108 Red marker on incomplete blocks; detector for conditions that are always true or always false on your data (backend done: POST /build/condition; frontend wiring open)
 - [ ] [M] B-109 Click a condition block: the preview shows the bars where it fired (no full backtest) [FP 24] (backend done: POST /build/condition; frontend wiring open)
-- [ ] [M] B-110 Trading frequency: calendar (daily, weekly, monthly, on bar close) or threshold corridor (X% drift)
+- [ ] [M] B-110 Trading frequency: calendar (daily, weekly, monthly, on bar close) or threshold corridor (X% drift) (partial: spec.frequency gates entries to daily, week_start or month_start; the X% drift corridor is open)
 - [ ] [M] B-111 Formula inline value under each rule: true-rate and last true date (backend done: POST /build/condition; frontend wiring open)
 - [ ] [M] B-112 Function reference panel for formula mode
 - [ ] [M] B-113 Named variables (fast = ema(close, 12)), user functions, comments; separate entry and exit formulas
@@ -245,7 +245,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [H] B-118 Find rules: grammar search of entries and exits with an out-of-sample split; every candidate counts in the trial ledger; results go to the Home databank grid [FP 70]
 - [x] [E] B-119 Checks card adds warm-up bars needed, data each rule uses, survivorship exposure (POST /build/checks returns warm-up bars and first eligible date, per-rule fields and windows, delisted names and the survivorship note)
 - [x] [E] B-120 Exits library additions: profit-target ladder, exit on opposite signal, end-of-week exit; exits combinable and ordered (two scale rungs then the final target, each priced at its own level; opposite-signal and end-of-week exits; bar order documented in engine.py and matched trade for trade by both engines)
-- [ ] [M] B-121 Sizing additions: equal weight, risk parity, max position and gross limits (partial: shares, cash, % equity, risk, vol target, Kelly, score and equal weight exist; max_position and max_gross caps ship; an explicit inverse-vol risk-parity mode is open)
+- [x] [M] B-121 Sizing additions: equal weight, risk parity, max position and gross limits (risk_parity weights the equal share by inverse 20-day volatility against today's entries, capped at 3x, in both engines; max_position and max_gross caps applied at entry)
 - [ ] [M] B-122 Allocate: if/else on a condition (regime, trend); hold bonds or cash when off (partial: market rule (trade only when) exists; if/else branch and bonds open)
 - [ ] B-123 Entry filters: fundamentals, calendar, cross-sectional, earnings-date filter (blocked by data: fundamentals from 2021 only; earnings dates where held)
 - [ ] [M] B-124 Indicator exit and scale in as exit-card rows

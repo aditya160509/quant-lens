@@ -134,6 +134,23 @@ ESCAPES = [
     "pd.read_pickle('x.pkl')",
     "pd.read_csv('/etc/passwd')",
     "pd.DataFrame().to_pickle('x')",
+    "np.DataSource().open('/etc/passwd')",
+    "np.loadtxt('/etc/passwd')",
+    "np.genfromtxt('/etc/passwd')",
+    "np.fromregex('/etc/passwd', 'a', [('a', 'S1')])",
+    "np.savez('/tmp/x', a=1)",
+    "np.array([1]).tofile('/tmp/x')",
+    "np.array([1]).dump('/tmp/x')",
+    "np.lib.npyio.os",
+    "np.sys",
+    "np.testing",
+    "pd.io",
+    "pd.DataFrame().to_latex('/tmp/x')",
+    "pd.DataFrame().to_string('/tmp/x')",
+    "pd.DataFrame().to_html('/tmp/x')",
+    "pd.DataFrame().query('a')",
+    "pd.eval('1')",
+    "pd.HDFStore('x')",
 ]
 
 

@@ -972,3 +972,35 @@ def test_profit_target_ladder_takes_two_rungs_then_the_rest():
     assert rows["event"] == rows["vector"]
     spec = Strategy(entry_long="close > 0", exits={"scale_at": 0.1, "scale_frac": 0.3, "scale_at2": 0.2, "scale_frac2": 0.5})
     assert "then 50% at 20%" in C.describe(spec)
+
+
+def test_risk_parity_sizes_by_inverse_volatility(studio):
+    spec = Strategy(entry_long="close > sma(close, 20)", exit_long="close < sma(close, 20)", sizing={"mode": "risk_parity"})
+    assert C.compile_spec(spec)["ok"]  # weight by risk needs no size value and no rank rule
+    settings = Settings(**SETTINGS)
+    prep = backtest.prepare(settings)
+    sig = C.signals(spec, prep.sig_bars, prep.panel.dates)
+    assert sig.size_vol is not None
+    bars = prep.panel.bars()
+    entries = np.where(np.isfinite(prep.panel.close), sig.entries, 0).astype(np.int8)
+    result = engine.run(bars, entries, sig.exits, backtest.engine_params(spec, settings), size_vol=sig.size_vol)
+    first = [t for t in result.trades if int(t[engine.T_ENTRY_BAR]) == min(int(x[engine.T_ENTRY_BAR]) for x in result.trades)]
+    assert len(first) >= 2
+    a, b = first[0], first[1]
+    vol = sig.size_vol[int(a[engine.T_SIGNAL_BAR])]
+    va, vb = vol[int(a[engine.T_SYM])], vol[int(b[engine.T_SYM])]
+    ratio = (a[engine.T_SHARES] * a[engine.T_ENTRY_PX]) / (b[engine.T_SHARES] * b[engine.T_ENTRY_PX])
+    assert ratio == pytest.approx(min(vb / va, (vb / va)) if vb / va <= 3 else 1.0, rel=0.05)
+    same = engine.run(bars, entries, sig.exits, backtest.engine_params(spec, settings), size_vol=sig.size_vol, engine="event")
+    assert np.array_equal(result.trades, same.trades, equal_nan=True)
+
+
+def test_entry_frequency_gates_entries_to_period_starts(studio):
+    spec = Strategy(entry_long="close > 0", frequency="week_start")
+    settings = Settings(**SETTINGS)
+    prep = backtest.prepare(settings)
+    sig = C.signals(spec, prep.sig_bars, prep.panel.dates)
+    fired = np.flatnonzero(sig.entries.any(axis=1))
+    periods = prep.panel.dates.to_period("W-FRI")
+    assert len(fired) > 50 and all(periods[t] != periods[t - 1] for t in fired if t)
+    assert "Entries only on the first bar of each week" in C.describe(spec)
