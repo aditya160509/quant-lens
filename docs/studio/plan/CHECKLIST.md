@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 127 | 163 | 21 | 70 |
+| Build | 128 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 127 | 163 |
+| Build | 128 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **237** | **538** |
+| **All pages** | **238** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 127 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 128 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -167,7 +167,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [M] B-40 Lint flags wall-clock time, network calls and unseeded random, so one code runs in backtest, paper and live (lint codes wall-clock, network, unseeded-random)
 - [x] [M] B-41 API version header (# studio-api: 1) with an automatic migrator and a quick fix (backend done: # studio-api: 1 header, lint info with a quick-fix edit under strict, error for a newer version, POST /build/migrate; migrations table is empty until the API changes)
 - [x] [M] B-42 Latency budget: completions under 100 ms, diagnostics under 500 ms after typing stops (server p95 measured in tests: completion 0.3 ms, lint 10 to 50 ms for 300 lines; the browser debounce is frontend)
-- [ ] [H] B-43 Portfolio mode: on_data(ctx) sees every symbol in the bar; universe set by a class attribute (list, index, or screen id); per-symbol on_bar kept as the simple mode (partial: on_data receives the settings universe in preview and Backtest) [FP 61] [PY A1] (backend done: POST /preview takes symbols and reads Strategy.universe (list, library universe id or index name); bars_by_symbol per name; frontend wiring open)
+- [x] [H] B-43 Portfolio mode: on_data(ctx) sees every symbol in the bar; universe set by a class attribute (list, index, or screen id); per-symbol on_bar kept as the simple mode [FP 61] [PY A1]; bars_by_symbol per name; frontend wiring open) (on_data sees every symbol; preview runs Strategy.universe and the chart picks any of its symbols)
 - [x] [M] B-44 Orders: target_weights, set_weight, order (qty), order_value, limit, stop, stop_limit, liquidate, cancel, cancel_all; all fill through fills.py (backend done: portfolio orders use the event engine; one pending explicit order per symbol) [FP 61] [PY A2]
 - [ ] [H] B-45 Brackets: bracket(sym, qty, stop, target, trail) with OCA cancel; partial exits by qty per level; stop fills first when both hit one bar [FP 61] (partial: ctx.bracket(symbol, qty, stop=, target=, trail=) enters at market and attaches exits as fractions of the fill; first hit closes the position, a bar touching both takes the stop; partial exits by quantity per level open)
 - [x] [H] B-46 Pyramiding: max_entries class attribute per symbol; scale in added to the Build exits card [FP 61] (backend done: Strategy.max_entries caps fills per symbol position in the event engine; scale-in as an Exits card row is frontend)
