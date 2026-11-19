@@ -2,6 +2,8 @@
 
 import time
 
+import pytest
+
 from tests.test_studio_v3_backtest import SMA, studio  # noqa: F401  (fixture)
 
 API = "/api/studio-v3"
@@ -159,3 +161,15 @@ def test_python_event_engine_matches_the_formula_vector_engine_trade_for_trade(s
     key = lambda r: r.trades[np.lexsort((r.trades[:, 0], r.trades[:, 1]))]
     assert np.allclose(key(vector), key(event), equal_nan=True)
     assert np.allclose(vector.equity, event.equity)
+
+
+def test_watch_expressions_read_the_paused_bar_and_its_past_only(studio):  # noqa: F811
+    spec = {"code": "class Strategy:\n    def on_bar(self, ctx):\n        pass\n"}
+    date = "2016-03-01"
+    body = {"spec": spec, "symbol": "SPY", "date": date, "expressions": ["close", "sma(close, 5)", "close >", "rsi(close, 14)"], "history": 3}
+    rows = studio.post(f"{API}/build/watch", json=body).json()
+    close, sma, bad, rsi = rows
+    assert [h["date"] for h in close["history"]][-1] == date and len(close["history"]) == 3 and close["value"] == close["history"][-1]["value"]
+    assert sma["value"] == pytest.approx(sum(studio.post(f"{API}/build/watch", json={**body, "expressions": ["close"], "history": 5}).json()[0]["history"][i]["value"] for i in range(5)) / 5)
+    assert bad["error"] and bad["value"] is None and rsi["value"] is not None
+    assert studio.post(f"{API}/build/watch", json={**body, "date": "2016-03-05"}).status_code == 422

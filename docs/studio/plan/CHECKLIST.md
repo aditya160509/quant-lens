@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 115 | 163 | 21 | 70 |
+| Build | 117 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 115 | 163 |
+| Build | 117 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **225** | **538** |
+| **All pages** | **227** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 115 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 117 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -195,13 +195,13 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [E] B-68 Runtime guard: positive history index raises in backtest (verified with source line and offending offset)
 - [x] [H] B-69 Bar stepper: pause at a date and symbol, inspect self and ctx, step one bar, step to the next order or fill, run to a date, step back one bar (deterministic re-run) [FP 27] [PY B8] (Debug tab: stop at date, step back and forward, next order, next fill, next 5% loss day)
 - [x] [M] B-70 Breakpoints with conditions (ctx.symbol == "AAPL" and ctx.date >= …) and hit counts; data breakpoints (first order; equity down 5% in a day) [FP 27, 65] (breakpoints from gutter or F9 with a condition and hit count; F5 runs to the first)
-- [ ] [H] B-71 Variables (self, ctx, locals); arrays and DataFrames in a grid viewer; watch expressions with history; read-only debug console
+- [x] [H] B-71 Variables (self, ctx, locals); arrays and DataFrames in a grid viewer; watch expressions with history; read-only debug console (backend done: POST /build/watch evaluates formula watches at a paused bar with recent history, causal and read-only; variables and arrays come from /build/debug state; grid viewer and debug console are frontend)
 - [ ] [M] B-72 Preview chart follows the paused bar, with position and pending orders drawn (partial: preview chart marks the paused bar; position and pending orders open)
 - [ ] [M] B-73 Logpoints from the gutter ("log {expr} here") without editing the code
 - [x] [E] B-74 Gutter: run markers on lines that placed orders in the last preview (hover shows count and first 5 dates); change markers since last version (backend done: preview order_lines list each strategy line that placed orders with count and first 5 dates; change markers since last version are frontend)
 - [x] [H] B-75 Inlay hints: parameter value next to ctx.param, last value next to ctx.value from the preview, computed type [FP 63] (backend done: POST /build/inlay-hints returns parameter values, warm-up bars, last preview values and argument names; frontend wiring open)
 - [x] [H] B-76 CodeLens above on_bar ("Run on SPY · Run on universe · Debug from 2020-03-01"); above ctx.rule ("true on 34% of bars") [FP 64] (backend done: POST /build/codelens returns run and debug lenses and the true-rate of each ctx.rule; frontend wiring open)
-- [ ] [H] B-77 Time travel on a finished backtest: pick any bar, see a variable snapshot, arrow keys step back and forward; snapshots only for chosen date ranges [FP 27]
+- [x] [H] B-77 Time travel on a finished backtest: pick any bar, see a variable snapshot, arrow keys step back and forward; snapshots only for chosen date ranges [FP 27] (backend done: /build/debug replays to any date with step -1, 0 or 1 and returns the variable snapshot, orders and fills; arrow-key UI is frontend)
 - [x] [M] B-78 Profiler: time per function and per line, slowest 10 lines, flame graph, memory chart (backend done: POST /build/profile returns the 10 slowest strategy lines and time per function; flame graph and memory chart open)
 - [ ] [H] B-79 Logs tab: virtual list (level, date, symbol, message, code line); filters for level, symbol, date, text, regex, case, whole word; click row jumps chart and editor; CSV export [FP 28] (partial: virtual list (only rows in view rendered); level, text, regex, case and word filters; click jumps to the line; date and symbol columns)
 - [ ] [M] B-80 Structured logs: ctx.log.info("entry", symbol=s, rsi=r) stored as key values, searchable [FP 28] (backend done: ctx.log, ctx.log.info/warning/error store clean key values on each log row; filtering and search are frontend)

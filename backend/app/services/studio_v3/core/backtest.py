@@ -487,6 +487,29 @@ def debug_bar(spec: Strategy, settings: Settings, symbol: str, date: str, step: 
     return {**output["debug"], "previous_date": str(dates[target - 1].date()) if target else None,
             "next_date": str(dates[target + 1].date()) if target + 1 < len(dates) else None}
 
+def watch(spec: Strategy, symbol: str, date: str, expressions: list[str], history: int = 20) -> list[dict]:
+    """Watch expressions at a paused bar (B-71): each formula's value on `date` and over the `history` bars up to it. Formulas only read bars up to
+    their own date, so a watch never shows the future, and nothing the strategy owns is touched."""
+    settings = Settings(symbols=[symbol], benchmark="")
+    prep = prepare(settings)
+    dates = prep.panel.dates
+    at = int(dates.searchsorted(pd.Timestamp(date)))
+    if at >= len(dates) or dates[at] != pd.Timestamp(date):
+        raise Refusal(f"No bar for {symbol} on {date}. Valid dates run from {dates[0].date()} to {dates[-1].date()}.", ["Select an observed session within the development window."])
+    params = spec.values()
+    rows = []
+    for expression in expressions:
+        try:
+            series = formula.evaluate(expression, prep.sig_bars, dates, params)[:, 0]
+        except Exception as exc:  # noqa: BLE001 a bad watch is reported on its own row
+            rows.append({"expression": expression, "error": getattr(exc, "message", str(exc)), "value": None, "history": []})
+            continue
+        window = series[max(0, at + 1 - history):at + 1]
+        clean = [None if not np.isfinite(v) else float(v) for v in window.astype(float)]
+        rows.append({"expression": expression, "error": None, "value": clean[-1], "history": [{"date": str(d.date()), "value": v} for d, v in zip(dates[at + 1 - len(clean):at + 1], clean, strict=True)]})
+    return rows
+
+
 def resolve_universe(attribute: list[str] | str | None, fallback: list[str], limit: int = 50) -> list[str]:
     """Strategy.universe: a list, a library universe id, or an index name such as "master" (B-43)."""
     if attribute is None:

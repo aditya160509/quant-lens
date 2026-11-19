@@ -588,6 +588,21 @@ class BuildDebugRequest(PreviewRequest):
     settings: Settings | None = None
 
 
+class WatchRequest(PreviewRequest):
+    date: dt.date
+    expressions: list[str] = Field(min_length=1, max_length=20)
+    history: int = Field(default=20, ge=1, le=500)
+
+
+@router.post("/build/watch")
+def watch_expressions(request: WatchRequest) -> list[dict[str, Any]]:
+    """Formula watches at a paused bar with their recent history. A formula that does not parse comes back on its own row with an error."""
+    try:
+        return backtest.watch(_spec(request.spec), normalize_symbol(request.symbol), request.date.isoformat(), request.expressions, request.history)
+    except backtest.Refusal as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 class DebugOrder(BaseModel):
     symbol: str
     quantity_or_direction: float
