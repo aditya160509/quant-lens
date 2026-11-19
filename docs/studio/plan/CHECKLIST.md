@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 117 | 163 | 21 | 70 |
+| Build | 121 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 117 | 163 |
+| Build | 121 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **227** | **538** |
+| **All pages** | **231** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 117 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 121 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -213,7 +213,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [E] B-86 Cancel with Esc; time budget shown on every run (backend done: DELETE /jobs/{id} stops a run at the next stage; budget_seconds is returned on every run; Esc key is frontend)
 - [x] [M] B-87 Runtime error: jump to the line, stack trace with user frames only, locals at the failing bar (symbol, date, self attributes) (partial: preview returns file, line, column, exception type and up to eight user frames) (backend done: runtime error problem.locals holds symbol, date, bar_index, the failing frame's variables and self attributes; jump to line is frontend)
 - [x] [M] B-88 Delta row after each quick run against the last run (return, Sharpe, trades) (backend done: GET /build/run/{job_id} returns delta against the previous run of the same level (return, Sharpe, trades))
-- [ ] [E] B-89 Preview settings: symbol and window (default SPY, 2 years), auto-preview on or off; quick-run universe (top 50 by volume, 5 years) (partial: symbol and auto-preview on or off; window and quick-run universe open)
+- [x] [E] B-89 Preview settings: symbol and window (default SPY, 2 years), auto-preview on or off; quick-run universe (top 50 by volume, 5 years) (symbol, window 1/2/3/5 years and auto-preview; quick run is top 50, 5 years)
 - [x] [E] B-90 Status bar: Ln:Col, error and warning counts, saved state, run state, last run time, "trial 14 on this idea" [FP 68] (Ln:Col, errors and warnings, saved state, warm-up, preview time, trial chip)
 - [x] [M] B-91 Yellow banner on a result when the editor code differs from the run (Edited banner on the result when the code differs from the run)
 - [ ] [M] B-92 Strategy is a project: main.py plus modules, README.md and params.json; file tree with create, rename, move, delete, duplicate and drag; limits 50 files and 200 KB per file [PY B3] (backend done: versioned file CRUD, diffs and checked helper execution; editor wiring open)
@@ -221,13 +221,13 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [M] B-94 Zip import and export of a project (More menu: Export project (.zip), Import project (.zip) opens the new strategy in Dev)
 - [x] [M] B-95 User snippets: save a selection with tab stops and a prefix trigger; shareable through Library (save a selection with a prefix trigger; the prefix completes in the editor; listed under Starters)
 - [x] [M] B-96 Examples in hover docs insert with one click (Docs rail: insert any member at the cursor with its argument placeholder)
-- [ ] [M] B-97 Gallery of 12 starters with a one-line description, last backtest on the default universe and "use as start" (trend 50/200, RSI(2), momentum top 10, dual momentum, pairs z-score, vol target, ATR breakout, turn of month, gap fade, sector rotation, ML ranking, risk parity) (partial: 20 formula templates exist; gallery stats open)
+- [ ] [M] B-97 Gallery of 12 starters with a one-line description, last backtest on the default universe and "use as start" (trend 50/200, RSI(2), momentum top 10, dual momentum, pairs z-score, vol target, ATR breakout, turn of month, gap fade, sector rotation, ML ranking, risk parity) (partial: 20 starters with SPY preview return and trades; default-universe stats and the named 12 open)
 - [x] [M] B-98 Python starters: trend, mean reversion, momentum rotation, pairs, vol target, breakout, seasonality, ML score [PY B10] (eight starters compile and trade on real data, tested; gallery UI open)
 - [x] [M] B-99 Warn above 200 blocks, hard stop above 1,000; warn above 8 optimisable parameters (block and parameter warnings shown under the rules)
 - [ ] [E] B-100 Customise: personal templates, parameter ranges per strategy, default sizing and costs per user, editor font and keymap (partial: Customise: default exits and sizing for new strategies, editor font size; personal templates and keymap open)
 - [x] [M] B-101 Monaco palette and the app palette merged into one list, grouped Editor, Run, View, Studio (one palette (⌘⇧P) lists Strategy, Mode, Run, Debug, View and Editor commands; Dev commands run in the editor)
-- [ ] [E] B-102 Four authoring modes on one spec: blocks, formula, Python, plain English; the mode switch never loses work (partial: all four exist; code-only badge and switch marking open) [FP 22]
-- [ ] [E] B-103 Blocks and formula show generated Python side by side (read only); formula to Python is one way, original kept; hand edits that cannot be represented set a code-only badge [FP 22] (partial: Python view under the rules (read only), Python runs badge; side-by-side open)
+- [x] [E] B-102 Four authoring modes on one spec: blocks, formula, Python, plain English; the mode switch never loses work [FP 22] (Blocks, Formula, Plain English and Python tabs on one spec; Python tab marked when code runs)
+- [x] [E] B-103 Blocks and formula show generated Python side by side (read only); formula to Python is one way, original kept; hand edits that cannot be represented set a code-only badge [FP 22], Python runs badge; side-by-side open) (open Python view sits beside the rules on wide screens, read only)
 - [x] [M] B-104 Plain English shows the interpreted rules as blocks before any run; ambiguous words highlighted ("oversold" = RSI(14) < 30); restated "what it does" paragraph; original prompt kept in version history (partial: phrase rules, ignored words listed, review then use; highlights and history open) [FP 23] (backend done: POST /plain-english also returns assumptions [{word, start, end, meaning, formula}] for oversold, overbought, uptrend, downtrend, breakout, pullback, golden cross, death cross and volume spike with offsets into the input, plus restated from compile.describe; unmatched keeps the rest; highlight UI is frontend)
 - [x] [E] B-105 Any and All groups, nested to any depth (partial: rows joined by and or; nesting open) [FP 24] (backend done: spec.groups maps entry_long, exit_long, entry_short, exit_short or market_filter to an Any/All tree up to 10 deep with disabled rules; the role formula is generated from it and trades identically; block editor wiring open)
 - [ ] [E] B-106 Condition kinds: cross above and below, for N bars, rising, falling, earnings filter, fundamentals, calendar, cross-sectional (partial: crosses, consecutive bars, rising, falling, week and month starts, percentile rank and z-score exist; earnings and fundamentals open) (partial: calendar kinds weekday(), month(), day_of_month(), quarter_start(), year_start() and between(x, low, high) added to formulas; earnings and fundamentals blocked by data)
@@ -250,7 +250,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] B-123 Entry filters: fundamentals, calendar, cross-sectional, earnings-date filter (blocked by data: fundamentals from 2021 only; earnings dates where held)
 - [ ] [M] B-124 Indicator exit and scale in as exit-card rows (partial: an indicator exit is exit_long as an Any group in spec.groups; scale-in rows need pyramiding (B-46), open)
 - [x] B-125 Stated regime claim marked "written after" when added after a drawdown
-- [ ] [E] B-126 Version timeline: each version with its metrics (equity sparkline, Sharpe); name and tag versions ("validated", "live"); a live version is locked [FP 35] (partial: Versions rail: name, tags, lock or unlock, restore, branch, run metrics per version; sparkline open)
+- [x] [E] B-126 Version timeline: each version with its metrics (equity sparkline, Sharpe); name and tag versions ("validated", "live"); a live version is locked [FP 35] (Versions rail: name, tags, lock, restore, branch, metrics and equity sparkline per version)
 - [x] [M] B-127 Restore or branch from any version; restore creates a new version and deletes nothing [FP 35] (POST /strategies/{sid}/versions/{v}/restore adds a new latest version; /branch starts a new strategy from it)
 - [ ] [M] B-128 Experiments as branches: fork a strategy, change a rule, compare two branches on one chart, merge back [FP 35] (partial: More › Compare and merge: rule and file diffs, latest results side by side, merge a branch back with ours or theirs on conflicts; one shared chart open)
 - [x] [M] B-129 Blame: each line shows the version that last changed it (GET /strategies/{sid}/blame?file= returns each line with the version that last changed it)
@@ -260,7 +260,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-133 Notes (hypothesis, what was tried, decisions) exported with the certificate
 - [ ] [M] B-134 Saved rule groups reusable as blocks; custom indicators by formula shared with Chart and Screener
 - [ ] [M] B-135 Customise: default mode, default exits and sizing profile from Library, blocks palette order, block colours and compact or expanded view (partial: Customise: default interface and mode, default exits and sizing; palette order and block colours open)
-- [ ] [M] B-136 Keyboard-first block insertion (type "/") and snap grid
+- [ ] [M] B-136 Keyboard-first block insertion (type "/") and snap grid (partial: / in a rule focuses Add condition; snap grid open)
 - [ ] [M] B-137 Shared undo across views; Explain on any selection; convert to library block; one parameter table across all views
 - [x] [M] B-138 Python keys: F5 debug and Run, ⌘⇧↵ full run (quick run ⌘↵) (F5 debug, ⌘↵ quick run, ⌘⇧↵ full run recorded in the ledger)
 - [x] [E] B-139 Python engine settings (fill timing, costs, sizing) shown as a badge when code overrides the card (status bar shows the engine settings the code sets)
