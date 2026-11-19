@@ -82,6 +82,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   });
   const [english, setEnglish] = useState("");
   const [symbol, setSymbol] = useState("SPY");
+  const [years, setYears] = useState(2);
   const [auto, setAuto] = useState(() => { try { return localStorage.getItem("studio:build:auto") !== "off"; } catch { return true; } });
   const [previewed, setPreviewed] = useState<string | null>(null);
   const [nudge, setNudge] = useState(0);
@@ -180,9 +181,9 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   useEffect(() => {
     if (!compiled?.ok || !symbol.trim() || (!auto && !nudge)) return;
     const hash = compiled.hash;
-    const t = setTimeout(() => void studio<Preview>("POST", "/preview", { spec, symbol: symbol.trim().toUpperCase() }).then((r) => { setPrev(r); setPreviewed(hash); setNudge(0); }, (e) => setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] })), 300);
+    const t = setTimeout(() => void studio<Preview>("POST", "/preview", { spec, symbol: symbol.trim().toUpperCase(), years }).then((r) => { setPrev(r); setPreviewed(hash); setNudge(0); }, (e) => setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] })), 300);
     return () => clearTimeout(t);
-  }, [spec, symbol, compiled?.ok, auto, nudge]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [spec, symbol, years, compiled?.ok, auto, nudge]); // eslint-disable-line react-hooks/exhaustive-deps
   const stale = !!prev && !!previewed && !!compiled?.hash && previewed !== compiled.hash;
 
   // Browser copy of unsaved edits, offered back when the page reopens with something different (B-27).
@@ -301,7 +302,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const checks: { ok: boolean | null; label: string; detail: string; go?: string }[] = [
     { ok: compiled ? errors === 0 : null, label: "Compiles", detail: errors ? `${errors} error${errors === 1 ? "" : "s"}` : compiled ? `${compiled.ms ?? 0} ms` : "checking" },
     { ok: prev?.status === "ok" ? (rp ? rp.changed === 0 : null) : null, label: "No look-ahead", detail: rp ? (rp.changed ? `changed at ${rp.changed} of ${rp.cuts} cuts` : `same at ${rp.cuts} cuts`) : "needs a preview" },
-    { ok: prev?.status === "ok" ? prev.trades.length > 0 : null, label: "Signals fire", detail: prev?.status === "ok" ? `${prev.trades.length} trades on ${symbol.toUpperCase()}, 2 years` : prev?.reason ?? "needs a preview" },
+    { ok: prev?.status === "ok" ? prev.trades.length > 0 : null, label: "Signals fire", detail: prev?.status === "ok" ? `${prev.trades.length} trades on ${symbol.toUpperCase()}, ${years} years` : prev?.reason ?? "needs a preview" },
     { ok: prev?.status === "ok" && prev.trades.length >= 5 ? true : null, label: "Trades on one name", detail: prev?.status === "ok" ? (prev.trades.length >= 5 ? `${prev.trades.length}, enough to judge the rule here` : `${prev.trades.length}: judge it on the full universe`) : "—" },
     { ok: !(compiled?.findings.some((f) => f.role.startsWith("exit_")) ?? false), label: "Every entry has an exit", detail: compiled?.findings.find((f) => f.role.startsWith("exit_"))?.message ?? "stop, target or rule set", go: "exits" },
     { ok: !(compiled?.findings.some((f) => f.role === "params") ?? false), label: "Parameters used", detail: compiled?.findings.filter((f) => f.role === "params").map((f) => f.token).join(", ") || "all used", go: "params" },
@@ -315,12 +316,13 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
               <label className="bd-auto" title="Preview after each edit"><input type="checkbox" checked={auto} onChange={(e) => { setAuto(e.target.checked); try { localStorage.setItem("studio:build:auto", e.target.checked ? "on" : "off"); } catch { /* blocked */ } }} />Auto</label>
               {!auto || stale ? <button className="btn sm" onClick={() => setNudge((n) => n + 1)}>Preview</button> : null}
               <input className="input" aria-label="Preview symbol" style={{ width: 90 }} value={symbol} onChange={(e) => setSymbol(e.target.value)} />
+              <select className="input" aria-label="Preview window" style={{ width: "auto" }} value={years} onChange={(e) => setYears(+e.target.value)}>{[1, 2, 3, 5].map((y) => <option key={y} value={y}>{y}y</option>)}</select>
             </div>
             {stale ? <p className="bd-find warning" style={{ margin: 0 }}><b>Edited</b>since this preview</p> : null}
             {prev?.invariants?.count ? <p className="bd-find error" style={{ margin: 0 }}><b>Invariant</b>broken on {prev.invariants.count} bar{prev.invariants.count === 1 ? "" : "s"}; Validate will fail</p> : null}
             {prev?.status === "ok" ? (
               <>
-                <p className="bd-meta" style={{ margin: 0 }}>{prev.trades.length} trades · {`${(prev.total_return ?? 0) >= 0 ? "+" : ""}${((prev.total_return ?? 0) * 100).toFixed(1)}%`} · last 2 years before the hold-out</p>
+                <p className="bd-meta" style={{ margin: 0 }}>{prev.trades.length} trades · {`${(prev.total_return ?? 0) >= 0 ? "+" : ""}${((prev.total_return ?? 0) * 100).toFixed(1)}%`} · last {years} years before the hold-out</p>
                 {prev.repaint ? <p className={`bd-find ${prev.repaint.changed ? "error" : ""}`}><b style={{ color: prev.repaint.changed ? undefined : "var(--up)" }}>{prev.repaint.changed ? "Repaints" : "No look-ahead"}</b>
                   {prev.repaint.changed ? `signals changed at ${prev.repaint.changed} of ${prev.repaint.cuts} cuts (${prev.repaint.dates.join(", ")})` : `same signals at ${prev.repaint.cuts} history cuts`}</p> : null}
                 <TimeSeries data={prev.bars} series={[{ key: "close", label: symbol.toUpperCase(), color: "var(--text-2)" }]} height={180} legend={false}

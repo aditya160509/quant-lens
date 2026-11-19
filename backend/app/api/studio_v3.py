@@ -363,6 +363,7 @@ class PreviewRequest(BaseModel):
     spec: dict
     symbol: str = "SPY"
     symbols: list[str] | None = Field(default=None, max_length=50)  # default: Strategy.universe, else `symbol`
+    years: float = Field(default=2.0, ge=0.5, le=10)
 
 
 class ConditionRequest(PreviewRequest):
@@ -672,7 +673,7 @@ def debug_python(request: BuildDebugRequest) -> dict:
 @router.post("/preview", response_model=PreviewResult, response_model_exclude_unset=True)
 def preview(request: PreviewRequest) -> dict[str, Any]:
     try:
-        return backtest.preview(_spec(request.spec), request.symbol, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None)
+        return backtest.preview(_spec(request.spec), request.symbol, request.years, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None)
     except backtest.Refusal as exc:
         return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
     except pycode.CodeError as exc:
@@ -683,7 +684,7 @@ def preview(request: PreviewRequest) -> dict[str, Any]:
 def profile_python(request: PreviewRequest) -> dict[str, Any]:
     """The preview run with the profiler on: `profile.lines` are the 10 slowest strategy lines and `profile.functions` the time per function. Slower than a preview."""
     try:
-        return backtest.preview(_spec(request.spec), request.symbol, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None, profile=True)
+        return backtest.preview(_spec(request.spec), request.symbol, request.years, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None, profile=True)
     except backtest.Refusal as exc:
         return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
     except pycode.CodeError as exc:
