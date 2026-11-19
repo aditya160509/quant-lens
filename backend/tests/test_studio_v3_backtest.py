@@ -1071,3 +1071,18 @@ def test_nested_any_all_groups_generate_the_formula_and_trade_like_it(studio):
         with pytest.raises(ValueError):
             Strategy(**{**SMA, "groups": bad})
     assert Strategy(**{**SMA, "groups": {"exit_long": {"op": "all", "items": [{"rule": "close > 0", "enabled": False}]}}}).exit_long == ""
+
+
+def test_plain_english_maps_ambiguous_words_and_says_so(studio):
+    text = "Buy when it is Oversold in an uptrend, sell on a golden cross or overbought, stop 5%, banana"
+    out = studio.post("/api/studio-v3/plain-english", json={"text": text}).json()
+    assert out["fields"]["entry_long"] == "(rsi(close, 14) < 30) & (close > sma(close, 200))"
+    assert out["unmatched"] == ["banana"]
+    words = [(a["word"], text[a["start"]:a["end"]], a["formula"]) for a in out["assumptions"]]
+    assert words == [("Oversold", "Oversold", "(rsi(close, 14) < 30)"), ("uptrend", "uptrend", "(close > sma(close, 200))"),
+                     ("golden cross", "golden cross", "crosses_above(sma(close, 50), sma(close, 200))"), ("overbought", "overbought", "(rsi(close, 14) > 70)")]
+    assert all(a["meaning"] for a in out["assumptions"])
+    assert "Buy when" in out["restated"] and "stop" in out["restated"].lower()
+    for phrase in ("breakout", "pullback", "volume spike", "downtrend", "death cross"):
+        got = studio.post("/api/studio-v3/plain-english", json={"text": f"buy on a {phrase}"}).json()
+        assert got["assumptions"][0]["word"] == phrase and got["unmatched"] == [] and got["fields"]["entry_long"] == got["assumptions"][0]["formula"]

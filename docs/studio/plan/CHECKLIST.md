@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 110 | 163 | 21 | 70 |
+| Build | 112 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 110 | 163 |
+| Build | 112 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **220** | **538** |
+| **All pages** | **222** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 110 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 112 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -188,7 +188,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [M] B-61 Lifecycle hooks: on_end_of_day, on_warmup_done, on_risk_event, on_stop (on_risk_event receives kind, date, value and limit)
 - [ ] [E] B-62 params = {"fast": (10, 5, 50, 5)} declared in code appear in Build params and the Optimise grid; ctx.param kept [FP 9] [PY A12] (partial: code-declared parameters listed in the Parameters card; Optimise grid binding open)
 - [x] [E] B-63 Per-strategy engine settings as class attributes (fill timing, costs, sizing); code wins over the card and a badge says so (fill, commission, slippage, borrow, max_positions and leverage read from the Strategy class; preview and backtest return settings_overrides and the report's fill and costs reflect the code)
-- [ ] [H] B-64 Python orders feed the event engine directly, so LEAN parity applies to Python strategies (partial: simple Python preview and Backtest use the event engine) [PY A13]
+- [x] [H] B-64 Python orders feed the event engine directly, so LEAN parity applies to Python strategies (partial: simple Python preview and Backtest use the event engine) [PY A13] (backend done: a Python strategy in the event engine matches the same rule as blocks in the vector engine trade for trade and in equity (test); preview, Backtest and Optimise already run Python through it)
 - [x] [M] B-65 Budget: 500 symbols × 2,500 bars in under 20 s (measured 0.55 s for the Python engine workload; real-data load excluded) [PY A14]
 - [x] [M] B-66 Default mode for new strategies (simple or portfolio) in Customise (Customise: Build opens in Simple or Dev, Simple starts in Blocks, Formula or Plain English)
 - [ ] B-67 Refuse formulas or Python that read fundamentals for dates before 2021 (blocked by data: fundamentals held from 2021 only)
@@ -228,7 +228,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-101 Monaco palette and the app palette merged into one list, grouped Editor, Run, View, Studio (partial: Studio commands added to the Monaco palette; app palette not merged)
 - [ ] [E] B-102 Four authoring modes on one spec: blocks, formula, Python, plain English; the mode switch never loses work (partial: all four exist; code-only badge and switch marking open) [FP 22]
 - [ ] [E] B-103 Blocks and formula show generated Python side by side (read only); formula to Python is one way, original kept; hand edits that cannot be represented set a code-only badge [FP 22] (partial: Python view under the rules (read only), Python runs badge; side-by-side open)
-- [ ] [M] B-104 Plain English shows the interpreted rules as blocks before any run; ambiguous words highlighted ("oversold" = RSI(14) < 30); restated "what it does" paragraph; original prompt kept in version history (partial: phrase rules, ignored words listed, review then use; highlights and history open) [FP 23]
+- [x] [M] B-104 Plain English shows the interpreted rules as blocks before any run; ambiguous words highlighted ("oversold" = RSI(14) < 30); restated "what it does" paragraph; original prompt kept in version history (partial: phrase rules, ignored words listed, review then use; highlights and history open) [FP 23] (backend done: POST /plain-english also returns assumptions [{word, start, end, meaning, formula}] for oversold, overbought, uptrend, downtrend, breakout, pullback, golden cross, death cross and volume spike with offsets into the input, plus restated from compile.describe; unmatched keeps the rest; highlight UI is frontend)
 - [x] [E] B-105 Any and All groups, nested to any depth (partial: rows joined by and or; nesting open) [FP 24] (backend done: spec.groups maps entry_long, exit_long, entry_short, exit_short or market_filter to an Any/All tree up to 10 deep with disabled rules; the role formula is generated from it and trades identically; block editor wiring open)
 - [ ] [E] B-106 Condition kinds: cross above and below, for N bars, rising, falling, earnings filter, fundamentals, calendar, cross-sectional (partial: crosses, consecutive bars, rising, falling, week and month starts, percentile rank and z-score exist; earnings and fundamentals open) (partial: calendar kinds weekday(), month(), day_of_month(), quarter_start(), year_start() and between(x, low, high) added to formulas; earnings and fundamentals blocked by data)
 - [ ] [E] B-107 Inline parameter editor with an optimisation range per parameter; plain-language summary line; colour by role; collapse, disable, comment, duplicate, copy as code; undo 50 steps [FP 9] (partial: conditions switch off, duplicate, collapse, copy as code; parameter ranges inline; colour by role and 50-step undo open)

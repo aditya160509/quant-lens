@@ -140,3 +140,22 @@ def test_preview_infers_the_warmup_from_the_longest_window(studio):  # noqa: F81
     code = 'class Strategy:\n    def on_bar(self, ctx):\n        if ctx.rule("close > sma(close, 50)"):\n            ctx.buy()\n'
     warm = studio.post(f"{API}/preview", json={"symbol": "SPY", "spec": {"code": code}}).json()["warmup"]
     assert warm["bars"] == 0 and warm["inferred_bars"] == 50 and warm["inferred_start_date"]
+
+
+def test_python_event_engine_matches_the_formula_vector_engine_trade_for_trade(studio):  # noqa: F811  B-64
+    import numpy as np
+
+    from app.services.studio_v3.core import backtest, pycode
+    from app.services.studio_v3.core.spec import Settings, Strategy
+
+    formula_spec = Strategy(**{**SMA, "sizing": {"mode": "pct_equity", "value": 0.2}})
+    python_spec = Strategy(**{**SMA, "entry_long": "", "exit_long": "", "code": pycode.from_formulas(formula_spec),
+                              "sizing": {"mode": "pct_equity", "value": 0.2}})
+    settings = Settings(symbols=["AAA", "BBB", "CCC"], benchmark="", holdout=0)
+    prep = backtest.prepare(settings)
+    vector = backtest.simulate(formula_spec, prep, settings)
+    event = backtest._simulate_python(python_spec, prep, settings)
+    assert len(vector.trades) > 3
+    key = lambda r: r.trades[np.lexsort((r.trades[:, 0], r.trades[:, 1]))]
+    assert np.allclose(key(vector), key(event), equal_nan=True)
+    assert np.allclose(vector.equity, event.equity)
