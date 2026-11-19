@@ -108,8 +108,9 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   };
   const cancelRun = () => { if (quick) void studio("POST", `/jobs/${quick.job_id}/cancel`).then(() => setQuick((q) => (q ? { ...q, status: "cancelled" } : q)), fail); };
   const [font, setFont] = useState(() => { try { return Number(localStorage.getItem("studio:dev:font")) || 13; } catch { return 13; } });
-  type Preview = Omit<DevPreview, "trades"> & { bars: { date: string; close: number }[]; trades: { entry_date: string; exit_date: string; side: string; return: number }[]; total_return?: number; repaint?: { cuts: number; changed: number; dates: string[] } };
+  type Preview = Omit<DevPreview, "trades"> & { bars: { date: string; close: number }[]; trades: { entry_date: string; exit_date: string; side: string; return: number }[]; total_return?: number; repaint?: { cuts: number; changed: number; dates: string[] }; symbols?: string[]; bars_by_symbol?: Record<string, { date: string; close: number }[]> };
   const [prev, setPrev] = useState<Preview | null>(null);
+  const [chartSym, setChartSym] = useState("");
   const [diff, setDiff] = useState<{ version: number; rows: [string, string, string][] } | null>(null);
   type Proposal = { fields: Record<string, string>; exits: Record<string, number>; unmatched: string[]; assumptions?: { word: string; start: number; end: number; meaning: string; formula: string }[]; restated?: string };
   const [proposal, setProposal] = useState<Proposal | { error: string } | null>(null);
@@ -333,7 +334,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
                 <p className="bd-meta" style={{ margin: 0 }}>{prev.trades.length} trades · {`${(prev.total_return ?? 0) >= 0 ? "+" : ""}${((prev.total_return ?? 0) * 100).toFixed(1)}%`} · last {years} years before the hold-out</p>
                 {prev.repaint ? <p className={`bd-find ${prev.repaint.changed ? "error" : ""}`}><b style={{ color: prev.repaint.changed ? undefined : "var(--up)" }}>{prev.repaint.changed ? "Repaints" : "No look-ahead"}</b>
                   {prev.repaint.changed ? `signals changed at ${prev.repaint.changed} of ${prev.repaint.cuts} cuts (${prev.repaint.dates.join(", ")})` : `same signals at ${prev.repaint.cuts} history cuts`}</p> : null}
-                <TimeSeries data={prev.bars} series={[{ key: "close", label: symbol.toUpperCase(), color: "var(--text-2)" }]} height={180} legend={false}
+                {(prev.symbols?.length ?? 0) > 1 ? <div className="dv-chips">{prev.symbols!.map((x) => <button key={x} className="pill" aria-pressed={(chartSym || prev.symbols![0]) === x} onClick={() => setChartSym(x)}>{x}</button>)}</div> : null}
+                <TimeSeries data={prev.bars_by_symbol?.[chartSym || prev.symbols?.[0] || ""] ?? prev.bars} series={[{ key: "close", label: (chartSym || prev.symbols?.[0] || symbol).toUpperCase(), color: "var(--text-2)" }]} height={180} legend={false}
                   markers={prev.invariants?.rows.length ? [...prev.invariants.rows.filter((r) => !r.symbol || r.symbol === symbol.toUpperCase()).map((r) => ({ date: r.date, label: "!", color: "var(--down)" })), ...prev.trades.flatMap((t) => [{ date: t.entry_date, label: "▲", color: "var(--up)" }])] : pausedAt && ui === "dev" ? [{ date: pausedAt, label: pausedLabel, color: "var(--warn)" }, ...prev.trades.flatMap((t) => [{ date: t.entry_date, label: "▲", color: "var(--up)" }, { date: t.exit_date, label: "×", color: "var(--down)" }])] : fired ? fired.dates.map((d) => ({ date: d, label: "●", color: "var(--accent)" })) : prev.trades.flatMap((t) => [{ date: t.entry_date, label: t.side === "long" ? "▲" : "▼", color: "var(--up)" }, { date: t.exit_date, label: "×", color: "var(--down)" }])} />
                 {fired ? <p className="bd-meta" style={{ margin: 0 }}>{ROLES.find((r) => r[0] === fired.role)?.[1]}: {fired.dates.length} bars marked <button className="bd-link" onClick={() => setFired(null)}>Show trades</button></p> : null}
               </>
