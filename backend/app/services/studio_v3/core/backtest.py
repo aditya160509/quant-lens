@@ -543,6 +543,9 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] 
         total = float(np.prod([1 + t["return"] for t in trades]) - 1) if trades else 0.0
     risk = [{"date": str(p.dates[e["bar"]].date()), "kind": e["kind"], "value": e["value"], "limit": e["limit"]} for e in r.risk_events]
     output.pop("risk_events", None)
+    if isinstance(output.get("warmup"), dict):  # B-53: the longest window any rule needs, when the code sets no warmup of its own
+        needed = C.warmup_bars(spec)
+        output["warmup"] = {**output["warmup"], "inferred_bars": needed, "inferred_start_date": str(p.dates[needed].date()) if needed < len(p.dates) else None}
     if output.get("profile") in (False, None):
         output.pop("profile", None)
     if output.get("order_lines") is True:  # formula strategies place no Python orders

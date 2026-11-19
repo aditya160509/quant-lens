@@ -109,3 +109,34 @@ def test_runtime_error_returns_the_locals_at_the_failing_bar(studio):  # noqa: F
     at = result["problem"]["locals"]
     assert result["status"] == "error" and result["problem"]["exception_type"] == "ZeroDivisionError"
     assert at["symbol"] == "SPY" and at["bar_index"] == 30 and at["variables"]["ratio"] == 1 and at["state"]["seen"] == 31 and at["date"]
+
+
+_INVARIANT = """class Strategy:
+    def on_bar(self, ctx):
+        ctx.assert_invariant(ctx.close[-1] > 0, "price is positive")
+        ctx.assert_invariant(ctx.t < 50, "only the first 50 bars")
+        if ctx.t % 30 == 0:
+            ctx.buy()
+        elif ctx.t % 30 == 15:
+            ctx.sell()
+"""
+
+
+def test_assert_invariant_marks_violations_and_fails_validate(studio):  # noqa: F811
+    result = studio.post(f"{API}/preview", json={"symbol": "SPY", "spec": {"code": _INVARIANT}}).json()
+    broken = result["invariants"]
+    assert broken["count"] > 100 and broken["rows"][0]["text"] == "only the first 50 bars" and broken["rows"][0]["line"] == 4 and broken["rows"][0]["symbol"] == "SPY"
+    assert len(broken["rows"]) <= 500
+    clean = studio.post(f"{API}/preview", json={"symbol": "SPY", "spec": {"code": _INVARIANT.replace("ctx.t < 50", "ctx.t >= 0")}}).json()
+    assert "invariants" not in clean
+    job = studio.post(f"{API}/feature/st03/jobs", json={"payload": {"spec": {"code": _INVARIANT}, "symbols": ["AAA", "BBB"], "profile": "quick"}}).json()
+    out = _wait(studio, job["job_id"])
+    assert out["status"] == "completed", out
+    tile = next(t for t in out["result"]["tables"]["tiles"] if t["test"] == "invariants")
+    assert tile["status"] == "fail" and out["result"]["meta"]["grade"]["grade"] == "F"
+
+
+def test_preview_infers_the_warmup_from_the_longest_window(studio):  # noqa: F811
+    code = 'class Strategy:\n    def on_bar(self, ctx):\n        if ctx.rule("close > sma(close, 50)"):\n            ctx.buy()\n'
+    warm = studio.post(f"{API}/preview", json={"symbol": "SPY", "spec": {"code": code}}).json()["warmup"]
+    assert warm["bars"] == 0 and warm["inferred_bars"] == 50 and warm["inferred_start_date"]

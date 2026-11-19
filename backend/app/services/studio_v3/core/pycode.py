@@ -753,6 +753,8 @@ def _execute(code, bars, dates, params, symbols, cache, output, *, event_setting
                 output["warmup"] = res["warmup"]
             if res.get("repaint") is not None:
                 output["repaint"] = res["repaint"]
+            if (res.get("invariants") or {}).get("count"):  # absent unless something broke, so clean reports keep their shape
+                output["invariants"] = res["invariants"]
             for key in ("order_lines", "profile"):  # only what the caller seeded with True, so reports keep their shape
                 if output.get(key) is True:
                     output[key] = res.get(key) or ([] if key == "order_lines" else None)

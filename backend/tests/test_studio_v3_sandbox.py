@@ -263,3 +263,4 @@ def test_library_internals_are_not_importable_from_strategy_source():
     assert pycode.check("from numpy._core import _methods", {}, entry=False)
     assert pycode.check("from numpy import __doc__", {}, entry=False)
     assert pycode.check("import numpy.ctypeslib", {}, entry=False)
+    assert pycode.check("import time", {}, entry=False) and pycode.check("import datetime", {}, entry=False)

@@ -18,16 +18,16 @@ from app.services.shared import metrics as M
 
 from . import compile as C
 from . import engine, limits, paths, store
-from .backtest import FEW_TRADES, Refusal, prepare, simulate
+from .backtest import FEW_TRADES, Refusal, _simulate_python, prepare, simulate
 from .spec import Settings, Strategy
 
 PROFILES = {"quick": {"noise": 20, "mcpt": 20, "random": 300, "windows": 4, "cells": 16},
             "full": {"noise": 100, "mcpt": 200, "random": 1000, "windows": 8, "cells": 49}}
 WEIGHTS = {"walk_forward": 3, "vs_random": 2, "noise": 2, "mcpt": 2, "delay": 1, "costs": 2, "parameters": 2, "dsr": 3, "pbo": 2,
-           "mc_trades": 1, "skip_trades": 2, "regimes": 2, "sanity": 2, "unseen": 1}
+           "mc_trades": 1, "skip_trades": 2, "regimes": 2, "sanity": 2, "unseen": 1, "invariants": 3}
 NAMES = {"walk_forward": "Walk-forward", "vs_random": "Vs random entries", "noise": "Price noise", "mcpt": "Permutation (MCPT)", "delay": "Delay 1 bar",
          "costs": "Costs 2×", "parameters": "Nearby settings", "dsr": "Deflated Sharpe", "pbo": "Overfitting (PBO)",
-         "mc_trades": "Trade Monte Carlo", "skip_trades": "Skipped trades and slippage", "regimes": "Every regime", "sanity": "Look-ahead and one-trade", "unseen": "Unseen symbols"}
+         "mc_trades": "Trade Monte Carlo", "skip_trades": "Skipped trades and slippage", "regimes": "Every regime", "sanity": "Look-ahead and one-trade", "unseen": "Unseen symbols", "invariants": "Strategy invariants"}
 MAX_SIMS = 100_000
 HOLDOUT_AGENT_BUDGET = 3
 
@@ -261,6 +261,8 @@ def grade(tiles: list[dict], few: bool) -> dict:
         letter = max(letter, "C")  # letters sort A < F: max() keeps the worse grade
     failed = sorted((t for t in judged if t["status"] == "fail"), key=lambda t: -t["weight"])
     reason = failed[0]["finding"] if failed else "every test that ran passed"
+    if any(t["test"] == "invariants" and t["status"] == "fail" for t in judged):
+        letter, reason = "F", next(t for t in judged if t["test"] == "invariants")["finding"]
     if any(t["test"] == "dsr" and t["status"] == "fail" for t in judged):
         reason = "luck: " + next(t for t in judged if t["test"] == "dsr")["finding"]
     return {"grade": letter, "score": score, "reason": reason, "cap": cap}
@@ -306,6 +308,15 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
     tiles: list[dict] = []
     tables: dict[str, list] = {}
     charts: dict[str, list] = {}
+
+    if "assert_invariant" in spec.code:  # B-39: a violated invariant fails the step whatever the other tests say
+        found: dict = {}
+        _simulate_python(spec, prep, settings, output=found)
+        broken = found.get("invariants")
+        tiles.append(_tile("invariants", "fail" if broken else "pass", broken["count"] if broken else 0, "no violation",
+                           f"{broken['count']} violations, first on {broken['rows'][0]['date']} line {broken['rows'][0]['line']}: {broken['rows'][0]['text']}" if broken else "every assert_invariant held"))
+        if broken:
+            tables["invariants"] = broken["rows"]
 
     stage("walk-forward", 15)
     cells = _cells(spec, prof["cells"])

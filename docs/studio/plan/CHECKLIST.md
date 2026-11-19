@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 107 | 163 | 21 | 70 |
+| Build | 110 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 107 | 163 |
+| Build | 110 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **217** | **538** |
+| **All pages** | **220** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 107 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 110 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -163,7 +163,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-36 Docs panel: ⌘-click or F1 opens the reference beside the editor; searchable (API, indicators, recipes); offline and versioned (partial: Docs rail: searchable API reference from the server; F1 opens it)
 - [x] [M] B-37 Strictness setting (basic or strict) and severity per rule (error, warning, off); defaults: basic, all layers, look-ahead as error (backend done: /build/check takes strictness basic or strict and severity per code (error, warning, info, off); settings UI open)
 - [x] [M] B-38 Domain diagnostics: unused parameter, warm-up longer than data, order with no stop in live, hard-coded symbol in a parameterised strategy, print in hot loop, mutable default in params [FP 26] (lint flags hard-coded symbols, print in the bar loop and mutable defaults; /build/checks reports warm-up against the period; the live no-stop rule sits in the Live lab)
-- [ ] [M] B-39 ctx.assert_invariant(cond, msg) puts red markers on the chart and fails the Validate step
+- [x] [M] B-39 ctx.assert_invariant(cond, msg) puts red markers on the chart and fails the Validate step (backend done: ctx.assert_invariant(cond, msg) records {date, symbol, file, line, text} (count plus up to 500 rows) on preview and Backtest; a violation adds a failing Strategy invariants tile and grade F to Validate; chart markers are frontend)
 - [x] [M] B-40 Lint flags wall-clock time, network calls and unseeded random, so one code runs in backtest, paper and live (lint codes wall-clock, network, unseeded-random)
 - [x] [M] B-41 API version header (# studio-api: 1) with an automatic migrator and a quick fix (backend done: # studio-api: 1 header, lint info with a quick-fix edit under strict, error for a newer version, POST /build/migrate; migrations table is empty until the API changes)
 - [x] [M] B-42 Latency budget: completions under 100 ms, diagnostics under 500 ms after typing stops (server p95 measured in tests: completion 0.3 ms, lint 10 to 50 ms for 300 lines; the browser debounce is frontend)
@@ -172,12 +172,12 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [H] B-45 Brackets: bracket(sym, qty, stop, target, trail) with OCA cancel; partial exits by qty per level; stop fills first when both hit one bar [FP 61]
 - [ ] [H] B-46 Pyramiding: max_entries class attribute per symbol; scale in added to the Build exits card [FP 61]
 - [x] [E] B-47 Read-only portfolio state: ctx.portfolio cash, value, leverage, exposure; ctx.pos(sym) qty, avg price, unrealised, bars held, entry date (backend done: immutable portfolio and position snapshots from the event engine) [FP 61] [PY A3]
-- [ ] [M] B-48 ctx.history(field, n, sym=None) returns numpy (pandas=True for a DataFrame); negative indexes only (partial: ctx.history returns bounded numeric windows; ndarray and DataFrame interoperability open) [PY A5]
+- [x] [M] B-48 ctx.history(field, n, sym=None) returns numpy (pandas=True for a DataFrame); negative indexes only (partial: ctx.history returns bounded numeric windows; ndarray and DataFrame interoperability open) [PY A5] (backend done: ctx.history(field, n, sym=None, pandas=False) with HistoryWindow.to_numpy() and np.asarray; pandas=True returns a Series or DataFrame indexed by date, causal)
 - [x] [M] B-49 ctx.bar(sym) for the current bar and ctx.market for the benchmark (current close only)
 - [x] [M] B-50 ctx.indicator(formula) with .value, .ready, .history(n), .window; LEAN-identical definitions (LEAN_PARITY row 19) (handles plus `self.sma(...)` style; EMA, RSI and ATR now seed like LEAN, std is population; parity tests per definition) [FP 43] [PY A4]
 - [x] [M] B-51 ctx.rank and ctx.zscore across the current universe, vectorised (literal formula inputs; rank supports top, bottom and where) [FP 61]
 - [x] [M] B-52 Portfolio rebalance hook, rebalance_schedule cadence, ctx.rebalancing and calendar start flags (verified across missing sessions and year boundaries) [FP 61] [PY A6]
-- [ ] [M] B-53 warmup class attribute: no orders before bar n; auto warm-up reported ("starts trading on …") (partial: explicit warm-up suppresses orders and reports first eligible dates; automatic inference open) [FP 61] [PY A10]
+- [x] [M] B-53 warmup class attribute: no orders before bar n; auto warm-up reported ("starts trading on …") (partial: explicit warm-up suppresses orders and reports first eligible dates; automatic inference open) [FP 61] [PY A10] (backend done: preview warmup returns inferred_bars and inferred_start_date from the longest rule window next to the explicit warmup report)
 - [x] [M] B-54 Risk attributes: max_drawdown (flatten and stop), max_daily_loss, max_position, max_gross; each breach logged as a risk event [FP 61] (spec.risk; both engines flatten at the next fill and stop, caps applied at entry, breach returns bar, kind, value and limit; on_risk_event fires once)
 - [ ] [M] B-55 ctx.store keeps small JSON across runs; instance attributes keep state
 - [x] [H] B-56 ctx.feature_matrix(formulas, lookback) and ctx.fit_every(n); sklearn allowed; fits use past bars only (backend done: ctx.feature_matrix(['roc(close, 5)', ...], n, symbol) returns the past n bars of literal formulas (NaN-padded, oldest first) and ctx.fit_every(n); sklearn linear_model, ensemble, preprocessing, pipeline, metrics, tree, neighbors, cluster, decomposition allowed; n_jobs refused; a test fits a Ridge and shows the matrix equals the one from cut data)

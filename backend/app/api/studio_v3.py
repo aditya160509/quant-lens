@@ -528,6 +528,8 @@ class StrategyProblem(BaseModel):
 
 
 class PreviewWarmup(BaseModel):
+    inferred_bars: int | None = None  # longest window the rules need; the first date with every value is inferred_start_date
+    inferred_start_date: str | None = None
     bars: int
     first_eligible_date: str | None
     first_eligible_by_symbol: dict[str, str | None]
@@ -568,6 +570,7 @@ class PreviewResult(BaseModel):
     settings_overrides: dict[str, Any] | None = None
     order_lines: list[dict[str, Any]] | None = None  # {file, line, count, dates[<=5]}: strategy lines that placed orders
     profile: dict[str, Any] | None = None  # only from POST /build/profile
+    invariants: dict[str, Any] | None = None  # {count, rows[{date, symbol, file, line, text}]}; present only when an assert_invariant failed
 
 
 class DebugBreakpointRequest(BaseModel):

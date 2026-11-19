@@ -779,3 +779,26 @@ def test_target_weights_corridor_skips_small_drift_but_always_closes():
     assert result.trades[0, engine.T_EXIT_BAR] == 7
     with pytest.raises(pycode.CodeError, match="corridor"):
         pycode.run_event(code.replace("corridor=0.9", "corridor=-1"), bars, dates, {}, ["AAA", "BBB"], engine.Params())
+
+
+def test_history_to_numpy_and_pandas_stay_causal():
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _bars(30, 2)
+    code = """import numpy as np
+
+
+class Strategy:
+    def on_data(self, ctx):
+        if ctx.bar_index == 10:
+            window = ctx.history("close", 5, "AAA")
+            frame = ctx.history("close", 5, pandas=True)
+            both = ctx.history(["open", "close"], 3, "BBB", pandas=True)
+            ctx.log("%s|%s|%s|%s" % (np.asarray(window).tolist() == window.to_numpy().tolist(), frame.shape, list(both.columns), frame.index[-1].strftime("%Y-%m-%d")))
+"""
+    out = {}
+    pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], engine.Params(), output=out)
+    assert out["logs"][0]["text"] == f"True|(5, 2)|['open', 'close']|{dates[10].date()}"
+    cut = {}
+    pycode.run_event(code, {k: v[:11] for k, v in bars.items()}, dates[:11], {}, ["AAA", "BBB"], engine.Params(), output=cut)
+    assert cut["logs"] == out["logs"]

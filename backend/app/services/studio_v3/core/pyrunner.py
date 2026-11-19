@@ -25,6 +25,8 @@ ALLOWED_IMPORTS = (
     "sklearn.tree", "sklearn.neighbors", "sklearn.cluster", "sklearn.decomposition",
 )
 ALLOWED_ROOTS = {name.split(".")[0] for name in ALLOWED_IMPORTS}
+# Stdlib modules that pandas and numpy C code load lazily through the caller's builtins. A strategy cannot name them: pycode.check refuses the import.
+LAZY_LIBRARY_MODULES = {"time", "datetime", "_strptime", "decimal", "calendar", "locale", "zoneinfo"}
 INDICATOR_NAMES = ("sma", "ema", "rsi", "atr", "std", "roc", "highest", "lowest")
 SAFE_BUILTINS = {k: __builtins__[k] if isinstance(__builtins__, dict) else getattr(__builtins__, k) for k in (
     "abs", "all", "any", "bool", "dict", "enumerate", "float", "int", "len", "list", "max", "min", "range", "round", "set", "sorted", "str", "sum", "tuple", "zip",
@@ -69,6 +71,13 @@ class HistoryWindow:
 
     def __iter__(self):
         return (float(value) for value in self._values[::-1])
+
+    def to_numpy(self):
+        """A copy of the window, oldest bar first."""
+        return np.array(self._values, dtype=float)
+
+    def __array__(self, dtype=None, copy=None):
+        return np.asarray(self.to_numpy(), dtype=dtype)
 
     def __getitem__(self, offset):
         if type(offset) is not int:
@@ -208,6 +217,7 @@ class Ctx:
         self.open, self.high, self.low, self.close, self.volume = (History(cols[f], self) for f in ("open", "high", "low", "close", "volume"))
         self.orders = []
         self._order_lines = None
+        self._invariants = None
         self.log = _Log(self)
 
     @property
@@ -222,10 +232,19 @@ class Ctx:
     def bar(self):
         return self.t
 
-    def history(self, fields, n):
-        """Read a bounded history window. Offset zero is the current bar."""
+    def history(self, fields, n, pandas=False):
+        """Read a bounded history window. Offset zero is the current bar. `.to_numpy()` gives an array; pandas=True gives a Series or DataFrame indexed by date, oldest first."""
         if type(n) is not int or n < 1:
             raise ValueError("history requires a positive integer window")
+        if pandas:
+            import pandas as pd
+
+            names = [fields] if isinstance(fields, str) else list(fields)
+            if any(name not in self._cols for name in names):
+                raise ValueError(f"Unknown history field in {names}")
+            end = self.t + 1
+            frame = pd.DataFrame({name: self._cols[name][max(0, end - n):end] for name in names}, index=pd.to_datetime(self._dates[max(0, end - n):end]))
+            return frame[fields] if isinstance(fields, str) else frame
         if not isinstance(fields, str):
             return MappingProxyType({field: self.history(field, n) for field in fields})
         if fields not in self._cols:
@@ -343,6 +362,16 @@ class Ctx:
             self._tables.setdefault(str(name)[:128], []).append({"date": self.date, "symbol": self.symbol, "cells": cells})
             self._table_count[0] += 1
 
+    def assert_invariant(self, condition, message=""):
+        """Record a violation (date, symbol, line, message) instead of stopping; Validate fails while any exist (B-39)."""
+        if condition or self._invariants is None:
+            return
+        self._invariants["count"] += 1
+        if len(self._invariants["rows"]) < 500:
+            site = _user_site()
+            self._invariants["rows"].append({"date": self.date, "symbol": self.symbol, "file": site[0] if site else "main.py", "line": site[1] if site else 0,
+                                             "text": str(message)[:300]})
+
     def _note_order(self):
         """Count the strategy line that placed an order, with the first five dates (B-74)."""
         if self._order_lines is None:
@@ -435,6 +464,7 @@ class PortfolioContext(Ctx):
         self._tables, self._table_count = first._tables, first._table_count
         self._plot_charts = first._plot_charts
         self._order_lines = first._order_lines
+        self._invariants = first._invariants
         self._logs, self._plots, self._plot_count = first._logs, first._plots, first._plot_count
         self._contexts = {ctx.symbol: ctx for ctx in contexts}
         self._columns = {symbol: i for i, symbol in enumerate(self._contexts)}
@@ -481,13 +511,19 @@ class PortfolioContext(Ctx):
             return None
         return Bar(*(float(self._bars[f][self.t, column]) for f in ("open", "high", "low", "close", "volume")))
 
-    def history(self, fields, n, sym=None):
-        """Read bounded history for one symbol or for the entire universe."""
+    def history(self, fields, n, sym=None, pandas=False):
+        """Read bounded history for one symbol or for the entire universe. pandas=True with no symbol and one field gives a DataFrame with a column per symbol."""
         if sym is None:
+            if pandas:
+                if not isinstance(fields, str):
+                    raise ValueError("pandas=True without sym needs one field name")
+                import pandas as pd
+
+                return pd.DataFrame({symbol: self.history(fields, n, symbol, pandas=True) for symbol in self.symbols})
             return MappingProxyType({symbol: self.history(fields, n, symbol) for symbol in self.symbols})
         ctx = self._contexts[sym]
         ctx._t = self.t
-        return ctx.history(fields, n)
+        return ctx.history(fields, n, pandas=pandas)
 
     def _feature_series(self, expr, symbol):
         if symbol is None or symbol not in self._columns:
@@ -1037,6 +1073,7 @@ def main():
     T, N = fields["close"].shape
     logs, plots, plot_charts, marks, tables = [], {}, {}, [], {}
     order_lines = {}
+    invariants = {"count": 0, "rows": []}
     ctx = None
 
     def use_context(value):
@@ -1064,6 +1101,7 @@ def main():
             elif not level and (name in ALLOWED_IMPORTS or (name == "scipy" and fromlist == ("stats",))
                                 # C code (ndarray.mean, ...) imports its own helpers lazily through the caller's builtins, with an empty fromlist and a
                                 # dotted name. A user statement for such a module is refused earlier by pycode.check; this layer keeps the root allow-list.
+                                or name in LAZY_LIBRARY_MODULES
                                 or (name.split(".")[0] in ALLOWED_ROOTS and not set(name.split(".")) & {"ctypeslib", "f2py", "distutils", "testing"})):
                 if name not in imported:
                     imported[name] = importlib.import_module(name)
@@ -1109,6 +1147,7 @@ def main():
             item._tables = tables if collect else None
             item._table_count = table_count
             item._order_lines = order_lines if collect else None
+            item._invariants = invariants if collect else None
         return contexts
 
     repaint = None
@@ -1174,7 +1213,7 @@ def main():
     risk_events = arrays.pop("risk_events", [])
     np.savez(sys.argv[2], **arrays)
     sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report, "debug": debug, "risk_events": risk_events,
-                                "order_lines": sorted(order_lines.values(), key=lambda r: (r["file"], r["line"])),
+                                "order_lines": sorted(order_lines.values(), key=lambda r: (r["file"], r["line"])), "invariants": invariants,
                                 "profile": profiler.report({"main.py": src, **meta["modules"]}) if profiler else None}))
 
 
