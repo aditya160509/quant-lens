@@ -10,6 +10,7 @@ import { Distribution } from "@/charts/Distribution";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { DataTable } from "@/kit/DataTable";
 import { studio, usePyTemplates } from "../api";
+import { RECIPES } from "./recipes";
 import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 
 type Log = { date: string; symbol: string | null; line: number; text: string; level: string; fields?: Record<string, unknown> | null };
@@ -342,6 +343,11 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
           ) : rail === "docs" ? (
             <div className="dv-list">
               <input className="input" placeholder="Search the API" aria-label="Search the API" value={docQ} onChange={(e) => setDocQ(e.target.value)} />
+              {RECIPES.filter(([t]) => !docQ || t.toLowerCase().includes(docQ.toLowerCase())).map(([title, code]) => (
+                <details key={title} className="dv-doc"><summary><code>{title}</code><i>recipe</i>
+                  <button className="icon-btn" title="Insert at the cursor" aria-label={`Insert ${title}`} onClick={(e) => { e.preventDefault(); insertAt.current?.(code); }}><FilePlus2 size={12} /></button></summary>
+                  <pre className="bd-code">{code}</pre></details>
+              ))}
               {docs === null ? <p className="dv-empty">Loading…</p> : docRows.slice(0, 300).map((d) => (
                 <details key={`${d.scope}.${d.name}`} className="dv-doc"><summary><code>{d.scope === "portfolio_ctx" ? "ctx" : d.scope}.{d.name}</code><i>{d.kind}</i>
                   <button className="icon-btn" title="Insert at the cursor" aria-label={`Insert ${d.name}`} onClick={(e) => { e.preventDefault(); insertAt.current?.(`${d.scope === "portfolio_ctx" ? "ctx" : d.scope === "numpy" ? "np" : d.scope === "pandas" ? "pd" : d.scope}.${d.signature ? d.signature.replace(/\(.*\)/, "($1)") : d.name}`); }}><FilePlus2 size={12} /></button></summary>
