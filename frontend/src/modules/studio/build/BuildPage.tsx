@@ -454,7 +454,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={setPausedAt} font={font} savedFiles={loaded ? { "main.py": (loaded.spec as Spec).code ?? "", ...(((loaded.spec as Spec).files as Record<string, string>) ?? {}) } : undefined} quick={quick} onQuickRun={(l) => void quickRun(l)} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid">
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
-            {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m} className={`btn sm${mode === m ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}
+            {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m && !spec.code.trim()} className={`btn sm${mode === m && !spec.code.trim() ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}
+            <button role="tab" aria-selected={!!spec.code.trim()} className={`btn sm${spec.code.trim() ? " on" : ""}`} onClick={() => switchUi("dev")}>Python</button>
             {compiled?.complexity ? <span className="bd-cx" title="Parameters, rules and the parameters a sweep can tune">{compiled.complexity.parameter_count} params · {compiled.complexity.formula_rule_count} rules · <b data-high={compiled.complexity.degrees_of_freedom > 8 || undefined}>{compiled.complexity.degrees_of_freedom} degrees of freedom</b></span> : null}
             {spec.code.trim() ? <span className="bd-find warning" style={{ marginLeft: "auto" }}><b>Python runs</b>rules below are kept, not used<button className="btn sm" onClick={() => switchUi("dev")}>Open in Dev</button><button className="btn sm" onClick={() => edit({ code: "", files: {} })}>Use rules</button></span> : null}
           </div>
@@ -512,7 +513,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
             </div>
           ); })}
           {[...findings("spec"), ...findings("blocks")].map((f, i) => <p key={i} className={`bd-find ${f.severity}`}><b>{f.severity === "error" ? "Error" : "Warning"}</b>{f.message}</p>)}
-          <details className="bd-more" onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open && pyView === null) setPyView(""); }}>
+          <details className="bd-more bd-py" onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open && pyView === null) setPyView(""); }}>
             <summary>Python</summary>
             <pre className="bd-code">{pyView || "…"}</pre>
             <button className="btn sm" onClick={() => switchUi("dev")}>Open in Dev</button>

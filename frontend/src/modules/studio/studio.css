@@ -369,3 +369,8 @@
 .bd-tpl-stat { margin-top: 4px; font: 11px var(--mono); font-style: normal; color: var(--up); }
 .bd-tpl-stat[data-neg] { color: var(--down); }
 .dv-spark { display: block; margin-top: 4px; }
+@media (min-width: 1200px) {
+  .bd-rules:has(> .bd-py[open]) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 16px; align-content: start; }
+  .bd-rules:has(> .bd-py[open]) > * { grid-column: 1; }
+  .bd-rules > .bd-py[open] { grid-column: 2; grid-row: 1 / span 40; align-self: start; position: sticky; top: 12px; }
+}
