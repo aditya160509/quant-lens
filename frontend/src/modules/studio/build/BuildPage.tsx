@@ -86,6 +86,10 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   });
   const [english, setEnglish] = useState("");
   const [symbol, setSymbol] = useState("SPY");
+  const [auto, setAuto] = useState(() => { try { return localStorage.getItem("studio:build:auto") !== "off"; } catch { return true; } });
+  const [previewed, setPreviewed] = useState<string | null>(null);
+  const [nudge, setNudge] = useState(0);
+  const [recover, setRecover] = useState<{ spec: Spec; at: number } | null>(null);
   type Preview = Omit<DevPreview, "trades"> & { bars: { date: string; close: number }[]; trades: { entry_date: string; exit_date: string; side: string; return: number }[]; total_return?: number; repaint?: { cuts: number; changed: number; dates: string[] } };
   const [prev, setPrev] = useState<Preview | null>(null);
   const [diff, setDiff] = useState<{ version: number; rows: [string, string, string][] } | null>(null);
@@ -157,10 +161,28 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
 
   // Preview on one name, 300 ms after typing stops (B-5).
   useEffect(() => {
-    if (!compiled?.ok || !symbol.trim()) return;
-    const t = setTimeout(() => void studio<Preview>("POST", "/preview", { spec, symbol: symbol.trim().toUpperCase() }).then(setPrev, (e) => setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] })), 300);
+    if (!compiled?.ok || !symbol.trim() || (!auto && !nudge)) return;
+    const hash = compiled.hash;
+    const t = setTimeout(() => void studio<Preview>("POST", "/preview", { spec, symbol: symbol.trim().toUpperCase() }).then((r) => { setPrev(r); setPreviewed(hash); setNudge(0); }, (e) => setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] })), 300);
     return () => clearTimeout(t);
-  }, [spec, symbol, compiled?.ok]);
+  }, [spec, symbol, compiled?.ok, auto, nudge]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stale = !!prev && !!previewed && !!compiled?.hash && previewed !== compiled.hash;
+
+  // Browser copy of unsaved edits, offered back when the page reopens with something different (B-27).
+  const backupKey = `studio:draft:${loaded?.id ?? id ?? "new"}`;
+  useEffect(() => {
+    if (!dirty) return;
+    const t = setTimeout(() => { try { localStorage.setItem(backupKey, JSON.stringify({ spec, at: Date.now() })); } catch { /* full or blocked */ } }, 500);
+    return () => clearTimeout(t);
+  }, [spec, dirty, backupKey]);
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      const raw = localStorage.getItem(`studio:draft:${loaded.id}`); if (!raw) return;
+      const b = JSON.parse(raw) as { spec: Spec; at: number };
+      if (JSON.stringify({ ...BLANK, ...b.spec }) !== JSON.stringify({ ...BLANK, ...(loaded.draft ?? loaded.spec) })) setRecover(b); else localStorage.removeItem(`studio:draft:${loaded.id}`);
+    } catch { /* blocked */ }
+  }, [loaded?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // True-rate and last true date of every rule on the preview name, 600 ms after typing stops (B-108, B-111, B-116).
   useEffect(() => {
@@ -194,6 +216,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     try {
       const s = loaded ? await studio<Loaded>("PUT", `/strategies/${loaded.id}`, body) : await studio<Loaded>("POST", "/strategies", body);
       setLoaded(s); setDirty(false); setSaving("idle"); toast.success(`Saved version ${s.latest}`);
+      try { localStorage.removeItem(`studio:draft:${s.id}`); localStorage.removeItem("studio:draft:new"); } catch { /* blocked */ }
       if (!loaded) router.replace(`/studio/build/${s.id}`);
       return s.id;
     } catch (e) { setSaving(e instanceof Error && /409|version/i.test(e.message) ? "conflict" : "idle"); fail(e); return null; }
@@ -267,8 +290,11 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           <section className="bd-card">
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <h3 style={{ flex: 1 }}>Preview</h3>
+              <label className="bd-auto" title="Preview after each edit"><input type="checkbox" checked={auto} onChange={(e) => { setAuto(e.target.checked); try { localStorage.setItem("studio:build:auto", e.target.checked ? "on" : "off"); } catch { /* blocked */ } }} />Auto</label>
+              {!auto || stale ? <button className="btn sm" onClick={() => setNudge((n) => n + 1)}>Preview</button> : null}
               <input className="input" aria-label="Preview symbol" style={{ width: 90 }} value={symbol} onChange={(e) => setSymbol(e.target.value)} />
             </div>
+            {stale ? <p className="bd-find warning" style={{ margin: 0 }}><b>Edited</b>since this preview</p> : null}
             {prev?.status === "ok" ? (
               <>
                 <p className="bd-meta" style={{ margin: 0 }}>{prev.trades.length} trades · {`${(prev.total_return ?? 0) >= 0 ? "+" : ""}${((prev.total_return ?? 0) * 100).toFixed(1)}%`} · last 2 years before the hold-out</p>
@@ -358,6 +384,11 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
       </header>
 
       <Palette open={palette} onClose={() => setPalette(false)} commands={commands} />
+      {recover ? (
+        <div className="bd-ro" role="status"><b>Unsaved edits</b><span>from this browser, {new Date(recover.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+          <button className="btn sm primary" onClick={() => { edit(recover.spec); setRecover(null); }}>Restore</button>
+          <button className="btn sm" onClick={() => { try { localStorage.removeItem(backupKey); } catch { /* blocked */ } setRecover(null); }}>Discard</button></div>
+      ) : null}
       {readOnly ? (
         <div className="bd-ro" role="status">
           {readOnly.kind === "lease" ? <><b>Read-only</b><span>open for editing in another tab since {new Date(readOnly.since * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span><button className="btn sm primary" onClick={() => takeLease(true)}>Take over</button></>
@@ -386,7 +417,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         </section>
       ) : null}
       {ui === "dev" ? <DevIDE spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} onRun={() => void run()} onFullRun={() => void run()} compileProblems={compileProblems}
-        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid">
+        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid">
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
             {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m} className={`btn sm${mode === m ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}
@@ -437,7 +468,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
               })()}
             </div>
           ); })}
-          {findings("spec").map((f, i) => <p key={i} className="bd-find error"><b>Error</b>{f.message}</p>)}
+          {[...findings("spec"), ...findings("blocks")].map((f, i) => <p key={i} className={`bd-find ${f.severity}`}><b>{f.severity === "error" ? "Error" : "Warning"}</b>{f.message}</p>)}
           <details className="bd-more" onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open && pyView === null) setPyView(""); }}>
             <summary>Python</summary>
             <pre className="bd-code">{pyView || "…"}</pre>

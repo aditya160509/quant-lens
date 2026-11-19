@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 82 | 163 | 21 | 70 |
+| Build | 87 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 82 | 163 |
+| Build | 87 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **192** | **538** |
+| **All pages** | **197** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 82 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 87 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -137,7 +137,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 
 - [x] [E] B-11 Full-height IDE: editor fills the work area; bottom panel resizes 30 to 40%; side rail collapses [PY B1] (Dev interface: full-height editor, resizable bottom panel (drag, double-click, ⌘J), collapsible rail (⌘B))
 - [ ] [M] B-12 Three zones: left rail (Files, Outline, Search, Templates, Versions), centre editor, bottom panel (Problems, Output, Logs, Results, Plots, Debug, Terminal); right rail (preview, Inspector, AI); each zone remembers its size (partial: Dev: activity bar with Files, Outline, Search, Versions, Docs, Starters; panel with Problems, Output, Plots, Trades, Debug; preview on the right; Results and Terminal open)
-- [ ] [H] B-13 Editor groups: split right or down, up to 4 groups; tabs can be pinned, kept in preview, or marked dirty
+- [ ] [H] B-13 Editor groups: split right or down, up to 4 groups; tabs can be pinned, kept in preview, or marked dirty (partial: split right with a second editor group (button, ⌘\); pinned and preview tabs open)
 - [ ] [H] B-14 One editing session per strategy: a second tab opens read-only with a take-over button (backend done: POST/DELETE /strategies/{sid}/lease (60 s, take_over); writers send X-Studio-Session and get 409 naming the holder; frontend wiring open)
 - [x] [M] B-15 Phone (390 px): one zone at a time with a Code, Run, Results switcher; Build on phone is Formula and Plain English only (phone width hides Dev and forces Simple)
 - [ ] [M] B-16 IDE keys: F5 debug, F9 breakpoint, F10 step bar, F11 step line, ⌘J panel, ⌘B rail, ⌘\ split, ⌘P file, ⌘⇧F search project (partial: F5, F9, F10, ⇧F10, ⌘J, ⌘B, ⌘P, ⌘⇧F, F1 built; F11 step line and ⌘\ split open)
@@ -151,8 +151,8 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [H] B-24 Code actions ⌘.: extract formula string to parameter, convert ctx.rule to indicator object, wrap selection in if ctx.position == 0, add missing on_fill (backend done: POST /build/code-actions returns text edits for extract-to-parameter, indicator object, wrap in if, add on_fill; frontend wiring open)
 - [x] [M] B-25 Outline of classes, methods and indicators for the open file (Outline rail from /build/outline; click jumps)
 - [ ] [E] B-26 Undo history survives reload, per file (partial: undo and redo built; survives reload not built)
-- [ ] [M] B-27 Save state indicator (Saved, Saving, Conflict) and local draft recovery from IndexedDB (partial: autosave exists; indicator and conflict state open)
-- [ ] [M] B-28 Read-only banner when the editor code differs from the code that produced the visible result
+- [x] [M] B-27 Save state indicator (Saved, Saving, Conflict) and local draft recovery from IndexedDB (status bar shows Saved, Draft, Saving, Conflict; browser copy of unsaved edits offered back on reopen)
+- [x] [M] B-28 Read-only banner when the editor code differs from the code that produced the visible result (Preview card and Results tab say Edited when the code differs from what produced them)
 - [x] [E] B-29 Side-by-side Monaco diff of two versions, with each version run result above it [PY B9] (Versions rail opens a side-by-side Monaco diff per file with each version's run above it)
 - [ ] [H] B-30 In-browser Pyright in a web worker with Studio stubs (ctx, portfolio, orders, indicators, numpy, pandas, math, typed Bar, Fill, Order, Position); covers the user own classes [FP 26, 62]
 - [x] [M] B-31 Completion inside ctx.value("…") for formula names, ctx.param("…") for parameter names, ctx.symbol == "…" for symbols, ctx.history("…") for fields; snippets with tab stops (server completion by scope: formula, param, history field, symbol)
@@ -207,15 +207,15 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-80 Structured logs: ctx.log.info("entry", symbol=s, rsi=r) stored as key values, searchable [FP 28] (backend done: ctx.log, ctx.log.info/warning/error store clean key values on each log row; filtering and search are frontend)
 - [ ] [E] B-81 Plots tab: each ctx.plot series overlays the price or sits in its own pane on a shared time axis; toggle each; compare across two runs [FP 29] [PY B2] (partial: overlay or own pane, toggle per series; compare across runs open)
 - [x] [E] B-82 Problems tab: static and runtime errors, click to jump to the line [PY B2] (Problems tab: lint, compile and runtime, click jumps; traceback frames listed)
-- [ ] [M] B-83 Results tab: compact Backtest report (KPI strip with All, Long, Short; equity vs benchmark; trade list; trade histogram; Properties block); Open in Backtest without recompute [PY B2]
+- [ ] [M] B-83 Results tab: compact Backtest report (KPI strip with All, Long, Short; equity vs benchmark; trade list; trade histogram; Properties block); Open in Backtest without recompute [PY B2] (partial: Results tab: return, Sharpe, trades for this version and Open in Backtest; full report open)
 - [ ] [E] B-84 Three run levels: live preview (600 ms debounce, one symbol, 2 years), quick run ⌘↵ (universe, 5 years), full run ⌘⇧↵ (recorded in the ledger) (partial: preview built (300 ms, 2 years); quick and full levels not split)
 - [ ] [E] B-85 Progress in the status bar ("bar 1,240 / 2,516 · 18 symbols · 3.2 s") with partial equity streamed to Results
 - [ ] [E] B-86 Cancel with Esc; time budget shown on every run
 - [ ] [M] B-87 Runtime error: jump to the line, stack trace with user frames only, locals at the failing bar (symbol, date, self attributes) (partial: preview returns file, line, column, exception type and up to eight user frames)
 - [ ] [M] B-88 Delta row after each quick run against the last run (return, Sharpe, trades)
-- [ ] [E] B-89 Preview settings: symbol and window (default SPY, 2 years), auto-preview on or off; quick-run universe (top 50 by volume, 5 years) (partial: preview symbol and window exist)
-- [ ] [E] B-90 Status bar: Ln:Col, error and warning counts, saved state, run state, last run time, "trial 14 on this idea" [FP 68] (partial: Ln:Col, errors and warnings, saved state, warm-up, preview time; trial count open)
-- [ ] [M] B-91 Yellow banner on a result when the editor code differs from the run
+- [ ] [E] B-89 Preview settings: symbol and window (default SPY, 2 years), auto-preview on or off; quick-run universe (top 50 by volume, 5 years) (partial: symbol and auto-preview on or off; window and quick-run universe open)
+- [x] [E] B-90 Status bar: Ln:Col, error and warning counts, saved state, run state, last run time, "trial 14 on this idea" [FP 68] (Ln:Col, errors and warnings, saved state, warm-up, preview time, trial chip)
+- [x] [M] B-91 Yellow banner on a result when the editor code differs from the run (Edited banner on the result when the code differs from the run)
 - [ ] [M] B-92 Strategy is a project: main.py plus modules, README.md and params.json; file tree with create, rename, move, delete, duplicate and drag; limits 50 files and 200 KB per file [PY B3] (backend done: versioned file CRUD, diffs and checked helper execution; editor wiring open)
 - [ ] [E] B-93 Any project can be marked a library and imported by others with a pinned version; "v3 available, review diff" badge; updates never change saved strategies silently [FP 58]
 - [ ] [M] B-94 Zip import and export of a project (backend done: GET /strategies/{sid}/export.zip and POST /strategies/import-zip with 50 file and 200 KB limits; frontend wiring open)
@@ -223,7 +223,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-96 Examples in hover docs insert with one click
 - [ ] [M] B-97 Gallery of 12 starters with a one-line description, last backtest on the default universe and "use as start" (trend 50/200, RSI(2), momentum top 10, dual momentum, pairs z-score, vol target, ATR breakout, turn of month, gap fade, sector rotation, ML ranking, risk parity) (partial: 20 formula templates exist; gallery stats open)
 - [x] [M] B-98 Python starters: trend, mean reversion, momentum rotation, pairs, vol target, breakout, seasonality, ML score [PY B10] (eight starters compile and trade on real data, tested; gallery UI open)
-- [ ] [M] B-99 Warn above 200 blocks, hard stop above 1,000; warn above 8 optimisable parameters (backend done: compile findings; frontend wiring open)
+- [x] [M] B-99 Warn above 200 blocks, hard stop above 1,000; warn above 8 optimisable parameters (block and parameter warnings shown under the rules)
 - [ ] [E] B-100 Customise: personal templates, parameter ranges per strategy, default sizing and costs per user, editor font and keymap
 - [ ] [M] B-101 Monaco palette and the app palette merged into one list, grouped Editor, Run, View, Studio (partial: Studio commands added to the Monaco palette; app palette not merged)
 - [ ] [E] B-102 Four authoring modes on one spec: blocks, formula, Python, plain English; the mode switch never loses work (partial: all four exist; code-only badge and switch marking open) [FP 22]

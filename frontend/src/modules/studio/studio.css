@@ -321,3 +321,12 @@
 .dv-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .dv-tags i { font: 10.5px var(--mono); font-style: normal; padding: 1px 6px; border-radius: 99px; background: var(--line); color: var(--text-2); }
 .dv-item code { font: 11px var(--mono); color: var(--accent); }
+.dv-editor[data-split] { display: grid; grid-template-columns: 1fr 1fr; }
+.dv-editor[data-split] > section { min-width: 0; }
+.dv-split { order: 2; display: grid; grid-template-rows: 30px minmax(0, 1fr); min-width: 0; border-left: 1px solid var(--line); }
+.dv-splithead { display: flex; align-items: center; gap: 6px; padding: 0 6px; border-bottom: 1px solid var(--line); }
+.dv-splithead .input { height: 24px; width: auto; font: 12px var(--mono); }
+.dv-results { display: grid; gap: 10px; justify-items: start; }
+.dv-results .kpis { width: 100%; }
+.bd-auto { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; color: var(--text-3); }
+.dv-splitbtn { align-self: center; margin-right: 6px; }

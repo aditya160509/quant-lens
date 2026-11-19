@@ -1,7 +1,8 @@
 "use client";
 
 import { DiffEditor } from "@monaco-editor/react";
-import { BookOpen, Bug, CaseSensitive, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, Bug, CaseSensitive, Columns2, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { SERIES } from "@/charts/core";
@@ -30,7 +31,7 @@ type Timeline = Version & { name: string; tags: string[]; locked: boolean; sharp
 type Snapshot = { at: number; files: Record<string, string> };
 type Snippet = { id: string; name: string; prefix: string; body: string; description: string };
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
-type Tab = "problems" | "output" | "plots" | "trades" | "debug";
+type Tab = "problems" | "output" | "plots" | "trades" | "results" | "debug";
 type Rail = "files" | "outline" | "search" | "versions" | "docs" | "templates";
 type Spec = { code: string; files?: Record<string, string>; params: Record<string, { value: number }>; [k: string]: unknown };
 export type Saved = "saved" | "draft" | "saving" | "conflict" | "new";
@@ -62,10 +63,10 @@ function finder(query: string, opt: { regex: boolean; caseSensitive: boolean; wo
 }
 
 /** Build › Dev: a project rail, the editor in tabs, Problems / Output / Plots / Trades / Debug below, preview and checks on the right, a status bar. */
-export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload }: {
+export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale }: {
   spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode;
   onSave: () => void; onRun: () => void; onFullRun: () => void; compileProblems: Problem[];
-  strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void;
+  strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean;
 }) {
   const files = useMemo(() => ({ "main.py": spec.code, ...(spec.files ?? {}) }), [spec.code, spec.files]);
   const [open, setOpen] = useState<string[]>(["main.py"]);
@@ -93,6 +94,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [diff, setDiff] = useState<{ version: number; files: Record<string, string> } | null>(null);
   const [lastPreview, setLastPreview] = useState<string | null>(null);
   const [qc, setQc] = useState<QC | null>(null);
+  const [split, setSplit] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<Timeline[]>([]);
   const [snaps, setSnaps] = useState<Snapshot[]>([]);
   const [snippets, setSnippets] = useState<Snippet[]>([]);
@@ -209,6 +211,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     { id: "studio.fullrun", label: "Run: full backtest", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => onFullRun() },
     { id: "studio.save", label: "Strategy: save version", run: () => onSave() },
     { id: "studio.newfile", label: "File: new", run: () => addFile() },
+    { id: "studio.split", label: "View: split editor", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.Backslash], run: () => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active)) },
     { id: "studio.snippet", label: "Snippet: save selection", run: () => saveSnippet() },
     { id: "studio.snippets", label: "Snippet: insert", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyS], run: () => { setRailOpen(true); setRail("templates"); } },
   ];
@@ -219,7 +222,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     </div>
   ));
   const docRows = (docs ?? []).filter((d) => !docQ || `${d.scope}.${d.name} ${d.documentation ?? ""}`.toLowerCase().includes(docQ.toLowerCase()));
-  const TABS: [Tab, string, number | null][] = [["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["debug", "Debug", null]];
+  const TABS: [Tab, string, number | null][] = [["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["results", "Results", null], ["debug", "Debug", null]];
   const toggles = <span className="dv-toggles">
     <button className="icon-btn" aria-pressed={opt.caseSensitive} title="Match case" onClick={() => setOpt((o) => ({ ...o, caseSensitive: !o.caseSensitive }))}><CaseSensitive size={14} /></button>
     <button className="icon-btn" aria-pressed={opt.word} title="Whole word" onClick={() => setOpt((o) => ({ ...o, word: !o.word }))}><WholeWord size={14} /></button>
@@ -314,14 +317,24 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
               {f}{open.length > 1 ? <button className="icon-btn" aria-label={`Close ${f}`} onClick={(e) => { e.stopPropagation(); close(f); }}><X size={11} /></button> : null}
             </div>
           ))}
+          <span style={{ flex: 1 }} />
+          <button className="icon-btn dv-splitbtn" aria-pressed={!!split} title="Split editor" aria-label="Split editor" onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}><Columns2 size={14} /></button>
           {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
         </div>
-        <div className="dv-editor">
+        <div className="dv-editor" data-split={(split && !diff) || undefined}>
           {!spec.code.trim() && active === "main.py" && !diff ? (
             <div className="dv-blank">
               <b>This strategy runs on its rules</b>
               <div><button className="btn primary" onClick={() => void studio<{ code: string }>("POST", "/to-python", { spec }).then((r) => edit({ code: r.code }), (e: Error) => toast.error(e.message))}>Convert rules to Python</button>
                 <button className="btn" onClick={() => { setRailOpen(true); setRail("templates"); }}>Start from a starter</button></div>
+            </div>
+          ) : null}
+          {split && !diff ? (
+            <div className="dv-split">
+              <div className="dv-splithead"><select className="input" aria-label="File in the second group" value={split} onChange={(e) => setSplit(e.target.value)}>{Object.keys(files).map((f) => <option key={f}>{f}</option>)}</select>
+                <button className="icon-btn" aria-label="Close split" onClick={() => setSplit(null)}><X size={12} /></button></div>
+              <CodeEditor path={`split/${split}`} value={files[split] ?? ""} onChange={(t) => setFile(split, t)} problems={[]} onSave={onSave} onRun={onRun} readOnly={readOnly}
+                project={{ file: split, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles }} />
             </div>
           ) : null}
           {diff ? (
@@ -376,6 +389,20 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
                 </div>
               ) : null}
               {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades" }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
+              {tab === "results" ? (() => {
+                const r = version ? runs[version] : undefined;
+                return r ? (
+                  <div className="dv-results">
+                    <div className="kpis">
+                      <div className="kpi"><span>Return</span><b>{pct(r.total_return)}</b></div>
+                      <div className="kpi"><span>Sharpe</span><b>{r.sharpe?.toFixed(2) ?? "—"}</b></div>
+                      <div className="kpi"><span>Trades</span><b>{r.trades ?? "—"}</b></div>
+                    </div>
+                    {stale ? <p className="bd-find warning"><b>Edited</b>the code differs from v{version}, which produced this result</p> : null}
+                    <Link className="btn sm" href="/studio/backtest">Open in Backtest</Link>
+                  </div>
+                ) : <p className="dv-empty">No backtest of v{version ?? 1} yet · ⌘↵ runs one</p>;
+              })() : null}
               {tab === "debug" ? (
                 <div className="dv-debug">
                   <div className="dv-dbar">
