@@ -118,6 +118,6 @@ export function PopMenu({ at, onClose, children, width = 220, sticky = false }: 
   return createPortal(menu, document.querySelector(".ws") ?? document.body);
 }
 
-export function MenuItem({ icon, onClick, danger, children, hint }: { icon?: ReactNode; onClick: () => void; danger?: boolean; children: ReactNode; hint?: string }) {
-  return <button type="button" role="menuitem" className={`item${danger ? " danger" : ""}`} onClick={onClick}>{icon}<span style={{ flex: 1 }}>{children}</span>{hint ? <span className="kbd">{hint}</span> : null}</button>;
+export function MenuItem({ icon, onClick, danger, children, hint, disabled }: { icon?: ReactNode; onClick: () => void; danger?: boolean; children: ReactNode; hint?: string; disabled?: boolean }) {
+  return <button type="button" role="menuitem" className={`item${danger ? " danger" : ""}`} onClick={onClick} disabled={disabled}>{icon}<span style={{ flex: 1 }}>{children}</span>{hint ? <span className="kbd">{hint}</span> : null}</button>;
 }

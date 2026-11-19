@@ -1,6 +1,6 @@
 "use client";
 
-import { Command as CommandIcon, Play, Plus, Save, Trash2 } from "lucide-react";
+import { Command as CommandIcon, Download, GitBranch, Link2, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
@@ -11,7 +11,8 @@ import { studio, useTemplates, type Compiled, type Ledger } from "../api";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { TrialChip } from "../RunHeader";
 import { BlockRows } from "./BlockRows";
-import { Segmented } from "@/workspace/ui";
+import { MenuItem, PopMenu, Segmented, type MenuAt } from "@/workspace/ui";
+import { STUDIO_BASE } from "../base";
 import type { Problem } from "./CodeEditor";
 import { DevIDE, type DevPreview, type Saved } from "./DevIDE";
 import { Palette, type Command } from "./Palette";
@@ -72,6 +73,10 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const [compiled, setCompiled] = useState<Compiled | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState<"idle" | "saving" | "conflict">("idle");
+  const [readOnly, setReadOnly] = useState<null | { kind: "lease"; since: number } | { kind: "share"; token: string }>(null);
+  const [more, setMore] = useState<MenuAt | null>(null);
+  const session = useRef(typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random()));
+  const zipInput = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"blocks" | "formula" | "english">("formula");
   const [ui, setUiState] = useState<"simple" | "dev">(() => {
     if (typeof window === "undefined") return "simple";
@@ -103,7 +108,28 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     const next = { ...BLANK, ...(version ? s.spec : s.draft ?? s.spec) };
     setLoaded(s); setSpec(next); if (next.code.trim() && !new URLSearchParams(window.location.search).get("ui")) setUi("dev"); setDirty(!version && !!s.draft); history.current = { past: [], future: [] };
   }, fail), []);
-  useEffect(() => { if (id) void load(id); else { setLoaded(null); setSpec(BLANK); } }, [id, load]);
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("share");
+    if (token) {
+      void studio<{ name: string; files: Record<string, string> }>("GET", `/share/${token}`).then((r) => { const { "main.py": code = "", ...files } = r.files; setSpec({ ...BLANK, name: r.name, code, files }); setReadOnly({ kind: "share", token }); setUi("dev"); }, fail);
+      return;
+    }
+    if (id) void load(id); else { setLoaded(null); setSpec(BLANK); }
+  }, [id, load]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // One editing session per strategy (B-14, B-132): renew a 60 s lease every 30 s; a second tab opens read-only.
+  const takeLease = useCallback((takeOver = false) => {
+    if (!loaded) return;
+    void studio<{ since: number }>("POST", `/strategies/${loaded.id}/lease`, { session: session.current, take_over: takeOver })
+      .then(() => setReadOnly((r) => (r?.kind === "lease" ? null : r)), (e: Error & { status?: number; detail?: { since?: number } }) => { if (e.status === 409) setReadOnly({ kind: "lease", since: e.detail?.since ?? Date.now() / 1000 }); });
+  }, [loaded]);
+  useEffect(() => {
+    if (!loaded) return;
+    takeLease();
+    const t = setInterval(() => takeLease(), 30_000);
+    const sid = loaded.id, s = session.current;
+    return () => { clearInterval(t); void fetch(`${STUDIO_BASE}/strategies/${sid}/lease?session=${s}`, { method: "DELETE", keepalive: true }).catch(() => undefined); };
+  }, [loaded?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 760px)");
@@ -121,7 +147,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   }
   const switchMode = (m: "blocks" | "formula" | "english") => setMode(m);
   const formatSave = () => void studio<{ code: string }>("POST", "/format-python", { code: spec.code }).then((r) => { const next = { ...spec, code: r.code }; if (r.code !== spec.code) edit({ code: r.code }); return save(next); }, fail);
-  const edit = (next: Partial<Spec>) => setSpec((cur) => { history.current.past.push(cur); history.current.future = []; setDirty(true); return { ...cur, ...next }; });
+  const edit = (next: Partial<Spec>) => readOnly ? void toast("Read-only", { id: "ro" }) : setSpec((cur) => { history.current.past.push(cur); history.current.future = []; setDirty(true); return { ...cur, ...next }; });
 
   // Live compile, 250 ms after typing stops.
   useEffect(() => {
@@ -315,11 +341,29 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         ) : null}
         <span className="bd-ui"><Segmented<"simple" | "dev"> label="Interface" value={ui} onChange={switchUi} options={[{ value: "simple", label: "Simple" }, { value: "dev", label: "Dev" }]} /></span>
         <button className="btn" onClick={() => setPalette(true)}><CommandIcon size={14} />Commands<kbd>⌘⇧P</kbd></button>
+        <button className="btn icon" aria-label="More" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMore({ x: r.right - 220, y: r.bottom + 4 }); }}><MoreHorizontal size={15} /></button>
+        <PopMenu at={more} onClose={() => setMore(null)} width={220}>
+          <MenuItem icon={<Link2 size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) void studio<{ token: string }>("POST", `/strategies/${loaded.id}/share`).then((r) => { const u = `${location.origin}/studio/build?share=${r.token}`; void navigator.clipboard?.writeText(u); toast.success("Read-only link copied"); }, fail); }}>Copy read-only link</MenuItem>
+          <MenuItem icon={<GitBranch size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) void studio<{ id: string }>("POST", `/strategies/${loaded.id}/versions/${loaded.version}/branch`).then((b) => router.push(`/studio/build/${b.id}`), fail); }}>Branch from v{loaded?.version ?? 1}</MenuItem>
+          <MenuItem icon={<Download size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) window.location.assign(`${STUDIO_BASE}/strategies/${loaded.id}/export.zip`); }}>Export project (.zip)</MenuItem>
+          <MenuItem icon={<Upload size={13} />} onClick={() => { setMore(null); zipInput.current?.click(); }}>Import project (.zip)</MenuItem>
+        </PopMenu>
+        <input ref={zipInput} type="file" accept=".zip,application/zip" hidden onChange={(e) => {
+          const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
+          void fetch(`${STUDIO_BASE}/strategies/import-zip?name=${encodeURIComponent(f.name.replace(/\.zip$/i, ""))}`, { method: "POST", headers: { "Content-Type": "application/zip" }, body: f })
+            .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.detail?.message ?? j.detail ?? "Import failed"); router.push(`/studio/build/${j.id}?ui=dev`); }).catch(fail);
+        }} />
         <button className="btn" onClick={() => void save()}><Save size={14} />Save<kbd>⌘S</kbd></button>
         <button className="btn primary" disabled={compiled ? !compiled.ok : true} onClick={() => void run()}><Play size={14} />Run backtest<kbd>⌘↵</kbd></button>
       </header>
 
       <Palette open={palette} onClose={() => setPalette(false)} commands={commands} />
+      {readOnly ? (
+        <div className="bd-ro" role="status">
+          {readOnly.kind === "lease" ? <><b>Read-only</b><span>open for editing in another tab since {new Date(readOnly.since * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span><button className="btn sm primary" onClick={() => takeLease(true)}>Take over</button></>
+            : <><b>Shared, read-only</b><span>{spec.name}</span><button className="btn sm primary" onClick={() => void studio<{ id: string }>("POST", `/share/${readOnly.token}/fork`).then((s) => { window.location.assign(`/studio/build/${s.id}?ui=dev`); }, fail)}>Fork to edit</button></>}
+        </div>
+      ) : null}
       {ui === "simple" && blank && templates.data ? (
         <section className="bd-card">
           <h3>Start from</h3>
@@ -342,7 +386,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         </section>
       ) : null}
       {ui === "dev" ? <DevIDE spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} onRun={() => void run()} onFullRun={() => void run()} compileProblems={compileProblems}
-        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} /> : <div className="bd-grid">
+        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid">
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
             {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m} className={`btn sm${mode === m ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}

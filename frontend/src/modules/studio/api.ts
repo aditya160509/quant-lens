@@ -7,7 +7,7 @@ import { STUDIO_BASE } from "./base";
 export async function studio<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${STUDIO_BASE}${path}`, { method, headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const json = (await res.json().catch(() => ({}))) as { detail?: unknown };
-  if (!res.ok) throw new Error(typeof json.detail === "string" ? json.detail : (json.detail as { reason?: string } | undefined)?.reason ?? `Request failed (${res.status})`);
+  if (!res.ok) { const d = json.detail as { reason?: string; message?: string } | undefined; throw Object.assign(new Error(typeof json.detail === "string" ? json.detail : d?.reason ?? d?.message ?? `Request failed (${res.status})`), { status: res.status, detail: json.detail }); }
   return json as T;
 }
 

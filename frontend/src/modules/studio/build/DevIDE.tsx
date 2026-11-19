@@ -1,7 +1,7 @@
 "use client";
 
 import { DiffEditor } from "@monaco-editor/react";
-import { BookOpen, Bug, CaseSensitive, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
+import { BookOpen, Bug, CaseSensitive, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { SERIES } from "@/charts/core";
@@ -26,6 +26,9 @@ type Debug = { date: string; symbol: string; bar_index: number; state: Record<st
 type QC = { ok: boolean; code: string; symbols: string[]; converted: { line: number; before: string; after: string }[]; unconverted: { line: number; source: string; reason: string }[] };
 type Member = { name: string; kind: string; signature: string | null; documentation: string | null };
 type Version = { version: number; created: number; actor: string };
+type Timeline = Version & { name: string; tags: string[]; locked: boolean; sharpe: number | null; total_return: number | null; spark: number[] };
+type Snapshot = { at: number; files: Record<string, string> };
+type Snippet = { id: string; name: string; prefix: string; body: string; description: string };
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 type Tab = "problems" | "output" | "plots" | "trades" | "debug";
 type Rail = "files" | "outline" | "search" | "versions" | "docs" | "templates";
@@ -59,10 +62,10 @@ function finder(query: string, opt: { regex: boolean; caseSensitive: boolean; wo
 }
 
 /** Build › Dev: a project rail, the editor in tabs, Problems / Output / Plots / Trades / Debug below, preview and checks on the right, a status bar. */
-export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial }: {
+export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload }: {
   spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode;
   onSave: () => void; onRun: () => void; onFullRun: () => void; compileProblems: Problem[];
-  strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode;
+  strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void;
 }) {
   const files = useMemo(() => ({ "main.py": spec.code, ...(spec.files ?? {}) }), [spec.code, spec.files]);
   const [open, setOpen] = useState<string[]>(["main.py"]);
@@ -90,6 +93,11 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [diff, setDiff] = useState<{ version: number; files: Record<string, string> } | null>(null);
   const [lastPreview, setLastPreview] = useState<string | null>(null);
   const [qc, setQc] = useState<QC | null>(null);
+  const [timeline, setTimeline] = useState<Timeline[]>([]);
+  const [snaps, setSnaps] = useState<Snapshot[]>([]);
+  const [snippets, setSnippets] = useState<Snippet[]>([]);
+  const selection = useRef("");
+  const insertAt = useRef<((text: string) => void) | null>(null);
   const qcRef = useRef<HTMLDialogElement>(null);
   const pyTemplates = usePyTemplates();
   const source = files[active] ?? "";
@@ -105,12 +113,32 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const toggleBp = (line: number) => setBps((b) => { const cur = b[active] ?? []; return { ...b, [active]: cur.includes(line) ? cur.filter((x) => x !== line) : [...cur, line].sort((x, y) => x - y) }; });
 
   useEffect(() => {
+    if (!source.trim()) { setLint([]); setOutline([]); return; }
     const t = setTimeout(() => {
       void studio<{ problems: Problem[] }>("POST", "/build/check", { code: source, file: active, files, params: Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, p.value])) }).then((r) => setLint(r.problems), () => undefined);
       void studio<Sym[]>("POST", "/build/outline", { code: source }).then(setOutline, () => undefined);
     }, 300);
     return () => clearTimeout(t);
   }, [source, active, files, spec.params]);
+  useEffect(() => {
+    if (rail !== "versions" || !strategyId) return;
+    void studio<Timeline[]>("GET", `/strategies/${strategyId}/timeline`).then(setTimeline, () => undefined);
+    void studio<Snapshot[]>("GET", `/strategies/${strategyId}/history`).then(setSnaps, () => undefined);
+  }, [rail, strategyId, versions.length, saved]);
+  useEffect(() => { void studio<Snippet[]>("GET", "/snippets").then(setSnippets, () => undefined); }, []);
+  const versionAct = (path: string, body?: unknown, msg?: string) => strategyId && void studio("POST", `/strategies/${strategyId}${path}`, body).then(() => { if (msg) toast.success(msg); onReload?.(); }, (e: Error) => toast.error(e.message));
+  const labelVersion = (v: Timeline) => {
+    const name = window.prompt(`Name v${v.version}`, v.name); if (name === null) return;
+    const tags = window.prompt("Tags, comma separated", v.tags.join(", ")); if (tags === null) return;
+    void studio("PUT", `/strategies/${strategyId}/versions/${v.version}/label`, { name, tags: tags.split(",").map((t) => t.trim()).filter(Boolean) }).then(() => studio<Timeline[]>("GET", `/strategies/${strategyId}/timeline`).then(setTimeline), (e: Error) => toast.error(e.message));
+  };
+  const lockVersion = (v: number | null) => void studio("PUT", `/strategies/${strategyId}/lock`, { version: v }).then(() => studio<Timeline[]>("GET", `/strategies/${strategyId}/timeline`).then(setTimeline), (e: Error) => toast.error(e.message));
+  const saveSnippet = () => {
+    const body = selection.current; if (!body.trim()) return toast.error("Select some code first");
+    const name = window.prompt("Snippet name")?.trim(); if (!name) return;
+    const prefix = window.prompt("Trigger prefix", name.toLowerCase().replace(/\W+/g, "_").slice(0, 20))?.trim(); if (!prefix) return;
+    void studio<Snippet>("POST", "/snippets", { name, prefix, body }).then((sn) => { setSnippets((x) => [...x, sn]); toast.success(`Saved ${name}`); }, (e: Error) => toast.error(e.message));
+  };
   useEffect(() => { if (prev) setLastPreview(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })); }, [prev]);
   useEffect(() => {
     if (rail !== "docs" || docs) return;
@@ -181,6 +209,8 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     { id: "studio.fullrun", label: "Run: full backtest", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => onFullRun() },
     { id: "studio.save", label: "Strategy: save version", run: () => onSave() },
     { id: "studio.newfile", label: "File: new", run: () => addFile() },
+    { id: "studio.snippet", label: "Snippet: save selection", run: () => saveSnippet() },
+    { id: "studio.snippets", label: "Snippet: insert", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyS], run: () => { setRailOpen(true); setRail("templates"); } },
   ];
   const outlineRows = (items: Sym[], depth = 0): ReactNode => items.map((s) => (
     <div key={`${s.name}${s.line}`}>
@@ -233,13 +263,24 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
             </div>
           ) : rail === "versions" ? (
             <div className="dv-list">
-              {versions.length ? [...versions].reverse().map((v) => {
-                const r = runs[v.version];
-                return <button key={v.version} className="dv-tpl" data-on={diff?.version === v.version || undefined} onClick={() => (diff?.version === v.version ? setDiff(null) : openDiff(v.version))}>
-                  <b>v{v.version} <span className="dv-muted">{new Date(v.created * 1000).toLocaleDateString()} · {v.actor}</span></b>
-                  <span>{r ? `${pct(r.total_return)} · Sharpe ${r.sharpe?.toFixed(2) ?? "—"} · ${r.trades ?? "—"} trades` : "not run"}</span>
-                </button>;
-              }) : <p className="dv-empty">Save to start versions</p>}
+              {timeline.length ? [...timeline].reverse().map((v) => (
+                <div key={v.version} className="dv-ver" data-on={diff?.version === v.version || undefined}>
+                  <button className="dv-tpl" onClick={() => (diff?.version === v.version ? setDiff(null) : openDiff(v.version))}>
+                    <b>v{v.version}{v.name ? ` ${v.name}` : ""}{v.locked ? <Lock size={11} style={{ marginLeft: 5 }} aria-label="Locked" /> : null} <span className="dv-muted">{new Date(v.created * 1000).toLocaleDateString()} · {v.actor}</span></b>
+                    {v.tags.length ? <span className="dv-tags">{v.tags.map((t) => <i key={t}>{t}</i>)}</span> : null}
+                    <span>{v.total_return != null ? `${pct(v.total_return)} · Sharpe ${v.sharpe?.toFixed(2) ?? "—"}` : "not run"}</span>
+                  </button>
+                  <div className="dv-vact">
+                    <button className="icon-btn" title="Name and tags" aria-label={`Name v${v.version}`} onClick={() => labelVersion(v)}><Tag size={12} /></button>
+                    <button className="icon-btn" title={v.locked ? "Unlock" : "Lock (live)"} aria-label={v.locked ? "Unlock" : "Lock"} onClick={() => lockVersion(v.locked ? null : v.version)}>{v.locked ? <Unlock size={12} /> : <Lock size={12} />}</button>
+                    <button className="icon-btn" title="Restore as latest" aria-label={`Restore v${v.version}`} onClick={() => versionAct(`/versions/${v.version}/restore`, undefined, `Restored v${v.version}`)}><RotateCcw size={12} /></button>
+                    <button className="icon-btn" title="Branch" aria-label={`Branch v${v.version}`} onClick={() => strategyId && void studio<{ id: string }>("POST", `/strategies/${strategyId}/versions/${v.version}/branch`).then((b) => window.location.assign(`/studio/build/${b.id}?ui=dev`), (e: Error) => toast.error(e.message))}><GitBranch size={12} /></button>
+                  </div>
+                </div>
+              )) : versions.length ? null : <p className="dv-empty">Save to start versions</p>}
+              {snaps.length ? <><h4 className="dv-sub">Local history · 7 days</h4>
+                {snaps.slice(0, 60).map((sn) => <button key={sn.at} className="dv-item" title="Restore these files into the draft" onClick={() => { replaceFiles(sn.files); toast("Snapshot restored into the draft · ⌘Z to undo"); }}>
+                  {new Date(sn.at * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}<span>{Object.keys(sn.files).length} file{Object.keys(sn.files).length === 1 ? "" : "s"}</span></button>)}</> : null}
             </div>
           ) : rail === "docs" ? (
             <div className="dv-list">
@@ -253,6 +294,14 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
             <div className="dv-list">
               {(pyTemplates.data ?? []).map((t) => <button key={t.name} className="dv-tpl" onClick={() => { edit({ ...(t.spec as Partial<Spec>) }); setOpen(["main.py"]); setActive("main.py"); }}><b>{t.name}</b><span>{t.rule}</span></button>)}
               <button className="btn sm ghost" onClick={() => { setQc(null); qcRef.current?.showModal(); }}><Upload size={13} />QuantConnect algorithm</button>
+              <h4 className="dv-sub">My snippets</h4>
+              {snippets.map((sn) => (
+                <div key={sn.id} className="dv-file">
+                  <button className="dv-item" title={sn.body} onClick={() => insertAt.current?.(sn.body)}><code>{sn.prefix}</code>{sn.name}</button>
+                  <button className="icon-btn" aria-label={`Delete ${sn.name}`} onClick={() => void studio("DELETE", `/snippets/${sn.id}`).then(() => setSnippets((x) => x.filter((y) => y.id !== sn.id)))}><Trash2 size={12} /></button>
+                </div>
+              ))}
+              <button className="btn sm ghost" onClick={saveSnippet}><FilePlus2 size={13} />Save selection as snippet</button>
             </div>
           )}
         </nav>
@@ -280,7 +329,8 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
               options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, fontSize: 13, lineHeight: 20, scrollBeyondLastLine: false, automaticLayout: true, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace" }} />
           ) : (
             <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={onSave} onRun={onRun} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
-              actions={actions} breakpoints={bps[active] ?? []} onGutter={toggleBp}
+              actions={actions} breakpoints={bps[active] ?? []} onGutter={toggleBp} readOnly={readOnly} snippets={snippets}
+              onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
               project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles }} />
           )}
         </div>

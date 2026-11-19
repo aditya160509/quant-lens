@@ -7,7 +7,8 @@ import { studio } from "../api";
 type Ed = Parameters<OnMount>[0];
 export type Problem = { severity: string; file: string; line: number; column: number; end_column: number; code: string; message: string };
 type Member = { name: string; kind: string; signature: string | null; documentation: string | null; insert_text?: string | null };
-type Project = { file: string; files: Record<string, string>; params: string[]; symbols: string[]; goto: (file: string, line: number, column?: number) => void; replace: (files: Record<string, string>) => void };
+type UserSnippet = { name: string; prefix: string; body: string; description: string };
+type Project = { file: string; files: Record<string, string>; params: string[]; symbols: string[]; goto: (file: string, line: number, column?: number) => void; replace: (files: Record<string, string>) => void; snippets?: UserSnippet[] };
 export type EditorAction = { id: string; label: string; keys?: (m: Monaco) => number[]; run: (line: number) => void };
 type Sym = { name: string; kind: string; line: number; column: number; end_line: number; end_column: number; children: Sym[] };
 
@@ -47,7 +48,7 @@ function register(monaco: Monaco) {
       const range = { startLineNumber: pos.lineNumber, endLineNumber: pos.lineNumber, startColumn: word.startColumn, endColumn: word.endColumn };
       const before = model.getLineContent(pos.lineNumber).slice(0, pos.column - 1);
       const scope = scopeAt(before);
-      if (!scope) return { suggestions: SNIPPETS.map(([l, d, s]) => ({ label: l, kind: K.Snippet, detail: d, insertText: s, insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range })) };
+      if (!scope) return { suggestions: [...SNIPPETS, ...(live.current?.snippets ?? []).map((u) => [u.prefix, u.name, u.body] as [string, string, string])].map(([l, d, s]) => ({ label: l, kind: K.Snippet, detail: d, insertText: s, insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range })) };
       const p = live.current;
       const items = await studio<Member[]>("POST", "/build/complete", { scope, code: model.getValue(), prefix: "", params: p?.params ?? [], symbols: p?.symbols ?? [] }).catch(() => []);
       return { suggestions: items.map((m) => ({ label: m.name, kind: kind(m.kind), detail: m.signature ?? m.kind, documentation: { value: doc(m) }, insertText: m.insert_text ?? m.name, range })) };
@@ -129,16 +130,18 @@ function theme(monaco: Monaco, dark: boolean) {
 }
 
 /** Build › Dev: Monaco for one project file, with server completion, signature help, go to definition and line markers. */
-export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], ran = [], onGutter }: {
+export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], ran = [], onGutter, readOnly, snippets, onSelection, insertRef }: {
   path: string; value: string; onChange: (v: string) => void; problems: Problem[]; project: Project;
   onSave: () => void; onRun: () => void; onCursor?: (line: number, column: number) => void; reveal?: { line: number; column?: number; n: number } | null;
   actions?: EditorAction[]; breakpoints?: number[]; ran?: { line: number; count: number; dates: string[] }[]; onGutter?: (line: number) => void;
+  readOnly?: boolean; snippets?: UserSnippet[]; onSelection?: (text: string) => void; insertRef?: { current: ((text: string) => void) | null };
 }) {
   const deco = useRef<{ clear: () => void; set: (d: NonNullable<Parameters<Ed["createDecorationsCollection"]>[0]>) => void } | null>(null);
   const acts = useRef(actions); acts.current = actions;
   const ed = useRef<{ editor: Ed; monaco: Monaco } | null>(null);
   const keys = useRef({ onSave, onRun, onCursor, onGutter }); keys.current = { onSave, onRun, onCursor, onGutter };
-  live.current = project;
+  live.current = { ...project, snippets };
+  const sel = useRef(onSelection); sel.current = onSelection;
 
   useEffect(() => {
     const m = ed.current; if (!m) return;
@@ -174,6 +177,8 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => keys.current.onSave());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => keys.current.onRun());
     editor.onDidChangeCursorPosition((e) => keys.current.onCursor?.(e.position.lineNumber, e.position.column));
+    editor.onDidChangeCursorSelection((e) => sel.current?.(editor.getModel()?.getValueInRange(e.selection) ?? ""));
+    if (insertRef) insertRef.current = (text) => { (editor.getContribution("snippetController2") as unknown as { insert: (t: string) => void } | null)?.insert(text); editor.focus(); };
     const c = editor.createDecorationsCollection();
     deco.current = { clear: () => c.clear(), set: (d) => c.set(d) };
     editor.onMouseDown((e) => { if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && e.target.position) keys.current.onGutter?.(e.target.position.lineNumber); });
@@ -184,6 +189,6 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     <Editor language="python" path={path} value={value} onChange={(v) => onChange(v ?? "")} onMount={mount} theme="studio" height="100%"
       options={{ minimap: { enabled: false }, fontSize: 13, lineHeight: 20, fontLigatures: false, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true,
         padding: { top: 10 }, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace", quickSuggestions: { strings: true, other: true, comments: false },
-        bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true }, glyphMargin: true }} />
+        bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true }, glyphMargin: true, readOnly }} />
   );
 }
