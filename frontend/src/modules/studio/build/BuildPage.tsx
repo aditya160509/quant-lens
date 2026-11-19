@@ -171,7 +171,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   }
   const switchMode = (m: "blocks" | "formula" | "english") => setMode(m);
   const formatSave = () => void studio<{ code: string }>("POST", "/format-python", { code: spec.code }).then((r) => { const next = { ...spec, code: r.code }; if (r.code !== spec.code) edit({ code: r.code }); return save(next); }, fail);
-  const edit = (next: Partial<Spec>) => readOnly ? void toast("Read-only", { id: "ro" }) : setSpec((cur) => { history.current.past.push(cur); history.current.future = []; setDirty(true); return { ...cur, ...next }; });
+  const edit = (next: Partial<Spec>) => readOnly ? void toast("Read-only", { id: "ro" }) : setSpec((cur) => { history.current.past = [...history.current.past.slice(-49), cur]; history.current.future = []; setDirty(true); return { ...cur, ...next }; });
 
   // Live compile, 250 ms after typing stops.
   useEffect(() => {
