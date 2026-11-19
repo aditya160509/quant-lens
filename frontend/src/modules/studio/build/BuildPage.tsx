@@ -11,7 +11,9 @@ import { studio, useTemplates, type Compiled, type Ledger } from "../api";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { TrialChip } from "../RunHeader";
 import { BlockRows } from "./BlockRows";
-import { CodeEditor } from "./CodeEditor";
+import { Segmented } from "@/workspace/ui";
+import type { Problem } from "./CodeEditor";
+import { DevIDE, type DevPreview } from "./DevIDE";
 import { Palette, type Command } from "./Palette";
 import { fromFormula, toFormula, type Row } from "./blocks";
 import "../studio.css";
@@ -69,10 +71,16 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const [spec, setSpec] = useState<Spec>(BLANK);
   const [compiled, setCompiled] = useState<Compiled | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [mode, setMode] = useState<"blocks" | "formula" | "python" | "english">("formula");
+  const [mode, setMode] = useState<"blocks" | "formula" | "english">("formula");
+  const [ui, setUiState] = useState<"simple" | "dev">(() => {
+    if (typeof window === "undefined") return "simple";
+    const q = new URLSearchParams(window.location.search).get("ui");
+    if (q === "dev" || q === "simple") return q;
+    try { return localStorage.getItem("studio:build:ui") === "dev" ? "dev" : "simple"; } catch { return "simple"; }
+  });
   const [english, setEnglish] = useState("");
   const [symbol, setSymbol] = useState("SPY");
-  type Preview = { status: string; reason?: string; line?: number | null; bars: { date: string; close: number }[]; trades: { entry_date: string; exit_date: string; side: string; return: number }[]; total_return?: number; repaint?: { cuts: number; changed: number; dates: string[] } };
+  type Preview = Omit<DevPreview, "trades"> & { bars: { date: string; close: number }[]; trades: { entry_date: string; exit_date: string; side: string; return: number }[]; total_return?: number; repaint?: { cuts: number; changed: number; dates: string[] } };
   const [prev, setPrev] = useState<Preview | null>(null);
   const [diff, setDiff] = useState<{ version: number; rows: [string, string, string][] } | null>(null);
   const [proposal, setProposal] = useState<{ fields: Record<string, string>; exits: Record<string, number>; unmatched: string[] } | { error: string } | null>(null);
@@ -85,14 +93,21 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
 
   const load = useCallback((sid: string, version?: number) => studio<Loaded>("GET", `/strategies/${sid}${version ? `?version=${version}` : ""}`).then((s) => {
     const next = { ...BLANK, ...(version ? s.spec : s.draft ?? s.spec) };
-    setLoaded(s); setSpec(next); if (next.code.trim()) setMode("python"); setDirty(!version && !!s.draft); history.current = { past: [], future: [] };
+    setLoaded(s); setSpec(next); if (next.code.trim() && !new URLSearchParams(window.location.search).get("ui")) setUi("dev"); setDirty(!version && !!s.draft); history.current = { past: [], future: [] };
   }, fail), []);
   useEffect(() => { if (id) void load(id); else { setLoaded(null); setSpec(BLANK); } }, [id, load]);
 
-  function switchMode(m: "blocks" | "formula" | "python" | "english") {
-    setMode(m);
-    if (m === "python" && !spec.code.trim()) void studio<{ code: string }>("POST", "/to-python", { spec }).then((r) => edit({ code: r.code }), fail);
+  function setUi(next: "simple" | "dev") {
+    setUiState(next);
+    try { localStorage.setItem("studio:build:ui", next); } catch { /* storage blocked */ }
+    const u = new URL(window.location.href); u.searchParams.set("ui", next); window.history.replaceState(window.history.state, "", u);
   }
+  function switchUi(next: "simple" | "dev") {
+    setUi(next);
+    if (next === "dev" && !spec.code.trim()) void studio<{ code: string }>("POST", "/to-python", { spec }).then((r) => edit({ code: r.code }), fail);
+  }
+  const switchMode = (m: "blocks" | "formula" | "english") => setMode(m);
+  const formatSave = () => void studio<{ code: string }>("POST", "/format-python", { code: spec.code }).then((r) => { const next = { ...spec, code: r.code }; if (r.code !== spec.code) edit({ code: r.code }); return save(next); }, fail);
   const edit = (next: Partial<Spec>) => setSpec((cur) => { history.current.past.push(cur); history.current.future = []; setDirty(true); return { ...cur, ...next }; });
 
   // Live compile, 250 ms after typing stops.
@@ -170,7 +185,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const commands: Command[] = [
     { id: "lift", group: "Edit", label: "Lift number to parameter", ask: "Parameter name for the number at the cursor", run: (n) => lift(n) },
     { id: "param", group: "Edit", label: "Add parameter", ask: "Parameter name", run: (n) => { if (n && /^[a-z_][a-z0-9_]*$/i.test(n)) edit({ params: { ...spec.params, [n]: { value: 0 } } }); } },
-    ...(["blocks", "formula", "python", "english"] as const).map((m) => ({ id: `mode-${m}`, group: "Mode", label: { blocks: "Blocks", formula: "Formula", python: "Python", english: "Plain English" }[m], run: () => switchMode(m) })),
+    ...(["blocks", "formula", "english"] as const).map((m) => ({ id: `mode-${m}`, group: "Mode", label: { blocks: "Blocks", formula: "Formula", english: "Plain English" }[m], run: () => { switchUi("simple"); switchMode(m); } })),
+    { id: "ui-dev", group: "Mode", label: "Dev: Python IDE", run: () => switchUi("dev") },
     { id: "save", group: "Strategy", label: "Save version", hint: "⌘S", run: () => void save() },
     { id: "run", group: "Strategy", label: "Run backtest", hint: "⌘↵", run: () => void run() },
     { id: "new", group: "Strategy", label: "New blank strategy", run: () => router.push("/studio/build") },
@@ -187,103 +203,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     { ok: !(compiled?.findings.some((f) => f.role === "params") ?? false), label: "Parameters used", detail: compiled?.findings.filter((f) => f.role === "params").map((f) => f.token).join(", ") || "all used", go: "params" },
   ];
 
-  return (
-    <div className="bd">
-      <header className="bd-head">
-        <input className="bd-name" aria-label="Strategy name" value={spec.name} onChange={(e) => edit({ name: e.target.value })} />
-        <span className="bd-meta">{loaded ? `v${loaded.latest}${dirty ? " · draft" : " · saved"}` : "new"}{compiled?.ms !== undefined ? ` · compiled in ${compiled.ms} ms` : ""}</span>
-        {loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null}
-        <span style={{ flex: 1 }} />
-        {loaded && loaded.versions.length > 1 ? (
-          <select className="input" aria-label="Version" value={loaded.version} onChange={(e) => void load(loaded.id, Number(e.target.value))}>
-            {[...loaded.versions].reverse().map((v) => <option key={v.version} value={v.version}>v{v.version} · {new Date(v.created * 1000).toLocaleDateString()} · {v.actor}</option>)}
-          </select>
-        ) : null}
-        {loaded && loaded.versions.length > 1 ? (
-          <select className="input" aria-label="Compare with" value={diff?.version ?? ""} onChange={(e) => {
-            const v = Number(e.target.value); if (!v) return setDiff(null);
-            void studio<Loaded>("GET", `/strategies/${loaded.id}?version=${v}`).then((o) => setDiff({ version: v, rows: specDiff(o.spec, spec) }), fail);
-          }}>
-            <option value="">Compare with…</option>
-            {[...loaded.versions].reverse().map((v) => <option key={v.version} value={v.version}>v{v.version}</option>)}
-          </select>
-        ) : null}
-        <button className="btn" onClick={() => setPalette(true)}><CommandIcon size={14} />Commands<kbd>⌘⇧P</kbd></button>
-        <button className="btn" onClick={() => void save()}><Save size={14} />Save<kbd>⌘S</kbd></button>
-        <button className="btn primary" disabled={compiled ? !compiled.ok : true} onClick={() => void run()}><Play size={14} />Run backtest<kbd>⌘↵</kbd></button>
-      </header>
-
-      <Palette open={palette} onClose={() => setPalette(false)} commands={commands} />
-      {blank && templates.data ? (
-        <section className="bd-card">
-          <h3>Start from</h3>
-          <div className="bd-tpls">
-            {templates.data.map((t) => (
-              <button key={t.name} className="bd-tpl" onClick={() => applyTemplate(t)}><b>{t.name}</b><span>{t.rule}</span></button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-      {diff ? (
-        <section className="bd-card">
-          <h3>v{diff.version} → this draft {diff.rows.length ? `· ${diff.rows.length} change${diff.rows.length === 1 ? "" : "s"}` : "· no changes"}</h3>
-          {diff.rows.map(([k, a, b]) => <div key={k} className="bd-diff"><span>{k}</span><del>{a || "—"}</del><ins>{b || "—"}</ins></div>)}
-          {loaded ? (() => {
-            const ra = loaded.runs_by_version[diff.version], rb = loaded.runs_by_version[loaded.version];
-            const cell = (r?: RunSum) => (r ? `${(r.total_return ?? 0) >= 0 ? "+" : ""}${((r.total_return ?? 0) * 100).toFixed(1)}% · Sharpe ${r.sharpe?.toFixed(2) ?? "—"} · ${r.trades ?? "—"} trades` : "not run");
-            return <div className="bd-diff"><span>backtest</span><del>{cell(ra)}</del><ins>{`v${loaded.version}: ${cell(rb)}`}</ins></div>;
-          })() : null}
-        </section>
-      ) : null}
-      <div className="bd-grid">
-        <section className="bd-card bd-rules">
-          <div className="bd-modes" role="tablist">
-            {(["blocks", "formula", "python", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m} className={`btn sm${mode === m ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", python: "Python", english: "Plain English" }[m]}</button>)}
-            {spec.code.trim() && mode !== "python" ? <span className="bd-find warning" style={{ marginLeft: "auto" }}><b>Python runs</b>rules below are kept, not used<button className="btn sm" onClick={() => edit({ code: "" })}>Use rules</button></span> : null}
-          </div>
-          {mode === "python" ? (
-            <>
-              <CodeEditor value={spec.code} onChange={(code) => edit({ code })} findings={findings("code")} catalogue={catalogue} onSave={() => void studio<{ code: string }>("POST", "/format-python", { code: spec.code }).then((r) => { const next = { ...spec, code: r.code }; if (r.code !== spec.code) edit({ code: r.code }); return save(next); }, fail)} onRun={() => void run()}
-                runtime={prev?.status === "error" ? { line: prev.line ?? null, message: prev.reason ?? "" } : null} />
-              {findings("code").map((f, i) => <p key={i} className={`bd-find ${f.severity}`}><b>Line {f.line}</b>{f.message}</p>)}
-              {prev?.status === "error" ? <p className="bd-find error"><b>{prev.line ? `Line ${prev.line}` : "Run"}</b>{prev.reason}</p> : null}
-            </>
-          ) : null}
-          {mode === "english" ? (
-            <div className="bd-rule">
-              <textarea className="input" rows={3} aria-label="Describe the strategy" placeholder="buy when the 50 day sma crosses above the 200 day sma; sell when rsi(2) above 70; stop 8%" value={english}
-                onChange={(e) => setEnglish(e.target.value)} />
-              <div style={{ display: "flex", gap: 6 }}>
-                <button className="btn sm" disabled={!english.trim()} onClick={() => void studio<{ fields: Record<string, string>; exits: Record<string, number>; unmatched: string[] }>("POST", "/plain-english", { text: english }).then(setProposal, (e) => setProposal({ error: e instanceof Error ? e.message : "Failed" }))}>Translate</button>
-                {proposal && !("error" in proposal) ? <button className="btn sm primary" onClick={() => { edit({ ...proposal.fields, exits: { ...spec.exits, ...proposal.exits } }); setProposal(null); setMode("formula"); }}>Use this rule</button> : null}
-              </div>
-              {proposal && "error" in proposal ? <p className="bd-find error"><b>Not understood</b>{proposal.error}</p> : null}
-              {proposal && !("error" in proposal) ? (
-                <div className="bd-proposal">
-                  {Object.entries(proposal.fields).map(([k, v]) => <p key={k}><span>{ROLES.find((r) => r[0] === k)?.[1]}</span><code>{v}</code></p>)}
-                  {Object.entries(proposal.exits).map(([k, v]) => <p key={k}><span>{EXITS.find((r) => r[0] === k)?.[1]}</span><code>{k === "time_stop" ? `${v} bars` : `${+(v * 100).toFixed(2)}%`}</code></p>)}
-                  {proposal.unmatched.length ? <p className="bd-find warning"><b>Ignored</b>{proposal.unmatched.join(", ")}</p> : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {ROLES.map(([role, label]) => {
-            if (mode === "english" || mode === "python") return null;
-            const rows = mode === "blocks" && role !== "score" ? fromFormula(spec[role] as string) : null;
-            return (
-            <div key={role} className="bd-rule">
-              <label htmlFor={`r-${role}`}>{label}</label>
-              {rows ? <BlockRows id={`b-${role}`} rows={rows.length ? rows : [{ left: "", op: ">", right: "", join: "&" } as Row]} suggestions={catalogue}
-                onChange={(r) => edit({ [role]: toFormula(r) })} /> : null}
-              {mode === "blocks" && role !== "score" && !rows ? <p className="bd-find warning"><b>Formula only</b>This rule is not a list of comparisons, so it stays as a formula.</p> : null}
-              {rows ? null : <textarea id={`r-${role}`} className="input" spellCheck={false} rows={role === "score" || role === "market_filter" ? 1 : 2} placeholder={role === "market_filter" ? "market > sma(market, 200)" : undefined} value={spec[role] as string} onSelect={track(role)} onFocus={track(role)} onChange={(e) => edit({ [role]: e.target.value })} />}
-              {findings(role).map((f, i) => <p key={i} className={`bd-find ${f.severity}`}><b>{f.severity === "error" ? "Error" : "Warning"}</b>{f.token ? <code>{f.token}</code> : null}{f.message}</p>)}
-            </div>
-          ); })}
-          {findings("spec").map((f, i) => <p key={i} className="bd-find error"><b>Error</b>{f.message}</p>)}
-        </section>
-
-        <aside className="bd-side">
+  const side = (
+    <>
           <section className="bd-card">
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <h3 style={{ flex: 1 }}>Preview</h3>
@@ -314,6 +235,9 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
             <h3>What it does</h3>
             <p className="bd-desc">{compiled?.description || "—"}</p>
           </section>
+    </>
+  );
+  const paramsCard = (
           <section className="bd-card" id="bd-params">
             <h3>Parameters</h3>
             {params.map(([k, p]) => (
@@ -330,7 +254,99 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
             {sweep ? <p className="bd-meta" style={{ margin: 0 }}>{sweep.toLocaleString()} settings in a full sweep</p> : null}
             <button className="btn sm" onClick={() => setPalette(true)}><Plus size={12} />Parameter</button>
           </section>
-        </aside>
+  );
+  const compileProblems: Problem[] = (compiled?.findings ?? []).filter((f) => f.role === "code").map((f) => ({ severity: f.severity, file: "main.py", line: Math.max(1, f.line), column: f.start + 1, end_column: Math.max(f.end, f.start + 1) + 1, code: "compile", message: f.message }));
+
+  return (
+    <div className="bd" data-ui={ui}>
+      <header className="bd-head">
+        <input className="bd-name" aria-label="Strategy name" value={spec.name} onChange={(e) => edit({ name: e.target.value })} />
+        <span className="bd-meta">{loaded ? `v${loaded.latest}${dirty ? " · draft" : " · saved"}` : "new"}{compiled?.ms !== undefined ? ` · compiled in ${compiled.ms} ms` : ""}</span>
+        {loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null}
+        <span style={{ flex: 1 }} />
+        {loaded && loaded.versions.length > 1 ? (
+          <select className="input" aria-label="Version" value={loaded.version} onChange={(e) => void load(loaded.id, Number(e.target.value))}>
+            {[...loaded.versions].reverse().map((v) => <option key={v.version} value={v.version}>v{v.version} · {new Date(v.created * 1000).toLocaleDateString()} · {v.actor}</option>)}
+          </select>
+        ) : null}
+        {loaded && loaded.versions.length > 1 ? (
+          <select className="input" aria-label="Compare with" value={diff?.version ?? ""} onChange={(e) => {
+            const v = Number(e.target.value); if (!v) return setDiff(null);
+            void studio<Loaded>("GET", `/strategies/${loaded.id}?version=${v}`).then((o) => setDiff({ version: v, rows: specDiff(o.spec, spec) }), fail);
+          }}>
+            <option value="">Compare with…</option>
+            {[...loaded.versions].reverse().map((v) => <option key={v.version} value={v.version}>v{v.version}</option>)}
+          </select>
+        ) : null}
+        <Segmented<"simple" | "dev"> label="Interface" value={ui} onChange={switchUi} options={[{ value: "simple", label: "Simple" }, { value: "dev", label: "Dev" }]} />
+        <button className="btn" onClick={() => setPalette(true)}><CommandIcon size={14} />Commands<kbd>⌘⇧P</kbd></button>
+        <button className="btn" onClick={() => void save()}><Save size={14} />Save<kbd>⌘S</kbd></button>
+        <button className="btn primary" disabled={compiled ? !compiled.ok : true} onClick={() => void run()}><Play size={14} />Run backtest<kbd>⌘↵</kbd></button>
+      </header>
+
+      <Palette open={palette} onClose={() => setPalette(false)} commands={commands} />
+      {ui === "simple" && blank && templates.data ? (
+        <section className="bd-card">
+          <h3>Start from</h3>
+          <div className="bd-tpls">
+            {templates.data.map((t) => (
+              <button key={t.name} className="bd-tpl" onClick={() => applyTemplate(t)}><b>{t.name}</b><span>{t.rule}</span></button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {diff ? (
+        <section className="bd-card">
+          <h3>v{diff.version} → this draft {diff.rows.length ? `· ${diff.rows.length} change${diff.rows.length === 1 ? "" : "s"}` : "· no changes"}</h3>
+          {diff.rows.map(([k, a, b]) => <div key={k} className="bd-diff"><span>{k}</span><del>{a || "—"}</del><ins>{b || "—"}</ins></div>)}
+          {loaded ? (() => {
+            const ra = loaded.runs_by_version[diff.version], rb = loaded.runs_by_version[loaded.version];
+            const cell = (r?: RunSum) => (r ? `${(r.total_return ?? 0) >= 0 ? "+" : ""}${((r.total_return ?? 0) * 100).toFixed(1)}% · Sharpe ${r.sharpe?.toFixed(2) ?? "—"} · ${r.trades ?? "—"} trades` : "not run");
+            return <div className="bd-diff"><span>backtest</span><del>{cell(ra)}</del><ins>{`v${loaded.version}: ${cell(rb)}`}</ins></div>;
+          })() : null}
+        </section>
+      ) : null}
+      {ui === "dev" ? <DevIDE spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} onRun={() => void run()} compileProblems={compileProblems} /> : <div className="bd-grid">
+        <section className="bd-card bd-rules">
+          <div className="bd-modes" role="tablist">
+            {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m} className={`btn sm${mode === m ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}
+            {spec.code.trim() ? <span className="bd-find warning" style={{ marginLeft: "auto" }}><b>Python runs</b>rules below are kept, not used<button className="btn sm" onClick={() => switchUi("dev")}>Open in Dev</button><button className="btn sm" onClick={() => edit({ code: "", files: {} })}>Use rules</button></span> : null}
+          </div>
+          {mode === "english" ? (
+            <div className="bd-rule">
+              <textarea className="input" rows={3} aria-label="Describe the strategy" placeholder="buy when the 50 day sma crosses above the 200 day sma; sell when rsi(2) above 70; stop 8%" value={english}
+                onChange={(e) => setEnglish(e.target.value)} />
+              <div style={{ display: "flex", gap: 6 }}>
+                <button className="btn sm" disabled={!english.trim()} onClick={() => void studio<{ fields: Record<string, string>; exits: Record<string, number>; unmatched: string[] }>("POST", "/plain-english", { text: english }).then(setProposal, (e) => setProposal({ error: e instanceof Error ? e.message : "Failed" }))}>Translate</button>
+                {proposal && !("error" in proposal) ? <button className="btn sm primary" onClick={() => { edit({ ...proposal.fields, exits: { ...spec.exits, ...proposal.exits } }); setProposal(null); setMode("formula"); }}>Use this rule</button> : null}
+              </div>
+              {proposal && "error" in proposal ? <p className="bd-find error"><b>Not understood</b>{proposal.error}</p> : null}
+              {proposal && !("error" in proposal) ? (
+                <div className="bd-proposal">
+                  {Object.entries(proposal.fields).map(([k, v]) => <p key={k}><span>{ROLES.find((r) => r[0] === k)?.[1]}</span><code>{v}</code></p>)}
+                  {Object.entries(proposal.exits).map(([k, v]) => <p key={k}><span>{EXITS.find((r) => r[0] === k)?.[1]}</span><code>{k === "time_stop" ? `${v} bars` : `${+(v * 100).toFixed(2)}%`}</code></p>)}
+                  {proposal.unmatched.length ? <p className="bd-find warning"><b>Ignored</b>{proposal.unmatched.join(", ")}</p> : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {ROLES.map(([role, label]) => {
+            if (mode === "english") return null;
+            const rows = mode === "blocks" && role !== "score" ? fromFormula(spec[role] as string) : null;
+            return (
+            <div key={role} className="bd-rule">
+              <label htmlFor={`r-${role}`}>{label}</label>
+              {rows ? <BlockRows id={`b-${role}`} rows={rows.length ? rows : [{ left: "", op: ">", right: "", join: "&" } as Row]} suggestions={catalogue}
+                onChange={(r) => edit({ [role]: toFormula(r) })} /> : null}
+              {mode === "blocks" && role !== "score" && !rows ? <p className="bd-find warning"><b>Formula only</b>This rule is not a list of comparisons, so it stays as a formula.</p> : null}
+              {rows ? null : <textarea id={`r-${role}`} className="input" spellCheck={false} rows={role === "score" || role === "market_filter" ? 1 : 2} placeholder={role === "market_filter" ? "market > sma(market, 200)" : undefined} value={spec[role] as string} onSelect={track(role)} onFocus={track(role)} onChange={(e) => edit({ [role]: e.target.value })} />}
+              {findings(role).map((f, i) => <p key={i} className={`bd-find ${f.severity}`}><b>{f.severity === "error" ? "Error" : "Warning"}</b>{f.token ? <code>{f.token}</code> : null}{f.message}</p>)}
+            </div>
+          ); })}
+          {findings("spec").map((f, i) => <p key={i} className="bd-find error"><b>Error</b>{f.message}</p>)}
+        </section>
+
+        <aside className="bd-side">{side}{paramsCard}</aside>
 
         <section className="bd-card" id="bd-exits">
           <h3>Exits</h3>
@@ -359,7 +375,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           <label className="bd-rule"><span>Regime it should work in{loaded?.regime_written_after ? <b className="chip warn" style={{ marginLeft: 8 }}>written after a backtest</b> : null}</span><input className="input" value={spec.regime_claim} onChange={(e) => edit({ regime_claim: e.target.value })} /></label>
           <label className="bd-rule"><span>Decisions</span><textarea className="input" rows={3} value={spec.notes} onChange={(e) => edit({ notes: e.target.value })} /></label>
         </section>
-      </div>
+      </div>}
     </div>
   );
 }

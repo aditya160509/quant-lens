@@ -26,5 +26,7 @@ export type Finding = { severity: "error" | "warning"; role: string; line: numbe
 export type Compiled = { ok: boolean; findings: Finding[]; hash: string; description: string; ms?: number };
 
 export const useHome = () => useQuery({ queryKey: ["studio", "home"], queryFn: () => studio<Home>("GET", "/home"), retry: 1 });
-export const useTemplates = () => useQuery({ queryKey: ["studio", "templates"], queryFn: () => studio<{ templates: Template[] }>("GET", "/templates").then((d) => d.templates), staleTime: Infinity });
+const templatesQuery = { queryKey: ["studio", "templates"], queryFn: () => studio<{ templates: Template[]; python_templates: Template[] }>("GET", "/templates"), staleTime: Infinity };
+export const useTemplates = () => useQuery({ ...templatesQuery, select: (d) => d.templates });
+export const usePyTemplates = () => useQuery({ ...templatesQuery, select: (d) => d.python_templates });
 export const useLimits = () => useQuery({ queryKey: ["studio", "limits"], queryFn: () => studio<{ freshness: Freshness; data: Record<string, unknown> }>("GET", "/limits"), staleTime: 300_000 });
