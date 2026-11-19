@@ -109,6 +109,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [lastPreview, setLastPreview] = useState<string | null>(null);
   const [qc, setQc] = useState<QC | null>(null);
   const [split, setSplit] = useState<string | null>(null);
+  const [splitDown, setSplitDown] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string[]>([]);
   const [logTop, setLogTop] = useState(0);
@@ -377,7 +378,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
           <button className="icon-btn dv-splitbtn" aria-pressed={!!split} title="Split editor" aria-label="Split editor" onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}><Columns2 size={14} /></button>
           {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
         </div>
-        <div className="dv-editor" data-split={(split && !diff) || undefined}>
+        <div className="dv-editor" data-split={split && !diff ? (splitDown ? "down" : "right") : undefined}>
           {!spec.code.trim() && active === "main.py" && !diff ? (
             <div className="dv-blank">
               <b>This strategy runs on its rules</b>
@@ -388,6 +389,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
           {split && !diff ? (
             <div className="dv-split">
               <div className="dv-splithead"><select className="input" aria-label="File in the second group" value={split} onChange={(e) => setSplit(e.target.value)}>{Object.keys(files).map((f) => <option key={f}>{f}</option>)}</select>
+                <button className="btn sm ghost" aria-pressed={splitDown} onClick={() => setSplitDown(!splitDown)}>{splitDown ? "Split right" : "Split down"}</button>
                 <button className="icon-btn" aria-label="Close split" onClick={() => setSplit(null)}><X size={12} /></button></div>
               <CodeEditor path={`split/${split}`} value={files[split] ?? ""} onChange={(t) => setFile(split, t)} problems={[]} onSave={onSave} onRun={onRun} readOnly={readOnly}
                 project={{ file: split, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles }} />

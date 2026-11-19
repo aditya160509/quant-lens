@@ -382,3 +382,5 @@
 .bd-rule[data-role="market_filter"] { --role: var(--warn); } .bd-rule[data-role="score"] { --role: var(--accent); }
 .bd-grid[data-compact] .gx-row { gap: 4px; } .bd-grid[data-compact] .gx-row .input { height: 26px; font-size: 12px; padding: 0 6px; }
 .bd-grid[data-compact] .gx-body { gap: 3px; } .bd-grid[data-compact] .bd-rule { gap: 4px; }
+.dv-editor[data-split="down"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+.dv-editor[data-split="down"] > .dv-split { border-left: 0; border-top: 1px solid var(--line); }
