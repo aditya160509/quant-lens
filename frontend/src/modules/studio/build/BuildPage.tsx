@@ -182,7 +182,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   useEffect(() => {
     if (!compiled?.ok || !symbol.trim() || (!auto && !nudge)) return;
     const hash = compiled.hash;
-    const t = setTimeout(() => void studio<Preview>("POST", "/preview", { spec, symbol: symbol.trim().toUpperCase(), years }).then((r) => { setPrev(r); setPreviewed(hash); setNudge(0); }, (e) => setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] })), 300);
+    const t = setTimeout(() => void studio<Preview>("POST", "/preview", { spec, symbol: symbol.trim().toUpperCase(), years }).then((r) => { setPrev(r); setPreviewed(hash); setNudge(0); }, (e) => setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] })), 120);
     return () => clearTimeout(t);
   }, [spec, symbol, years, compiled?.ok, auto, nudge]); // eslint-disable-line react-hooks/exhaustive-deps
   const stale = !!prev && !!previewed && !!compiled?.hash && previewed !== compiled.hash;
