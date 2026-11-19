@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import time
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -241,7 +242,17 @@ def _rolling(eq: np.ndarray, bench: np.ndarray | None, dates: pd.DatetimeIndex) 
 
 def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     """The st01 result in the labs' FeatureResult shape. Raises Refusal instead of returning an empty report."""
-    stage = progress or (lambda *_: None)
+    started = time.perf_counter()
+    info: dict = {"budget_seconds": pycode.TIMEOUT_S}
+
+    def stage(name: str, percent: float) -> None:
+        """Progress with what the run is working on and how long it has taken; a cancelled job stops at the next stage (B-85, B-86)."""
+        if progress is None:
+            return
+        if getattr(progress, "cancelled", lambda: False)():
+            raise Refusal("The run was cancelled.", ["start it again when ready"])
+        progress(name, percent, {**info, "elapsed_seconds": round(time.perf_counter() - started, 2)})
+
     found = C.compile_spec(spec)
     if not found["ok"]:
         first = next(f for f in found["findings"] if f["severity"] == "error")
@@ -250,6 +261,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     stage("load", 10)
     prep = prepare(settings)
     p, cap = prep.panel, settings.capital
+    info.update(symbols=len(p.symbols), bars=len(p.dates))
     stage("signals", 30)
     sig = None if spec.code.strip() else C.signals(spec, prep.sig_bars, p.dates)
     stage("simulate", 50)
@@ -495,7 +507,7 @@ def resolve_universe(attribute: list[str] | str | None, fallback: list[str], lim
         raise Refusal(f"Strategy.universe {attribute!r} is not a symbol list, library universe or index name.", [str(exc)]) from exc
 
 
-def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] | None = None) -> dict:
+def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] | None = None, *, profile: bool = False) -> dict:
     """Build's preview: one name, the last `years` of development bars, closes plus the trades the rule takes there (B-5)."""
     found = C.compile_spec(spec)
     if not found["ok"]:
@@ -506,11 +518,11 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] 
     prep = prepare(settings)
     p = prep.panel
     lo = max(0, int(p.dates.searchsorted(p.dates[-1] - pd.DateOffset(days=int(365 * years)))))
-    output: dict = {}
+    output: dict = {"order_lines": True, "profile": profile}
     if spec.code.strip():
         # Start a year before the window so history-based code is warm, then shift the bar indexes back to the full panel.
         run_from = max(0, lo - 252)
-        r = _simulate_python(spec, prep, settings, lo=run_from, output=output, repaint_from=lo - run_from)
+        r = _simulate_python(spec, prep, settings, lo=run_from, output=output, repaint_from=None if profile else lo - run_from)
         output.pop("entry_signals")
         for col in (engine.T_ENTRY_BAR, engine.T_EXIT_BAR, engine.T_SIGNAL_BAR):
             r.trades[:, col] += run_from
@@ -531,6 +543,10 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] 
         total = float(np.prod([1 + t["return"] for t in trades]) - 1) if trades else 0.0
     risk = [{"date": str(p.dates[e["bar"]].date()), "kind": e["kind"], "value": e["value"], "limit": e["limit"]} for e in r.risk_events]
     output.pop("risk_events", None)
+    if output.get("profile") in (False, None):
+        output.pop("profile", None)
+    if output.get("order_lines") is True:  # formula strategies place no Python orders
+        output["order_lines"] = []
     return {"status": "ok", "symbol": p.symbols[0], "symbols": list(p.symbols), "bars_by_symbol": by_symbol, "window": {"start": start, "end": str(p.dates[-1].date())}, "bars": bars, "trades": trades, "total_return": total, **output, "risk_events": risk}
 
 

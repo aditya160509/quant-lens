@@ -9,6 +9,7 @@ import json
 import math
 import operator
 import sys
+import time
 import traceback
 from dataclasses import dataclass
 from datetime import date
@@ -113,6 +114,68 @@ class Indicator:
         return self.history(self._period or self._ctx.t + 1)
 
 
+def _user_site():
+    """(file, line) of the nearest strategy frame that called into the API."""
+    frame = sys._getframe(2)
+    while frame is not None:
+        name = frame.f_code.co_filename
+        if name.startswith("<studio:"):
+            return name[8:-1], frame.f_lineno
+        frame = frame.f_back
+    return None
+
+
+class _LineProfiler:
+    """Seconds per strategy line (callees included) and per function, from sys.settrace on strategy frames only. Opt-in: it slows the run."""
+
+    def __init__(self):
+        self.lines, self.functions, self._stack, self._last = {}, {}, [], None
+
+    def _charge(self, now):
+        if self._last is not None:
+            key, t0 = self._last
+            self.lines[key] = self.lines.get(key, 0.0) + now - t0
+
+    def _global(self, frame, event, arg):
+        code = frame.f_code
+        if not code.co_filename.startswith("<studio:"):
+            return None
+        now = time.perf_counter()
+        self._charge(now)
+        self._stack.append((self._last, (code.co_filename[8:-1], code.co_name), now))
+        self._last = None
+        return self._local
+
+    def _local(self, frame, event, arg):
+        now = time.perf_counter()
+        name = frame.f_code.co_filename[8:-1]
+        if event == "line":
+            self._charge(now)
+            self._last = ((name, frame.f_lineno), now)
+        elif event == "return":
+            self._charge(now)
+            caller, function, started = self._stack.pop()
+            row = self.functions.setdefault(function, [0, 0.0])
+            row[0] += 1
+            row[1] += now - started
+            self._last = None if caller is None else (caller[0], now)
+        return self._local
+
+    def run(self, call):
+        sys.settrace(self._global)
+        try:
+            return call()
+        finally:
+            sys.settrace(None)
+
+    def report(self, sources):
+        top = sorted(self.lines.items(), key=lambda item: -item[1])[:10]
+        text = lambda f, n: (sources.get(f, "").splitlines() + [""] * n)[n - 1].strip()[:200]
+        return {"lines": [{"file": f, "line": n, "seconds": round(sec, 6), "text": text(f, n)} for (f, n), sec in top],
+                "functions": [{"file": f, "name": name, "calls": c, "seconds": round(sec, 6)}
+                              for (f, name), (c, sec) in sorted(self.functions.items(), key=lambda item: -item[1][1])[:20]]}
+
+
 class _Log:
     """ctx.log(...) plus ctx.log.info/warning/error with key values (B-80)."""
 
@@ -139,6 +202,7 @@ class Ctx:
         self._cols, self._values, self._dates = cols, values, dates
         self.open, self.high, self.low, self.close, self.volume = (History(cols[f], self) for f in ("open", "high", "low", "close", "volume"))
         self.orders = []
+        self._order_lines = None
         self.log = _Log(self)
 
     @property
@@ -250,7 +314,19 @@ class Ctx:
             self._tables.setdefault(str(name)[:128], []).append({"date": self.date, "symbol": self.symbol, "cells": cells})
             self._table_count[0] += 1
 
+    def _note_order(self):
+        """Count the strategy line that placed an order, with the first five dates (B-74)."""
+        if self._order_lines is None:
+            return
+        site = _user_site()
+        if site is not None:
+            row = self._order_lines.setdefault(site, {"file": site[0], "line": site[1], "count": 0, "dates": []})
+            row["count"] += 1
+            if len(row["dates"]) < 5 and self.date not in row["dates"]:
+                row["dates"].append(self.date)
+
     def _order(self, action):
+        self._note_order()
         self.orders.append((self.t, action))
 
     def buy(self):
@@ -329,6 +405,7 @@ class PortfolioContext(Ctx):
         self._symbols, self._marks = first._symbols, first._marks
         self._tables, self._table_count = first._tables, first._table_count
         self._plot_charts = first._plot_charts
+        self._order_lines = first._order_lines
         self._logs, self._plots, self._plot_count = first._logs, first._plots, first._plot_count
         self._contexts = {ctx.symbol: ctx for ctx in contexts}
         self._columns = {symbol: i for i, symbol in enumerate(self._contexts)}
@@ -432,15 +509,19 @@ class PortfolioContext(Ctx):
         return MappingProxyType({self.symbols[i]: float(score) for i, score in zip(np.flatnonzero(present), scores, strict=True)})
 
     def buy(self, symbol):
+        self._note_order()
         self.orders.append((symbol, 1))
 
     def sell(self, symbol):
+        self._note_order()
         self.orders.append((symbol, 2))
 
     def short(self, symbol):
+        self._note_order()
         self.orders.append((symbol, -1))
 
     def cover(self, symbol):
+        self._note_order()
         self.orders.append((symbol, 3))
 
     def market_order(self, symbol, quantity):
@@ -478,6 +559,7 @@ class PortfolioContext(Ctx):
         if any(price is not None and (not math.isfinite(price) or price <= 0) for price in (limit, stop)):
             raise ValueError("Order price must be positive and finite")
         if quantity:
+            self._note_order()
             self.orders.append((symbol, (quantity, limit, stop)))
 
     def set_holdings(self, symbol, weight):
@@ -909,6 +991,7 @@ def main():
     benchmark = z.get("benchmark")
     T, N = fields["close"].shape
     logs, plots, plot_charts, marks, tables = [], {}, {}, [], {}
+    order_lines = {}
     ctx = None
 
     def use_context(value):
@@ -977,6 +1060,7 @@ def main():
             item._marks = marks if collect else None
             item._tables = tables if collect else None
             item._table_count = table_count
+            item._order_lines = order_lines if collect else None
         return contexts
 
     repaint = None
@@ -984,9 +1068,13 @@ def main():
     warmup_report = debug = None
     try:
         compiled = compile(src, "<studio:main.py>", "exec")
+        profiler = _LineProfiler() if meta.get("profile") else None
         helper_code = {name[:-3]: compile(source, f"<studio:{name}>", "exec") for name, source in meta["modules"].items()}
         if meta["event_settings"] is not None:
-            arrays, repaint, entry_signals, warmup_report, debug = event_run(z, meta, load_strategy, make_contexts, use_context, values, lambda: ctx)
+            def run_events():
+                return event_run(z, meta, load_strategy, make_contexts, use_context, values, lambda: ctx)
+
+            arrays, repaint, entry_signals, warmup_report, debug = profiler.run(run_events) if profiler else run_events()
         else:
             cls, warmup = load_strategy()
             entries, exits = np.zeros((T, N), np.int8), np.zeros((T, N), np.int8)
@@ -1025,13 +1113,21 @@ def main():
         frames = [{"file": f.filename[8:-1], "line": f.lineno, "column": (f.colno or 0) + 1, "function": f.name} for f in tb[-8:]]
         filename = getattr(e, "filename", "") or ""
         source_file = frames[-1]["file"] if frames else filename[8:-1] if filename.startswith("<studio:") else "main.py"
+        walked = [frame for frame, _ in traceback.walk_tb(e.__traceback__) if frame.f_code.co_filename.startswith("<studio:")]
+        failing = walked[-1] if walked else None
+        owner = failing.f_locals.get("self") if failing is not None else None
+        at_bar = {"symbol": getattr(ctx, "symbol", None), "date": ctx.date if ctx is not None and ctx.t < len(ctx._dates) else None, "bar_index": getattr(ctx, "t", None),
+                  "variables": _debug_value({k: v for k, v in (failing.f_locals if failing else {}).items() if not k.startswith("_") and k not in ("self", "ctx")}),
+                  "state": _debug_value({k: v for k, v in vars(owner).items() if not k.startswith("_") and not callable(v)} if hasattr(owner, "__dict__") else {})}
         sys.stdout.write(json.dumps({"error": f"{type(e).__name__}: {e}"[:1024], "problem": {
-            "file": source_file, "line": line, "column": column, "exception_type": type(e).__name__, "traceback": frames,
+            "file": source_file, "line": line, "column": column, "exception_type": type(e).__name__, "traceback": frames, "locals": at_bar,
         }}))
         return
     risk_events = arrays.pop("risk_events", [])
     np.savez(sys.argv[2], **arrays)
-    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report, "debug": debug, "risk_events": risk_events}))
+    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report, "debug": debug, "risk_events": risk_events,
+                                "order_lines": sorted(order_lines.values(), key=lambda r: (r["file"], r["line"])),
+                                "profile": profiler.report({"main.py": src, **meta["modules"]}) if profiler else None}))
 
 
 if __name__ == "__main__":

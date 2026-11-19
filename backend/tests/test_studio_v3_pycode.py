@@ -36,6 +36,7 @@ def test_positive_index_is_look_ahead_and_reports_its_line():
     assert e.value.problem == {
         "file": "main.py", "line": 3, "column": 9, "exception_type": "IndexError",
         "traceback": [{"file": "main.py", "line": 3, "column": 9, "function": "on_bar"}],
+        "locals": {"symbol": "0", "date": "2020-01-01", "bar_index": 0, "variables": {}, "state": {}},
     }
 
 

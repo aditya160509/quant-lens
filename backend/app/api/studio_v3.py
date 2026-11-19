@@ -524,6 +524,7 @@ class StrategyProblem(BaseModel):
     column: int | None = None
     exception_type: str | None = None
     traceback: list[StrategyFrame] | None = None
+    locals: dict[str, Any] | None = None  # at the failing bar: symbol, date, bar_index, variables of the failing frame, self attributes (state)
 
 
 class PreviewWarmup(BaseModel):
@@ -565,6 +566,8 @@ class PreviewResult(BaseModel):
     warmup: PreviewWarmup | None = None
     risk_events: list[dict[str, Any]] | None = None
     settings_overrides: dict[str, Any] | None = None
+    order_lines: list[dict[str, Any]] | None = None  # {file, line, count, dates[<=5]}: strategy lines that placed orders
+    profile: dict[str, Any] | None = None  # only from POST /build/profile
 
 
 class DebugBreakpointRequest(BaseModel):
@@ -652,6 +655,17 @@ def debug_python(request: BuildDebugRequest) -> dict:
 def preview(request: PreviewRequest) -> dict[str, Any]:
     try:
         return backtest.preview(_spec(request.spec), request.symbol, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None)
+    except backtest.Refusal as exc:
+        return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
+    except pycode.CodeError as exc:
+        return {"status": "error", "reason": exc.message, "line": exc.line, "problem": exc.problem, "bars": [], "trades": []}
+
+
+@router.post("/build/profile", response_model=PreviewResult, response_model_exclude_unset=True)
+def profile_python(request: PreviewRequest) -> dict[str, Any]:
+    """The preview run with the profiler on: `profile.lines` are the 10 slowest strategy lines and `profile.functions` the time per function. Slower than a preview."""
+    try:
+        return backtest.preview(_spec(request.spec), request.symbol, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None, profile=True)
     except backtest.Refusal as exc:
         return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
     except pycode.CodeError as exc:
@@ -1244,6 +1258,66 @@ def create_job(feature_id: str, request: FeatureRequest, x_studio_actor: str | N
     if job["status"] == "queued":
         JOBS.submit(job["job_id"], _execute, job["job_id"], feature.FEATURE_ID, {**request.payload, "_actor": _actor(x_studio_actor)}, _actor(x_studio_actor))
     return {"job_id": job["job_id"], "status": job["status"], "feature_id": feature.FEATURE_ID}
+
+
+class BuildRunRequest(BaseModel):
+    level: Literal["quick", "full"] = "quick"
+    spec: dict[str, Any] | None = None
+    strategy_id: str | None = None
+    version: int | None = Field(default=None, ge=1)
+    settings: dict[str, Any] = Field(default_factory=dict)  # the same flat keys as /feature/st01/jobs: symbols, fill, cost_profile, start, end ...
+
+
+@router.post("/build/run")
+def build_run(request: BuildRunRequest, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Quick run: the top 50 names by liquidity over the last 5 years, never entered in the trial ledger.
+    Full run: a saved version over the whole period, recorded in the ledger. Poll GET /build/run/{job_id}; cancel with DELETE /jobs/{job_id}."""
+    payload = dict(request.settings)
+    if request.level == "full":
+        if not request.strategy_id:
+            raise HTTPException(422, "A full run needs a saved strategy. Save a version, then pass strategy_id.")
+        payload.update(strategy_id=request.strategy_id, **({"version": request.version} if request.version else {}))
+        label = request.strategy_id
+    else:
+        spec = request.spec
+        if spec is None and request.strategy_id:
+            spec = _known(store.get, request.strategy_id, request.version)["spec"]
+        if spec is None:
+            raise HTTPException(422, "A quick run needs a spec or a strategy_id.")
+        label = request.strategy_id or f"draft:{spec.get('name', '')}"
+        if not payload.get("symbols"):
+            payload.setdefault("top_n", 50)
+        if not payload.get("start"):
+            panel = data.panel(["SPY"], None, None)
+            if len(panel.dates):
+                payload["start"] = str((panel.dates[-1] - pd.DateOffset(years=5)).date())
+        payload["spec"] = spec
+    job = create_job("st01", FeatureRequest(payload=payload), x_studio_actor)
+    key = f"lastrun:{request.level}:{label}"
+    previous = store.kv_get(key)
+    store.kv_set(key, job["job_id"])
+    store.kv_set(f"previous:{job['job_id']}", previous)
+    return {**job, "level": request.level, "previous_job_id": previous, "budget_seconds": pycode.TIMEOUT_S}
+
+
+def _run_summary(job_id: str | None) -> dict[str, Any] | None:
+    path = RESULTS_DIR / f"{job_id}.json" if job_id else None
+    if path is None or not path.is_file():
+        return None
+    meta = json.loads(path.read_text())["meta"]
+    return {"total_return": meta.get("total_return"), "sharpe": (meta.get("metrics") or {}).get("sharpe"), "trades": (meta.get("metrics") or {}).get("trades")}
+
+
+@router.get("/build/run/{job_id}")
+def build_run_status(job_id: str) -> dict[str, Any]:
+    """Job status with progress ({percent, message, partial: {symbols, bars, elapsed_seconds, budget_seconds}}) and, when done, the change since the previous run of the same level."""
+    out = job_status(job_id)
+    if out["status"] == "completed":
+        current, previous = _run_summary(job_id), _run_summary(store.kv_get(f"previous:{job_id}"))
+        out["delta"] = None if previous is None or current is None else {
+            "previous_job_id": store.kv_get(f"previous:{job_id}"),
+            **{k: (None if current[k] is None or previous[k] is None else current[k] - previous[k]) for k in ("total_return", "sharpe", "trades")}}
+    return out
 
 
 @router.get("/jobs/{job_id}")
