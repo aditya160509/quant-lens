@@ -311,13 +311,14 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
               <input className="input" aria-label="Preview symbol" style={{ width: 90 }} value={symbol} onChange={(e) => setSymbol(e.target.value)} />
             </div>
             {stale ? <p className="bd-find warning" style={{ margin: 0 }}><b>Edited</b>since this preview</p> : null}
+            {prev?.invariants?.count ? <p className="bd-find error" style={{ margin: 0 }}><b>Invariant</b>broken on {prev.invariants.count} bar{prev.invariants.count === 1 ? "" : "s"}; Validate will fail</p> : null}
             {prev?.status === "ok" ? (
               <>
                 <p className="bd-meta" style={{ margin: 0 }}>{prev.trades.length} trades · {`${(prev.total_return ?? 0) >= 0 ? "+" : ""}${((prev.total_return ?? 0) * 100).toFixed(1)}%`} · last 2 years before the hold-out</p>
                 {prev.repaint ? <p className={`bd-find ${prev.repaint.changed ? "error" : ""}`}><b style={{ color: prev.repaint.changed ? undefined : "var(--up)" }}>{prev.repaint.changed ? "Repaints" : "No look-ahead"}</b>
                   {prev.repaint.changed ? `signals changed at ${prev.repaint.changed} of ${prev.repaint.cuts} cuts (${prev.repaint.dates.join(", ")})` : `same signals at ${prev.repaint.cuts} history cuts`}</p> : null}
                 <TimeSeries data={prev.bars} series={[{ key: "close", label: symbol.toUpperCase(), color: "var(--text-2)" }]} height={180} legend={false}
-                  markers={pausedAt && ui === "dev" ? [{ date: pausedAt, label: "❚❚", color: "var(--warn)" }, ...prev.trades.flatMap((t) => [{ date: t.entry_date, label: "▲", color: "var(--up)" }, { date: t.exit_date, label: "×", color: "var(--down)" }])] : fired ? fired.dates.map((d) => ({ date: d, label: "●", color: "var(--accent)" })) : prev.trades.flatMap((t) => [{ date: t.entry_date, label: t.side === "long" ? "▲" : "▼", color: "var(--up)" }, { date: t.exit_date, label: "×", color: "var(--down)" }])} />
+                  markers={prev.invariants?.rows.length ? [...prev.invariants.rows.filter((r) => !r.symbol || r.symbol === symbol.toUpperCase()).map((r) => ({ date: r.date, label: "!", color: "var(--down)" })), ...prev.trades.flatMap((t) => [{ date: t.entry_date, label: "▲", color: "var(--up)" }])] : pausedAt && ui === "dev" ? [{ date: pausedAt, label: "❚❚", color: "var(--warn)" }, ...prev.trades.flatMap((t) => [{ date: t.entry_date, label: "▲", color: "var(--up)" }, { date: t.exit_date, label: "×", color: "var(--down)" }])] : fired ? fired.dates.map((d) => ({ date: d, label: "●", color: "var(--accent)" })) : prev.trades.flatMap((t) => [{ date: t.entry_date, label: t.side === "long" ? "▲" : "▼", color: "var(--up)" }, { date: t.exit_date, label: "×", color: "var(--down)" }])} />
                 {fired ? <p className="bd-meta" style={{ margin: 0 }}>{ROLES.find((r) => r[0] === fired.role)?.[1]}: {fired.dates.length} bars marked <button className="bd-link" onClick={() => setFired(null)}>Show trades</button></p> : null}
               </>
             ) : <div className="st-skip">{prev?.reason ? `${prev.status === "error" ? "error" : "skipped"}: ${prev.reason}` : "—"}</div>}
