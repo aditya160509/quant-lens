@@ -432,7 +432,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           <h3>Start from</h3>
           <div className="bd-tpls">
             {templates.data.map((t) => (
-              <button key={t.name} className="bd-tpl" onClick={() => applyTemplate(t)}><b>{t.name}</b><span>{t.rule}</span></button>
+              <button key={t.name} className="bd-tpl" onClick={() => applyTemplate(t)}><b>{t.name}</b><span>{t.rule}</span><TplStat spec={t.spec} /></button>
             ))}
           </div>
         </section>
@@ -595,4 +595,12 @@ function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void })
       </div>
     </dialog>
   );
+}
+
+/** Last preview result for a starter on SPY over its window (B-97). */
+function TplStat({ spec }: { spec: unknown }) {
+  const [r, setR] = useState<{ total_return?: number; trades?: unknown[] } | null>(null);
+  useEffect(() => { void studio<{ total_return?: number; trades?: unknown[] }>("POST", "/preview", { spec, symbol: "SPY" }).then(setR, () => undefined); }, [spec]);
+  if (!r || r.total_return == null) return null;
+  return <i className="bd-tpl-stat" data-neg={r.total_return < 0 || undefined}>SPY {r.total_return >= 0 ? "+" : ""}{(r.total_return * 100).toFixed(1)}% · {r.trades?.length ?? 0} trade{r.trades?.length === 1 ? "" : "s"}</i>;
 }
