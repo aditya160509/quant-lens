@@ -17,10 +17,13 @@ export function BranchDialog({ id, name, spec, onClose, onMerged }: { id: string
   const [cmp, setCmp] = useState<Compared | null>(null);
   const [conflicts, setConflicts] = useState<string[] | null>(null);
   const [fields, setFields] = useState<[string, string, string][]>([]);
+  const [curves, setCurves] = useState<Record<string, number[]>>({});
   useEffect(() => { ref.current?.showModal(); void studio<{ strategies: StrategyCard[] }>("GET", "/strategies").then((r) => setList(r.strategies.filter((s) => s.id !== id)), () => undefined); }, [id]);
   useEffect(() => {
     if (!other) { setCmp(null); setFields([]); return; }
     void studio<Compared>("GET", `/strategies/${id}/compare/${other}`).then(setCmp, (e: Error) => toast.error(e.message));
+    const last = (sid: string) => studio<{ spark?: number[] }[]>("GET", `/strategies/${sid}/timeline`).then((t) => [...t].reverse().find((v) => (v.spark?.length ?? 0) > 1)?.spark ?? [], () => []);
+    void Promise.all([last(id), last(other)]).then(([a, b]) => setCurves({ [id]: a, [other]: b }));
     void studio<{ spec: Record<string, unknown> }>("GET", `/strategies/${other}`).then((o) => setFields(specDiff(spec, o.spec).filter(([k]) => !/^(code|files|name|groups)/.test(k))), () => undefined);
   }, [id, other, spec]);
   const label = (sid: string) => (sid === id ? name : list.find((s) => s.id === sid)?.name ?? sid);
@@ -48,6 +51,13 @@ export function BranchDialog({ id, name, spec, onClose, onMerged }: { id: string
           <div className="kpis">
             {[cmp.a, cmp.b].map((sid) => <div key={sid} className="kpi"><span>{label(sid)}</span><b>{pct(cmp.runs[sid]?.total_return)}</b><i className="dv-delta">Sharpe {cmp.runs[sid]?.sharpe?.toFixed(2) ?? "—"} · {cmp.runs[sid]?.trades ?? "—"} trades</i></div>)}
           </div>
+          {Object.values(curves).some((c) => c.length > 1) ? (() => {
+            const all = Object.values(curves).flatMap((c) => c.map((v) => v / c[0]));
+            const lo = Math.min(...all), hi = Math.max(...all), W = 600, H = 120;
+            return <section><h3>Equity</h3><svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img" aria-label="Equity of both strategies">
+              {[cmp.a, cmp.b].map((sid, k) => { const c = curves[sid] ?? []; return c.length > 1 ? <path key={sid} fill="none" strokeWidth="1.6" stroke={k ? "var(--warn)" : "var(--accent)"} d={c.map((v, i) => `${i ? "L" : "M"}${(i / (c.length - 1)) * W},${H - ((v / c[0] - lo) / (hi - lo || 1)) * H}`).join("")} /> : null; })}
+            </svg><p className="bd-meta"><b style={{ color: "var(--accent)" }}>━</b> {label(cmp.a)} <b style={{ color: "var(--warn)" }}>━</b> {label(cmp.b)}</p></section>;
+          })() : null}
           {fields.length ? <section><h3>Rules and settings</h3>{fields.map(([k, a, b]) => <div key={k} className="bd-diff"><span>{k}</span><del>{a || "—"}</del><ins>{b || "—"}</ins></div>)}</section> : null}
           {Object.keys(cmp.diffs).length ? Object.entries(cmp.diffs).map(([f, d]) => (
             <details key={f} open><summary>{f}</summary><pre className="bd-code bd-udiff">{d.split("\n").map((l, i) => <span key={i} data-k={l.startsWith("+") && !l.startsWith("+++") ? "add" : l.startsWith("-") && !l.startsWith("---") ? "del" : l.startsWith("@@") ? "hunk" : undefined}>{l}{"\n"}</span>)}</pre></details>
