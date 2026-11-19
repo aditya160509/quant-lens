@@ -266,3 +266,8 @@ New routes (under /api/studio-v3): POST /preview (symbols, window, bars_by_symbo
 Still open and why: B-55 ctx.store across runs (a store that survives runs makes the same strategy return different results, which breaks the reproduce certificate); B-93 project as pinned library (needs cross-strategy imports in the sandbox); B-115 tree blocks, B-118 find rules, B-122 if/else allocate (engine and search work, not started); B-62 binding is frontend; B-110 drift corridor for formula strategies; per-bar progress counter (the sandbox does not stream); B-67, B-123 blocked by data; B-140 owner decision.
 
 Known limits: the runtime import layer allows submodules of the allowed roots (C code in numpy and pandas imports helpers lazily through the caller's builtins), so the AST check is the gate for user import statements; the profiler traces strategy frames only and slows the run; leases expire after 60 s without a renewal.
+
+## Build: open owner decisions (2026-11-19)
+- B-140 inline ⌘K AI edit: waits on OD-11 (AI provider and cost). Not built.
+- B-55 ctx.store across runs: would break the reproduce certificate. Options: skip, or allow with the certificate marked not reproducible. Not built.
+- B-67, B-123: blocked by data (fundamentals from 2021 only).
