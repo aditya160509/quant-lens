@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 38 | 70 | 21 | 70 |
+| Build | 74 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 54 | 163 |
+| Build | 74 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **164** | **538** |
+| **All pages** | **184** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 54 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 74 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -135,32 +135,32 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 
 ### Target additions (FEATURES_PEAK)
 
-- [ ] [E] B-11 Full-height IDE: editor fills the work area; bottom panel resizes 30 to 40%; side rail collapses (partial: editor is a 420 px box) [PY B1]
-- [ ] [M] B-12 Three zones: left rail (Files, Outline, Search, Templates, Versions), centre editor, bottom panel (Problems, Output, Logs, Results, Plots, Debug, Terminal); right rail (preview, Inspector, AI); each zone remembers its size
+- [x] [E] B-11 Full-height IDE: editor fills the work area; bottom panel resizes 30 to 40%; side rail collapses [PY B1] (Dev interface: full-height editor, resizable bottom panel (drag, double-click, ⌘J), collapsible rail (⌘B))
+- [ ] [M] B-12 Three zones: left rail (Files, Outline, Search, Templates, Versions), centre editor, bottom panel (Problems, Output, Logs, Results, Plots, Debug, Terminal); right rail (preview, Inspector, AI); each zone remembers its size (partial: Dev: activity bar with Files, Outline, Search, Versions, Docs, Starters; panel with Problems, Output, Plots, Trades, Debug; preview on the right; Results and Terminal open)
 - [ ] [H] B-13 Editor groups: split right or down, up to 4 groups; tabs can be pinned, kept in preview, or marked dirty
 - [ ] [H] B-14 One editing session per strategy: a second tab opens read-only with a take-over button (backend done: POST/DELETE /strategies/{sid}/lease (60 s, take_over); writers send X-Studio-Session and get 409 naming the holder; frontend wiring open)
-- [ ] [M] B-15 Phone (390 px): one zone at a time with a Code, Run, Results switcher; Build on phone is Formula and Plain English only
-- [ ] [M] B-16 IDE keys: F5 debug, F9 breakpoint, F10 step bar, F11 step line, ⌘J panel, ⌘B rail, ⌘\ split, ⌘P file, ⌘⇧F search project
-- [ ] [M] B-17 JetBrains Mono 13 px, 20 px line height, ligatures off, bracket colours, sticky scroll, folding (partial: Mono 13 px only) [PY B13]
-- [ ] [E] B-18 App theme tokens defined as a Monaco theme so the editor sits in the page (partial: vs-dark and light only) [PY B12]
-- [ ] [E] B-19 Editing keys: ⌘/ comment, ⌥↑↓ move line, ⌘D next match, ⌘⇧K delete line, ⇧⌥-drag column select, go to line ⌃G (partial: ⌘S format and save and ⌘↵ run exist) [PY B5]
+- [x] [M] B-15 Phone (390 px): one zone at a time with a Code, Run, Results switcher; Build on phone is Formula and Plain English only (phone width hides Dev and forces Simple)
+- [ ] [M] B-16 IDE keys: F5 debug, F9 breakpoint, F10 step bar, F11 step line, ⌘J panel, ⌘B rail, ⌘\ split, ⌘P file, ⌘⇧F search project (partial: F5, F9, F10, ⇧F10, ⌘J, ⌘B, ⌘P, ⌘⇧F, F1 built; F11 step line and ⌘\ split open)
+- [x] [M] B-17 JetBrains Mono 13 px, 20 px line height, ligatures off, bracket colours, sticky scroll, folding [PY B13] (JetBrains Mono 13/20, ligatures off, bracket pairs, sticky scroll, folding)
+- [x] [E] B-18 App theme tokens defined as a Monaco theme so the editor sits in the page [PY B12] (Monaco theme built from the shell's tokens, follows light and dark)
+- [x] [E] B-19 Editing keys: ⌘/ comment, ⌥↑↓ move line, ⌘D next match, ⌘⇧K delete line, ⇧⌥-drag column select, go to line ⌃G [PY B5] (Monaco defaults: ⌘/, ⌥↑↓, ⌘D, ⌘⇧K, column select, ⌃G)
 - [x] B-20 Format Python on save with ruff
 - [ ] [H] B-21 Format selection (⌘K ⌘F) and organise imports
-- [ ] [H] B-22 Go to symbol ⌘⇧O, go to line ⌃G, definition F12, references ⇧F12, peek ⌥F12, rename F2 across files (partial: cross-file definition, references, rename preview and symbol outline APIs ship; editor wiring open)
-- [ ] [H] B-23 Find and replace across all project files: regex, case, whole word, preview before replacing (backend done: POST /strategies/{sid}/find-replace with regex, case, whole word, preview and one-version replace; frontend wiring open)
+- [x] [H] B-22 Go to symbol ⌘⇧O, go to line ⌃G, definition F12, references ⇧F12, peek ⌥F12, rename F2 across files (⌘⇧O symbols, ⌃G, F12 definition, ⇧F12 references, ⌥F12 peek, F2 rename across files)
+- [x] [H] B-23 Find and replace across all project files: regex, case, whole word, preview before replacing (Search rail: regex, case, whole word, replace preview per line, replace all)
 - [ ] [H] B-24 Code actions ⌘.: extract formula string to parameter, convert ctx.rule to indicator object, wrap selection in if ctx.position == 0, add missing on_fill
-- [ ] [M] B-25 Outline of classes, methods and indicators for the open file (backend done: typed outline endpoint; editor wiring open)
+- [x] [M] B-25 Outline of classes, methods and indicators for the open file (Outline rail from /build/outline; click jumps)
 - [ ] [E] B-26 Undo history survives reload, per file (partial: undo and redo built; survives reload not built)
 - [ ] [M] B-27 Save state indicator (Saved, Saving, Conflict) and local draft recovery from IndexedDB (partial: autosave exists; indicator and conflict state open)
 - [ ] [M] B-28 Read-only banner when the editor code differs from the code that produced the visible result
-- [ ] [E] B-29 Side-by-side Monaco diff of two versions, with each version run result above it (partial: field-by-field diff with run results built; Monaco side-by-side open) [PY B9]
+- [x] [E] B-29 Side-by-side Monaco diff of two versions, with each version run result above it [PY B9] (Versions rail opens a side-by-side Monaco diff per file with each version's run above it)
 - [ ] [H] B-30 In-browser Pyright in a web worker with Studio stubs (ctx, portfolio, orders, indicators, numpy, pandas, math, typed Bar, Fill, Order, Position); covers the user own classes [FP 26, 62]
-- [ ] [M] B-31 Completion inside ctx.value("…") for formula names, ctx.param("…") for parameter names, ctx.symbol == "…" for symbols, ctx.history("…") for fields; snippets with tab stops (backend done: completion scopes for formulas, parameters, symbols and history fields with formula tab stops; frontend wiring open)
+- [x] [M] B-31 Completion inside ctx.value("…") for formula names, ctx.param("…") for parameter names, ctx.symbol == "…" for symbols, ctx.history("…") for fields; snippets with tab stops (server completion by scope: formula, param, history field, symbol)
 - [ ] [M] B-32 Completion for the whole API with signature help on "(" (active parameter bold) and a docs example (partial: backend completion and signatures for the runner API, Strategy members and the numpy and pandas namespaces; frontend wiring open) [PY B6]
 - [ ] [M] B-33 Three diagnostic layers as you type (300 ms): Pyright errors; Studio rules (banned names, look-ahead patterns, imports outside the allow-list); formula parse errors at the exact token (partial: POST /build/check serves project-aware static findings, undefined names, unused locals and definite unreachable orders; frontend debounce and Pyright open)
 - [ ] [E] B-34 Hover: docs, signature, formula meaning, lookback and warm-up bars, latest value after a preview; hover on a parameter shows its range and last best value (partial: ctx hovers exist)
 - [ ] [E] B-35 Look-ahead detector in the editor: close[0], close[1:], history without a negative index, ctx.date against future literals, next_* reads; marked before the run (partial: AST screen refuses positive indexes; inline editor markers open) [FP 8]
-- [ ] [M] B-36 Docs panel: ⌘-click or F1 opens the reference beside the editor; searchable (API, indicators, recipes); offline and versioned
+- [ ] [M] B-36 Docs panel: ⌘-click or F1 opens the reference beside the editor; searchable (API, indicators, recipes); offline and versioned (partial: Docs rail: searchable API reference from the server; F1 opens it)
 - [ ] [M] B-37 Strictness setting (basic or strict) and severity per rule (error, warning, off); defaults: basic, all layers, look-ahead as error
 - [x] [M] B-38 Domain diagnostics: unused parameter, warm-up longer than data, order with no stop in live, hard-coded symbol in a parameterised strategy, print in hot loop, mutable default in params [FP 26] (lint flags hard-coded symbols, print in the bar loop and mutable defaults; /build/checks reports warm-up against the period; the live no-stop rule sits in the Live lab)
 - [ ] [M] B-39 ctx.assert_invariant(cond, msg) puts red markers on the chart and fails the Validate step
@@ -183,7 +183,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [H] B-56 ctx.feature_matrix(formulas, lookback) and ctx.fit_every(n); sklearn allowed; fits use past bars only
 - [ ] [M] B-57 Import allow-list: math, statistics, numpy, pandas, scipy.stats, scipy.optimize, sklearn, and the project files; others refused with the line and a request link (partial: math, statistics, numpy, pandas, scipy.stats and saved project modules allowed, enforced in the AST and again through a restricted `__import__`; 44 escape cases refused; sklearn and scipy.optimize stay out per PYTHON_IDE A7) [PY A7]
 - [x] [E] B-58 print and ctx.log(msg, level) captured per bar (date, symbol), 50,000-line cap with a truncation row (backend done: typed preview logs include source line and level) [PY A8]
-- [ ] [E] B-59 ctx.plot(name, value, chart="main" or "own"), ctx.mark(sym, label) on the price chart, ctx.table(name, row) as a sortable table (backend done: preview and Backtest return chart placement, marks and structured rows; frontend rendering open) [FP 29] [PY A9]
+- [x] [E] B-59 ctx.plot(name, value, chart="main" or "own"), ctx.mark(sym, label) on the price chart, ctx.table(name, row) as a sortable table [FP 29] [PY A9] (Plots tab: main-chart overlays with marks, own panes, ctx.table as sortable tables)
 - [x] [E] B-60 on_fill(ctx, fill) gets symbol, side, quantity, price, date and fee (preview and Backtest receive actual event-engine fills; one-argument callback remains supported) [PY A11]
 - [x] [M] B-61 Lifecycle hooks: on_end_of_day, on_warmup_done, on_risk_event, on_stop (on_risk_event receives kind, date, value and limit)
 - [ ] [E] B-62 params = {"fast": (10, 5, 50, 5)} declared in code appear in Build params and the Optimise grid; ctx.param kept (backend done: compile exposes literal declarations and Optimise evaluates them through the event engine; frontend Build binding open) [FP 9] [PY A12]
@@ -193,8 +193,8 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-66 Default mode for new strategies (simple or portfolio) in Customise
 - [ ] B-67 Refuse formulas or Python that read fundamentals for dates before 2021 (blocked by data: fundamentals held from 2021 only)
 - [x] [E] B-68 Runtime guard: positive history index raises in backtest (verified with source line and offending offset)
-- [ ] [H] B-69 Bar stepper: pause at a date and symbol, inspect self and ctx, step one bar, step to the next order or fill, run to a date, step back one bar (deterministic re-run) [FP 27] [PY B8] (backend done: date and symbol replay, stepping, snapshots and next order or fill; editor wiring open)
-- [ ] [M] B-70 Breakpoints with conditions (ctx.symbol == "AAPL" and ctx.date >= …) and hit counts; data breakpoints (first order; equity down 5% in a day) [FP 27, 65] (backend done: source conditions, hit counts, next order and equity-loss triggers; editor wiring open)
+- [x] [H] B-69 Bar stepper: pause at a date and symbol, inspect self and ctx, step one bar, step to the next order or fill, run to a date, step back one bar (deterministic re-run) [FP 27] [PY B8] (Debug tab: stop at date, step back and forward, next order, next fill, next 5% loss day)
+- [x] [M] B-70 Breakpoints with conditions (ctx.symbol == "AAPL" and ctx.date >= …) and hit counts; data breakpoints (first order; equity down 5% in a day) [FP 27, 65] (breakpoints from gutter or F9 with a condition and hit count; F5 runs to the first)
 - [ ] [H] B-71 Variables (self, ctx, locals); arrays and DataFrames in a grid viewer; watch expressions with history; read-only debug console
 - [ ] [M] B-72 Preview chart follows the paused bar, with position and pending orders drawn
 - [ ] [M] B-73 Logpoints from the gutter ("log {expr} here") without editing the code
@@ -203,10 +203,10 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [H] B-76 CodeLens above on_bar ("Run on SPY · Run on universe · Debug from 2020-03-01"); above ctx.rule ("true on 34% of bars") [FP 64]
 - [ ] [H] B-77 Time travel on a finished backtest: pick any bar, see a variable snapshot, arrow keys step back and forward; snapshots only for chosen date ranges [FP 27]
 - [ ] [M] B-78 Profiler: time per function and per line, slowest 10 lines, flame graph, memory chart
-- [ ] [H] B-79 Logs tab: virtual list (level, date, symbol, message, code line); filters for level, symbol, date, text, regex, case, whole word; click row jumps chart and editor; CSV export [FP 28]
+- [ ] [H] B-79 Logs tab: virtual list (level, date, symbol, message, code line); filters for level, symbol, date, text, regex, case, whole word; click row jumps chart and editor; CSV export [FP 28] (partial: Output: level, text, regex, case and word filters, click jumps to the line, 2,000 rows shown; virtual list open)
 - [ ] [M] B-80 Structured logs: ctx.log.info("entry", symbol=s, rsi=r) stored as key values, searchable [FP 28] (backend done: ctx.log, ctx.log.info/warning/error store clean key values on each log row; filtering and search are frontend)
-- [ ] [E] B-81 Plots tab: each ctx.plot series overlays the price or sits in its own pane on a shared time axis; toggle each; compare across two runs [FP 29] [PY B2]
-- [ ] [E] B-82 Problems tab: static and runtime errors, click to jump to the line (partial: markers only, no Problems list) [PY B2]
+- [ ] [E] B-81 Plots tab: each ctx.plot series overlays the price or sits in its own pane on a shared time axis; toggle each; compare across two runs [FP 29] [PY B2] (partial: overlay or own pane, toggle per series; compare across runs open)
+- [x] [E] B-82 Problems tab: static and runtime errors, click to jump to the line [PY B2] (Problems tab: lint, compile and runtime, click jumps; traceback frames listed)
 - [ ] [M] B-83 Results tab: compact Backtest report (KPI strip with All, Long, Short; equity vs benchmark; trade list; trade histogram; Properties block); Open in Backtest without recompute [PY B2]
 - [ ] [E] B-84 Three run levels: live preview (600 ms debounce, one symbol, 2 years), quick run ⌘↵ (universe, 5 years), full run ⌘⇧↵ (recorded in the ledger) (partial: preview built (300 ms, 2 years); quick and full levels not split)
 - [ ] [E] B-85 Progress in the status bar ("bar 1,240 / 2,516 · 18 symbols · 3.2 s") with partial equity streamed to Results
@@ -214,7 +214,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-87 Runtime error: jump to the line, stack trace with user frames only, locals at the failing bar (symbol, date, self attributes) (partial: preview returns file, line, column, exception type and up to eight user frames)
 - [ ] [M] B-88 Delta row after each quick run against the last run (return, Sharpe, trades)
 - [ ] [E] B-89 Preview settings: symbol and window (default SPY, 2 years), auto-preview on or off; quick-run universe (top 50 by volume, 5 years) (partial: preview symbol and window exist)
-- [ ] [E] B-90 Status bar: Ln:Col, error and warning counts, saved state, run state, last run time, "trial 14 on this idea" (partial: trial chip in Build; status bar not built) [FP 68]
+- [ ] [E] B-90 Status bar: Ln:Col, error and warning counts, saved state, run state, last run time, "trial 14 on this idea" [FP 68] (partial: Ln:Col, errors and warnings, saved state, warm-up, preview time; trial count open)
 - [ ] [M] B-91 Yellow banner on a result when the editor code differs from the run
 - [ ] [M] B-92 Strategy is a project: main.py plus modules, README.md and params.json; file tree with create, rename, move, delete, duplicate and drag; limits 50 files and 200 KB per file [PY B3] (backend done: versioned file CRUD, diffs and checked helper execution; editor wiring open)
 - [ ] [E] B-93 Any project can be marked a library and imported by others with a pinned version; "v3 available, review diff" badge; updates never change saved strategies silently [FP 58]
@@ -225,23 +225,23 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [M] B-98 Python starters: trend, mean reversion, momentum rotation, pairs, vol target, breakout, seasonality, ML score [PY B10] (eight starters compile and trade on real data, tested; gallery UI open)
 - [ ] [M] B-99 Warn above 200 blocks, hard stop above 1,000; warn above 8 optimisable parameters (backend done: compile findings; frontend wiring open)
 - [ ] [E] B-100 Customise: personal templates, parameter ranges per strategy, default sizing and costs per user, editor font and keymap
-- [ ] [M] B-101 Monaco palette and the app palette merged into one list, grouped Editor, Run, View, Studio
+- [ ] [M] B-101 Monaco palette and the app palette merged into one list, grouped Editor, Run, View, Studio (partial: Studio commands added to the Monaco palette; app palette not merged)
 - [ ] [E] B-102 Four authoring modes on one spec: blocks, formula, Python, plain English; the mode switch never loses work (partial: all four exist; code-only badge and switch marking open) [FP 22]
-- [ ] [E] B-103 Blocks and formula show generated Python side by side (read only); formula to Python is one way, original kept; hand edits that cannot be represented set a code-only badge (partial: formula to Python one way exists; side panel and badge open) [FP 22]
+- [ ] [E] B-103 Blocks and formula show generated Python side by side (read only); formula to Python is one way, original kept; hand edits that cannot be represented set a code-only badge [FP 22] (partial: Python view under the rules (read only), Python runs badge; side-by-side open)
 - [ ] [M] B-104 Plain English shows the interpreted rules as blocks before any run; ambiguous words highlighted ("oversold" = RSI(14) < 30); restated "what it does" paragraph; original prompt kept in version history (partial: phrase rules, ignored words listed, review then use; highlights and history open) [FP 23]
 - [ ] [E] B-105 Any and All groups, nested to any depth (partial: rows joined by and or; nesting open) [FP 24]
 - [ ] [E] B-106 Condition kinds: cross above and below, for N bars, rising, falling, earnings filter, fundamentals, calendar, cross-sectional (partial: crosses, consecutive bars, rising, falling, week and month starts, percentile rank and z-score exist; earnings and fundamentals open)
 - [ ] [E] B-107 Inline parameter editor with an optimisation range per parameter; plain-language summary line; colour by role; collapse, disable, comment, duplicate, copy as code; undo 50 steps [FP 9]
-- [ ] [M] B-108 Red marker on incomplete blocks; detector for conditions that are always true or always false on your data (backend done: POST /build/condition; frontend wiring open)
-- [ ] [M] B-109 Click a condition block: the preview shows the bars where it fired (no full backtest) [FP 24] (backend done: POST /build/condition; frontend wiring open)
+- [x] [M] B-108 Red marker on incomplete blocks; detector for conditions that are always true or always false on your data (always or never true flagged under the rule)
+- [x] [M] B-109 Click a condition block: the preview shows the bars where it fired (no full backtest) [FP 24] (Show on chart marks the bars where a rule fired)
 - [ ] [M] B-110 Trading frequency: calendar (daily, weekly, monthly, on bar close) or threshold corridor (X% drift) (partial: spec.frequency gates entries to daily, week_start or month_start; the X% drift corridor is open)
-- [ ] [M] B-111 Formula inline value under each rule: true-rate and last true date (backend done: POST /build/condition; frontend wiring open)
-- [ ] [M] B-112 Function reference panel for formula mode
+- [x] [M] B-111 Formula inline value under each rule: true-rate and last true date (true-rate and last true date under each rule)
+- [x] [M] B-112 Function reference panel for formula mode (Functions reference in Simple, searchable, inserts at the cursor)
 - [x] [M] B-113 Named variables (fast = ema(close, 12)), user functions, comments; separate entry and exit formulas (named variables `x = expr` lines, `;` separators and # comments expand before parsing; user functions and separate entry/exit editors open)
 - [x] B-114 Causal weekly(x) and monthly(x) built and tested (hourly blocked by data) [FP 42]
 - [ ] [H] B-115 Composer-style tree blocks: if/else branches, filter by rank, weight by method, group; nest to any depth [FP 69]
-- [ ] [M] B-116 Live true-rate on every condition block ("true on 31% of bars, last true 2026-01-28") [FP 69] (backend done: POST /build/condition; frontend wiring open)
-- [ ] [M] B-117 Complexity meter: counts parameters and rules and shows degrees of freedom while building [FP 25] (backend done: compile returns complexity; frontend wiring open)
+- [x] [M] B-116 Live true-rate on every condition block ("true on 31% of bars, last true 2026-01-28") [FP 69] (true-rate on every rule, refreshed 600 ms after typing)
+- [x] [M] B-117 Complexity meter: counts parameters and rules and shows degrees of freedom while building [FP 25] (complexity meter: parameters, rules, degrees of freedom)
 - [ ] [H] B-118 Find rules: grammar search of entries and exits with an out-of-sample split; every candidate counts in the trial ledger; results go to the Home databank grid [FP 70]
 - [x] [E] B-119 Checks card adds warm-up bars needed, data each rule uses, survivorship exposure (POST /build/checks returns warm-up bars and first eligible date, per-rule fields and windows, delisted names and the survivorship note)
 - [x] [E] B-120 Exits library additions: profit-target ladder, exit on opposite signal, end-of-week exit; exits combinable and ordered (two scale rungs then the final target, each priced at its own level; opposite-signal and end-of-week exits; bar order documented in engine.py and matched trade for trade by both engines)
@@ -262,7 +262,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-135 Customise: default mode, default exits and sizing profile from Library, blocks palette order, block colours and compact or expanded view
 - [ ] [M] B-136 Keyboard-first block insertion (type "/") and snap grid
 - [ ] [M] B-137 Shared undo across views; Explain on any selection; convert to library block; one parameter table across all views
-- [ ] [M] B-138 Python keys: F5 debug and Run, ⌘⇧↵ full run (quick run ⌘↵)
+- [ ] [M] B-138 Python keys: F5 debug and Run, ⌘⇧↵ full run (quick run ⌘↵) (partial: F5 debug, ⌘⇧↵ full run built; quick run waits on the run-level endpoint)
 - [ ] [E] B-139 Python engine settings (fill timing, costs, sizing) shown as a badge when code overrides the card
 - [ ] B-140 Inline ⌘K edit on a selection, shown as a diff to accept or reject (AI is an owner decision) (owner decision: AI features, see OD-11)
 - [ ] [M] B-141 Snippets palette (⌘⇧S) with user and team snippets (backend done: /snippets store; palette is frontend)
