@@ -86,7 +86,14 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const [diff, setDiff] = useState<{ version: number; rows: [string, string, string][] } | null>(null);
   const [proposal, setProposal] = useState<{ fields: Record<string, string>; exits: Record<string, number>; unmatched: string[] } | { error: string } | null>(null);
   const [catalogue, setCatalogue] = useState<string[]>([]);
-  useEffect(() => { void studio<{ formula: { fields: { name: string }[]; operators: { example: string }[] } }>("GET", "/manifest").then((m) => setCatalogue([...m.formula.fields.map((f) => f.name), ...m.formula.operators.map((o) => o.example)]), () => undefined); }, []);
+  type Ref = { name: string; doc: string; example?: string; args?: string[] };
+  const [reference, setReference] = useState<Ref[]>([]);
+  const [refQ, setRefQ] = useState("");
+  type Cond = { true_rate: number | null; last_true_date: string | null; fired_dates: string[]; constant: boolean | null; observations: number };
+  const [conds, setConds] = useState<Record<string, Cond | { error: string }>>({});
+  const [fired, setFired] = useState<{ role: string; dates: string[] } | null>(null);
+  const [pyView, setPyView] = useState<string | null>(null);
+  useEffect(() => { void studio<{ formula: { fields: Ref[]; operators: Ref[] } }>("GET", "/manifest").then((m) => { setCatalogue([...m.formula.fields.map((f) => f.name), ...m.formula.operators.map((o) => o.example ?? o.name)]); setReference([...m.formula.operators, ...m.formula.fields]); }, () => undefined); }, []);
   const history = useRef<{ past: Spec[]; future: Spec[] }>({ past: [], future: [] });
   const [palette, setPalette] = useState(false);
   const focus = useRef<{ role: string; start: number; end: number } | null>(null);
@@ -128,6 +135,25 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     const t = setTimeout(() => void studio<Preview>("POST", "/preview", { spec, symbol: symbol.trim().toUpperCase() }).then(setPrev, (e) => setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] })), 300);
     return () => clearTimeout(t);
   }, [spec, symbol, compiled?.ok]);
+
+  // True-rate and last true date of every rule on the preview name, 600 ms after typing stops (B-108, B-111, B-116).
+  useEffect(() => {
+    if (!compiled?.ok || !symbol.trim() || ui === "dev") return;
+    const t = setTimeout(() => {
+      for (const [role] of ROLES) {
+        const expr = (spec[role] as string).trim();
+        if (!expr || role === "score") continue;
+        void studio<Cond>("POST", "/build/condition", { spec, symbol: symbol.trim().toUpperCase(), expression: expr })
+          .then((c) => setConds((o) => ({ ...o, [role]: c })), (e: Error) => setConds((o) => ({ ...o, [role]: { error: e.message } })));
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [spec, symbol, compiled?.ok, ui]);
+  useEffect(() => {
+    if (pyView === null) return;
+    const t = setTimeout(() => void studio<{ code: string }>("POST", "/to-python", { spec: { ...spec, code: "" } }).then((r) => setPyView(r.code), () => undefined), 400);
+    return () => clearTimeout(t);
+  }, [spec, pyView === null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Autosave the draft every 2 s while there are unsaved edits (B-6).
   useEffect(() => {
@@ -223,7 +249,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
                 {prev.repaint ? <p className={`bd-find ${prev.repaint.changed ? "error" : ""}`}><b style={{ color: prev.repaint.changed ? undefined : "var(--up)" }}>{prev.repaint.changed ? "Repaints" : "No look-ahead"}</b>
                   {prev.repaint.changed ? `signals changed at ${prev.repaint.changed} of ${prev.repaint.cuts} cuts (${prev.repaint.dates.join(", ")})` : `same signals at ${prev.repaint.cuts} history cuts`}</p> : null}
                 <TimeSeries data={prev.bars} series={[{ key: "close", label: symbol.toUpperCase(), color: "var(--text-2)" }]} height={180} legend={false}
-                  markers={prev.trades.flatMap((t) => [{ date: t.entry_date, label: t.side === "long" ? "▲" : "▼", color: "var(--up)" }, { date: t.exit_date, label: "×", color: "var(--down)" }])} />
+                  markers={fired ? fired.dates.map((d) => ({ date: d, label: "●", color: "var(--accent)" })) : prev.trades.flatMap((t) => [{ date: t.entry_date, label: t.side === "long" ? "▲" : "▼", color: "var(--up)" }, { date: t.exit_date, label: "×", color: "var(--down)" }])} />
+                {fired ? <p className="bd-meta" style={{ margin: 0 }}>{ROLES.find((r) => r[0] === fired.role)?.[1]}: {fired.dates.length} bars marked <button className="bd-link" onClick={() => setFired(null)}>Show trades</button></p> : null}
               </>
             ) : <div className="st-skip">{prev?.reason ? `${prev.status === "error" ? "error" : "skipped"}: ${prev.reason}` : "—"}</div>}
           </section>
@@ -319,6 +346,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
             {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m} className={`btn sm${mode === m ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}
+            {compiled?.complexity ? <span className="bd-cx" title="Parameters, rules and the parameters a sweep can tune">{compiled.complexity.parameter_count} params · {compiled.complexity.formula_rule_count} rules · <b data-high={compiled.complexity.degrees_of_freedom > 8 || undefined}>{compiled.complexity.degrees_of_freedom} degrees of freedom</b></span> : null}
             {spec.code.trim() ? <span className="bd-find warning" style={{ marginLeft: "auto" }}><b>Python runs</b>rules below are kept, not used<button className="btn sm" onClick={() => switchUi("dev")}>Open in Dev</button><button className="btn sm" onClick={() => edit({ code: "", files: {} })}>Use rules</button></span> : null}
           </div>
           {mode === "english" ? (
@@ -350,9 +378,41 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
               {mode === "blocks" && role !== "score" && !rows ? <p className="bd-find warning"><b>Formula only</b>This rule is not a list of comparisons, so it stays as a formula.</p> : null}
               {rows ? null : <textarea id={`r-${role}`} className="input" spellCheck={false} rows={role === "score" || role === "market_filter" ? 1 : 2} placeholder={role === "market_filter" ? "market > sma(market, 200)" : undefined} value={spec[role] as string} onSelect={track(role)} onFocus={track(role)} onChange={(e) => edit({ [role]: e.target.value })} />}
               {findings(role).map((f, i) => <p key={i} className={`bd-find ${f.severity}`}><b>{f.severity === "error" ? "Error" : "Warning"}</b>{f.token ? <code>{f.token}</code> : null}{f.message}</p>)}
+              {(() => {
+                const c = conds[role];
+                if (!c || !(spec[role] as string).trim() || role === "score") return null;
+                if ("error" in c) return null;
+                const on = fired?.role === role;
+                return (
+                  <p className={`bd-cond${c.constant !== null ? " warn" : ""}`}>
+                    {c.constant === true ? <b>Always true on {symbol.toUpperCase()}</b> : c.constant === false ? <b>Never true on {symbol.toUpperCase()}</b> : null}
+                    <span>true on {c.true_rate === null ? "—" : `${(c.true_rate * 100).toFixed(c.true_rate < 0.01 ? 2 : 0)}%`} of {c.observations} bars{c.last_true_date ? ` · last ${c.last_true_date}` : ""}</span>
+                    {c.fired_dates.length ? <button className="bd-link" aria-pressed={on} onClick={() => setFired(on ? null : { role, dates: c.fired_dates })}>{on ? "Hide on chart" : "Show on chart"}</button> : null}
+                  </p>
+                );
+              })()}
             </div>
           ); })}
           {findings("spec").map((f, i) => <p key={i} className="bd-find error"><b>Error</b>{f.message}</p>)}
+          <details className="bd-more" onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open && pyView === null) setPyView(""); }}>
+            <summary>Python</summary>
+            <pre className="bd-code">{pyView || "…"}</pre>
+            <button className="btn sm" onClick={() => switchUi("dev")}>Open in Dev</button>
+          </details>
+          <details className="bd-more">
+            <summary>Functions</summary>
+            <input className="input" placeholder="Search" aria-label="Search functions" value={refQ} onChange={(e) => setRefQ(e.target.value)} />
+            <div className="bd-ref">
+              {reference.filter((r) => !refQ || `${r.name} ${r.doc}`.toLowerCase().includes(refQ.toLowerCase())).map((r) => (
+                <button key={r.name} className="bd-refrow" title="Insert at the cursor" onClick={() => {
+                  const f = focus.current, text = r.example ?? r.name;
+                  if (!f) return void navigator.clipboard?.writeText(text).then(() => toast.success("Copied"));
+                  const cur = spec[f.role] as string;
+                  edit({ [f.role]: cur.slice(0, f.start) + text + cur.slice(f.end) });
+                }}><code>{r.args ? `${r.name}(${r.args.join(", ")})` : r.name}</code><span>{r.doc}</span></button>
+              ))}
+            </div>
+          </details>
         </section>
 
         <aside className="bd-side">{side}{paramsCard}</aside>
