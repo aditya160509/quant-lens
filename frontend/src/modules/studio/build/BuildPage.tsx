@@ -13,7 +13,7 @@ import { TrialChip } from "../RunHeader";
 import { BlockRows } from "./BlockRows";
 import { Segmented } from "@/workspace/ui";
 import type { Problem } from "./CodeEditor";
-import { DevIDE, type DevPreview } from "./DevIDE";
+import { DevIDE, type DevPreview, type Saved } from "./DevIDE";
 import { Palette, type Command } from "./Palette";
 import { fromFormula, toFormula, type Row } from "./blocks";
 import "../studio.css";
@@ -71,6 +71,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const [spec, setSpec] = useState<Spec>(BLANK);
   const [compiled, setCompiled] = useState<Compiled | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState<"idle" | "saving" | "conflict">("idle");
   const [mode, setMode] = useState<"blocks" | "formula" | "english">("formula");
   const [ui, setUiState] = useState<"simple" | "dev">(() => {
     if (typeof window === "undefined") return "simple";
@@ -97,6 +98,11 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   }, fail), []);
   useEffect(() => { if (id) void load(id); else { setLoaded(null); setSpec(BLANK); } }, [id, load]);
 
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 760px)");
+    const on = () => { if (mq.matches) setUiState("simple"); };
+    on(); mq.addEventListener("change", on); return () => mq.removeEventListener("change", on);
+  }, []);
   function setUi(next: "simple" | "dev") {
     setUiState(next);
     try { localStorage.setItem("studio:build:ui", next); } catch { /* storage blocked */ }
@@ -132,12 +138,13 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
 
   const save = useCallback(async (over?: Spec): Promise<string | null> => {
     const body = { spec: over ?? spec };
+    setSaving("saving");
     try {
       const s = loaded ? await studio<Loaded>("PUT", `/strategies/${loaded.id}`, body) : await studio<Loaded>("POST", "/strategies", body);
-      setLoaded(s); setDirty(false); toast.success(`Saved version ${s.latest}`);
+      setLoaded(s); setDirty(false); setSaving("idle"); toast.success(`Saved version ${s.latest}`);
       if (!loaded) router.replace(`/studio/build/${s.id}`);
       return s.id;
-    } catch (e) { fail(e); return null; }
+    } catch (e) { setSaving(e instanceof Error && /409|version/i.test(e.message) ? "conflict" : "idle"); fail(e); return null; }
   }, [loaded, spec, router]);
 
   const run = useCallback(async () => {
@@ -255,6 +262,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
             <button className="btn sm" onClick={() => setPalette(true)}><Plus size={12} />Parameter</button>
           </section>
   );
+  const savedState: Saved = saving === "saving" ? "saving" : saving === "conflict" ? "conflict" : !loaded ? "new" : dirty ? "draft" : "saved";
   const compileProblems: Problem[] = (compiled?.findings ?? []).filter((f) => f.role === "code").map((f) => ({ severity: f.severity, file: "main.py", line: Math.max(1, f.line), column: f.start + 1, end_column: Math.max(f.end, f.start + 1) + 1, code: "compile", message: f.message }));
 
   return (
@@ -278,7 +286,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
             {[...loaded.versions].reverse().map((v) => <option key={v.version} value={v.version}>v{v.version}</option>)}
           </select>
         ) : null}
-        <Segmented<"simple" | "dev"> label="Interface" value={ui} onChange={switchUi} options={[{ value: "simple", label: "Simple" }, { value: "dev", label: "Dev" }]} />
+        <span className="bd-ui"><Segmented<"simple" | "dev"> label="Interface" value={ui} onChange={switchUi} options={[{ value: "simple", label: "Simple" }, { value: "dev", label: "Dev" }]} /></span>
         <button className="btn" onClick={() => setPalette(true)}><CommandIcon size={14} />Commands<kbd>⌘⇧P</kbd></button>
         <button className="btn" onClick={() => void save()}><Save size={14} />Save<kbd>⌘S</kbd></button>
         <button className="btn primary" disabled={compiled ? !compiled.ok : true} onClick={() => void run()}><Play size={14} />Run backtest<kbd>⌘↵</kbd></button>
@@ -306,7 +314,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           })() : null}
         </section>
       ) : null}
-      {ui === "dev" ? <DevIDE spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} onRun={() => void run()} compileProblems={compileProblems} /> : <div className="bd-grid">
+      {ui === "dev" ? <DevIDE spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} onRun={() => void run()} onFullRun={() => void run()} compileProblems={compileProblems}
+        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} /> : <div className="bd-grid">
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
             {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m} className={`btn sm${mode === m ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}

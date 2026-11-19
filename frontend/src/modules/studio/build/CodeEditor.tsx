@@ -7,7 +7,9 @@ import { studio } from "../api";
 type Ed = Parameters<OnMount>[0];
 export type Problem = { severity: string; file: string; line: number; column: number; end_column: number; code: string; message: string };
 type Member = { name: string; kind: string; signature: string | null; documentation: string | null; insert_text?: string | null };
-type Project = { file: string; files: Record<string, string>; params: string[]; symbols: string[]; goto: (file: string, line: number, column?: number) => void };
+type Project = { file: string; files: Record<string, string>; params: string[]; symbols: string[]; goto: (file: string, line: number, column?: number) => void; replace: (files: Record<string, string>) => void };
+export type EditorAction = { id: string; label: string; keys?: (m: Monaco) => number[]; run: (line: number) => void };
+type Sym = { name: string; kind: string; line: number; column: number; end_line: number; end_column: number; children: Sym[] };
 
 /** The open project, read by the Monaco providers (registered once per page load). */
 const live: { current: Project | null } = { current: null };
@@ -66,6 +68,36 @@ function register(monaco: Monaco) {
       return { value: { signatures: [{ label: m.signature, documentation: m.documentation ?? undefined, parameters: args.map((a) => ({ label: a })) }], activeSignature: 0, activeParameter: Math.min(active, Math.max(0, args.length - 1)) }, dispose: () => undefined };
     },
   });
+  const nav = (model: { getValue: () => string }, pos: { lineNumber: number; column: number }, extra: Record<string, unknown> = {}) => {
+    const p = live.current;
+    return { code: model.getValue(), file: p?.file ?? "main.py", files: p?.files ?? {}, line: pos.lineNumber, column: pos.column, ...extra };
+  };
+  monaco.languages.registerReferenceProvider("python", {
+    provideReferences: async (model, pos) => {
+      const hits = await studio<{ file: string; line: number; column: number; name: string }[]>("POST", "/build/references", nav(model, pos)).catch(() => []);
+      return hits.map((h) => ({ uri: h.file === live.current?.file ? model.uri : monaco.Uri.parse(`file:///${h.file}`), range: new monaco.Range(h.line, h.column, h.line, h.column + h.name.length) }));
+    },
+  });
+  monaco.languages.registerRenameProvider("python", {
+    provideRenameEdits: async (model, pos, newName) => {
+      const out = await studio<Record<string, string>>("POST", "/build/rename", nav(model, pos, { new_name: newName })).catch((e: Error) => ({ __error: e.message }));
+      if ("__error" in out) return { edits: [], rejectReason: out.__error };
+      live.current?.replace(out);
+      return { edits: [] };
+    },
+  });
+  monaco.languages.registerDocumentSymbolProvider("python", {
+    provideDocumentSymbols: async (model) => {
+      const S = monaco.languages.SymbolKind;
+      type DocSym = { name: string; detail: string; kind: number; range: InstanceType<Monaco["Range"]>; selectionRange: InstanceType<Monaco["Range"]>; tags: []; children: DocSym[] };
+      const map = (x: Sym): DocSym => {
+        const range = new monaco.Range(x.line, x.column, x.end_line, x.end_column);
+        return { name: x.name, detail: x.kind, kind: ({ class: S.Class, method: S.Method, function: S.Function } as Record<string, number>)[x.kind] ?? S.Variable, range, selectionRange: range, tags: [], children: x.children.map(map) };
+      };
+      const items = await studio<Sym[]>("POST", "/build/outline", { code: model.getValue() }).catch(() => []);
+      return items.map(map);
+    },
+  });
   monaco.languages.registerDefinitionProvider("python", {
     provideDefinition: async (model, pos) => {
       const p = live.current;
@@ -97,12 +129,15 @@ function theme(monaco: Monaco, dark: boolean) {
 }
 
 /** Build › Dev: Monaco for one project file, with server completion, signature help, go to definition and line markers. */
-export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal }: {
+export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], ran = [], onGutter }: {
   path: string; value: string; onChange: (v: string) => void; problems: Problem[]; project: Project;
   onSave: () => void; onRun: () => void; onCursor?: (line: number, column: number) => void; reveal?: { line: number; column?: number; n: number } | null;
+  actions?: EditorAction[]; breakpoints?: number[]; ran?: { line: number; count: number; dates: string[] }[]; onGutter?: (line: number) => void;
 }) {
+  const deco = useRef<{ clear: () => void; set: (d: NonNullable<Parameters<Ed["createDecorationsCollection"]>[0]>) => void } | null>(null);
+  const acts = useRef(actions); acts.current = actions;
   const ed = useRef<{ editor: Ed; monaco: Monaco } | null>(null);
-  const keys = useRef({ onSave, onRun, onCursor }); keys.current = { onSave, onRun, onCursor };
+  const keys = useRef({ onSave, onRun, onCursor, onGutter }); keys.current = { onSave, onRun, onCursor, onGutter };
   live.current = project;
 
   useEffect(() => {
@@ -111,6 +146,14 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     m.monaco.editor.setModelMarkers(model, "studio", problems.map((f) => ({ severity: f.severity === "error" ? m.monaco.MarkerSeverity.Error : f.severity === "warning" ? m.monaco.MarkerSeverity.Warning : m.monaco.MarkerSeverity.Info,
       message: f.message, code: f.code, startLineNumber: Math.max(1, f.line), endLineNumber: Math.max(1, f.line), startColumn: Math.max(1, f.column), endColumn: Math.max(f.end_column, f.column + 1) })));
   }, [problems, path]);
+
+  useEffect(() => {
+    const m = ed.current; if (!m) return;
+    deco.current?.set([
+      ...breakpoints.map((line) => ({ range: new m.monaco.Range(line, 1, line, 1), options: { glyphMarginClassName: "dv-bp", glyphMarginHoverMessage: { value: "Breakpoint" } } })),
+      ...ran.map((r) => ({ range: new m.monaco.Range(r.line, 1, r.line, 1), options: { linesDecorationsClassName: "dv-ran", hoverMessage: { value: `Placed ${r.count} order${r.count === 1 ? "" : "s"}: ${r.dates.slice(0, 5).join(", ")}` } } })),
+    ]);
+  }, [breakpoints, ran, path, value]);
 
   useEffect(() => {
     const m = ed.current; if (!m || !reveal) return;
@@ -131,12 +174,16 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => keys.current.onSave());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => keys.current.onRun());
     editor.onDidChangeCursorPosition((e) => keys.current.onCursor?.(e.position.lineNumber, e.position.column));
+    const c = editor.createDecorationsCollection();
+    deco.current = { clear: () => c.clear(), set: (d) => c.set(d) };
+    editor.onMouseDown((e) => { if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && e.target.position) keys.current.onGutter?.(e.target.position.lineNumber); });
+    for (const a of acts.current) editor.addAction({ id: a.id, label: a.label, keybindings: a.keys?.(monaco), run: (x) => acts.current.find((y) => y.id === a.id)?.run(x.getPosition()?.lineNumber ?? 1) });
   };
 
   return (
     <Editor language="python" path={path} value={value} onChange={(v) => onChange(v ?? "")} onMount={mount} theme="studio" height="100%"
       options={{ minimap: { enabled: false }, fontSize: 13, lineHeight: 20, fontLigatures: false, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true,
         padding: { top: 10 }, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace", quickSuggestions: { strings: true, other: true, comments: false },
-        bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true } }} />
+        bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true }, glyphMargin: true }} />
   );
 }

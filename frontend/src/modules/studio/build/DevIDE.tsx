@@ -1,59 +1,109 @@
 "use client";
 
-import { Bug, FileCode2, FilePlus2, LayoutTemplate, ListTree, Pencil, Trash2, Upload, X } from "lucide-react";
+import { DiffEditor } from "@monaco-editor/react";
+import { BookOpen, Bug, CaseSensitive, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { SERIES } from "@/charts/core";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { DataTable } from "@/kit/DataTable";
 import { studio, usePyTemplates } from "../api";
-import { CodeEditor, type Problem } from "./CodeEditor";
+import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 
-type Log = { date: string; symbol: string | null; line: number; text: string; level: string };
+type Log = { date: string; symbol: string | null; line: number; text: string; level: string; fields?: Record<string, unknown> | null };
 type Point = { date: string; symbol: string | null; value: number | null };
+type Frame = { file: string; line: number; column: number; function: string };
 export type DevPreview = {
-  status: string; reason?: string; line?: number | null; problem?: { file?: string | null; line?: number | null; column?: number | null; exception_type?: string | null } | null;
-  trades: Record<string, unknown>[]; logs?: Log[]; plots?: Record<string, Point[]>; warmup?: { bars: number; first_eligible_date: string | null } | null;
+  status: string; reason?: string; line?: number | null;
+  problem?: { file?: string | null; line?: number | null; column?: number | null; exception_type?: string | null; traceback?: Frame[] | null } | null;
+  trades: Record<string, unknown>[]; bars?: { date: string; close: number }[]; logs?: Log[] | null; plots?: Record<string, Point[]> | null; plot_charts?: Record<string, string> | null;
+  marks?: { date: string; symbol: string; label: string }[] | null; tables?: Record<string, { date: string; symbol: string | null; cells: Record<string, unknown> }[]> | null;
+  warmup?: { bars: number; first_eligible_date: string | null } | null;
 };
 type Sym = { name: string; kind: string; line: number; column: number; children: Sym[] };
 type Debug = { date: string; symbol: string; bar_index: number; state: Record<string, unknown>; context: Record<string, number | null>; orders: Record<string, unknown>[]; fills: Record<string, unknown>[];
   previous_date: string | null; next_date: string | null; breakpoint?: { file: string; line: number; hit_count: number; locals: Record<string, unknown> } | null; equity_change?: number | null };
 type QC = { ok: boolean; code: string; symbols: string[]; converted: { line: number; before: string; after: string }[]; unconverted: { line: number; source: string; reason: string }[] };
+type Member = { name: string; kind: string; signature: string | null; documentation: string | null };
+type Version = { version: number; created: number; actor: string };
+type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 type Tab = "problems" | "output" | "plots" | "trades" | "debug";
+type Rail = "files" | "outline" | "search" | "versions" | "docs" | "templates";
 type Spec = { code: string; files?: Record<string, string>; params: Record<string, { value: number }>; [k: string]: unknown };
+export type Saved = "saved" | "draft" | "saving" | "conflict" | "new";
 
-const store = { get: (k: string, f: number) => { try { return Number(localStorage.getItem(k)) || f; } catch { return f; } }, set: (k: string, v: number) => { try { localStorage.setItem(k, String(v)); } catch { /* blocked */ } } };
+const store = {
+  get: (k: string, f: number) => { try { return Number(localStorage.getItem(k)) || f; } catch { return f; } },
+  set: (k: string, v: number) => { try { localStorage.setItem(k, String(v)); } catch { /* blocked */ } },
+};
 const show = (v: unknown) => (v === null || v === undefined ? "—" : typeof v === "number" ? (Number.isInteger(v) ? String(v) : v.toFixed(4)) : typeof v === "object" ? JSON.stringify(v) : String(v));
+const pct = (v?: number) => (v === undefined ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
+const DOC_SCOPES = ["ctx", "portfolio_ctx", "numpy", "pandas", "math", "statistics"];
+const RAILS: [Rail, ReactNode, string][] = [
+  ["files", <FileCode2 key="f" size={15} />, "Files"], ["outline", <ListTree key="o" size={15} />, "Outline"], ["search", <Search key="s" size={15} />, "Search"],
+  ["versions", <GitBranch key="v" size={15} />, "Versions"], ["docs", <BookOpen key="d" size={15} />, "Docs"], ["templates", <LayoutTemplate key="t" size={15} />, "Starters"],
+];
 
-/** Build › Dev: files and outline on the left, the editor in tabs, Problems / Output / Plots / Trades / Debug below, preview and checks on the right. */
-export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, compileProblems }: {
+/** Variables at a paused bar: name and value, numbers right-aligned. */
+function KV({ rows }: { rows: Record<string, unknown> }) {
+  return <dl className="dv-kv">{Object.entries(rows).map(([k, v]) => <div key={k}><dt>{k}</dt><dd data-num={typeof v === "number" || undefined}>{show(v)}</dd></div>)}</dl>;
+}
+
+/** Find every match of a query in the project files. */
+function finder(query: string, opt: { regex: boolean; caseSensitive: boolean; word: boolean }): RegExp | null {
+  if (!query) return null;
+  try {
+    const body = opt.regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(opt.word ? `\\b(?:${body})\\b` : body, opt.caseSensitive ? "g" : "gi");
+  } catch { return null; }
+}
+
+/** Build › Dev: a project rail, the editor in tabs, Problems / Output / Plots / Trades / Debug below, preview and checks on the right, a status bar. */
+export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial }: {
   spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode;
-  onSave: () => void; onRun: () => void; compileProblems: Problem[];
+  onSave: () => void; onRun: () => void; onFullRun: () => void; compileProblems: Problem[];
+  strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode;
 }) {
   const files = useMemo(() => ({ "main.py": spec.code, ...(spec.files ?? {}) }), [spec.code, spec.files]);
   const [open, setOpen] = useState<string[]>(["main.py"]);
   const [active, setActive] = useState("main.py");
-  const [rail, setRail] = useState<"files" | "outline" | "templates">("files");
+  const [rail, setRail] = useState<Rail>("files");
+  const [railOpen, setRailOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(true);
   const [tab, setTab] = useState<Tab>("problems");
   const [lint, setLint] = useState<Problem[]>([]);
   const [outline, setOutline] = useState<Sym[]>([]);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [reveal, setReveal] = useState<{ line: number; column?: number; n: number } | null>(null);
   const [panel, setPanel] = useState(() => store.get("studio:dev:panel", 260));
-  const [logFilter, setLogFilter] = useState("");
+  const [logQ, setLogQ] = useState("");
+  const [logLevel, setLogLevel] = useState<string>("all");
+  const [plotsOn, setPlotsOn] = useState<Record<string, boolean>>({});
   const [dbg, setDbg] = useState<Debug | null>(null);
   const [dbgDate, setDbgDate] = useState("");
   const [cond, setCond] = useState("");
+  const [bps, setBps] = useState<Record<string, number[]>>({});
+  const [q, setQ] = useState(""); const [rep, setRep] = useState("");
+  const [opt, setOpt] = useState({ regex: false, caseSensitive: false, word: false });
+  const [docs, setDocs] = useState<(Member & { scope: string })[] | null>(null);
+  const [docQ, setDocQ] = useState("");
+  const [diff, setDiff] = useState<{ version: number; files: Record<string, string> } | null>(null);
+  const [lastPreview, setLastPreview] = useState<string | null>(null);
   const [qc, setQc] = useState<QC | null>(null);
   const qcRef = useRef<HTMLDialogElement>(null);
   const pyTemplates = usePyTemplates();
   const source = files[active] ?? "";
 
   const setFile = (name: string, text: string) => (name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
-  const goto = (file: string, line: number, column?: number) => { if (!(file in files)) return; setOpen((o) => (o.includes(file) ? o : [...o, file])); setActive(file); setReveal({ line, column, n: Date.now() }); };
+  const replaceFiles = (next: Record<string, string>) => {
+    const all = { ...files, ...next };
+    const { "main.py": code, ...rest } = all;
+    edit({ code, files: rest });
+  };
+  const goto = (file: string, line: number, column?: number) => { if (!(file in files)) return; setDiff(null); setOpen((o) => (o.includes(file) ? o : [...o, file])); setActive(file); setReveal({ line, column, n: Date.now() }); };
   const close = (f: string) => { const rest = open.filter((x) => x !== f); setOpen(rest.length ? rest : ["main.py"]); if (active === f) setActive(rest.at(-1) ?? "main.py"); };
+  const toggleBp = (line: number) => setBps((b) => { const cur = b[active] ?? []; return { ...b, [active]: cur.includes(line) ? cur.filter((x) => x !== line) : [...cur, line].sort((x, y) => x - y) }; });
 
-  // Lint and outline the open file 300 ms after typing stops.
   useEffect(() => {
     const t = setTimeout(() => {
       void studio<{ problems: Problem[] }>("POST", "/build/check", { code: source, file: active, files, params: Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, p.value])) }).then((r) => setLint(r.problems), () => undefined);
@@ -61,17 +111,30 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, compileP
     }, 300);
     return () => clearTimeout(t);
   }, [source, active, files, spec.params]);
+  useEffect(() => { if (prev) setLastPreview(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })); }, [prev]);
+  useEffect(() => {
+    if (rail !== "docs" || docs) return;
+    void Promise.all(DOC_SCOPES.map((scope) => studio<Member[]>("POST", "/build/complete", { scope, code: "" }).then((ms) => ms.map((m) => ({ ...m, scope })), () => []))).then((all) => setDocs(all.flat()));
+  }, [rail, docs]);
 
   const runtime: Problem[] = prev?.status === "error" ? [{ severity: "error", file: prev.problem?.file ?? "main.py", line: prev.problem?.line ?? prev.line ?? 1, column: prev.problem?.column ?? 1, end_column: 200, code: prev.problem?.exception_type ?? "runtime", message: prev.reason ?? "Run failed" }] : [];
   const problems = [...lint, ...compileProblems.filter((p) => p.file === active), ...runtime];
   const errors = problems.filter((p) => p.severity === "error").length, warnings = problems.length - errors;
-  const logs = (prev?.logs ?? []).filter((l) => !logFilter || `${l.date} ${l.symbol ?? ""} ${l.text}`.toLowerCase().includes(logFilter.toLowerCase()));
+  const logRe = finder(logQ, opt);
+  const logs = (prev?.logs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}`))));
   const plots = Object.entries(prev?.plots ?? {});
+  const re = finder(q, opt);
+  const hits = re ? Object.entries(files).flatMap(([f, text]) => text.split("\n").flatMap((line, i) => { re.lastIndex = 0; return re.test(line) ? [{ file: f, line: i + 1, text: line }] : []; })) : [];
 
   const debug = (body: Record<string, unknown>) => {
     const date = String(body.date || dbg?.date || dbgDate || (prev?.trades.at(-1)?.entry_date ?? ""));
     if (!date) return toast.error("Pick a date to stop at");
+    setTab("debug"); setPanelOpen(true);
     void studio<Debug>("POST", "/build/debug", { spec, symbol, date, ...body }).then((d) => { setDbg(d); setDbgDate(d.date); if (d.breakpoint) goto(d.breakpoint.file, d.breakpoint.line); }, (e: Error) => toast.error(e.message));
+  };
+  const startDebug = () => {
+    const bp = Object.entries(bps).flatMap(([file, lines]) => lines.map((line) => ({ file, line })))[0];
+    debug(bp ? { date: dbgDate || (prev?.bars?.[0]?.date ?? ""), breakpoint: { ...bp, condition: cond || null } } : {});
   };
   const addFile = () => {
     const n = window.prompt("File name", "helpers.py")?.trim();
@@ -87,125 +150,224 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, compileP
     const { [f]: text, ...rest } = spec.files ?? {};
     edit({ files: { ...rest, [n]: text ?? "" } }); setOpen((o) => o.map((x) => (x === f ? n : x))); if (active === f) setActive(n);
   };
+  const dupFile = (f: string) => { let n = f.replace(/\.py$/, "_copy.py"); while (n in files) n = n.replace(/\.py$/, "_copy.py"); edit({ files: { ...(spec.files ?? {}), [n]: files[f] } }); goto(n, 1); };
   const dropFile = (f: string) => { const { [f]: _, ...rest } = spec.files ?? {}; edit({ files: rest }); close(f); toast(`${f} deleted · ⌘Z to undo`); };
+  const replaceAll = () => {
+    if (!re) return;
+    const next = Object.fromEntries(Object.entries(files).map(([f, t]) => [f, t.replace(re, rep)]));
+    replaceFiles(next); toast.success(`Replaced ${hits.length} line${hits.length === 1 ? "" : "s"}`);
+  };
+  const openDiff = (v: number) => {
+    if (!strategyId) return;
+    void studio<{ files: Record<string, string> }>("GET", `/strategies/${strategyId}/files?version=${v}`).then((r) => setDiff({ version: v, files: r.files }), (e: Error) => toast.error(e.message));
+  };
   const drag = (e: React.PointerEvent) => {
     const y0 = e.clientY, h0 = panel;
     const move = (m: PointerEvent) => setPanel(Math.min(Math.max(h0 - (m.clientY - y0), 120), window.innerHeight * 0.7));
     const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); setPanel((h) => { store.set("studio:dev:panel", h); return h; }); };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
+
+  const actions: EditorAction[] = [
+    { id: "studio.debug", label: "Debug: start", keys: (m) => [m.KeyCode.F5], run: () => startDebug() },
+    { id: "studio.bp", label: "Debug: toggle breakpoint", keys: (m) => [m.KeyCode.F9], run: (line) => toggleBp(line) },
+    { id: "studio.step", label: "Debug: step one bar", keys: (m) => [m.KeyCode.F10], run: () => debug({ step: 1 }) },
+    { id: "studio.stepback", label: "Debug: step back one bar", keys: (m) => [m.KeyMod.Shift | m.KeyCode.F10], run: () => debug({ step: -1 }) },
+    { id: "studio.panel", label: "View: toggle panel", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyJ], run: () => setPanelOpen((o) => !o) },
+    { id: "studio.rail", label: "View: toggle side bar", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyB], run: () => setRailOpen((o) => !o) },
+    { id: "studio.files", label: "Go to file", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyP], run: () => { setRailOpen(true); setRail("files"); } },
+    { id: "studio.search", label: "Search project", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyF], run: () => { setRailOpen(true); setRail("search"); } },
+    { id: "studio.docs", label: "Docs: open reference", keys: (m) => [m.KeyCode.F1], run: () => { setRailOpen(true); setRail("docs"); } },
+    { id: "studio.fullrun", label: "Run: full backtest", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => onFullRun() },
+    { id: "studio.save", label: "Strategy: save version", run: () => onSave() },
+    { id: "studio.newfile", label: "File: new", run: () => addFile() },
+  ];
   const outlineRows = (items: Sym[], depth = 0): ReactNode => items.map((s) => (
     <div key={`${s.name}${s.line}`}>
       <button className="dv-item" style={{ paddingLeft: 10 + depth * 14 }} onClick={() => goto(active, s.line, s.column)}><i className={`dv-k dv-k-${s.kind}`}>{s.kind[0]}</i>{s.name}<span>{s.line}</span></button>
       {outlineRows(s.children, depth + 1)}
     </div>
   ));
-  const TABS: [Tab, string, number | null][] = [["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length || null], ["trades", "Trades", prev?.trades.length ?? null], ["debug", "Debug", null]];
+  const docRows = (docs ?? []).filter((d) => !docQ || `${d.scope}.${d.name} ${d.documentation ?? ""}`.toLowerCase().includes(docQ.toLowerCase()));
+  const TABS: [Tab, string, number | null][] = [["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["debug", "Debug", null]];
+  const toggles = <span className="dv-toggles">
+    <button className="icon-btn" aria-pressed={opt.caseSensitive} title="Match case" onClick={() => setOpt((o) => ({ ...o, caseSensitive: !o.caseSensitive }))}><CaseSensitive size={14} /></button>
+    <button className="icon-btn" aria-pressed={opt.word} title="Whole word" onClick={() => setOpt((o) => ({ ...o, word: !o.word }))}><WholeWord size={14} /></button>
+    <button className="icon-btn" aria-pressed={opt.regex} title="Regular expression" onClick={() => setOpt((o) => ({ ...o, regex: !o.regex }))}><Regex size={14} /></button>
+  </span>;
+  const priceRows = (prev?.bars ?? []).map((b) => ({ date: b.date, close: b.close, ...Object.fromEntries(plots.filter(([n]) => prev?.plot_charts?.[n] === "main" && plotsOn[n] !== false).map(([n, pts]) => [n, pts.find((p) => p.date === b.date)?.value ?? null])) }));
+  const mainPlots = plots.filter(([n]) => prev?.plot_charts?.[n] === "main");
 
   return (
-    <div className="dv" style={{ ["--panel-h" as string]: `${panel}px` }}>
-      <nav className="dv-rail" aria-label="Project">
-        <div className="seg dv-railtabs" role="group" aria-label="Side panel">
-          {([["files", <FileCode2 key="f" size={14} />, "Files"], ["outline", <ListTree key="o" size={14} />, "Outline"], ["templates", <LayoutTemplate key="t" size={14} />, "Starters"]] as const).map(([k, icon, l]) => (
-            <button key={k} type="button" aria-pressed={rail === k} title={l} onClick={() => setRail(k)}>{icon}<span>{l}</span></button>
-          ))}
-        </div>
-        {rail === "files" ? (
-          <div className="dv-list">
-            {Object.keys(files).map((f) => (
-              <div key={f} className="dv-file" data-on={f === active || undefined}>
-                <button className="dv-item" onClick={() => goto(f, reveal?.line ?? 1)}><FileCode2 size={13} />{f}</button>
-                {f !== "main.py" ? <><button className="icon-btn" aria-label={`Rename ${f}`} onClick={() => renameFile(f)}><Pencil size={12} /></button><button className="icon-btn" aria-label={`Delete ${f}`} onClick={() => dropFile(f)}><Trash2 size={12} /></button></> : null}
-              </div>
-            ))}
-            <button className="btn sm ghost" onClick={addFile}><FilePlus2 size={13} />New file</button>
-          </div>
-        ) : rail === "outline" ? (
-          <div className="dv-list">{outline.length ? outlineRows(outline) : <p className="dv-empty">No classes or functions</p>}</div>
-        ) : (
-          <div className="dv-list">
-            {(pyTemplates.data ?? []).map((t) => <button key={t.name} className="dv-tpl" onClick={() => { edit({ ...(t.spec as Partial<Spec>) }); setOpen(["main.py"]); setActive("main.py"); }}><b>{t.name}</b><span>{t.rule}</span></button>)}
-            <button className="btn sm ghost" onClick={() => { setQc(null); qcRef.current?.showModal(); }}><Upload size={13} />QuantConnect algorithm</button>
-          </div>
-        )}
+    <div className="dv" data-rail={railOpen || undefined} style={{ ["--panel-h" as string]: panelOpen ? `${panel}px` : "0px" }}>
+      <nav className="dv-icons" aria-label="Side bar">
+        {RAILS.map(([k, icon, l]) => <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={railOpen && rail === k} onClick={() => { if (railOpen && rail === k) setRailOpen(false); else { setRail(k); setRailOpen(true); } }}>{icon}</button>)}
       </nav>
+      {railOpen ? (
+        <nav className="dv-rail" aria-label={RAILS.find((r) => r[0] === rail)?.[2]}>
+          <h4>{RAILS.find((r) => r[0] === rail)?.[2]}</h4>
+          {rail === "files" ? (
+            <div className="dv-list">
+              {Object.keys(files).map((f) => (
+                <div key={f} className="dv-file" data-on={f === active || undefined}>
+                  <button className="dv-item" onClick={() => goto(f, 1)}><FileCode2 size={13} />{f}</button>
+                  <button className="icon-btn" title="Duplicate" aria-label={`Duplicate ${f}`} onClick={() => dupFile(f)}><FilePlus2 size={12} /></button>
+                  {f !== "main.py" ? <><button className="icon-btn" title="Rename" aria-label={`Rename ${f}`} onClick={() => renameFile(f)}><Pencil size={12} /></button><button className="icon-btn" title="Delete" aria-label={`Delete ${f}`} onClick={() => dropFile(f)}><Trash2 size={12} /></button></> : null}
+                </div>
+              ))}
+              <button className="btn sm ghost" onClick={addFile}><FilePlus2 size={13} />New file</button>
+            </div>
+          ) : rail === "outline" ? (
+            <div className="dv-list">{outline.length ? outlineRows(outline) : <p className="dv-empty">No classes or functions</p>}</div>
+          ) : rail === "search" ? (
+            <div className="dv-list">
+              <div className="dv-search"><input className="input" autoFocus placeholder="Search" aria-label="Search project" value={q} onChange={(e) => setQ(e.target.value)} />{toggles}</div>
+              <div className="dv-search"><input className="input" placeholder="Replace" aria-label="Replace with" value={rep} onChange={(e) => setRep(e.target.value)} /><button className="btn sm" disabled={!hits.length} onClick={replaceAll}>All</button></div>
+              {q && !re ? <p className="dv-empty">Invalid pattern</p> : null}
+              {re ? <p className="dv-count">{hits.length} line{hits.length === 1 ? "" : "s"} in {new Set(hits.map((h) => h.file)).size} file{new Set(hits.map((h) => h.file)).size === 1 ? "" : "s"}</p> : null}
+              {hits.slice(0, 400).map((h, i) => {
+                re!.lastIndex = 0;
+                const after = rep && re ? h.text.replace(re, rep) : null;
+                return <button key={i} className="dv-hit" onClick={() => goto(h.file, h.line)}><i>{h.file}:{h.line}</i><code>{h.text.trim()}</code>{after !== null && after !== h.text ? <code className="dv-after">{after.trim()}</code> : null}</button>;
+              })}
+            </div>
+          ) : rail === "versions" ? (
+            <div className="dv-list">
+              {versions.length ? [...versions].reverse().map((v) => {
+                const r = runs[v.version];
+                return <button key={v.version} className="dv-tpl" data-on={diff?.version === v.version || undefined} onClick={() => (diff?.version === v.version ? setDiff(null) : openDiff(v.version))}>
+                  <b>v{v.version} <span className="dv-muted">{new Date(v.created * 1000).toLocaleDateString()} · {v.actor}</span></b>
+                  <span>{r ? `${pct(r.total_return)} · Sharpe ${r.sharpe?.toFixed(2) ?? "—"} · ${r.trades ?? "—"} trades` : "not run"}</span>
+                </button>;
+              }) : <p className="dv-empty">Save to start versions</p>}
+            </div>
+          ) : rail === "docs" ? (
+            <div className="dv-list">
+              <input className="input" placeholder="Search the API" aria-label="Search the API" value={docQ} onChange={(e) => setDocQ(e.target.value)} />
+              {docs === null ? <p className="dv-empty">Loading…</p> : docRows.slice(0, 300).map((d) => (
+                <details key={`${d.scope}.${d.name}`} className="dv-doc"><summary><code>{d.scope === "portfolio_ctx" ? "ctx" : d.scope}.{d.name}</code><i>{d.kind}</i></summary>
+                  {d.signature ? <code className="dv-sig">{d.signature}</code> : null}{d.documentation ? <p>{d.documentation}</p> : null}</details>
+              ))}
+            </div>
+          ) : (
+            <div className="dv-list">
+              {(pyTemplates.data ?? []).map((t) => <button key={t.name} className="dv-tpl" onClick={() => { edit({ ...(t.spec as Partial<Spec>) }); setOpen(["main.py"]); setActive("main.py"); }}><b>{t.name}</b><span>{t.rule}</span></button>)}
+              <button className="btn sm ghost" onClick={() => { setQc(null); qcRef.current?.showModal(); }}><Upload size={13} />QuantConnect algorithm</button>
+            </div>
+          )}
+        </nav>
+      ) : null}
 
       <section className="dv-main">
         <div className="dv-tabs" role="tablist">
           {open.map((f) => (
-            <div key={f} role="tab" aria-selected={f === active} className="dv-tab" onClick={() => setActive(f)} onAuxClick={(e) => { if (e.button === 1) close(f); }}>
+            <div key={f} role="tab" aria-selected={!diff && f === active} className="dv-tab" onClick={() => { setDiff(null); setActive(f); }} onAuxClick={(e) => { if (e.button === 1) close(f); }}>
               {f}{open.length > 1 ? <button className="icon-btn" aria-label={`Close ${f}`} onClick={(e) => { e.stopPropagation(); close(f); }}><X size={11} /></button> : null}
             </div>
           ))}
+          {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
         </div>
         <div className="dv-editor">
-          {!spec.code.trim() && active === "main.py" ? (
+          {!spec.code.trim() && active === "main.py" && !diff ? (
             <div className="dv-blank">
               <b>This strategy runs on its rules</b>
               <div><button className="btn primary" onClick={() => void studio<{ code: string }>("POST", "/to-python", { spec }).then((r) => edit({ code: r.code }), (e: Error) => toast.error(e.message))}>Convert rules to Python</button>
-                <button className="btn" onClick={() => setRail("templates")}>Start from a starter</button></div>
+                <button className="btn" onClick={() => { setRailOpen(true); setRail("templates"); }}>Start from a starter</button></div>
             </div>
           ) : null}
-          <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={onSave} onRun={onRun} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
-            project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto }} />
+          {diff ? (
+            <DiffEditor language="python" original={diff.files[active] ?? ""} modified={source} theme="studio" height="100%"
+              options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, fontSize: 13, lineHeight: 20, scrollBeyondLastLine: false, automaticLayout: true, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace" }} />
+          ) : (
+            <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={onSave} onRun={onRun} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
+              actions={actions} breakpoints={bps[active] ?? []} onGutter={toggleBp}
+              project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles }} />
+          )}
         </div>
-        <div className="dv-grip" role="separator" aria-orientation="horizontal" aria-label="Resize panel" onPointerDown={drag} />
-        <div className="dv-panel">
-          <div className="dv-ptabs" role="tablist">
-            {TABS.map(([k, l, n]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{l}{n ? <span className="num">{n}</span> : null}</button>)}
-          </div>
-          <div className="dv-pbody">
-            {tab === "problems" ? (problems.length ? problems.map((p, i) => (
-              <button key={i} className="dv-prob" onClick={() => goto(p.file, p.line, p.column)}><b className={p.severity}>{p.severity}</b><span>{p.message}</span><i>{p.file}:{p.line}:{p.column}{p.code ? ` ${p.code}` : ""}</i></button>
-            )) : <p className="dv-empty">No problems</p>) : null}
-            {tab === "output" ? (
-              <>
-                <input className="input dv-filter" placeholder="Filter by date, symbol or text" aria-label="Filter output" value={logFilter} onChange={(e) => setLogFilter(e.target.value)} />
-                {logs.length ? <div className="dv-logs">{logs.map((l, i) => <button key={i} className="dv-log" data-level={l.level} onClick={() => goto("main.py", l.line)}><time>{l.date}</time><span>{l.symbol ?? ""}</span><code>{l.text}</code><i>:{l.line}</i></button>)}</div>
-                  : <p className="dv-empty">{prev?.logs ? "Nothing matches" : "print() and ctx.log() appear here after a preview"}</p>}
-              </>
-            ) : null}
-            {tab === "plots" ? (plots.length ? plots.map(([name, pts], i) => (
-              <div key={name} className="dv-plot"><b>{name}</b><TimeSeries data={pts.filter((p) => p.value !== null).map((p) => ({ date: p.date, v: p.value }))} series={[{ key: "v", label: name, color: SERIES[i % SERIES.length] }]} height={140} legend={false} /></div>
-            )) : <p className="dv-empty">ctx.plot(name, value) draws here</p>) : null}
-            {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades" }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
-            {tab === "debug" ? (
-              <div className="dv-debug">
-                <div className="dv-dbar">
-                  <input className="input" type="date" aria-label="Stop at date" value={dbgDate} onChange={(e) => setDbgDate(e.target.value)} />
-                  <button className="btn sm primary" onClick={() => debug({ date: dbgDate })}><Bug size={13} />Stop here</button>
-                  <button className="btn sm" disabled={!dbg?.previous_date} onClick={() => debug({ step: -1 })}>◀ Bar</button>
-                  <button className="btn sm" disabled={!dbg?.next_date} onClick={() => debug({ step: 1 })}>Bar ▶</button>
-                  <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "order" })}>Next order</button>
-                  <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "fill" })}>Next fill</button>
-                  <span className="dv-sep" />
-                  <input className="input" aria-label="Breakpoint condition" placeholder="condition" value={cond} onChange={(e) => setCond(e.target.value)} />
-                  <button className="btn sm" onClick={() => debug({ breakpoint: { file: active, line: cursor.line, condition: cond || null } })}>Break at {active}:{cursor.line}</button>
-                </div>
-                {dbg ? (
-                  <div className="dv-dgrid">
-                    <div><h4>{dbg.symbol} · {dbg.date} · bar {dbg.bar_index}{dbg.breakpoint ? ` · hit ${dbg.breakpoint.hit_count}` : ""}</h4>
-                      <DataTable rows={Object.entries(dbg.context).map(([k, v]) => ({ ctx: k, value: v }))} /></div>
-                    <div><h4>self</h4>
-                      <DataTable rows={Object.entries({ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }).map(([k, v]) => ({ name: k, value: show(v) }))} /></div>
-                    <div><h4>Orders</h4>{dbg.orders.length ? <DataTable rows={dbg.orders} /> : <p className="dv-empty">None this bar</p>}
-                      <h4>Fills</h4>{dbg.fills.length ? <DataTable rows={dbg.fills} /> : <p className="dv-empty">None this bar</p>}</div>
+        <div className="dv-grip" role="separator" aria-orientation="horizontal" aria-label="Resize panel" onPointerDown={drag} onDoubleClick={() => setPanelOpen((o) => !o)} />
+        {panelOpen ? (
+          <div className="dv-panel">
+            <div className="dv-ptabs" role="tablist">
+              {TABS.map(([k, l, n]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{l}{n ? <span className="num">{n}</span> : null}</button>)}
+              <span style={{ flex: 1 }} />
+              <button className="icon-btn" aria-label="Hide panel" title="Hide panel ⌘J" onClick={() => setPanelOpen(false)}><X size={13} /></button>
+            </div>
+            <div className="dv-pbody">
+              {tab === "problems" ? (problems.length ? <>
+                {problems.map((p, i) => (
+                  <button key={i} className="dv-prob" onClick={() => goto(p.file, p.line, p.column)}><b className={p.severity}>{p.severity}</b><span>{p.message}</span><i>{p.file}:{p.line}:{p.column}{p.code ? ` ${p.code}` : ""}</i></button>
+                ))}
+                {prev?.problem?.traceback?.length ? <div className="dv-trace">{prev.problem.traceback.map((f, i) => <button key={i} className="dv-item" onClick={() => goto(f.file, f.line, f.column)}>{f.function}<span>{f.file}:{f.line}</span></button>)}</div> : null}
+              </> : <p className="dv-empty">No problems</p>) : null}
+              {tab === "output" ? (
+                <>
+                  <div className="dv-search dv-logbar">
+                    <input className="input" placeholder="Filter" aria-label="Filter output" value={logQ} onChange={(e) => setLogQ(e.target.value)} />{toggles}
+                    <div className="seg" role="group" aria-label="Level">{["all", "info", "warning", "error"].map((l) => <button key={l} type="button" aria-pressed={logLevel === l} onClick={() => setLogLevel(l)}>{l}</button>)}</div>
+                    <span className="dv-count">{logs.length.toLocaleString()} of {(prev?.logs?.length ?? 0).toLocaleString()}</span>
                   </div>
-                ) : <p className="dv-empty">Stops at the last preview trade, or the date set</p>}
-              </div>
-            ) : null}
+                  {logs.length ? <div className="dv-logs">{logs.slice(0, 2000).map((l, i) => (
+                    <button key={i} className="dv-log" data-level={l.level} onClick={() => goto("main.py", l.line)}><time>{l.date}</time><span>{l.symbol ?? ""}</span>
+                      <code>{l.text}{l.fields ? <em>{Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("")}</em> : null}</code><i>:{l.line}</i></button>
+                  ))}</div> : <p className="dv-empty">{prev?.logs?.length ? "Nothing matches" : "No output"}</p>}
+                </>
+              ) : null}
+              {tab === "plots" ? (
+                <div className="dv-plots">
+                  {plots.length ? <div className="dv-chips">{plots.map(([n], i) => <button key={n} className="pill" aria-pressed={plotsOn[n] !== false} onClick={() => setPlotsOn((o) => ({ ...o, [n]: o[n] === false }))}><i style={{ background: SERIES[i % SERIES.length] }} />{n}</button>)}</div> : null}
+                  {mainPlots.length && priceRows.length ? <div className="dv-plot"><b>Price · {symbol}</b><TimeSeries data={priceRows} height={200} legend={false}
+                    series={[{ key: "close", label: symbol, color: "var(--text-3)" }, ...mainPlots.filter(([n]) => plotsOn[n] !== false).map(([n]) => ({ key: n, label: n, color: SERIES[plots.findIndex(([x]) => x === n) % SERIES.length] }))]}
+                    markers={(prev?.marks ?? []).filter((m) => m.symbol === symbol).map((m) => ({ date: m.date, label: m.label, color: "var(--accent)" }))} /></div> : null}
+                  {plots.filter(([n]) => prev?.plot_charts?.[n] !== "main" && plotsOn[n] !== false).map(([name, pts]) => (
+                    <div key={name} className="dv-plot"><b>{name}</b><TimeSeries data={pts.filter((p) => p.value !== null).map((p) => ({ date: p.date, v: p.value }))} series={[{ key: "v", label: name, color: SERIES[plots.findIndex(([x]) => x === name) % SERIES.length] }]} height={140} legend={false} /></div>
+                  ))}
+                  {Object.entries(prev?.tables ?? {}).map(([name, rows]) => <div key={name} className="dv-plot"><b>{name}</b><DataTable rows={rows.map((r) => ({ date: r.date, symbol: r.symbol, ...r.cells }))} opts={{ viewKey: `studio:dev:table:${name}` }} /></div>)}
+                  {!plots.length && !Object.keys(prev?.tables ?? {}).length ? <p className="dv-empty">No plots</p> : null}
+                </div>
+              ) : null}
+              {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades" }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
+              {tab === "debug" ? (
+                <div className="dv-debug">
+                  <div className="dv-dbar">
+                    <input className="input" type="date" aria-label="Stop at date" value={dbgDate} onChange={(e) => setDbgDate(e.target.value)} />
+                    <button className="btn sm primary" onClick={() => debug({ date: dbgDate })}><Bug size={13} />Stop here<kbd>F5</kbd></button>
+                    <button className="btn sm" disabled={!dbg?.previous_date} onClick={() => debug({ step: -1 })}>◀ Bar</button>
+                    <button className="btn sm" disabled={!dbg?.next_date} onClick={() => debug({ step: 1 })}>Bar ▶<kbd>F10</kbd></button>
+                    <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "order" })}>Next order</button>
+                    <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "fill" })}>Next fill</button>
+                    <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "equity", loss_fraction: 0.05 })}>Next 5% loss day</button>
+                    <span className="dv-sep" />
+                    <input className="input" aria-label="Breakpoint condition" placeholder="condition" value={cond} onChange={(e) => setCond(e.target.value)} />
+                    <button className="btn sm" onClick={() => debug({ breakpoint: { file: active, line: cursor.line, condition: cond || null } })}>Break at {active}:{cursor.line}</button>
+                  </div>
+                  {dbg ? (
+                    <div className="dv-dgrid">
+                      <div><h4>{dbg.symbol} · {dbg.date} · bar {dbg.bar_index}{dbg.breakpoint ? ` · hit ${dbg.breakpoint.hit_count}` : ""}{dbg.equity_change != null ? ` · ${pct(dbg.equity_change)}` : ""}</h4>
+                        <KV rows={dbg.context} /></div>
+                      <div><h4>{dbg.breakpoint ? "Locals and self" : "self"}</h4>
+                        {Object.keys({ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }).length ? <KV rows={{ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }} /> : <p className="dv-empty">No attributes</p>}</div>
+                      <div><h4>Orders</h4>{dbg.orders.length ? <DataTable rows={dbg.orders} /> : <p className="dv-empty">None this bar</p>}
+                        <h4>Fills</h4>{dbg.fills.length ? <DataTable rows={dbg.fills} /> : <p className="dv-empty">None this bar</p>}</div>
+                    </div>
+                  ) : <p className="dv-empty">Stops at the last preview trade, or the date set</p>}
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
+        ) : null}
       </section>
 
       <aside className="dv-side">{side}</aside>
 
       <footer className="dv-status">
         <span>{active}</span><span>Ln {cursor.line}, Col {cursor.column}</span>
-        <button className="dv-sbtn" onClick={() => setTab("problems")}><b className="error">{errors}</b> errors <b className="warning">{warnings}</b> warnings</button>
-        {prev?.warmup ? <span>warm-up {prev.warmup.bars} bars</span> : null}
+        <button className="dv-sbtn" onClick={() => { setPanelOpen(true); setTab("problems"); }}><b className="error">{errors}</b> errors <b className="warning">{warnings}</b> warnings</button>
+        <span className={`dv-save dv-save-${saved}`}>{{ saved: "Saved", draft: "Draft", saving: "Saving…", conflict: "Conflict: reload", new: "Not saved" }[saved]}</span>
+        {prev?.warmup ? <span>warm-up {prev.warmup.bars} bars{prev.warmup.first_eligible_date ? ` · trades from ${prev.warmup.first_eligible_date}` : ""}</span> : null}
+        {Object.values(bps).flat().length ? <span>{Object.values(bps).flat().length} breakpoint{Object.values(bps).flat().length === 1 ? "" : "s"}</span> : null}
         <span style={{ flex: 1 }} />
-        <span>{prev ? (prev.status === "ok" ? `preview ${symbol}` : prev.status) : "no preview"}</span><span>Python 3.12</span>
+        {trial}
+        <span>{prev ? `${prev.status === "ok" ? `preview ${symbol}` : prev.status}${lastPreview ? ` · ${lastPreview}` : ""}` : "no preview"}</span><span>Python 3.12</span>
       </footer>
 
       <dialog ref={qcRef} className="sh-import" aria-label="Open a QuantConnect algorithm" onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
