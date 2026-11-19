@@ -126,7 +126,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] B-2 Look-ahead (close[+1], centred window) refused with the line and token named
 - [x] B-3 Weekly SMA on a Wednesday uses the last closed week
 - [x] B-4 Compile under 100 ms server side for a 20-row strategy
-- [ ] [E] B-5 Preview refreshes within 300 ms after typing stops (in-page timing) (partial: server 0.37 s measured; in-page timing not tested)
+- [ ] [E] B-5 Preview refreshes within 300 ms after typing stops (in-page timing) (partial: debounce 120 ms; measured in page: formula rules about 270 ms, Python on_bar about 400 ms (server 244 ms for 2 years); Python server time open)
 - [x] [E] B-6 Reload restores the unsaved draft exactly (autosave to the browser 500 ms after an edit; reload restores a new strategy exactly and offers saved ones back (checked in the browser 2026-11-19))
 - [ ] [E] B-7 Ten near-identical sweep cells add ten raw and fewer than four effective trials (partial: raw and effective counts shown; cell test not recorded)
 - [x] B-8 Time stop, breakeven and scale-out each have a fixture with exact expected trades
