@@ -19,7 +19,7 @@ export type DevPreview = {
   problem?: { file?: string | null; line?: number | null; column?: number | null; exception_type?: string | null; traceback?: Frame[] | null } | null;
   trades: Record<string, unknown>[]; bars?: { date: string; close: number }[]; logs?: Log[] | null; plots?: Record<string, Point[]> | null; plot_charts?: Record<string, string> | null;
   marks?: { date: string; symbol: string; label: string }[] | null; tables?: Record<string, { date: string; symbol: string | null; cells: Record<string, unknown> }[]> | null;
-  warmup?: { bars: number; first_eligible_date: string | null } | null;
+  warmup?: { bars: number; first_eligible_date: string | null } | null; settings_overrides?: Record<string, unknown> | null;
 };
 type Sym = { name: string; kind: string; line: number; column: number; children: Sym[] };
 type Debug = { date: string; symbol: string; bar_index: number; state: Record<string, unknown>; context: Record<string, number | null>; orders: Record<string, unknown>[]; fills: Record<string, unknown>[];
@@ -63,10 +63,10 @@ function finder(query: string, opt: { regex: boolean; caseSensitive: boolean; wo
 }
 
 /** Build › Dev: a project rail, the editor in tabs, Problems / Output / Plots / Trades / Debug below, preview and checks on the right, a status bar. */
-export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale }: {
+export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font }: {
   spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode;
   onSave: () => void; onRun: () => void; onFullRun: () => void; compileProblems: Problem[];
-  strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean;
+  strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null) => void; font?: number;
 }) {
   const files = useMemo(() => ({ "main.py": spec.code, ...(spec.files ?? {}) }), [spec.code, spec.files]);
   const [open, setOpen] = useState<string[]>(["main.py"]);
@@ -161,7 +161,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     const date = String(body.date || dbg?.date || dbgDate || (prev?.trades.at(-1)?.entry_date ?? ""));
     if (!date) return toast.error("Pick a date to stop at");
     setTab("debug"); setPanelOpen(true);
-    void studio<Debug>("POST", "/build/debug", { spec, symbol, date, ...body }).then((d) => { setDbg(d); setDbgDate(d.date); if (d.breakpoint) goto(d.breakpoint.file, d.breakpoint.line); }, (e: Error) => toast.error(e.message));
+    void studio<Debug>("POST", "/build/debug", { spec, symbol, date, ...body }).then((d) => { setDbg(d); setDbgDate(d.date); onPause?.(d.date); if (d.breakpoint) goto(d.breakpoint.file, d.breakpoint.line); }, (e: Error) => toast.error(e.message));
   };
   const startDebug = () => {
     const bp = Object.entries(bps).flatMap(([file, lines]) => lines.map((line) => ({ file, line })))[0];
@@ -290,7 +290,8 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
             <div className="dv-list">
               <input className="input" placeholder="Search the API" aria-label="Search the API" value={docQ} onChange={(e) => setDocQ(e.target.value)} />
               {docs === null ? <p className="dv-empty">Loading…</p> : docRows.slice(0, 300).map((d) => (
-                <details key={`${d.scope}.${d.name}`} className="dv-doc"><summary><code>{d.scope === "portfolio_ctx" ? "ctx" : d.scope}.{d.name}</code><i>{d.kind}</i></summary>
+                <details key={`${d.scope}.${d.name}`} className="dv-doc"><summary><code>{d.scope === "portfolio_ctx" ? "ctx" : d.scope}.{d.name}</code><i>{d.kind}</i>
+                  <button className="icon-btn" title="Insert at the cursor" aria-label={`Insert ${d.name}`} onClick={(e) => { e.preventDefault(); insertAt.current?.(`${d.scope === "portfolio_ctx" ? "ctx" : d.scope === "numpy" ? "np" : d.scope === "pandas" ? "pd" : d.scope}.${d.signature ? d.signature.replace(/\(.*\)/, "($1)") : d.name}`); }}><FilePlus2 size={12} /></button></summary>
                   {d.signature ? <code className="dv-sig">{d.signature}</code> : null}{d.documentation ? <p>{d.documentation}</p> : null}</details>
               ))}
             </div>
@@ -343,7 +344,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
               options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, fontSize: 13, lineHeight: 20, scrollBeyondLastLine: false, automaticLayout: true, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace" }} />
           ) : (
             <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={onSave} onRun={onRun} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
-              actions={actions} breakpoints={bps[active] ?? []} onGutter={toggleBp} readOnly={readOnly} snippets={snippets}
+              font={font} actions={actions} breakpoints={bps[active] ?? []} onGutter={toggleBp} readOnly={readOnly} snippets={snippets}
               onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
               project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles, paramSpecs: spec.params, problems,
                 addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
@@ -445,6 +446,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
         <button className="dv-sbtn" onClick={() => { setPanelOpen(true); setTab("problems"); }}><b className="error">{errors}</b> errors <b className="warning">{warnings}</b> warnings</button>
         <span className={`dv-save dv-save-${saved}`}>{{ saved: "Saved", draft: "Draft", saving: "Saving…", conflict: "Conflict: reload", new: "Not saved" }[saved]}</span>
         {prev?.warmup ? <span>warm-up {prev.warmup.bars} bars{prev.warmup.first_eligible_date ? ` · trades from ${prev.warmup.first_eligible_date}` : ""}</span> : null}
+        {prev?.settings_overrides && Object.keys(prev.settings_overrides).length ? <span className="dv-over" title={Object.entries(prev.settings_overrides).map(([k, v]) => `${k} = ${String(v)}`).join("\n")}>code sets {Object.keys(prev.settings_overrides).join(", ")}</span> : null}
         {Object.values(bps).flat().length ? <span>{Object.values(bps).flat().length} breakpoint{Object.values(bps).flat().length === 1 ? "" : "s"}</span> : null}
         <span style={{ flex: 1 }} />
         {trial}

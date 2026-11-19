@@ -90,6 +90,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const [previewed, setPreviewed] = useState<string | null>(null);
   const [nudge, setNudge] = useState(0);
   const [recover, setRecover] = useState<{ spec: Spec; at: number } | null>(null);
+  const [pausedAt, setPausedAt] = useState<string | null>(null);
+  const [font, setFont] = useState(() => { try { return Number(localStorage.getItem("studio:dev:font")) || 13; } catch { return 13; } });
   type Preview = Omit<DevPreview, "trades"> & { bars: { date: string; close: number }[]; trades: { entry_date: string; exit_date: string; side: string; return: number }[]; total_return?: number; repaint?: { cuts: number; changed: number; dates: string[] } };
   const [prev, setPrev] = useState<Preview | null>(null);
   const [diff, setDiff] = useState<{ version: number; rows: [string, string, string][] } | null>(null);
@@ -301,7 +303,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
                 {prev.repaint ? <p className={`bd-find ${prev.repaint.changed ? "error" : ""}`}><b style={{ color: prev.repaint.changed ? undefined : "var(--up)" }}>{prev.repaint.changed ? "Repaints" : "No look-ahead"}</b>
                   {prev.repaint.changed ? `signals changed at ${prev.repaint.changed} of ${prev.repaint.cuts} cuts (${prev.repaint.dates.join(", ")})` : `same signals at ${prev.repaint.cuts} history cuts`}</p> : null}
                 <TimeSeries data={prev.bars} series={[{ key: "close", label: symbol.toUpperCase(), color: "var(--text-2)" }]} height={180} legend={false}
-                  markers={fired ? fired.dates.map((d) => ({ date: d, label: "●", color: "var(--accent)" })) : prev.trades.flatMap((t) => [{ date: t.entry_date, label: t.side === "long" ? "▲" : "▼", color: "var(--up)" }, { date: t.exit_date, label: "×", color: "var(--down)" }])} />
+                  markers={pausedAt && ui === "dev" ? [{ date: pausedAt, label: "❚❚", color: "var(--warn)" }, ...prev.trades.flatMap((t) => [{ date: t.entry_date, label: "▲", color: "var(--up)" }, { date: t.exit_date, label: "×", color: "var(--down)" }])] : fired ? fired.dates.map((d) => ({ date: d, label: "●", color: "var(--accent)" })) : prev.trades.flatMap((t) => [{ date: t.entry_date, label: t.side === "long" ? "▲" : "▼", color: "var(--up)" }, { date: t.exit_date, label: "×", color: "var(--down)" }])} />
                 {fired ? <p className="bd-meta" style={{ margin: 0 }}>{ROLES.find((r) => r[0] === fired.role)?.[1]}: {fired.dates.length} bars marked <button className="bd-link" onClick={() => setFired(null)}>Show trades</button></p> : null}
               </>
             ) : <div className="st-skip">{prev?.reason ? `${prev.status === "error" ? "error" : "skipped"}: ${prev.reason}` : "—"}</div>}
@@ -336,6 +338,9 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
                 <label className="bd-num" title="Search on a log scale"><span>Log</span><input type="checkbox" checked={!!p.log} onChange={(e) => edit({ params: { ...spec.params, [k]: { ...p, log: e.target.checked } } })} /></label>
                 <button className="btn sm" aria-label={`Remove ${k}`} onClick={() => { const { [k]: _, ...rest } = spec.params; edit({ params: rest }); }}><Trash2 size={12} /></button>
               </div>
+            ))}
+            {Object.entries(compiled?.parameters ?? {}).filter(([k]) => !(k in spec.params)).map(([k, p]) => (
+              <div key={k} className="bd-param bd-param-code"><code>{k}</code><span>{p.value}</span><span>{p.min ?? "—"}</span><span>{p.max ?? "—"}</span><span>{p.step ?? "—"}</span><i>in code</i></div>
             ))}
             {sweep ? <p className="bd-meta" style={{ margin: 0 }}>{sweep.toLocaleString()} settings in a full sweep</p> : null}
             <button className="btn sm" onClick={() => setPalette(true)}><Plus size={12} />Parameter</button>
@@ -373,6 +378,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           <MenuItem icon={<GitBranch size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) void studio<{ id: string }>("POST", `/strategies/${loaded.id}/versions/${loaded.version}/branch`).then((b) => router.push(`/studio/build/${b.id}`), fail); }}>Branch from v{loaded?.version ?? 1}</MenuItem>
           <MenuItem icon={<Download size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) window.location.assign(`${STUDIO_BASE}/strategies/${loaded.id}/export.zip`); }}>Export project (.zip)</MenuItem>
           <MenuItem icon={<Upload size={13} />} onClick={() => { setMore(null); zipInput.current?.click(); }}>Import project (.zip)</MenuItem>
+          <div className="hd">Editor font</div>
+          <div style={{ padding: "2px 8px 8px" }}><Segmented<number> label="Editor font size" value={font} onChange={(v) => { setFont(v); try { localStorage.setItem("studio:dev:font", String(v)); } catch { /* blocked */ } }} options={[12, 13, 14, 15].map((v) => ({ value: v, label: String(v) }))} /></div>
         </PopMenu>
         <input ref={zipInput} type="file" accept=".zip,application/zip" hidden onChange={(e) => {
           const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
@@ -417,7 +424,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         </section>
       ) : null}
       {ui === "dev" ? <DevIDE spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} onRun={() => void run()} onFullRun={() => void run()} compileProblems={compileProblems}
-        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid">
+        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={setPausedAt} font={font} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid">
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
             {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m} className={`btn sm${mode === m ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}

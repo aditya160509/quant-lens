@@ -167,11 +167,11 @@ function theme(monaco: Monaco, dark: boolean) {
 }
 
 /** Build › Dev: Monaco for one project file, with server completion, signature help, go to definition and line markers. */
-export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], ran = [], onGutter, readOnly, snippets, onSelection, insertRef }: {
+export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], ran = [], onGutter, readOnly, font = 13, snippets, onSelection, insertRef }: {
   path: string; value: string; onChange: (v: string) => void; problems: Problem[]; project: Project;
   onSave: () => void; onRun: () => void; onCursor?: (line: number, column: number) => void; reveal?: { line: number; column?: number; n: number } | null;
   actions?: EditorAction[]; breakpoints?: number[]; ran?: { line: number; count: number; dates: string[] }[]; onGutter?: (line: number) => void;
-  readOnly?: boolean; snippets?: UserSnippet[]; onSelection?: (text: string) => void; insertRef?: { current: ((text: string) => void) | null };
+  readOnly?: boolean; font?: number; snippets?: UserSnippet[]; onSelection?: (text: string) => void; insertRef?: { current: ((text: string) => void) | null };
 }) {
   const deco = useRef<{ clear: () => void; set: (d: NonNullable<Parameters<Ed["createDecorationsCollection"]>[0]>) => void } | null>(null);
   const acts = useRef(actions); acts.current = actions;
@@ -232,7 +232,7 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
 
   return (
     <Editor language="python" path={path} value={value} onChange={(v) => onChange(v ?? "")} onMount={mount} theme="studio" height="100%"
-      options={{ minimap: { enabled: false }, fontSize: 13, lineHeight: 20, fontLigatures: false, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true,
+      options={{ minimap: { enabled: false }, fontSize: font, lineHeight: Math.round(font * 1.54), fontLigatures: false, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true,
         padding: { top: 10 }, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace", quickSuggestions: { strings: true, other: true, comments: false },
         bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true }, glyphMargin: true, readOnly }} />
   );

@@ -23,7 +23,7 @@ export type Home = { strategies: StrategyCard[]; attention: Attention[]; recent_
   prefs?: { layout: "cards" | "table"; sort: string; columns: string[]; density: "comfortable" | "compact"; group_by: string; card_fields: string[]; pinned: string[] } };
 export type Template = { name: string; rule: string; description: string; spec: Record<string, unknown> };
 export type Finding = { severity: "error" | "warning"; role: string; line: number; start: number; end: number; token: string; message: string; lookahead?: boolean };
-export type Compiled = { ok: boolean; findings: Finding[]; hash: string; description: string; ms?: number; complexity?: { parameter_count: number; formula_rule_count: number; degrees_of_freedom: number } };
+export type Compiled = { ok: boolean; findings: Finding[]; hash: string; description: string; ms?: number; complexity?: { parameter_count: number; formula_rule_count: number; degrees_of_freedom: number }; parameters?: Record<string, { value: number; min?: number | null; max?: number | null; step?: number | null }> };
 
 export const useHome = () => useQuery({ queryKey: ["studio", "home"], queryFn: () => studio<Home>("GET", "/home"), retry: 1 });
 const templatesQuery = { queryKey: ["studio", "templates"], queryFn: () => studio<{ templates: Template[]; python_templates: Template[] }>("GET", "/templates"), staleTime: Infinity };
