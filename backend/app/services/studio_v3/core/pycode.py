@@ -28,7 +28,12 @@ RUNNER = Path(__file__).with_name("pyrunner.py")
 TIMEOUT_S = 120
 BANNED_NAMES = {"eval", "exec", "compile", "open", "globals", "locals", "vars", "getattr", "setattr", "delattr", "input", "breakpoint", "help", "memoryview", "type"}
 # A7: the numerical libraries a strategy may import. Everything else is refused, and the runner repeats the list.
-ALLOWED_IMPORTS = {"math", "statistics", "numpy", "pandas", "scipy.stats"}
+ALLOWED_IMPORTS = {
+    "math", "statistics", "numpy", "pandas", "scipy.stats", "scipy.optimize",
+    # B-56: models that fit on past bars. No datasets, model_selection or utils (joblib, downloads); `n_jobs` is refused in check().
+    "sklearn.linear_model", "sklearn.ensemble", "sklearn.preprocessing", "sklearn.pipeline", "sklearn.metrics",
+    "sklearn.tree", "sklearn.neighbors", "sklearn.cluster", "sklearn.decomposition",
+}
 # Defence in depth: library calls that reach the filesystem or spawn work, banned by name.
 BANNED_ATTRS = {
     "read_csv", "read_table", "read_parquet", "read_json", "read_html", "read_excel", "read_sql", "read_sql_query",
@@ -42,6 +47,8 @@ BANNED_ATTRS = {
     "HDFStore", "eval", "query", "show_config", "source", "lookfor",
     # submodules that expose os, sys or file readers
     "lib", "io", "testing", "f2py", "distutils", "sys", "os", "compat", "util", "core",
+    # reached through sklearn modules
+    "joblib", "externals", "utils", "datasets", "fetch_openml", "fetch_20newsgroups", "get_data_home",
 }
 TEMPLATE = '''class Strategy:
     def init(self, ctx):
@@ -85,6 +92,9 @@ def _formula_args(node):
         return (None,)
     if node.func.attr in ("value", "rule"):
         return (node.args[0] if node.args else None,)
+    if isinstance(node.func.value, ast.Name) and node.func.value.id == "ctx" and node.func.attr == "feature_matrix":
+        first = node.args[0] if node.args else next((kw.value for kw in node.keywords if kw.arg == "exprs"), None)
+        return tuple(first.elts) if isinstance(first, (ast.List, ast.Tuple)) and first.elts else (None,)
     if isinstance(node.func.value, ast.Name) and node.func.value.id == "ctx" and node.func.attr in ("rank", "zscore"):
         first = node.args[0] if node.args else next((kw.value for kw in node.keywords if kw.arg == "expr"), None)
         return (*([first] if isinstance(first, ast.Constant) else []),
@@ -195,6 +205,9 @@ def check(code: str, params: dict[str, float], *, modules: set[str] | None = Non
             found.append(_finding(*at, f"'{n.id}' is not allowed in a strategy", n.id))
         elif isinstance(n, ast.Attribute) and (n.attr.startswith("_") or n.attr in BANNED_ATTRS or "pickle" in n.attr):
             found.append(_finding(*at, f"'.{n.attr}' is not allowed in a strategy", n.attr))
+        elif isinstance(n, ast.keyword) and n.arg in {"n_jobs", "backend", "verbose_file"}:
+            found.append(_finding(getattr(n.value, "lineno", 1), getattr(n.value, "col_offset", 0), getattr(n.value, "end_col_offset", 0),
+                                  f"'{n.arg}' would start other processes; fits run in this one process", n.arg))
         elif isinstance(n, (ast.Global, ast.Nonlocal)):
             found.append(_finding(*at, "global and nonlocal are not allowed", "global"))
         elif any(not _literal_formula(arg) for arg in _formula_args(n)):

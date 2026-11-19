@@ -19,7 +19,12 @@ from types import MappingProxyType, MethodType, ModuleType
 import numpy as np
 
 # A7: the same allow-list pycode.check enforces, enforced again where the import actually happens.
-ALLOWED_IMPORTS = ("math", "statistics", "numpy", "pandas", "scipy.stats")
+ALLOWED_IMPORTS = (
+    "math", "statistics", "numpy", "pandas", "scipy.stats", "scipy.optimize",
+    "sklearn.linear_model", "sklearn.ensemble", "sklearn.preprocessing", "sklearn.pipeline", "sklearn.metrics",
+    "sklearn.tree", "sklearn.neighbors", "sklearn.cluster", "sklearn.decomposition",
+)
+ALLOWED_ROOTS = {name.split(".")[0] for name in ALLOWED_IMPORTS}
 INDICATOR_NAMES = ("sma", "ema", "rsi", "atr", "std", "roc", "highest", "lowest")
 SAFE_BUILTINS = {k: __builtins__[k] if isinstance(__builtins__, dict) else getattr(__builtins__, k) for k in (
     "abs", "all", "any", "bool", "dict", "enumerate", "float", "int", "len", "list", "max", "min", "range", "round", "set", "sorted", "str", "sum", "tuple", "zip",
@@ -242,6 +247,30 @@ class Ctx:
         formula = indicator_formula(expr, period)
         return Indicator(self, formula, self._values[formula], period)
 
+    def fit_every(self, n):
+        """True on every n-th bar: refit a model there and reuse it in between."""
+        if type(n) is not int or n < 1:
+            raise ValueError("fit_every needs a positive integer")
+        return self.t % n == 0
+
+    def feature_matrix(self, exprs, n, symbol=None):
+        """The last n bars (this one included) of each literal formula as an (n, features) array, oldest row first; early rows are NaN."""
+        if type(n) is not int or not 1 <= n <= 5000:
+            raise ValueError("feature_matrix needs a window from 1 to 5000 bars")
+        columns = []
+        for expr in exprs:
+            series = self._feature_series(expr, symbol)
+            window = series[max(0, self.t + 1 - n):self.t + 1]
+            columns.append(np.concatenate([np.full(n - len(window), np.nan), window]))
+        return np.column_stack(columns)
+
+    def _feature_series(self, expr, symbol):
+        if symbol is not None and symbol != self.symbol:
+            raise ValueError("Per-symbol strategies can read only their current symbol")
+        if expr not in self._values:
+            raise KeyError(f"ctx.feature_matrix needs literal formula strings; {expr!r} was not precomputed")
+        return self._values[expr]
+
     def value(self, expr):
         """A formula's value on this bar, e.g. ctx.value("rsi(close, 14)")."""
         a = self._values.get(expr)
@@ -459,6 +488,13 @@ class PortfolioContext(Ctx):
         ctx = self._contexts[sym]
         ctx._t = self.t
         return ctx.history(fields, n)
+
+    def _feature_series(self, expr, symbol):
+        if symbol is None or symbol not in self._columns:
+            raise ValueError("ctx.feature_matrix(exprs, n, symbol) needs a symbol in the run universe in on_data")
+        if expr not in self._matrix_values:
+            raise KeyError(f"ctx.feature_matrix needs literal formula strings; {expr!r} was not precomputed")
+        return self._matrix_values[expr][:, self._columns[symbol]]
 
     def value(self, expr, symbol=None):
         if symbol is None:
@@ -1025,7 +1061,10 @@ def main():
             if name in helper_code and not level:
                 if any(item == "*" or item.startswith("_") for item in fromlist):
                     raise ImportError("Only named imports from saved project modules are allowed")
-            elif not level and (name in ALLOWED_IMPORTS or (name == "scipy" and fromlist == ("stats",))):
+            elif not level and (name in ALLOWED_IMPORTS or (name == "scipy" and fromlist == ("stats",))
+                                # C code (ndarray.mean, ...) imports its own helpers lazily through the caller's builtins, with an empty fromlist and a
+                                # dotted name. A user statement for such a module is refused earlier by pycode.check; this layer keeps the root allow-list.
+                                or (name.split(".")[0] in ALLOWED_ROOTS and not set(name.split(".")) & {"ctypeslib", "f2py", "distutils", "testing"})):
                 if name not in imported:
                     imported[name] = importlib.import_module(name)
                 return imported[name]

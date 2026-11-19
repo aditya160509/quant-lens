@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 95 | 163 | 21 | 70 |
+| Build | 97 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 95 | 163 |
+| Build | 97 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **205** | **538** |
+| **All pages** | **207** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 95 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 97 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -180,8 +180,8 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-53 warmup class attribute: no orders before bar n; auto warm-up reported ("starts trading on …") (partial: explicit warm-up suppresses orders and reports first eligible dates; automatic inference open) [FP 61] [PY A10]
 - [x] [M] B-54 Risk attributes: max_drawdown (flatten and stop), max_daily_loss, max_position, max_gross; each breach logged as a risk event [FP 61] (spec.risk; both engines flatten at the next fill and stop, caps applied at entry, breach returns bar, kind, value and limit; on_risk_event fires once)
 - [ ] [M] B-55 ctx.store keeps small JSON across runs; instance attributes keep state
-- [ ] [H] B-56 ctx.feature_matrix(formulas, lookback) and ctx.fit_every(n); sklearn allowed; fits use past bars only
-- [ ] [M] B-57 Import allow-list: math, statistics, numpy, pandas, scipy.stats, scipy.optimize, sklearn, and the project files; others refused with the line and a request link (partial: math, statistics, numpy, pandas, scipy.stats and saved project modules allowed, enforced in the AST and again through a restricted `__import__`; 44 escape cases refused; sklearn and scipy.optimize stay out per PYTHON_IDE A7) [PY A7]
+- [x] [H] B-56 ctx.feature_matrix(formulas, lookback) and ctx.fit_every(n); sklearn allowed; fits use past bars only (backend done: ctx.feature_matrix(['roc(close, 5)', ...], n, symbol) returns the past n bars of literal formulas (NaN-padded, oldest first) and ctx.fit_every(n); sklearn linear_model, ensemble, preprocessing, pipeline, metrics, tree, neighbors, cluster, decomposition allowed; n_jobs refused; a test fits a Ridge and shows the matrix equals the one from cut data)
+- [x] [M] B-57 Import allow-list: math, statistics, numpy, pandas, scipy.stats, scipy.optimize, sklearn, and the project files; others refused with the line and a request link (partial: math, statistics, numpy, pandas, scipy.stats and saved project modules allowed, enforced in the AST and again through a restricted `__import__`; 44 escape cases refused; sklearn and scipy.optimize stay out per PYTHON_IDE A7) [PY A7] (backend done: scipy.optimize and the sklearn modules above join the allow-list in the AST check and the runner; datasets, model_selection, utils and joblib stay refused (47 + more escape cases); a request link in the message is frontend)
 - [x] [E] B-58 print and ctx.log(msg, level) captured per bar (date, symbol), 50,000-line cap with a truncation row (backend done: typed preview logs include source line and level) [PY A8]
 - [x] [E] B-59 ctx.plot(name, value, chart="main" or "own"), ctx.mark(sym, label) on the price chart, ctx.table(name, row) as a sortable table [FP 29] [PY A9] (Plots tab: main-chart overlays with marks, own panes, ctx.table as sortable tables)
 - [x] [E] B-60 on_fill(ctx, fill) gets symbol, side, quantity, price, date and fee (preview and Backtest receive actual event-engine fills; one-argument callback remains supported) [PY A11]

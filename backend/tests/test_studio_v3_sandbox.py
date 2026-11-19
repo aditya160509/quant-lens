@@ -102,7 +102,6 @@ ESCAPES = [
     "import shutil",
     "import sklearn",
     "import numpy.linalg",
-    "import scipy.optimize",
     "from os import path",
     "from subprocess import run",
     "from pathlib import Path",
@@ -188,3 +187,79 @@ class Strategy:
     spec = Strategy(code=code)
     assert pycode.check_project(spec.code, {}, spec.files) == []
     assert formula.evaluate("sma(close, 3)", bars, dates).shape == bars["close"].shape
+
+
+@pytest.mark.parametrize("source", [
+    "from sklearn.datasets import fetch_openml",
+    "import sklearn.model_selection",
+    "import joblib",
+    "from sklearn.utils import check_array",
+    "from sklearn.ensemble import RandomForestClassifier\nRandomForestClassifier(n_jobs=4)",
+    "from sklearn.ensemble import RandomForestClassifier\nRandomForestClassifier().joblib",
+    "from sklearn.linear_model import Ridge\nRidge().__class__",
+    "import scipy.io",
+    "from scipy import optimize\noptimize.__loader__",
+])
+def test_models_are_allowed_but_their_escape_routes_are_refused(source):
+    assert pycode.check(source, {}, entry=False), source
+
+
+@pytest.mark.parametrize("source", [
+    "from scipy.optimize import minimize",
+    "from sklearn.linear_model import Ridge",
+    "from sklearn.ensemble import RandomForestRegressor, GradientBoostingClassifier",
+    "from sklearn.preprocessing import StandardScaler",
+])
+def test_scipy_optimize_and_sklearn_models_pass_the_import_check(source):
+    assert pycode.check(source, {}, entry=False) == [], source
+
+
+def test_a_model_fits_on_past_bars_only_and_trades():
+    import pandas as pd
+
+    bars, _ = _bars(200, 2)
+    dates = pd.bdate_range("2020-01-01", periods=200)
+    code = """import numpy as np
+from sklearn.linear_model import Ridge
+
+
+class Strategy:
+    warmup = 60
+
+    def init(self, ctx):
+        self.model = None
+
+    def on_data(self, ctx):
+        if ctx.fit_every(20) and ctx.t >= 61:
+            rows = ctx.feature_matrix(["roc(close, 5)", "rsi(close, 14)"], 60, "AAA")
+            past = ctx.history("close", 61, "AAA")
+            closes = np.array(list(past))[::-1]
+            target = np.append(closes[2:] / closes[1:-1] - 1, np.nan)  # each row's next return; the newest row has none yet
+            keep = np.isfinite(rows).all(axis=1) & np.isfinite(target)
+            if keep.sum() > 10:
+                self.model = Ridge(alpha=1.0).fit(rows[keep], target[keep])
+        if self.model is not None:
+            now = ctx.feature_matrix(["roc(close, 5)", "rsi(close, 14)"], 1, "AAA")
+            if np.isfinite(now).all():
+                ctx.set_holdings("AAA", 0.5 if self.model.predict(now)[0] > 0 else 0.0)
+"""
+    result = pycode.run_event(code, bars, dates, {}, ["AAA", "BBB"], engine.Params())
+    assert len(result.trades) >= 1
+    # the matrix at bar t is identical whether or not later bars exist
+    probe = """class Strategy:
+    def on_data(self, ctx):
+        if ctx.bar_index == 80:
+            ctx.log(str(ctx.feature_matrix(["sma(close, 5)"], 3, "AAA").tolist()))
+"""
+    full, cut = {}, {}
+    pycode.run_event(probe, bars, dates, {}, ["AAA", "BBB"], engine.Params(), output=full)
+    pycode.run_event(probe, {k: v[:81] for k, v in bars.items()}, dates[:81], {}, ["AAA", "BBB"], engine.Params(), output=cut)
+    assert full["logs"][0]["text"] == cut["logs"][0]["text"]
+    with pytest.raises(pycode.CodeError, match="literal formula"):
+        pycode.run_event("class Strategy:\n    def on_data(self, ctx):\n        ctx.feature_matrix([ctx.symbols[0]], 3, 'AAA')\n", bars, dates, {}, ["AAA", "BBB"], engine.Params())
+
+
+def test_library_internals_are_not_importable_from_strategy_source():
+    assert pycode.check("from numpy._core import _methods", {}, entry=False)
+    assert pycode.check("from numpy import __doc__", {}, entry=False)
+    assert pycode.check("import numpy.ctypeslib", {}, entry=False)
