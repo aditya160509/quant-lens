@@ -161,6 +161,10 @@ class VersionConflict(ValueError):
     pass
 
 
+class VersionLocked(ValueError):
+    pass
+
+
 def save_version(sid: str, spec: Strategy, actor: str = "human", *, base_version: int | None = None) -> dict:
     """A new immutable version; saving an unchanged rule returns the latest instead of adding a copy."""
     now = time.time()
@@ -173,7 +177,11 @@ def save_version(sid: str, spec: Strategy, actor: str = "human", *, base_version
             raise VersionConflict(f"Strategy is at version {last['version']}. Reload before saving.")
         previous = json.loads(last["spec"])
         previous.setdefault("files", {})
-        if previous != json.loads(spec.model_dump_json()):
+        changed = previous != json.loads(spec.model_dump_json())
+        locked = con.execute("SELECT value FROM kv WHERE key = ?", (f"lock:{sid}",)).fetchone()
+        if changed and locked and json.loads(locked["value"]) == last["version"]:
+            raise VersionLocked(f"Version {last['version']} is locked because it is live. Unlock it or branch the strategy.")
+        if changed:
             con.execute("INSERT INTO versions VALUES (?,?,?,?,?,?)", (sid, last["version"] + 1, spec.model_dump_json(), spec.hash(), actor, now))
         if base_version is None:
             con.execute("UPDATE strategies SET name = ?, updated = ?, draft = NULL WHERE id = ?", (spec.name, now, sid))

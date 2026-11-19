@@ -138,7 +138,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [E] B-11 Full-height IDE: editor fills the work area; bottom panel resizes 30 to 40%; side rail collapses (partial: editor is a 420 px box) [PY B1]
 - [ ] [M] B-12 Three zones: left rail (Files, Outline, Search, Templates, Versions), centre editor, bottom panel (Problems, Output, Logs, Results, Plots, Debug, Terminal); right rail (preview, Inspector, AI); each zone remembers its size
 - [ ] [H] B-13 Editor groups: split right or down, up to 4 groups; tabs can be pinned, kept in preview, or marked dirty
-- [ ] [H] B-14 One editing session per strategy: a second tab opens read-only with a take-over button
+- [ ] [H] B-14 One editing session per strategy: a second tab opens read-only with a take-over button (backend done: POST/DELETE /strategies/{sid}/lease (60 s, take_over); writers send X-Studio-Session and get 409 naming the holder; frontend wiring open)
 - [ ] [M] B-15 Phone (390 px): one zone at a time with a Code, Run, Results switcher; Build on phone is Formula and Plain English only
 - [ ] [M] B-16 IDE keys: F5 debug, F9 breakpoint, F10 step bar, F11 step line, ⌘J panel, ⌘B rail, ⌘\ split, ⌘P file, ⌘⇧F search project
 - [ ] [M] B-17 JetBrains Mono 13 px, 20 px line height, ligatures off, bracket colours, sticky scroll, folding (partial: Mono 13 px only) [PY B13]
@@ -147,7 +147,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] B-20 Format Python on save with ruff
 - [ ] [H] B-21 Format selection (⌘K ⌘F) and organise imports
 - [ ] [H] B-22 Go to symbol ⌘⇧O, go to line ⌃G, definition F12, references ⇧F12, peek ⌥F12, rename F2 across files (partial: cross-file definition, references, rename preview and symbol outline APIs ship; editor wiring open)
-- [ ] [H] B-23 Find and replace across all project files: regex, case, whole word, preview before replacing
+- [ ] [H] B-23 Find and replace across all project files: regex, case, whole word, preview before replacing (backend done: POST /strategies/{sid}/find-replace with regex, case, whole word, preview and one-version replace; frontend wiring open)
 - [ ] [H] B-24 Code actions ⌘.: extract formula string to parameter, convert ctx.rule to indicator object, wrap selection in if ctx.position == 0, add missing on_fill
 - [ ] [M] B-25 Outline of classes, methods and indicators for the open file (backend done: typed outline endpoint; editor wiring open)
 - [ ] [E] B-26 Undo history survives reload, per file (partial: undo and redo built; survives reload not built)
@@ -218,8 +218,8 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-91 Yellow banner on a result when the editor code differs from the run
 - [ ] [M] B-92 Strategy is a project: main.py plus modules, README.md and params.json; file tree with create, rename, move, delete, duplicate and drag; limits 50 files and 200 KB per file [PY B3] (backend done: versioned file CRUD, diffs and checked helper execution; editor wiring open)
 - [ ] [E] B-93 Any project can be marked a library and imported by others with a pinned version; "v3 available, review diff" badge; updates never change saved strategies silently [FP 58]
-- [ ] [M] B-94 Zip import and export of a project
-- [ ] [M] B-95 User snippets: save a selection with tab stops and a prefix trigger; shareable through Library
+- [ ] [M] B-94 Zip import and export of a project (backend done: GET /strategies/{sid}/export.zip and POST /strategies/import-zip with 50 file and 200 KB limits; frontend wiring open)
+- [ ] [M] B-95 User snippets: save a selection with tab stops and a prefix trigger; shareable through Library (backend done: GET/POST/PUT/DELETE /snippets with prefix triggers; Library sharing open)
 - [ ] [M] B-96 Examples in hover docs insert with one click
 - [ ] [M] B-97 Gallery of 12 starters with a one-line description, last backtest on the default universe and "use as start" (trend 50/200, RSI(2), momentum top 10, dual momentum, pairs z-score, vol target, ATR breakout, turn of month, gap fade, sector rotation, ML ranking, risk parity) (partial: 20 formula templates exist; gallery stats open)
 - [x] [M] B-98 Python starters: trend, mean reversion, momentum rotation, pairs, vol target, breakout, seasonality, ML score [PY B10] (eight starters compile and trade on real data, tested; gallery UI open)
@@ -250,13 +250,13 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] B-123 Entry filters: fundamentals, calendar, cross-sectional, earnings-date filter (blocked by data: fundamentals from 2021 only; earnings dates where held)
 - [ ] [M] B-124 Indicator exit and scale in as exit-card rows
 - [x] B-125 Stated regime claim marked "written after" when added after a drawdown
-- [ ] [E] B-126 Version timeline: each version with its metrics (equity sparkline, Sharpe); name and tag versions ("validated", "live"); a live version is locked (partial: version list, picker and field diff with run results exist; timeline metrics, tags and lock open) [FP 35]
+- [ ] [E] B-126 Version timeline: each version with its metrics (equity sparkline, Sharpe); name and tag versions ("validated", "live"); a live version is locked (partial: version list, picker and field diff with run results exist; timeline metrics, tags and lock open) [FP 35] (backend done: GET /strategies/{sid}/timeline with name, tags, lock and run summary; PUT .../versions/{v}/label; PUT .../lock makes saving over it answer 423; frontend wiring open)
 - [x] [M] B-127 Restore or branch from any version; restore creates a new version and deletes nothing [FP 35] (POST /strategies/{sid}/versions/{v}/restore adds a new latest version; /branch starts a new strategy from it)
-- [ ] [M] B-128 Experiments as branches: fork a strategy, change a rule, compare two branches on one chart, merge back [FP 35]
+- [ ] [M] B-128 Experiments as branches: fork a strategy, change a rule, compare two branches on one chart, merge back [FP 35] (backend done: GET /strategies/{sid}/compare/{other} and POST /strategies/{sid}/merge three-way by file with 409 conflicts; one-chart compare is frontend)
 - [x] [M] B-129 Blame: each line shows the version that last changed it (GET /strategies/{sid}/blame?file= returns each line with the version that last changed it)
-- [ ] [M] B-130 Local history: autosave snapshots kept 7 days, separate from versions (partial: autosave draft every 2 s; 7-day history open)
-- [ ] [E] B-131 Share a read-only link or a fork link; pinned comment threads on a line
-- [ ] [H] B-132 Single editing session per strategy with take-over; the second tab is read-only (no QuantConnect-style desync) [FP 66]
+- [ ] [M] B-130 Local history: autosave snapshots kept 7 days, separate from versions (partial: autosave draft every 2 s; 7-day history open) (backend done: GET /strategies/{sid}/history keeps draft snapshots 7 days; frontend wiring open)
+- [ ] [E] B-131 Share a read-only link or a fork link; pinned comment threads on a line (backend done: POST /strategies/{sid}/share, GET /share/{token}, POST /share/{token}/fork, DELETE; pinned comment threads open)
+- [ ] [H] B-132 Single editing session per strategy with take-over; the second tab is read-only (no QuantConnect-style desync) [FP 66] (backend done: same lease; PUT /strategies/{sid}, PATCH files and find-replace answer 409 to a second session; frontend wiring open)
 - [ ] [M] B-133 Notes (hypothesis, what was tried, decisions) exported with the certificate
 - [ ] [M] B-134 Saved rule groups reusable as blocks; custom indicators by formula shared with Chart and Screener
 - [ ] [M] B-135 Customise: default mode, default exits and sizing profile from Library, blocks palette order, block colours and compact or expanded view
@@ -265,7 +265,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [M] B-138 Python keys: F5 debug and Run, ⌘⇧↵ full run (quick run ⌘↵)
 - [ ] [E] B-139 Python engine settings (fill timing, costs, sizing) shown as a badge when code overrides the card
 - [ ] B-140 Inline ⌘K edit on a selection, shown as a diff to accept or reject (AI is an owner decision) (owner decision: AI features, see OD-11)
-- [ ] [M] B-141 Snippets palette (⌘⇧S) with user and team snippets
+- [ ] [M] B-141 Snippets palette (⌘⇧S) with user and team snippets (backend done: /snippets store; palette is frontend)
 - [x] B-142 Formula editor with live compile (0.26 ms measured) and per-role findings
 - [x] B-143 Blocks and formula convert both ways: rows of comparisons and crosses joined by and/or; other shapes stay formula (round-trip test)
 - [x] B-144 Python mode: Monaco with ctx completion, hovers, snippets, inline markers from server checks and runtime errors; class Strategy with init, on_bar, on_fill

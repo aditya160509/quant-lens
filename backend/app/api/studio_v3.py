@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import difflib
 import io
@@ -34,6 +35,7 @@ from app.services.studio_v3.core import (
     store,
     templates,
     validate,
+    workspace,
 )
 from app.services.studio_v3.core import compile as compiler
 from app.services.studio_v3.core import (
@@ -632,14 +634,28 @@ def _known(fn, *args, **kwargs):
         raise HTTPException(404, str(exc).strip("'\"")) from exc
 
 
+def _guarded(fn, *args, **kwargs):
+    """Workspace calls: a refusal becomes a 4xx whose detail names the fix; an unknown id a 404."""
+    try:
+        return fn(*args, **kwargs)
+    except workspace.Refused as exc:
+        raise HTTPException(exc.status, {"message": str(exc), **exc.extra}) from exc
+    except KeyError as exc:
+        raise HTTPException(404, str(exc).strip("'\"")) from exc
+
+
 @router.get("/strategies/{sid}")
 def get_strategy(sid: str, version: int | None = None) -> dict[str, Any]:
     return _known(store.get, sid, version)
 
 
 @router.put("/strategies/{sid}")
-def save_version(sid: str, request: SpecRequest, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
-    return _known(store.save_version, sid, _spec(request.spec), _actor(x_studio_actor))
+def save_version(sid: str, request: SpecRequest, x_studio_actor: str | None = Header(None), x_studio_session: str | None = Header(None)) -> dict[str, Any]:
+    _guarded(workspace.check_writer, sid, x_studio_session)
+    try:
+        return _known(store.save_version, sid, _spec(request.spec), _actor(x_studio_actor))
+    except store.VersionLocked as exc:
+        raise HTTPException(423, str(exc)) from exc
 
 
 class ProjectFileUpdate(BaseModel):
@@ -666,7 +682,8 @@ def get_project_files(sid: str, version: int | None = None, base_version: int | 
 
 
 @router.patch("/strategies/{sid}/files")
-def update_project_file(sid: str, request: ProjectFileUpdate, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+def update_project_file(sid: str, request: ProjectFileUpdate, x_studio_actor: str | None = Header(None), x_studio_session: str | None = Header(None)) -> dict[str, Any]:
+    _guarded(workspace.check_writer, sid, x_studio_session)
     saved = _known(store.get, sid)
     if saved["version"] != request.base_version:
         raise HTTPException(409, f"Strategy is at version {saved['version']}. Reload before saving.")
@@ -702,6 +719,8 @@ def update_project_file(sid: str, request: ProjectFileUpdate, x_studio_actor: st
         versioned = _known(store.save_version, sid, updated, _actor(x_studio_actor), base_version=request.base_version)
     except store.VersionConflict as exc:
         raise HTTPException(409, str(exc)) from exc
+    except store.VersionLocked as exc:
+        raise HTTPException(423, str(exc)) from exc
     return {"version": versioned["version"], "files": _spec(versioned["spec"]).project_files()}
 
 
@@ -723,10 +742,162 @@ def blame_file(sid: str, file: str = "main.py") -> list[dict[str, Any]]:
     return _known(store.blame, sid, file)
 
 
+class VersionLabel(BaseModel):
+    name: str | None = Field(default=None, max_length=80)
+    tags: list[str] | None = Field(default=None, max_length=10)
+
+
+class VersionLock(BaseModel):
+    version: int | None = Field(default=None, ge=1)  # null unlocks
+
+
+@router.get("/strategies/{sid}/timeline")
+def version_timeline(sid: str) -> list[dict[str, Any]]:
+    """Every version with its name, tags, lock state and latest backtest summary."""
+    return _guarded(workspace.timeline, sid)
+
+
+@router.put("/strategies/{sid}/versions/{version}/label")
+def label_version(sid: str, version: int, request: VersionLabel) -> dict[str, Any]:
+    return _guarded(workspace.label_version, sid, version, request.name, request.tags)
+
+
+@router.put("/strategies/{sid}/lock")
+def lock_version(sid: str, request: VersionLock) -> dict[str, Any]:
+    """Lock the live version: saving over it answers 423 until it is unlocked."""
+    return _guarded(workspace.set_lock, sid, request.version)
+
+
+class MergeRequest(BaseModel):
+    source: str
+    resolution: Literal["ours", "theirs"] | None = None
+
+
+@router.get("/strategies/{sid}/compare/{other}")
+def compare_strategies(sid: str, other: str) -> dict[str, Any]:
+    """File diffs and latest run summaries of two strategies, for comparing branches."""
+    return _guarded(workspace.compare, sid, other)
+
+
+@router.post("/strategies/{sid}/merge")
+def merge_branch(sid: str, request: MergeRequest, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Merge a branch back into the strategy it was branched from; 409 lists conflicting files."""
+    return _guarded(workspace.merge, sid, request.source, request.resolution, _actor(x_studio_actor))
+
+
+@router.get("/strategies/{sid}/history")
+def local_history(sid: str) -> list[dict[str, Any]]:
+    """Autosave snapshots from the last 7 days, newest first."""
+    _known(store.get, sid)
+    return workspace.history(sid)
+
+
+class SnippetBody(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    prefix: str = Field(min_length=1, max_length=32)
+    body: str = Field(max_length=20_000)
+    description: str = Field(default="", max_length=300)
+
+
+@router.get("/snippets")
+def list_snippets() -> list[dict[str, Any]]:
+    return workspace.snippets()
+
+
+@router.post("/snippets")
+def add_snippet(request: SnippetBody) -> dict[str, Any]:
+    return _guarded(workspace.save_snippet, **request.model_dump())
+
+
+@router.put("/snippets/{snippet_id}")
+def update_snippet(snippet_id: str, request: SnippetBody) -> dict[str, Any]:
+    return _guarded(workspace.save_snippet, **request.model_dump(), snippet_id=snippet_id)
+
+
+@router.delete("/snippets/{snippet_id}")
+def remove_snippet(snippet_id: str) -> dict[str, bool]:
+    _guarded(workspace.delete_snippet, snippet_id)
+    return {"deleted": True}
+
+
+@router.post("/strategies/{sid}/share")
+def share_strategy(sid: str, version: int | None = None) -> dict[str, Any]:
+    """A read-only link to one version; anyone with the token can read or fork it."""
+    return _guarded(workspace.share, sid, version)
+
+
+@router.get("/share/{token}")
+def read_shared(token: str) -> dict[str, Any]:
+    return _guarded(workspace.read_share, token)
+
+
+@router.post("/share/{token}/fork")
+def fork_shared(token: str, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    return _guarded(workspace.fork_share, token, _actor(x_studio_actor))
+
+
+@router.delete("/share/{token}")
+def revoke_shared(token: str) -> dict[str, bool]:
+    _guarded(workspace.revoke_share, token)
+    return {"revoked": True}
+
+
+class LeaseRequest(BaseModel):
+    session: str = Field(min_length=1, max_length=64)
+    take_over: bool = False
+
+
+@router.post("/strategies/{sid}/lease")
+def acquire_lease(sid: str, request: LeaseRequest) -> dict[str, Any]:
+    """Take or renew the single editing session (60 s; renew while the editor is open). 409 names the holder."""
+    return _guarded(workspace.acquire_lease, sid, request.session, request.take_over)
+
+
+@router.delete("/strategies/{sid}/lease")
+def release_lease(sid: str, session: str) -> dict[str, bool]:
+    _guarded(workspace.release_lease, sid, session)
+    return {"released": True}
+
+
+class FindReplaceRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=500)
+    replacement: str | None = Field(default=None, max_length=2000)  # omit to preview matches only
+    regex: bool = False
+    match_case: bool = False
+    whole_word: bool = False
+    base_version: int | None = Field(default=None, ge=1)
+
+
+@router.post("/strategies/{sid}/find-replace")
+def find_replace(sid: str, request: FindReplaceRequest, x_studio_actor: str | None = Header(None), x_studio_session: str | None = Header(None)) -> dict[str, Any]:
+    """Project-wide matches with line and column; with a replacement it saves one new version."""
+    if request.replacement is not None:
+        _guarded(workspace.check_writer, sid, x_studio_session)
+    try:
+        return _guarded(workspace.find_replace, sid, request.query, request.replacement, regex=request.regex, match_case=request.match_case,
+                        whole_word=request.whole_word, base_version=request.base_version, actor=_actor(x_studio_actor))
+    except store.VersionLocked as exc:
+        raise HTTPException(423, str(exc)) from exc
+
+
+@router.get("/strategies/{sid}/export.zip")
+def export_project_zip(sid: str, version: int | None = None) -> Response:
+    return Response(_guarded(workspace.export_zip, sid, version), media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{sid}.zip"'})
+
+
+@router.post("/strategies/import-zip")
+async def import_project_zip(request: Request, name: str | None = None, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Body is the zip itself (Content-Type application/zip): main.py plus helpers at the top level, 50 files, 200 KB each."""
+    return _guarded(workspace.import_zip, await request.body(), name, _actor(x_studio_actor))
+
+
 @router.put("/strategies/{sid}/draft")
 def save_draft(sid: str, request: SpecRequest) -> dict[str, Any]:
     _known(store.get, sid)
     store.save_draft(sid, request.spec or None)
+    if request.spec and request.spec.get("code"):
+        with contextlib.suppress(ValidationError):  # an invalid draft is still saved above; it just has no snapshot
+            workspace.snapshot(sid, request.spec)
     return {"saved": True}
 
 
