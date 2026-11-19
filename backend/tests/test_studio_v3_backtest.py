@@ -1032,3 +1032,21 @@ def test_on_data_preview_covers_only_the_window_and_describes_on_data(studio):
     assert "on_data" in checked["description"]
     bad = studio.post("/api/studio-v3/build/debug", json={"spec": spec, "symbol": "SPY", "date": "1990-01-02"})
     assert bad.status_code == 422 and "Valid dates run from" in str(bad.json()) and result["window"]["end"] in str(bad.json())
+
+
+def test_preview_trades_several_symbols_from_the_universe_attribute(studio):
+    code = '''class Strategy:
+    universe = ["AAA", "BBB", "CCC"]
+    warmup = 5
+
+    def on_data(self, ctx):
+        if ctx.bar_index == 5:
+            ctx.target_weights({"AAA": 0.3, "BBB": 0.3, "CCC": 0.3})
+'''
+    result = studio.post("/api/studio-v3/preview", json={"symbol": "SPY", "spec": {"code": code}}).json()
+    assert result["status"] == "ok" and result["symbols"] == ["AAA", "BBB", "CCC"]
+    assert set(result["bars_by_symbol"]) == {"AAA", "BBB", "CCC"} and result["bars"] == result["bars_by_symbol"]["AAA"]
+    spread = code.replace('ctx.target_weights({"AAA": 0.3, "BBB": 0.3, "CCC": 0.3})', "ctx.target_weights({s: 0.4 for s in ctx.symbols})")
+    explicit = studio.post("/api/studio-v3/preview", json={"symbol": "SPY", "symbols": ["AAA", "BBB"], "spec": {"code": spread}}).json()
+    assert explicit["symbols"] == ["AAA", "BBB"]
+    assert {t["symbol"] for t in result["trades"]} <= {"AAA", "BBB", "CCC"}

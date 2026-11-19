@@ -126,6 +126,27 @@ def engine_overrides(code: str) -> dict[str, float | str]:
     return out
 
 
+def universe_attribute(code: str) -> list[str] | str | None:
+    """`universe = [...]` or `universe = "master"` on class Strategy (B-43): a symbol list, or an index name or library id."""
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, ValueError):
+        return None
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == "Strategy":
+            for item in node.body:
+                if isinstance(item, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "universe" for t in item.targets):
+                    try:
+                        value = ast.literal_eval(item.value)
+                    except (ValueError, SyntaxError):
+                        return None
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+                    if isinstance(value, (list, tuple)) and value and all(isinstance(x, str) for x in value):
+                        return [x.strip().upper() for x in value if x.strip()]
+    return None
+
+
 def exprs(code: str) -> list[str]:
     """Literal strategy formulas evaluated once before the event loop."""
     return list(dict.fromkeys(

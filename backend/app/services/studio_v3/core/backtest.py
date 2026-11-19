@@ -475,13 +475,34 @@ def debug_bar(spec: Strategy, settings: Settings, symbol: str, date: str, step: 
     return {**output["debug"], "previous_date": str(dates[target - 1].date()) if target else None,
             "next_date": str(dates[target + 1].date()) if target + 1 < len(dates) else None}
 
-def preview(spec: Strategy, symbol: str, years: float = 2.0) -> dict:
+def resolve_universe(attribute: list[str] | str | None, fallback: list[str], limit: int = 50) -> list[str]:
+    """Strategy.universe: a list, a library universe id, or an index name such as "master" (B-43)."""
+    if attribute is None:
+        return fallback
+    if isinstance(attribute, list):
+        return [data_loader.normalize_symbol(s) for s in attribute]
+    from . import library  # lazy: library imports this module
+
+    try:
+        item = library.get(attribute)
+    except KeyError:
+        item = None
+    if item and item.get("kind") == "universe":
+        return library._pool(library.UniverseBody(**item["body"]))[:limit]
+    try:
+        return list(data_loader.parse_symbols({"universe": attribute, "primary_only": True}, max_symbols=limit))[:limit]
+    except ValueError as exc:
+        raise Refusal(f"Strategy.universe {attribute!r} is not a symbol list, library universe or index name.", [str(exc)]) from exc
+
+
+def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] | None = None) -> dict:
     """Build's preview: one name, the last `years` of development bars, closes plus the trades the rule takes there (B-5)."""
     found = C.compile_spec(spec)
     if not found["ok"]:
         return {"status": "skipped", "reason": "the rule does not compile", "bars": [], "trades": []}
     # load extra history so long windows are warm before the visible span
-    settings = Settings(symbols=[symbol], benchmark="")
+    chosen = symbols or resolve_universe(pycode.universe_attribute(spec.code) if spec.code.strip() else None, [symbol])
+    settings = Settings(symbols=chosen, benchmark="")
     prep = prepare(settings)
     p = prep.panel
     lo = max(0, int(p.dates.searchsorted(p.dates[-1] - pd.DateOffset(days=int(365 * years)))))
@@ -501,11 +522,16 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0) -> dict:
         output["repaint"] = repaint_check(spec, prep, lo, full=sig)
     start = str(p.dates[lo].date())
     trades = [t for t in trades_table(r, p) if t["entry_date"] >= start]
-    bars = [{"date": str(d.date()), "close": float(c)} for d, c in zip(p.dates[lo:], p.close[lo:, 0], strict=True) if np.isfinite(c)]
-    total = float(np.prod([1 + t["return"] for t in trades]) - 1) if trades else 0.0
+    by_symbol = {name: [{"date": str(d.date()), "close": float(c)} for d, c in zip(p.dates[lo:], p.close[lo:, i], strict=True) if np.isfinite(c)]
+                 for i, name in enumerate(p.symbols)}
+    bars = by_symbol[p.symbols[0]]
+    if len(p.symbols) > 1:  # a book: the return is the account's, not a product of trade returns
+        total = float(r.equity[-1] / r.equity[lo - run_from if spec.code.strip() else lo] - 1)
+    else:
+        total = float(np.prod([1 + t["return"] for t in trades]) - 1) if trades else 0.0
     risk = [{"date": str(p.dates[e["bar"]].date()), "kind": e["kind"], "value": e["value"], "limit": e["limit"]} for e in r.risk_events]
     output.pop("risk_events", None)
-    return {"status": "ok", "symbol": symbol, "window": {"start": start, "end": str(p.dates[-1].date())}, "bars": bars, "trades": trades, "total_return": total, **output, "risk_events": risk}
+    return {"status": "ok", "symbol": p.symbols[0], "symbols": list(p.symbols), "bars_by_symbol": by_symbol, "window": {"start": start, "end": str(p.dates[-1].date())}, "bars": bars, "trades": trades, "total_return": total, **output, "risk_events": risk}
 
 
 def repaint_check(spec: Strategy, prep: Prepared, lo: int = 0, cuts: int = 50, *, full: C.Signals | None = None) -> dict:

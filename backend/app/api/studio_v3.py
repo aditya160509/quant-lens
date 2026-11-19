@@ -356,6 +356,7 @@ def import_quantconnect(request: QuantConnectImportRequest) -> dict[str, Any]:
 class PreviewRequest(BaseModel):
     spec: dict
     symbol: str = "SPY"
+    symbols: list[str] | None = Field(default=None, max_length=50)  # default: Strategy.universe, else `symbol`
 
 
 class ConditionRequest(PreviewRequest):
@@ -454,6 +455,8 @@ class PreviewResult(BaseModel):
     line: int | None = None
     problem: StrategyProblem | None = None
     symbol: str | None = None
+    symbols: list[str] | None = None
+    bars_by_symbol: dict[str, list[dict[str, Any]]] | None = None
     window: dict[str, str] | None = None
     bars: list[dict[str, Any]]
     trades: list[dict[str, Any]]
@@ -553,7 +556,7 @@ def debug_python(request: BuildDebugRequest) -> dict:
 @router.post("/preview", response_model=PreviewResult, response_model_exclude_unset=True)
 def preview(request: PreviewRequest) -> dict[str, Any]:
     try:
-        return backtest.preview(_spec(request.spec), request.symbol)
+        return backtest.preview(_spec(request.spec), request.symbol, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None)
     except backtest.Refusal as exc:
         return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
     except pycode.CodeError as exc:
