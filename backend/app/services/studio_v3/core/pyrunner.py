@@ -609,6 +609,18 @@ class PortfolioContext(Ctx):
     def stop_limit_order(self, symbol, quantity, stop_price, limit_price):
         self._submit(symbol, quantity, limit=float(limit_price), stop=float(stop_price))
 
+    def bracket(self, symbol, quantity, stop=None, target=None, trail=None):
+        """Enter with a market order and attach exits as fractions of the fill price: stop (loss), target (gain) and trail. Whichever hits first closes the
+        position and the other is gone (one-cancels-other); a bar that touches both takes the stop first."""
+        levels = []
+        for name, value in (("stop", stop), ("target", target), ("trail", trail)):
+            if value is not None and (not math.isfinite(float(value)) or not 0 < float(value) < 1):
+                raise ValueError(f"bracket {name} is a fraction of the entry price between 0 and 1, like 0.05")
+            levels.append(math.nan if value is None else float(value))
+        if all(math.isnan(level) for level in levels):
+            raise ValueError("bracket needs at least one of stop, target or trail")
+        self._submit(symbol, quantity, bracket=tuple(levels))
+
     def order_value(self, symbol, value):
         current = self.bar(symbol)
         if current is not None:
@@ -632,7 +644,7 @@ class PortfolioContext(Ctx):
     stop = stop_order
     stop_limit = stop_limit_order
 
-    def _submit(self, symbol, quantity, *, limit=None, stop=None):
+    def _submit(self, symbol, quantity, *, limit=None, stop=None, bracket=None):
         self._columns[symbol]
         quantity = float(quantity)
         if not math.isfinite(quantity):
@@ -641,7 +653,7 @@ class PortfolioContext(Ctx):
             raise ValueError("Order price must be positive and finite")
         if quantity:
             self._note_order()
-            self.orders.append((symbol, (quantity, limit, stop)))
+            self.orders.append((symbol, (quantity, limit, stop, bracket)))
 
     def set_holdings(self, symbol, weight):
         weight = float(weight)
@@ -695,6 +707,9 @@ class PortfolioStrategy:
         self.use_context = use_context
         self.submitted = submitted
         self.market_filter = market_filter
+        self.max_entries = getattr(cls, "max_entries", 0)
+        if type(self.max_entries) is not int or self.max_entries < 0:
+            raise ValueError("Strategy.max_entries must be a nonnegative integer")
         self.rebalance = getattr(self.strategy, "rebalance", None)
         self.schedule = getattr(self.strategy, "rebalance_schedule", "daily")
         if self.schedule not in (None, "daily", "week_start", "month_start", "quarter_start", "year_start") and (
@@ -717,6 +732,7 @@ class PortfolioStrategy:
 
     def on_bar(self, engine_ctx):
         ctx = self._context(engine_ctx)
+        engine_ctx._e.max_entries = self.max_entries
         if ctx.t == 0 and hasattr(self.strategy, "init"):
             self.strategy.init(ctx)
             ctx.orders.clear()
@@ -738,8 +754,12 @@ class PortfolioStrategy:
                 if self.market_filter is not None and not self.market_filter[ctx.t, n]:
                     continue
                 if isinstance(action, tuple):
-                    quantity, limit, stop = action
+                    quantity, limit, stop, bracket = action
                     engine_ctx._e.pending.pop(n, None)
+                    if bracket is None:
+                        engine_ctx._e.brackets.pop(n, None)
+                    else:
+                        engine_ctx._e.brackets[n] = bracket
                     engine_ctx._e.wants.pop(n, None)
                     engine_ctx._e.orders[n] = (quantity, math.nan if limit is None else limit, math.nan if stop is None else stop, ctx.t)
                     self.submitted[ctx.t, n, [0, 2, 3]] = quantity, limit or 0, stop or 0

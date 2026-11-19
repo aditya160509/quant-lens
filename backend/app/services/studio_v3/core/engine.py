@@ -357,6 +357,8 @@ class Position:
     slip: float
     risk: float
     stop_kind: int = R_STOP
+    trail: float = -1.0  # a bracket's own trailing fraction; negative uses Params.trail
+    entries: int = 1  # fills that built this position, for max_entries
     last: float = 0.0
     exit_reason: int = 0  # pending exit at the next fill
 
@@ -417,6 +419,8 @@ class EventEngine:
         self.pending: dict[int, tuple[int, float, int]] = {}  # symbol -> (direction, shares, signal bar)
         self.wants: dict[int, int] = {}
         self.orders: dict[int, tuple[float, float, float, int]] = {}
+        self.brackets: dict[int, tuple[float, float, float]] = {}  # symbol -> (stop, target, trail) fractions applied when its order opens a position
+        self.max_entries = 0  # 0: add to a position without limit
         self.cash, self.costs, self.unfilled, self.traded = params.capital, 0.0, 0, 0.0
         self.trades: list[tuple] = []
         self._fills: list[Fill] | None = None
@@ -515,10 +519,19 @@ class EventEngine:
         dist = self.stop_dist[sigbar, n] if self.stop_dist is not None else price * p.stop
         pos = self.positions.get(n)
         if pos is None:
+            stop_level = price - direction * dist if dist > 0 else math.nan
+            target_level = price * (1 + direction * p.target) if p.target > 0 else math.nan
+            trail = -1.0
+            bracket = self.brackets.pop(n, None)
+            if bracket is not None:
+                stop_fraction, target_fraction, trail_fraction = bracket
+                stop_level = price * (1 - direction * stop_fraction) if math.isfinite(stop_fraction) else stop_level
+                target_level = price * (1 + direction * target_fraction) if math.isfinite(target_fraction) else target_level
+                trail = trail_fraction if math.isfinite(trail_fraction) else -1.0
             self.positions[n] = Position(
                 shares=direction * shares, entry_px=price, entry_bar=t, signal_bar=sigbar,
-                stop=price - direction * dist if dist > 0 else math.nan,
-                target=price * (1 + direction * p.target) if p.target > 0 else math.nan,
+                stop=stop_level, trail=trail,
+                target=target_level,
                 scale=price * (1 + direction * p.scale_at) if p.scale_at > 0 and p.scale_frac > 0 else math.nan,
                 scale2=price * (1 + direction * p.scale_at2) if p.scale_at2 > 0 and p.scale_frac2 > 0 else math.nan,
                 high_water=price, lo=price, hi=price, cost=comm, slip=slip, risk=shares * dist if dist > 0 else math.nan, last=price)
@@ -528,6 +541,7 @@ class EventEngine:
             pos.cost += comm
             pos.slip += slip
             pos.risk += shares * dist
+            pos.entries += 1
         if self._fills is not None:
             self._fills.append(Fill(n, t, "buy" if direction > 0 else "sell", shares, price, comm))
 
@@ -578,6 +592,8 @@ class EventEngine:
                 size = min(remaining, allowance, max(eq * p.leverage - gross, 0.0) / price)
                 if n not in self.positions and 0 < p.max_positions <= count:
                     size = 0.0
+                if pos is not None and pos.shares * direction > 0 and 0 < self.max_entries <= pos.entries:
+                    size = 0.0  # pyramiding cap (B-46)
                 if size > 1e-9:
                     self._open(n, t, sigbar, direction, size, raw, price)
                 if size < remaining - 1e-9:
@@ -619,9 +635,10 @@ class EventEngine:
                 best = h[t, n] if d > 0 else l[t, n]
                 if p.breakeven > 0 and pos.stop_kind != R_BREAKEVEN and d * (best / pos.entry_px - 1.0) >= p.breakeven and not d * (pos.stop - pos.entry_px) >= 0:
                     pos.stop, pos.stop_kind = pos.entry_px, R_BREAKEVEN
-                if p.trail > 0:
+                trail = pos.trail if pos.trail >= 0 else p.trail
+                if trail > 0:
                     pos.high_water = max(pos.high_water, best) if d > 0 else min(pos.high_water, best)
-                    ts = pos.high_water * (1.0 - d * p.trail)
+                    ts = pos.high_water * (1.0 - d * trail)
                     if not d * (pos.stop - ts) >= 0:
                         pos.stop, pos.stop_kind = ts, R_TRAIL
             if self.orders:

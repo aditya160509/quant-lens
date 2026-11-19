@@ -802,3 +802,45 @@ class Strategy:
     cut = {}
     pycode.run_event(code, {k: v[:11] for k, v in bars.items()}, dates[:11], {}, ["AAA", "BBB"], engine.Params(), output=cut)
     assert cut["logs"] == out["logs"]
+
+
+def _flat_bars(closes, highs=None, lows=None):
+    c = np.array(closes, dtype=float)[:, None]
+    return {"open": c.copy(), "high": np.array(highs if highs is not None else closes, dtype=float)[:, None], "low": np.array(lows if lows is not None else closes, dtype=float)[:, None],
+            "close": c, "volume": np.full_like(c, 1e9)}, pd.bdate_range("2020-01-01", periods=len(c))
+
+
+def _bracket_trades(closes, highs, lows, call):
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _flat_bars(closes, highs, lows)
+    code = f"class Strategy:\n    def on_data(self, ctx):\n        if ctx.bar_index == 0:\n            {call}\n"
+    return pycode.run_event(code, bars, dates, {}, ["AAA"], engine.Params()), engine
+
+
+def test_bracket_enters_then_stop_or_target_closes_the_position_and_the_other_leg_is_gone():
+    stopped, engine = _bracket_trades([100] * 6, [100, 100, 100, 100, 100, 100], [100, 100, 94, 100, 100, 100], 'ctx.bracket("AAA", 10, stop=0.05, target=0.10)')
+    assert len(stopped.trades) == 1 and stopped.trades[0, engine.T_EXIT_PX] == pytest.approx(95) and engine.REASONS[int(stopped.trades[0, engine.T_REASON])] == "stop"
+    won, engine = _bracket_trades([100] * 6, [100, 100, 100, 112, 100, 100], [100] * 6, 'ctx.bracket("AAA", 10, stop=0.05, target=0.10)')
+    assert len(won.trades) == 1 and won.trades[0, engine.T_EXIT_PX] == pytest.approx(110) and engine.REASONS[int(won.trades[0, engine.T_REASON])] == "target"
+    both, engine = _bracket_trades([100] * 6, [100, 100, 111, 100, 100, 100], [100, 100, 94, 100, 100, 100], 'ctx.bracket("AAA", 10, stop=0.05, target=0.10)')
+    assert len(both.trades) == 1 and engine.REASONS[int(both.trades[0, engine.T_REASON])] == "stop"  # same bar: the worse outcome first
+    with pytest.raises(pycode.CodeError, match="between 0 and 1"):
+        _bracket_trades([100] * 3, [100] * 3, [100] * 3, 'ctx.bracket("AAA", 10, stop=5)')
+
+
+def test_bracket_trail_follows_the_high_water_mark():
+    result, engine = _bracket_trades([100, 100, 105, 115, 115, 115, 115], [100, 100, 110, 120, 116, 116, 116], [100, 100, 100, 112, 107, 107, 107], 'ctx.bracket("AAA", 10, trail=0.1)')
+    assert len(result.trades) == 1 and result.trades[0, engine.T_EXIT_PX] == pytest.approx(108, abs=0.05) and engine.REASONS[int(result.trades[0, engine.T_REASON])] == "trailing stop"
+
+
+def test_max_entries_caps_pyramiding_per_symbol():
+    from app.services.studio_v3.core import engine
+
+    bars, dates = _flat_bars([100] * 10)
+    body = "class Strategy:\n    {cap}\n    def on_data(self, ctx):\n        if ctx.bar_index in (0, 1, 2, 3):\n            ctx.market_order('AAA', 10)\n"
+    free = pycode.run_event(body.format(cap="pass"), bars, dates, {}, ["AAA"], engine.Params())
+    capped = pycode.run_event(body.format(cap="max_entries = 2"), bars, dates, {}, ["AAA"], engine.Params())
+    assert free.trades[0, engine.T_SHARES] == 40 and capped.trades[0, engine.T_SHARES] == 20
+    with pytest.raises(pycode.CodeError, match="max_entries"):
+        pycode.run_event(body.format(cap="max_entries = -1"), bars, dates, {}, ["AAA"], engine.Params())
