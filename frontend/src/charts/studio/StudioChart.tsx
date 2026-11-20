@@ -8,7 +8,10 @@ import type { OHLCVBar } from "@/components/chart_engine/types";
 export type ChartBar = { time: string; open: number; high: number; low: number; close: number; volume: number };
 export type ChartTrade = { entry_date: string; exit_date: string; side: string; pnl: number; exit_reason?: string };
 export type ChartIndicator = { id: string; params: Record<string, unknown> };
+/** A named series drawn from dated values, on the price pane or its own pane (a strategy's ctx.plot). */
+export type ChartLine = { name: string; points: { date: string; value: number | null }[]; separate?: boolean };
 
+const NO_LINES: ChartLine[] = [];
 const probe = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d", { willReadFrequently: true });
 /** Lightweight Charts parses colours itself: theme tokens (oklch) resolve to rgba through a 1px canvas. */
 function css(el: Element, name: string, fallback: string, alpha = 1) {
@@ -25,8 +28,8 @@ const PALETTE = ["--c1", "--c2", "--c3", "--c4", "--c5", "--c6"];
 
 /** Candles, volume, any registered indicator (overlay or own pane), and a strategy's trades as markers with the held span shaded.
  *  `upto` draws only the first n bars (replay); `focus` zooms to a trade. */
-export function StudioChart({ bars, indicators, trades, upto, focus, height = 520 }: {
-  bars: ChartBar[]; indicators: ChartIndicator[]; trades: ChartTrade[]; upto?: number; focus?: ChartTrade | null; height?: number;
+export function StudioChart({ bars, indicators, trades, upto, focus, height = 520, lines = NO_LINES, pauseAt }: {
+  bars: ChartBar[]; indicators: ChartIndicator[]; trades: ChartTrade[]; upto?: number; focus?: ChartTrade | null; height?: number; lines?: ChartLine[]; pauseAt?: string | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const api = useRef<{ chart: IChartApi; candles: ISeriesApi<"Candlestick"> } | null>(null);
@@ -68,6 +71,13 @@ export function StudioChart({ bars, indicators, trades, upto, focus, height = 52
       if (at > 1) chart.panes()[at]?.setHeight(Math.round(height * 0.16));
     });
 
+    lines.forEach((ln, k) => {
+      const at = ln.separate ? pane++ : 0;
+      chart.addSeries(LineSeries, { color: css(el, PALETTE[(indicators.length + k) % PALETTE.length], "#888"), lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: ln.name }, at)
+        .setData(ln.points.filter((p) => p.value != null && p.date <= shown.at(-1)!.time).map((p) => ({ time: toTime(p.date), value: p.value as number })));
+      if (at > 1) chart.panes()[at]?.setHeight(Math.round(height * 0.16));
+    });
+
     const last = shown.at(-1)!.time;
     const marks: SeriesMarker<Time>[] = trades.flatMap((t) => {
       const long = t.side === "long";
@@ -75,12 +85,14 @@ export function StudioChart({ bars, indicators, trades, upto, focus, height = 52
       if (t.entry_date <= last) m.push({ time: toTime(t.entry_date), position: long ? "belowBar" : "aboveBar", shape: long ? "arrowUp" : "arrowDown", color: long ? up : down, text: long ? "B" : "S" });
       if (t.exit_date <= last) m.push({ time: toTime(t.exit_date), position: long ? "aboveBar" : "belowBar", shape: "circle", color: t.pnl >= 0 ? up : down, text: `${t.pnl >= 0 ? "+" : ""}${Math.round(t.pnl)}` });
       return m;
-    }).sort((a, b) => String(a.time).localeCompare(String(b.time)));
+    });
+    if (pauseAt && pauseAt <= last) marks.push({ time: toTime(pauseAt), position: "aboveBar", shape: "square", color: css(el, "--warn", "#f5a623"), text: "❚❚" });
+    marks.sort((a, b) => String(a.time).localeCompare(String(b.time)));
     if (marks.length) createSeriesMarkers(candles, marks);
     chart.timeScale().fitContent();
     api.current = { chart, candles };
     return () => { chart.remove(); api.current = null; };
-  }, [bars, indicators, trades, upto, height]);
+  }, [bars, indicators, trades, upto, height, lines, pauseAt]);
 
   useEffect(() => {
     if (!focus || !api.current) return;
