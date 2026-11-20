@@ -461,14 +461,3 @@
 .dv-replay .seg button { min-width: 30px; }
 .dv-con-at { color: var(--text-4); font: 11px var(--mono); font-style: normal; }
 .dv-tools { gap: 4px; }
-@media (max-width: 760px) {
-  .dv-bar { flex-wrap: wrap; height: auto; row-gap: 2px; padding: 4px 8px; }
-  .dv-title, .dv[data-rail] .dv-title { width: 100%; padding: 0 4px; order: 1; }
-  .dv-tabs { order: 3; flex: 1 1 100%; }
-  .dv-tools, .dv-bar > .btn, .dv-bar > .bd-ui { order: 2; }
-  .dv { grid-template-rows: auto auto 70dvh 26px; }
-  .dv-bar { grid-row: 1; } .dv-icons { grid-column: 1; grid-row: 2; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
-  .dv-icons .icon-btn { flex: none; width: 44px; height: 40px; }
-  .dv-rail { grid-row: 3; } .dv-main { grid-row: 4; } .dv-status { grid-row: 5; padding-right: 0; overflow-x: auto; }
-  .dv-side { grid-row: 6; border-left: 0; border-top: 1px solid var(--line); }
-}
