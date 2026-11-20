@@ -494,3 +494,8 @@
 .dv-tab:hover:not([aria-selected="true"]) { background: color-mix(in oklab, var(--text) 5%, transparent); }
 .dv-status { background: transparent; border-radius: 8px; }
 .dv-status > button { border-radius: 6px; }
+.dv-runs { display: grid; gap: 2px; }
+.dv-run { display: grid; grid-template-columns: auto 1fr auto auto auto; align-items: center; gap: 10px; padding: 2px 6px; border-radius: 8px; font-size: 12px; }
+.dv-run[data-on] { background: var(--line); }
+.dv-run span { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.dv-runname { border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; padding: 4px 0; }

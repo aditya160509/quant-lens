@@ -15,6 +15,7 @@ import { useLayout } from "@/workspace/layout";
 import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 import { DevChart } from "./DevChart";
 import { DevRobust } from "./DevRobust";
+import { DevRuns, type RunEntry } from "./DevRuns";
 import { DevTearsheet } from "./DevTearsheet";
 
 type Log = { date: string; symbol: string | null; line: number; text: string; level: string; fields?: Record<string, unknown> | null };
@@ -45,8 +46,8 @@ type Snapshot = { at: number; files: Record<string, string> };
 type Snippet = { id: string; name: string; prefix: string; body: string; description: string };
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 type Tab = "problems" | "output" | "plots" | "trades" | "debug" | "console";
-type View = "code" | "chart" | "results" | "tearsheet" | "robust";
-const VIEW_LABEL: Record<Exclude<View, "code">, string> = { chart: "Chart", results: "Results", tearsheet: "Tearsheet", robust: "Robustness" };
+type View = "code" | "chart" | "results" | "tearsheet" | "robust" | "runs";
+const VIEW_LABEL: Record<Exclude<View, "code">, string> = { chart: "Chart", results: "Results", tearsheet: "Tearsheet", robust: "Robustness", runs: "Runs" };
 type Rail = "files" | "outline" | "search" | "versions" | "docs" | "templates";
 type Spec = { code: string; files?: Record<string, string>; params: Record<string, { value: number; min?: number | null; max?: number | null; step?: number | null }>; [k: string]: unknown };
 export type Saved = "saved" | "draft" | "saving" | "conflict" | "new";
@@ -263,6 +264,13 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
     stepping.current = true;
     void Promise.resolve(date ? debugRef.current({ date }, true) : debugRef.current({ step }, true)).finally(() => { stepping.current = false; });
   }, []);
+  const [runLog, setRunLog] = useState<RunEntry[]>([]);
+  useEffect(() => {
+    if (quick?.status !== "completed" || !quick.result?.meta) return;
+    setRunLog((l) => (l.some((r) => r.id === quick.job_id) ? l : [{ id: quick.job_id, label: `Run ${l.length + 1} · ${quick.level}`, at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), pinned: false, run: quick }, ...l].slice(0, 20)));
+  }, [quick]);
+  const pinRun = (id: string) => setRunLog((l) => l.map((r) => (r.id === id ? { ...r, pinned: !r.pinned } : r)));
+  const renameRun = (id: string) => { const n = window.prompt("Name this run")?.trim(); if (n) setRunLog((l) => l.map((r) => (r.id === id ? { ...r, label: n } : r))); };
   const openView = (v: Exclude<View, "code">) => { setExtra((x) => (x.includes(v) ? x : [...x, v])); setView(v); };
   const closeView = (v: Exclude<View, "code">) => { setExtra((x) => x.filter((y) => y !== v)); if (view === v) setView("code"); if (v === "chart") setPlaying(false); };
   const startDebug = () => {
@@ -338,6 +346,7 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
     { id: "studio.chart", label: "View: chart with replay", run: () => openView("chart") },
     { id: "studio.results", label: "View: results", run: () => openView("results") },
     { id: "studio.tearsheet", label: "View: tearsheet", run: () => openView("tearsheet") },
+    { id: "studio.runs", label: "View: compare runs", run: () => openView("runs") },
     { id: "studio.robust", label: "Run: robustness (Monte Carlo)", run: () => openView("robust") },
     { id: "studio.profile", label: "Run: profile the preview", run: () => runProfile() },
     { id: "studio.save", label: "Strategy: save version", run: () => onSave() },
@@ -440,6 +449,7 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
               <button role="menuitem" onClick={() => openView("results")}>Results</button>
               <button role="menuitem" onClick={() => openView("tearsheet")}>Tearsheet</button>
               <button role="menuitem" onClick={() => openView("robust")}>Robustness</button>
+              <button role="menuitem" onClick={() => openView("runs")}>Compare runs</button>
               <hr />
               <button role="menuitemcheckbox" aria-checked={sideMode === "on"} onClick={() => setSideMode(sideMode === "on" ? "off" : "on")}>Preview</button>
               <button role="menuitemcheckbox" aria-checked={sideMode === "wide"} onClick={() => setSideMode(sideMode === "wide" ? "off" : "wide")}>Preview 50 / 50</button>
@@ -553,7 +563,7 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
         <div className="dv-editor" data-split={split && !diff ? (splitDown ? "down" : "right") : undefined}>
           {view !== "code" ? (
             <div className="dv-view-pane" data-kind={view}>
-              {view === "chart" ? <DevChart symbol={symbol} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={(d, st) => replayGo(d, st)} /> : <div className="dv-pbody">{view === "tearsheet" ? <DevTearsheet quick={quick ?? null} /> : view === "robust" ? <DevRobust quick={quick ?? null} /> : resultsView}</div>}
+              {view === "chart" ? <DevChart symbol={symbol} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={(d, st) => replayGo(d, st)} /> : <div className="dv-pbody">{view === "tearsheet" ? <DevTearsheet quick={quick ?? null} /> : view === "robust" ? <DevRobust quick={quick ?? null} /> : view === "runs" ? <DevRuns runs={runLog} onPin={pinRun} onRename={renameRun} /> : resultsView}</div>}
             </div>
           ) : null}
           {!spec.code.trim() && active === "main.py" && !diff ? (
