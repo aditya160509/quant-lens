@@ -271,3 +271,6 @@ Known limits: the runtime import layer allows submodules of the allowed roots (C
 - B-140 inline ⌘K AI edit: waits on OD-11 (AI provider and cost). Not built.
 - B-55 ctx.store across runs: would break the reproduce certificate. Options: skip, or allow with the certificate marked not reproducible. Not built.
 - B-67, B-123: blocked by data (fundamentals from 2021 only).
+
+## Build: deferred (2026-11-20)
+- Dev on phones (≤760px): Dev falls back to Simple; a real phone Dev layout is deferred until desktop Dev is finished (owner call).
