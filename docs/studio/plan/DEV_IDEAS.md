@@ -539,7 +539,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 ## Chart workspace plan (owner + Claude, 2026-11-20)
 
-Decision: replace the home-grown chart engine (`components/chart_engine`, ~25k lines) as the primary chart. Build on **KLineChart** (Apache-2.0, zero deps, ~50 KB gzip, built-in indicators and drawing overlays, `registerOverlay` / `registerIndicator` for custom ones; https://github.com/klinecharts/KLineChart, https://klinecharts.com/en-US/guide/overlay). Keep ours only until the new chart reaches parity, then delete it. Final call waits on `CHART_RESEARCH.md` (engine comparison in progress).
+Decision (revised after CHART_RESEARCH.md): **keep and extend our engine** (Q360ChartCore). It already ships Fib, Gann, Elliott, pitchfork, pattern, channel, projection, measurement and volume tool families plus 71 indicators, more than KLineChart (16 built-in overlays). The missing pieces (rail, script dock, tester drawer, panes, motion) are UI we'd build on any base. Gate: a 100k-bar 60 fps pan/zoom spike. If it fails, fall back to LuxAlgo Vela (Apache-2.0, WebGL2). KLineChart notes below are kept as a quarry for ideas.
 
 Why KLineChart over the rest:
 - Lightweight-charts has no drawing tools; every "TradingView alternative" on top of it (OpenCharts, OrderCraft, dipping-charts) rebuilds drawings by hand.
