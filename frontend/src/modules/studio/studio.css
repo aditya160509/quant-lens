@@ -449,7 +449,7 @@
 .dv-menu hr { margin: 4px 6px; border: 0; border-top: 1px solid var(--line); }
 .dv-view-pane { position: absolute; inset: 0; z-index: 3; background: var(--island); display: grid; min-height: 0; min-width: 0; }
 .dv-view-pane > .dv-pbody { overflow: auto; padding: 12px 16px; }
-.dv-chart { display: grid; grid-template-rows: minmax(0, 1fr) auto 40px; min-height: 0; min-width: 0; }
+.dv-chart { height: 100%; display: grid; grid-template-rows: minmax(0, 1fr) auto 40px; min-height: 0; min-width: 0; }
 .dv-nav { display: grid; grid-template-rows: auto minmax(0, 1fr); max-height: 168px; min-height: 0; border-top: 1px solid var(--line); }
 .dv-navbar { display: flex; align-items: center; gap: 6px; padding: 4px 10px; }
 .dv-navbar select { width: auto; flex: none; }
@@ -470,7 +470,7 @@
 .dv-tear { position: relative; display: grid; gap: 12px; padding-top: 4px; }
 .dv-gear { position: absolute; top: 0; right: 0; z-index: 2; }
 .dv-chart > .dv-empty { margin: 16px; }
-.dv-chartbox { min-height: 0; min-width: 0; overflow: hidden; padding: 4px 8px 0; }
+.dv-chartbox { min-height: 0; min-width: 0; overflow: hidden; }
 .dv-replay { display: flex; align-items: center; gap: 4px; padding: 0 10px; border-top: 1px solid var(--line); }
 .dv-replay input[type="range"] { flex: 1; min-width: 0; margin: 0 8px; accent-color: var(--accent); }
 .dv-replay time { min-width: 84px; text-align: right; font: 12px var(--mono); color: var(--text-3); }
