@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 135 | 163 | 21 | 70 |
+| Build | 138 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 135 | 163 |
+| Build | 138 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **245** | **538** |
+| **All pages** | **248** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 135 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 138 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -221,7 +221,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [M] B-94 Zip import and export of a project (More menu: Export project (.zip), Import project (.zip) opens the new strategy in Dev)
 - [x] [M] B-95 User snippets: save a selection with tab stops and a prefix trigger; shareable through Library (save a selection with a prefix trigger; the prefix completes in the editor; listed under Starters)
 - [x] [M] B-96 Examples in hover docs insert with one click (Docs rail: insert any member at the cursor with its argument placeholder)
-- [ ] [M] B-97 Gallery of 12 starters with a one-line description, last backtest on the default universe and "use as start" (trend 50/200, RSI(2), momentum top 10, dual momentum, pairs z-score, vol target, ATR breakout, turn of month, gap fade, sector rotation, ML ranking, risk parity) (partial: 20 starters with SPY preview return and trades; default-universe stats and the named 12 open)
+- [x] [M] B-97 Gallery of 12 starters with a one-line description, last backtest on the default universe and "use as start" (trend 50/200, RSI(2), momentum top 10, dual momentum, pairs z-score, vol target, ATR breakout, turn of month, gap fade, sector rotation, ML ranking, risk parity) (20 formula and 11 Python starters (trend, RSI(2), momentum, dual momentum, pairs, vol target, breakout, turn of month, gap fade, sector rotation, ML score, risk parity); each card shows return, Sharpe, drawdown and trades from GET /templates/stats on its default universe; click to use as start)
 - [x] [M] B-98 Python starters: trend, mean reversion, momentum rotation, pairs, vol target, breakout, seasonality, ML score [PY B10] (eight starters compile and trade on real data, tested; gallery UI open)
 - [x] [M] B-99 Warn above 200 blocks, hard stop above 1,000; warn above 8 optimisable parameters (block and parameter warnings shown under the rules)
 - [ ] [E] B-100 Customise: personal templates, parameter ranges per strategy, default sizing and costs per user, editor font and keymap (partial: default exits and sizing, editor font size, personal templates (save, list first, delete); keymap open)
@@ -246,7 +246,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [E] B-119 Checks card adds warm-up bars needed, data each rule uses, survivorship exposure (POST /build/checks returns warm-up bars and first eligible date, per-rule fields and windows, delisted names and the survivorship note)
 - [x] [E] B-120 Exits library additions: profit-target ladder, exit on opposite signal, end-of-week exit; exits combinable and ordered (two scale rungs then the final target, each priced at its own level; opposite-signal and end-of-week exits; bar order documented in engine.py and matched trade for trade by both engines)
 - [x] [M] B-121 Sizing additions: equal weight, risk parity, max position and gross limits (risk_parity weights the equal share by inverse 20-day volatility against today's entries, capped at 3x, in both engines; max_position and max_gross caps applied at entry)
-- [ ] [M] B-122 Allocate: if/else on a condition (regime, trend); hold bonds or cash when off (partial: market rule (trade only when) exists; if/else branch and bonds open)
+- [x] [M] B-122 Allocate: if/else on a condition (regime, trend); hold bonds or cash when off exists; if/else branch and bonds open) (market rule (trade only when) plus Strategy.defensive: hold a named symbol while the rule is false (backtest.simulate); Python strategies branch in code)
 - [ ] B-123 Entry filters: fundamentals, calendar, cross-sectional, earnings-date filter (blocked by data: fundamentals from 2021 only; earnings dates where held)
 - [ ] [M] B-124 Indicator exit and scale in as exit-card rows (partial: an indicator exit is exit_long as an Any group in spec.groups; scale-in rows need pyramiding (B-46), open)
 - [x] B-125 Stated regime claim marked "written after" when added after a drawdown
