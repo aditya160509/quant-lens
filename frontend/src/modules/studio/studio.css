@@ -494,3 +494,9 @@
 .dv-run[data-on] { background: var(--line); }
 .dv-run span { color: var(--text-3); font-variant-numeric: tabular-nums; }
 .dv-runname { border: 0; background: none; color: var(--text); text-align: left; cursor: pointer; padding: 4px 0; }
+
+/* Inputs: declared params as number + slider (W-10). */
+.dv-input { display: grid; gap: 4px; padding: 4px 8px; }
+.dv-input > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 12px var(--mono); color: var(--text-2); }
+.dv-input .input { width: 72px; text-align: right; }
+.dv-input input[type=range] { width: 100%; accent-color: var(--accent); }

@@ -156,6 +156,14 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
   const pyTemplates = usePyTemplates();
   const source = files[active] ?? "";
 
+  // Inputs: params = {"name": (default, min, max, step)} in class Strategy, plus saved overrides; editing one re-runs the preview.
+  const inputs = useMemo(() => {
+    const out: Spec["params"] = {};
+    const body = /params\s*=\s*\{([^}]*)\}/.exec(spec.code)?.[1] ?? "";
+    for (const m of body.matchAll(/["'](\w+)["']\s*:\s*\(\s*([-\d.e]+)\s*,\s*([-\d.e]+)\s*,\s*([-\d.e]+)\s*,\s*([-\d.e]+)\s*\)/g)) out[m[1]] = { value: +m[2], min: +m[3], max: +m[4], step: +m[5] };
+    return { ...out, ...Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, { ...out[k], ...p }])) };
+  }, [spec.code, spec.params]);
+  const setInput = (n: string, p: Spec["params"][string], value: number) => Number.isFinite(value) && edit({ params: { ...spec.params, [n]: { ...p, value } } });
   const setFile = (name: string, text: string) => (keep(name), name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
   const replaceFiles = (next: Record<string, string>) => {
     const all = { ...files, ...next };
@@ -478,9 +486,14 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
               ))}
               <button className="btn sm ghost" onClick={addFile}><FilePlus2 size={13} />New file</button>
               </details>
-              <details open><summary>Parameters<span>{Object.keys(spec.params).length}</span></summary>
-                {Object.entries(spec.params).map(([n, p]) => <div key={n} className="dv-row"><code>{n}</code><span>{p.value}</span></div>)}
-                {Object.keys(spec.params).length ? null : <p className="dv-empty">None</p>}
+              <details open><summary>Inputs<span>{Object.keys(inputs).length}</span></summary>
+                {Object.entries(inputs).map(([n, p]) => (
+                  <label key={n} className="dv-input">
+                    <span><code>{n}</code><input className="input sm" type="number" value={p.value} min={p.min ?? undefined} max={p.max ?? undefined} step={p.step ?? "any"} onChange={(e) => setInput(n, p, +e.target.value)} /></span>
+                    {p.min != null && p.max != null ? <input type="range" aria-label={n} value={p.value} min={p.min} max={p.max} step={p.step ?? "any"} onChange={(e) => setInput(n, p, +e.target.value)} /> : null}
+                  </label>
+                ))}
+                {Object.keys(inputs).length ? null : <p className="dv-empty">None</p>}
               </details>
               <details><summary>Libraries<span>{DOC_SCOPES.length}</span></summary>
                 {DOC_SCOPES.map((n) => <button key={n} className="dv-item" onClick={() => setRail("docs")}><BookOpen size={13} />{n}</button>)}
