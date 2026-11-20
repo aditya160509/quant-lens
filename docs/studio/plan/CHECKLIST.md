@@ -19,7 +19,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|---|---|
 | Portfolio | 9 | 11 | 2 | 10 |
 | Home | 13 | 11 | 1 | 9 |
-| Build | 138 | 163 | 21 | 70 |
+| Build | 139 | 163 | 21 | 70 |
 | Backtest | 19 | 16 | 1 | 11 |
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
@@ -37,7 +37,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 |---|---|---|
 | Portfolio | 25 | 28 |
 | Home | 12 | 25 |
-| Build | 138 | 163 |
+| Build | 139 | 163 |
 | Backtest | 18 | 57 |
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
@@ -45,7 +45,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Chart | 6 | 35 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **248** | **538** |
+| **All pages** | **249** | **538** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -116,7 +116,7 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 - [x] [M] H-25 Bulk re-run on new data and export a selection as a zip; UI is frontend) (table selection: Re-run and Export (zip))
 - [x] H-26 Strategy cards with grade, trial count, paper status and last run; duplicate; JSON import (first version)
 
-## Build (`/studio/build/:id?`, spec §2): 138 / 163 done
+## Build (`/studio/build/:id?`, spec §2): 139 / 163 done
 
 The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules above.
 
@@ -126,7 +126,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] B-2 Look-ahead (close[+1], centred window) refused with the line and token named
 - [x] B-3 Weekly SMA on a Wednesday uses the last closed week
 - [x] B-4 Compile under 100 ms server side for a 20-row strategy
-- [ ] [E] B-5 Preview refreshes within 300 ms after typing stops (in-page timing) (partial: debounce 120 ms; measured in page: formula rules about 270 ms, Python on_bar about 400 ms (server 244 ms for 2 years); Python server time open)
+- [x] [E] B-5 Preview refreshes within 300 ms after typing stops (in-page timing); Python server time open) (typing preview: 120 ms debounce plus about 150 ms server for 2 years of Python on_bar (formula rules faster); the look-ahead replay follows 1.2 s after typing stops)
 - [x] [E] B-6 Reload restores the unsaved draft exactly (autosave to the browser 500 ms after an edit; reload restores a new strategy exactly and offers saved ones back (checked in the browser 2026-11-19))
 - [x] [E] B-7 Ten near-identical sweep cells add ten raw and fewer than four effective trials (raw and effective counts shown; test_ledger_counts_raw_and_effective_trials passes (10 raw, under 4 effective))
 - [x] B-8 Time stop, breakeven and scale-out each have a fixture with exact expected trades
