@@ -23,10 +23,11 @@ import { DevTearsheet } from "./DevTearsheet";
 type Log = { date: string; symbol: string | null; line: number; text: string; level: string; fields?: Record<string, unknown> | null };
 type Point = { date: string; symbol: string | null; value: number | null };
 type Frame = { file: string; line: number; column: number; function: string };
+export type Draw = { styles: Record<string, { color: string | null; width: number; style: string }>; hlines: { value: number; chart: string; color: string | null; name: string }[]; fills: { a: string; b: string; color: string | null }[]; bg: { date: string; color: string }[] };
 export type DevPreview = {
   status: string; reason?: string; line?: number | null;
   problem?: { file?: string | null; line?: number | null; column?: number | null; exception_type?: string | null; traceback?: Frame[] | null } | null;
-  trades: Record<string, unknown>[]; bars?: { date: string; close: number }[]; logs?: Log[] | null; plots?: Record<string, Point[]> | null; plot_charts?: Record<string, string> | null;
+  trades: Record<string, unknown>[]; bars?: { date: string; close: number }[]; logs?: Log[] | null; plots?: Record<string, Point[]> | null; plot_charts?: Record<string, string> | null; draw?: Draw | null;
   marks?: { date: string; symbol: string; label: string }[] | null; tables?: Record<string, { date: string; symbol: string | null; cells: Record<string, unknown> }[]> | null;
   warmup?: { bars: number; first_eligible_date: string | null } | null; settings_overrides?: Record<string, unknown> | null;
   order_lines?: { file: string; line: number; count: number; dates: string[] }[] | null; locals?: Record<string, unknown> | null;

@@ -4,14 +4,14 @@ import { ChevronLeft, ChevronRight, Pause, Play, SlidersHorizontal } from "lucid
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Vela as VelaChart } from "@luxalgo/vela";
 import { studio } from "../api";
-import type { DevPreview } from "./DevIDE";
+import type { DevPreview, Draw } from "./DevIDE";
 import { excursions } from "./devStats";
 
 type Bar = { time: string; open: number; high: number; low: number; close: number; volume: number };
 
 type Pt = { time: number; value: number | null };
 /** What the Vela natives read: ctx.plot series, held spans, the paused bar. Written by DevChart, read by the one chart on screen. */
-const feed = { plots: {} as Record<string, Pt[]>, colors: {} as Record<string, string>, spans: [] as { from: number; to: number; color: string }[], subs: new Set<() => void>() };
+const feed = { plots: {} as Record<string, Pt[]>, colors: {} as Record<string, string>, draw: null as Draw | null, own: {} as Record<string, boolean>, bg: [] as { from: number; to: number; color: string }[], spans: [] as { from: number; to: number; color: string }[], subs: new Set<() => void>() };
 const push = () => feed.subs.forEach((f) => f());
 let probe: CanvasRenderingContext2D | null = null;
 /** A theme token as #rrggbb (tokens resolve to lab() in the browser; Vela wants hex). Read on the chart's own element, where the tokens live. */
@@ -26,15 +26,22 @@ let booted: ReturnType<typeof boot> | null = null;
 /** Vela loads in the browser only; the two native indicators that paint our plots and spans register once. */
 function boot() {
   return Promise.all([import("@luxalgo/vela"), import("@luxalgo/vela/plugin")]).then(([{ Vela, createTheme }, { registerNativeIndicator, stableSeriesId }]) => {
-    registerNativeIndicator({
-      type: "atlas.plot", title: "Plot", paneHint: "price", overlay: true, multiInstance: true,
+    for (const [type, paneHint] of [["atlas.plot", "price"], ["atlas.pane", "new"]] as const) registerNativeIndicator({
+      type, title: "Plot", paneHint, overlay: paneHint === "price", multiInstance: true,
       inputsSchema: () => [{ key: "name", title: "Name", type: "string", defval: "" }], defaultInputs: () => ({ name: "" }),
       create: () => {
         let ctx: import("@luxalgo/vela/plugin").NativeIndicatorContext | null = null, name = "", off = () => {};
         const run = () => {
           const pts = feed.plots[name]; if (!ctx || !pts) return;
           const by = new Map(pts.map((p) => [p.time, p.value]));
-          ctx.emit({ series: [{ id: stableSeriesId({ instanceId: "atlas.plot", kind: "line", title: name, ordinal: 0 }), title: name, paneId: "", kind: "line", points: ctx.bars().map((b) => ({ time: b.time, value: by.get(b.time) ?? null })), style: { color: feed.colors[name], width: 1.5, lineStyle: "solid" } }] });
+          const st = feed.draw?.styles[name], d = feed.draw, sid = (n: string) => stableSeriesId({ instanceId: "atlas.plot", kind: "line", title: n, ordinal: 0 });
+          const kind = ({ step: "step", histogram: "histogram", area: "area", dots: "circles" } as const)[st?.style as "step"] ?? "line";
+          const own = feed.own[name], firstOwn = Object.keys(feed.plots).find((n) => feed.own[n]) === name;
+          ctx.emit({
+            series: [{ id: sid(name), title: name, paneId: "", kind, points: ctx.bars().map((b) => ({ time: b.time, value: by.get(b.time) ?? null })), style: { color: st?.color ?? feed.colors[name], width: st?.width ?? 1.5, lineStyle: "solid" } }],
+            fills: (d?.fills ?? []).filter((f) => f.a === name && f.b !== name && feed.own[f.b] === own).map((f, i) => ({ id: `fill${i}`, paneId: "", fromSeriesId: sid(f.a), toSeriesId: sid(f.b), color: f.color ?? tint(feed.colors[name], "26") })),
+            priceLines: own && firstOwn ? (d?.hlines ?? []).filter((h) => h.chart === "own").map((h, i) => ({ id: `h${i}`, paneId: "", price: h.value, color: h.color ?? "#888888", lineStyle: "dashed" as const, width: 1, title: h.name })) : [],
+          });
         };
         return { start: (c, i) => { ctx = c; name = String(i.name ?? ""); off = (feed.subs.add(run), () => feed.subs.delete(run)); run(); }, onBars: run, onViewport: () => {}, setInputs: (i) => { name = String(i.name ?? ""); run(); }, suspend: () => {}, resume: run, stop: () => { off(); ctx = null; } };
       },
@@ -44,7 +51,10 @@ function boot() {
       inputsSchema: () => [], defaultInputs: () => ({}),
       create: () => {
         let ctx: import("@luxalgo/vela/plugin").NativeIndicatorContext | null = null, off = () => {};
-        const run = () => ctx?.emit({ backgrounds: feed.spans.map((x, i) => ({ id: `span${i}`, paneId: "", from: x.from, to: x.to, color: x.color, overlay: true })) });
+        const run = () => ctx?.emit({
+          backgrounds: [...feed.spans, ...feed.bg].map((x, i) => ({ id: `span${i}`, paneId: "", from: x.from, to: x.to, color: x.color, overlay: true })),
+          priceLines: (feed.draw?.hlines ?? []).filter((h) => h.chart === "main").map((h, i) => ({ id: `h${i}`, paneId: "", price: h.value, color: h.color ?? "#888888", lineStyle: "dashed" as const, width: 1, title: h.name })),
+        });
         return { start: (c) => { ctx = c; off = (feed.subs.add(run), () => feed.subs.delete(run)); run(); }, onBars: run, onViewport: () => {}, setInputs: () => {}, suspend: () => {}, resume: run, stop: () => { off(); ctx = null; } };
       },
     });
@@ -120,14 +130,17 @@ export function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpe
       feed.plots[n] = (plots?.[n] ?? []).filter((p) => !p.symbol || p.symbol === sym).map((p) => ({ time: ms(p.date), value: p.value }));
       feed.colors[n] = cv(`--s${(i % 6) + 1}`, box.current ?? undefined);
       const wantOwn = own[n] ?? prev?.plot_charts?.[n] !== "main";
+      feed.own[n] = wantOwn;
       let e = handles.current.get(n);
-      if (!e) { e = { h: chart.addNativeIndicator("atlas.plot", { inputs: { name: n } }), own: false }; handles.current.set(n, e); e.h.moveTo(wantOwn ? { newPane: true } : "price"); e.own = wantOwn; }
-      else if (e.own !== wantOwn) { e.h.moveTo(wantOwn ? { newPane: true } : "price"); e.own = wantOwn; }
+      if (e && e.own !== wantOwn) { e.h.remove(); e = undefined; }
+      if (!e) { e = { h: chart.addNativeIndicator(wantOwn ? "atlas.pane" : "atlas.plot", { inputs: { name: n } }), own: wantOwn }; handles.current.set(n, e); }
       e.h.setVisible(!hidden.includes(n));
     });
     handles.current.forEach((e, n) => { if (!names.includes(n)) { e.h.remove(); handles.current.delete(n); } });
+    feed.draw = prev?.draw ?? null;
+    feed.bg = (prev?.draw?.bg ?? []).map((b) => ({ from: ms(b.date), to: ms(b.date) + 864e5, color: b.color }));
     push();
-  }, [chart, plots, hidden, own, sym, prev?.plot_charts]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chart, plots, hidden, own, sym, prev?.plot_charts, prev?.draw]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trades as markers on the lane, held spans and the paused bar as shading, the view follows the paused bar.
   useEffect(() => {
