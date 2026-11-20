@@ -94,3 +94,19 @@ def test_python_starter_gallery_trades_on_real_market_data():
         assert C.compile_spec(spec)["ok"], item["name"]
         result = backtest.simulate(spec, prepared[key], settings)
         assert len(result.trades) > 0, item["name"]
+
+
+def test_template_stats_cover_every_starter(tmp_path, monkeypatch):  # B-97
+    from app.services.studio_v3.core import templates
+
+    monkeypatch.setattr(store, "DB_PATH", tmp_path / "studio.sqlite")
+    first = templates.stats()
+    for _ in range(240):
+        if first["status"] == "ready":
+            break
+        time.sleep(0.25)
+        first = templates.stats()
+    stats = first["stats"]
+    names = [t["name"] for t in templates.list_templates()] + [t["name"] for t in templates.list_python_templates()]
+    assert first["status"] == "ready" and set(stats) == set(names)
+    assert all("total_return" in v and v["trades"] >= 0 for v in stats.values())

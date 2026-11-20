@@ -739,6 +739,12 @@ def test_alert(sid: str) -> dict[str, Any]:
     return {"sent": live.deliver(sid, "Studio test alert", "This is a test alert from Studio.")}
 
 
+@router.get("/templates/stats")
+def template_stats() -> dict[str, Any]:
+    """Each starter's backtest on its default universe; "computing" until the background pass finishes."""
+    return templates.stats()
+
+
 @router.get("/templates")
 def get_templates() -> dict[str, Any]:
     return {"templates": templates.list_templates(), "python_templates": templates.list_python_templates()}

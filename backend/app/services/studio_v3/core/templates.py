@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+
 from .compile import compile_spec
 from .spec import Strategy
 
@@ -200,3 +202,46 @@ def _universe(code: str) -> list[str] | None:
     from . import pycode
     found = pycode.universe_attribute(code)
     return found if isinstance(found, list) else None
+
+
+# --- gallery stats (B-97): each starter's backtest on its default universe, computed once per data version off the request path ---
+
+_stats_running = threading.Event()
+
+
+def stats() -> dict:
+    from . import data, store
+    key = f"template_stats:{data.data_version()}"
+    done = store.kv_get(key)
+    if done is not None:
+        return {"status": "ready", "stats": done}
+    if not _stats_running.is_set():
+        _stats_running.set()
+        threading.Thread(target=_compute_stats, args=(key,), daemon=True).start()
+    return {"status": "computing", "stats": {}}
+
+
+def _compute_stats(key: str) -> None:
+    import numpy as np
+
+    from . import backtest, store
+    from .spec import Settings, Strategy
+    out = {}
+    try:
+        items = [(t["name"], t["spec"], None) for t in list_templates()] + [(t["name"], t["spec"], t["symbols"]) for t in list_python_templates()]
+        for name, spec, symbols in items:
+            try:
+                settings = Settings(symbols=symbols, benchmark="") if symbols else Settings()
+                prep = backtest.prepare(settings)
+                r = backtest.simulate(Strategy(**spec), prep, settings)
+                eq = np.asarray(r.equity, dtype=float)
+                rets = np.diff(eq) / eq[:-1]
+                sd = float(np.std(rets))
+                out[name] = {"total_return": float(eq[-1] / eq[0] - 1), "sharpe": float(np.mean(rets) / sd * np.sqrt(252)) if sd > 0 else None,
+                             "max_drawdown": float((eq / np.maximum.accumulate(eq) - 1).min()), "trades": len(r.trades),
+                             "start": str(prep.panel.dates[0].date()), "end": str(prep.panel.dates[-1].date()), "symbols": len(prep.panel.symbols)}
+            except Exception as exc:  # noqa: BLE001 one broken starter must not hide the others
+                out[name] = {"error": str(exc)[:200]}
+        store.kv_set(key, out)
+    finally:
+        _stats_running.clear()
