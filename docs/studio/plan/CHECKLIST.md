@@ -746,7 +746,7 @@ Each needs an answer before the page it blocks. Defaults are in the text.
 - [ ] OD-18 Tax and wash-sale (REVIEW G10) is not in v3. Confirm it stays out
 - [ ] OD-19 Tick data is not in v3 (REVIEW §3). Confirm it stays out
 
-## Workspace (Studio v3 single screen, plan: docs/studio/plan/workspace_plan.html): 7 / 14 done
+## Workspace (Studio v3 single screen, plan: docs/studio/plan/workspace_plan.html): 8 / 14 done
 Merges Build (141 done features move into panels unchanged), the 22 open Build items, and DEV_IDEAS catalogue items (as numbered there).
 - [x] [L] W-1 Panel system: resizable splits, snap, one spring animation, 60 fps drag, layout remembered
 - [x] [M] W-2 Panels closed by default; open from View menu, palette and shortcuts
@@ -757,7 +757,7 @@ Merges Build (141 done features move into panels unchanged), the 22 open Build i
 - [ ] [M] W-7 Drawings saved per strategy; per-tool settings and floating toolbar
 - [ ] [L] W-8 Strategy Tester drawer: key stats, equity/drawdown, trades list, settings
 - [x] [M] W-9 ctx.fill, ctx.hline, ctx.bgcolor, ctx.draw_* rendered on the chart
-- [ ] [M] W-10 Declared params become an Inputs form; change a value and the chart re-runs
+- [x] [M] W-10 Declared params become an Inputs form; change a value and the chart re-runs
 - [ ] [L] W-11 Report page: performance, trades analysis, tearsheet, robustness, compare, certificate
 - [ ] [M] W-12 Chart-first mode for non-coders (D in the plan)
 - [x] [S] W-13 Fix: preview too short, broken resize and pan (superseded by W-1)
