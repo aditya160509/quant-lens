@@ -213,7 +213,7 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
   const hadErrors = useRef(0);
   useEffect(() => { if (errors && !hadErrors.current) { setPanelOpen(true); setTab("problems"); } hadErrors.current = errors; }, [errors]);
   const logRe = finder(logQ, opt);
-  const logs = (prev?.logs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logSym || l.symbol === logSym) && (!logFrom || l.date >= logFrom) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}`))));
+  const logs = (prev?.logs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logSym || l.symbol === logSym) && (!logFrom || l.date >= logFrom) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}${l.fields ? Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("") : ""}`))));
   const plots = Object.entries(prev?.plots ?? {});
   // B-81: the plots of the preview before this one, overlaid dashed when "Previous run" is on.
   const [before, setBefore] = useState<Record<string, Point[]> | null>(null);
