@@ -29,6 +29,7 @@
     "@codemirror/view": "^6.43.15",
     "@glass-sdk/liquid-glass": "^0.0.2",
     "@leeoniya/ufuzzy": "^1.0.19",
+    "@luxalgo/vela": "^0.10.13",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-dialog": "1.1.15",
     "@radix-ui/react-popover": "^1.1.23",

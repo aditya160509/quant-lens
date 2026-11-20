@@ -2,6 +2,21 @@
 
 One tracker for every acceptance id and every point in [FEATURES_PEAK.md](FEATURES_PEAK.md). Page specs: [PAGES.md](PAGES.md). Reasons: [REVIEW.md](REVIEW.md). Data limits and decisions: [DECISIONS.md](DECISIONS.md). Python editor gaps: [PYTHON_IDE.md](PYTHON_IDE.md). LEAN steps: [LEAN_PARITY.md](../research/LEAN_PARITY.md). Item-to-id map: bottom of FEATURES_PEAK.md.
 
+## Now: everything still open for Build + Workspace (one list)
+
+Three streams, in this order. Details stay in their sections below; this is the map.
+
+**1. Workspace (new single screen), section "Workspace" at the bottom: W-1 to W-14.** Panels, templates, rename/manage workspaces, Vela chart (mark B), Strategy Tester, ctx drawing calls, Inputs form, Report page, chart-first mode, old engine removal.
+
+**2. Build items still open (22), section "Build":**
+- Editor and IDE: B-13 editor groups, B-16 IDE keys (⌘\ split), B-26 undo survives reload, B-30 in-browser Pyright, B-73 logpoints, B-92 project files, B-93 libraries, B-137 shared undo / Explain
+- Customise: B-100 personal templates, ranges, default costs
+- Strategy logic: B-45 brackets and partial exits, B-106 condition kinds, B-110 trading frequency / corridor, B-115 Composer-style tree blocks (if/else branches), B-118 find rules, B-134 saved rule groups, B-136 "/" insert and snap grid
+- Records: B-133 notes with the certificate, B-10 screenshots at 1440 and 1024
+- Blocked or owner: B-55 ctx.store, B-67 and B-123 (fundamentals data), B-140 AI ⌘K edit
+
+**3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 1 replay tied to debugger (partial), 4 walk-forward, 6 optimisation heatmap, 7 parameter plateau, 8 drawing layer (now Vela, W-7), 11 to 15 research cells, reactive and SQL cells, data browser, 17 to 19 library, starters, share links, 20 review comments (partial), 21 and 22 AI explain and critic, 23 and 24 paper and live hooks, 26 keymap chords, 27 layouts (now W-3), 28 pop-out windows, 29 stress test, 30 chart templates. Built: 2, 3, 5, 9, 10, 25.
+
 ## Rules
 
 - One page at a time, in this order: Portfolio (finish), Home, Build (Python IDE per PYTHON_IDE.md), Backtest, Optimise, Validate, Live, Chart, Library, Cross-page.
