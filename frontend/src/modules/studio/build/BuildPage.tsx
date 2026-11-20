@@ -23,7 +23,7 @@ import "../studio.css";
 
 type Param = { value: number; min?: number | null; max?: number | null; step?: number | null; log?: boolean };
 type Spec = {
-  name: string; entry_long: string; exit_long: string; entry_short: string; exit_short: string; score: string; market_filter: string; defensive?: string;
+  name: string; entry_long: string; exit_long: string; entry_short: string; exit_short: string; score: string; market_filter: string; scale_in: string; max_entries?: number; defensive?: string;
   params: Record<string, Param>;
   exits: Record<string, number>; sizing: { mode: string; value: number; max_positions: number };
   limits: Record<string, number | null>; code: string; hypothesis: string; regime_claim: string; notes: string; [k: string]: unknown;
@@ -33,13 +33,13 @@ type RunSum = { headline?: string; total_return?: number; sharpe?: number | null
 type Loaded = { id: string; name: string; version: number; latest: number; spec: Spec; draft: Spec | null; versions: Version[]; trials: Ledger; runs_by_version: Record<string, RunSum>; regime_written_after: boolean };
 
 const BLANK: Spec = {
-  name: "Untitled", entry_long: "", exit_long: "", entry_short: "", exit_short: "", score: "", market_filter: "", params: {},
+  name: "Untitled", entry_long: "", exit_long: "", entry_short: "", exit_short: "", score: "", market_filter: "", scale_in: "", params: {},
   exits: { stop: 0, stop_atr: 0, target: 0, trail: 0, time_stop: 0, breakeven: 0, scale_at: 0, scale_frac: 0 },
   sizing: { mode: "equal", value: 0, max_positions: 10 },
   limits: { max_drawdown: 0.25, max_drawdown_months: null, min_trades: 30, min_years: null, max_beta: null, max_cost_share: null, min_start_pass: null },
   code: "", hypothesis: "", regime_claim: "", notes: "",
 };
-const ROLES: [string, string][] = [["entry_long", "Enter long"], ["exit_long", "Exit long"], ["entry_short", "Enter short"], ["exit_short", "Exit short"], ["score", "Rank by"], ["market_filter", "Trade only when"]];
+const ROLES: [string, string][] = [["entry_long", "Enter long"], ["exit_long", "Exit long"], ["entry_short", "Enter short"], ["exit_short", "Exit short"], ["score", "Rank by"], ["market_filter", "Trade only when"], ["scale_in", "Add when"]];
 const EXITS: [string, string, boolean][] = [["stop", "Stop", true], ["stop_atr", "Stop × ATR", false], ["target", "Target", true], ["trail", "Trailing stop", true], ["time_stop", "Time stop (bars)", false],
   ["breakeven", "Breakeven at", true], ["scale_at", "Scale out at", true], ["scale_frac", "Scale out share", true]];
 const LIMITS: [string, string, boolean][] = [["max_drawdown", "Max drawdown", true], ["max_drawdown_months", "Max drawdown months", false], ["min_trades", "Min trades", false],
@@ -520,13 +520,16 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           {ROLES.map(([role, label]) => {
             if (mode === "english") return null;
             const groups = (spec.groups ?? {}) as Record<string, Group>;
-            const tree: Group | null = mode === "blocks" && role !== "score" ? groups[role] ?? toGroup(spec[role] as string) ?? { op: "all", items: [{ rule: spec[role] as string, enabled: true }] } : null;
+            const tree: Group | null = mode === "blocks" && role !== "score" && role !== "scale_in" ? groups[role] ?? toGroup(spec[role] as string) ?? { op: "all", items: [{ rule: spec[role] as string, enabled: true }] } : null;
             const dropGroup = () => { const { [role]: _, ...rest } = groups; return rest; };
             return (
             <div key={role} className="bd-rule" data-role={role}>
               <label htmlFor={`r-${role}`}>{label}</label>
               {tree ? <GroupEditor id={`b-${role}`} group={tree} suggestions={catalogue} onChange={(g) => edit({ [role]: groupFormula(g), groups: { ...groups, [role]: g } })} /> : null}
-              {tree ? null : <textarea id={`r-${role}`} className="input" spellCheck={false} rows={role === "score" || role === "market_filter" ? 1 : 2} placeholder={role === "market_filter" ? "market > sma(market, 200)" : undefined} value={spec[role] as string} onSelect={track(role)} onFocus={track(role)} onChange={(e) => edit({ [role]: e.target.value, ...(role in groups ? { groups: dropGroup() } : {}) })} />}
+              {tree ? null : <textarea id={`r-${role}`} className="input" spellCheck={false} rows={role === "score" || role === "market_filter" || role === "scale_in" ? 1 : 2} placeholder={role === "market_filter" ? "market > sma(market, 200)" : undefined} value={spec[role] as string} onSelect={track(role)} onFocus={track(role)} onChange={(e) => edit({ [role]: e.target.value, ...(role in groups ? { groups: dropGroup() } : {}) })} />}
+              {role === "scale_in" && spec.scale_in.trim() ? (
+                <label className="bd-num"><span>Max fills</span><input className="input" type="number" min={1} max={20} aria-label="Most fills that build one position" style={{ width: 80 }} value={spec.max_entries ?? 3} onChange={(e) => edit({ max_entries: Math.max(1, Math.min(20, Number(e.target.value) || 1)) })} /></label>
+              ) : null}
               {role === "market_filter" && spec.market_filter.trim() ? (
                 <label className="bd-num"><span>Else hold</span><input className="input" aria-label="Symbol held while the market rule is false" placeholder="cash" style={{ width: 110 }} value={spec.defensive ?? ""} onChange={(e) => edit({ defensive: e.target.value.toUpperCase() })} /></label>
               ) : null}
