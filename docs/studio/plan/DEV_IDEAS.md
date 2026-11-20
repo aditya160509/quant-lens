@@ -536,3 +536,51 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 13. AI explain and critique (21, 22), kept behind an accept step. M and S.
 14. Paper trading hook and divergence view (23), then live status and kill switch (24). L and M. Do these only after the owner approves live-trading scope.
 15. Review comments (20), keymap (26), layouts (27), pop-out windows (28). M each.
+
+## Chart workspace plan (owner + Claude, 2026-11-20)
+
+Decision: replace the home-grown chart engine (`components/chart_engine`, ~25k lines) as the primary chart. Build on **KLineChart** (Apache-2.0, zero deps, ~50 KB gzip, built-in indicators and drawing overlays, `registerOverlay` / `registerIndicator` for custom ones; https://github.com/klinecharts/KLineChart, https://klinecharts.com/en-US/guide/overlay). Keep ours only until the new chart reaches parity, then delete it. Final call waits on `CHART_RESEARCH.md` (engine comparison in progress).
+
+Why KLineChart over the rest:
+- Lightweight-charts has no drawing tools; every "TradingView alternative" on top of it (OpenCharts, OrderCraft, dipping-charts) rebuilds drawings by hand.
+- **react-klinecharts-ui** (headless React hooks over klinecharts: indicators, alerts, replay, measure, compare, hotkeys, data export; ported from the QUANTIX KLineChart-Pro fork) gives us state without any UI lock-in, so our liquid-glass look stays ours. https://github.com/NemeZZiZZ/react-klinecharts-ui
+- **klinechartpro** (SiMahfud, Apache-2.0 fork of klinecharts/pro): 25 drawing tools, bar replay, shortcuts, custom tool API. Mine it for tools; don't take its SolidJS UI. https://github.com/SiMahfud/klinechartpro
+- Watch: **mg-exchange-chart** (Apache-2.0, Canvas 2D + WebGL, 60+ drawing tools, layered canvases, claims 60 fps at 100k visible bars). Only 3 stars, so it's a quarry for ideas and shaders, not a base. https://github.com/MG-Trading-Terminal/mg-exchange-chart
+
+### Layout: one Chart workspace (replaces the Chart tab)
+- **Top bar, one dense row**: symbol, timeframe, chart type, Indicators, Alerts, Replay, undo/redo, layout, snapshot, fullscreen. TakeProfit/TradingView density; no second toolbar.
+- **Left rail (slim)**: crosshair, trend lines, fib, patterns, shapes, text, measure, zoom, magnet, lock, hide, delete-all. Each group opens a flyout, and the last-used tool sticks on the rail. Option to pin it fully expanded along the top.
+- **Floating object toolbar** on a selected drawing: colour, width, style, extend, lock, visibility, clone, delete, settings. The settings dialog covers every property per tool.
+- **Script dock (right, optional)**: Python editor. Save, and the chart re-renders plots and trades with no 50/50 lock. Dev IDE stays for VS Code-style work.
+- **Strategy Tester drawer (bottom)** that opens when a strategy runs, TradingView-style:
+  - Key stats: PnL, max DD, win rate, profit factor.
+  - Performance chart: equity / drawdown / buy and hold toggle.
+  - Performance analysis tabs: breakdown, periodical, benchmarking, growth and decline.
+  - Trades analysis tabs: distribution, streaks, time patterns, excursions (MAE/MFE).
+  - List of trades.
+  - Settings: range, capital, costs, execution.
+  - Reuse `devStats.ts`, `DevTearsheet.tsx`, `DevRobust.tsx`.
+- **Motion**: one spring curve for every resize, collapse and flyout; no jumps.
+
+### Script language: Indie-style Python (our Pine)
+TakeProfit's Indie is Python-flavoured. We already have Python + `ctx.plot`, so no new language:
+- Add an indicator mode: a script with `plot()` only and no trades, declaring `overlay=True/False` (price pane vs its own pane), inputs (`input.int`, `input.float`, `input.source`) that render as a settings form, and colours, line styles, `fill`, `hline`, `bgcolor`.
+- Indicators run through the same pyrunner, return series, and are drawn via `registerIndicator` with the values precomputed.
+- **Pine import (later)**: **PineTS** (LuxAlgo, runs Pine v5/v6 in JS) could let people paste Pine scripts. Its licence is open-source with commercial terms for closed products, so check before use. https://github.com/LuxAlgo/PineTS
+- **Marketplace (later)**: share and install community indicators, like TakeProfit's.
+
+### Best quant OSS to take from (beyond charts)
+- **OpenStatz** (Apache-2.0, a QuantStats rebuild with an interactive web tearsheet): same numbers, modern UI. Use it as the reference for our Strategy Tester metrics. https://github.com/marketcalls/openstatz
+- **QuantStats** (Apache-2.0): metric definitions to match. https://github.com/ranaroussi/quantstats
+- **skfolio** (sklearn-style portfolio optimisation and risk): candidate for the Portfolio page. https://skfolio.org/
+- **NautilusTrader**: event-driven realism (fills, latency). **vectorbt**: vectorised sweeps for the optimiser. Comparisons: https://python.financial/comparisons/vectorbt-pro-vs-nautilustrader, https://python.financial/benchmarks/event-processing
+- **OpenAlgo**: node-based visual strategy editor on React Flow; an idea for Simple mode. https://github.com/marketcalls/openalgo
+- **awesome-quant**: master list to mine per page. https://github.com/wilsonfreitas/awesome-quant
+
+### Build order
+1. Spike: KLineChart + react-klinecharts-ui in the Chart tab with our bars, trades and plots, plus two drawing tools. Screenshot it against TradingView.
+2. Left rail, flyouts, floating toolbar, per-tool settings.
+3. Strategy Tester drawer (reuse devStats).
+4. Indicator mode in pyrunner + input forms + `registerIndicator` bridge.
+5. Script dock with live sync.
+6. Delete the old engine once FullChart is migrated.
