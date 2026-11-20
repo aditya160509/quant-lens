@@ -461,3 +461,17 @@
 .dv-replay .seg button { min-width: 30px; }
 .dv-con-at { color: var(--text-4); font: 11px var(--mono); font-style: normal; }
 .dv-tools { gap: 4px; }
+
+/* Dev: soft floating panels instead of hard dividers (owner feedback 2026-11-20). */
+.dv { gap: 6px; padding: 0 6px 6px; background: transparent; box-shadow: none; }
+.dv-bar, .dv-icons, .dv-rail, .dv-rail h4, .dv-side, .dv-status, .dv-status > *, .dv-tabs, .dv-grip { border: 0; }
+.dv-rail, .dv-side, .dv-editor, .dv-panel { background: var(--island); border-radius: 12px; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--text) 5%, transparent); overflow: hidden; }
+.dv-main { gap: 0; background: transparent; }
+.dv-grip { background: transparent; border-radius: 4px; }
+.dv-grip:hover, .dv-grip:active { background: color-mix(in oklab, var(--accent) 45%, transparent); opacity: 1; }
+.dv-icons .icon-btn { width: 40px; height: 40px; margin: 2px 0; border-radius: 10px; }
+.dv-tab { height: 28px; margin: 0 2px; align-self: center; border-radius: 8px; }
+.dv-tab[aria-selected="true"] { background: color-mix(in oklab, var(--text) 9%, transparent); box-shadow: none; }
+.dv-tab:hover:not([aria-selected="true"]) { background: color-mix(in oklab, var(--text) 5%, transparent); }
+.dv-status { background: transparent; border-radius: 8px; }
+.dv-status > button { border-radius: 6px; }
