@@ -10,7 +10,7 @@ type Partial = { x: string; y: string | null; cells: [number, number, number | n
 export default function LiveSweep({ feature, progress }: { feature: FeatureSpec; progress: unknown }) {
   const p = (progress as { partial?: Partial } | null)?.partial;
   const grid = useMemo(() => {
-    if (!p) return null;
+    if (!p?.cells) return null;
     const xs = [...new Set(p.cells.map((c) => c[0]))].sort((a, b) => a - b), ys = [...new Set(p.cells.map((c) => c[1]))].sort((a, b) => a - b);
     const v: (number | null)[][] = ys.map(() => xs.map(() => null));
     for (const [x, y, s] of p.cells) if (s !== null) v[ys.indexOf(y)][xs.indexOf(x)] = Math.max(v[ys.indexOf(y)][xs.indexOf(x)] ?? -Infinity, s);
