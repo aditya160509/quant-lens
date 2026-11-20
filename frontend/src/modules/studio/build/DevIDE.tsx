@@ -1,6 +1,7 @@
 "use client";
 
 import { DiffEditor } from "@monaco-editor/react";
+import { Group, Panel, Separator, type GroupImperativeHandle } from "react-resizable-panels";
 import Link from "next/link";
 import { BookOpen, Bug, ChevronDown, LayoutPanelLeft, PanelRight, Maximize2, Minimize2, CaseSensitive, Columns2, Pin, PinOff, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -14,6 +15,7 @@ import { RECIPES } from "./recipes";
 import { useLayout } from "@/workspace/layout";
 import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 import { DevChart } from "./DevChart";
+import { snap, springTo, targets, useWorkspaces, WorkspaceMenu, type PanelId } from "./Workspace";
 import { DevRobust } from "./DevRobust";
 import { DevRuns, type RunEntry } from "./DevRuns";
 import { DevTearsheet } from "./DevTearsheet";
@@ -46,16 +48,12 @@ type Snapshot = { at: number; files: Record<string, string> };
 type Snippet = { id: string; name: string; prefix: string; body: string; description: string };
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 type Tab = "problems" | "output" | "plots" | "trades" | "debug" | "console";
-type View = "code" | "chart" | "results" | "tearsheet" | "robust" | "runs";
-const VIEW_LABEL: Record<Exclude<View, "code">, string> = { chart: "Chart", results: "Results", tearsheet: "Tearsheet", robust: "Robustness", runs: "Runs" };
+type View = "code" | "results" | "tearsheet" | "robust" | "runs";
+const VIEW_LABEL: Record<Exclude<View, "code">, string> = { results: "Results", tearsheet: "Tearsheet", robust: "Robustness", runs: "Runs" };
 type Rail = "files" | "outline" | "search" | "versions" | "docs" | "templates";
 type Spec = { code: string; files?: Record<string, string>; params: Record<string, { value: number; min?: number | null; max?: number | null; step?: number | null }>; [k: string]: unknown };
 export type Saved = "saved" | "draft" | "saving" | "conflict" | "new";
 
-const store = {
-  get: (k: string, f: number) => { try { return Number(localStorage.getItem(k)) || f; } catch { return f; } },
-  set: (k: string, v: number) => { try { localStorage.setItem(k, String(v)); } catch { /* blocked */ } },
-};
 const show = (v: unknown) => (v === null || v === undefined ? "—" : typeof v === "number" ? (Number.isInteger(v) ? String(v) : v.toFixed(4)) : typeof v === "object" ? JSON.stringify(v) : String(v));
 const pct = (v?: number) => (v === undefined ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
 const DOC_SCOPES = ["ctx", "portfolio_ctx", "numpy", "pandas", "math", "statistics"];
@@ -89,27 +87,27 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
   const [open, setOpen] = useState<string[]>(["main.py"]);
   const [active, setActive] = useState("main.py");
   const [rail, setRail] = useState<Rail>("files");
-  const [railOpen, setRailOpen] = useState(true);
+  const ws = useWorkspaces();
+  const open_ = ws.cur.layout.open;
+  const setOpenP = (p: PanelId, v: boolean | ((o: boolean) => boolean)) => ws.patch((l) => ({ ...l, open: { ...l.open, [p]: typeof v === "function" ? v(l.open[p]) : v } }));
+  const railOpen = open_.rail, setRailOpen = (v: boolean | ((o: boolean) => boolean)) => setOpenP("rail", v);
+  const panelOpen = open_.tester, setPanelOpen = (v: boolean | ((o: boolean) => boolean)) => setOpenP("tester", v);
+  const hRef = useRef<GroupImperativeHandle>(null), vRef = useRef<GroupImperativeHandle>(null);
+  const chartSeen = useRef(false);
+  if (open_.chart) chartSeen.current = true;
   const [view, setView] = useState<View>("code");
   const [extra, setExtra] = useState<Exclude<View, "code">[]>([]);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const stepping = useRef(false);
   const debugRef = useRef<(b: Record<string, unknown>, quiet?: boolean) => Promise<void> | void>(() => undefined);
-  const [panelOpen, setPanelOpen] = useState(false);
   const [panelMax, setPanelMax] = useState(false);
-  const [railW, setRailW] = useState(() => store.get("studio:dev:railw", 220));
-  const [sideW, setSideW] = useState(() => store.get("studio:dev:sidew", 360));
   const [tab, setTab] = useState<Tab>("problems");
   const [lint, setLint] = useState<Problem[]>([]);
   const [types, setTypes] = useState<Problem[]>([]);
   const [outline, setOutline] = useState<Sym[]>([]);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [reveal, setReveal] = useState<{ line: number; column?: number; n: number } | null>(null);
-  const [panel, setPanel] = useState(() => store.get("studio:dev:panel", typeof window === "undefined" ? 320 : Math.round(window.innerHeight * 0.42)));
-  // Preview column: shown, hidden, or wide (chart at full size); remembered.
-  const [sideMode, setSideMode] = useState<"on" | "off" | "wide">(() => { try { const v = localStorage.getItem("studio:dev:side"); return v === "on" || v === "wide" ? v : "off"; } catch { return "off"; } });
-  useEffect(() => { try { localStorage.setItem("studio:dev:side", sideMode); } catch { /* blocked */ } window.dispatchEvent(new CustomEvent("studio:side", { detail: sideMode })); }, [sideMode]);
   // Dev wants the width: the workspace sidebar closes while Dev is open and comes back after (user feedback 2026-11-20).
   useEffect(() => { const was = useLayout.getState().open.left; useLayout.getState().set("left", false, true); return () => useLayout.getState().set("left", was, true); }, []);
   const [logQ, setLogQ] = useState("");
@@ -202,7 +200,7 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
   useEffect(() => {
     const on = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
-      if (id.startsWith("goto:")) { openView("chart"); replayGo(id.slice(5), undefined); return; }
+      if (id.startsWith("goto:")) { setOpenP("chart", true); replayGo(id.slice(5), undefined); return; }
       actionsRef.current.find((a) => a.id === id)?.run(cursor.line);
     };
     window.addEventListener("studio:dev", on); return () => window.removeEventListener("studio:dev", on);
@@ -272,7 +270,8 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
   const pinRun = (id: string) => setRunLog((l) => l.map((r) => (r.id === id ? { ...r, pinned: !r.pinned } : r)));
   const renameRun = (id: string) => { const n = window.prompt("Name this run")?.trim(); if (n) setRunLog((l) => l.map((r) => (r.id === id ? { ...r, label: n } : r))); };
   const openView = (v: Exclude<View, "code">) => { setExtra((x) => (x.includes(v) ? x : [...x, v])); setView(v); };
-  const closeView = (v: Exclude<View, "code">) => { setExtra((x) => x.filter((y) => y !== v)); if (view === v) setView("code"); if (v === "chart") setPlaying(false); };
+  const closeView = (v: Exclude<View, "code">) => { setExtra((x) => x.filter((y) => y !== v)); if (view === v) setView("code"); };
+  useEffect(() => { if (!open_.chart) setPlaying(false); }, [open_.chart]);
   const startDebug = () => {
     const bp = Object.entries(bps).flatMap(([file, lines]) => lines.map((line) => ({ file, line })))[0];
     debug(bp ? { date: dbgDate || (prev?.bars?.[0]?.date ?? ""), breakpoint: { ...bp, condition: cond || null } } : {});
@@ -306,28 +305,26 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
     openView("results"); setProfile("loading");
     void studio<{ profile?: Profile }>("POST", "/build/profile", { spec, symbol }).then((r) => setProfile(r.profile ?? {}), (e: Error) => { setProfile(null); toast.error(e.message); });
   };
-  useEffect(() => { if (sideMode === "wide" && window.innerWidth <= 1280) setRailOpen(false); }, [sideMode]);
   useEffect(() => { if (quick?.job_id) openView("results"); }, [quick?.job_id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!quick || !["queued", "running"].includes(quick.status)) return;
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel?.(); };
     window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc);
   }, [quick, onCancel]);
-  const drag = (e: React.PointerEvent) => {
-    const y0 = e.clientY, h0 = panel;
-    const move = (m: PointerEvent) => setPanel(Math.min(Math.max(h0 - (m.clientY - y0), 120), window.innerHeight * 0.85));
-    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); setPanel((h) => { store.set("studio:dev:panel", h); return h; }); };
-    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  useEffect(() => { const t = targets(ws.cur.layout); springTo(hRef.current, t.h); springTo(vRef.current, t.v); }, [ws.cur.id, open_.rail, open_.chart || open_.preview, open_.tester]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** After a drag: snap the chart to 30/50/70, close a panel pulled to the edge, remember the size. */
+  const onH = (l: Record<string, number>, m: { isUserInteraction: boolean }) => {
+    if (!m.isUserInteraction) return;
+    const right = snap(l.right, [30, 50, 70]);
+    ws.patch((x) => ({ open: { ...x.open, rail: x.open.rail && l.rail >= 6, chart: x.open.chart && right >= 8, preview: x.open.preview && right >= 8 },
+      size: { ...x.size, rail: x.open.rail && l.rail >= 6 ? l.rail : x.size.rail, right: right >= 8 ? right : x.size.right } }));
+    if (right !== l.right && right >= 8) springTo(hRef.current, { rail: l.rail, center: 100 - l.rail - right, right });
   };
-
-  /** Drag a vertical edge: the rail grows rightward, the preview leftward. Size is remembered. */
-  const vdrag = (key: string, set: (w: number) => void, w0: number, dir: 1 | -1) => (e: React.PointerEvent) => {
-    e.preventDefault();
-    const x0 = e.clientX; let w = w0;
-    const move = (m: PointerEvent) => { w = Math.round(Math.min(Math.max(w0 + dir * (m.clientX - x0), 180), window.innerWidth * 0.6)); set(w); };
-    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); store.set(key, w); };
-    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  const onV = (l: Record<string, number>, m: { isUserInteraction: boolean }) => {
+    if (!m.isUserInteraction) return;
+    ws.patch((x) => ({ open: { ...x.open, tester: x.open.tester && l.tester >= 8 }, size: { ...x.size, tester: x.open.tester && l.tester >= 8 ? l.tester : x.size.tester } }));
   };
+  const maxTester = () => { const next = !panelMax; setPanelMax(next); const t = next ? 85 : 34; ws.patch((x) => ({ ...x, size: { ...x.size, tester: t } })); springTo(vRef.current, { editor: 100 - t, tester: t }); };
 
   const actions: EditorAction[] = [
     { id: "studio.debug", label: "Debug: start", keys: (m) => [m.KeyCode.F5], run: () => startDebug() },
@@ -343,7 +340,7 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
     { id: "studio.fullrun", label: "Run: full backtest (recorded)", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => { openView("results"); if (onQuickRun) onQuickRun("full"); else onFullRun(); } },
     { id: "studio.quickrun", label: "Run: quick (top 50, 5 years)", run: () => { openView("results"); if (onQuickRun) onQuickRun("quick"); else onRun(); } },
     { id: "studio.cancel", label: "Run: cancel", run: () => onCancel?.() },
-    { id: "studio.chart", label: "View: chart with replay", run: () => openView("chart") },
+    { id: "studio.chart", label: "View: chart with replay", run: () => setOpenP("chart", true) },
     { id: "studio.results", label: "View: results", run: () => openView("results") },
     { id: "studio.tearsheet", label: "View: tearsheet", run: () => openView("tearsheet") },
     { id: "studio.runs", label: "View: compare runs", run: () => openView("runs") },
@@ -425,7 +422,7 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
               })();
 
   return (
-    <div className="dv" data-rail={railOpen || undefined} data-side={sideMode} data-pmax={panelOpen && panelMax || undefined} style={{ ["--panel-h" as string]: panelOpen ? `${panel}px` : "0px", ["--rail-w" as string]: `${railW}px`, ["--side-w" as string]: `${sideW}px` }}>
+    <div className="dv">
       <div className="dv-bar">
         <div className="dv-title">{title}</div>
         <div className="dv-tabs" role="tablist">
@@ -442,17 +439,17 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
           {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
         </div>
         <div className="dv-tools">
+          <WorkspaceMenu ws={ws} />
           <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
             <summary className="btn sm ghost" aria-label="View menu"><LayoutPanelLeft size={14} />View<ChevronDown size={12} /></summary>
             <div className="dv-menu" role="menu" onClick={(e) => { (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
-              <button role="menuitem" onClick={() => openView("chart")}>Chart and replay</button>
-              <button role="menuitem" onClick={() => openView("results")}>Results</button>
+                            <button role="menuitem" onClick={() => openView("results")}>Results</button>
               <button role="menuitem" onClick={() => openView("tearsheet")}>Tearsheet</button>
               <button role="menuitem" onClick={() => openView("robust")}>Robustness</button>
               <button role="menuitem" onClick={() => openView("runs")}>Compare runs</button>
               <hr />
-              <button role="menuitemcheckbox" aria-checked={sideMode === "on"} onClick={() => setSideMode(sideMode === "on" ? "off" : "on")}>Preview</button>
-              <button role="menuitemcheckbox" aria-checked={sideMode === "wide"} onClick={() => setSideMode(sideMode === "wide" ? "off" : "wide")}>Preview 50 / 50</button>
+              <button role="menuitemcheckbox" aria-checked={open_.chart} onClick={() => setOpenP("chart", (o) => !o)}>Chart</button>
+              <button role="menuitemcheckbox" aria-checked={open_.preview} onClick={() => setOpenP("preview", (o) => !o)}>Preview</button>
               <button role="menuitemcheckbox" aria-checked={!!split} onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}>Split editor</button>
               <button role="menuitemcheckbox" aria-checked={panelOpen} onClick={() => setPanelOpen((o) => !o)}>Panel</button>
               <button role="menuitemcheckbox" aria-checked={railOpen} onClick={() => setRailOpen((o) => !o)}>Side bar</button>
@@ -464,9 +461,9 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
       <nav className="dv-icons" aria-label="Side bar">
         {RAILS.map(([k, icon, l]) => <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={railOpen && rail === k} onClick={() => { if (railOpen && rail === k) setRailOpen(false); else { setRail(k); setRailOpen(true); } }}>{icon}</button>)}
       </nav>
-      {railOpen ? (
-        <nav className="dv-rail" aria-label={RAILS.find((r) => r[0] === rail)?.[2]}>
-          <div className="dv-vgrip" data-edge="r" role="separator" aria-orientation="vertical" aria-label="Resize side bar" onPointerDown={vdrag("studio:dev:railw", setRailW, railW, 1)} onDoubleClick={() => { setRailW(240); store.set("studio:dev:railw", 220); }} />
+      <Group className="dv-body" orientation="horizontal" id="dv-h" groupRef={hRef} defaultLayout={targets(ws.cur.layout).h} onLayoutChanged={onH}>
+      <Panel id="rail" minSize={0}>
+        <nav className="dv-rail" aria-hidden={!railOpen} aria-label={RAILS.find((r) => r[0] === rail)?.[2]}>
           <h4>{RAILS.find((r) => r[0] === rail)?.[2]}</h4>
           {rail === "files" ? (
             <div className="dv-list dv-explorer">
@@ -557,13 +554,15 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
             </div>
           )}
         </nav>
-      ) : null}
-
-      <section className="dv-main">
+      </Panel>
+      <Separator className="dv-gutter" disabled={!railOpen} />
+      <Panel id="center" minSize={20}>
+      <Group className="dv-main" orientation="vertical" id="dv-v" groupRef={vRef} defaultLayout={targets(ws.cur.layout).v} onLayoutChanged={onV}>
+      <Panel id="editor" minSize={10} className="dv-edpane">
         <div className="dv-editor" data-split={split && !diff ? (splitDown ? "down" : "right") : undefined}>
           {view !== "code" ? (
             <div className="dv-view-pane" data-kind={view}>
-              {view === "chart" ? <DevChart symbol={symbol} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={(d, st) => replayGo(d, st)} /> : <div className="dv-pbody">{view === "tearsheet" ? <DevTearsheet quick={quick ?? null} /> : view === "robust" ? <DevRobust quick={quick ?? null} /> : view === "runs" ? <DevRuns runs={runLog} onPin={pinRun} onRename={renameRun} /> : resultsView}</div>}
+              <div className="dv-pbody">{view === "tearsheet" ? <DevTearsheet quick={quick ?? null} /> : view === "robust" ? <DevRobust quick={quick ?? null} /> : view === "runs" ? <DevRuns runs={runLog} onPin={pinRun} onRename={renameRun} /> : resultsView}</div>
             </div>
           ) : null}
           {!spec.code.trim() && active === "main.py" && !diff ? (
@@ -603,13 +602,14 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
             <form onSubmit={(e) => { e.preventDefault(); postCmt(); }}><input className="input" autoFocus aria-label="Reply" placeholder="Comment" value={cmtText} onChange={(e) => setCmtText(e.target.value)} /><button className="btn sm primary" disabled={!cmtText.trim()}>Post</button></form>
           </div>
         ) : null}
-        <div className="dv-grip" role="separator" aria-orientation="horizontal" aria-label="Resize panel" onPointerDown={drag} onDoubleClick={() => setPanelOpen((o) => !o)} />
-        {panelOpen ? (
-          <div className="dv-panel">
+      </Panel>
+      <Separator className="dv-gutter" disabled={!panelOpen} />
+      <Panel id="tester" minSize={0}>
+          <div className="dv-panel" aria-hidden={!panelOpen}>
             <div className="dv-ptabs" role="tablist">
               {TABS.map(([k, l, n]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{l}{n ? <span className="num">{n}</span> : null}</button>)}
               <span style={{ flex: 1 }} />
-              <button className="icon-btn" aria-label={panelMax ? "Restore panel" : "Maximise panel"} title={panelMax ? "Restore panel" : "Maximise panel"} onClick={() => setPanelMax((m) => !m)}>{panelMax ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
+              <button className="icon-btn" aria-label={panelMax ? "Restore panel" : "Maximise panel"} title={panelMax ? "Restore panel" : "Maximise panel"} onClick={maxTester}>{panelMax ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
               <button className="icon-btn" aria-label="Hide panel" title="Hide panel ⌘J" onClick={() => setPanelOpen(false)}><X size={13} /></button>
             </div>
             <div className="dv-pbody" onScroll={(e) => { if (tab === "output") setLogTop(e.currentTarget.scrollTop); }}>
@@ -706,13 +706,17 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
               ) : null}
             </div>
           </div>
-        ) : null}
-      </section>
-
-      <aside className="dv-side">
-        <div className="dv-vgrip" data-edge="l" role="separator" aria-orientation="vertical" aria-label="Resize preview" onPointerDown={vdrag("studio:dev:sidew", setSideW, sideW, -1)} onDoubleClick={() => { setSideW(380); store.set("studio:dev:sidew", 360); }} />
-        {side}
+      </Panel>
+      </Group>
+      </Panel>
+      <Separator className="dv-gutter" disabled={!open_.chart && !open_.preview} />
+      <Panel id="right" minSize={0}>
+      <aside className="dv-side" data-both={(open_.chart && open_.preview) || undefined}>
+        {chartSeen.current ? <div className="dv-chartpane" hidden={!open_.chart}><DevChart symbol={symbol} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={(d, st) => replayGo(d, st)} /></div> : null}
+        {open_.preview ? <div className="dv-prevpane">{side}</div> : null}
       </aside>
+      </Panel>
+      </Group>
 
       <footer className="dv-status">
         <span>{active}</span><span>Ln {cursor.line}, Col {cursor.column}</span>
