@@ -385,13 +385,11 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const savedState: Saved = saving === "saving" ? "saving" : saving === "conflict" ? "conflict" : !loaded ? "new" : dirty ? "draft" : "saved";
   const compileProblems: Problem[] = (compiled?.findings ?? []).filter((f) => f.role === "code").map((f) => ({ severity: f.severity, file: "main.py", line: Math.max(1, f.line), column: f.start + 1, end_column: Math.max(f.end, f.start + 1) + 1, code: "compile", message: f.message }));
 
-  return (
-    <div className="bd" data-ui={ui}>
-      <header className="bd-head">
-        <input className="bd-name" aria-label="Strategy name" value={spec.name} onChange={(e) => edit({ name: e.target.value })} />
-        <span className="bd-meta">{loaded ? `v${loaded.latest}${dirty ? " · draft" : " · saved"}` : "new"}{compiled?.ms !== undefined ? ` · compiled in ${compiled.ms} ms` : ""}</span>
-        {loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null}
-        <span style={{ flex: 1 }} />
+  const nameInput = (
+<input className="bd-name" aria-label="Strategy name" value={spec.name} onChange={(e) => edit({ name: e.target.value })} />
+  );
+  const headRight = (
+    <>
         {loaded && loaded.versions.length > 1 ? (
           <select className="input" aria-label="Version" value={loaded.version} onChange={(e) => void load(loaded.id, Number(e.target.value))}>
             {[...loaded.versions].reverse().map((v) => <option key={v.version} value={v.version}>v{v.version} · {new Date(v.created * 1000).toLocaleDateString()} · {v.actor}</option>)}
@@ -427,7 +425,19 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         }} />
         <button className="btn" onClick={() => void save()}><Save size={14} />Save<kbd>⌘S</kbd></button>
         <button className="btn primary" disabled={compiled ? !compiled.ok : true} onClick={() => void run()}><Play size={14} />Run backtest<kbd>⌘↵</kbd></button>
-      </header>
+    </>
+  );
+
+  return (
+    <div className="bd" data-ui={ui}>
+      {ui === "dev" ? null : (
+      <header className="bd-head">
+        <input className="bd-name" aria-label="Strategy name" value={spec.name} onChange={(e) => edit({ name: e.target.value })} />
+        <span className="bd-meta">{loaded ? `v${loaded.latest}${dirty ? " · draft" : " · saved"}` : "new"}{compiled?.ms !== undefined ? ` · compiled in ${compiled.ms} ms` : ""}</span>
+        {loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null}
+        <span style={{ flex: 1 }} />
+        {headRight}
+      </header>)}
 
       <Palette open={palette} onClose={() => setPalette(false)} commands={commands} />
       {dialog === "branches" && loaded ? <BranchDialog id={loaded.id} name={spec.name} spec={spec} onClose={() => setDialog(null)} onMerged={(t) => router.push(`/studio/build/${t}`)} /> : null}
@@ -452,7 +462,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
                 <button className="icon-btn" aria-label={`Delete template ${t.name}`} onClick={(e) => { e.stopPropagation(); saveMine(mine.filter((x) => x !== t)); }}><Trash2 size={12} /></button></div>
             ))}
             {templates.data.map((t) => (
-              <button key={t.name} className="bd-tpl" onClick={() => applyTemplate(t)}><b>{t.name}</b><span>{t.rule}</span><TplStat spec={t.spec} /></button>
+              <button key={t.name} className="bd-tpl" onClick={() => applyTemplate(t)}><b>{t.name}</b><span>{t.rule}</span><TplStat name={t.name} /></button>
             ))}
           </div>
         </section>
@@ -468,7 +478,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           })() : null}
         </section>
       ) : null}
-      {ui === "dev" ? <DevIDE spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} onRun={() => void run()} onFullRun={() => void run()} compileProblems={compileProblems}
+      {ui === "dev" ? <DevIDE title={nameInput} tools={headRight} spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} onRun={() => void run()} onFullRun={() => void run()} compileProblems={compileProblems}
         strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={(d, l) => { setPausedAt(d); setPausedLabel(l ?? "❚❚"); }} font={font} savedFiles={loaded ? { "main.py": (loaded.spec as Spec).code ?? "", ...(((loaded.spec as Spec).files as Record<string, string>) ?? {}) } : undefined} quick={quick} onQuickRun={(l) => void quickRun(l)} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid" data-compact={readDefaults().compact || undefined} data-plain={readDefaults().plain || undefined}>
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
@@ -624,10 +634,17 @@ function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void })
   );
 }
 
-/** Last preview result for a starter on SPY over its window (B-97). */
-function TplStat({ spec }: { spec: unknown }) {
-  const [r, setR] = useState<{ total_return?: number; trades?: unknown[] } | null>(null);
-  useEffect(() => { void studio<{ total_return?: number; trades?: unknown[] }>("POST", "/preview", { spec, symbol: "SPY" }).then(setR, () => undefined); }, [spec]);
+type TplStats = { status: string; stats: Record<string, { total_return?: number; sharpe?: number | null; max_drawdown?: number; trades?: number; symbols?: number; start?: string; end?: string; error?: string }> };
+let tplStats: Promise<TplStats> | null = null;
+const loadTplStats = (): Promise<TplStats> => {
+  tplStats ??= studio<TplStats>("GET", "/templates/stats").then((r) => { if (r.status !== "ready") { tplStats = null; return new Promise<TplStats>((ok) => setTimeout(() => ok(loadTplStats()), 2000)); } return r; }, (e) => { tplStats = null; throw e; });
+  return tplStats;
+};
+
+/** A starter's backtest on its default universe (B-97). */
+function TplStat({ name }: { name: string }) {
+  const [r, setR] = useState<TplStats["stats"][string] | null>(null);
+  useEffect(() => { void loadTplStats().then((s) => setR(s.stats[name] ?? null), () => undefined); }, [name]);
   if (!r || r.total_return == null) return null;
-  return <i className="bd-tpl-stat" data-neg={r.total_return < 0 || undefined}>SPY {r.total_return >= 0 ? "+" : ""}{(r.total_return * 100).toFixed(1)}% · {r.trades?.length ?? 0} trade{r.trades?.length === 1 ? "" : "s"}</i>;
+  return <i className="bd-tpl-stat" data-neg={r.total_return < 0 || undefined} title={`${r.symbols} names, ${r.start} to ${r.end}`}>{r.total_return >= 0 ? "+" : ""}{(r.total_return * 100).toFixed(0)}% · Sharpe {r.sharpe?.toFixed(2) ?? "—"} · DD {((r.max_drawdown ?? 0) * 100).toFixed(0)}% · {r.trades} trades</i>;
 }
