@@ -227,7 +227,8 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
       run: (x) => { const r = x.getSelection(); if (r) rewrite("/build/format-range", { start_line: r.startLineNumber, end_line: r.endLineNumber }); } });
     editor.addAction({ id: "studio.organiseImports", label: "Organise imports", keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyO], run: () => rewrite("/build/organise-imports") });
     editor.addAction({ id: "studio.migrate", label: "Migrate to the current Studio API", run: () => rewrite("/build/migrate") });
-    for (const a of acts.current) editor.addAction({ id: a.id, label: a.label, keybindings: a.keys?.(monaco), run: (x) => acts.current.find((y) => y.id === a.id)?.run(x.getPosition()?.lineNumber ?? 1) });
+    const custom = userKeys();
+    for (const a of acts.current) editor.addAction({ id: a.id, label: a.label, keybindings: custom[a.id] ? parseKeys(monaco, custom[a.id]) ?? a.keys?.(monaco) : a.keys?.(monaco), run: (x) => acts.current.find((y) => y.id === a.id)?.run(x.getPosition()?.lineNumber ?? 1) });
   };
 
   return (
@@ -236,4 +237,26 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
         padding: { top: 10 }, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace", quickSuggestions: { strings: true, other: true, comments: false },
         bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true }, glyphMargin: true, readOnly }} />
   );
+}
+
+/** Studio commands whose shortcut can be changed in Customise (B-100). */
+export const REBINDABLE: [string, string][] = [["studio.debug", "Debug: start"], ["studio.bp", "Toggle breakpoint"], ["studio.step", "Step one bar"], ["studio.stepback", "Step back one bar"],
+  ["studio.panel", "Toggle panel"], ["studio.rail", "Toggle side bar"], ["studio.files", "Go to file"], ["studio.search", "Search project"], ["studio.docs", "Docs"], ["studio.fullrun", "Full run"], ["studio.quickrun", "Quick run"]];
+
+export const userKeys = (): Record<string, string> => { try { return (JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as { keys?: Record<string, string> }).keys ?? {}; } catch { return {}; } };
+
+/** "Cmd+Shift+K", "F6", "Alt+Enter" as a Monaco keybinding; null when it does not parse. */
+export function parseKeys(m: Monaco, text: string): number[] | null {
+  let mod = 0, key: number | undefined;
+  for (const raw of text.split("+").map((x) => x.trim().toLowerCase()).filter(Boolean)) {
+    if (["cmd", "ctrl", "meta", "⌘"].includes(raw)) mod |= m.KeyMod.CtrlCmd;
+    else if (["shift", "⇧"].includes(raw)) mod |= m.KeyMod.Shift;
+    else if (["alt", "option", "opt", "⌥"].includes(raw)) mod |= m.KeyMod.Alt;
+    else if (raw === "enter" || raw === "return") key = m.KeyCode.Enter;
+    else if (/^f([1-9]|1[0-9])$/.test(raw)) key = (m.KeyCode as unknown as Record<string, number>)[raw.toUpperCase()];
+    else if (/^[a-z]$/.test(raw)) key = (m.KeyCode as unknown as Record<string, number>)[`Key${raw.toUpperCase()}`];
+    else if (/^[0-9]$/.test(raw)) key = (m.KeyCode as unknown as Record<string, number>)[`Digit${raw}`];
+    else return null;
+  }
+  return key === undefined ? null : [mod | key];
 }

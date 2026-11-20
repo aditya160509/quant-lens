@@ -2,7 +2,7 @@
 
 import { DiffEditor } from "@monaco-editor/react";
 import Link from "next/link";
-import { BookOpen, Bug, CaseSensitive, Columns2, Pin, PinOff, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
+import { BookOpen, Bug, PanelRight, Maximize2, CaseSensitive, Columns2, Pin, PinOff, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { SERIES } from "@/charts/core";
@@ -11,6 +11,7 @@ import { TimeSeries } from "@/charts/TimeSeries";
 import { DataTable } from "@/kit/DataTable";
 import { studio, usePyTemplates } from "../api";
 import { RECIPES } from "./recipes";
+import { useLayout } from "@/workspace/layout";
 import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 
 type Log = { date: string; symbol: string | null; line: number; text: string; level: string; fields?: Record<string, unknown> | null };
@@ -83,14 +84,19 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [active, setActive] = useState("main.py");
   const [rail, setRail] = useState<Rail>("files");
   const [railOpen, setRailOpen] = useState(true);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("problems");
   const [lint, setLint] = useState<Problem[]>([]);
   const [types, setTypes] = useState<Problem[]>([]);
   const [outline, setOutline] = useState<Sym[]>([]);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [reveal, setReveal] = useState<{ line: number; column?: number; n: number } | null>(null);
-  const [panel, setPanel] = useState(() => store.get("studio:dev:panel", 260));
+  const [panel, setPanel] = useState(() => store.get("studio:dev:panel", typeof window === "undefined" ? 320 : Math.round(window.innerHeight * 0.42)));
+  // Preview column: shown, hidden, or wide (chart at full size); remembered.
+  const [sideMode, setSideMode] = useState<"on" | "off" | "wide">(() => { try { const v = localStorage.getItem("studio:dev:side"); return v === "on" || v === "wide" ? v : "off"; } catch { return "off"; } });
+  useEffect(() => { try { localStorage.setItem("studio:dev:side", sideMode); } catch { /* blocked */ } window.dispatchEvent(new CustomEvent("studio:side", { detail: sideMode })); }, [sideMode]);
+  // Dev wants the width: the workspace sidebar closes while Dev is open and comes back after (user feedback 2026-11-20).
+  useEffect(() => { const was = useLayout.getState().open.left; useLayout.getState().set("left", false, true); return () => useLayout.getState().set("left", was, true); }, []);
   const [logQ, setLogQ] = useState("");
   const [logLevel, setLogLevel] = useState<string>("all");
   const [logSym, setLogSym] = useState("");
@@ -192,6 +198,9 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const broken: Problem[] = (prev?.invariants?.rows ?? []).filter((r) => r.file === active).slice(0, 50).map((r) => ({ severity: "error", file: r.file, line: r.line, column: 1, end_column: 200, code: "invariant", message: `${r.text} (${r.symbol ?? ""} ${r.date})` }));
   const problems = [...lint, ...types, ...compileProblems.filter((p) => p.file === active), ...runtime, ...broken];
   const errors = problems.filter((p) => p.severity === "error").length, warnings = problems.length - errors;
+  // The editor keeps the space; the panel opens on its own only when an error appears.
+  const hadErrors = useRef(0);
+  useEffect(() => { if (errors && !hadErrors.current) { setPanelOpen(true); setTab("problems"); } hadErrors.current = errors; }, [errors]);
   const logRe = finder(logQ, opt);
   const logs = (prev?.logs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logSym || l.symbol === logSym) && (!logFrom || l.date >= logFrom) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}`))));
   const plots = Object.entries(prev?.plots ?? {});
@@ -296,7 +305,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const mainPlots = plots.filter(([n]) => prev?.plot_charts?.[n] === "main");
 
   return (
-    <div className="dv" data-rail={railOpen || undefined} style={{ ["--panel-h" as string]: panelOpen ? `${panel}px` : "0px" }}>
+    <div className="dv" data-rail={railOpen || undefined} data-side={sideMode} style={{ ["--panel-h" as string]: panelOpen ? `${panel}px` : "0px" }}>
       <nav className="dv-icons" aria-label="Side bar">
         {RAILS.map(([k, icon, l]) => <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={railOpen && rail === k} onClick={() => { if (railOpen && rail === k) setRailOpen(false); else { setRail(k); setRailOpen(true); } }}>{icon}</button>)}
       </nav>
@@ -393,6 +402,8 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
             </div>
           ))}
           <span style={{ flex: 1 }} />
+          <button className="btn sm ghost dv-tabbtn" aria-pressed={sideMode === "on"} onClick={() => setSideMode(sideMode === "on" ? "off" : "on")}><PanelRight size={13} />Preview</button>
+          <button className="btn sm ghost dv-tabbtn" aria-pressed={sideMode === "wide"} onClick={() => setSideMode(sideMode === "wide" ? "off" : "wide")}><Maximize2 size={13} />50 / 50</button>
           <button className="icon-btn dv-splitbtn" aria-pressed={!!split} title="Split editor" aria-label="Split editor" onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}><Columns2 size={14} /></button>
           {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
         </div>
