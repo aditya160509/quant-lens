@@ -148,10 +148,55 @@ PYTHON_TEMPLATES = [
                 elif score < 0:
                     ctx.sell()
 '''),
+    _t("Python dual momentum", "Each month hold US or international stocks, whichever rose more over 12 months, and bonds when neither beat cash.", code='''class Strategy:
+    universe = ["SPY", "EFA", "IEF", "BIL"]
+    warmup = 252
+    rebalance_schedule = "month_start"
+
+    def on_data(self, ctx):
+        if not ctx.rebalancing:
+            return
+        ret = {symbol: ctx.value("roc(close, 252)", symbol) for symbol in ("SPY", "EFA", "BIL")}
+        best = "SPY" if ret["SPY"] >= ret["EFA"] else "EFA"
+        hold = best if ret[best] > ret["BIL"] else "IEF"
+        ctx.target_weights({symbol: 0.95 if symbol == hold else 0 for symbol in ctx.symbols})
+'''),
+    _t("Python sector rotation", "Each month hold the three sectors with the best 6-month return.", code='''class Strategy:
+    universe = ["XLB", "XLE", "XLF", "XLI", "XLK", "XLP", "XLU", "XLV", "XLY"]
+    warmup = 126
+    rebalance_schedule = "month_start"
+
+    def on_data(self, ctx):
+        if not ctx.rebalancing:
+            return
+        top = [symbol for symbol, _ in ctx.rank("roc(close, 126)", top=3)]
+        ctx.target_weights({symbol: 0.32 if symbol in top else 0 for symbol in ctx.symbols}, corridor=0.03)
+'''),
+    _t("Python risk parity", "Each month weight stocks, bonds and gold by inverse 3-month volatility.", code='''class Strategy:
+    universe = ["SPY", "TLT", "GLD"]
+    warmup = 63
+    rebalance_schedule = "month_start"
+
+    def on_data(self, ctx):
+        if not ctx.rebalancing:
+            return
+        vol = {symbol: ctx.value("std(returns, 63)", symbol) for symbol in ctx.symbols}
+        inverse = {symbol: 1 / v for symbol, v in vol.items() if math.isfinite(v) and v > 0}
+        total = sum(inverse.values())
+        if not total:
+            return
+        ctx.target_weights({symbol: 0.95 * value / total for symbol, value in inverse.items()}, corridor=0.02)
+'''),
 ]
 
 
 def list_python_templates() -> list[dict]:
     return [{"name": template["name"], "rule": template["rule"], "spec": template["spec"],
-             "symbols": ["SPY", "QQQ"] if template["name"] == "Python pairs" else ["SPY", "QQQ", "IWM"]}
+             "symbols": _universe(template["spec"]["code"]) or (["SPY", "QQQ"] if template["name"] == "Python pairs" else ["SPY", "QQQ", "IWM"])}
             for template in PYTHON_TEMPLATES]
+
+
+def _universe(code: str) -> list[str] | None:
+    from . import pycode
+    found = pycode.universe_attribute(code)
+    return found if isinstance(found, list) else None
