@@ -14,6 +14,8 @@ import { RECIPES } from "./recipes";
 import { useLayout } from "@/workspace/layout";
 import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 import { DevChart } from "./DevChart";
+import { DevRobust } from "./DevRobust";
+import { DevTearsheet } from "./DevTearsheet";
 
 type Log = { date: string; symbol: string | null; line: number; text: string; level: string; fields?: Record<string, unknown> | null };
 type Point = { date: string; symbol: string | null; value: number | null };
@@ -43,7 +45,8 @@ type Snapshot = { at: number; files: Record<string, string> };
 type Snippet = { id: string; name: string; prefix: string; body: string; description: string };
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 type Tab = "problems" | "output" | "plots" | "trades" | "debug" | "console";
-type View = "code" | "chart" | "results";
+type View = "code" | "chart" | "results" | "tearsheet" | "robust";
+const VIEW_LABEL: Record<Exclude<View, "code">, string> = { chart: "Chart", results: "Results", tearsheet: "Tearsheet", robust: "Robustness" };
 type Rail = "files" | "outline" | "search" | "versions" | "docs" | "templates";
 type Spec = { code: string; files?: Record<string, string>; params: Record<string, { value: number; min?: number | null; max?: number | null; step?: number | null }>; [k: string]: unknown };
 export type Saved = "saved" | "draft" | "saving" | "conflict" | "new";
@@ -196,7 +199,11 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
   };
   const actionsRef = useRef<EditorAction[]>([]);
   useEffect(() => {
-    const on = (e: Event) => actionsRef.current.find((a) => a.id === (e as CustomEvent<string>).detail)?.run(cursor.line);
+    const on = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (id.startsWith("goto:")) { openView("chart"); replayGo(id.slice(5), undefined); return; }
+      actionsRef.current.find((a) => a.id === id)?.run(cursor.line);
+    };
     window.addEventListener("studio:dev", on); return () => window.removeEventListener("studio:dev", on);
   }, [cursor.line]);
   useEffect(() => { if (prev) setLastPreview(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })); }, [prev]);
@@ -330,6 +337,8 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
     { id: "studio.cancel", label: "Run: cancel", run: () => onCancel?.() },
     { id: "studio.chart", label: "View: chart with replay", run: () => openView("chart") },
     { id: "studio.results", label: "View: results", run: () => openView("results") },
+    { id: "studio.tearsheet", label: "View: tearsheet", run: () => openView("tearsheet") },
+    { id: "studio.robust", label: "Run: robustness (Monte Carlo)", run: () => openView("robust") },
     { id: "studio.profile", label: "Run: profile the preview", run: () => runProfile() },
     { id: "studio.save", label: "Strategy: save version", run: () => onSave() },
     { id: "studio.newfile", label: "File: new", run: () => addFile() },
@@ -420,7 +429,7 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
               {open.length > 1 && !pinned.includes(f) ? <button className="icon-btn" aria-label={`Close ${f}`} onClick={(e) => { e.stopPropagation(); close(f); }}><X size={11} /></button> : null}
             </div>
           ))}
-          {extra.map((v) => <div key={v} role="tab" aria-selected={view === v} className="dv-tab" onClick={() => setView(v)}>{v === "chart" ? "Chart" : "Results"}<button className="icon-btn" aria-label={`Close ${v}`} onClick={(e) => { e.stopPropagation(); closeView(v); }}><X size={11} /></button></div>)}
+          {extra.map((v) => <div key={v} role="tab" aria-selected={view === v} className="dv-tab" onClick={() => setView(v)}>{VIEW_LABEL[v]}<button className="icon-btn" aria-label={`Close ${v}`} onClick={(e) => { e.stopPropagation(); closeView(v); }}><X size={11} /></button></div>)}
           {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
         </div>
         <div className="dv-tools">
@@ -429,6 +438,8 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
             <div className="dv-menu" role="menu" onClick={(e) => { (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
               <button role="menuitem" onClick={() => openView("chart")}>Chart and replay</button>
               <button role="menuitem" onClick={() => openView("results")}>Results</button>
+              <button role="menuitem" onClick={() => openView("tearsheet")}>Tearsheet</button>
+              <button role="menuitem" onClick={() => openView("robust")}>Robustness</button>
               <hr />
               <button role="menuitemcheckbox" aria-checked={sideMode === "on"} onClick={() => setSideMode(sideMode === "on" ? "off" : "on")}>Preview</button>
               <button role="menuitemcheckbox" aria-checked={sideMode === "wide"} onClick={() => setSideMode(sideMode === "wide" ? "off" : "wide")}>Preview 50 / 50</button>
@@ -542,7 +553,7 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
         <div className="dv-editor" data-split={split && !diff ? (splitDown ? "down" : "right") : undefined}>
           {view !== "code" ? (
             <div className="dv-view-pane" data-kind={view}>
-              {view === "chart" ? <DevChart symbol={symbol} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={(d, st) => replayGo(d, st)} /> : <div className="dv-pbody">{resultsView}</div>}
+              {view === "chart" ? <DevChart symbol={symbol} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={(d, st) => replayGo(d, st)} /> : <div className="dv-pbody">{view === "tearsheet" ? <DevTearsheet quick={quick ?? null} /> : view === "robust" ? <DevRobust quick={quick ?? null} /> : resultsView}</div>}
             </div>
           ) : null}
           {!spec.code.trim() && active === "main.py" && !diff ? (

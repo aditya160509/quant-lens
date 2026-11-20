@@ -22,9 +22,6 @@ interface IndicatorMenuProps {
 // Max oscillators allowed (pane indicators like RSI, MACD)
 const MAX_OSCILLATORS = 4;
 
-// Default oscillators to show when component mounts
-const DEFAULT_OSCILLATORS = ['rsi', 'macd'];
-
 // Category colors for visual organization
 const CATEGORY_COLORS: Record<string, string> = {
     'Trend': '#22c55e',
@@ -95,32 +92,6 @@ export default function IndicatorMenu({
         activeIndicators.filter(i => i.placement === 'overlay'),
         [activeIndicators]
     );
-
-    // Initialize with default oscillators (RSI + MACD) - use ref to avoid cascading renders
-    const initializedRef = React.useRef(false);
-
-    useEffect(() => {
-        if (!initializedRef.current && activeIndicators.length === 0) {
-            initializedRef.current = true;
-            DEFAULT_OSCILLATORS.forEach(id => {
-                const indicator = getAllIndicators().find(i => i.id === id);
-                if (indicator) {
-                    const config: IndicatorConfig = {
-                        id: `${id}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-                        type: id,
-                        params: { ...indicator.defaultParams },
-                        placement: indicator.placement,
-                        visible: true,
-                        color: getIndicatorColor(id),
-                        lineWidth: 1,
-                    };
-                    onAddIndicator(config);
-                }
-            });
-        } else if (activeIndicators.length > 0) {
-            initializedRef.current = true;
-        }
-    }, [activeIndicators.length, onAddIndicator]);
 
     // Show toast notification
     const showToast = useCallback((message: string) => {
