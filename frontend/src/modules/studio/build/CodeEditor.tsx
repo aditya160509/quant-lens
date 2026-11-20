@@ -167,16 +167,16 @@ function theme(monaco: Monaco, dark: boolean) {
 }
 
 /** Build › Dev: Monaco for one project file, with server completion, signature help, go to definition and line markers. */
-export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], ran = [], onGutter, readOnly, font = 13, snippets, onSelection, insertRef }: {
+export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], ran = [], onGutter, onComment, commentLines = [], readOnly, font = 13, snippets, onSelection, insertRef }: {
   path: string; value: string; onChange: (v: string) => void; problems: Problem[]; project: Project;
   onSave: () => void; onRun: () => void; onCursor?: (line: number, column: number) => void; reveal?: { line: number; column?: number; n: number } | null;
-  actions?: EditorAction[]; breakpoints?: number[]; ran?: { line: number; count: number; dates: string[] }[]; onGutter?: (line: number) => void;
+  actions?: EditorAction[]; breakpoints?: number[]; ran?: { line: number; count: number; dates: string[] }[]; onGutter?: (line: number) => void; onComment?: (line: number) => void; commentLines?: number[];
   readOnly?: boolean; font?: number; snippets?: UserSnippet[]; onSelection?: (text: string) => void; insertRef?: { current: ((text: string) => void) | null };
 }) {
   const deco = useRef<{ clear: () => void; set: (d: NonNullable<Parameters<Ed["createDecorationsCollection"]>[0]>) => void } | null>(null);
   const acts = useRef(actions); acts.current = actions;
   const ed = useRef<{ editor: Ed; monaco: Monaco } | null>(null);
-  const keys = useRef({ onSave, onRun, onCursor, onGutter }); keys.current = { onSave, onRun, onCursor, onGutter };
+  const keys = useRef({ onSave, onRun, onCursor, onGutter, onComment }); keys.current = { onSave, onRun, onCursor, onGutter, onComment };
   live.current = { ...project, snippets };
   const sel = useRef(onSelection); sel.current = onSelection;
 
@@ -191,9 +191,10 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     const m = ed.current; if (!m) return;
     deco.current?.set([
       ...breakpoints.map((line) => ({ range: new m.monaco.Range(line, 1, line, 1), options: { glyphMarginClassName: "dv-bp", glyphMarginHoverMessage: { value: "Breakpoint" } } })),
+      ...commentLines.map((line) => ({ range: new m.monaco.Range(line, 1, line, 1), options: { linesDecorationsClassName: "dv-cmt", hoverMessage: { value: "Comment thread" } } })),
       ...ran.map((r) => ({ range: new m.monaco.Range(r.line, 1, r.line, 1), options: { linesDecorationsClassName: "dv-ran", hoverMessage: { value: `Placed ${r.count} order${r.count === 1 ? "" : "s"}: ${r.dates.slice(0, 5).join(", ")}` } } })),
     ]);
-  }, [breakpoints, ran, path, value]);
+  }, [breakpoints, ran, commentLines, path, value]);
 
   useEffect(() => {
     const m = ed.current; if (!m || !reveal) return;
@@ -218,7 +219,8 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     if (insertRef) insertRef.current = (text) => { (editor.getContribution("snippetController2") as unknown as { insert: (t: string) => void } | null)?.insert(text); editor.focus(); };
     const c = editor.createDecorationsCollection();
     deco.current = { clear: () => c.clear(), set: (d) => c.set(d) };
-    editor.onMouseDown((e) => { if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && e.target.position) keys.current.onGutter?.(e.target.position.lineNumber); });
+    editor.addAction({ id: "studio.comment", label: "Comment on line", contextMenuGroupId: "navigation", run: (x) => keys.current.onComment?.(x.getPosition()?.lineNumber ?? 1) });
+    editor.onMouseDown((e) => { if (e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_DECORATIONS && e.target.position && e.target.element?.classList.contains("dv-cmt")) keys.current.onComment?.(e.target.position.lineNumber); if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && e.target.position) keys.current.onGutter?.(e.target.position.lineNumber); });
     const rewrite = (path: string, extra: Record<string, unknown> = {}) => void studio<{ code: string }>("POST", path, { code: editor.getValue(), ...extra }).then((r) => {
       const model = editor.getModel(); if (!model || r.code === model.getValue()) return;
       editor.executeEdits("studio", [{ range: model.getFullModelRange(), text: r.code }]);

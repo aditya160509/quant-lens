@@ -219,6 +219,19 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     if (!dbg || !watches.length) { setWatchRows([]); return; }
     void studio<typeof watchRows>("POST", "/build/watch", { spec, symbol: dbg.symbol, date: dbg.date, expressions: watches }).then(setWatchRows, () => undefined);
   }, [dbg, watches]); // eslint-disable-line react-hooks/exhaustive-deps
+  type Cmt = { id: string; thread_id: string; file: string; line: number; text: string; author: string; created: number };
+  const [cmts, setCmts] = useState<Cmt[]>([]);
+  const [thread, setThread] = useState<{ file: string; line: number } | null>(null);
+  const [cmtText, setCmtText] = useState("");
+  const loadCmts = () => { if (strategyId) void studio<Cmt[]>("GET", `/strategies/${strategyId}/comments`).then(setCmts, () => undefined); };
+  useEffect(loadCmts, [strategyId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openThread = (line: number) => { if (!strategyId) return toast.error("Save the strategy to comment"); setThread({ file: active, line }); setCmtText(""); };
+  const postCmt = () => {
+    if (!thread || !cmtText.trim()) return;
+    const first = cmts.find((c) => c.file === thread.file && c.line === thread.line);
+    void studio("POST", `/strategies/${strategyId}/comments`, { ...thread, text: cmtText.trim(), ...(first ? { thread_id: first.thread_id } : {}) }).then(() => { setCmtText(""); loadCmts(); }, (e: Error) => toast.error(e.message));
+  };
+  const dropCmt = (id: string) => void studio("DELETE", `/strategies/${strategyId}/comments/${id}`).then(loadCmts, (e: Error) => toast.error(e.message));
   const stepLine = (cursorLine?: number) => {
     const b = dbg?.breakpoint;
     debug({ date: dbg?.date, step_line: true, breakpoint: { file: b?.file ?? active, line: b?.line ?? cursorLine ?? cursor.line } });
@@ -447,13 +460,22 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
               options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, fontSize: 13, lineHeight: 20, scrollBeyondLastLine: false, automaticLayout: true, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace" }} />
           ) : (
             <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={onSave} onRun={() => { setTab("results"); setPanelOpen(true); if (onQuickRun) onQuickRun("quick"); else onRun(); }} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
-              font={font} actions={actions} breakpoints={bps[active] ?? []} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} onGutter={toggleBp} readOnly={readOnly} snippets={snippets}
+              font={font} actions={actions} breakpoints={bps[active] ?? []} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
               onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
               project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles, paramSpecs: spec.params, problems,
                 addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
                 lens: (command, args) => { if (command === "debug") debug({ date: String(args.date ?? "") }); else if (command === "inspect_condition") { setTab("output"); toast(`${String(args.expression)} on ${String(args.symbol)}`); } else onRun(); } }} />
           )}
         </div>
+        {thread ? (
+          <div className="dv-thread" role="dialog" aria-label={`Comments on ${thread.file}:${thread.line}`}>
+            <header><b>{thread.file}:{thread.line}</b><button className="icon-btn" aria-label="Close thread" onClick={() => setThread(null)}><X size={12} /></button></header>
+            {cmts.filter((c) => c.file === thread.file && c.line === thread.line).map((c) => (
+              <p key={c.id}><i>{c.author}</i>{c.text}<button className="icon-btn" aria-label="Delete comment" onClick={() => dropCmt(c.id)}><Trash2 size={12} /></button></p>
+            ))}
+            <form onSubmit={(e) => { e.preventDefault(); postCmt(); }}><input className="input" autoFocus aria-label="Reply" placeholder="Comment" value={cmtText} onChange={(e) => setCmtText(e.target.value)} /><button className="btn sm primary" disabled={!cmtText.trim()}>Post</button></form>
+          </div>
+        ) : null}
         <div className="dv-grip" role="separator" aria-orientation="horizontal" aria-label="Resize panel" onPointerDown={drag} onDoubleClick={() => setPanelOpen((o) => !o)} />
         {panelOpen ? (
           <div className="dv-panel">

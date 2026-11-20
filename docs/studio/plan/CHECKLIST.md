@@ -140,7 +140,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [H] B-13 Editor groups: split right or down, up to 4 groups; tabs can be pinned, kept in preview, or marked dirty; pinned and preview tabs open) become kept on double click or edit; pin and unpin; unsaved dot per file; split down and 4 groups open) (partial: split right or down; preview, pinned and unsaved tabs; two groups (up to 4 open))
 - [x] [H] B-14 One editing session per strategy: a second tab opens read-only with a take-over button; writers send X-Studio-Session and get 409 naming the holder; frontend wiring open) (lease renewed every 30 s; second tab shows a read-only banner with Take over (checked with two tabs))
 - [x] [M] B-15 Phone (390 px): one zone at a time with a Code, Run, Results switcher; Build on phone is Formula and Plain English only (phone width hides Dev and forces Simple)
-- [ ] [M] B-16 IDE keys: F5 debug, F9 breakpoint, F10 step bar, F11 step line, ⌘J panel, ⌘B rail, ⌘\ split, ⌘P file, ⌘⇧F search project (partial: F5, F9, F10, ⇧F10, ⌘J, ⌘B, ⌘P, ⌘⇧F, F1 built; F11 step line and ⌘\ split open)
+- [ ] [M] B-16 IDE keys: F5 debug, F9 breakpoint, F10 step bar, F11 step line, ⌘J panel, ⌘B rail, ⌘\ split, ⌘P file, ⌘⇧F search project (partial: F5, F9, F10, ⇧F10, F11, ⌘J, ⌘B, ⌘P, ⌘⇧F, F1 built; ⌘\ split open)
 - [x] [M] B-17 JetBrains Mono 13 px, 20 px line height, ligatures off, bracket colours, sticky scroll, folding [PY B13] (JetBrains Mono 13/20, ligatures off, bracket pairs, sticky scroll, folding)
 - [x] [E] B-18 App theme tokens defined as a Monaco theme so the editor sits in the page [PY B12] (Monaco theme built from the shell's tokens, follows light and dark)
 - [x] [E] B-19 Editing keys: ⌘/ comment, ⌥↑↓ move line, ⌘D next match, ⌘⇧K delete line, ⇧⌥-drag column select, go to line ⌃G [PY B5] (Monaco defaults: ⌘/, ⌥↑↓, ⌘D, ⌘⇧K, column select, ⌃G)
@@ -255,7 +255,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [M] B-128 Experiments as branches: fork a strategy, change a rule, compare two branches on one chart, merge back [FP 35] (More › Compare and merge: rule and file diffs, latest results side by side, both equity curves on one chart, merge back with ours or theirs)
 - [x] [M] B-129 Blame: each line shows the version that last changed it (GET /strategies/{sid}/blame?file= returns each line with the version that last changed it)
 - [x] [M] B-130 Local history: autosave snapshots kept 7 days, separate from versions (Versions rail lists 7-day local snapshots; one click restores the files into the draft)
-- [ ] [E] B-131 Share a read-only link or a fork link; pinned comment threads on a line (partial: read-only link (More menu) opens a shared view with Fork to edit; line comment threads open)
+- [x] [E] B-131 Share a read-only link or a fork link; pinned comment threads on a line (partial: read-only link (More menu) opens a shared view with Fork to edit; line comment threads open)
 - [x] [H] B-132 Single editing session per strategy with take-over; the second tab is read-only (no QuantConnect-style desync) [FP 66] (same lease: a second tab is read-only until Take over)
 - [ ] [M] B-133 Notes (hypothesis, what was tried, decisions) exported with the certificate
 - [ ] [M] B-134 Saved rule groups reusable as blocks; custom indicators by formula shared with Chart and Screener

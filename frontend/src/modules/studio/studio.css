@@ -439,3 +439,9 @@
 .dv-panel { grid-template-rows: 34px minmax(0, 1fr); }
 .dv-side { padding: 8px; }
 .bd[data-ui="dev"] .dv-status { padding-right: 150px; height: 24px; }
+.dv-cmt { background: var(--accent); border-radius: 50%; width: 7px !important; height: 7px !important; margin: 7px 0 0 4px; cursor: pointer; }
+.dv-main { position: relative; }
+.dv-thread { position: absolute; z-index: 20; top: 44px; right: 16px; width: 320px; display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line), 0 8px 24px rgb(0 0 0 / .3); }
+.dv-thread header { display: flex; justify-content: space-between; align-items: center; font: 12px var(--mono); }
+.dv-thread p { display: flex; gap: 6px; align-items: baseline; margin: 0; font-size: 12.5px; } .dv-thread p i { color: var(--text-3); font-style: normal; } .dv-thread p .icon-btn { margin-left: auto; }
+.dv-thread form { display: flex; gap: 6px; } .dv-thread form .input { flex: 1; min-width: 0; }
