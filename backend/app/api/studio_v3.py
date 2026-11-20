@@ -928,6 +928,32 @@ def local_history(sid: str) -> list[dict[str, Any]]:
     return workspace.history(sid)
 
 
+class CommentBody(BaseModel):
+    file: str = Field(default="main.py", max_length=120)
+    line: int = Field(default=1, ge=1, le=100_000)
+    text: str = Field(min_length=1, max_length=4000)
+    author: str = Field(default="you", max_length=60)
+    thread_id: str | None = Field(default=None, max_length=16)
+
+
+@router.get("/strategies/{sid}/comments")
+def list_comments(sid: str) -> list[dict[str, Any]]:
+    """Line comment threads, oldest first; a reply shares its thread's file and line."""
+    _known(store.get, sid)
+    return workspace.comments(sid)
+
+
+@router.post("/strategies/{sid}/comments")
+def add_comment(sid: str, request: CommentBody) -> dict[str, Any]:
+    return _guarded(workspace.add_comment, sid, **request.model_dump())
+
+
+@router.delete("/strategies/{sid}/comments/{comment_id}")
+def remove_comment(sid: str, comment_id: str) -> dict[str, bool]:
+    _guarded(workspace.delete_comment, sid, comment_id)
+    return {"deleted": True}
+
+
 class SnippetBody(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     prefix: str = Field(min_length=1, max_length=32)

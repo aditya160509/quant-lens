@@ -174,6 +174,36 @@ def delete_snippet(snippet_id: str) -> None:
     store.kv_set("snippets", [r for r in rows if r["id"] != snippet_id])
 
 
+# --- line comment threads (B-131) ---------------------------------------------
+
+MAX_COMMENTS = 1000
+
+
+def comments(sid: str) -> list[dict]:
+    return store.kv_get(f"comments:{sid}", [])
+
+
+def add_comment(sid: str, file: str, line: int, text: str, author: str = "you", thread_id: str | None = None) -> dict:
+    store.get(sid)  # unknown strategy -> KeyError -> 404
+    rows = comments(sid)
+    if len(rows) >= MAX_COMMENTS:
+        raise Refused(f"At most {MAX_COMMENTS} comments on a strategy.")
+    if thread_id and not any(r["thread_id"] == thread_id for r in rows):
+        raise KeyError(f"Unknown thread {thread_id}")
+    head = next((r for r in rows if r["thread_id"] == thread_id), None)
+    row = {"id": secrets.token_hex(4), "thread_id": thread_id or secrets.token_hex(4), "file": head["file"] if head else file, "line": head["line"] if head else line,
+           "text": text.strip()[:4000], "author": author.strip()[:60] or "you", "version": store.get(sid)["version"], "created": time.time()}
+    store.kv_set(f"comments:{sid}", [*rows, row])
+    return row
+
+
+def delete_comment(sid: str, comment_id: str) -> None:
+    rows = comments(sid)
+    if not any(r["id"] == comment_id for r in rows):
+        raise KeyError(f"Unknown comment {comment_id}")
+    store.kv_set(f"comments:{sid}", [r for r in rows if r["id"] != comment_id])
+
+
 # --- read-only share links and forks (B-131) ---------------------------------
 
 

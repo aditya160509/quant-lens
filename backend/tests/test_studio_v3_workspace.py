@@ -67,6 +67,17 @@ def test_snippets_crud_validates_prefix(studio):  # noqa: F811
     assert studio.delete(f"{API}/snippets/{made['id']}").status_code == 404
 
 
+def test_line_comment_threads_and_replies(studio):  # noqa: F811
+    sid = _make(studio)
+    first = studio.post(f"{API}/strategies/{sid}/comments", json={"file": "main.py", "line": 2, "text": "why 2?"}).json()
+    reply = studio.post(f"{API}/strategies/{sid}/comments", json={"line": 9, "text": "tuned", "thread_id": first["thread_id"]}).json()
+    assert (reply["file"], reply["line"], reply["thread_id"], reply["version"]) == ("main.py", 2, first["thread_id"], first["version"])
+    assert [c["text"] for c in studio.get(f"{API}/strategies/{sid}/comments").json()] == ["why 2?", "tuned"]
+    assert studio.post(f"{API}/strategies/{sid}/comments", json={"text": "x", "thread_id": "nope"}).status_code == 404
+    assert studio.delete(f"{API}/strategies/{sid}/comments/{first['id']}").json() == {"deleted": True}
+    assert studio.get(f"{API}/strategies/missing/comments").status_code == 404
+
+
 def test_share_link_is_read_only_and_forks(studio):  # noqa: F811
     sid = _make(studio)
     token = studio.post(f"{API}/strategies/{sid}/share").json()["token"]
