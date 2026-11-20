@@ -272,7 +272,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] [M] B-130 Local history: autosave snapshots kept 7 days, separate from versions (Versions rail lists 7-day local snapshots; one click restores the files into the draft)
 - [x] [E] B-131 Share a read-only link or a fork link; pinned comment threads on a line (partial: read-only link (More menu) opens a shared view with Fork to edit; line comment threads open)
 - [x] [H] B-132 Single editing session per strategy with take-over; the second tab is read-only (no QuantConnect-style desync) [FP 66] (same lease: a second tab is read-only until Take over)
-- [ ] [M] B-133 Notes (hypothesis, what was tried, decisions) exported with the certificate
+- [x] [M] B-133 Notes (hypothesis, what was tried, decisions) exported with the certificate
 - [ ] [M] B-134 Saved rule groups reusable as blocks; custom indicators by formula shared with Chart and Screener
 - [x] [M] B-135 Customise: default mode, default exits and sizing profile from Library, blocks palette order, block colours and compact or expanded view (Customise: default interface and mode, exits and sizing, compact or expanded blocks, colour by role, condition palette order)
 - [ ] [M] B-136 Keyboard-first block insertion (type "/") and snap grid (partial: / in a rule focuses Add condition; snap grid open)
