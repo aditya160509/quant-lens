@@ -8,6 +8,7 @@ import inspect
 import json
 import math
 import operator
+import re
 import sys
 import time
 import traceback
@@ -209,6 +210,19 @@ class _Log:
         self._ctx._log(message, "error", sys._getframe(1).f_lineno, fields)
 
 
+_COLOR = re.compile(r"^(#[0-9a-fA-F]{3,8}|[a-z]{3,20})$")
+
+
+def _color(value):
+    """Accept #hex or a CSS colour name; None keeps the default."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    if not _COLOR.match(value):
+        raise ValueError("Colour must be #hex or a colour name")
+    return value
+
+
 class Ctx:
     def __init__(self, cols, values, params, symbol, dates):
         self._t = 0
@@ -321,12 +335,16 @@ class Ctx:
             row["fields"] = clean
         self._logs.append(row)
 
-    def plot(self, name, value, chart="own"):
+    def plot(self, name, value, chart="own", color=None, width=None, style=None):
         """Record a value in a named plot on the main chart or in a separate pane."""
         if chart not in ("main", "own"):
             raise ValueError("Plot chart must be main or own")
         value = float(value)
         name = str(name)[:128]
+        if self._plots is not None and (color is not None or width is not None or style is not None):
+            if style not in (None, "line", "step", "histogram", "area", "dots"):
+                raise ValueError("Plot style must be line, step, histogram, area or dots")
+            self._draw["styles"][name] = {"color": _color(color), "width": max(1, min(int(width or 1), 6)), "style": style or "line"}
         if self._plots is not None and self._plot_count[0] < 50_000:
             if self._plot_charts.setdefault(name, chart) != chart:
                 raise ValueError("A named plot must keep the same chart")
@@ -334,6 +352,25 @@ class Ctx:
                 "date": self.date, "symbol": self.symbol, "value": value if math.isfinite(value) else None,
             })
             self._plot_count[0] += 1
+
+    def hline(self, value, chart="own", color=None, name=""):
+        """Draw a flat level line once, e.g. RSI 70."""
+        if chart not in ("main", "own"):
+            raise ValueError("Line chart must be main or own")
+        line = {"value": float(value), "chart": chart, "color": _color(color), "name": str(name)[:64]}
+        if self._plots is not None and line not in self._draw["hlines"] and len(self._draw["hlines"]) < 50:
+            self._draw["hlines"].append(line)
+
+    def fill(self, a, b, color=None):
+        """Shade the area between two named plots."""
+        pair = {"a": str(a)[:128], "b": str(b)[:128], "color": _color(color)}
+        if self._plots is not None and pair not in self._draw["fills"] and len(self._draw["fills"]) < 50:
+            self._draw["fills"].append(pair)
+
+    def bgcolor(self, color):
+        """Colour the background of the current bar."""
+        if self._plots is not None and color and len(self._draw["bg"]) < 50_000:
+            self._draw["bg"].append({"date": self.date, "color": _color(color)})
 
     def mark(self, symbol, label):
         """Attach a labeled marker to a symbol on the current bar."""
@@ -463,6 +500,7 @@ class PortfolioContext(Ctx):
         self._symbols, self._marks = first._symbols, first._marks
         self._tables, self._table_count = first._tables, first._table_count
         self._plot_charts = first._plot_charts
+        self._draw = first._draw
         self._order_lines = first._order_lines
         self._invariants = first._invariants
         self._logs, self._plots, self._plot_count = first._logs, first._plots, first._plot_count
@@ -1105,6 +1143,7 @@ def main():
     benchmark = z.get("benchmark")
     T, N = fields["close"].shape
     logs, plots, plot_charts, marks, tables = [], {}, {}, [], {}
+    draw = {"styles": {}, "hlines": [], "fills": [], "bg": []}
     order_lines = {}
     invariants = {"count": 0, "rows": []}
     ctx = None
@@ -1175,6 +1214,7 @@ def main():
             item._plots = plots if collect else None
             item._plot_count = plot_count
             item._plot_charts = plot_charts
+            item._draw = draw
             item._symbols = meta["symbols"]
             item._marks = marks if collect else None
             item._tables = tables if collect else None
@@ -1245,7 +1285,7 @@ def main():
         return
     risk_events = arrays.pop("risk_events", [])
     np.savez(sys.argv[2], **arrays)
-    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report, "debug": debug, "risk_events": risk_events,
+    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "draw": draw, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report, "debug": debug, "risk_events": risk_events,
                                 "order_lines": sorted(order_lines.values(), key=lambda r: (r["file"], r["line"])), "invariants": invariants,
                                 "profile": profiler.report({"main.py": src, **meta["modules"]}) if profiler else None}))
 

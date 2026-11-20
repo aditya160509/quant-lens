@@ -596,13 +596,22 @@ def test_python_preview_returns_chart_markers_and_structured_tables(studio):
     code = """class Strategy:
     def on_bar(self, ctx):
         if ctx.bar == 1:
-            ctx.plot("price", ctx.close[-1], chart="main")
+            ctx.plot("price", ctx.close[-1], chart="main", color="#ff9900", width=2)
+            ctx.hline(70, color="red")
+            ctx.fill("price", "price")
+            ctx.bgcolor("#00ff0022")
             ctx.mark(ctx.symbol, "review")
             ctx.table("signals", {"count": 2, "confirmed": True})
 """
     result = studio.post("/api/studio-v3/preview", json={"symbol": "SPY", "spec": {"code": code}}).json()
     assert result["status"] == "ok"
     assert result["plot_charts"] == {"price": "main"}
+    assert result["draw"] == {
+        "styles": {"price": {"color": "#ff9900", "width": 2, "style": "line"}},
+        "hlines": [{"value": 70.0, "chart": "own", "color": "red", "name": ""}],
+        "fills": [{"a": "price", "b": "price", "color": None}],
+        "bg": [{"date": "2015-01-02", "color": "#00ff0022"}],
+    }
     assert result["marks"] == [{"date": "2015-01-02", "symbol": "SPY", "label": "review"}]
     assert result["tables"]["signals"] == [
         {"date": "2015-01-02", "symbol": "SPY", "cells": {"count": 2, "confirmed": True}},

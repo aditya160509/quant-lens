@@ -744,7 +744,7 @@ def _execute(code, bars, dates, params, symbols, cache, output, *, event_setting
         if not res.get("ok"):
             raise CodeError(res.get("error") or (p.stderr.strip().splitlines() or ["the strategy process died"])[-1], res.get("problem"))
         if output is not None:
-            output.update({field: res[field] for field in ("logs", "plots", "plot_charts", "marks", "tables", "risk_events")})
+            output.update({field: res[field] for field in ("logs", "plots", "plot_charts", "draw", "marks", "tables", "risk_events")})
             if res.get("entry_signals") is not None:
                 output["entry_signals"] = res["entry_signals"]
             if res.get("debug") is not None:

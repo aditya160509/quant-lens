@@ -572,6 +572,7 @@ class PreviewResult(BaseModel):
     logs: list[PreviewLog] | None = None
     plots: dict[str, list[PreviewPlotPoint]] | None = None
     plot_charts: dict[str, str] | None = None
+    draw: dict | None = None
     marks: list[PreviewMark] | None = None
     tables: dict[str, list[PreviewTableRow]] | None = None
     warmup: PreviewWarmup | None = None
