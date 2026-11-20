@@ -235,7 +235,7 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
 
   return (
     <Editor language="python" path={path} value={value} onChange={(v) => onChange(v ?? "")} onMount={mount} theme="studio" height="100%"
-      options={{ minimap: { enabled: false }, fontSize: font, lineHeight: Math.round(font * 1.54), fontLigatures: false, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true,
+      options={{ minimap: { enabled: false }, overviewRulerLanes: 0, overviewRulerBorder: false, hideCursorInOverviewRuler: true, fontSize: font, lineHeight: Math.round(font * 1.54), fontLigatures: false, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true,
         padding: { top: 10 }, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace", quickSuggestions: { strings: true, other: true, comments: false },
         bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true }, glyphMargin: true, readOnly }} />
   );
