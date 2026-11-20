@@ -37,5 +37,5 @@ OUTPUTS = [
 def run(payload: dict[str, Any] | None = None, progress=None) -> dict[str, Any]:
     spec, settings, sid, version = parse(payload or {})
     out = backtest.run_backtest(spec, settings, progress)
-    out["meta"]["strategy"] = {"id": sid, "version": version, "name": spec.name}
+    out["meta"]["strategy"] = {"id": sid, "version": version, "name": spec.name, "hypothesis": spec.hypothesis, "regime_claim": spec.regime_claim, "notes": spec.notes}
     return out

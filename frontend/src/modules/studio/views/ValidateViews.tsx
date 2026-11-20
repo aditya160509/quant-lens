@@ -103,7 +103,8 @@ type Repro = { match: boolean; result_hash: string; reproduced_hash: string; dat
 
 /** Certificate: the server re-runs this validation from its stored settings and compares hashes. */
 export function Certificate({ result }: ViewProps) {
-  const m = result.meta as unknown as { run?: { id: string }; run_hash: string; result_hash: string; grade: { grade: string; reason: string }; strategy?: { name: string; version: number | null } };
+  const m = result.meta as unknown as { run?: { id: string }; run_hash: string; result_hash: string; grade: { grade: string; reason: string }; strategy?: { name: string; version: number | null; hypothesis?: string; regime_claim?: string; notes?: string } };
+  const notes = ([["Hypothesis", m.strategy?.hypothesis], ["Regime", m.strategy?.regime_claim], ["Notes", m.strategy?.notes]] as const).filter(([, v]) => v?.trim());
   const [r, setR] = useState<Repro | { error: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const go = () => {
@@ -119,6 +120,7 @@ export function Certificate({ result }: ViewProps) {
         {r && "error" in r ? <span className="bd-find error"><b>Failed</b>{r.error}</span> : null}
         {r && !("error" in r) ? <span className={`chip ${r.match ? "up" : "down"}`}>{r.match ? `reproduced ${new Date(r.at * 1000).toLocaleDateString()} ✓` : `differs: ${r.reproduced_hash}`}</span> : null}
       </div>
+      {notes.map(([k, v]) => <div key={k} className="st-fig"><b>{k}</b><span style={{ whiteSpace: "pre-wrap" }}>{v}</span></div>)}
     </div>
   );
 }

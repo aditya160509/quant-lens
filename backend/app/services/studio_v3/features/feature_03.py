@@ -54,5 +54,5 @@ def run(payload: dict[str, Any] | None = None, progress=None) -> dict[str, Any]:
     out = validate.run_validate(spec, settings, sid, version, str(payload.get("profile") or "quick"), payload.get("weights"), bool(payload.get("show_holdout")),
                                 str(payload.get("_actor") or "human"), progress,
                                 bool(payload.get("anchored")), int(payload.get("purge", 5) or 0), payload.get("reopt", True) is not False, float(payload.get("volume_cap", 0.01) or 0), int(payload.get("sims") or 1000))
-    out["meta"]["strategy"] = {"id": sid, "version": version, "name": spec.name}
+    out["meta"]["strategy"] = {"id": sid, "version": version, "name": spec.name, "hypothesis": spec.hypothesis, "regime_claim": spec.regime_claim, "notes": spec.notes}
     return backtest._clean(out)

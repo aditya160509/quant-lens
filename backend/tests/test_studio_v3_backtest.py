@@ -257,7 +257,7 @@ def test_ui_job_and_agent_api_give_the_same_hash(studio):  # X-3
     meta = job["result"]["meta"]
     assert meta["result_hash"] == rest["result_hash"] == mcp["result_hash"] and meta["run_hash"] == rest["run_hash"]
     assert rest["verdict"] == "not validated" and rest["limits"] and rest["ledger"]["raw"] == 1 and rest["spec"]["entry_long"] == SMA["entry_long"]
-    assert "_trial" not in job["result"] and meta["ledger"]["raw"] == 1 and meta["strategy"] == {"id": sid, "version": 1, "name": "SMA cross"}
+    assert "_trial" not in job["result"] and meta["ledger"]["raw"] == 1 and meta["strategy"] == {"id": sid, "version": 1, "name": "SMA cross", "hypothesis": "", "regime_claim": "", "notes": ""}
     log = studio.get(f"/api/studio-v3/actor-log?strategy_id={sid}").json()["log"]
     assert {x["actor"] for x in log} == {"human", "agent:test", "agent:mcp"} and all(x["action"] in {"create", "st01"} for x in log)
     home = studio.get("/api/studio-v3/home").json()

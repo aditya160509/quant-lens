@@ -37,7 +37,7 @@ def run(payload: dict[str, Any] | None = None, progress=None) -> dict[str, Any]:
                                 progress, getattr(progress, "cancelled", lambda: False), custom=str(payload.get("custom") or ""), link=str(payload.get("link") or ""),
                                 min_trades=int(payload.get("min_trades") or 0), max_dd=float(payload.get("max_dd") or 0) or None, radius=int(payload.get("radius") or 1),
                                 budget_s=float(payload.get("budget_s") or 0))
-    out["meta"]["strategy"] = {"id": sid, "version": version, "name": spec.name}
+    out["meta"]["strategy"] = {"id": sid, "version": version, "name": spec.name, "hypothesis": spec.hypothesis, "regime_claim": spec.regime_claim, "notes": spec.notes}
     trials = out.pop("_trials")
     out = backtest._clean(out)
     out["_trials"] = trials

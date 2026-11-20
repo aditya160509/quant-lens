@@ -37,5 +37,5 @@ def run(payload: dict[str, Any] | None = None, progress=None) -> dict[str, Any]:
     payload = payload or {}
     spec, settings, sid, version = parse(payload)
     out = live.run_live(spec, settings, sid, version, parse_trades(str(payload.get("real_trades") or "")), bool(payload.get("send")), progress)
-    out["meta"]["strategy"] = {"id": sid, "version": version, "name": spec.name}
+    out["meta"]["strategy"] = {"id": sid, "version": version, "name": spec.name, "hypothesis": spec.hypothesis, "regime_claim": spec.regime_claim, "notes": spec.notes}
     return backtest._clean(out)
