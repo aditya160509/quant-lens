@@ -23,7 +23,7 @@ import "../studio.css";
 
 type Param = { value: number; min?: number | null; max?: number | null; step?: number | null; log?: boolean };
 type Spec = {
-  name: string; entry_long: string; exit_long: string; entry_short: string; exit_short: string; score: string; market_filter: string;
+  name: string; entry_long: string; exit_long: string; entry_short: string; exit_short: string; score: string; market_filter: string; defensive?: string;
   params: Record<string, Param>;
   exits: Record<string, number>; sizing: { mode: string; value: number; max_positions: number };
   limits: Record<string, number | null>; code: string; hypothesis: string; regime_claim: string; notes: string; [k: string]: unknown;
@@ -524,6 +524,9 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
               <label htmlFor={`r-${role}`}>{label}</label>
               {tree ? <GroupEditor id={`b-${role}`} group={tree} suggestions={catalogue} onChange={(g) => edit({ [role]: groupFormula(g), groups: { ...groups, [role]: g } })} /> : null}
               {tree ? null : <textarea id={`r-${role}`} className="input" spellCheck={false} rows={role === "score" || role === "market_filter" ? 1 : 2} placeholder={role === "market_filter" ? "market > sma(market, 200)" : undefined} value={spec[role] as string} onSelect={track(role)} onFocus={track(role)} onChange={(e) => edit({ [role]: e.target.value, ...(role in groups ? { groups: dropGroup() } : {}) })} />}
+              {role === "market_filter" && spec.market_filter.trim() ? (
+                <label className="bd-num"><span>Else hold</span><input className="input" aria-label="Symbol held while the market rule is false" placeholder="cash" style={{ width: 110 }} value={spec.defensive ?? ""} onChange={(e) => edit({ defensive: e.target.value.toUpperCase() })} /></label>
+              ) : null}
               {findings(role).map((f, i) => <p key={i} className={`bd-find ${f.severity}`}><b>{f.severity === "error" ? "Error" : "Warning"}</b>{f.token ? <code>{f.token}</code> : null}{f.message}</p>)}
               {(() => {
                 const c = conds[role];
