@@ -1131,3 +1131,10 @@ def test_defensive_symbol_is_held_only_while_the_market_rule_is_false():  # B-12
     with pytest.raises(B.Refusal):
         B.simulate(s.model_copy(update={"defensive": "GLD"}), B.prepare(Settings(symbols=["SPY"], benchmark="SPY")), Settings(symbols=["SPY"], benchmark="SPY"))
     assert pd.Series(on).any() and not pd.Series(on).all()
+
+
+def test_typing_preview_skips_the_look_ahead_replay(studio):  # B-5
+    code = "class Strategy:\n    def on_bar(self, ctx):\n        if ctx.rule('close > sma(close, 50)'):\n            ctx.buy()\n        else:\n            ctx.sell()\n"
+    fast = studio.post("/api/studio-v3/preview", json={"spec": {"code": code}, "repaint": False}).json()
+    full = studio.post("/api/studio-v3/preview", json={"spec": {"code": code}}).json()
+    assert "repaint" not in fast and full["repaint"]["cuts"] > 0 and fast["trades"] == full["trades"]

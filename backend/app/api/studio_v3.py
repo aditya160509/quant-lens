@@ -371,6 +371,7 @@ class PreviewRequest(BaseModel):
     symbol: str = "SPY"
     symbols: list[str] | None = Field(default=None, max_length=50)  # default: Strategy.universe, else `symbol`
     years: float = Field(default=2.0, ge=0.5, le=10)
+    repaint: bool = True  # False: skip the look-ahead replay for a fast typing preview
 
 
 class ConditionRequest(PreviewRequest):
@@ -683,7 +684,7 @@ def debug_python(request: BuildDebugRequest) -> dict:
 @router.post("/preview", response_model=PreviewResult, response_model_exclude_unset=True)
 def preview(request: PreviewRequest) -> dict[str, Any]:
     try:
-        return backtest.preview(_spec(request.spec), request.symbol, request.years, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None)
+        return backtest.preview(_spec(request.spec), request.symbol, request.years, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None, repaint=request.repaint)
     except backtest.Refusal as exc:
         return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
     except pycode.CodeError as exc:

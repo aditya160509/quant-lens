@@ -186,8 +186,11 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   useEffect(() => {
     if (!compiled?.ok || !symbol.trim() || (!auto && !nudge)) return;
     const hash = compiled.hash;
-    const t = setTimeout(() => void studio<Preview>("POST", "/preview", { spec, symbol: symbol.trim().toUpperCase(), years }).then((r) => { setPrev(r); setPreviewed(hash); setNudge(0); }, (e) => setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] })), 120);
-    return () => clearTimeout(t);
+    const body = { spec, symbol: symbol.trim().toUpperCase(), years };
+    const t = setTimeout(() => void studio<Preview>("POST", "/preview", { ...body, repaint: false }).then((r) => { setPrev(r); setPreviewed(hash); setNudge(0); }, (e) => setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] })), 120);
+    // The look-ahead replay is the slow part, so it runs once typing has stopped (B-5).
+    const full = setTimeout(() => void studio<Preview>("POST", "/preview", body).then((r) => setPrev(r), () => undefined), 1200);
+    return () => { clearTimeout(t); clearTimeout(full); };
   }, [spec, symbol, years, compiled?.ok, auto, nudge]); // eslint-disable-line react-hooks/exhaustive-deps
   const stale = !!prev && !!previewed && !!compiled?.hash && previewed !== compiled.hash;
 
