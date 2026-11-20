@@ -161,6 +161,11 @@ def simulate(spec: Strategy, prep: Prepared, settings: Settings, *, sig: C.Signa
     p = _effective(spec, settings, cost_multiple)
     if exits_override:
         p = replace(p, **exits_override)
+    if spec.scale_in.strip():
+        adds = C.market_on(spec.model_copy(update={"market_filter": spec.scale_in}), prep.sig_bars, prep.panel.dates, params) & traded
+        bars = {k: v[lo:] for k, v in prep.panel.bars().items()}
+        return engine.run(bars, entries[lo:], exits[lo:], p, score=None if sig.score is None else sig.score[lo:], stop_dist=None if sig.stop_dist is None else sig.stop_dist[lo:],
+                          size_vol=None if sig.size_vol is None else sig.size_vol[lo:], strategy=engine.ScaleInStrategy(entries[lo:], exits[lo:], adds[lo:], spec.max_entries))
     if lo:
         bars = {k: v[lo:] for k, v in prep.panel.bars().items()}
         return engine.run(bars, entries[lo:], exits[lo:], p, score=None if sig.score is None else sig.score[lo:], stop_dist=None if sig.stop_dist is None else sig.stop_dist[lo:],

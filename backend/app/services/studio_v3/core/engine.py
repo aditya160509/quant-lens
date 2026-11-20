@@ -412,6 +412,23 @@ class SignalStrategy:
             ctx.enter(int(n), int(self.entries[t, n]))
 
 
+class ScaleInStrategy(SignalStrategy):
+    """Signals plus adds: while a long is held and `adds` fires, buy one more first-entry's size at the next open, up to `max_entries` fills (B-124)."""
+
+    def __init__(self, entries: np.ndarray, exits: np.ndarray, adds: np.ndarray, max_entries: int):
+        super().__init__(entries, exits)
+        self.adds, self.max_entries = adds, max_entries
+
+    def on_bar(self, ctx: Context) -> None:
+        super().on_bar(ctx)
+        e = ctx._e
+        e.max_entries = self.max_entries
+        for n in np.flatnonzero(self.adds[ctx.t]):
+            pos = e.positions.get(int(n))
+            if pos and pos.shares > 0 and not pos.exit_reason and int(n) not in e.orders:
+                e.orders[int(n)] = (pos.shares / pos.entries, math.nan, math.nan, ctx.t)
+
+
 class EventEngine:
     def __init__(self, bars: dict[str, np.ndarray], params: Params, score=None, stop_dist=None, size_vol=None):
         self.bars, self.p, self.score, self.stop_dist, self.size_vol = bars, params, score, stop_dist, size_vol

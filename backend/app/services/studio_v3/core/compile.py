@@ -14,8 +14,8 @@ from app.services.shared.formula import SignalError
 from . import formula, pycode
 from .spec import Strategy
 
-ROLES = ("entry_long", "exit_long", "entry_short", "exit_short", "score", "market_filter")
-ROLE_LABEL = {"entry_long": "Buy when", "exit_long": "Sell when", "entry_short": "Short when", "exit_short": "Cover when", "score": "Rank by", "market_filter": "Trade only when"}
+ROLES = ("entry_long", "exit_long", "entry_short", "exit_short", "score", "market_filter", "scale_in")
+ROLE_LABEL = {"entry_long": "Buy when", "exit_long": "Sell when", "entry_short": "Short when", "exit_short": "Cover when", "score": "Rank by", "market_filter": "Trade only when", "scale_in": "Add when"}
 
 
 def compile_spec(spec: Strategy) -> dict:

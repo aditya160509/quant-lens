@@ -1138,3 +1138,16 @@ def test_typing_preview_skips_the_look_ahead_replay(studio):  # B-5
     fast = studio.post("/api/studio-v3/preview", json={"spec": {"code": code}, "repaint": False}).json()
     full = studio.post("/api/studio-v3/preview", json={"spec": {"code": code}}).json()
     assert "repaint" not in fast and full["repaint"]["cuts"] > 0 and fast["trades"] == full["trades"]
+
+
+def test_scale_in_adds_first_entry_size_up_to_max_entries():  # B-124
+    import numpy as np
+
+    from app.services.studio_v3.core import backtest as B
+    from app.services.studio_v3.core.spec import Settings, Strategy
+
+    st = Settings(symbols=["SPY"], benchmark="")
+    prep = B.prepare(st)
+    base = Strategy(entry_long="close > sma(close, 100)", exit_long="close < sma(close, 100)", sizing={"mode": "pct_equity", "value": 0.3, "max_positions": 1})
+    peak = {k: float(np.max(B.simulate(base.model_copy(update={"scale_in": "rsi(close, 2) < 10", "max_entries": k}), prep, st).gross_exposure)) for k in (1, 2, 3)}
+    assert peak[1] < 0.45 < peak[2] < 0.75 < peak[3] < 1.05

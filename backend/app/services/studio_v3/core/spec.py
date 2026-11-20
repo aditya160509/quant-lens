@@ -103,6 +103,8 @@ class Strategy(_Model):
     exit_short: str = ""
     score: str = ""  # which candidates take the free slots first (higher first)
     market_filter: str = ""  # trade only while true; when it turns false every position is closed and the book sits in cash
+    scale_in: str = ""  # while long, add one first-entry's size each bar this is true (B-124)
+    max_entries: int = Field(3, ge=1, le=20)  # fills that may build one position when scale_in is set
     defensive: str = Field("", max_length=12)  # else-branch of the market rule: hold this symbol (it must be in the universe) instead of cash (B-122)
     params: dict[str, Param] = Field(default_factory=dict)
     frequency: Literal["daily", "week_start", "month_start"] = "daily"  # entries only on these bars; exits always run
