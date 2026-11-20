@@ -1092,3 +1092,22 @@ def test_typecheck_reports_type_errors_and_leaves_undefined_names_to_the_linter(
     code = "import numpy as np\nclass Strategy:\n    def on_bar(self, ctx):\n        x: int = 'a'\n        np.foo_bar()\n        print(nope)\n"
     problems = studio.post("/api/studio-v3/build/typecheck", json={"code": code}).json()["problems"]
     assert [(p["line"], p["code"]) for p in problems] == [(4, "ty-invalid-assignment"), (5, "ty-missing-attribute")]
+
+
+def test_build_debug_step_line_stops_at_the_next_executed_line(studio):
+    source = """from helper import check
+
+class Strategy:
+    def on_bar(self, ctx):
+        check(ctx)
+"""
+    files = {"helper.py": "def check(ctx):\n    local_value = ctx.bar * 2\n    return local_value\n"}
+    path = "/api/studio-v3/build/debug"
+    body = {"symbol": "SPY", "date": "2015-01-05", "spec": {"code": source, "files": files},
+            "breakpoint": {"file": "helper.py", "line": 2}, "step_line": True}
+    result = studio.post(path, json=body)
+    assert result.status_code == 200, result.text
+    hit = result.json()["breakpoint"]
+    assert (hit["file"], hit["line"]) == ("helper.py", 3) and result.json()["date"] == "2015-01-05"
+    assert hit["locals"]["local_value"] == 4
+    assert studio.post(path, json=body | {"breakpoint": None}).status_code == 422

@@ -994,9 +994,22 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
         comparisons = {"Eq": operator.eq, "NotEq": operator.ne, "Lt": operator.lt, "LtE": operator.le,
                        "Gt": operator.gt, "GtE": operator.ge}
 
+        armed = False
+
         def trace(frame, trace_event, arg):
-            nonlocal hit, hit_count
-            if frame.f_code.co_filename != f"<studio:{bp['file']}>":
+            nonlocal hit, hit_count, armed
+            name = frame.f_code.co_filename
+            if bp.get("step"):  # F11: after the given line runs on the paused bar, stop at the next line of any strategy file
+                if not name.startswith("<studio:"):
+                    return None
+                ctx = current_context() if trace_event == "line" else None
+                if ctx is not None and hit is None and ctx.t == after and (ctx.symbol is None or ctx.symbol == target) and column in available[ctx.t]:
+                    if armed:
+                        hit = {"file": name[8:-1], "line": frame.f_lineno, "hit_count": 1, "bar": ctx.t, "locals": _debug_value(frame.f_locals)}
+                    elif name == f"<studio:{bp['file']}>" and frame.f_lineno == bp["line"]:
+                        armed = True
+                return trace
+            if name != f"<studio:{bp['file']}>":
                 return None
             if trace_event == "line" and frame.f_lineno == bp["line"]:
                 ctx = current_context()
@@ -1014,7 +1027,7 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
             equity_change = float((equity - prior_equity) / prior_equity) if prior_equity and prior_equity > 0 else None
             prior_equity = equity
             executions = captured_fills.pop(t, [])
-            if t <= after or column not in available[t]:
+            if t < after + (not (bp and bp.get("step"))) or column not in available[t]:
                 return False
             if event == "breakpoint":
                 matched = hit is not None and hit["bar"] == t

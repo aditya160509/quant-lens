@@ -593,6 +593,7 @@ class BuildDebugRequest(PreviewRequest):
     event: Literal["order", "fill", "equity"] | None = None
     loss_fraction: float | None = Field(default=None, gt=0, le=1)
     breakpoint: DebugBreakpointRequest | None = None
+    step_line: bool = False  # with `breakpoint` naming the paused line: stop at the next executed line on the same bar (F11)
     settings: Settings | None = None
 
 
@@ -653,6 +654,8 @@ class BuildDebugResult(BaseModel):
 def debug_python(request: BuildDebugRequest) -> dict:
     symbol = normalize_symbol(request.symbol)
     settings = request.settings or Settings(symbols=[symbol], benchmark="")
+    if request.step_line and (not request.breakpoint or request.step or request.event):
+        raise HTTPException(422, "Step a line from a paused file and line: send `breakpoint` with step_line and no step or event.")
     if sum(bool(item) for item in (request.step, request.event, request.breakpoint)) > 1:
         raise HTTPException(422, "Choose a session step, event jump or breakpoint.")
     if (request.event == "equity") != (request.loss_fraction is not None):
@@ -667,7 +670,7 @@ def debug_python(request: BuildDebugRequest) -> dict:
             condition = pycode.breakpoint_condition(request.breakpoint.condition)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
-        breakpoint = {"file": request.breakpoint.file, "line": request.breakpoint.line, "condition": condition}
+        breakpoint = {"file": request.breakpoint.file, "line": request.breakpoint.line, "condition": condition, "step": request.step_line}
     try:
         return backtest.debug_bar(spec, settings, symbol, request.date.isoformat(), request.step,
                                   "breakpoint" if breakpoint else request.event, breakpoint, request.loss_fraction)
