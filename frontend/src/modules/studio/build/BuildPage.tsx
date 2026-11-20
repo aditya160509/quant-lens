@@ -1,6 +1,6 @@
 "use client";
 
-import { Command as CommandIcon, BookmarkPlus, Download, GitBranch, GitMerge, Settings2, Link2, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
+import { Command as CommandIcon, BookmarkPlus, CircleCheck, CircleDashed, CircleX, Download, GitBranch, GitMerge, Settings2, Link2, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
@@ -91,21 +91,39 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const [pausedAt, setPausedAt] = useState<string | null>(null);
   const [pausedLabel, setPausedLabel] = useState("❚❚");
   const [quick, setQuick] = useState<QuickRun | null>(null);
+  const runPending = useRef(false);
+  const [starting, setStarting] = useState(false);
   const quickRun = async (level: "quick" | "full") => {
-    let sid: string | null = loaded?.id ?? null;
-    if (level === "full") { sid = await save(); if (!sid) return; }
+    if (runPending.current) return;
+    runPending.current = true;
+    setStarting(true);
     try {
+      const sid = level === "full" ? await save(undefined, false) : loaded?.id;
+      if (level === "full" && !sid) { runPending.current = false; return; }
       const j = await studio<QuickRun>("POST", "/build/run", level === "full" ? { level, strategy_id: sid } : { level, spec, ...(sid ? { strategy_id: sid } : {}) });
       setQuick({ ...j, level, status: "queued" });
       const poll = async () => {
         const st = await studio<QuickRun>("GET", `/build/run/${j.job_id}`).catch(() => null);
-        if (!st) return;
+        if (!st) {
+          runPending.current = false;
+          setQuick((q) => q?.job_id === j.job_id && q.status !== "cancelled" ? { ...q, status: "failed", error: "Could not retrieve backtest status." } : q);
+          return;
+        }
         setQuick((q) => (q?.job_id === j.job_id ? { ...st, level } : q));
         if (["queued", "running"].includes(st.status)) setTimeout(() => void poll(), 700);
-        else if (level === "full" && loaded) void load(loaded.id);
+        else {
+          runPending.current = false;
+          if (level === "full" && sid) {
+            void studio<Loaded>("GET", `/strategies/${sid}`).then(
+              (updated) => setLoaded((current) => current?.id === sid ? updated : current),
+              () => undefined,
+            );
+          }
+        }
       };
       setTimeout(() => void poll(), 400);
-    } catch (e) { fail(e); }
+    } catch (e) { runPending.current = false; fail(e); }
+    finally { setStarting(false); }
   };
   const cancelRun = () => { if (quick) void studio("POST", `/jobs/${quick.job_id}/cancel`).then(() => setQuick((q) => (q ? { ...q, status: "cancelled" } : q)), fail); };
   const [font, setFont] = useState(() => { try { return Number(localStorage.getItem("studio:dev:font")) || 13; } catch { return 13; } });
@@ -185,10 +203,12 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     if (!compiled?.ok || !symbol.trim() || (!auto && !nudge)) return;
     const hash = compiled.hash;
     const body = { spec, symbol: symbol.trim().toUpperCase(), years };
-    const t = setTimeout(() => void studio<Preview>("POST", "/preview", { ...body, repaint: false }).then((r) => { setPrev(r); setPreviewed(hash); setNudge(0); }, (e) => setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] })), 120);
+    const request = new AbortController();
+    let checked = false;
+    const t = setTimeout(() => void studio<Preview>("POST", "/preview", { ...body, repaint: false }, request.signal).then((r) => { if (!request.signal.aborted && !checked) { setPrev(r); setPreviewed(hash); } }, (e) => { if (!request.signal.aborted && !checked) setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] }); }), 120);
     // The look-ahead replay is the slow part, so it runs once typing has stopped (B-5).
-    const full = setTimeout(() => void studio<Preview>("POST", "/preview", body).then((r) => setPrev(r), () => undefined), 1200);
-    return () => { clearTimeout(t); clearTimeout(full); };
+    const full = setTimeout(() => void studio<Preview>("POST", "/preview", body, request.signal).then((r) => { if (!request.signal.aborted) { checked = true; setPrev(r); setPreviewed(hash); } }, () => undefined).finally(() => { if (!request.signal.aborted) setNudge(0); }), 1200);
+    return () => { clearTimeout(t); clearTimeout(full); request.abort(); };
   }, [spec, symbol, years, compiled?.ok, auto, nudge]); // eslint-disable-line react-hooks/exhaustive-deps
   const stale = !!prev && !!previewed && !!compiled?.hash && previewed !== compiled.hash;
 
@@ -239,17 +259,17 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     return () => clearTimeout(t);
   }, [spec, dirty, loaded]);
 
-  const save = useCallback(async (over?: Spec): Promise<string | null> => {
+  const save = useCallback(async (over?: Spec, navigate = true): Promise<string | null> => {
     const body = { spec: over ?? spec };
     setSaving("saving");
     try {
       const s = loaded ? await studio<Loaded>("PUT", `/strategies/${loaded.id}`, body) : await studio<Loaded>("POST", "/strategies", body);
       setLoaded(s); setDirty(false); setSaving("idle"); toast.success(`Saved version ${s.latest}`);
       try { localStorage.removeItem(`studio:draft:${s.id}`); localStorage.removeItem("studio:draft:new"); } catch { /* blocked */ }
-      if (!loaded) router.replace(`/studio/build/${s.id}`);
+      if (!loaded && navigate) router.replace(`/studio/build/${s.id}?ui=${ui}`);
       return s.id;
     } catch (e) { setSaving(e instanceof Error && /409|version/i.test(e.message) ? "conflict" : "idle"); fail(e); return null; }
-  }, [loaded, spec, router]);
+  }, [loaded, spec, router, ui]);
 
   const run = useCallback(async () => {
     const sid = await save(); if (!sid) return;
@@ -264,14 +284,14 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.key.toLowerCase() === "p" && e.shiftKey) { e.preventDefault(); setPalette((o) => !o); }
       else if (e.key === "s") { e.preventDefault(); void save(); }
-      else if (e.key === "Enter") { e.preventDefault(); void run(); }
+      else if (e.key === "Enter" && ui !== "dev") { e.preventDefault(); void run(); }
       else if (e.key === "z" && !(e.target as HTMLElement).matches("input, textarea")) {
         e.preventDefault(); const h = history.current, from = e.shiftKey ? h.future : h.past, to = e.shiftKey ? h.past : h.future;
         const prev = from.pop(); if (prev) setSpec((cur) => { to.push(cur); return prev; });
       }
     };
     window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);
-  }, [save, run]);
+  }, [save, run, ui]);
 
   /** Lift the number under the cursor (or selected) in a rule to a named parameter with a sweep range around it. */
   const lift = (name?: string) => {
@@ -291,10 +311,10 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const saveMine = (next: typeof mine) => { setMine(next); try { localStorage.setItem("studio:build:mytemplates", JSON.stringify(next)); } catch { /* private window */ } };
   const applyTemplate = (t: { spec: Record<string, unknown> }) => { edit({ ...BLANK, ...(t.spec as Partial<Spec>) }); setMode("formula"); };
 
-  const findings = (role: string) => (blank ? [] : compiled?.findings.filter((f) => f.role === role) ?? []);
   const params = Object.entries(spec.params);
   const sweep = params.reduce((n, [, p]) => (p.min != null && p.max != null && p.step ? n * (Math.floor((p.max - p.min) / p.step + 1e-9) + 1) : n), params.length ? 1 : 0);
   const blank = !loaded && !spec.code.trim() && ROLES.every(([r]) => !(spec[r] as string).trim());
+  const findings = (role: string) => (blank ? [] : compiled?.findings.filter((f) => f.role === role) ?? []);
   const commands: Command[] = [
     { id: "lift", group: "Edit", label: "Lift number to parameter", ask: "Parameter name for the number at the cursor", run: (n) => lift(n) },
     { id: "param", group: "Edit", label: "Add parameter", ask: "Parameter name", run: (n) => { if (n && /^[a-z_][a-z0-9_]*$/i.test(n)) edit({ params: { ...spec.params, [n]: { value: 0 } } }); } },
@@ -307,7 +327,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
       ["studio.newfile", "Editor", "New file", ""], ["studio.snippet", "Editor", "Save selection as snippet", ""], ["studio.snippets", "Editor", "Insert snippet", "⌘⇧S"]] as const)
       .map(([cid, group, label, hint]) => ({ id: cid, group, label, hint: hint || undefined, run: () => window.dispatchEvent(new CustomEvent("studio:dev", { detail: cid })) })) : []),
     { id: "save", group: "Strategy", label: "Save version", hint: "⌘S", run: () => void save() },
-    { id: "run", group: "Strategy", label: "Run backtest", hint: "⌘↵", run: () => void run() },
+    ...(ui === "simple" ? [{ id: "run", group: "Strategy", label: "Run backtest", hint: "⌘↵", run: () => void run() }] : []),
     { id: "new", group: "Strategy", label: "New blank strategy", run: () => router.push("/studio/build") },
     ...(templates.data ?? []).map((t) => ({ id: `t-${t.name}`, group: "Template", label: `${t.name}: ${t.rule}`, run: () => applyTemplate(t) })),
   ];
@@ -322,6 +342,16 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     { ok: !(compiled?.findings.some((f) => f.role === "params") ?? false), label: "Parameters used", detail: compiled?.findings.filter((f) => f.role === "params").map((f) => f.token).join(", ") || "all used", go: "params" },
   ];
 
+  const checkList = (
+            <ul className="bd-checks">
+              {checks.map((c) => (
+                <li key={c.label} className={c.ok === null ? "" : c.ok ? "ok" : "bad"}>
+                  <span className="bd-check-icon">{c.ok === null ? <CircleDashed aria-label="Pending" /> : c.ok ? <CircleCheck aria-label="Passed" /> : <CircleX aria-label="Failed" />}</span><b>{c.label}</b>
+                  {c.go && c.ok === false ? <button className="bd-link" onClick={() => document.getElementById(`bd-${c.go}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}>{c.detail}</button> : <span>{c.detail}</span>}
+                </li>
+              ))}
+            </ul>
+  );
   const side = (
     <>
           <section className="bd-card">
@@ -346,21 +376,14 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
               </>
             ) : <div className="st-skip">{prev?.reason ? `${prev.status === "error" ? "error" : "skipped"}: ${prev.reason}` : "—"}</div>}
           </section>
-          <section className="bd-card">
-            <h3>Checks</h3>
-            <ul className="bd-checks">
-              {checks.map((c) => (
-                <li key={c.label} className={c.ok === null ? "" : c.ok ? "ok" : "bad"}>
-                  <i aria-hidden /> <b>{c.label}</b>
-                  {c.go && c.ok === false ? <button className="bd-link" onClick={() => document.getElementById(`bd-${c.go}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}>{c.detail}</button> : <span>{c.detail}</span>}
-                </li>
-              ))}
-            </ul>
-          </section>
-          <section className="bd-card">
-            <h3>What it does</h3>
+          {ui === "dev" ? <details className="bd-card dv-preview-details" open>
+            <summary>Checks</summary>
+            {checkList}
+          </details> : <section className="bd-card"><h3>Checks</h3>{checkList}</section>}
+          {ui === "dev" ? <details className="bd-card dv-preview-details">
+            <summary>What it does</summary>
             <p className="bd-desc">{compiled?.description || "—"}</p>
-          </section>
+          </details> : <section className="bd-card"><h3>What it does</h3><p className="bd-desc">{compiled?.description || "—"}</p></section>}
     </>
   );
   const paramsCard = (
@@ -387,10 +410,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const savedState: Saved = saving === "saving" ? "saving" : saving === "conflict" ? "conflict" : !loaded ? "new" : dirty ? "draft" : "saved";
   const compileProblems: Problem[] = (compiled?.findings ?? []).filter((f) => f.role === "code").map((f) => ({ severity: f.severity, file: "main.py", line: Math.max(1, f.line), column: f.start + 1, end_column: Math.max(f.end, f.start + 1) + 1, code: "compile", message: f.message }));
 
-  const nameInput = (
-<input className="bd-name" aria-label="Strategy name" value={spec.name} onChange={(e) => edit({ name: e.target.value })} />
-  );
-  const headRight = (
+  const nameInput = <input className="bd-name" aria-label="Strategy name" value={spec.name} onChange={(e) => edit({ name: e.target.value })} />;
+  const versionControls = (
     <>
         {loaded && loaded.versions.length > 1 ? (
           <select className="input" aria-label="Version" value={loaded.version} onChange={(e) => void load(loaded.id, Number(e.target.value))}>
@@ -406,10 +427,16 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
             {[...loaded.versions].reverse().map((v) => <option key={v.version} value={v.version}>v{v.version}</option>)}
           </select>
         ) : null}
+    </>
+  );
+  const headRight = (
+    <>
+        {ui === "dev" ? null : versionControls}
         <span className="bd-ui"><Segmented<"simple" | "dev"> label="Interface" value={ui} onChange={switchUi} options={[{ value: "simple", label: "Simple" }, { value: "dev", label: "Dev" }]} /></span>
-        <button className="btn" onClick={() => setPalette(true)}><CommandIcon size={14} />Commands<kbd>⌘⇧P</kbd></button>
+        <button className={ui === "dev" ? "btn icon" : "btn"} title="Commands (⌘⇧P)" aria-label="Commands" onClick={() => setPalette(true)}><CommandIcon size={14} />{ui === "dev" ? null : <>Commands<kbd>⌘⇧P</kbd></>}</button>
         <button className="btn icon" aria-label="More" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMore({ x: r.right - 220, y: r.bottom + 4 }); }}><MoreHorizontal size={15} /></button>
-        <PopMenu at={more} onClose={() => setMore(null)} width={220}>
+        <PopMenu at={more} onClose={() => setMore(null)} width={220} sticky={ui === "dev"}>
+          {ui === "dev" ? <div className="bd-menu-fields">{nameInput}{versionControls}</div> : null}
           <MenuItem icon={<Link2 size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) void studio<{ token: string }>("POST", `/strategies/${loaded.id}/share`).then((r) => { const u = `${location.origin}/studio/build?share=${r.token}`; void navigator.clipboard?.writeText(u); toast.success("Read-only link copied"); }, fail); }}>Copy read-only link</MenuItem>
           <MenuItem icon={<GitBranch size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) void studio<{ id: string }>("POST", `/strategies/${loaded.id}/versions/${loaded.version}/branch`).then((b) => router.push(`/studio/build/${b.id}`), fail); }}>Branch from v{loaded?.version ?? 1}</MenuItem>
           <MenuItem icon={<Download size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) window.location.assign(`${STUDIO_BASE}/strategies/${loaded.id}/export.zip`); }}>Export project (.zip)</MenuItem>
@@ -425,8 +452,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           void fetch(`${STUDIO_BASE}/strategies/import-zip?name=${encodeURIComponent(f.name.replace(/\.zip$/i, ""))}`, { method: "POST", headers: { "Content-Type": "application/zip" }, body: f })
             .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.detail?.message ?? j.detail ?? "Import failed"); router.push(`/studio/build/${j.id}?ui=dev`); }).catch(fail);
         }} />
-        <button className="btn" onClick={() => void save()}><Save size={14} />Save<kbd>⌘S</kbd></button>
-        <button className="btn primary" disabled={compiled ? !compiled.ok : true} onClick={() => void run()}><Play size={14} />Run backtest<kbd>⌘↵</kbd></button>
+        <button className={ui === "dev" ? "btn icon" : "btn"} title="Save (⌘S)" aria-label="Save" onClick={() => void save()}><Save size={14} />{ui === "dev" ? null : <>Save<kbd>⌘S</kbd></>}</button>
+        {ui === "dev" ? null : <button className="btn primary" disabled={!compiled?.ok} onClick={() => void run()}><Play size={14} />Run backtest<kbd>⌘↵</kbd></button>}
     </>
   );
 
@@ -434,7 +461,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     <div className="bd" data-ui={ui}>
       {ui === "dev" ? null : (
       <header className="bd-head">
-        <input className="bd-name" aria-label="Strategy name" value={spec.name} onChange={(e) => edit({ name: e.target.value })} />
+        {nameInput}
         <span className="bd-meta">{loaded ? `v${loaded.latest}${dirty ? " · draft" : " · saved"}` : "new"}{compiled?.ms !== undefined ? ` · compiled in ${compiled.ms} ms` : ""}</span>
         {loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null}
         <span style={{ flex: 1 }} />
@@ -480,7 +507,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           })() : null}
         </section>
       ) : null}
-      {ui === "dev" ? <DevIDE title={nameInput} tools={headRight} spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} onRun={() => void run()} onFullRun={() => void run()} compileProblems={compileProblems}
+      {ui === "dev" ? <DevIDE tools={headRight} canRun={!!spec.code.trim() || ROLES.some(([role]) => !!String(spec[role] ?? "").trim())} starting={starting} onPreview={() => setNudge((n) => n + 1)} spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} compileProblems={compileProblems}
         strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={(d, l) => { setPausedAt(d); setPausedLabel(l ?? "❚❚"); }} font={font} savedFiles={loaded ? { "main.py": (loaded.spec as Spec).code ?? "", ...(((loaded.spec as Spec).files as Record<string, string>) ?? {}) } : undefined} quick={quick} onQuickRun={(l) => void quickRun(l)} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid" data-compact={readDefaults().compact || undefined} data-plain={readDefaults().plain || undefined}>
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">

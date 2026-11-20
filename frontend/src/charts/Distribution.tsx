@@ -2,7 +2,7 @@
 
 import { area, bin, quantileSorted, scaleLinear } from "d3";
 import { memo, useMemo, useState } from "react";
-import { AxisLabel, AxisX, Readout, ReadoutRow, Svg, crisp, useWidth } from "./core";
+import { AxisLabel, AxisX, AxisY, Readout, ReadoutRow, Svg, crisp, useWidth } from "./core";
 
 type View = "histogram" | "strip" | "box" | "ridge";
 type Props = {
@@ -24,9 +24,10 @@ function DistributionImpl({ values, observed = null, tail = "right", xLabel = "S
     const scale = scaleLinear().domain([lo - pad, hi + pad]).nice();
     return { bins: bin().domain(scale.domain() as [number, number]).thresholds(scale.ticks(Math.min(40, Math.max(8, Math.round(Math.sqrt(clean.length))))))(clean), domain: scale.domain(), q: [0.05, 0.25, 0.5, 0.75, 0.95].map((p) => quantileSorted(clean, p) ?? 0) };
   }, [clean, mark]);
-  const left = 12, right = Math.max(24, width - 12), bottom = height - 32, top = 28;
+  const left = view === "histogram" ? 38 : 12, right = Math.max(24, width - 12), bottom = height - 32, top = 28;
   const x = scaleLinear().domain(domain).range([left, right]);
-  const y = scaleLinear().domain([0, Math.max(1, ...bins.map((b) => b.length))]).range([bottom, top]);
+  const maxCount = Math.max(1, ...bins.map((b) => b.length));
+  const y = scaleLinear().domain([0, maxCount]).range([bottom, top]);
   const inTail = (v: number) => mark === null ? false : tail === "right" ? v >= mark : tail === "left" ? v <= mark : Math.abs(v) >= Math.abs(mark);
   const extreme = mark === null ? null : clean.filter(inTail).length;
   const hb = hover === null ? null : bins[hover];
@@ -48,9 +49,13 @@ function DistributionImpl({ values, observed = null, tail = "right", xLabel = "S
         {view === "box" ? <g><line x1={x(q[0])} x2={x(q[4])} y1={midY} y2={midY} stroke="var(--text-2)" />{[q[0], q[4]].map((v, i) => <line key={i} x1={x(v)} x2={x(v)} y1={midY - 14} y2={midY + 14} stroke="var(--text-2)" />)}<rect x={x(q[1])} y={midY - 24} width={Math.max(1, x(q[3]) - x(q[1]))} height={48} fill="var(--accent-soft)" stroke="var(--accent)" />{clean.filter((v) => v < q[0] || v > q[4]).map((v, i) => <circle key={i} cx={x(v)} cy={midY} r={2} fill="var(--text-2)" />)}</g> : null}
         <line x1={crisp(x(q[2]))} x2={crisp(x(q[2]))} y1={top} y2={bottom} stroke="var(--text-2)" strokeDasharray="3 3" />
         {mark !== null ? <g><line x1={crisp(x(mark))} x2={crisp(x(mark))} y1={top - 8} y2={bottom} stroke="var(--down)" strokeWidth={1.5} /><text x={x(mark)} y={top - 12} textAnchor={x(mark) > width / 2 ? "end" : "start"} fontSize={10.5} fill="var(--text)">{observedLabel} {format(mark)}</text></g> : null}
+        {view === "histogram" ? <>
+          <AxisLabel x={left} y={12} anchor="start">Count</AxisLabel>
+          <AxisY scale={y} x={left} ticks={Math.min(4, maxCount)} format={(v) => String(v)} spine />
+        </> : null}
         <AxisX scale={x} y={bottom} ticks={Math.max(2, Math.floor(width / 90))} format={format} spine /><AxisLabel x={right} y={height - 1} anchor="end">{xLabel}</AxisLabel>
       </Svg> : <div style={{ height }} />}
-      <p className="calendar-note">{view === "box" ? "Box: 25th–75th percentiles; whiskers: 5th–95th. Dots show observations beyond the whiskers." : view === "ridge" ? "Frequency ridge joins histogram bin centres; it is not a fitted probability density." : view === "strip" ? "Each dot is one observation; vertical jitter only separates overlapping values." : "Bar height counts observations; the red segment counts observations as extreme as the marker."} The shaded interval contains the central 90%.</p>
+      {view !== "histogram" || mark !== null ? <p className="calendar-note">{view === "box" ? "Box: 25th–75th percentiles; whiskers: 5th–95th. Dots show observations beyond the whiskers." : view === "ridge" ? "Frequency ridge joins histogram bin centres; it is not a fitted probability density." : view === "strip" ? "Each dot is one observation; vertical jitter only separates overlapping values." : mark === null ? null : "Red bars count observations as extreme as the marker."}{view !== "histogram" || mark !== null ? " The shaded interval contains the central 90%." : null}</p> : null}
       {hb ? <Readout x={x(((hb.x0 ?? 0) + (hb.x1 ?? 0)) / 2)} y={60} width={width}><ReadoutRow label="Range" value={`${format(hb.x0 ?? 0)} to ${format(hb.x1 ?? 0)}`} /><ReadoutRow label="Observations" value={`${hb.length} of ${clean.length}`} /><ReadoutRow label="Share" value={`${(hb.length / clean.length * 100).toFixed(1)}%`} /></Readout> : null}
     </>}
   </div>;

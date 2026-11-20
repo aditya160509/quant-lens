@@ -5,7 +5,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Vela as VelaChart } from "@luxalgo/vela";
 import { studio } from "../api";
 import type { DevPreview, Draw } from "./DevIDE";
-import { excursions } from "./devStats";
 
 type Bar = { time: string; open: number; high: number; low: number; close: number; volume: number };
 
@@ -79,7 +78,9 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   useEffect(() => {
     if (!sym) return;
     setError(null);
-    void studio<{ bars: Record<string, Bar[]> }>("GET", `/bars?symbols=${encodeURIComponent(sym)}&tf=1d`).then((d) => setAll(d.bars[sym] ?? []), (e: Error) => { setAll([]); setError(e.message); });
+    const request = new AbortController();
+    void studio<{ bars: Record<string, Bar[]> }>("GET", `/bars?symbols=${encodeURIComponent(sym)}&tf=1d`, undefined, request.signal).then((d) => { if (!request.signal.aborted) setAll(d.bars[sym] ?? []); }, (e: Error) => { if (!request.signal.aborted) { setAll([]); setError(e.message); } });
+    return () => request.abort();
   }, [sym]);
 
   const from = prev?.bars?.[0]?.date, to = prev?.bars?.at(-1)?.date;
@@ -88,15 +89,12 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   const [hidden, setHidden] = useState<string[]>([]);
   const [own, setOwn] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<"all" | "win" | "loss">("all");
-  const rows = useMemo(() => (prev?.trades ?? []).filter((t) => !t.symbol || t.symbol === sym).map((t) => {
-    const e = excursions({ entry_date: String(t.entry_date), exit_date: String(t.exit_date), side: String(t.side), entry: Number(t.entry), exit: Number(t.exit), pnl: Number(t.pnl), ret: Number(t.return) }, all);
-    return { entry: String(t.entry_date), exit: String(t.exit_date), side: String(t.side), ret: Number(t.return), pnl: Number(t.pnl), days: Math.round((ms(String(t.exit_date)) - ms(String(t.entry_date))) / 864e5), ...e };
-  }), [prev?.trades, sym, all]);
-  const shown = rows.filter((r) => filter === "all" || (filter === "win" ? r.pnl > 0 : r.pnl <= 0));
-  const here = pausedAt ? shown.findIndex((r) => r.entry >= pausedAt) : -1;
+  const rows = useMemo(() => (prev?.trades ?? []).filter((t) => !t.symbol || t.symbol === sym), [prev?.trades, sym]);
+  const shown = useMemo(() => rows.filter((r) => filter === "all" || (filter === "win" ? Number(r.pnl) > 0 : Number(r.pnl) <= 0)), [rows, filter]);
+  const currentTrade = pausedAt ? shown.findLastIndex((r) => String(r.entry_date) <= pausedAt) : -1;
   const hop = useCallback((d: 1 | -1) => {
-    const next = shown[pausedAt ? (d > 0 ? shown.findIndex((r) => r.entry > pausedAt) : shown.findLastIndex((r) => r.entry < pausedAt)) : d > 0 ? 0 : shown.length - 1];
-    if (next) onGo(next.entry);
+    const next = shown[pausedAt ? (d > 0 ? shown.findIndex((r) => String(r.entry_date) > pausedAt) : shown.findLastIndex((r) => String(r.entry_date) < pausedAt)) : d > 0 ? 0 : shown.length - 1];
+    if (next) onGo(String(next.entry_date));
   }, [shown, pausedAt, onGo]);
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
@@ -189,7 +187,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
       {rows.length || Object.keys(prev?.plots ?? {}).length ? (
         <div className="dv-nav">
           <div className="dv-navbar">
-            <b>Trades<span>{shown.length}</span></b>
+            <b>Trades<span>{currentTrade >= 0 ? `${currentTrade + 1} / ` : ""}{shown.length}</span></b>
             <select className="input sm" aria-label="Filter trades" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}><option value="all">All</option><option value="win">Winners</option><option value="loss">Losers</option></select>
             <button className="icon-btn" aria-label="Previous trade" title="Previous trade [" onClick={() => hop(-1)}><ChevronLeft size={14} /></button>
             <button className="icon-btn" aria-label="Next trade" title="Next trade ]" onClick={() => hop(1)}><ChevronRight size={14} /></button>
@@ -208,18 +206,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
               </details>
             ) : null}
           </div>
-          {shown.length ? <details className="dv-chart-trades">
-          <summary>Trade list</summary>
-          <div className="dv-navrows" role="table" aria-label="Trades">
-            <div role="row" className="dv-navhead"><span>Entry</span><span>Side</span><span>Hold</span><span>Return</span><span>MAE</span><span>MFE</span></div>
-            {shown.map((r, i) => (
-              <button key={r.entry + r.exit} role="row" className="dv-navrow" data-on={i === here || undefined} onClick={() => onGo(r.entry)}>
-                <span>{r.entry}</span><span>{r.side}</span><span data-num>{r.days}d</span><span data-num data-sign={r.ret >= 0 ? "up" : "down"}>{(r.ret * 100).toFixed(1)}%</span>
-                <span data-num>{r.mae == null ? "—" : `${(r.mae * 100).toFixed(1)}%`}</span><span data-num>{r.mfe == null ? "—" : `${(r.mfe * 100).toFixed(1)}%`}</span>
-              </button>
-            ))}
-          </div>
-          </details> : null}
+
         </div>
       ) : null}
       <div className="dv-replay">

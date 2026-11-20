@@ -752,7 +752,7 @@ Merges Build (141 done features move into panels unchanged), the 22 open Build i
 - [x] [M] W-2 Panels closed by default; open from View menu, palette and shortcuts
 - [x] [M] W-3 Workspace templates: Code only, Code + Chart, Full tester, Chart first, plus user-saved ones
 - [x] [S] W-4 Rename, duplicate, delete and switch workspaces; per-strategy default
-- [ ] [M] W-5 Customise: panel visibility and workspace sizes are saved, including the chart/preview and editor splits. Flexible docking and chrome controls remain open.
+- [ ] [M] W-5 Customise: panel visibility and workspace sizes are saved, including the editor split. Preview opens in the resizable bottom panel, and the Dev activity bar can be hidden. Flexible docking remains open.
 - [x] [L] W-6 Vela chart panel fed with bars, trades, ctx.plot, paused bar; mark B (Vela™ in status bar)
 - [ ] [M] W-7 Drawings saved per strategy; per-tool settings and floating toolbar
 - [ ] [L] W-8 Strategy Tester drawer: key stats, equity/drawdown, trades list, settings

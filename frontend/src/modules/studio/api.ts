@@ -4,8 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { STUDIO_BASE } from "./base";
 
 /** A request to the Studio API; a failed one throws the server's own message. */
-export async function studio<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${STUDIO_BASE}${path}`, { method, headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+export async function studio<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(`${STUDIO_BASE}${path}`, { method, signal, headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const json = (await res.json().catch(() => ({}))) as { detail?: unknown };
   if (!res.ok) { const d = json.detail as { reason?: string; message?: string } | undefined; throw Object.assign(new Error(typeof json.detail === "string" ? json.detail : d?.reason ?? d?.message ?? `Request failed (${res.status})`), { status: res.status, detail: json.detail }); }
   return json as T;

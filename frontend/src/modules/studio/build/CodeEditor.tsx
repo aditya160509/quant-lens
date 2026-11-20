@@ -16,7 +16,7 @@ export type EditorAction = { id: string; label: string; keys?: (m: Monaco) => nu
 type Sym = { name: string; kind: string; line: number; column: number; end_line: number; end_column: number; children: Sym[] };
 
 /** The open project, read by the Monaco providers (registered once per page load). */
-const live: { current: Project | null } = { current: null };
+const live: { current: (Project & { owner: object }) | null } = { current: null };
 
 const SNIPPETS: [string, string, string][] = [
   ["strategy", "Per-symbol strategy", "class Strategy:\n    def init(self, ctx):\n        ${1:pass}\n\n    def on_bar(self, ctx):\n        ${2:pass}\n"],
@@ -177,7 +177,13 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
   const acts = useRef(actions); acts.current = actions;
   const ed = useRef<{ editor: Ed; monaco: Monaco } | null>(null);
   const keys = useRef({ onSave, onRun, onCursor, onGutter, onComment }); keys.current = { onSave, onRun, onCursor, onGutter, onComment };
-  live.current = { ...project, snippets };
+  const context = useRef({ ...project, snippets });
+  useEffect(() => {
+    context.current = { ...project, snippets };
+    if (ed.current?.editor.hasTextFocus() || live.current?.owner === context) {
+      live.current = { ...context.current, owner: context };
+    }
+  }, [project, snippets]);
   const sel = useRef(onSelection); sel.current = onSelection;
 
   useEffect(() => {
@@ -211,6 +217,9 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
   const mount: OnMount = (editor, monaco) => {
     ed.current = { editor, monaco };
     register(monaco);
+    live.current ??= { ...context.current, owner: context };
+    editor.onDidFocusEditorText(() => { live.current = { ...context.current, owner: context }; });
+    editor.onDidDispose(() => { if (live.current?.owner === context) live.current = null; });
     theme(monaco, document.documentElement.dataset.theme !== "light");
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => keys.current.onSave());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => keys.current.onRun());
@@ -234,10 +243,10 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
   };
 
   return (
-    <Editor language="python" path={path} value={value} onChange={(v) => onChange(v ?? "")} onMount={mount} theme="studio" height="100%"
-      options={{ minimap: { enabled: false }, overviewRulerLanes: 0, overviewRulerBorder: false, hideCursorInOverviewRuler: true, fontSize: font, lineHeight: Math.round(font * 1.54), fontLigatures: false, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true,
+    <div className="dv-monaco"><Editor language="python" path={path} value={value} onChange={(v) => onChange(v ?? "")} onMount={mount} theme="studio" height="100%"
+      options={{ minimap: { enabled: false }, wordWrap: "on", overviewRulerLanes: 0, overviewRulerBorder: false, hideCursorInOverviewRuler: true, fontSize: font, lineHeight: Math.round(font * 1.54), fontLigatures: false, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true, fixedOverflowWidgets: true, scrollbar: { alwaysConsumeMouseWheel: false },
         padding: { top: 10 }, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace", quickSuggestions: { strings: true, other: true, comments: false },
-        bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true }, glyphMargin: true, readOnly }} />
+        bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true }, glyphMargin: true, readOnly }} /></div>
   );
 }
 

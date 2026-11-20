@@ -8,12 +8,12 @@ export type PanelId = "rail" | "chart" | "preview" | "tester";
 export type Layout = { open: Record<PanelId, boolean>; size: { rail: number; right: number; tester: number; chart?: number; split?: number } };
 export type Workspace = { id: string; name: string; builtin?: boolean; layout: Layout };
 
-const L = (open: Partial<Record<PanelId, boolean>>, right = 45, tester = 34, rail = 18): Layout => ({ open: { rail: false, chart: false, preview: false, tester: false, ...open }, size: { rail, right, tester } });
+const L = (open: Partial<Record<PanelId, boolean>>, right = 42, tester = 24, rail = 16): Layout => ({ open: { rail: false, chart: false, preview: false, tester: false, ...open }, size: { rail, right, tester } });
 const BUILTIN: Workspace[] = [
   { id: "code", name: "Code only", builtin: true, layout: L({}) },
   { id: "code-chart", name: "Code + Chart", builtin: true, layout: L({ chart: true }) },
-  { id: "tester", name: "Full tester", builtin: true, layout: L({ rail: true, chart: true, tester: true }, 42, 36) },
-  { id: "chart-first", name: "Chart first", builtin: true, layout: L({ chart: true }, 72) },
+  { id: "tester", name: "Full tester", builtin: true, layout: L({ rail: true, chart: true, tester: true }, 34, 24, 16) },
+  { id: "chart-first", name: "Chart first", builtin: true, layout: L({ chart: true }, 60) },
 ];
 const KEY = "studio:dev:workspaces";
 type Saved = { active: string; list: Workspace[] };
@@ -21,7 +21,14 @@ type Saved = { active: string; list: Workspace[] };
 const load = (): Saved => {
   let s: Partial<Saved> = {};
   try { s = JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { /* blocked or corrupt */ }
-  const list = [...BUILTIN.filter((b) => !s.list?.some((w) => w.id === b.id)), ...(s.list ?? [])];
+  const list = [...BUILTIN.filter((b) => !s.list?.some((w) => w.id === b.id)), ...(s.list ?? []).map((w) => {
+    const { right, tester, rail } = w.layout.size;
+    if (w.id === "tester" && right === 42 && tester === 36 && rail === 18) {
+      return { ...w, layout: { ...w.layout, size: { ...w.layout.size, right: 34, tester: 24, rail: 16 } } };
+    }
+    if (w.id === "chart-first" && right === 72) return { ...w, layout: { ...w.layout, size: { ...w.layout.size, right: 60 } } };
+    return w;
+  })];
   return { list, active: list.some((w) => w.id === s.active) ? s.active! : "code" };
 };
 
@@ -45,6 +52,20 @@ export const targets = (l: Layout) => {
   const right = l.open.chart || l.open.preview ? l.size.right : 0, rail = l.open.rail ? l.size.rail : 0, t = l.open.tester ? l.size.tester : 0;
   return { h: { rail, center: 100 - rail - right, right }, v: { editor: 100 - t, tester: t } };
 };
+
+/** Reserve room for the editor before applying a saved split to the current window. */
+export function fitWorkspace(layout: Layout, width: number, chartFirst: boolean): Layout {
+  if (!width) return layout;
+  const { open, size } = layout;
+  const available = Math.max(1, width - (open.rail ? 6 : 0) - (open.chart ? 6 : 0));
+  const editor = Math.min(available, chartFirst ? available * 0.3 : 430);
+  const remaining = available - editor;
+  const chart = open.chart && (!open.rail || remaining >= 390);
+  const rightMin = chart ? Math.min(remaining, 235) : 0;
+  const rail = open.rail ? Math.min(remaining - rightMin, Math.max(155, available * size.rail / 100)) : 0;
+  const right = chart ? Math.min(remaining - rail, Math.max(rightMin, available * size.right / 100)) : 0;
+  return { open: { ...open, chart }, size: { ...size, rail: rail / available * 100, right: right / available * 100 } };
+}
 
 export function WorkspaceMenu({ ws }: { ws: ReturnType<typeof useWorkspaces> }) {
   const { cur } = ws;
