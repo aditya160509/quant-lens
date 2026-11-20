@@ -756,7 +756,7 @@ Merges Build (141 done features move into panels unchanged), the 22 open Build i
 - [x] [L] W-6 Vela chart panel fed with bars, trades, ctx.plot, paused bar; mark B (Vela™ in status bar)
 - [ ] [M] W-7 Drawings saved per strategy; per-tool settings and floating toolbar
 - [ ] [L] W-8 Strategy Tester drawer: key stats, equity/drawdown, trades list, settings
-- [ ] [M] W-9 ctx.fill, ctx.hline, ctx.bgcolor, ctx.draw_* rendered on the chart
+- [x] [M] W-9 ctx.fill, ctx.hline, ctx.bgcolor, ctx.draw_* rendered on the chart
 - [ ] [M] W-10 Declared params become an Inputs form; change a value and the chart re-runs
 - [ ] [L] W-11 Report page: performance, trades analysis, tearsheet, robustness, compare, certificate
 - [ ] [M] W-12 Chart-first mode for non-coders (D in the plan)
