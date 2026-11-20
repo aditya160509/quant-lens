@@ -54,7 +54,7 @@ const show = (v: unknown) => (v === null || v === undefined ? "—" : typeof v =
 const pct = (v?: number) => (v === undefined ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
 const DOC_SCOPES = ["ctx", "portfolio_ctx", "numpy", "pandas", "math", "statistics"];
 const RAILS: [Rail, ReactNode, string][] = [
-  ["files", <FileCode2 key="f" size={15} />, "Files"], ["outline", <ListTree key="o" size={15} />, "Outline"], ["search", <Search key="s" size={15} />, "Search"],
+  ["files", <FileCode2 key="f" size={15} />, "Explorer"], ["outline", <ListTree key="o" size={15} />, "Outline"], ["search", <Search key="s" size={15} />, "Search"],
   ["versions", <GitBranch key="v" size={15} />, "Versions"], ["docs", <BookOpen key="d" size={15} />, "Docs"], ["templates", <LayoutTemplate key="t" size={15} />, "Starters"],
 ];
 
@@ -73,8 +73,8 @@ function finder(query: string, opt: { regex: boolean; caseSensitive: boolean; wo
 }
 
 /** Build › Dev: a project rail, the editor in tabs, Problems / Output / Plots / Trades / Debug below, preview and checks on the right, a status bar. */
-export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel, savedFiles }: {
-  spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode;
+export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, onRun, onFullRun, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel, savedFiles }: {
+  title?: ReactNode; tools?: ReactNode; spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode;
   onSave: () => void; onRun: () => void; onFullRun: () => void; compileProblems: Problem[];
   strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null, label?: string) => void; font?: number; savedFiles?: Record<string, string>;
   quick?: QuickRun | null; onQuickRun?: (level: "quick" | "full") => void; onCancel?: () => void;
@@ -86,8 +86,8 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [railOpen, setRailOpen] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelMax, setPanelMax] = useState(false);
-  const [railW, setRailW] = useState(() => store.get("studio:dev:railw", 240));
-  const [sideW, setSideW] = useState(() => store.get("studio:dev:sidew", 380));
+  const [railW, setRailW] = useState(() => store.get("studio:dev:railw", 220));
+  const [sideW, setSideW] = useState(() => store.get("studio:dev:sidew", 360));
   const [tab, setTab] = useState<Tab>("problems");
   const [lint, setLint] = useState<Problem[]>([]);
   const [types, setTypes] = useState<Problem[]>([]);
@@ -225,7 +225,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [cmtText, setCmtText] = useState("");
   const loadCmts = () => { if (strategyId) void studio<Cmt[]>("GET", `/strategies/${strategyId}/comments`).then(setCmts, () => undefined); };
   useEffect(loadCmts, [strategyId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const openThread = (line: number) => { if (!strategyId) return toast.error("Save the strategy to comment"); setThread({ file: active, line }); setCmtText(""); };
+  const openThread = (line: number) => { if (!strategyId) return toast.error("Save the strategy to comment"); setThread({ file: active, line }); setCmtText(""); setTimeout(() => document.querySelector<HTMLInputElement>(".dv-thread input")?.focus(), 80); };
   const postCmt = () => {
     if (!thread || !cmtText.trim()) return;
     const first = cmts.find((c) => c.file === thread.file && c.line === thread.line);
@@ -336,15 +336,37 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
 
   return (
     <div className="dv" data-rail={railOpen || undefined} data-side={sideMode} data-pmax={panelOpen && panelMax || undefined} style={{ ["--panel-h" as string]: panelOpen ? `${panel}px` : "0px", ["--rail-w" as string]: `${railW}px`, ["--side-w" as string]: `${sideW}px` }}>
+      <div className="dv-bar">
+        <div className="dv-title">{title}</div>
+        <div className="dv-tabs" role="tablist">
+          {open.map((f) => (
+            <div key={f} role="tab" aria-selected={!diff && f === active} className="dv-tab" data-preview={preview === f || undefined} data-pinned={pinned.includes(f) || undefined}
+              onClick={() => { setDiff(null); setActive(f); }} onDoubleClick={() => keep(f)} onAuxClick={(e) => { if (e.button === 1) close(f); }}>
+              {pinned.includes(f) ? <Pin size={10} aria-label="Pinned" /> : null}{f}
+              {savedFiles && (savedFiles[f] ?? "") !== (files[f] ?? "") ? <i className="dv-dirty" aria-label="Unsaved" /> : null}
+              <button className="icon-btn" aria-label={pinned.includes(f) ? `Unpin ${f}` : `Pin ${f}`} title={pinned.includes(f) ? "Unpin" : "Pin"} onClick={(e) => { e.stopPropagation(); keep(f); setPinned((p) => (p.includes(f) ? p.filter((x) => x !== f) : [...p, f])); }}>{pinned.includes(f) ? <PinOff size={11} /> : <Pin size={11} />}</button>
+              {open.length > 1 && !pinned.includes(f) ? <button className="icon-btn" aria-label={`Close ${f}`} onClick={(e) => { e.stopPropagation(); close(f); }}><X size={11} /></button> : null}
+            </div>
+          ))}
+          {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
+        </div>
+        <div className="dv-tools">
+          <button className="icon-btn dv-tabbtn" aria-pressed={sideMode === "on"} title="Preview" aria-label="Preview" onClick={() => setSideMode(sideMode === "on" ? "off" : "on")}><PanelRight size={16} /></button>
+          <button className="icon-btn dv-tabbtn" aria-pressed={sideMode === "wide"} title="Preview 50 / 50" aria-label="Preview 50 / 50" onClick={() => setSideMode(sideMode === "wide" ? "off" : "wide")}><Maximize2 size={16} /></button>
+          <button className="icon-btn dv-splitbtn" aria-pressed={!!split} title="Split editor" aria-label="Split editor" onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}><Columns2 size={14} /></button>
+        </div>
+        {tools}
+        </div>
       <nav className="dv-icons" aria-label="Side bar">
         {RAILS.map(([k, icon, l]) => <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={railOpen && rail === k} onClick={() => { if (railOpen && rail === k) setRailOpen(false); else { setRail(k); setRailOpen(true); } }}>{icon}</button>)}
       </nav>
       {railOpen ? (
         <nav className="dv-rail" aria-label={RAILS.find((r) => r[0] === rail)?.[2]}>
-          <div className="dv-vgrip" data-edge="r" role="separator" aria-orientation="vertical" aria-label="Resize side bar" onPointerDown={vdrag("studio:dev:railw", setRailW, railW, 1)} onDoubleClick={() => { setRailW(240); store.set("studio:dev:railw", 240); }} />
+          <div className="dv-vgrip" data-edge="r" role="separator" aria-orientation="vertical" aria-label="Resize side bar" onPointerDown={vdrag("studio:dev:railw", setRailW, railW, 1)} onDoubleClick={() => { setRailW(240); store.set("studio:dev:railw", 220); }} />
           <h4>{RAILS.find((r) => r[0] === rail)?.[2]}</h4>
           {rail === "files" ? (
-            <div className="dv-list">
+            <div className="dv-list dv-explorer">
+              <details open><summary>Files</summary>
               {Object.keys(files).map((f) => (
                 <div key={f} className="dv-file" data-on={f === active || undefined}>
                   <button className="dv-item" onClick={() => peek(f)} onDoubleClick={() => { goto(f, 1); keep(f); }}><FileCode2 size={13} />{f}</button>
@@ -353,6 +375,18 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
                 </div>
               ))}
               <button className="btn sm ghost" onClick={addFile}><FilePlus2 size={13} />New file</button>
+              </details>
+              <details open><summary>Parameters<span>{Object.keys(spec.params).length}</span></summary>
+                {Object.entries(spec.params).map(([n, p]) => <div key={n} className="dv-row"><code>{n}</code><span>{p.value}</span></div>)}
+                {Object.keys(spec.params).length ? null : <p className="dv-empty">None</p>}
+              </details>
+              <details><summary>Libraries<span>{DOC_SCOPES.length}</span></summary>
+                {DOC_SCOPES.map((n) => <button key={n} className="dv-item" onClick={() => setRail("docs")}><BookOpen size={13} />{n}</button>)}
+              </details>
+              <details><summary>Versions<span>{versions.length}</span></summary>
+                {[...versions].reverse().slice(0, 6).map((v) => <button key={v.version} className="dv-item" onClick={() => setRail("versions")}><GitBranch size={13} />v{v.version}<span>{v.actor}</span></button>)}
+                {versions.length ? null : <p className="dv-empty">Not saved</p>}
+              </details>
             </div>
           ) : rail === "outline" ? (
             <div className="dv-list">{outline.length ? outlineRows(outline) : <p className="dv-empty">No classes or functions</p>}</div>
@@ -422,22 +456,6 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
       ) : null}
 
       <section className="dv-main">
-        <div className="dv-tabs" role="tablist">
-          {open.map((f) => (
-            <div key={f} role="tab" aria-selected={!diff && f === active} className="dv-tab" data-preview={preview === f || undefined} data-pinned={pinned.includes(f) || undefined}
-              onClick={() => { setDiff(null); setActive(f); }} onDoubleClick={() => keep(f)} onAuxClick={(e) => { if (e.button === 1) close(f); }}>
-              {pinned.includes(f) ? <Pin size={10} aria-label="Pinned" /> : null}{f}
-              {savedFiles && (savedFiles[f] ?? "") !== (files[f] ?? "") ? <i className="dv-dirty" aria-label="Unsaved" /> : null}
-              <button className="icon-btn" aria-label={pinned.includes(f) ? `Unpin ${f}` : `Pin ${f}`} title={pinned.includes(f) ? "Unpin" : "Pin"} onClick={(e) => { e.stopPropagation(); keep(f); setPinned((p) => (p.includes(f) ? p.filter((x) => x !== f) : [...p, f])); }}>{pinned.includes(f) ? <PinOff size={11} /> : <Pin size={11} />}</button>
-              {open.length > 1 && !pinned.includes(f) ? <button className="icon-btn" aria-label={`Close ${f}`} onClick={(e) => { e.stopPropagation(); close(f); }}><X size={11} /></button> : null}
-            </div>
-          ))}
-          <span style={{ flex: 1 }} />
-          <button className="icon-btn dv-tabbtn" aria-pressed={sideMode === "on"} title="Preview" aria-label="Preview" onClick={() => setSideMode(sideMode === "on" ? "off" : "on")}><PanelRight size={16} /></button>
-          <button className="icon-btn dv-tabbtn" aria-pressed={sideMode === "wide"} title="Preview 50 / 50" aria-label="Preview 50 / 50" onClick={() => setSideMode(sideMode === "wide" ? "off" : "wide")}><Maximize2 size={16} /></button>
-          <button className="icon-btn dv-splitbtn" aria-pressed={!!split} title="Split editor" aria-label="Split editor" onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}><Columns2 size={14} /></button>
-          {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
-        </div>
         <div className="dv-editor" data-split={split && !diff ? (splitDown ? "down" : "right") : undefined}>
           {!spec.code.trim() && active === "main.py" && !diff ? (
             <div className="dv-blank">
@@ -633,7 +651,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
       </section>
 
       <aside className="dv-side">
-        <div className="dv-vgrip" data-edge="l" role="separator" aria-orientation="vertical" aria-label="Resize preview" onPointerDown={vdrag("studio:dev:sidew", setSideW, sideW, -1)} onDoubleClick={() => { setSideW(380); store.set("studio:dev:sidew", 380); }} />
+        <div className="dv-vgrip" data-edge="l" role="separator" aria-orientation="vertical" aria-label="Resize preview" onPointerDown={vdrag("studio:dev:sidew", setSideW, sideW, -1)} onDoubleClick={() => { setSideW(380); store.set("studio:dev:sidew", 360); }} />
         {side}
       </aside>
 
