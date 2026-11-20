@@ -246,7 +246,7 @@
 .dv-sbtn b.error { color: var(--down); } .dv-sbtn b.warning { color: var(--warn); }
 .dv-qc p { margin: 0 0 6px; font-size: 12.5px; }
 .dv-qc b.warning { color: var(--warn); }
-@media (max-width: 1280px) { .dv { grid-template-columns: var(--ab) minmax(0, 1fr); } .dv[data-rail] { grid-template-columns: var(--ab) 200px minmax(0, 1fr); } .dv-side { display: none; } }
+@media (max-width: 1280px) { .dv { grid-template-columns: var(--ab) minmax(0, 1fr); } .dv[data-rail] { grid-template-columns: var(--ab) 200px minmax(0, 1fr); } }
 @media (max-width: 760px) { .bd[data-ui="dev"] { height: auto; } .dv { grid-template-columns: 1fr; grid-template-rows: auto 70dvh 26px; } .dv-rail { border-right: 0; border-bottom: 1px solid var(--line); } .dv-list { max-height: 160px; } .dv-main { grid-row: 2; } }
 .dv-search { display: flex; gap: 4px; align-items: center; margin: 0 4px 4px; }
 .dv-search .input { flex: 1; min-width: 0; }
@@ -410,3 +410,32 @@
 .bd[data-ui="dev"] .bd-head .btn { height: 32px; white-space: nowrap; }
 .dv-tabbtn { align-self: center; margin-right: 4px; height: 26px; padding: 0 10px; font-size: 12px; }
 .bd[data-ui="dev"] .dv-status { padding-right: 150px; }
+
+/* Dev layout: edge to edge, resizable rail and preview, VS Code style */
+.bd[data-ui="dev"] { padding: 0; gap: 0; }
+.bd[data-ui="dev"] .bd-head { padding: 4px 10px; }
+.dv { --ab: 44px; border-radius: 0; grid-template-columns: var(--ab) minmax(0, 1fr) var(--side-w, 380px); }
+.dv[data-rail] { grid-template-columns: var(--ab) var(--rail-w, 240px) minmax(0, 1fr) var(--side-w, 380px); }
+.dv[data-side="off"] { grid-template-columns: var(--ab) minmax(0, 1fr) 0; } .dv[data-side="off"][data-rail] { grid-template-columns: var(--ab) var(--rail-w, 240px) minmax(0, 1fr) 0; }
+.dv[data-side="wide"] { grid-template-columns: var(--ab) minmax(0, 1fr) minmax(0, 1fr); } .dv[data-side="wide"][data-rail] { grid-template-columns: var(--ab) var(--rail-w, 240px) minmax(0, 1fr) minmax(0, 1fr); }
+.dv-rail, .dv-side { position: relative; }
+.dv-vgrip { position: absolute; top: 0; bottom: 0; width: 7px; z-index: 5; cursor: col-resize; }
+.dv-vgrip[data-edge="r"] { right: -3px; } .dv-vgrip[data-edge="l"] { left: -3px; }
+.dv-vgrip:hover, .dv-vgrip:active { background: color-mix(in oklab, var(--accent) 45%, transparent); }
+.dv-icons { gap: 4px; padding: 8px 0; }
+.dv-icons .icon-btn { width: 36px; height: 36px; }
+.dv-main { grid-template-rows: 38px minmax(0, 1fr) 4px var(--panel-h, 260px); }
+.dv[data-pmax] .dv-main { grid-template-rows: 38px 0 4px minmax(0, 1fr); }
+.dv-tabs { align-items: flex-end; padding-right: 6px; }
+.dv-tab { height: 33px; margin: 5px 0 0 2px; padding: 0 8px 0 12px; }
+.dv-tabbtn { width: 28px; height: 28px; margin: 0 1px 3px; align-self: center; padding: 0; }
+.dv-tabbtn[aria-pressed="true"] { color: var(--accent); background: var(--line); }
+.dv-item { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 6px 8px; }
+.dv-item span { margin-left: auto; }
+.dv-file .icon-btn { width: 24px; height: 24px; flex: none; }
+.dv-ptabs { height: 34px; align-items: stretch; overflow-x: auto; scrollbar-width: none; }
+.dv-ptabs button { white-space: nowrap; padding: 0 12px; }
+.dv-ptabs .icon-btn { align-self: center; width: 26px; height: 26px; padding: 0; }
+.dv-panel { grid-template-rows: 34px minmax(0, 1fr); }
+.dv-side { padding: 8px; }
+.bd[data-ui="dev"] .dv-status { padding-right: 150px; height: 24px; }

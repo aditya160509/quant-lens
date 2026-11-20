@@ -2,7 +2,7 @@
 
 import { DiffEditor } from "@monaco-editor/react";
 import Link from "next/link";
-import { BookOpen, Bug, PanelRight, Maximize2, CaseSensitive, Columns2, Pin, PinOff, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
+import { BookOpen, Bug, PanelRight, Maximize2, Minimize2, CaseSensitive, Columns2, Pin, PinOff, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { SERIES } from "@/charts/core";
@@ -85,6 +85,9 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const [rail, setRail] = useState<Rail>("files");
   const [railOpen, setRailOpen] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [panelMax, setPanelMax] = useState(false);
+  const [railW, setRailW] = useState(() => store.get("studio:dev:railw", 240));
+  const [sideW, setSideW] = useState(() => store.get("studio:dev:sidew", 380));
   const [tab, setTab] = useState<Tab>("problems");
   const [lint, setLint] = useState<Problem[]>([]);
   const [types, setTypes] = useState<Problem[]>([]);
@@ -216,6 +219,10 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     if (!dbg || !watches.length) { setWatchRows([]); return; }
     void studio<typeof watchRows>("POST", "/build/watch", { spec, symbol: dbg.symbol, date: dbg.date, expressions: watches }).then(setWatchRows, () => undefined);
   }, [dbg, watches]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stepLine = (cursorLine?: number) => {
+    const b = dbg?.breakpoint;
+    debug({ date: dbg?.date, step_line: true, breakpoint: { file: b?.file ?? active, line: b?.line ?? cursorLine ?? cursor.line } });
+  };
   const debug = (body: Record<string, unknown>) => {
     const date = String(body.date || dbg?.date || dbgDate || (prev?.trades.at(-1)?.entry_date ?? ""));
     if (!date) return toast.error("Pick a date to stop at");
@@ -262,8 +269,17 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   }, [quick, onCancel]);
   const drag = (e: React.PointerEvent) => {
     const y0 = e.clientY, h0 = panel;
-    const move = (m: PointerEvent) => setPanel(Math.min(Math.max(h0 - (m.clientY - y0), 120), window.innerHeight * 0.7));
+    const move = (m: PointerEvent) => setPanel(Math.min(Math.max(h0 - (m.clientY - y0), 120), window.innerHeight * 0.85));
     const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); setPanel((h) => { store.set("studio:dev:panel", h); return h; }); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  };
+
+  /** Drag a vertical edge: the rail grows rightward, the preview leftward. Size is remembered. */
+  const vdrag = (key: string, set: (w: number) => void, w0: number, dir: 1 | -1) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    const x0 = e.clientX; let w = w0;
+    const move = (m: PointerEvent) => { w = Math.round(Math.min(Math.max(w0 + dir * (m.clientX - x0), 180), window.innerWidth * 0.6)); set(w); };
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); store.set(key, w); };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
 
@@ -271,6 +287,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
     { id: "studio.debug", label: "Debug: start", keys: (m) => [m.KeyCode.F5], run: () => startDebug() },
     { id: "studio.bp", label: "Debug: toggle breakpoint", keys: (m) => [m.KeyCode.F9], run: (line) => toggleBp(line) },
     { id: "studio.step", label: "Debug: step one bar", keys: (m) => [m.KeyCode.F10], run: () => debug({ step: 1 }) },
+    { id: "studio.stepline", label: "Debug: step line", keys: (m) => [m.KeyCode.F11], run: (l) => stepLine(l) },
     { id: "studio.stepback", label: "Debug: step back one bar", keys: (m) => [m.KeyMod.Shift | m.KeyCode.F10], run: () => debug({ step: -1 }) },
     { id: "studio.panel", label: "View: toggle panel", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyJ], run: () => setPanelOpen((o) => !o) },
     { id: "studio.rail", label: "View: toggle side bar", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyB], run: () => setRailOpen((o) => !o) },
@@ -305,12 +322,13 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
   const mainPlots = plots.filter(([n]) => prev?.plot_charts?.[n] === "main");
 
   return (
-    <div className="dv" data-rail={railOpen || undefined} data-side={sideMode} style={{ ["--panel-h" as string]: panelOpen ? `${panel}px` : "0px" }}>
+    <div className="dv" data-rail={railOpen || undefined} data-side={sideMode} data-pmax={panelOpen && panelMax || undefined} style={{ ["--panel-h" as string]: panelOpen ? `${panel}px` : "0px", ["--rail-w" as string]: `${railW}px`, ["--side-w" as string]: `${sideW}px` }}>
       <nav className="dv-icons" aria-label="Side bar">
         {RAILS.map(([k, icon, l]) => <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={railOpen && rail === k} onClick={() => { if (railOpen && rail === k) setRailOpen(false); else { setRail(k); setRailOpen(true); } }}>{icon}</button>)}
       </nav>
       {railOpen ? (
         <nav className="dv-rail" aria-label={RAILS.find((r) => r[0] === rail)?.[2]}>
+          <div className="dv-vgrip" data-edge="r" role="separator" aria-orientation="vertical" aria-label="Resize side bar" onPointerDown={vdrag("studio:dev:railw", setRailW, railW, 1)} onDoubleClick={() => { setRailW(240); store.set("studio:dev:railw", 240); }} />
           <h4>{RAILS.find((r) => r[0] === rail)?.[2]}</h4>
           {rail === "files" ? (
             <div className="dv-list">
@@ -402,8 +420,8 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
             </div>
           ))}
           <span style={{ flex: 1 }} />
-          <button className="btn sm ghost dv-tabbtn" aria-pressed={sideMode === "on"} onClick={() => setSideMode(sideMode === "on" ? "off" : "on")}><PanelRight size={13} />Preview</button>
-          <button className="btn sm ghost dv-tabbtn" aria-pressed={sideMode === "wide"} onClick={() => setSideMode(sideMode === "wide" ? "off" : "wide")}><Maximize2 size={13} />50 / 50</button>
+          <button className="icon-btn dv-tabbtn" aria-pressed={sideMode === "on"} title="Preview" aria-label="Preview" onClick={() => setSideMode(sideMode === "on" ? "off" : "on")}><PanelRight size={16} /></button>
+          <button className="icon-btn dv-tabbtn" aria-pressed={sideMode === "wide"} title="Preview 50 / 50" aria-label="Preview 50 / 50" onClick={() => setSideMode(sideMode === "wide" ? "off" : "wide")}><Maximize2 size={16} /></button>
           <button className="icon-btn dv-splitbtn" aria-pressed={!!split} title="Split editor" aria-label="Split editor" onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}><Columns2 size={14} /></button>
           {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
         </div>
@@ -442,6 +460,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
             <div className="dv-ptabs" role="tablist">
               {TABS.map(([k, l, n]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{l}{n ? <span className="num">{n}</span> : null}</button>)}
               <span style={{ flex: 1 }} />
+              <button className="icon-btn" aria-label={panelMax ? "Restore panel" : "Maximise panel"} title={panelMax ? "Restore panel" : "Maximise panel"} onClick={() => setPanelMax((m) => !m)}>{panelMax ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
               <button className="icon-btn" aria-label="Hide panel" title="Hide panel ⌘J" onClick={() => setPanelOpen(false)}><X size={13} /></button>
             </div>
             <div className="dv-pbody" onScroll={(e) => { if (tab === "output") setLogTop(e.currentTarget.scrollTop); }}>
@@ -560,6 +579,7 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
                     <button className="btn sm primary" onClick={() => debug({ date: dbgDate })}><Bug size={13} />Stop here<kbd>F5</kbd></button>
                     <button className="btn sm" disabled={!dbg?.previous_date} onClick={() => debug({ step: -1 })}>◀ Bar</button>
                     <button className="btn sm" disabled={!dbg?.next_date} onClick={() => debug({ step: 1 })}>Bar ▶<kbd>F10</kbd></button>
+                    <button className="btn sm" disabled={!dbg} onClick={() => stepLine()}>Line ▶<kbd>F11</kbd></button>
                     <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "order" })}>Next order</button>
                     <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "fill" })}>Next fill</button>
                     <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "equity", loss_fraction: 0.05 })}>Next 5% loss day</button>
@@ -590,7 +610,10 @@ export function DevIDE({ spec, edit, symbol, prev, side, onSave, onRun, onFullRu
         ) : null}
       </section>
 
-      <aside className="dv-side">{side}</aside>
+      <aside className="dv-side">
+        <div className="dv-vgrip" data-edge="l" role="separator" aria-orientation="vertical" aria-label="Resize preview" onPointerDown={vdrag("studio:dev:sidew", setSideW, sideW, -1)} onDoubleClick={() => { setSideW(380); store.set("studio:dev:sidew", 380); }} />
+        {side}
+      </aside>
 
       <footer className="dv-status">
         <span>{active}</span><span>Ln {cursor.line}, Col {cursor.column}</span>

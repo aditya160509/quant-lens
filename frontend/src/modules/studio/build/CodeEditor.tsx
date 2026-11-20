@@ -240,7 +240,7 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
 }
 
 /** Studio commands whose shortcut can be changed in Customise (B-100). */
-export const REBINDABLE: [string, string][] = [["studio.debug", "Debug: start"], ["studio.bp", "Toggle breakpoint"], ["studio.step", "Step one bar"], ["studio.stepback", "Step back one bar"],
+export const REBINDABLE: [string, string][] = [["studio.debug", "Debug: start"], ["studio.bp", "Toggle breakpoint"], ["studio.step", "Step one bar"], ["studio.stepline", "Step line"], ["studio.stepback", "Step back one bar"],
   ["studio.panel", "Toggle panel"], ["studio.rail", "Toggle side bar"], ["studio.files", "Go to file"], ["studio.search", "Search project"], ["studio.docs", "Docs"], ["studio.fullrun", "Full run"], ["studio.quickrun", "Quick run"]];
 
 export const userKeys = (): Record<string, string> => { try { return (JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as { keys?: Record<string, string> }).keys ?? {}; } catch { return {}; } };
