@@ -151,6 +151,11 @@ def _gate(spec: Strategy, entries, exits, bars, dates, params, cache) -> None:
     exits[~on] |= 3
 
 
+def market_on(spec: Strategy, bars, dates, params=None) -> np.ndarray:
+    """The market rule per bar and name (all true when there is none)."""
+    return _bool(spec.market_filter, bars, dates, params, {}) if spec.market_filter.strip() else np.ones(bars["close"].shape, dtype=bool)
+
+
 def _vol(spec: Strategy, bars, dates, params, cache) -> np.ndarray | None:
     if spec.sizing.mode not in {"vol_target", "risk_parity"}:
         return None

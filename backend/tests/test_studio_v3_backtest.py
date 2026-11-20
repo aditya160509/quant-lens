@@ -1111,3 +1111,23 @@ class Strategy:
     assert (hit["file"], hit["line"]) == ("helper.py", 3) and result.json()["date"] == "2015-01-05"
     assert hit["locals"]["local_value"] == 4
     assert studio.post(path, json=body | {"breakpoint": None}).status_code == 422
+
+
+def test_defensive_symbol_is_held_only_while_the_market_rule_is_false():  # B-122
+    import pandas as pd
+    import pytest
+
+    from app.services.studio_v3.core import backtest as B
+    from app.services.studio_v3.core import compile as C
+    from app.services.studio_v3.core.spec import Settings, Strategy
+
+    st = Settings(symbols=["SPY", "TLT"], benchmark="SPY")
+    prep = B.prepare(st)
+    s = Strategy(entry_long="close > sma(close, 50)", market_filter="market > sma(market, 200)", defensive="TLT")
+    on = C.market_on(s, prep.sig_bars, prep.panel.dates)[:, prep.panel.symbols.index("TLT")]
+    day = {d: i for i, d in enumerate(prep.panel.dates.strftime("%Y-%m-%d"))}
+    held = [t for t in B.trades_table(B.simulate(s, prep, st), prep.panel) if t["symbol"] == "TLT"]
+    assert held and all(not on[day[t["signal_date"]]] for t in held)
+    with pytest.raises(B.Refusal):
+        B.simulate(s.model_copy(update={"defensive": "GLD"}), B.prepare(Settings(symbols=["SPY"], benchmark="SPY")), Settings(symbols=["SPY"], benchmark="SPY"))
+    assert pd.Series(on).any() and not pd.Series(on).all()

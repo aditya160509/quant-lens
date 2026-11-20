@@ -147,14 +147,25 @@ def simulate(spec: Strategy, prep: Prepared, settings: Settings, *, sig: C.Signa
     sig = sig or C.signals(spec, prep.sig_bars, prep.panel.dates, params)
     traded = np.isfinite(prep.panel.close)
     entries = np.where(traded if mask is None else traded & mask[None, :], sig.entries, 0).astype(np.int8)
+    exits = sig.exits
+    if spec.defensive.strip() and spec.market_filter.strip():
+        # B-122 allocate if/else: while the market rule is false, hold the defensive name; sell it when the rule turns true
+        name = spec.defensive.strip().upper()
+        if name not in prep.panel.symbols:
+            raise Refusal(f"The defensive symbol {name} is not in the universe.", [f"add {name} to the universe", "or clear the defensive symbol to sit in cash"])
+        j = prep.panel.symbols.index(name)
+        on = C.market_on(spec, prep.sig_bars, prep.panel.dates, params)[:, j]
+        entries[:, j] = np.where(on | ~traded[:, j], 0, 1)
+        exits = exits.copy()
+        exits[:, j] = np.where(on, 1, 0)
     p = _effective(spec, settings, cost_multiple)
     if exits_override:
         p = replace(p, **exits_override)
     if lo:
         bars = {k: v[lo:] for k, v in prep.panel.bars().items()}
-        return engine.run(bars, entries[lo:], sig.exits[lo:], p, score=None if sig.score is None else sig.score[lo:], stop_dist=None if sig.stop_dist is None else sig.stop_dist[lo:],
+        return engine.run(bars, entries[lo:], exits[lo:], p, score=None if sig.score is None else sig.score[lo:], stop_dist=None if sig.stop_dist is None else sig.stop_dist[lo:],
                           size_vol=None if sig.size_vol is None else sig.size_vol[lo:])
-    return engine.run(prep.panel.bars(), entries, sig.exits, p, score=sig.score, stop_dist=sig.stop_dist, size_vol=sig.size_vol)
+    return engine.run(prep.panel.bars(), entries, exits, p, score=sig.score, stop_dist=sig.stop_dist, size_vol=sig.size_vol)
 
 
 def _cagr(eq: np.ndarray, capital: float) -> float | None:
