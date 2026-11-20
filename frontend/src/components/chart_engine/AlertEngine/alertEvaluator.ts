@@ -5,7 +5,6 @@
 
 import type { OHLCVBar, IndicatorOutput } from '../types';
 import type { Alert, AlertCondition, AlertTriggerEvent } from './alertTypes';
-import { generateHistoryId } from './alertTypes';
 
 // =============================================================================
 // EVALUATION RESULT

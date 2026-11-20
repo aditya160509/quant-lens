@@ -3,16 +3,7 @@
  * Zustand-style state with reducer pattern
  */
 
-import type {
-    ChartState,
-    ChartAction,
-    ChartConfig,
-    ReplayState,
-    PaneConfig,
-    Timeframe,
-    ChartType,
-    ScaleMode
-} from '../types';
+import type { ChartState, ChartAction, ChartConfig, ReplayState, PaneConfig } from '../types';
 
 // =============================================================================
 // INITIAL STATE

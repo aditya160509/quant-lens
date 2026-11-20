@@ -6,7 +6,7 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import dynamic from 'next/dynamic';
 import { CHART_THEME } from './types';
 import type { Timeframe, SeriesData, OHLCVBar } from './types';

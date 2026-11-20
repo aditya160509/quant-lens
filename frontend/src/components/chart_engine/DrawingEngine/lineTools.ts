@@ -3,19 +3,7 @@
  * TrendLine, HorizontalLine, VerticalLine, Ray, InfoLine, Extended Line
  */
 
-import type { Drawing, DrawingAnchor, DrawingStyle } from '../types';
-import {
-    DrawingToolDefinition,
-    RenderContext,
-    HitTestResult,
-    defaultDrawingStyle,
-    generateDrawingId,
-    setLineStyle,
-    drawAnchor,
-    distanceToLine,
-    distanceToPoint,
-    getLineAngle,
-} from './baseTool';
+import { DrawingToolDefinition, defaultDrawingStyle, generateDrawingId, setLineStyle, drawAnchor, distanceToLine, distanceToPoint, getLineAngle } from './baseTool';
 
 // =============================================================================
 // TREND LINE

@@ -3,19 +3,7 @@
  * Fibonacci Projection, Circles, Spiral, Channel, Wedge, Bars Pattern
  */
 
-import type { Drawing, DrawingAnchor, DrawingStyle } from '../types';
-import {
-    DrawingToolDefinition,
-    RenderContext,
-    HitTestResult,
-    defaultDrawingStyle,
-    generateDrawingId,
-    setLineStyle,
-    drawAnchor,
-    distanceToPoint,
-    FIBONACCI_LEVELS,
-    getFibonacciPrices,
-} from './baseTool';
+import { DrawingToolDefinition, defaultDrawingStyle, generateDrawingId, setLineStyle, drawAnchor, distanceToPoint } from './baseTool';
 import { CHART_THEME } from '../types';
 
 // =============================================================================

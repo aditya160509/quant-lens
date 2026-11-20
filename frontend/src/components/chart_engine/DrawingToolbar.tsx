@@ -7,7 +7,6 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { CHART_THEME } from './types';
-import { TOOL_MENU } from './DrawingEngine/registry';
 
 // =============================================================================
 // ICONS - SVG icons for each tool category

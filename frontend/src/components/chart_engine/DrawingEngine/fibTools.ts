@@ -3,20 +3,7 @@
  * Fibonacci Retracement, Extension, TimeZones, Fan, Arcs, Circles
  */
 
-import type { Drawing, DrawingAnchor, DrawingStyle } from '../types';
-import {
-    DrawingToolDefinition,
-    RenderContext,
-    HitTestResult,
-    defaultDrawingStyle,
-    generateDrawingId,
-    setLineStyle,
-    drawAnchor,
-    distanceToLine,
-    distanceToPoint,
-    FIBONACCI_LEVELS,
-    getFibonacciPrices,
-} from './baseTool';
+import { DrawingToolDefinition, defaultDrawingStyle, generateDrawingId, setLineStyle, drawAnchor, distanceToPoint, getFibonacciPrices } from './baseTool';
 import { CHART_THEME } from '../types';
 
 // =============================================================================

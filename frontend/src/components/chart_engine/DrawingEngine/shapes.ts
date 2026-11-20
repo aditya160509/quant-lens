@@ -3,18 +3,7 @@
  * Rectangle, Ellipse, Triangle, Arrow, Text
  */
 
-import type { Drawing, DrawingAnchor, DrawingStyle } from '../types';
-import {
-    DrawingToolDefinition,
-    RenderContext,
-    HitTestResult,
-    defaultDrawingStyle,
-    generateDrawingId,
-    setLineStyle,
-    drawAnchor,
-    distanceToPoint,
-    distanceToLine,
-} from './baseTool';
+import { DrawingToolDefinition, defaultDrawingStyle, generateDrawingId, setLineStyle, drawAnchor, distanceToPoint, distanceToLine } from './baseTool';
 import { CHART_THEME } from '../types';
 
 // =============================================================================

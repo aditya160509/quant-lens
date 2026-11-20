@@ -5,7 +5,7 @@
 
 import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { useChart } from '../state/ChartContext';
-import { CHART_THEME, type OHLCVBar, type IndicatorOutput } from '../types';
+import { CHART_THEME, type OHLCVBar, type ChartOverlay } from '../types';
 import { toHeikinAshi, toRenko, toRangeBars } from '../DataAdapter/intraday';
 import { getIndicator } from '../IndicatorEngine/registry';
 
@@ -40,7 +40,14 @@ interface ChartCanvasProps {
     strategySignals?: Map<string, any>;
     /** Hide the time axis at the bottom */
     hideTimeAxis?: boolean;
+    overlay?: ChartOverlay;
 }
+
+const NO_COMPARE: Record<string, OHLCVBar[]> = {};
+const NO_STRINGS: string[] = [];
+const NO_ARRAY: any[] = [];
+const NO_SIGNALS = new Map<string, any>();
+const LINE_COLORS = ['#ffd60a', '#0a84ff', '#bf5af2', '#ff9f0a', '#64d2ff', '#30d158'];
 
 interface Dimensions {
     chartWidth: number;
@@ -151,8 +158,7 @@ function createTimeScale(bars: OHLCVBar[], width: number) {
 // =============================================================================
 
 import { getTool } from '../DrawingEngine/registry';
-import type { Drawing, DrawingAnchor } from '../types';
-import { generateDrawingId } from '../DrawingEngine/baseTool';
+import type { Drawing } from '../types';
 
 // ... (existing imports)
 
@@ -165,7 +171,7 @@ export default function ChartCanvas({
     height, 
     onBarHover, 
     onBarClick, 
-    compareData = {}, 
+    compareData = NO_COMPARE, 
     syncedCrosshairTimestamp, 
     onCrosshairMove,
     externalBars,
@@ -176,11 +182,12 @@ export default function ChartCanvas({
     replayCursorIndex,
     replaySelectMode,
     anchorIndex = 0,
-    visibleGhosts = [],
+    visibleGhosts = NO_STRINGS,
     alphaMode = 'percent',
-    detectedPatterns = [],
-    strategySignals = new Map(),
-    hideTimeAxis = false
+    detectedPatterns = NO_ARRAY,
+    strategySignals = NO_SIGNALS,
+    hideTimeAxis = false,
+    overlay
 }: ChartCanvasProps) {
     const { state, dispatch } = useChart();
     const currentSymbol = symbol || state.symbol;
@@ -296,6 +303,18 @@ export default function ChartCanvas({
         return { x, y, price, time, index };
     }, [scales, displayBars]);
 
+
+    // Overlay timestamps resolved to bar indices (first bar at or after each time)
+    const ov = useMemo(() => {
+        if (!overlay) return null;
+        const ts = allBars.map((b) => b.timestamp);
+        const at = (t: number) => { let lo = 0, hi = ts.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ts[m] < t) lo = m + 1; else hi = m; } return lo; };
+        return {
+            trades: (overlay.trades ?? []).map((t) => ({ ...t, i0: at(t.entry), i1: Math.min(at(t.exit), ts.length - 1) })),
+            lines: (overlay.lines ?? []).map((l) => ({ name: l.name, separate: l.separate, pts: l.points.flatMap((p) => (p.value == null || at(p.timestamp) >= ts.length ? [] : [[at(p.timestamp), p.value] as const])) })),
+            pause: overlay.pauseAt != null && at(overlay.pauseAt) < ts.length ? at(overlay.pauseAt) : -1,
+        };
+    }, [overlay, allBars]);
 
     // Render canvas
     useEffect(() => {
@@ -604,7 +623,52 @@ export default function ChartCanvas({
             ctx.restore();
         }
 
-    }, [width, height, displayBars, allBars, scales, dims, state.config, priceRange, state.drawings, activeDrawing, state.indicators, state.data?.session, compareData, currentSymbol, externalBars, state.data?.bars, state.drawingsVisible, anchorIndex, visibleGhosts, alphaMode, detectedPatterns, strategySignals, visibleStartIndex, hideTimeAxis]);
+        if (ov) {
+            const last = visibleStartIndex + displayBars.length - 1;
+            const X = (i: number) => scales.time.toPixel(i - visibleStartIndex);
+            ctx.save();
+            ctx.beginPath(); ctx.rect(0, 0, dims.chartWidth, dims.chartHeight); ctx.clip();
+            ov.trades.forEach((t) => {
+                const a = Math.max(t.i0, visibleStartIndex), b = Math.min(t.i1, last);
+                if (b < a) return;
+                ctx.fillStyle = t.pnl >= 0 ? 'rgba(0,255,136,0.07)' : 'rgba(255,45,85,0.07)';
+                ctx.fillRect(X(a), 0, Math.max(1, X(b) - X(a)), dims.chartHeight);
+                const long = t.side !== 'short' && t.side !== 'sell';
+                const mark = (i: number, up: boolean, color: string) => {
+                    if (i < visibleStartIndex || i > last) return;
+                    const bar = allBars[i], x = X(i);
+                    const y = up ? scales.price.toPixel(bar.low) + 10 : scales.price.toPixel(bar.high) - 10;
+                    ctx.fillStyle = color; ctx.beginPath();
+                    if (up) { ctx.moveTo(x, y - 5); ctx.lineTo(x - 5, y + 4); ctx.lineTo(x + 5, y + 4); } else { ctx.moveTo(x, y + 5); ctx.lineTo(x - 5, y - 4); ctx.lineTo(x + 5, y - 4); }
+                    ctx.fill();
+                };
+                mark(t.i0, long, long ? CHART_THEME.upColor : CHART_THEME.downColor);
+                mark(t.i1, !long, t.pnl >= 0 ? CHART_THEME.upColor : CHART_THEME.downColor);
+            });
+            const band = { top: dims.chartHeight * 0.78, bottom: dims.chartHeight - 8 };
+            ov.lines.forEach((l, k) => {
+                const vis = l.pts.filter(([i]) => i >= visibleStartIndex && i <= last);
+                if (!vis.length) return;
+                let y = (v: number) => scales.price.toPixel(v);
+                if (l.separate) {
+                    const vs = vis.map(([, v]) => v), lo = Math.min(...vs), hi = Math.max(...vs);
+                    y = (v: number) => band.bottom - ((v - lo) / (hi - lo || 1)) * (band.bottom - band.top);
+                }
+                ctx.strokeStyle = LINE_COLORS[k % LINE_COLORS.length]; ctx.lineWidth = 1.4; ctx.beginPath();
+                vis.forEach(([i, v], n) => (n ? ctx.lineTo(X(i), y(v)) : ctx.moveTo(X(i), y(v))));
+                ctx.stroke();
+                ctx.fillStyle = ctx.strokeStyle; ctx.font = '9px monospace'; ctx.textAlign = 'left';
+                ctx.fillText(l.name, 6, 12 + k * 11);
+            });
+            if (ov.pause >= visibleStartIndex && ov.pause <= last) {
+                const x = X(ov.pause);
+                ctx.strokeStyle = CHART_THEME.accent; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, dims.chartHeight); ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+    }, [width, height, displayBars, allBars, scales, dims, state.config, priceRange, state.drawings, activeDrawing, state.indicators, state.data?.session, compareData, currentSymbol, externalBars, state.data?.bars, state.drawingsVisible, anchorIndex, visibleGhosts, alphaMode, detectedPatterns, strategySignals, visibleStartIndex, hideTimeAxis, ov]);
 
     // Separate effect for crosshair rendering (high frequency updates)
     useEffect(() => {

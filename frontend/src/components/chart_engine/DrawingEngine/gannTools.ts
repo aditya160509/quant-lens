@@ -3,18 +3,7 @@
  * Gann Box, Gann Fan, Gann Square
  */
 
-import type { Drawing, DrawingAnchor, DrawingStyle } from '../types';
-import {
-    DrawingToolDefinition,
-    RenderContext,
-    HitTestResult,
-    defaultDrawingStyle,
-    generateDrawingId,
-    setLineStyle,
-    drawAnchor,
-    distanceToPoint,
-    GANN_ANGLES,
-} from './baseTool';
+import { DrawingToolDefinition, defaultDrawingStyle, generateDrawingId, setLineStyle, drawAnchor, distanceToPoint, GANN_ANGLES } from './baseTool';
 import { CHART_THEME } from '../types';
 
 // =============================================================================

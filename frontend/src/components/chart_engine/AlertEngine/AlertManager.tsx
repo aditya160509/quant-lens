@@ -7,17 +7,10 @@
 
 import React, { useState, useCallback } from 'react';
 import { CHART_THEME, type Timeframe } from '../types';
-import {
-    type Alert,
-    type AlertCondition,
-    type AlertConditionType,
-    type NotificationMethod,
-    getConditionDescription,
-    ALERT_COLORS,
-} from './alertTypes';
+import { type Alert, getConditionDescription } from './alertTypes';
 import { requestNotificationPermission } from './alertNotifier';
 import { useAlerts } from './useAlerts';
-import { Bell, History, Plus, X, AlertCircle, Trash2, Power, BellOff } from 'lucide-react';
+import { Bell, History, Plus, X, Trash2, BellOff } from 'lucide-react';
 
 // =============================================================================
 // TYPES

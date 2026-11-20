@@ -3,18 +3,8 @@
  * Additional harmonic patterns and classical chart patterns
  */
 
-import type { Drawing, DrawingAnchor, DrawingStyle } from '../types';
-import {
-    DrawingToolDefinition,
-    RenderContext,
-    HitTestResult,
-    defaultDrawingStyle,
-    generateDrawingId,
-    setLineStyle,
-    drawAnchor,
-    distanceToPoint,
-    distanceToLine,
-} from './baseTool';
+import type { Drawing, DrawingStyle } from '../types';
+import { DrawingToolDefinition, RenderContext, HitTestResult, defaultDrawingStyle, generateDrawingId, setLineStyle, drawAnchor, distanceToPoint, distanceToLine } from './baseTool';
 import { CHART_THEME } from '../types';
 
 // =============================================================================

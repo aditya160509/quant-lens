@@ -3,17 +3,8 @@
  * Standard, Schiff, Modified Schiff, Inside Pitchfork
  */
 
-import type { Drawing, DrawingAnchor, DrawingStyle } from '../types';
-import {
-    DrawingToolDefinition,
-    RenderContext,
-    HitTestResult,
-    defaultDrawingStyle,
-    generateDrawingId,
-    setLineStyle,
-    drawAnchor,
-    distanceToPoint,
-} from './baseTool';
+import type { DrawingStyle } from '../types';
+import { DrawingToolDefinition, defaultDrawingStyle, generateDrawingId, setLineStyle, drawAnchor, distanceToPoint } from './baseTool';
 import { CHART_THEME } from '../types';
 
 // =============================================================================

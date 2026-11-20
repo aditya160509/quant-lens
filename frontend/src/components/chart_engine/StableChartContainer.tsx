@@ -13,7 +13,7 @@
 
 'use client';
 
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 
 // Theme constants matching TradingView dark mode
 const CHART_COLORS = {

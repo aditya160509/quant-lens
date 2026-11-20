@@ -3,19 +3,7 @@
  * Price Range, Date Range, Date+Price Range, Ruler, Trend Angle Measurement, Percentage Calculator
  */
 
-import type { Drawing, DrawingAnchor, DrawingStyle } from '../types';
-import {
-    DrawingToolDefinition,
-    RenderContext,
-    HitTestResult,
-    defaultDrawingStyle,
-    generateDrawingId,
-    setLineStyle,
-    drawAnchor,
-    distanceToLine,
-    distanceToPoint,
-    getLineAngle,
-} from './baseTool';
+import { DrawingToolDefinition, defaultDrawingStyle, generateDrawingId, setLineStyle, drawAnchor, distanceToLine, distanceToPoint, getLineAngle } from './baseTool';
 import { CHART_THEME } from '../types';
 
 // =============================================================================

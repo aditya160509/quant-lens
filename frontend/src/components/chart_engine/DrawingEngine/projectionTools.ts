@@ -3,17 +3,7 @@
  * Long Position, Short Position, Risk/Reward Box, Bars Pattern, Forecast Curve, Ghost Feed
  */
 
-import type { Drawing, DrawingAnchor, DrawingStyle } from '../types';
-import {
-    DrawingToolDefinition,
-    RenderContext,
-    HitTestResult,
-    defaultDrawingStyle,
-    generateDrawingId,
-    setLineStyle,
-    drawAnchor,
-    distanceToPoint,
-} from './baseTool';
+import { DrawingToolDefinition, defaultDrawingStyle, generateDrawingId, drawAnchor, distanceToPoint } from './baseTool';
 import { CHART_THEME } from '../types';
 
 // =============================================================================

@@ -269,6 +269,15 @@ export type ChartAction =
 // COMPONENT PROPS
 // =============================================================================
 
+/** Caller-owned data drawn over the price chart (timestamps in ms). `bars` replaces the fetched series; `upto` shows only the first n bars. */
+export interface ChartOverlay {
+    bars?: OHLCVBar[];
+    trades?: { entry: number; exit: number; side: string; pnl: number }[];
+    lines?: { name: string; points: { timestamp: number; value: number | null }[]; separate?: boolean }[];
+    upto?: number;
+    pauseAt?: number | null;
+}
+
 export interface Q360ChartCoreProps {
     symbol: string;
     timeframe: Timeframe;
@@ -291,6 +300,7 @@ export interface Q360ChartCoreProps {
      * - 'lightweight': Uses TradingView's lightweight-charts library (recommended for compare/sync)
      */
     chartEngine?: 'custom' | 'lightweight';
+    overlay?: ChartOverlay;
 }
 
 // =============================================================================

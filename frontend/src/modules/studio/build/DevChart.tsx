@@ -2,9 +2,14 @@
 
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { StudioChart, type ChartBar, type ChartLine, type ChartTrade } from "@/charts/studio/StudioChart";
+import dynamic from "next/dynamic";
+import type { ChartOverlay, OHLCVBar } from "@/components/chart_engine/types";
 import { studio } from "../api";
 import type { DevPreview } from "./DevIDE";
+
+type Bar = { time: string; open: number; high: number; low: number; close: number; volume: number };
+const Q360ChartCore = dynamic(() => import("@/components/chart_engine/q360_chart_core"), { ssr: false, loading: () => null });
+const ms = (d: string) => Date.parse(d);
 
 export const SPEEDS = [1, 2, 5];
 
@@ -13,7 +18,7 @@ export function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpe
   symbol: string; prev: DevPreview | null; pausedAt: string | null; playing: boolean; speed: number;
   onPlay: (on: boolean) => void; onSpeed: (s: number) => void; onGo: (date: string | null, step?: 1 | -1) => void;
 }) {
-  const [all, setAll] = useState<ChartBar[]>([]);
+  const [all, setAll] = useState<Bar[]>([]);
   const [error, setError] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const [h, setH] = useState(0);
@@ -21,14 +26,19 @@ export function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpe
   useEffect(() => {
     if (!sym) return;
     setError(null);
-    void studio<{ bars: Record<string, ChartBar[]> }>("GET", `/bars?symbols=${encodeURIComponent(sym)}&tf=1d`).then((d) => setAll(d.bars[sym] ?? []), (e: Error) => { setAll([]); setError(e.message); });
+    void studio<{ bars: Record<string, Bar[]> }>("GET", `/bars?symbols=${encodeURIComponent(sym)}&tf=1d`).then((d) => setAll(d.bars[sym] ?? []), (e: Error) => { setAll([]); setError(e.message); });
   }, [sym]);
 
   const from = prev?.bars?.[0]?.date, to = prev?.bars?.at(-1)?.date;
   const bars = useMemo(() => all.filter((b) => (!from || b.time >= from) && (!to || b.time <= to)), [all, from, to]);
-  const trades = useMemo(() => (prev?.trades ?? []).filter((t) => !t.symbol || t.symbol === sym) as unknown as ChartTrade[], [prev?.trades, sym]);
-  const lines = useMemo<ChartLine[]>(() => Object.entries(prev?.plots ?? {}).map(([name, pts]) => ({ name, separate: prev?.plot_charts?.[name] !== "main", points: pts.filter((p) => !p.symbol || p.symbol === sym) })), [prev?.plots, prev?.plot_charts, sym]);
   const at = pausedAt ? bars.findIndex((b) => b.time >= pausedAt) : -1;
+  const overlay = useMemo<ChartOverlay>(() => ({
+    bars: bars.map((b): OHLCVBar => ({ timestamp: ms(b.time), open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume })),
+    trades: (prev?.trades ?? []).filter((t) => !t.symbol || t.symbol === sym).map((t) => ({ entry: ms(String(t.entry_date)), exit: ms(String(t.exit_date)), side: String(t.side), pnl: Number(t.pnl) })),
+    lines: Object.entries(prev?.plots ?? {}).map(([name, pts]) => ({ name, separate: prev?.plot_charts?.[name] !== "main", points: pts.filter((p) => !p.symbol || p.symbol === sym).map((p) => ({ timestamp: ms(p.date), value: p.value })) })),
+    upto: at >= 0 ? at + 1 : undefined,
+    pauseAt: pausedAt ? ms(pausedAt) : null,
+  }), [bars, prev?.trades, prev?.plots, prev?.plot_charts, sym, at, pausedAt]);
 
   useEffect(() => {
     const el = box.current; if (!el) return;
@@ -45,7 +55,7 @@ export function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpe
   if (error || !bars.length) return <div className="dv-empty">{error ? `No bars: ${error}` : prev ? "Loading bars" : "Run a preview to chart it"}</div>;
   return (
     <div className="dv-chart">
-      <div className="dv-chartbox" ref={box}>{h > 80 ? <StudioChart bars={bars} indicators={[]} trades={trades} lines={lines} upto={at >= 0 ? at + 1 : undefined} pauseAt={pausedAt} height={h} /> : null}</div>
+      <div className="dv-chartbox" ref={box}>{h > 80 ? <Q360ChartCore symbol={sym} timeframe="1d" mode="intraday" chartEngine="custom" height={h} overlay={overlay} /> : null}</div>
       <div className="dv-replay">
         <button className="icon-btn" aria-label="Back one bar" title="Back one bar" onClick={() => onGo(null, -1)}><ChevronLeft size={15} /></button>
         <button className="icon-btn" aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause" : "Play"} onClick={() => onPlay(!playing)}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>

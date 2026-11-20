@@ -3,19 +3,7 @@
  * Parallel Channel, Regression Channel, Flat Channel
  */
 
-import type { Drawing, DrawingAnchor, DrawingStyle } from '../types';
-import {
-    DrawingToolDefinition,
-    RenderContext,
-    HitTestResult,
-    defaultDrawingStyle,
-    generateDrawingId,
-    setLineStyle,
-    drawAnchor,
-    distanceToLine,
-    distanceToPoint,
-} from './baseTool';
-import { CHART_THEME } from '../types';
+import { DrawingToolDefinition, defaultDrawingStyle, generateDrawingId, setLineStyle, drawAnchor, distanceToLine, distanceToPoint } from './baseTool';
 
 // =============================================================================
 // PARALLEL CHANNEL

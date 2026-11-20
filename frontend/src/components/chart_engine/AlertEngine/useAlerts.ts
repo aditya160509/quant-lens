@@ -7,18 +7,7 @@
 
 import { useReducer, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { OHLCVBar, IndicatorOutput, Timeframe } from '../types';
-import {
-    type Alert,
-    type AlertAction,
-    type AlertManagerState,
-    type AlertHistoryEntry,
-    type AlertCondition,
-    type NotificationSettings,
-    type AlertTriggerEvent,
-    createDefaultAlert,
-    generateAlertId,
-    generateHistoryId,
-} from './alertTypes';
+import { type Alert, type AlertAction, type AlertManagerState, type AlertHistoryEntry, type AlertCondition, type NotificationSettings, createDefaultAlert, generateHistoryId } from './alertTypes';
 import { evaluateAlert, createTriggerEvent } from './alertEvaluator';
 import { triggerAlertNotification, getNotificationPermission } from './alertNotifier';
 

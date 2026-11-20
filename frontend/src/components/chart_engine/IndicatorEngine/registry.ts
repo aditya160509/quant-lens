@@ -3,7 +3,7 @@
  * Compute-side indicator definitions and registry
  */
 
-import type { OHLCVBar, IndicatorDefinition, IndicatorOutput } from '../types';
+import type { OHLCVBar, IndicatorDefinition } from '../types';
 
 // =============================================================================
 // REGISTRY

@@ -19,7 +19,7 @@ import DrawingToolbar from './DrawingToolbar';
 import IndicatorMenu from './IndicatorMenu';
 import IndicatorPaneRenderer from './IndicatorPaneRenderer';
 import { getIndicator } from './IndicatorEngine/registry';
-import { getSeries, getMockSeries } from './DataAdapter/intraday';
+import { getSeries, getMockSeries, US_EQUITY_SESSION } from './DataAdapter/intraday';
 import { CustomIndicatorModal, useCustomIndicators } from '../trading/CustomIndicator';
 import TradingViewSearch from '../symbols/TradingViewSearch';
 import dynamic from 'next/dynamic';
@@ -28,21 +28,14 @@ import { AlertManager } from './AlertEngine/AlertManager';
 import { AlphaPanel } from '../watchlist/AlphaPanel';
 import { PatternSelector, CANDLESTICK_PATTERNS, scanForPatterns } from './PatternScanner';
 import { StrategySelector, TRADING_STRATEGIES, runStrategies } from './StrategyEngine';
-import { Activity, LayoutGrid, Cpu } from 'lucide-react';
+import { LayoutGrid, Cpu } from 'lucide-react';
 
 // Dynamically import MiniChart to avoid SSR issues with lightweight-charts
 const MiniChart = dynamic(() => import('./MiniChart'), { 
     ssr: false, 
     loading: () => <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: 10 }}>Loading...</div>
 });
-import {
-    type Q360ChartCoreProps,
-    type OHLCVBar,
-    type Timeframe,
-    type ChartType,
-    CHART_THEME,
-    type IndicatorConfig
-} from './types';
+import { type Q360ChartCoreProps, type OHLCVBar, type Timeframe, type ChartType, CHART_THEME, type IndicatorConfig } from './types';
 
 // =============================================================================
 // TIMEFRAME OPTIONS
@@ -149,6 +142,7 @@ function ChartInner({
     isMemberOfGrid = false,
     syncedCrosshairTimestamp,
     onCrosshairMove,
+    overlay,
 }: Omit<Q360ChartCoreProps, 'symbol' | 'timeframe' | 'mode' | 'session' | 'onBarClick' | 'onDataLoad' | 'replayActive' | 'replayCursorIndex' | 'replaySelectMode'>) {
     const { 
         state, 
@@ -439,6 +433,10 @@ useEffect(() => {
     }, []);
 
     useEffect(() => {
+        if (overlay?.bars) {
+            dispatch({ type: 'SET_DATA', payload: { symbol: state.symbol, timeframe: state.timeframe, bars: overlay.bars, session: US_EQUITY_SESSION } });
+            return;
+        }
         const fetchData = async () => {
             setIsLoading(true);
             setError(null);
@@ -461,7 +459,14 @@ useEffect(() => {
         };
 
         fetchData();
-    }, [state.symbol, state.timeframe, dispatch]);
+    }, [state.symbol, state.timeframe, dispatch, overlay?.bars]);
+
+    // The caller owns the replay cursor when it passes `upto`
+    const overlayUpto = overlay?.upto;
+    useEffect(() => {
+        if (overlayUpto != null) dispatch({ type: 'START_REPLAY', payload: Math.max(0, overlayUpto - 1) });
+        else if (overlay) dispatch({ type: 'STOP_REPLAY' });
+    }, [overlayUpto, overlay, dispatch]);
     
     // State for compare symbol data
     const [compareData, setCompareData] = useState<Record<string, OHLCVBar[]>>({});
@@ -1186,6 +1191,7 @@ useEffect(() => {
                                 alphaMode={alphaMode}
                                 detectedPatterns={detectedPatterns}
                                 strategySignals={strategySignals}
+                                overlay={overlay}
                             />
                         </div>
                     ) : (
@@ -1477,7 +1483,7 @@ useEffect(() => {
             </div>
 
             {/* Replay Controls (Overlay at bottom) */}
-            {(state.replay.active || isReplaySelectMode) && (
+            {(state.replay.active || isReplaySelectMode) && !overlay && (
                  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-50 shadow-xl rounded overflow-hidden">
                     <ReplayControls />
                  </div>

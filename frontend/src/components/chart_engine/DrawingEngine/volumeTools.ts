@@ -3,17 +3,8 @@
  * Anchored VWAP, Fixed Range Volume Profile, Visible Range Volume Profile, Volume Delta
  */
 
-import type { Drawing, DrawingAnchor, DrawingStyle, OHLCVBar } from '../types';
-import {
-    DrawingToolDefinition,
-    RenderContext,
-    HitTestResult,
-    defaultDrawingStyle,
-    generateDrawingId,
-    setLineStyle,
-    drawAnchor,
-    distanceToPoint,
-} from './baseTool';
+import type { OHLCVBar } from '../types';
+import { DrawingToolDefinition, defaultDrawingStyle, generateDrawingId, drawAnchor, distanceToPoint } from './baseTool';
 import { CHART_THEME } from '../types';
 
 // =============================================================================

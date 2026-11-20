@@ -3,7 +3,6 @@
  * Precision statistical calculations for relative value analysis.
  */
 
-import { OHLCVBar } from '../types';
 
 /**
  * Calculates the Pearson Correlation Coefficient (R) between two datasets.

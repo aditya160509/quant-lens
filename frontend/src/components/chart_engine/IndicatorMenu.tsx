@@ -9,7 +9,7 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { getAllIndicators, getIndicatorsByPlacement } from './IndicatorEngine/registry';
-import { CHART_THEME, INDICATOR_COLORS, getIndicatorColor, type IndicatorConfig } from './types';
+import { CHART_THEME, getIndicatorColor, type IndicatorConfig } from './types';
 import { Check, X, Search } from 'lucide-react';
 
 interface IndicatorMenuProps {
