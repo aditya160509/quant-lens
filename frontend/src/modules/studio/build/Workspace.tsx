@@ -1,13 +1,11 @@
 "use client";
 
-import { animate } from "framer-motion";
 import { ChevronDown, LayoutDashboard } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import type { GroupImperativeHandle } from "react-resizable-panels";
 
 export type PanelId = "rail" | "chart" | "preview" | "tester";
 /** Sizes are percentages: rail and right of the width, tester of the centre height. */
-export type Layout = { open: Record<PanelId, boolean>; size: { rail: number; right: number; tester: number } };
+export type Layout = { open: Record<PanelId, boolean>; size: { rail: number; right: number; tester: number; chart?: number; split?: number } };
 export type Workspace = { id: string; name: string; builtin?: boolean; layout: Layout };
 
 const L = (open: Partial<Record<PanelId, boolean>>, right = 45, tester = 34, rail = 18): Layout => ({ open: { rail: false, chart: false, preview: false, tester: false, ...open }, size: { rail, right, tester } });
@@ -47,23 +45,6 @@ export const targets = (l: Layout) => {
   const right = l.open.chart || l.open.preview ? l.size.right : 0, rail = l.open.rail ? l.size.rail : 0, t = l.open.tester ? l.size.tester : 0;
   return { h: { rail, center: 100 - rail - right, right }, v: { editor: 100 - t, tester: t } };
 };
-
-/** The one spring every panel open, close and workspace switch runs on. It writes sizes straight to the DOM: no React render per frame. */
-const running = new WeakMap<object, { stop: () => void }>();
-export function springTo(g: GroupImperativeHandle | null | undefined, to: Record<string, number>) {
-  if (!g) return;
-  running.get(g)?.stop();
-  const from = g.getLayout(), keys = Object.keys(to);
-  running.set(g, animate(0, 1, {
-    type: "spring", stiffness: 420, damping: 42, restDelta: 0.0005,
-    onUpdate: (t) => {
-      const v = keys.map((k) => Math.max(0, (from[k] ?? to[k]) + (to[k] - (from[k] ?? to[k])) * t)), sum = v.reduce((a, b) => a + b, 0) || 1;
-      g.setLayout(Object.fromEntries(keys.map((k, i) => [k, (v[i] * 100) / sum])));
-    },
-  }));
-}
-
-export const snap = (v: number, points: number[]) => points.find((p) => Math.abs(p - v) <= 2.5) ?? v;
 
 export function WorkspaceMenu({ ws }: { ws: ReturnType<typeof useWorkspaces> }) {
   const { cur } = ws;

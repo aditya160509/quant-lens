@@ -21,7 +21,7 @@ export function DevRobust({ quick }: { quick: QuickRun | null }) {
   if (!mc) return <p className="dv-empty">{quick ? "Needs at least 5 trades" : "Run a backtest first"}</p>;
   const retPct = percentile(mc.final, mc.orig.ret), ddPct = percentile(mc.dd, mc.orig.dd);
   const verdict = method === "shuffle"
-    ? (ddPct < 5 ? "The drawdown was worse than almost every reordering: the order of these trades hurt this run." : ddPct > 95 ? "The drawdown was milder than almost every reordering: this order was a lucky one." : "The order of the trades did not decide the drawdown.")
+    ? (ddPct < 5 ? "Drawdown was deeper than in most reorderings." : ddPct > 95 ? "Drawdown was shallower than in most reorderings." : "Drawdown fell within the central 90% of reorderings.")
     : (retPct > 95 ? "The return sits in the top 5% of resamples: the backtest may be in the luckiest tail." : retPct < 50 ? "The return is below the median resample: weaker than typical." : "The return is in the typical range of resamples.");
   return (
     <div className="dv-tear">
@@ -30,9 +30,9 @@ export function DevRobust({ quick }: { quick: QuickRun | null }) {
         <select className="input sm" aria-label="Runs" value={runs} onChange={(e) => setRuns(Number(e.target.value))}>{[500, 1000, 5000].map((n) => <option key={n} value={n}>{n} runs</option>)}</select>
         <span className="dv-count">seed {SEED}</span>
       </div>
-      <p className="bd-desc">{verdict}</p>
+      <p className="bd-desc">{verdict}{method === "shuffle" ? ` Final return stays at ${pc(mc.orig.ret)} when the same trade P&L is reordered.` : ""}</p>
       <div className="dv-dgrid">
-        <div className="dv-plot"><b>Final return · original {pc(mc.orig.ret)} · percentile {retPct.toFixed(0)}</b><Distribution values={mc.final} observed={mc.orig.ret} xLabel="Final return" height={200} format={pc} /></div>
+        {method === "bootstrap" ? <div className="dv-plot"><b>Final return · original {pc(mc.orig.ret)} · percentile {retPct.toFixed(0)}</b><Distribution values={mc.final} observed={mc.orig.ret} xLabel="Final return" height={200} format={pc} /></div> : null}
         <div className="dv-plot"><b>Max drawdown · original {pc(mc.orig.dd)} · percentile {ddPct.toFixed(0)}</b><Distribution values={mc.dd} observed={mc.orig.dd} xLabel="Max drawdown" height={200} format={pc} /></div>
       </div>
     </div>

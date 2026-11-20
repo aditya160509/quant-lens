@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Pause, Play, SlidersHorizontal } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Vela as VelaChart } from "@luxalgo/vela";
 import { studio } from "../api";
 import type { DevPreview, Draw } from "./DevIDE";
@@ -66,7 +66,7 @@ const ms = (d: string) => Date.parse(d);
 export const SPEEDS = [1, 2, 5];
 
 /** The Chart page's engine over the preview window: trades, ctx.plot series, the paused bar, and replay controls that drive the debugger. */
-export function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpeed, onGo }: {
+export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpeed, onGo }: {
   symbol: string; prev: DevPreview | null; pausedAt: string | null; playing: boolean; speed: number;
   onPlay: (on: boolean) => void; onSpeed: (s: number) => void; onGo: (date: string | null, step?: 1 | -1) => void;
 }) {
@@ -118,8 +118,21 @@ export function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpe
       c = new Vela(el, { data: bars.map((b) => ({ time: ms(b.time), open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume })), timeframe: "1d", theme: createTheme({ colors: { background: cv("--island", el), accent: cv("--s1", el) } }), upColor: up, downColor: down, height: el.clientHeight, drawings: true });
       void c.ready().then(() => { if (dead) return; c!.renderer.set("attribution", false); handles.current.clear(); c!.addNativeIndicator("atlas.spans"); setChart(c); });
     });
-    const ro = new ResizeObserver(() => c?.resize()); ro.observe(el);
-    return () => { dead = true; ro.disconnect(); setChart(null); c?.destroy(); };
+    let frame = 0;
+    let width = 0;
+    let height = 0;
+    const ro = new ResizeObserver(() => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (!c || !el.clientWidth || !el.clientHeight || (width === el.clientWidth && height === el.clientHeight)) return;
+        width = el.clientWidth;
+        height = el.clientHeight;
+        c.resize();
+      });
+    });
+    ro.observe(el);
+    return () => { dead = true; ro.disconnect(); cancelAnimationFrame(frame); setChart(null); c?.destroy(); };
   }, [barsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Plots: one native per ctx.plot name, moved to its own pane or onto price, hidden from the Plots menu.
@@ -195,6 +208,8 @@ export function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpe
               </details>
             ) : null}
           </div>
+          {shown.length ? <details className="dv-chart-trades">
+          <summary>Trade list</summary>
           <div className="dv-navrows" role="table" aria-label="Trades">
             <div role="row" className="dv-navhead"><span>Entry</span><span>Side</span><span>Hold</span><span>Return</span><span>MAE</span><span>MFE</span></div>
             {shown.map((r, i) => (
@@ -204,6 +219,7 @@ export function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpe
               </button>
             ))}
           </div>
+          </details> : null}
         </div>
       ) : null}
       <div className="dv-replay">
@@ -216,4 +232,4 @@ export function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpe
       </div>
     </div>
   );
-}
+});

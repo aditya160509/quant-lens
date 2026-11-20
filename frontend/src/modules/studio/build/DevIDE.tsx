@@ -15,7 +15,7 @@ import { RECIPES } from "./recipes";
 import { useLayout } from "@/workspace/layout";
 import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 import { DevChart } from "./DevChart";
-import { snap, springTo, targets, useWorkspaces, WorkspaceMenu, type PanelId } from "./Workspace";
+import { targets, useWorkspaces, WorkspaceMenu, type PanelId } from "./Workspace";
 import { DevRobust } from "./DevRobust";
 import { DevRuns, type RunEntry } from "./DevRuns";
 import { DevTearsheet } from "./DevTearsheet";
@@ -94,15 +94,37 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
   const railOpen = open_.rail, setRailOpen = (v: boolean | ((o: boolean) => boolean)) => setOpenP("rail", v);
   const panelOpen = open_.tester, setPanelOpen = (v: boolean | ((o: boolean) => boolean)) => setOpenP("tester", v);
   const hRef = useRef<GroupImperativeHandle>(null), vRef = useRef<GroupImperativeHandle>(null);
+  const sideRef = useRef<GroupImperativeHandle>(null);
   const chartSeen = useRef(false);
-  if (open_.chart) chartSeen.current = true;
   const [view, setView] = useState<View>("code");
+  const [reportSide, setReportSide] = useState(false);
+  const showingSide = view === "code" || reportSide;
+  const chartOpen = showingSide && open_.chart;
+  const previewOpen = showingSide && open_.preview;
+  const sideOpen = chartOpen || previewOpen;
+  const layout = { ...ws.cur.layout, open: { ...open_, chart: chartOpen, preview: previewOpen } };
+  if (chartOpen) chartSeen.current = true;
+  useEffect(() => {
+    const chart = chartOpen && previewOpen ? (ws.cur.layout.size.chart ?? 60) : previewOpen ? 0 : 100;
+    sideRef.current?.setLayout({ chart, preview: 100 - chart });
+  }, [chartOpen, previewOpen, ws.cur.id, ws.cur.layout.size.chart]);
   const [extra, setExtra] = useState<Exclude<View, "code">[]>([]);
+  const tabStrip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const strip = tabStrip.current;
+    const selected = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!strip || !selected) return;
+    const bounds = strip.getBoundingClientRect();
+    const tab = selected.getBoundingClientRect();
+    if (tab.right > bounds.right) strip.scrollLeft += tab.right - bounds.right;
+    else if (tab.left < bounds.left) strip.scrollLeft -= bounds.left - tab.left;
+  }, [active, view, extra]);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const stepping = useRef(false);
   const debugRef = useRef<(b: Record<string, unknown>, quiet?: boolean) => Promise<void> | void>(() => undefined);
   const [panelMax, setPanelMax] = useState(false);
+  const testerBeforeMax = useRef<number | null>(null);
   const [tab, setTab] = useState<Tab>("problems");
   const [lint, setLint] = useState<Problem[]>([]);
   const [types, setTypes] = useState<Problem[]>([]);
@@ -142,6 +164,11 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
   const [qc, setQc] = useState<QC | null>(null);
   const [split, setSplit] = useState<string | null>(null);
   const [splitDown, setSplitDown] = useState(false);
+  const editorSplitRef = useRef<GroupImperativeHandle>(null);
+  useEffect(() => {
+    const primary = split && !diff ? (ws.cur.layout.size.split ?? 50) : 100;
+    editorSplitRef.current?.setLayout({ primary, secondary: 100 - primary });
+  }, [split, splitDown, diff, ws.cur.id, ws.cur.layout.size.split]);
   const [preview, setPreview] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string[]>([]);
   const [logTop, setLogTop] = useState(0);
@@ -320,20 +347,19 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel?.(); };
     window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc);
   }, [quick, onCancel]);
-  useEffect(() => { const t = targets(ws.cur.layout); springTo(hRef.current, t.h); springTo(vRef.current, t.v); }, [ws.cur.id, open_.rail, open_.chart || open_.preview, open_.tester]); // eslint-disable-line react-hooks/exhaustive-deps
-  /** After a drag: snap the chart to 30/50/70, close a panel pulled to the edge, remember the size. */
+  useEffect(() => { const t = targets(layout); hRef.current?.setLayout(t.h); vRef.current?.setLayout(t.v); }, [ws.cur.id, open_.rail, sideOpen, open_.tester]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Remember the exact panel sizes and close a panel pulled to the edge. */
   const onH = (l: Record<string, number>, m: { isUserInteraction: boolean }) => {
     if (!m.isUserInteraction) return;
-    const right = snap(l.right, [30, 50, 70]);
-    ws.patch((x) => ({ open: { ...x.open, rail: x.open.rail && l.rail >= 6, chart: x.open.chart && right >= 8, preview: x.open.preview && right >= 8 },
+    const right = l.right;
+    ws.patch((x) => ({ open: { ...x.open, rail: x.open.rail && l.rail >= 6, chart: sideOpen ? x.open.chart && right >= 8 : x.open.chart, preview: sideOpen ? x.open.preview && right >= 8 : x.open.preview },
       size: { ...x.size, rail: x.open.rail && l.rail >= 6 ? l.rail : x.size.rail, right: right >= 8 ? right : x.size.right } }));
-    if (right !== l.right && right >= 8) springTo(hRef.current, { rail: l.rail, center: 100 - l.rail - right, right });
   };
   const onV = (l: Record<string, number>, m: { isUserInteraction: boolean }) => {
     if (!m.isUserInteraction) return;
     ws.patch((x) => ({ open: { ...x.open, tester: x.open.tester && l.tester >= 8 }, size: { ...x.size, tester: x.open.tester && l.tester >= 8 ? l.tester : x.size.tester } }));
   };
-  const maxTester = () => { const next = !panelMax; setPanelMax(next); const t = next ? 85 : 34; ws.patch((x) => ({ ...x, size: { ...x.size, tester: t } })); springTo(vRef.current, { editor: 100 - t, tester: t }); };
+  const maxTester = () => { const next = !panelMax; setPanelMax(next); if (next) testerBeforeMax.current = vRef.current?.getLayout().tester ?? ws.cur.layout.size.tester; const t = next ? 85 : (testerBeforeMax.current ?? 34); ws.patch((x) => ({ ...x, size: { ...x.size, tester: t } })); vRef.current?.setLayout({ editor: 100 - t, tester: t }); };
 
   const actions: EditorAction[] = [
     { id: "studio.debug", label: "Debug: start", keys: (m) => [m.KeyCode.F5], run: () => startDebug() },
@@ -379,7 +405,7 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
   const priceRows = (prev?.bars ?? []).map((b) => ({ date: b.date, close: b.close, ...Object.fromEntries(plots.filter(([n]) => prev?.plot_charts?.[n] === "main" && plotsOn[n] !== false).map(([n, pts]) => [n, pts.find((p) => p.date === b.date)?.value ?? null])) }));
   const mainPlots = plots.filter(([n]) => prev?.plot_charts?.[n] === "main");
 
-  const resultsView = (() => {
+  const resultsView = view === "results" ? (() => {
                 const r = version ? runs[version] : undefined;
                 const m = quick?.result?.meta;
                 const running = quick && ["queued", "running"].includes(quick.status);
@@ -428,25 +454,12 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
                     </div> : null}
                   </div>
                 );
-              })();
+              })() : null;
 
   return (
     <div className="dv">
       <div className="dv-bar">
         <div className="dv-title">{title}</div>
-        <div className="dv-tabs" role="tablist">
-          {open.map((f) => (
-            <div key={f} role="tab" aria-selected={view === "code" && !diff && f === active} className="dv-tab" data-preview={preview === f || undefined} data-pinned={pinned.includes(f) || undefined}
-              onClick={() => { setDiff(null); setView("code"); setActive(f); }} onDoubleClick={() => keep(f)} onAuxClick={(e) => { if (e.button === 1) close(f); }}>
-              {pinned.includes(f) ? <Pin size={10} aria-label="Pinned" /> : null}{f}
-              {savedFiles && (savedFiles[f] ?? "") !== (files[f] ?? "") ? <i className="dv-dirty" aria-label="Unsaved" /> : null}
-              <button className="icon-btn" aria-label={pinned.includes(f) ? `Unpin ${f}` : `Pin ${f}`} title={pinned.includes(f) ? "Unpin" : "Pin"} onClick={(e) => { e.stopPropagation(); keep(f); setPinned((p) => (p.includes(f) ? p.filter((x) => x !== f) : [...p, f])); }}>{pinned.includes(f) ? <PinOff size={11} /> : <Pin size={11} />}</button>
-              {open.length > 1 && !pinned.includes(f) ? <button className="icon-btn" aria-label={`Close ${f}`} onClick={(e) => { e.stopPropagation(); close(f); }}><X size={11} /></button> : null}
-            </div>
-          ))}
-          {extra.map((v) => <div key={v} role="tab" aria-selected={view === v} className="dv-tab" onClick={() => setView(v)}>{VIEW_LABEL[v]}<button className="icon-btn" aria-label={`Close ${v}`} onClick={(e) => { e.stopPropagation(); closeView(v); }}><X size={11} /></button></div>)}
-          {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
-        </div>
         <div className="dv-tools">
           <WorkspaceMenu ws={ws} />
           <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
@@ -457,8 +470,9 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
               <button role="menuitem" onClick={() => openView("robust")}>Robustness</button>
               <button role="menuitem" onClick={() => openView("runs")}>Compare runs</button>
               <hr />
-              <button role="menuitemcheckbox" aria-checked={open_.chart} onClick={() => setOpenP("chart", (o) => !o)}>Chart</button>
-              <button role="menuitemcheckbox" aria-checked={open_.preview} onClick={() => setOpenP("preview", (o) => !o)}>Preview</button>
+              {view !== "code" ? <button role="menuitemcheckbox" aria-checked={reportSide} onClick={() => setReportSide((visible) => !visible)}>Show workspace side panes</button> : null}
+              <button role="menuitemcheckbox" aria-checked={chartOpen} onClick={() => { if (view !== "code") setReportSide(true); setOpenP("chart", !chartOpen); }}>Chart</button>
+              <button role="menuitemcheckbox" aria-checked={previewOpen} onClick={() => { if (view !== "code") setReportSide(true); setOpenP("preview", !previewOpen); }}>Preview</button>
               <button role="menuitemcheckbox" aria-checked={!!split} onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}>Split editor</button>
               <button role="menuitemcheckbox" aria-checked={panelOpen} onClick={() => setPanelOpen((o) => !o)}>Panel</button>
               <button role="menuitemcheckbox" aria-checked={railOpen} onClick={() => setRailOpen((o) => !o)}>Side bar</button>
@@ -470,9 +484,9 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
       <nav className="dv-icons" aria-label="Side bar">
         {RAILS.map(([k, icon, l]) => <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={railOpen && rail === k} onClick={() => { if (railOpen && rail === k) setRailOpen(false); else { setRail(k); setRailOpen(true); } }}>{icon}</button>)}
       </nav>
-      <Group className="dv-body" orientation="horizontal" id="dv-h" groupRef={hRef} defaultLayout={targets(ws.cur.layout).h} onLayoutChanged={onH}>
+      <Group className="dv-body" orientation="horizontal" id="dv-h" groupRef={hRef} defaultLayout={targets(layout).h} onLayoutChanged={onH}>
       <Panel id="rail" minSize={0}>
-        <nav className="dv-rail" aria-hidden={!railOpen} aria-label={RAILS.find((r) => r[0] === rail)?.[2]}>
+        <nav className="dv-rail" inert={!railOpen} aria-hidden={!railOpen} aria-label={RAILS.find((r) => r[0] === rail)?.[2]}>
           <h4>{RAILS.find((r) => r[0] === rail)?.[2]}</h4>
           {rail === "files" ? (
             <div className="dv-list dv-explorer">
@@ -570,29 +584,40 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
         </nav>
       </Panel>
       <Separator className="dv-gutter" disabled={!railOpen} />
-      <Panel id="center" minSize={20}>
+      <Panel id="center" minSize={sideOpen && ws.cur.id !== "chart-first" ? "45%" : "20%"}>
       <Group className="dv-main" orientation="vertical" id="dv-v" groupRef={vRef} defaultLayout={targets(ws.cur.layout).v} onLayoutChanged={onV}>
-      <Panel id="editor" minSize={10} className="dv-edpane">
-        <div className="dv-editor" data-split={split && !diff ? (splitDown ? "down" : "right") : undefined}>
+      <Panel id="editor" minSize="15%" className="dv-edpane">
+        <div ref={tabStrip} className="dv-tabs" role="tablist" aria-label="Open files and reports">
+          {open.map((f) => (
+            <div key={f} role="tab" aria-selected={view === "code" && !diff && f === active} className="dv-tab" tabIndex={0} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.currentTarget.click(); } }} data-preview={preview === f || undefined} data-pinned={pinned.includes(f) || undefined}
+              onClick={() => { setDiff(null); setView("code"); setActive(f); }} onDoubleClick={() => keep(f)} onAuxClick={(e) => { if (e.button === 1) close(f); }}>
+              {pinned.includes(f) ? <Pin size={10} aria-label="Pinned" /> : null}{f}
+              {savedFiles && (savedFiles[f] ?? "") !== (files[f] ?? "") ? <i className="dv-dirty" aria-label="Unsaved" /> : null}
+              <button className="icon-btn" aria-label={pinned.includes(f) ? `Unpin ${f}` : `Pin ${f}`} title={pinned.includes(f) ? "Unpin" : "Pin"} onClick={(e) => { e.stopPropagation(); keep(f); setPinned((p) => (p.includes(f) ? p.filter((x) => x !== f) : [...p, f])); }}>{pinned.includes(f) ? <PinOff size={11} /> : <Pin size={11} />}</button>
+              {open.length > 1 && !pinned.includes(f) ? <button className="icon-btn" aria-label={`Close ${f}`} onClick={(e) => { e.stopPropagation(); close(f); }}><X size={11} /></button> : null}
+            </div>
+          ))}
+          {extra.map((v) => <div key={v} role="tab" aria-selected={view === v} className="dv-tab" tabIndex={0} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setView(v); } }} onClick={() => setView(v)}>{VIEW_LABEL[v]}<button className="icon-btn" aria-label={`Close ${v}`} onClick={(e) => { e.stopPropagation(); closeView(v); }}><X size={11} /></button></div>)}
+          {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
+        </div>
+        <div className="dv-editor">
           {view !== "code" ? (
             <div className="dv-view-pane" data-kind={view}>
               <div className="dv-pbody">{view === "tearsheet" ? <DevTearsheet quick={quick ?? null} /> : view === "robust" ? <DevRobust quick={quick ?? null} /> : view === "runs" ? <DevRuns runs={runLog} onPin={pinRun} onRename={renameRun} /> : resultsView}</div>
             </div>
           ) : null}
+          <div className="dv-code" hidden={view !== "code"}>
+          <Group orientation={splitDown ? "vertical" : "horizontal"} id="dv-editor-split" groupRef={editorSplitRef}
+            defaultLayout={split && !diff ? { primary: ws.cur.layout.size.split ?? 50, secondary: 100 - (ws.cur.layout.size.split ?? 50) } : { primary: 100, secondary: 0 }}
+            onLayoutChanged={(sizes, { isUserInteraction }) => {
+              if (isUserInteraction && split && !diff) ws.patch((current) => ({ ...current, size: { ...current.size, split: sizes.primary } }));
+            }}>
+          <Panel id="primary" minSize="20%" className="dv-primary-editor">
           {!spec.code.trim() && active === "main.py" && !diff ? (
             <div className="dv-blank">
               <b>This strategy runs on its rules</b>
               <div><button className="btn primary" onClick={() => void studio<{ code: string }>("POST", "/to-python", { spec }).then((r) => edit({ code: r.code }), (e: Error) => toast.error(e.message))}>Convert rules to Python</button>
                 <button className="btn" onClick={() => { setRailOpen(true); setRail("templates"); }}>Start from a starter</button></div>
-            </div>
-          ) : null}
-          {split && !diff ? (
-            <div className="dv-split">
-              <div className="dv-splithead"><select className="input" aria-label="File in the second group" value={split} onChange={(e) => setSplit(e.target.value)}>{Object.keys(files).map((f) => <option key={f}>{f}</option>)}</select>
-                <button className="btn sm ghost" aria-pressed={splitDown} onClick={() => setSplitDown(!splitDown)}>{splitDown ? "Split right" : "Split down"}</button>
-                <button className="icon-btn" aria-label="Close split" onClick={() => setSplit(null)}><X size={12} /></button></div>
-              <CodeEditor path={`split/${split}`} value={files[split] ?? ""} onChange={(t) => setFile(split, t)} problems={[]} onSave={onSave} onRun={onRun} readOnly={readOnly}
-                project={{ file: split, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles }} />
             </div>
           ) : null}
           {diff ? (
@@ -606,6 +631,19 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
                 addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
                 lens: (command, args) => { if (command === "debug") debug({ date: String(args.date ?? "") }); else if (command === "inspect_condition") { setTab("output"); toast(`${String(args.expression)} on ${String(args.symbol)}`); } else onRun(); } }} />
           )}
+          </Panel>
+          <Separator className={`dv-gutter ${splitDown ? "dv-gutter-vertical" : ""}`} disabled={!split || Boolean(diff)} />
+          <Panel id="secondary" minSize={split && !diff ? "20%" : 0}>
+            {split && !diff ? <div className="dv-split">
+              <div className="dv-splithead"><select className="input" aria-label="File in the second group" value={split} onChange={(e) => setSplit(e.target.value)}>{Object.keys(files).map((f) => <option key={f}>{f}</option>)}</select>
+                <button className="btn sm ghost" aria-pressed={splitDown} onClick={() => setSplitDown(!splitDown)}>{splitDown ? "Split right" : "Split down"}</button>
+                <button className="icon-btn" aria-label="Close split" onClick={() => setSplit(null)}><X size={12} /></button></div>
+              <CodeEditor path={`split/${split}`} value={files[split] ?? ""} onChange={(t) => setFile(split, t)} problems={[]} onSave={onSave} onRun={onRun} readOnly={readOnly}
+                project={{ file: split, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles }} />
+            </div> : null}
+          </Panel>
+          </Group>
+          </div>
         </div>
         {thread ? (
           <div className="dv-thread" role="dialog" aria-label={`Comments on ${thread.file}:${thread.line}`}>
@@ -619,7 +657,7 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
       </Panel>
       <Separator className="dv-gutter" disabled={!panelOpen} />
       <Panel id="tester" minSize={0}>
-          <div className="dv-panel" aria-hidden={!panelOpen}>
+          <div className="dv-panel" inert={!panelOpen} aria-hidden={!panelOpen}>
             <div className="dv-ptabs" role="tablist">
               {TABS.map(([k, l, n]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{l}{n ? <span className="num">{n}</span> : null}</button>)}
               <span style={{ flex: 1 }} />
@@ -723,11 +761,23 @@ export function DevIDE({ title, tools, spec, edit, symbol, prev, side, onSave, o
       </Panel>
       </Group>
       </Panel>
-      <Separator className="dv-gutter" disabled={!open_.chart && !open_.preview} />
+      <Separator className="dv-gutter" disabled={!sideOpen} />
       <Panel id="right" minSize={0}>
-      <aside className="dv-side" data-both={(open_.chart && open_.preview) || undefined}>
-        {chartSeen.current ? <div className="dv-chartpane" hidden={!open_.chart}><DevChart symbol={symbol} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={(d, st) => replayGo(d, st)} /></div> : null}
-        {open_.preview ? <div className="dv-prevpane">{side}</div> : null}
+      <aside className="dv-side" inert={!sideOpen}>
+        <Group orientation="vertical" id="dv-side-split"
+          groupRef={sideRef}
+          defaultLayout={{ chart: chartOpen && previewOpen ? (ws.cur.layout.size.chart ?? 60) : previewOpen ? 0 : 100, preview: chartOpen && previewOpen ? 100 - (ws.cur.layout.size.chart ?? 60) : previewOpen ? 100 : 0 }}
+          onLayoutChanged={(sizes, { isUserInteraction }) => {
+            if (isUserInteraction && chartOpen && previewOpen) ws.patch((current) => ({ ...current, size: { ...current.size, chart: sizes.chart } }));
+          }}>
+        <Panel id="chart" minSize={chartOpen && previewOpen ? "20%" : 0}>
+        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart symbol={symbol} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} /></div> : null}
+        </Panel>
+        <Separator className="dv-gutter dv-gutter-vertical" disabled={!chartOpen || !previewOpen} />
+        <Panel id="preview" minSize={chartOpen && previewOpen ? "20%" : 0}>
+          {previewOpen ? <div className="dv-prevpane">{side}</div> : null}
+        </Panel>
+        </Group>
       </aside>
       </Panel>
       </Group>

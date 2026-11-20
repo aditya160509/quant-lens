@@ -8,11 +8,11 @@ Three streams, in this order. Details stay in their sections below; this is the 
 
 **1. Workspace (new single screen), section "Workspace" at the bottom: W-1 to W-14.** Panels, templates, rename/manage workspaces, Vela chart (mark B), Strategy Tester, ctx drawing calls, Inputs form, Report page, chart-first mode, old engine removal.
 
-**2. Build items still open (22), section "Build":**
+**2. Build items still open (21), section "Build":**
 - Editor and IDE: B-13 editor groups, B-16 IDE keys (⌘\ split), B-26 undo survives reload, B-30 in-browser Pyright, B-73 logpoints, B-92 project files, B-93 libraries, B-137 shared undo / Explain
 - Customise: B-100 personal templates, ranges, default costs
 - Strategy logic: B-45 brackets and partial exits, B-106 condition kinds, B-110 trading frequency / corridor, B-115 Composer-style tree blocks (if/else branches), B-118 find rules, B-134 saved rule groups, B-136 "/" insert and snap grid
-- Records: B-133 notes with the certificate, B-10 screenshots at 1440 and 1024
+- Records: B-10 screenshots at 1440 and 1024
 - Blocked or owner: B-55 ctx.store, B-67 and B-123 (fundamentals data), B-140 AI ⌘K edit
 
 **3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 1 replay tied to debugger (partial), 4 walk-forward, 6 optimisation heatmap, 7 parameter plateau, 8 drawing layer (now Vela, W-7), 11 to 15 research cells, reactive and SQL cells, data browser, 17 to 19 library, starters, share links, 20 review comments (partial), 21 and 22 AI explain and critic, 23 and 24 paper and live hooks, 26 keymap chords, 27 layouts (now W-3), 28 pop-out windows, 29 stress test, 30 chart templates. Built: 2, 3, 5, 9, 10, 25.
@@ -152,7 +152,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 
 - [x] [E] B-11 Full-height IDE: editor fills the work area; bottom panel resizes 30 to 40%; side rail collapses [PY B1] (Dev interface: full-height editor, resizable bottom panel (drag, double-click, ⌘J), collapsible rail (⌘B))
 - [x] [M] B-12 Three zones: left rail (Files, Outline, Search, Templates, Versions), centre editor, bottom panel (Problems, Output, Logs, Results, Plots, Debug, Terminal); right rail (preview, Inspector, AI); each zone remembers its size (Dev: activity bar (Files, Outline, Search, Versions, Docs, Starters); panel with Problems, Output, Plots, Trades, Results, Debug and Console; preview on the right)
-- [ ] [H] B-13 Editor groups: split right or down, up to 4 groups; tabs can be pinned, kept in preview, or marked dirty; pinned and preview tabs open) become kept on double click or edit; pin and unpin; unsaved dot per file; split down and 4 groups open) (partial: split right or down; preview, pinned and unsaved tabs; two groups (up to 4 open))
+- [ ] [H] B-13 Editor groups: two resizable groups support splitting right or down, with preview, pinned and dirty tabs. Up to four groups remain planned.
 - [x] [H] B-14 One editing session per strategy: a second tab opens read-only with a take-over button; writers send X-Studio-Session and get 409 naming the holder; frontend wiring open) (lease renewed every 30 s; second tab shows a read-only banner with Take over (checked with two tabs))
 - [x] [M] B-15 Phone (390 px): one zone at a time with a Code, Run, Results switcher; Build on phone is Formula and Plain English only (phone width hides Dev and forces Simple)
 - [ ] [M] B-16 IDE keys: F5 debug, F9 breakpoint, F10 step bar, F11 step line, ⌘J panel, ⌘B rail, ⌘\ split, ⌘P file, ⌘⇧F search project (partial: F5, F9, F10, ⇧F10, F11, ⌘J, ⌘B, ⌘P, ⌘⇧F, F1 built; ⌘\ split open)
@@ -752,13 +752,13 @@ Merges Build (141 done features move into panels unchanged), the 22 open Build i
 - [x] [M] W-2 Panels closed by default; open from View menu, palette and shortcuts
 - [x] [M] W-3 Workspace templates: Code only, Code + Chart, Full tester, Chart first, plus user-saved ones
 - [x] [S] W-4 Rename, duplicate, delete and switch workspaces; per-strategy default
-- [ ] [M] W-5 Customise: which panels, where they dock (left/right/bottom), sizes, hide chrome
+- [ ] [M] W-5 Customise: panel visibility and workspace sizes are saved, including the chart/preview and editor splits. Flexible docking and chrome controls remain open.
 - [x] [L] W-6 Vela chart panel fed with bars, trades, ctx.plot, paused bar; mark B (Vela™ in status bar)
 - [ ] [M] W-7 Drawings saved per strategy; per-tool settings and floating toolbar
 - [ ] [L] W-8 Strategy Tester drawer: key stats, equity/drawdown, trades list, settings
 - [x] [M] W-9 ctx.fill, ctx.hline, ctx.bgcolor, ctx.draw_* rendered on the chart
 - [x] [M] W-10 Declared params become an Inputs form; change a value and the chart re-runs
-- [ ] [L] W-11 Report page: performance, trades analysis, tearsheet, robustness, compare, certificate
+- [ ] [L] W-11 Report page: performance, trades analysis, tearsheet, robustness, compare, certificate. Dev report tabs now use the full workspace by default. A standalone report page remains open.
 - [ ] [M] W-12 Chart-first mode for non-coders (D in the plan)
 - [x] [S] W-13 Fix: preview too short, broken resize and pan (superseded by W-1)
 - [ ] [M] W-14 Remove the old chart engine and SVG preview once unused (ask owner first)
