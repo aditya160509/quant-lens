@@ -16,7 +16,8 @@ const BUILTIN: Workspace[] = [
   { id: "code", name: "Code only", builtin: true, layout: L({}) },
   { id: "code-chart", name: "Code + Chart", builtin: true, layout: L({ chart: true }) },
   { id: "tester", name: "Full tester", builtin: true, layout: L({ rail: true, chart: true, tester: true }, 34, 24, 16) },
-  { id: "chart-first", name: "Chart first", builtin: true, layout: L({ chart: true }, 60) },
+  // Chart first (W-12): the chart is the main panel on the left, code docks on the right, the tester spans the bottom.
+  { id: "chart-first", name: "Chart first", builtin: true, layout: { ...L({ chart: true, tester: true }, 66, 26), dock: { chart: "left", panel: "full" } } },
 ];
 const KEY = "studio:dev:workspaces";
 type Saved = { active: string; list: Workspace[] };
@@ -29,7 +30,7 @@ const load = (): Saved => {
     if (w.id === "tester" && right === 42 && tester === 36 && rail === 18) {
       return { ...w, layout: { ...w.layout, size: { ...w.layout.size, right: 34, tester: 24, rail: 16 } } };
     }
-    if (w.id === "chart-first" && right === 72) return { ...w, layout: { ...w.layout, size: { ...w.layout.size, right: 60 } } };
+    if (w.id === "chart-first" && !w.layout.dock) return BUILTIN.find((b) => b.id === "chart-first")!;
     return w;
   })];
   return { list, active: list.some((w) => w.id === s.active) ? s.active! : "code" };
@@ -41,8 +42,11 @@ export function useWorkspaces() {
   const cur = s.list.find((w) => w.id === s.active) ?? s.list[0];
   const patch = useCallback((f: (l: Layout) => Layout) => setS((p) => ({ ...p, list: p.list.map((w) => (w.id === p.active ? { ...w, layout: f(w.layout) } : w)) })), []);
   const add = (name: string, layout: Layout) => setS((p) => { const id = `u${Date.now().toString(36)}`; return { active: id, list: [...p.list, { id, name, layout: structuredClone(layout) }] }; });
+  const before = useRef("code-chart");
   return {
     list: s.list, cur, patch,
+    /** One click between Chart first and the layout you came from. */
+    flipChartFirst: () => setS((p) => { if (p.active !== "chart-first") { before.current = p.active; return { ...p, active: "chart-first" }; } return { ...p, active: p.list.some((w) => w.id === before.current) ? before.current : "code-chart" }; }),
     switchTo: (id: string) => setS((p) => ({ ...p, active: id })),
     add,
     rename: (id: string, name: string) => setS((p) => ({ ...p, list: p.list.map((w) => (w.id === id ? { ...w, name } : w)) })),

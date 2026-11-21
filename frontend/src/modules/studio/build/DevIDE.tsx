@@ -455,6 +455,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.stepline", label: "Debug: step line", keys: (m) => [m.KeyCode.F11], run: (l) => stepLine(l) },
     { id: "studio.stepback", label: "Debug: step back one bar", keys: (m) => [m.KeyMod.Shift | m.KeyCode.F10], run: () => debug({ step: -1 }) },
     { id: "studio.layouts", label: "View: customise layouts", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Backslash], run: () => setLayoutsOpen(true) },
+    { id: "studio.chartfirst", label: "View: chart first", run: () => ws.flipChartFirst() },
     { id: "studio.panel", label: "View: toggle panel", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyJ], run: () => setPanelOpen((o) => !o) },
     { id: "studio.rail", label: "View: toggle side bar", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyB], run: () => { if (railOpen) setRailOpen(false); else revealRail(rail); } },
     { id: "studio.files", label: "Go to file", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyP], run: () => revealRail("files") },
@@ -565,6 +566,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
         setPinned((current) => current.includes(active) ? current.filter((file) => file !== active) : [...current, active]);
       }}>Pin active file</button> : null}
       <hr />
+      <button role="menuitemcheckbox" aria-checked={chartFirst} onClick={ws.flipChartFirst}>Chart first</button>
       <button role="menuitemcheckbox" aria-checked={focus} onClick={() => { const on = !focus; setIconsOpen(!on); setRailOpen(!on); setPanelOpen(!on); }}>Focus mode</button>
     </WorkspaceMenu>
     <LayoutsDialog ws={ws} open={layoutsOpen} onClose={() => setLayoutsOpen(false)} />

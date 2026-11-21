@@ -59,10 +59,10 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
 | Live | 11 | 46 |
-| Chart | 8 | 50 |
+| Chart | 9 | 50 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **252** | **553** |
+| **All pages** | **253** | **553** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -531,7 +531,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] L-45 Freeze per version (backdate labelled); a new version starts a segment
 - [x] L-46 Alerts: Apprise channels, test send, digest on run, failures logged
 
-## Chart (Build's Vela chart; one merged list, 2026-11-21): 8 / 50 done
+## Chart (Build's Vela chart; one merged list, 2026-11-21): 9 / 50 done
 
 One list for every chart item. It merges the old Chart page items (C-1 to C-35, page deleted in W-14), W-7, W-12, DEV_IDEAS 1, 8 and 30, the multi-symbol proposal in DEV_IDEAS, and CHART_RESEARCH "Supercharts parity and beyond". Duplicates are merged; sources are in brackets. P1 first within each group.
 
@@ -558,7 +558,7 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [ ] [E] CH-16 P1 Range buttons (1M to All) and go to date [research: Vela]
 - [ ] [M] CH-17 P1 Compare symbols rebased to 100 or percent [C-7, DEV multi-symbol 5]
 - [ ] [E] CH-18 P1 Price scale menu: linear, log, percent, indexed to 100 [C-8, Vela has log and percent]
-- [ ] [M] CH-19 P2 Chart-first mode for non-coders: big chart, script dock, tester drawer [W-12]
+- [x] [M] CH-19 P2 Chart-first mode: big chart on the left, code docked right, tester across the bottom; one click (Layout menu or palette) flips to and from it. Simple mode keeps its own screen [W-12]
 - [ ] [H] CH-20 P2 Saved chart templates and layouts per symbol or global; indicator templates; drawing style presets; colours, crosshair, scale side, a key per tool [C-11 part, C-27, DEV 30, research]
 
 ### Chart types
