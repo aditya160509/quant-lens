@@ -25,6 +25,7 @@ import { DevTearsheet } from "./DevTearsheet";
 import { RunSummary } from "./RunSummary";
 import { tradeSummary } from "./devStats";
 import { NotifyBell } from "./NotifyBell";
+import { Terminal } from "./Terminal";
 
 type Log = { date: string; symbol: string | null; line: number; text: string; level: string; fields?: Record<string, unknown> | null };
 type Point = { date: string; symbol: string | null; value: number | null };
@@ -243,11 +244,11 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [tab, setTab] = useState<Tab>("tester");
   const [lint, setLint] = useState<Problem[]>([]);
   const [types, setTypes] = useState<Problem[]>([]);
-  const [outline, setOutline] = useState<Sym[]>([]);
   const [sev, setSev] = useState<Record<string, string>>({});
   useServerPref("inspections", sev, setSev);
   const [scope, setScope] = useState<"file" | "project">("file");
   const [report, setReport] = useState<Problem[]>([]);
+  const [outline, setOutline] = useState<Sym[]>([]);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [reveal, setReveal] = useState<{ line: number; column?: number; n: number } | null>(null);
   // Dev wants the width: the workspace sidebar closes while Dev is open and comes back after (user feedback 2026-11-20).
@@ -262,16 +263,6 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [watches, setWatches] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("studio:watch") ?? "[]"); } catch { return []; } });
   const [watchRows, setWatchRows] = useState<{ expression: string; error: string | null; value: unknown; history: { date: string; value: number }[] }[]>([]);
   const [watchIn, setWatchIn] = useState("");
-  const [con, setCon] = useState<{ q: string; at: string; out: string; err?: boolean }[]>([]);
-  const [conIn, setConIn] = useState("");
-  const conHist = useRef(-1);
-  const runCon = (q: string) => {
-    const date = dbg?.date || prev?.bars?.at(-1)?.date;
-    if (!q.trim() || !date) return;
-    setConIn(""); conHist.current = -1;
-    void studio<{ error: string | null; value: unknown }[]>("POST", "/build/watch", { spec, symbol: dbg?.symbol ?? symbol, date, expressions: [q], history: 1 })
-      .then(([r]) => setCon((c) => [...c, { q, at: date, out: r.error ?? (typeof r.value === "number" ? String(+r.value.toFixed(6)) : JSON.stringify(r.value)), err: !!r.error }]), (e: Error) => setCon((c) => [...c, { q, at: date, out: e.message, err: true }]));
-  };
   const [cond, setCond] = useState("");
   const [hitN, setHitN] = useState("");
   const [trig, setTrig] = useState("");
@@ -326,6 +317,15 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       {p.min != null && p.max != null ? <input type="range" aria-label={n} value={p.value} min={p.min} max={p.max} step={p.step ?? "any"} onChange={(e) => setInput(n, p, +e.target.value)} /> : null}
     </label>
   )) : <p className="dv-empty">None</p>;
+  // Name the browser tab after the strategy.
+  useEffect(() => { document.title = spec.name ? `${spec.name} · Build · ATLAS` : "Build · ATLAS"; }, [spec.name]);
+  const setFile = (name: string, text: string) => (keep(name), name in scratch ? setScratch((s) => ({ ...s, [name]: text })) : name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
+  const replaceFiles = (next: Record<string, string>) => {
+    const all: Record<string, string> = { ...files, ...next };
+    const { "main.py": code, ...rest } = all;
+    setScratch((s) => Object.fromEntries(Object.keys(s).map((f) => [f, rest[f] ?? s[f]])));
+    edit({ code, files: Object.fromEntries(Object.entries(rest).filter(([f]) => !(f in scratch))) });
+  };
   const params = () => Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, p.value]));
   const inspectProject = async () => {
     const found: Problem[] = [];
@@ -356,15 +356,6 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       extra = { params: list.split(",").map((x) => x.trim()).filter(Boolean).map((x) => { const [name, ...d] = x.split("="); return { name: name.trim(), default: d.join("=").trim() || undefined }; }) };
     }
     void studio<Record<string, string>>("POST", "/build/refactor", { code: source, file: active, files, ...r, ...extra }).then((out) => { replaceFiles(out); toast.success("Refactored · ⌘Z to undo"); }, (e: Error) => toast.error(e.message));
-  };
-  // Name the browser tab after the strategy.
-  useEffect(() => { document.title = spec.name ? `${spec.name} · Build · ATLAS` : "Build · ATLAS"; }, [spec.name]);
-  const setFile = (name: string, text: string) => (keep(name), name in scratch ? setScratch((s) => ({ ...s, [name]: text })) : name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
-  const replaceFiles = (next: Record<string, string>) => {
-    const all: Record<string, string> = { ...files, ...next };
-    const { "main.py": code, ...rest } = all;
-    setScratch((s) => Object.fromEntries(Object.keys(s).map((f) => [f, rest[f] ?? s[f]])));
-    edit({ code, files: Object.fromEntries(Object.entries(rest).filter(([f]) => !(f in scratch))) });
   };
   const addScratch = () => {
     let n = 1; while (`scratch_${n}.py` in files) n++;
@@ -718,7 +709,6 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.newscratch", label: "File: new scratch file", run: () => addScratch() },
     { id: "studio.bm", label: "Bookmark: toggle", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyK], run: (line) => toggleBm(line) },
     { id: "studio.bmnext", label: "Bookmark: next", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.Period], run: (line) => bmJump(1, line) },
-    { id: "studio.inspect", label: "Inspect: whole project", run: () => void inspectProject() },
     { id: "studio.bmprev", label: "Bookmark: previous", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.Comma], run: (line) => bmJump(-1, line) },
     { id: "studio.zen", label: "View: zen mode", keys: (m) => [m.KeyMod.chord(m.KeyMod.CtrlCmd | m.KeyCode.KeyK, m.KeyMod.CtrlCmd | m.KeyCode.KeyZ)], run: () => setZen((z) => !z) },
     { id: "studio.hidetools", label: "View: hide all tool windows", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.F12], run: () => setZen((z) => !z) },
@@ -728,6 +718,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.fwd", label: "Go: forward", keys: (m) => [m.KeyMod.WinCtrl | m.KeyMod.Shift | m.KeyCode.Minus], run: () => hop(1) },
     { id: "studio.symproj", label: "Go to symbol in project", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyT], run: () => window.dispatchEvent(new CustomEvent("studio:palette", { detail: "Symbol " })) },
     { id: "studio.outline", label: "Go to symbol in file", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyO], run: () => window.dispatchEvent(new CustomEvent("studio:palette", { detail: "Outline " })) },
+    { id: "studio.inspect", label: "Inspect: whole project", run: () => void inspectProject() },
     { id: "studio.snippets", label: "Snippet: insert", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyS], run: () => revealRail("templates") },
   ];
   actionsRef.current = actions;
@@ -1107,15 +1098,9 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                 ))}</div>
               )) : null}
               {tab === "console" ? (
-                <div className="dv-console" onClick={(e) => (e.currentTarget.querySelector("input") as HTMLInputElement | null)?.focus()}>
-                  {con.map((c, i) => <div key={i}><span className="dv-con-q">› {c.q}</span><i>{c.at}</i><pre data-err={c.err || undefined}>{c.out}</pre></div>)}
-                  <form onSubmit={(e) => { e.preventDefault(); runCon(conIn); }}><span>›</span>
-                    <input aria-label="Console" spellCheck={false} autoComplete="off" value={conIn} onChange={(e) => setConIn(e.target.value)} onKeyDown={(e) => {
-                      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-                      e.preventDefault(); const qs = con.map((c) => c.q); const n = conHist.current === -1 ? qs.length : conHist.current; const k = Math.max(0, Math.min(qs.length, n + (e.key === "ArrowUp" ? -1 : 1)));
-                      conHist.current = k; setConIn(qs[k] ?? "");
-                    }} /><i className="dv-con-at">{dbg?.date ?? prev?.bars?.at(-1)?.date}</i></form>
-                </div>
+                <Terminal host={{ files, code: spec.code, extra: spec.files ?? {}, active, symbol, storeKey: strategyId ?? "draft", spec, paused: dbg ? { symbol: dbg.symbol ?? symbol, date: dbg.date } : null, preview: onPreview, goto,
+                  run: (level, settings) => { if (!canRun || starting || running) throw new Error("A run is already going or runs are off here"); const s = { ...rc.settings, ...settings }; openView("results"); lastRun.current = { level, settings: s }; onQuickRun(level, s); },
+                  render: (v) => (tableOf(v) ? <VarGrid t={tableOf(v)!} open /> : typeof v === "object" ? <KV rows={v as Record<string, unknown>} /> : <pre>{show(v)}</pre>) }} />
               ) : null}
               {tab === "debug" ? (
                 <div className="dv-debug">

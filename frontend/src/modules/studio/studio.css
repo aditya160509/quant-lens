@@ -448,13 +448,18 @@
 .bd-rule[data-role="market_filter"] { --role: var(--warn); } .bd-rule[data-role="score"] { --role: var(--accent); }
 .bd-grid[data-compact] .gx-row { gap: 4px; } .bd-grid[data-compact] .gx-row .input { height: 26px; font-size: 12px; padding: 0 6px; }
 .bd-grid[data-compact] .gx-body { gap: 3px; } .bd-grid[data-compact] .bd-rule { gap: 4px; }
-.dv-console { height: 100%; overflow: auto; padding: 8px 12px; font: 12.5px var(--mono); cursor: text; }
-.dv-console > div { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; padding: 3px 0; }
-.dv-console i { color: var(--text-4); font-style: normal; font-size: 11px; }
-.dv-console pre { grid-column: 1 / -1; margin: 0; color: var(--text); white-space: pre-wrap; } .dv-console pre[data-err] { color: var(--down); }
+.dv-term { height: 100%; overflow: auto; padding: 6px 12px; font: 12.5px var(--mono); cursor: text; }
+.dv-term-block { padding: 4px 0 6px; border-bottom: 1px solid var(--line); }
+.dv-term-block header { display: flex; align-items: center; gap: 8px; }
+.dv-term-block header .dv-con-q { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-term-block header i { color: var(--text-4); font-style: normal; font-size: 11px; }
+.dv-term-block header .icon-btn { opacity: 0; } .dv-term-block:hover header .icon-btn, .dv-term-block header .icon-btn:focus-visible { opacity: 1; }
+.dv-term-block[data-st="run"] .dv-con-q { color: var(--accent); } .dv-term-block[data-st="err"] .dv-con-q { color: var(--down); }
+.dv-term-block pre { margin: 2px 0 0; color: var(--text); white-space: pre-wrap; } .dv-term-block pre[data-err] { color: var(--down); }
+.dv-term-link { all: unset; color: var(--accent); cursor: pointer; text-decoration: underline dotted; }
 .dv-con-q { color: var(--text-3); }
-.dv-console form { display: flex; gap: 8px; align-items: center; color: var(--accent); }
-.dv-console form input { flex: 1; border: 0; outline: 0; background: none; color: var(--text); font: inherit; }
+.dv-term form { display: flex; gap: 8px; align-items: center; color: var(--accent); padding-top: 6px; }
+.dv-term form input { flex: 1; border: 0; outline: 0; background: none; color: var(--text); font: inherit; }
 .bd-palette { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; }
 .bd-palette li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 6px; border-radius: 6px; background: var(--line); }
 .bd-keys { display: grid; gap: 3px; }
@@ -502,7 +507,6 @@
   .dv-navbar, .dv-replay { padding-inline: 4px; gap: 3px; }
   .dv-replay input[type="range"] { margin-inline: 2px; }
 }
-.dv-con-at { color: var(--text-4); font: 11px var(--mono); font-style: normal; }
 
 /* Dev: soft floating panels instead of hard dividers (owner feedback 2026-11-20). */
 
