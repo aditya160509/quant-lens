@@ -755,7 +755,7 @@ Merges Build (141 done features move into panels unchanged), the 22 open Build i
 - [ ] [M] W-5 Customise: panel visibility and workspace sizes are saved, including the editor split. Preview opens in the resizable bottom panel, and the Dev activity bar can be hidden. Flexible docking remains open.
 - [x] [L] W-6 Vela chart panel fed with bars, trades, ctx.plot, paused bar; mark B (Vela™ in status bar)
 - [ ] [M] W-7 Drawings saved per strategy; per-tool settings and floating toolbar
-- [ ] [L] W-8 Strategy Tester drawer: key stats, equity/drawdown, trades list, settings
+- [x] [L] W-8 Strategy Tester drawer: key stats, equity/drawdown, trades list, settings (Inputs card beside the results)
 - [x] [M] W-9 ctx.fill, ctx.hline, ctx.bgcolor, ctx.draw_* rendered on the chart
 - [x] [M] W-10 Declared params become an Inputs form; change a value and the chart re-runs
 - [ ] [L] W-11 Report page: performance, trades analysis, tearsheet, robustness, compare, certificate. Dev report tabs now use the full workspace by default. A standalone report page remains open.

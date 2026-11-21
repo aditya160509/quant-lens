@@ -67,9 +67,8 @@ const RAILS: [Rail, ReactNode, string][] = [
 
 const money = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 /** Strategy Tester summary: every headline number on one screen, colour only where it means gain or loss. */
-function Tester({ trades }: { trades: Record<string, unknown>[] }) {
+function Tester({ trades, inputs }: { trades: Record<string, unknown>[]; inputs: ReactNode }) {
   const s = useMemo(() => tradeSummary(trades), [trades]);
-  if (!s.trades) return <p className="dv-empty">Run the preview to see results</p>;
   const tiles: [string, string, "up" | "down" | null][] = [
     ["Net P&L", money(s.net), s.net >= 0 ? "up" : "down"], ["Max drawdown", money(s.maxdd), s.maxdd < 0 ? "down" : null],
     ["Win rate", s.win === null ? "–" : `${(s.win * 100).toFixed(0)}%`, null], ["Profit factor", s.pf === null ? "–" : s.pf.toFixed(2), s.pf === null ? null : s.pf >= 1 ? "up" : "down"],
@@ -77,8 +76,11 @@ function Tester({ trades }: { trades: Record<string, unknown>[] }) {
   ];
   return (
     <div className="dv-tester">
-      <dl className="dv-tiles">{tiles.map(([k, v, tone]) => <div key={k}><dt>{k}</dt><dd className="num" data-tone={tone ?? undefined}>{v}</dd></div>)}</dl>
+      <div className="dv-tester-main">
+      {s.trades ? <dl className="dv-tiles">{tiles.map(([k, v, tone]) => <div key={k}><dt>{k}</dt><dd className="num" data-tone={tone ?? undefined}>{v}</dd></div>)}</dl> : <p className="dv-empty">Run the preview to see results</p>}
       {s.curve.length > 1 ? <TimeSeries data={s.curve} series={[{ key: "net", label: "Cumulative P&L", color: "var(--text-2)" }, { key: "dd", label: "Drawdown", color: "var(--down)" }]} height={140} legend={false} /> : null}
+      </div>
+      <aside className="dv-tester-set" aria-label="Inputs"><h4>Inputs</h4>{inputs}</aside>
     </div>
   );
 }
@@ -221,6 +223,13 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     return { ...out, ...Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, { ...out[k], ...p }])) };
   }, [spec.code, spec.params]);
   const setInput = (n: string, p: Spec["params"][string], value: number) => Number.isFinite(value) && edit({ params: { ...spec.params, [n]: { ...p, value } } });
+  // One inputs list, shown in the Files rail and in the Tester's settings (TradingView Strategy Tester "Inputs").
+  const inputList = Object.keys(inputs).length ? Object.entries(inputs).map(([n, p]) => (
+    <label key={n} className="dv-input">
+      <span><code>{n}</code><input className="input sm" type="number" value={p.value} min={p.min ?? undefined} max={p.max ?? undefined} step={p.step ?? "any"} onChange={(e) => setInput(n, p, +e.target.value)} /></span>
+      {p.min != null && p.max != null ? <input type="range" aria-label={n} value={p.value} min={p.min} max={p.max} step={p.step ?? "any"} onChange={(e) => setInput(n, p, +e.target.value)} /> : null}
+    </label>
+  )) : <p className="dv-empty">None</p>;
   // Name the browser tab after the strategy.
   useEffect(() => { document.title = spec.name ? `${spec.name} · Build · ATLAS` : "Build · ATLAS"; }, [spec.name]);
   const setFile = (name: string, text: string) => (keep(name), name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
@@ -580,13 +589,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               <button className="btn sm ghost" onClick={addFile}><FilePlus2 size={13} />New file</button>
               </details>
               <details open><summary>Inputs<span>{Object.keys(inputs).length}</span></summary>
-                {Object.entries(inputs).map(([n, p]) => (
-                  <label key={n} className="dv-input">
-                    <span><code>{n}</code><input className="input sm" type="number" value={p.value} min={p.min ?? undefined} max={p.max ?? undefined} step={p.step ?? "any"} onChange={(e) => setInput(n, p, +e.target.value)} /></span>
-                    {p.min != null && p.max != null ? <input type="range" aria-label={n} value={p.value} min={p.min} max={p.max} step={p.step ?? "any"} onChange={(e) => setInput(n, p, +e.target.value)} /> : null}
-                  </label>
-                ))}
-                {Object.keys(inputs).length ? null : <p className="dv-empty">None</p>}
+                {inputList}
               </details>
             </div>
           ) : rail === "outline" ? (
@@ -784,7 +787,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                   {!plots.length && !Object.keys(prev?.tables ?? {}).length ? <p className="dv-empty">No plots</p> : null}
                 </div>
               ) : null}
-              {tab === "tester" ? <Tester trades={prev?.trades ?? []} /> : null}
+              {tab === "tester" ? <Tester trades={prev?.trades ?? []} inputs={inputList} /> : null}
               {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades" }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
               {tab === "console" ? (
                 <div className="dv-console" onClick={(e) => (e.currentTarget.querySelector("input") as HTMLInputElement | null)?.focus()}>
