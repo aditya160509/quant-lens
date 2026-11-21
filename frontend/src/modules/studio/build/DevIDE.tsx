@@ -53,7 +53,8 @@ type Snapshot = { at: number; files: Record<string, string> };
 type Snippet = { id: string; name: string; prefix: string; body: string; description: string };
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 export type Logpoint = { file: string; line: number; message: string };
-type Tab = "tester" | "problems" | "output" | "plots" | "trades" | "debug" | "console" | "preview";
+type Tab = "tester" | "problems" | "output" | "plots" | "trades" | "debug" | "console" | "cells" | "preview";
+type CellRow = { index: number | null; line?: number; stdout: string; value: unknown; error: string | null; error_line: number | null; seconds: number };
 type View = "code" | "results" | "tearsheet" | "robust" | "runs";
 const VIEW_LABEL: Record<Exclude<View, "code">, string> = { results: "Results", tearsheet: "Tearsheet", robust: "Robustness", runs: "Runs" };
 type Rail = "files" | "outline" | "search" | "versions" | "tests" | "docs" | "templates";
@@ -109,10 +110,10 @@ type VarTable = { shape: number[]; columns: string[]; dtypes: string[]; summary:
   head: unknown[][]; head_index: (string | number)[]; index: (string | number)[]; rows: unknown[][] };
 const tableOf = (v: unknown) => (v && typeof v === "object" && "__table__" in v ? (v as { __table__: VarTable }).__table__ : null);
 /** Variable explorer: a DataFrame, Series or array local with types, a summary, a sparkline, and its first and last rows. */
-function VarGrid({ t }: { t: VarTable }) {
+function VarGrid({ t, open }: { t: VarTable; open?: boolean }) {
   const row = (r: unknown[], i: string | number) => <tr key={`r${i}`}><th>{i}</th>{r.map((x, j) => <td key={j}>{show(x)}</td>)}</tr>;
   return (
-    <details className="dv-vgrid"><summary>{t.shape.join(" × ")}</summary>
+    <details className="dv-vgrid" open={open}><summary>{t.shape.join(" × ")}</summary>
       <div><table>
         <thead><tr><th />{t.columns.map((c, j) => <th key={c} title={t.dtypes[j]}>{c}<small>{t.dtypes[j]}</small></th>)}</tr></thead>
         <tbody className="dv-vsum">
@@ -311,6 +312,15 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     setScratch((s) => ({ ...s, [name]: "" })); setDiff(null); setOpen((o) => [...o, name]); setActive(name);
   };
   const dropScratch = (f: string) => { setScratch(({ [f]: _, ...rest }) => rest); close(f); };
+  const [cellOut, setCellOut] = useState<{ file: string; titles: string[]; rows: CellRow[] } | "running" | null>(null);
+  const hasCells = /^\s*# %%/m.test(files[active] ?? "");
+  const runCell = (line: number, only = true) => {
+    const starts = [1, ...(files[active] ?? "").split("\n").flatMap((t, i) => (i && /^\s*# %%/.test(t) ? [i + 1] : []))];
+    const upto = starts.filter((s0) => s0 <= line).length - 1;
+    setPanelOpen(true); setTab("cells"); setCellOut("running");
+    void studio<{ cells: { title: string }[]; outputs: CellRow[] }>("POST", "/build/cells", { code: spec.code, files: spec.files ?? {}, file: active, upto, only, symbols: [symbol] })
+      .then((r) => setCellOut({ file: active, titles: r.cells.map((c) => c.title), rows: r.outputs }), (e: Error) => { setCellOut(null); toast.error(e.message); });
+  };
   const goto = (file: string, line: number, column?: number) => { if (!(file in files)) return; setDiff(null); setOpen((o) => (o.includes(file) ? o : [...o, file])); setActive(file); setReveal({ line, column, n: Date.now() }); };
   // Single click opens a preview tab that the next single click replaces; double click or an edit keeps it (B-13).
   const peek = (f: string) => { if (!(f in files)) return; setDiff(null); setOpen((o) => (o.includes(f) ? o : [...o.filter((x) => x !== preview || pinned.includes(x)), f])); if (!open.includes(f)) setPreview(f); setActive(f); };
@@ -543,6 +553,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.fullrun", label: "Run: full backtest (recorded)", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => runCode("full") },
     { id: "studio.quickrun", label: "Run: quick (top 50, 5 years)", run: () => runCode() },
     { id: "studio.runconfigs", label: "Run: edit configurations", run: () => setRcOpen(true) },
+    { id: "studio.cell", label: "Cells: run cell", keys: (m) => [m.KeyMod.WinCtrl | m.KeyCode.Enter], run: (line) => runCell(line) },
+    { id: "studio.cellabove", label: "Cells: run above and this cell", keys: (m) => [m.KeyMod.WinCtrl | m.KeyMod.Shift | m.KeyCode.Enter], run: (line) => runCell(line, false) },
     { id: "studio.tests", label: "Test: run all", run: () => { revealRail("tests"); runTests(); } },
     { id: "studio.cancel", label: "Run: cancel", run: () => onCancel?.() },
     { id: "studio.chart", label: "View: chart with replay", run: () => setOpenP("chart", true) },
@@ -564,6 +576,9 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   ];
   actionsRef.current = actions;
   debugRef.current = debug;
+  // Breadcrumbs: at each depth the last symbol that starts at or above the cursor (the outline has no end lines).
+  const crumbs: Sym[] = [];
+  for (let level = outline; ;) { const s0 = level.filter((x) => x.line <= cursor.line).at(-1); if (!s0) break; crumbs.push(s0); level = s0.children; }
   const outlineRows = (items: Sym[], depth = 0): ReactNode => items.map((s) => (
     <div key={`${s.name}${s.line}`}>
       <button className="dv-item" style={{ paddingLeft: 10 + depth * 14 }} onClick={() => goto(active, s.line, s.column)}><i className={`dv-k dv-k-${s.kind}`}>{s.kind[0]}</i>{s.name}<span>{s.line}</span></button>
@@ -572,7 +587,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   ));
   const todos = useMemo(() => Object.entries(files).filter(([f]) => !(f in scratch)).flatMap(([f, text]) => text.split("\n").flatMap((line, i) => /#.*\b(TODO|FIXME|XXX)\b/.test(line) ? [{ file: f, line: i + 1, text: line.trim().replace(/^#\s*/, "") }] : [])), [files, scratch]);
   const docRows = (docs ?? []).filter((d) => !docQ || `${d.scope}.${d.name} ${d.documentation ?? ""}`.toLowerCase().includes(docQ.toLowerCase()));
-  const TABS: [Tab, string, number | null][] = [["tester", "Tester", null], ["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["debug", "Debug", null], ["console", "Console", null], ["preview", "Preview", null]];
+  const TABS: [Tab, string, number | null][] = [["tester", "Tester", null], ["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["debug", "Debug", null], ["console", "Console", null], ...(hasCells || cellOut ? [["cells", "Cells", null] as [Tab, string, null]] : []), ["preview", "Preview", null]];
   const toggles = <span className="dv-toggles">
     <button className="icon-btn" aria-pressed={opt.caseSensitive} title="Match case" onClick={() => setOpt((o) => ({ ...o, caseSensitive: !o.caseSensitive }))}><CaseSensitive size={14} /></button>
     <button className="icon-btn" aria-pressed={opt.word} title="Whole word" onClick={() => setOpt((o) => ({ ...o, word: !o.word }))}><WholeWord size={14} /></button>
@@ -785,6 +800,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
           {extra.map((v) => <div key={v} role="tab" aria-selected={view === v} className="dv-tab" tabIndex={0} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setView(v); } }} onClick={() => setView(v)}>{VIEW_LABEL[v]}<button className="icon-btn" aria-label={`Close ${v}`} onClick={(e) => { e.stopPropagation(); closeView(v); }}><X size={11} /></button></div>)}
           {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
         </div>
+        {view === "code" && !diff ? <nav className="dv-crumbs" aria-label="Breadcrumbs"><button onClick={() => revealRail("files")}>{active}</button>{crumbs.map((c) => <button key={`${c.name}${c.line}`} onClick={() => goto(active, c.line, c.column)}>{c.name}</button>)}</nav> : null}
         <div className="dv-editor">
           {view !== "code" ? (
             <div key={view} className="dv-view-pane" data-kind={view}>
@@ -814,7 +830,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
               project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles, paramSpecs: spec.params, problems,
                 addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
-                lens: (command, args) => { if (command === "debug") debug({ date: String(args.date ?? "") }); else if (command === "inspect_condition") { setTab("output"); toast(`${String(args.expression)} on ${String(args.symbol)}`); } else if (command === "run_symbol") { openPreview(); onPreview(); } else runCode("full"); } }} />
+                lens: (command, args) => { if (command === "cell") runCell(Number(args.line), args.only !== false); else if (command === "debug") debug({ date: String(args.date ?? "") }); else if (command === "inspect_condition") { setTab("output"); toast(`${String(args.expression)} on ${String(args.symbol)}`); } else if (command === "run_symbol") { openPreview(); onPreview(); } else runCode("full"); } }} />
           )}
           </Panel>
           <Separator className={`dv-gutter ${splitDown ? "dv-gutter-vertical" : ""}`} disabled={!split || Boolean(diff)} />
@@ -901,6 +917,16 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               ) : null}
               {tab === "tester" ? <Tester trades={prev?.trades ?? []} inputs={inputList} /> : null}
               {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades" }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
+              {tab === "cells" ? (cellOut === "running" ? <p className="dv-empty">Running…</p> : !cellOut ? <p className="dv-empty">Ctrl+Enter runs the cell at the cursor</p> : (
+                <div className="dv-cells">{cellOut.rows.map((r, i) => (
+                  <section key={i}>
+                    <h4><button className="dv-item" onClick={() => r.line && goto(cellOut.file, r.line)}>{r.index === null ? "Cells" : `Cell ${r.index + 1}${cellOut.titles[r.index] ? ` · ${cellOut.titles[r.index]}` : ""}`}</button><i>{r.seconds.toFixed(3)} s</i></h4>
+                    {r.stdout ? <pre>{r.stdout}</pre> : null}
+                    {r.error ? <p className="bd-find error"><b>{r.error_line ? <button className="dv-item" onClick={() => goto(cellOut.file, r.error_line!)}>line {r.error_line}</button> : "Error"}</b>{r.error}</p> : null}
+                    {r.value !== null && r.value !== undefined ? (tableOf(r.value) ? <VarGrid t={tableOf(r.value)!} open /> : typeof r.value === "object" ? <KV rows={r.value as Record<string, unknown>} /> : <pre>{show(r.value)}</pre>) : null}
+                  </section>
+                ))}</div>
+              )) : null}
               {tab === "console" ? (
                 <div className="dv-console" onClick={(e) => (e.currentTarget.querySelector("input") as HTMLInputElement | null)?.focus()}>
                   {con.map((c, i) => <div key={i}><span className="dv-con-q">› {c.q}</span><i>{c.at}</i><pre data-err={c.err || undefined}>{c.out}</pre></div>)}

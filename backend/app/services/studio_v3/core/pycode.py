@@ -226,10 +226,15 @@ def check(code: str, params: dict[str, float], *, modules: set[str] | None = Non
     return found
 
 
+def _is_cells(source: str) -> bool:
+    """A research file split into `# %%` cells; it runs through POST /build/cells, not as part of the strategy."""
+    return any(line.lstrip().startswith("# %%") for line in source.splitlines())
+
+
 def check_project(code: str, params: dict[str, float], files: dict[str, str]) -> list[dict]:
     modules = {name[:-3] for name in files if name.endswith(".py")}
     # test_*.py files are not part of the strategy; POST /build/test checks and runs them
-    sources = {"main.py": code, **{name: source for name, source in files.items() if name.endswith(".py") and name != "main.py" and not name.startswith("test_")}}
+    sources = {"main.py": code, **{name: source for name, source in files.items() if name.endswith(".py") and name != "main.py" and not name.startswith("test_") and not _is_cells(source)}}
     return [
         {**finding, "file": name}
         for name, source in sources.items()
@@ -605,8 +610,8 @@ _LEVELS = {"error", "warning", "info", "off"}
 def lint(code: str, params: dict[str, float], *, file: str = "main.py", modules: set[str] | None = None,
          strictness: str = "basic", severity: dict[str, str] | None = None) -> list[dict]:
     """strictness "strict" adds unused imports and the API header; `severity` maps a problem code to error, warning, info or off (B-37)."""
-    if file.rsplit("/", 1)[-1].startswith("test_"):
-        modules = (modules or set()) | {"studio.testing"}  # the strategy-test fixture
+    if file.rsplit("/", 1)[-1].startswith("test_") or _is_cells(code):
+        modules = (modules or set()) | {"studio.testing", "studio.research"}  # the test fixture and the research-cell data loader
     problems = _lint(code, params, file=file, modules=modules, strict=strictness == "strict")
     for code_name, level in (severity or {}).items():
         if level not in _LEVELS:

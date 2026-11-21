@@ -317,6 +317,14 @@
 .dv-bp { background: var(--down); border-radius: 50%; width: 9px !important; height: 9px !important; margin: 5px 0 0 5px; }
 .dv-lp { background: var(--text-2); width: 8px !important; height: 8px !important; margin: 6px 0 0 6px; transform: rotate(45deg); }
 .dv-tests { display: grid; gap: 1px; }
+.dv-crumbs { display: flex; align-items: center; gap: 2px; padding: 2px 10px; min-height: 22px; font-size: 12px; color: var(--text-3); overflow: hidden; white-space: nowrap; }
+.dv-crumbs button { background: none; border: 0; padding: 0 4px; color: inherit; font: inherit; cursor: pointer; border-radius: 4px; }
+.dv-crumbs button:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.dv-crumbs button + button::before { content: "›"; margin-right: 6px; color: var(--text-3); }
+.dv-cells { display: grid; gap: 10px; padding: 6px 2px; }
+.dv-cells h4 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12px; font-weight: 500; color: var(--text-2); }
+.dv-cells h4 i { margin-left: auto; font-style: normal; color: var(--text-3); font: 11px var(--mono); }
+.dv-cells pre { margin: 4px 0 0; font: 12px var(--mono); color: var(--text); white-space: pre-wrap; }
 .dv-vgrid summary { cursor: pointer; color: var(--text-2); }
 .dv-vgrid > div { max-height: 260px; overflow: auto; margin-top: 4px; border: 1px solid var(--line-2); border-radius: 6px; }
 .dv-vgrid table { border-collapse: collapse; font: 11.5px var(--mono); font-variant-numeric: tabular-nums; }

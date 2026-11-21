@@ -122,7 +122,10 @@ function register(monaco: Monaco) {
   monaco.languages.registerCodeLensProvider("python", {
     provideCodeLenses: async (model) => {
       const lenses = await studio<{ line: number; title: string; command: string; arguments: Record<string, unknown> }[]>("POST", "/build/codelens", { code: model.getValue(), symbol: live.current?.symbols[0] ?? "SPY", params: values() }).catch(() => []);
-      return { lenses: lenses.map((l, i) => ({ range: new monaco.Range(l.line, 1, l.line, 1), id: `lens${i}`, command: { id: "studio.lens", title: l.title, arguments: [l.command, l.arguments] } })), dispose: () => undefined };
+      // Percent cells: "# %%" lines get Run cell and Run above lenses (handled by the project's lens callback).
+      const cellLines = model.getLinesContent().flatMap((t, i) => (/^\s*# %%/.test(t) ? [i + 1] : []));
+      const cellLenses = cellLines.flatMap((line) => [["Run cell", true], ["Run above and this", false]].map(([title, only], k) => ({ range: new monaco.Range(line, 1, line, 1), id: `cell${line}.${k}`, command: { id: "studio.lens", title: String(title), arguments: ["cell", { line, only }] } })));
+      return { lenses: [...cellLenses, ...lenses.map((l, i) => ({ range: new monaco.Range(l.line, 1, l.line, 1), id: `lens${i}`, command: { id: "studio.lens", title: l.title, arguments: [l.command, l.arguments] } }))], dispose: () => undefined };
     },
   });
   const edits = (model: { uri: unknown }, list: TextEdit[]) => list.map((e) => ({ resource: model.uri as never, versionId: undefined, textEdit: { range: new monaco.Range(e.line, e.column, e.end_line, e.end_column), text: e.text } }));

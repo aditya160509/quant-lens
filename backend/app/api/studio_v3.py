@@ -189,6 +189,24 @@ def run_strategy_tests(request: BuildTestRequest) -> dict[str, Any]:
     return strategy_tests.run({**request.files, "main.py": request.code}, request.file, request.name)
 
 
+class BuildCellsRequest(BaseModel):
+    code: str = Field(default="", max_length=200_000)
+    files: dict[str, str] = Field(default_factory=dict)
+    file: str = Field(default="main.py", max_length=128)
+    upto: int = Field(default=0, ge=0)
+    only: bool = True  # True: Run cell; False: Run above and this cell
+    symbols: list[str] = Field(default_factory=lambda: ["SPY"], max_length=5)
+
+
+@router.post("/build/cells")
+def run_cells(request: BuildCellsRequest) -> dict[str, Any]:
+    """Runs the `# %%` cells of one file up to `upto` in the sandbox child; `from studio.research import load` returns a symbol's bars as a DataFrame."""
+    try:
+        return strategy_tests.run_cells({**request.files, "main.py": request.code}, request.file, request.upto, request.only, [normalize_symbol(s) for s in request.symbols])
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+
+
 class BuildCheckRequest(BuildProjectDocument):
     params: dict[str, float] = Field(default_factory=dict)
     strictness: Literal["basic", "strict"] = "basic"  # strict adds unused imports and the studio-api header

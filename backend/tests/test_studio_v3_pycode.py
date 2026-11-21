@@ -883,3 +883,10 @@ def test_test_files_may_import_the_fixture_and_never_block_the_strategy():
     assert not [p for p in pycode.check_project("class Strategy:\n    def on_bar(self, ctx):\n        pass\n", {}, {"test_main.py": test_src}) if p["severity"] == "error"]
     assert not [p for p in pycode.lint(test_src, {}, file="test_main.py") if "not allowed" in p["message"]]
     assert [p for p in pycode.lint(test_src, {}, file="helpers.py") if "not allowed" in p["message"]]
+
+
+def test_cell_files_may_load_research_data_and_never_block_the_strategy():
+    cells = "# %%\nfrom studio.research import load\ndf = load('SPY')\n"
+    main = "class Strategy:\n    def on_bar(self, ctx):\n        pass\n"
+    assert not [p for p in pycode.check_project(main, {}, {"research.py": cells}) if p["severity"] == "error"]
+    assert not [p for p in pycode.lint(cells, {}, file="research.py") if "not allowed" in p["message"]]
