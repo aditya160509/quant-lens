@@ -24,6 +24,7 @@ function ModuleSwitcher({ current, themeClass, className }: { current: ModuleLin
   const [hot, setHot] = useState(current?.id ?? MODULES[0].id);
   const shown = MODULES.find((x) => x.id === hot) ?? MODULES[0];
   const Icon = current?.icon ?? Home;
+  const page = activePage(current, usePathname() ?? "");
   const nav = (e: ReactKeyEvent<HTMLDivElement>) => {
     if (!["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft"].includes(e.key)) return;
     e.preventDefault();
@@ -37,7 +38,7 @@ function ModuleSwitcher({ current, themeClass, className }: { current: ModuleLin
     <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) setHot(current?.id ?? MODULES[0].id); }}>
       <Popover.Trigger asChild>
         <button type="button" className="ws-switch" aria-label="Switch module">
-          <span className="tile"><Icon size={14} strokeWidth={1.8} /></span>{current?.label ?? "Home"}<ChevronDown size={13} strokeWidth={2} aria-hidden />
+          <span className="tile"><Icon size={14} strokeWidth={1.8} /></span>{current?.label ?? "Home"}{page && page.href !== current?.href ? <><span className="slash">/</span><b>{page.label}</b></> : null}<ChevronDown size={13} strokeWidth={2} aria-hidden />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -56,7 +57,7 @@ function ModuleSwitcher({ current, themeClass, className }: { current: ModuleLin
           </div>
           <div data-col="p" className="col pages">
             <div className="hd">{shown.label}</div>
-            {shown.pages?.map((p) => <Link key={p.href} href={p.href} className="item" onClick={() => setOpen(false)}>{p.label}</Link>)}
+            {shown.pages?.map((p) => <Link key={p.href} href={p.href} className="item" aria-current={p.href === page?.href ? "page" : undefined} onClick={() => setOpen(false)}>{p.label}</Link>)}
           </div>
         </Popover.Content>
       </Popover.Portal>
@@ -64,18 +65,9 @@ function ModuleSwitcher({ current, themeClass, className }: { current: ModuleLin
   );
 }
 
-/** The current module's pages as header tabs: pages change often, so they get the cheapest control. */
-function PageTabs({ current }: { current: ModuleLink | undefined }) {
-  const path = usePathname() ?? "";
-  if (!current?.pages) return null;
-  // Longest match wins, so the module root (Home) is active only on the root itself.
-  const on = current.pages.filter((p) => path === p.href || path.startsWith(p.href + "/")).sort((x, y) => y.href.length - x.href.length)[0]?.href;
-  return (
-    <nav className="ws-tabs" aria-label={`${current.label} pages`}>
-      {current.pages.map((p) => <Link key={p.href} href={p.href} aria-current={p.href === on ? "page" : undefined}>{p.label}</Link>)}
-    </nav>
-  );
-}
+/** The page of a module the path is on; longest match wins, so the module root is active only on the root itself. */
+const activePage = (m: ModuleLink | undefined, path: string) =>
+  m?.pages?.filter((p) => path === p.href || path.startsWith(p.href + "/")).sort((x, y) => y.href.length - x.href.length)[0];
 
 export type PaletteItem = { id: string; group: string; label: string; icon?: LucideIcon; meta?: string; keywords?: string[]; run: () => void };
 
@@ -194,7 +186,8 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
           </Link>
           <span className="ws-div" aria-hidden />
           <ModuleSwitcher current={MODULES.find((x) => x.id === module)} themeClass={themeClass} className={className} />
-          {MODULES.find((x) => x.id === module)?.pages ? <PageTabs current={MODULES.find((x) => x.id === module)} />
+          {/* Pages live in the switcher (hover a module, pick a page), so the header keeps its width for page controls. */}
+          {MODULES.find((x) => x.id === module)?.pages ? null
             : crumb ? <nav className="ws-crumb" aria-label="Breadcrumb"><span className="slash">/</span><b>{crumb}</b></nav> : null}
           {/* Pages put their own controls here (Studio Build: workspace, view, run), so there is one header, not two. */}
           <div id="ws-slot" className="ws-slot" />

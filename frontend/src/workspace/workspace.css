@@ -201,11 +201,9 @@
 .ws-switch-pop .mod[data-hot] { background: var(--island); }
 .ws-switch-pop .mod[aria-current="page"] .tile { color: var(--text); box-shadow: inset 0 0 0 1px var(--line-3); }
 .ws-switch-pop .item { text-decoration: none; font-size: 13px; height: 30px; }
-.ws-tabs { display: flex; align-items: stretch; align-self: stretch; gap: 2px; margin-left: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.ws-tabs a { position: relative; display: flex; align-items: center; padding: 0 10px; font-size: 13px; color: var(--text-3); text-decoration: none; white-space: nowrap; transition: color .12s; }
-.ws-tabs a:hover { color: var(--text); }
-.ws-tabs a[aria-current="page"] { color: var(--text); font-weight: 500; }
-.ws-tabs a[aria-current="page"]::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; border-radius: 2px; background: var(--text); }
+.ws-switch .slash { color: var(--text-4); margin: 0 -2px; }
+.ws-switch b { font-weight: 500; }
+.ws-switch-pop .item[aria-current="page"] { color: var(--text); background: color-mix(in oklab, var(--text) 6%, transparent); }
 .ws-slot { display: flex; flex: none; align-items: center; gap: 6px; margin-left: auto; }
 .ws-slot:empty { display: none; }
 .ws-slot:not(:empty) ~ .ws-search { margin-left: 0; width: auto; }
@@ -459,7 +457,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 @media (max-width: 760px) {
   .ws { position: static; min-height: 100dvh; display: block; }
   .ws-top { position: sticky; top: 0; z-index: 20; height: 50px; background: var(--bg); }
-  .ws-crumb, .ws-tabs, .ws-slot, .ws-div, .ws-search .label, .ws-layout-toggles { display: none; }
+  .ws-crumb, .ws-slot, .ws-div, .ws-search .label, .ws-layout-toggles { display: none; }
   .ws-search { width: auto; flex: 1; }
   .ws-body { display: block; padding: 0 var(--gutter) var(--gutter); }
   .ws-body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
