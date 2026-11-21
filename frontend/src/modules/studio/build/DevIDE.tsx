@@ -3,7 +3,7 @@
 import { DiffEditor } from "@monaco-editor/react";
 import { Group, Panel, Separator, type GroupImperativeHandle } from "react-resizable-panels";
 import Link from "next/link";
-import { BookOpen, Bug, CircleAlert, Gauge, SquareTerminal, ChevronDown, LayoutPanelLeft, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
+import { BookOpen, Bug, CircleAlert, Gauge, SquareTerminal, ChevronDown, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
@@ -513,67 +513,40 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                 );
               })() : null;
 
+  const focus = !iconsOpen && !railOpen && !panelOpen;
+  // One Layout menu (JetBrains: header widgets hide actions in drop-downs): workspace, views, panels, focus.
+  const bar = <>
+    <WorkspaceMenu ws={ws}>
+      <div className="hd">Open</div>
+      <button role="menuitem" onClick={() => openView("results")}>Results</button>
+      <button role="menuitem" onClick={() => openView("tearsheet")}>Tearsheet</button>
+      <button role="menuitem" onClick={() => openView("robust")}>Robustness</button>
+      <button role="menuitem" onClick={() => openView("runs")}>Compare runs</button>
+      <button role="menuitem" onClick={openPreview}>Preview</button>
+      <hr />
+      <div className="hd">Show</div>
+      {view !== "code" ? <button role="menuitemcheckbox" aria-checked={reportSide} onClick={() => setReportSide((visible) => !visible)}>Chart and bottom panel</button> : null}
+      <button role="menuitemcheckbox" aria-checked={chartOpen} onClick={() => { if (view !== "code") setReportSide(true); if (!chartOpen && open_.chart) setRailOpen(false); else setOpenP("chart", !chartOpen); }}>Chart</button>
+      <button role="menuitemcheckbox" aria-checked={panelOpen} onClick={() => { setPanelOpen(!panelOpen); if (view !== "code") setReportSide(!panelOpen); }}>Bottom panel</button>
+      <button role="menuitemcheckbox" aria-checked={!!split} onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}>Split editor</button>
+      <button role="menuitemcheckbox" aria-checked={iconsOpen} onClick={() => setIconsOpen((o) => !o)}>Tool strip</button>
+      {view === "code" ? <button role="menuitemcheckbox" aria-checked={pinned.includes(active)} onClick={() => {
+        keep(active);
+        setPinned((current) => current.includes(active) ? current.filter((file) => file !== active) : [...current, active]);
+      }}>Pin active file</button> : null}
+      <hr />
+      <button role="menuitemcheckbox" aria-checked={focus} onClick={() => { const on = !focus; setIconsOpen(!on); setRailOpen(!on); setPanelOpen(!on); }}>Focus mode</button>
+    </WorkspaceMenu>
+    {tools}
+    <button className="btn dv-execute" disabled={!canRun || starting || running} title={!canRun ? "Add strategy code or rules to run" : "Run backtest (⌘↵)"} onClick={() => runCode()}>
+      <Play size={14} />{starting || running ? "Running…" : "Run"}
+    </button>
+    {running && view !== "results" ? <button className="btn" onClick={onCancel}>Cancel</button> : null}
+  </>;
+
   return (
     <div className="dv" data-activity={iconsOpen} data-head={slot ? "" : undefined}>
-      {slot ? createPortal(<div className="dv-bar in-head">
-        <div className="dv-tools">
-          <WorkspaceMenu ws={ws} />
-          <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
-            <summary className="btn sm ghost" aria-label="View menu"><LayoutPanelLeft size={14} />View<ChevronDown size={12} /></summary>
-            <div className="dv-menu" role="menu" onClick={(e) => { (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
-              <button role="menuitem" onClick={() => openView("results")}>Results</button>
-              <button role="menuitem" onClick={() => openView("tearsheet")}>Tearsheet</button>
-              <button role="menuitem" onClick={() => openView("robust")}>Robustness</button>
-              <button role="menuitem" onClick={() => openView("runs")}>Compare runs</button>
-              <hr />
-              {view !== "code" ? <button role="menuitemcheckbox" aria-checked={reportSide} onClick={() => setReportSide((visible) => !visible)}>Show chart and bottom panel</button> : null}
-              <button role="menuitemcheckbox" aria-checked={chartOpen} onClick={() => { if (view !== "code") setReportSide(true); if (!chartOpen && open_.chart) setRailOpen(false); else setOpenP("chart", !chartOpen); }}>Chart</button>
-              <button role="menuitem" onClick={openPreview}>Preview</button>
-              <button role="menuitemcheckbox" aria-checked={!!split} onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}>Split editor</button>
-              <button role="menuitemcheckbox" aria-checked={panelOpen} onClick={() => { setPanelOpen(!panelOpen); if (view !== "code") setReportSide(!panelOpen); }}>Bottom panel</button>
-              {view === "code" ? <button role="menuitemcheckbox" aria-checked={pinned.includes(active)} onClick={() => {
-                keep(active);
-                setPinned((current) => current.includes(active) ? current.filter((file) => file !== active) : [...current, active]);
-              }}>Pin active file</button> : null}
-              <button role="menuitemcheckbox" aria-checked={iconsOpen} onClick={() => setIconsOpen((o) => !o)}>Activity bar</button>
-            </div>
-          </details>
-        </div>
-        {tools}
-        <button className="btn dv-execute" disabled={!canRun || starting || running} title={!canRun ? "Add strategy code or rules to run" : "Run backtest (⌘↵)"} onClick={() => runCode()}>
-          <Play size={14} />{starting || running ? "Running…" : "Run"}
-        </button>
-        {running && view !== "results" ? <button className="btn" onClick={onCancel}>Cancel</button> : null}
-      </div>, slot) : <div className="dv-bar">
-        <div className="dv-tools">
-          <WorkspaceMenu ws={ws} />
-          <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
-            <summary className="btn sm ghost" aria-label="View menu"><LayoutPanelLeft size={14} />View<ChevronDown size={12} /></summary>
-            <div className="dv-menu" role="menu" onClick={(e) => { (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
-              <button role="menuitem" onClick={() => openView("results")}>Results</button>
-              <button role="menuitem" onClick={() => openView("tearsheet")}>Tearsheet</button>
-              <button role="menuitem" onClick={() => openView("robust")}>Robustness</button>
-              <button role="menuitem" onClick={() => openView("runs")}>Compare runs</button>
-              <hr />
-              {view !== "code" ? <button role="menuitemcheckbox" aria-checked={reportSide} onClick={() => setReportSide((visible) => !visible)}>Show chart and bottom panel</button> : null}
-              <button role="menuitemcheckbox" aria-checked={chartOpen} onClick={() => { if (view !== "code") setReportSide(true); if (!chartOpen && open_.chart) setRailOpen(false); else setOpenP("chart", !chartOpen); }}>Chart</button>
-              <button role="menuitem" onClick={openPreview}>Preview</button>
-              <button role="menuitemcheckbox" aria-checked={!!split} onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}>Split editor</button>
-              <button role="menuitemcheckbox" aria-checked={panelOpen} onClick={() => { setPanelOpen(!panelOpen); if (view !== "code") setReportSide(!panelOpen); }}>Bottom panel</button>
-              {view === "code" ? <button role="menuitemcheckbox" aria-checked={pinned.includes(active)} onClick={() => {
-                keep(active);
-                setPinned((current) => current.includes(active) ? current.filter((file) => file !== active) : [...current, active]);
-              }}>Pin active file</button> : null}
-              <button role="menuitemcheckbox" aria-checked={iconsOpen} onClick={() => setIconsOpen((o) => !o)}>Activity bar</button>
-            </div>
-          </details>
-        </div>
-        {tools}
-        <button className="btn dv-execute" disabled={!canRun || starting || running} title={!canRun ? "Add strategy code or rules to run" : "Run backtest (⌘↵)"} onClick={() => runCode()}>
-          <Play size={14} />{starting || running ? "Running…" : "Run"}
-        </button>
-        {running && view !== "results" ? <button className="btn" onClick={onCancel}>Cancel</button> : null}
-      </div>}
+      {slot ? createPortal(<div className="dv-bar in-head">{bar}</div>, slot) : <div className="dv-bar">{bar}</div>}
       <nav className="dv-icons" aria-label="Activity bar" hidden={!iconsOpen}>
         {/* Four entry points; Outline sits beside Files in the side bar header, Starters opens from ⌘⇧S and the empty editor. */}
         {RAILS.filter(([k]) => k !== "outline" && k !== "templates").map(([k, icon, l]) => {

@@ -157,6 +157,7 @@
   z-index: 40;
   display: grid;
   grid-template-rows: var(--top-bar-h) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   background: var(--bg);
   color: var(--text);
   font: 400 13px/1.5 var(--font);
@@ -179,7 +180,7 @@
 .ws h1, .ws h2, .ws h3, .ws h4, .ws p { margin: 0; }
 
 /* top bar */
-.ws-top { display: flex; align-items: center; gap: 12px; padding: 0 10px 0 14px; }
+.ws-top { display: flex; align-items: center; gap: 12px; padding: 0 10px 0 14px; min-width: 0; }
 .ws-brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em; color: var(--text); text-decoration: none; }
 .ws-crumb { display: flex; align-items: center; gap: 7px; color: var(--text-3); min-width: 0; white-space: nowrap; overflow: hidden; font-size: 13px; }
 .ws-crumb b { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
@@ -203,7 +204,7 @@
 .ws-tabs a:hover { color: var(--text); }
 .ws-tabs a[aria-current="page"] { color: var(--text); font-weight: 500; }
 .ws-tabs a[aria-current="page"]::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; border-radius: 2px; background: var(--text); }
-.ws-slot { display: flex; align-items: center; gap: 6px; margin-left: auto; min-width: 0; }
+.ws-slot { display: flex; flex: none; align-items: center; gap: 6px; margin-left: auto; }
 .ws-slot:empty { display: none; }
 .ws-slot:not(:empty) ~ .ws-search { margin-left: 0; width: auto; }
 .ws-slot:not(:empty) ~ .ws-search .label { display: none; }

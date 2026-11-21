@@ -433,7 +433,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     <>
         {ui === "dev" ? null : versionControls}
         <span className="bd-ui"><Segmented<"simple" | "dev"> label="Interface" value={ui} onChange={switchUi} options={[{ value: "simple", label: "Simple" }, { value: "dev", label: "Dev" }]} /></span>
-        <button className={ui === "dev" ? "btn icon" : "btn"} title="Commands (⌘⇧P)" aria-label="Commands" onClick={() => setPalette(true)}><CommandIcon size={14} />{ui === "dev" ? null : <>Commands<kbd>⌘⇧P</kbd></>}</button>
+        {/* Dev keeps ⌘⇧P and the header search; the button would be a third way in. */}
+        {ui === "dev" ? null : <button className="btn" title="Commands (⌘⇧P)" aria-label="Commands" onClick={() => setPalette(true)}><CommandIcon size={14} />Commands<kbd>⌘⇧P</kbd></button>}
         <button className="btn icon" aria-label="More" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMore({ x: r.right - 220, y: r.bottom + 4 }); }}><MoreHorizontal size={15} /></button>
         <PopMenu at={more} onClose={() => setMore(null)} width={220} sticky={ui === "dev"}>
           {ui === "dev" ? <div className="bd-menu-fields">{nameInput}{versionControls}</div> : null}

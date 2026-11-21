@@ -2,6 +2,7 @@
 
 import { ChevronDown, LayoutDashboard } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
 export type PanelId = "rail" | "chart" | "preview" | "tester";
 /** Sizes are percentages: rail and right of the width, tester of the centre height. */
@@ -67,18 +68,20 @@ export function fitWorkspace(layout: Layout, width: number, chartFirst: boolean)
   return { open: { ...open, chart }, size: { ...size, rail: rail / available * 100, right: right / available * 100 } };
 }
 
-export function WorkspaceMenu({ ws }: { ws: ReturnType<typeof useWorkspaces> }) {
+export function WorkspaceMenu({ ws, children }: { ws: ReturnType<typeof useWorkspaces>; children?: ReactNode }) {
   const { cur } = ws;
   return (
     <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
-      <summary className="btn sm ghost" aria-label="Workspace"><LayoutDashboard size={14} />{cur.name}<ChevronDown size={12} /></summary>
+      <summary className="btn sm ghost" aria-label={`Layout: ${cur.name}`} title={`Layout: ${cur.name}`}><LayoutDashboard size={15} /><ChevronDown size={12} /></summary>
       <div className="dv-menu" role="menu" onClick={(e) => { (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
+        <div className="hd">Workspace</div>
         {ws.list.map((w) => <button key={w.id} role="menuitemradio" aria-checked={w.id === cur.id} onClick={() => ws.switchTo(w.id)}>{w.name}</button>)}
         <hr />
         <button role="menuitem" onClick={() => { const n = window.prompt("Save workspace as")?.trim(); if (n) ws.add(n, cur.layout); }}>Save as…</button>
         <button role="menuitem" onClick={() => ws.add(`${cur.name} copy`, cur.layout)}>Duplicate</button>
         {cur.builtin ? null : <button role="menuitem" onClick={() => { const n = window.prompt("Rename workspace", cur.name)?.trim(); if (n) ws.rename(cur.id, n); }}>Rename</button>}
         {cur.builtin ? null : <button role="menuitem" onClick={() => ws.remove(cur.id)}>Delete</button>}
+        {children ? <><hr />{children}</> : null}
       </div>
     </details>
   );

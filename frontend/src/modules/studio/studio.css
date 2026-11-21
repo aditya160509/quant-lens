@@ -229,7 +229,7 @@
 .dv-bar .btn.icon { width: 28px; padding: 0; }
 .dv-bar kbd { display: none; }
 .dv-bar .input { height: 28px; max-width: 120px; }
-.dv-panel { height: 100%; display: grid; grid-template-rows: 34px minmax(0, 1fr); min-height: 0; }
+.dv-panel { height: 100%; display: grid; grid-template-rows: 34px minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); min-height: 0; min-width: 0; }
 .dv-phead { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
 .dv-ptabs { display: flex; flex: 1; min-width: 0; gap: 2px; padding: 0 8px; overflow-x: auto; scrollbar-width: none; }
 .dv-ptabs button { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border: 0; background: none; color: var(--text-3); font-size: 13px; cursor: pointer; white-space: nowrap; }
@@ -562,7 +562,7 @@
 .dv-tiles dd[data-tone="up"] { color: var(--up); }
 .dv-tiles dd[data-tone="down"] { color: var(--down); }
 /* Dev controls living in the workspace header: one row, no own border, the page's own bar row collapses. */
-.dv-bar.in-head { flex-wrap: nowrap; min-height: 0; padding: 0; gap: 4px; border: 0; }
+.dv-bar.in-head { flex-wrap: nowrap; justify-content: flex-start; min-height: 0; padding: 0; gap: 4px; border: 0; }
 .dv-bar.in-head .btn { height: 30px; border-radius: 8px; }
 .dv-bar.in-head .dv-execute { padding: 0 14px; background: var(--text); color: var(--bg); border: 0; font-weight: 600; }
 .dv-bar.in-head .dv-execute:hover:not(:disabled) { filter: brightness(1.08); }
@@ -574,5 +574,7 @@
 .dv-icons .icon-btn { width: 32px; height: 32px; margin: 0; border-radius: 8px; color: var(--text-3); }
 .dv-icons .icon-btn svg { width: 18px; height: 18px; stroke-width: 1.6; }
 .dv-icons .icon-btn:hover { color: var(--text); background: color-mix(in oklab, var(--text) 6%, transparent); }
-.dv-icons .icon-btn[aria-pressed="true"] { color: var(--text); background: color-mix(in oklab, var(--text) 11%, transparent); }
+.dv-icons .icon-btn[aria-pressed="true"] { color: var(--text); background: color-mix(in oklab, var(--text) 6%, transparent); }
 .dv-icons-gap { flex: 1; }
+
+.dv-menu .hd { padding: 6px 10px 2px; font-size: 11px; font-weight: 500; color: var(--text-4); }
