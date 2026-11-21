@@ -1,5 +1,63 @@
 # Dev IDE
 
+## Backend backlog across this file
+
+**29 backend work packages: 26 open and 3 pending owner approval.** This is the 2026-11-21 planning count for this file. A package groups related work around one backend contract. It includes backend portions of mixed features, and counts repeated proposals once. Work in backend code and backend tests. Track any remaining UI dependency in the matching idea.
+
+| Section | Open | Owner approval |
+|---|---:|---:|
+| Numbered ideas | 7 | 2 |
+| IDE catalogue and terminal | 7 | 1 |
+| Chart workspace and universe runs | 2 | 0 |
+| Results and reporting | 10 | 0 |
+| **Total** | **26** | **3** |
+
+### Numbered ideas (7 open)
+
+- [ ] **#11 Research state.** Define how cell state can feed an isolated, reproducible preview. The existing cells endpoint already runs scripts and loads historical bars.
+- [ ] **#12 Date-range selection execution.** Run an expression, function or block in the existing sandbox against a requested window and return a typed result.
+- [ ] **#13 Reactive cells.** Resolve dependencies, track stale cells and execute the affected cells in order.
+- [ ] **#14 SQL cells.** Return bounded, read-only query results from the approved data store. Any new dependency needs separate approval.
+- [ ] **#17 Snippet library.** Add tags, sharing and sandboxed snippet tests to the existing snippet API.
+- [ ] **#18 Starter data.** Add a compact equity series and snippet references to the cached starter statistics.
+- [ ] **#20 Chart-bar comments.** Support symbol, timeframe and timestamp anchors, plus thread resolution.
+
+### IDE catalogue and terminal (7 open)
+
+- [ ] **Run configurations.** Apply per-input overrides and support sharing saved configurations where authorized.
+- [ ] **Data breakpoints.** Stop the debugger when a watched value changes.
+- [ ] **Compound launch.** Orchestrate independent runs across targets and collect comparable results. A single universe backtest already runs multiple symbols.
+- [ ] **Line blame.** Derive per-line version attribution from saved strategy history.
+- [ ] **Profile and settings sync.** Persist the remaining settings and profile bundles across devices. Layouts and run configs already have server persistence.
+- [ ] **Collaborative editing presence.** Publish scoped live cursor and presence updates for shared editing sessions.
+- [ ] **Typed command output.** Provide a common run output contract for logs, tables, plots and metrics. Terminal history, command completion and wrappers around existing endpoints are UI work.
+
+### Chart workspace and universe runs (2 open)
+
+- [ ] **Indicator-only Python mode.** Run no-trade scripts with validated input and overlay metadata and return plot series through the existing sandbox.
+- [ ] **Universe summaries.** Add server-side per-symbol equity, exposure, drawdown and period rollups for large runs. Reuse current per-name trade statistics and fetch bars for the selected symbol. This also covers symbol-level exposure and turnover series in Results.
+
+### Results and reporting (10 open)
+
+- [ ] **Order lifecycle.** Return durable order events with submitted, filled, partial, cancelled and rejected states.
+- [ ] **Long and short equity.** Produce separate side-level equity curves using the existing trade statistics.
+- [ ] **Profit and cost attribution.** Return gross gains, gross losses, commissions and slippage separately so the waterfall reconciles to net P&L.
+- [ ] **Sector and factor analysis.** Supply point-in-time exposures and return attribution with coverage metadata.
+- [ ] **Signal log.** Retain emitted signals and associate them with orders, fills and realized outcomes where available.
+- [ ] **Run provenance.** Record effective input values, engine version and data identity with existing settings and run metadata.
+- [ ] **Intraday deep backtest.** Support intraday trade-level fills and equity with appropriate historical data and bounded runs.
+- [ ] **Benchmark modes.** Add equal-weight universe and cash benchmarks. The backtest already accepts a ticker benchmark.
+- [ ] **Entry event study.** Align historical bars around entries and aggregate paths with observation counts and coverage.
+- [ ] **User-coded reports.** Run versioned `results.py` against a read-only result in the sandbox and persist bounded typed output with the run. Reusable report blocks, trade annotations and custom optimiser objectives are extensions of this package.
+
+### Owner approval (3)
+
+- [ ] **#23 Paper divergence.** Match paper fills and equity to the corresponding backtest and measure divergence.
+- [ ] **#24 Live status and controls.** Confirm the existing live API coverage before adding missing lifecycle or emergency controls.
+- [ ] **Live or paper debugger attachment.** Define an authorized, read-only debugger attachment to a running session.
+
+**Outside the count.** AI features, Pine import and marketplace are parked in this file. OS-shell integration is outside the current Console design. Chart layout, pop-outs, inline cell output and chart-to-code navigation are UI work. Results already returns trades with MAE/MFE and bars held, drawdown episodes, equity and benchmark series, distributions, rolling metrics and portfolio-wide exposure. Presentation, client-side calculations, filtering, comparison and export over those payloads do not add backend packages. If a report needs data beyond the current payload resolution, check it against the relevant package above.
+
 ## Research
 
 Searched with TinyFish; licences marked (v) were confirmed on the page, the rest are from the project's repo and worth one more look before copying code. Ideas, not code, unless the licence is permissive.
