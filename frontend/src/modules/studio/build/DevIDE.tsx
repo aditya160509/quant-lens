@@ -15,6 +15,7 @@ import { studio, usePyTemplates } from "../api";
 import { RECIPES } from "./recipes";
 import { useLayout } from "@/workspace/layout";
 import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
+import { useServerPref } from "./serverPref";
 import { DevChart } from "./DevChart";
 import { RunConfigPicker, RunConfigsDialog, useRunConfigs } from "./RunConfigs";
 import { fitWorkspace, LayoutsDialog, targets, useWorkspaces, WorkspaceMenu, type PanelId } from "./Workspace";
@@ -243,6 +244,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [lint, setLint] = useState<Problem[]>([]);
   const [types, setTypes] = useState<Problem[]>([]);
   const [outline, setOutline] = useState<Sym[]>([]);
+  const [sev, setSev] = useState<Record<string, string>>({});
+  useServerPref("inspections", sev, setSev);
+  const [scope, setScope] = useState<"file" | "project">("file");
+  const [report, setReport] = useState<Problem[]>([]);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [reveal, setReveal] = useState<{ line: number; column?: number; n: number } | null>(null);
   // Dev wants the width: the workspace sidebar closes while Dev is open and comes back after (user feedback 2026-11-20).
@@ -321,6 +326,37 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       {p.min != null && p.max != null ? <input type="range" aria-label={n} value={p.value} min={p.min} max={p.max} step={p.step ?? "any"} onChange={(e) => setInput(n, p, +e.target.value)} /> : null}
     </label>
   )) : <p className="dv-empty">None</p>;
+  const params = () => Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, p.value]));
+  const inspectProject = async () => {
+    const found: Problem[] = [];
+    setPanelOpen(true); setTab("problems"); setScope("project"); setReport([]);
+    for (const f of Object.keys(files).filter((n) => n.endsWith(".py") && files[n].trim())) {
+      const body = { code: files[f], file: f, files, params: params() };
+      const [a, b] = await Promise.all([
+        studio<{ problems: Problem[] }>("POST", "/build/check", { ...body, strictness: strict ? "strict" : "basic", severity: sev }).catch(() => ({ problems: [] as Problem[] })),
+        studio<{ problems: Problem[] }>("POST", "/build/typecheck", body).catch(() => ({ problems: [] as Problem[] })),
+      ]);
+      found.push(...[...a.problems, ...b.problems].map((p) => ({ ...p, file: f })));
+      setReport([...found]);
+    }
+    toast(found.length ? `${found.length} problem${found.length === 1 ? "" : "s"} in ${new Set(found.map((p) => p.file)).size} file(s)` : "No problems in the project");
+  };
+  const setSeverity = (code: string) => {
+    const v = window.prompt(`Severity for ${code} (error, warning, info, off; empty resets)`, sev[code] ?? "")?.trim().toLowerCase();
+    if (v === undefined) return;
+    if (v && !["error", "warning", "info", "off"].includes(v)) return toast.error("Use error, warning, info or off");
+    setSev((m) => { const { [code]: _, ...rest } = m; return v ? { ...rest, [code]: v } : rest; });
+  };
+  const refactor = (r: Record<string, unknown>) => {
+    let extra: Record<string, unknown> = {};
+    if (r.op === "move") { const target = window.prompt("Move to file", "helpers.py")?.trim(); if (!target) return; extra = { target }; }
+    if (r.op === "signature") {
+      const list = window.prompt("Parameters in order: name, or name=default for a new one", (r.params as string[]).join(", "));
+      if (list === null) return;
+      extra = { params: list.split(",").map((x) => x.trim()).filter(Boolean).map((x) => { const [name, ...d] = x.split("="); return { name: name.trim(), default: d.join("=").trim() || undefined }; }) };
+    }
+    void studio<Record<string, string>>("POST", "/build/refactor", { code: source, file: active, files, ...r, ...extra }).then((out) => { replaceFiles(out); toast.success("Refactored · ⌘Z to undo"); }, (e: Error) => toast.error(e.message));
+  };
   // Name the browser tab after the strategy.
   useEffect(() => { document.title = spec.name ? `${spec.name} · Build · ATLAS` : "Build · ATLAS"; }, [spec.name]);
   const setFile = (name: string, text: string) => (keep(name), name in scratch ? setScratch((s) => ({ ...s, [name]: text })) : name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
@@ -383,12 +419,12 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   useEffect(() => {
     if (!source.trim()) { setLint([]); setTypes([]); setOutline([]); return; }
     const t = setTimeout(() => {
-      void studio<{ problems: Problem[] }>("POST", "/build/check", { code: source, file: active, files, strictness: strict ? "strict" : "basic", params: Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, p.value])) }).then((r) => setLint(r.problems), () => undefined);
+      void studio<{ problems: Problem[] }>("POST", "/build/check", { code: source, file: active, files, strictness: strict ? "strict" : "basic", severity: sev, params: Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, p.value])) }).then((r) => setLint(r.problems), () => undefined);
       void studio<Sym[]>("POST", "/build/outline", { code: source }).then(setOutline, () => undefined);
       void studio<{ problems: Problem[] }>("POST", "/build/typecheck", { code: source, file: active, files }).then((r) => setTypes(r.problems), () => setTypes([]));
     }, 300);
     return () => clearTimeout(t);
-  }, [source, active, files, spec.params, strict]);
+  }, [source, active, files, spec.params, strict, sev]);
   useEffect(() => {
     if (rail !== "versions" || !strategyId) return;
     void studio<Timeline[]>("GET", `/strategies/${strategyId}/timeline`).then(setTimeline, () => undefined);
@@ -682,6 +718,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.newscratch", label: "File: new scratch file", run: () => addScratch() },
     { id: "studio.bm", label: "Bookmark: toggle", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyK], run: (line) => toggleBm(line) },
     { id: "studio.bmnext", label: "Bookmark: next", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.Period], run: (line) => bmJump(1, line) },
+    { id: "studio.inspect", label: "Inspect: whole project", run: () => void inspectProject() },
     { id: "studio.bmprev", label: "Bookmark: previous", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.Comma], run: (line) => bmJump(-1, line) },
     { id: "studio.zen", label: "View: zen mode", keys: (m) => [m.KeyMod.chord(m.KeyMod.CtrlCmd | m.KeyCode.KeyK, m.KeyMod.CtrlCmd | m.KeyCode.KeyZ)], run: () => setZen((z) => !z) },
     { id: "studio.hidetools", label: "View: hide all tool windows", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.F12], run: () => setZen((z) => !z) },
@@ -960,7 +997,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               font={font} actions={actions} breakpoints={bps[active] ?? []} bookmarks={bms[active] ?? []} logpoints={logpoints.filter((p) => p.file === active)} coverage={coverage ? prev?.coverage?.[active] ?? null : null} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} inline={inlineValues} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
               onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
               project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles, paramSpecs: spec.params, problems,
-                addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
+                refactor, addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
                 lens: (command, args) => { if (command === "cell") runCell(Number(args.line), args.only !== false); else if (command === "debug") debug({ date: String(args.date ?? "") }); else if (command === "inspect_condition") { setTab("output"); toast(`${String(args.expression)} on ${String(args.symbol)}`); } else if (command === "run_symbol") { openPreview(); onPreview(); } else runCode("full"); } }} />
           )}
           </Panel>
@@ -1001,9 +1038,17 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
             <div className="dv-pbody" onScroll={(e) => { if (tab === "output") setLogTop(e.currentTarget.scrollTop); }}>
               {panelOpen && tab === "preview" ? side : null}
               {tab === "problems" ? <label className="dv-strict"><input type="checkbox" checked={strict} onChange={(e) => { setStrict(e.target.checked); try { localStorage.setItem("studio:dev:strict", e.target.checked ? "1" : "0"); } catch { /* blocked */ } }} />Strict</label> : null}
-              {tab === "problems" ? (problems.length ? <>
+              {tab === "problems" ? <div className="seg dv-strict" role="group" aria-label="Scope">{(["file", "project"] as const).map((k) => <button key={k} type="button" aria-pressed={scope === k} onClick={() => (k === "project" && !report.length ? void inspectProject() : setScope(k))}>{k === "file" ? "Current file" : "Project"}</button>)}</div> : null}
+              {tab === "problems" && scope === "project" ? (report.length ? Object.entries(Object.groupBy(report, (p) => p.file)).map(([f, list]) => (
+                <div key={f}><h4 className="dv-sub">{f} · {list!.length}</h4>
+                  {Object.entries(Object.groupBy(list!, (p) => p.code || "other")).map(([c, group]) => group!.map((p, i) => (
+                    <button key={`${c}${i}`} className="dv-prob" onClick={() => { setScope("file"); goto(p.file, p.line, p.column); }}><b className={p.severity}>{p.severity}</b><span>{p.message}</span><i>{p.line}:{p.column} {c}</i></button>
+                  )))}
+                </div>
+              )) : <p className="dv-empty">No problems</p>) : null}
+              {tab === "problems" && scope === "file" ? (problems.length ? <>
                 {problems.map((p, i) => (
-                  <button key={i} className="dv-prob" onClick={() => goto(p.file, p.line, p.column)}><b className={p.severity}>{p.severity}</b><span>{p.message}</span><i>{p.file}:{p.line}:{p.column}{p.code ? ` ${p.code}` : ""}</i></button>
+                  <button key={i} className="dv-prob" title={lint.includes(p) ? "Right-click to set severity" : undefined} onContextMenu={(e) => { if (lint.includes(p) && p.code) { e.preventDefault(); setSeverity(p.code); } }} onClick={() => goto(p.file, p.line, p.column)}><b className={p.severity}>{p.severity}</b><span>{p.message}</span><i>{p.file}:{p.line}:{p.column}{p.code ? ` ${p.code}` : ""}</i></button>
                 ))}
                 {prev?.locals ? <div className="dv-trace"><h4 className="dv-sub">At the failing bar</h4><KV rows={prev.locals} /></div> : null}
                 {prev?.problem?.traceback?.length ? <div className="dv-trace">{prev.problem.traceback.map((f, i) => <button key={i} className="dv-item" onClick={() => goto(f.file, f.line, f.column)}>{f.function}<span>{f.file}:{f.line}</span></button>)}</div> : null}

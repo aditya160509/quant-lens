@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { studio } from "../api";
 
 /** Keeps a Build preference on the server (GET/PUT /build/prefs/{name}) so it follows the user across browsers; local storage stays the fast first paint. */
-export function useServerPref<T>(name: "layouts" | "runconfigs", value: T, apply: (v: T) => void) {
+export function useServerPref<T>(name: "layouts" | "runconfigs" | "inspections", value: T, apply: (v: T) => void) {
   const loaded = useRef(false);
   useEffect(() => {
     void studio<{ value: T | null }>("GET", `/build/prefs/${name}`).then((r) => { if (r.value) apply(r.value); }, () => undefined).finally(() => { loaded.current = true; });

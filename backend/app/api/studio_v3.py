@@ -524,6 +524,25 @@ def code_actions_python(request: CodeActionRequest) -> list[dict[str, Any]]:
     return editor.code_actions(request.code, request.line, request.column, request.end_line, request.end_column)
 
 
+class RefactorRequest(BuildProjectDocument):
+    op: Literal["inline", "move", "signature"]
+    line: int = Field(default=1, ge=1)
+    column: int = Field(default=1, ge=1)
+    symbol: str = Field(default="", max_length=128)
+    target: str = Field(default="", max_length=128)
+    params: list[dict[str, Any]] = Field(default_factory=list, max_length=50)  # signature: the new parameter list [{name, default?}]
+
+
+@router.post("/build/refactor")
+def refactor_python(request: RefactorRequest) -> dict[str, str]:
+    """Returns only the files that change (like /build/rename); an unsafe refactoring is a 422 with the reason."""
+    try:
+        return editor.refactor({**request.files, request.file: request.code}, request.file, request.op, line=request.line, column=request.column,
+                               symbol=request.symbol, target=request.target, params=request.params)
+    except editor.RefactorError as e:
+        raise HTTPException(422, str(e)) from e
+
+
 @router.post("/build/organise-imports")
 def organise_imports_python(request: CodeRequest) -> dict[str, str]:
     return {"code": editor.organise_imports(request.code)}
@@ -1207,13 +1226,13 @@ def put_filters(request: FiltersRequest, x_studio_actor: str | None = Header(Non
 
 
 @router.get("/build/prefs/{name}")
-def get_build_prefs(name: Literal["layouts", "runconfigs"]) -> dict[str, Any]:
+def get_build_prefs(name: Literal["layouts", "runconfigs", "inspections"]) -> dict[str, Any]:
     """Build's saved layouts and run configurations, kept on the server so they follow the user across browsers."""
     return {"value": store.kv_get(f"build:prefs:{name}")}
 
 
 @router.put("/build/prefs/{name}")
-def put_build_prefs(name: Literal["layouts", "runconfigs"], request: dict[str, Any], x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+def put_build_prefs(name: Literal["layouts", "runconfigs", "inspections"], request: dict[str, Any], x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
     _human_only(x_studio_actor, "Saving Build preferences")
     if len(json.dumps(request)) > 200_000:
         raise HTTPException(413, "Preferences are limited to 200 KB")

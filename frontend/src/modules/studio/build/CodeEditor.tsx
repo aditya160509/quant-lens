@@ -12,7 +12,7 @@ type Member = { name: string; kind: string; signature: string | null; documentat
 type UserSnippet = { name: string; prefix: string; body: string; description: string };
 type Project = { file: string; files: Record<string, string>; params: string[]; symbols: string[]; goto: (file: string, line: number, column?: number) => void; replace: (files: Record<string, string>) => void; snippets?: UserSnippet[];
   paramSpecs?: Record<string, { value: number; min?: number | null; max?: number | null; step?: number | null }>; problems?: Problem[];
-  lens?: (command: string, args: Record<string, unknown>) => void; addParam?: (name: string, value: number) => void };
+  lens?: (command: string, args: Record<string, unknown>) => void; addParam?: (name: string, value: number) => void; refactor?: (r: Record<string, unknown>) => void };
 export type EditorAction = { id: string; label: string; keys?: (m: Monaco) => number[]; run: (line: number) => void };
 type Sym = { name: string; kind: string; line: number; column: number; end_line: number; end_column: number; children: Sym[] };
 
@@ -117,6 +117,7 @@ function register(monaco: Monaco) {
     },
   });
   const lensCmd = monaco.editor.registerCommand("studio.lens", (_a, command: string, args: Record<string, unknown>) => live.current?.lens?.(command, args));
+  monaco.editor.registerCommand("studio.refactor", (_a, r: Record<string, unknown>) => live.current?.refactor?.(r));
   const paramCmd = monaco.editor.registerCommand("studio.addParam", (_a, name: string, value: number) => live.current?.addParam?.(name, value));
   void lensCmd; void paramCmd;
   monaco.languages.registerCodeLensProvider("python", {
@@ -131,12 +132,12 @@ function register(monaco: Monaco) {
   const edits = (model: { uri: unknown }, list: TextEdit[]) => list.map((e) => ({ resource: model.uri as never, versionId: undefined, textEdit: { range: new monaco.Range(e.line, e.column, e.end_line, e.end_column), text: e.text } }));
   monaco.languages.registerCodeActionProvider("python", {
     provideCodeActions: async (model, range) => {
-      const found = await studio<{ title: string; kind: string; edits: TextEdit[]; parameter?: { name: string; value: number } }[]>("POST", "/build/code-actions", { code: model.getValue(), line: range.startLineNumber, column: range.startColumn,
+      const found = await studio<{ title: string; kind: string; edits: TextEdit[]; parameter?: { name: string; value: number }; refactor?: Record<string, unknown> }[]>("POST", "/build/code-actions", { code: model.getValue(), line: range.startLineNumber, column: range.startColumn,
         ...(range.isEmpty() ? {} : { end_line: range.endLineNumber, end_column: range.endColumn }) }).catch(() => []);
       const fixes = (live.current?.problems ?? []).filter((p) => p.fix && p.line >= range.startLineNumber && p.line <= range.endLineNumber);
       return { actions: [
         ...fixes.map((p) => ({ title: p.fix!.title, kind: "quickfix", isPreferred: true, edit: { edits: edits(model, p.fix!.edits) } })),
-        ...found.map((a) => ({ title: a.title, kind: a.kind, edit: { edits: edits(model, a.edits) }, command: a.parameter ? { id: "studio.addParam", title: "Add parameter", arguments: [a.parameter.name, a.parameter.value] } : undefined })),
+        ...found.map((a) => ({ title: a.title, kind: a.kind, edit: { edits: edits(model, a.edits) }, command: a.parameter ? { id: "studio.addParam", title: "Add parameter", arguments: [a.parameter.name, a.parameter.value] } : a.refactor ? { id: "studio.refactor", title: a.title, arguments: [{ ...a.refactor, line: range.startLineNumber }] } : undefined })),
       ], dispose: () => undefined };
     },
   });
@@ -234,6 +235,7 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     editor.onDidDispose(() => obs.disconnect());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => keys.current.onSave());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => keys.current.onRun());
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.Enter, () => editor.trigger("studio", "editor.action.quickFix", null));
     editor.onDidChangeCursorPosition((e) => keys.current.onCursor?.(e.position.lineNumber, e.position.column));
     editor.onDidChangeCursorSelection((e) => sel.current?.(editor.getModel()?.getValueInRange(e.selection) ?? ""));
     if (insertRef) insertRef.current = (text) => { (editor.getContribution("snippetController2") as unknown as { insert: (t: string) => void } | null)?.insert(text); editor.focus(); };

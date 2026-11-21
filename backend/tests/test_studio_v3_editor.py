@@ -105,3 +105,22 @@ def test_extract_variable_extract_function_and_quick_fixes():
     assert "Organise imports" in {a["title"]: a for a in editor.code_actions(code, 1, 1)}
     fixes = {p["code"]: p["fix"]["title"] for p in pycode.lint("import os\n\n\ndef f():\n    z = 1\n", {}, strictness="strict") if p.get("fix")}
     assert fixes["F401"] == "Remove unused import" and fixes["F841"] == "Prefix with _"
+
+
+def test_refactor_inline_move_and_change_signature():
+    import pytest
+
+    out = editor.refactor({"main.py": "def f(a):\n    x = a + 1\n    return x * 2\n"}, "main.py", "inline", line=2)
+    assert out["main.py"] == "def f(a):\n    return (a + 1) * 2\n"
+    with pytest.raises(editor.RefactorError, match="more than once"):
+        editor.refactor({"main.py": "x = 1\nx = 2\nprint(x)\n"}, "main.py", "inline", line=1)
+    files = {"main.py": "import math\nfrom lib import helper\n\n\ndef big(x):\n    return math.sqrt(x)\n\n\ndef run():\n    return big(4) + helper(1)\n", "lib.py": "def helper(a):\n    return a\n"}
+    moved = editor.refactor(files, "main.py", "move", symbol="big", target="lib.py")
+    assert "def big" in moved["lib.py"] and "import math" in moved["lib.py"] and "from lib import big" in moved["main.py"] and "def big" not in moved["main.py"]
+    with pytest.raises(editor.RefactorError, match="circular"):
+        editor.refactor({"main.py": "def a():\n    pass\n", "lib.py": "from main import a\n"}, "main.py", "move", symbol="a", target="lib.py")
+    sig = {"main.py": "from lib import helper\n\nhelper(1)\nhelper(a=2)\n", "lib.py": "def helper(a, b=3):\n    return a + b\n"}
+    new = editor.refactor(sig, "lib.py", "signature", symbol="helper", params=[{"name": "a"}, {"name": "c", "default": "0"}, {"name": "b"}])
+    assert "def helper(a, c=0, b=3)" in new["lib.py"] and "helper(1)\nhelper(2)" in new["main.py"]
+    with pytest.raises(editor.RefactorError, match="still uses"):
+        editor.refactor(sig, "lib.py", "signature", symbol="helper", params=[{"name": "a"}])

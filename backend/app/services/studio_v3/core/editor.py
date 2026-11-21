@@ -225,6 +225,7 @@ def code_actions(code: str, line: int, column: int, end_line: int | None = None,
                                        "text": " " * indent + "if ctx.position == 0:\n" + body}]})
     if end_line is not None and end_column is not None and end_line >= line:
         actions.extend(_extract_actions(tree, code, line, column, end_line, end_column))
+    actions.extend(_refactor_actions(tree, line))
     organised = organise_imports(code)
     if organised != code:
         actions.append({"title": "Organise imports", "kind": "source.organizeImports",
@@ -236,6 +237,254 @@ def code_actions(code: str, line: int, column: int, end_line: int | None = None,
                         "edits": [{"line": last.end_lineno + 1, "column": 1, "end_line": last.end_lineno + 1, "end_column": 1,
                                    "text": "\n    def on_fill(self, ctx, fill):\n        pass\n"}]})
     return actions
+
+
+class RefactorError(ValueError):
+    """An unsafe or impossible refactoring; the message says why."""
+
+
+def _offsets(code: str):
+    starts = [0]
+    for ln in code.splitlines(keepends=True):
+        starts.append(starts[-1] + len(ln))
+    lines = code.splitlines()
+
+    def at(line: int, col: int) -> int:  # ast columns are UTF-8 bytes
+        return starts[line - 1] + len(lines[line - 1].encode()[:col].decode(errors="ignore"))
+    return at
+
+
+def _splice(code: str, edits: list[tuple[int, int, str]]) -> str:
+    for a, b, text in sorted(edits, reverse=True):
+        code = code[:a] + text + code[b:]
+    return code
+
+
+def _module(file: str) -> str:
+    return file.removesuffix(".py")
+
+
+def _scope_of(tree: ast.Module, node: ast.AST) -> ast.AST:
+    best: ast.AST = tree
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.lineno <= node.lineno and node.end_lineno <= n.end_lineno:  # type: ignore[attr-defined]
+            best = n
+    return best
+
+
+def _inline(files: dict[str, str], file: str, line: int, column: int) -> dict[str, str]:
+    code = files[file]
+    tree = _tree(code)
+    stmt = next((n for n in ast.walk(tree) if isinstance(n, ast.Assign) and n.lineno <= line <= n.end_lineno), None) if tree else None
+    if stmt is None or len(stmt.targets) != 1 or not isinstance(stmt.targets[0], ast.Name):
+        raise RefactorError("Put the cursor on a simple assignment such as `x = expression`.")
+    name, scope = stmt.targets[0].id, _scope_of(tree, stmt)
+    nodes = [n for n in ast.walk(scope) if isinstance(n, ast.Name)]
+    if sum(isinstance(n.ctx, (ast.Store, ast.Del)) and n.id == name for n in nodes) != 1 or any(isinstance(n, (ast.Global, ast.Nonlocal)) and name in n.names for n in ast.walk(scope)):
+        raise RefactorError(f"`{name}` is assigned more than once, so it cannot be inlined.")
+    uses = [n for n in nodes if n.id == name and isinstance(n.ctx, ast.Load)]
+    if not uses or any(u.lineno <= stmt.end_lineno for u in uses):
+        raise RefactorError(f"`{name}` is not read after this line.")
+    if any(isinstance(n, (ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)) and any(u in set(ast.walk(n)) for u in uses) for n in ast.walk(scope)):
+        raise RefactorError(f"`{name}` is read inside a lambda or comprehension.")
+    value = ast.get_source_segment(code, stmt.value) or ""
+    if len(uses) > 1 and any(isinstance(n, (ast.Call, ast.Await, ast.Yield, ast.NamedExpr)) for n in ast.walk(stmt.value)):
+        raise RefactorError(f"`{name}` is read {len(uses)} times and its value calls a function; inlining would repeat the call.")
+    if any(isinstance(n, ast.Name) and n.id != name and any(isinstance(m, ast.Name) and m.id == n.id and isinstance(m.ctx, ast.Store) for m in nodes) for n in ast.walk(stmt.value)):
+        raise RefactorError("A name used in the value is reassigned, so inlining could change the result.")
+    atom = isinstance(stmt.value, (ast.Name, ast.Constant, ast.Attribute, ast.Call, ast.Subscript))
+    at = _offsets(code)
+    lines = code.splitlines(keepends=True)
+    edits = [(at(u.lineno, u.col_offset), at(u.end_lineno, u.end_col_offset), value if atom else f"({value})") for u in uses]
+    edits.append((at(stmt.lineno, 0), at(stmt.end_lineno, 0) + len(lines[stmt.end_lineno - 1]), ""))
+    return {file: _splice(code, edits)}
+
+
+def _bound(tree: ast.Module) -> dict[str, ast.stmt]:
+    out: dict[str, ast.stmt] = {}
+    for n in tree.body:
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out[n.name] = n
+        elif isinstance(n, (ast.Import, ast.ImportFrom)):
+            for a in n.names:
+                out[(a.asname or a.name).split(".")[0]] = n
+        elif isinstance(n, ast.Assign):
+            for t in n.targets:
+                for m in ast.walk(t):
+                    if isinstance(m, ast.Name):
+                        out[m.id] = n
+    return out
+
+
+def _stmt_range(code: str, node: ast.stmt) -> tuple[int, int]:
+    at = _offsets(code)
+    first = min([node.lineno, *[d.lineno for d in getattr(node, "decorator_list", [])]])
+    end = at(node.end_lineno + 1, 0) if node.end_lineno < len(code.splitlines()) else len(code)
+    return at(first, 0), end
+
+
+def _move(files: dict[str, str], file: str, symbol: str, target: str) -> dict[str, str]:
+    if not target.endswith(".py") or "/" in target or target == file:
+        raise RefactorError("Choose another file in the project, such as helpers.py.")
+    if target == "main.py":
+        raise RefactorError("Moving into main.py is not supported.")
+    code, tree = files[file], _tree(files[file])
+    node = tree and next((n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.name == symbol), None)
+    if not node:
+        raise RefactorError(f"`{symbol}` is not a top-level function or class in {file}.")
+    src, dst = _module(file), _module(target)
+    bound = _bound(tree)
+    used = {n.id for n in ast.walk(node) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)} | {n.value.id for n in ast.walk(node) if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)}
+    local = {n.id for n in ast.walk(node) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)} | {a.arg for a in ast.walk(node) if isinstance(a, ast.arg)}
+    imports, tied = [], sorted(x for x in used - local - {symbol} if x in bound and not isinstance(bound[x], (ast.Import, ast.ImportFrom)))
+    if tied:
+        raise RefactorError(f"`{symbol}` uses {', '.join(tied)} from {file}; move those too, or pass them in.")
+    for x in sorted(used - local):
+        imp = bound.get(x)
+        if isinstance(imp, (ast.Import, ast.ImportFrom)) and (text := ast.get_source_segment(code, imp)) not in imports:
+            imports.append(text)
+    dst_code = files.get(target, "")
+    dst_tree = _tree(dst_code)
+    if dst_tree is None:
+        raise RefactorError(f"{target} does not parse.")
+    if any((isinstance(n, ast.ImportFrom) and n.module == src) or (isinstance(n, ast.Import) and any(a.name == src for a in n.names)) for n in ast.walk(dst_tree)):
+        raise RefactorError(f"{target} imports {file}; moving `{symbol}` would create a circular import.")
+    if symbol in _bound(dst_tree):
+        raise RefactorError(f"{target} already defines `{symbol}`.")
+    out: dict[str, str] = {}
+    body = code[slice(*_stmt_range(code, node))].rstrip("\n")
+    head = "\n".join(i for i in imports if i not in dst_code)
+    out[target] = (dst_code.rstrip("\n") + "\n\n\n" if dst_code.strip() else "") + (head + "\n\n\n" if head else "") + body + "\n"
+    rest = _splice(code, [(*_stmt_range(code, node), "")])
+    for name, text in {**files, file: rest}.items():
+        t = _tree(text)
+        if t is None or name == target:
+            continue
+        if name != file:
+            if any(isinstance(n, ast.Attribute) and n.attr == symbol and isinstance(n.value, ast.Name) and n.value.id == src for n in ast.walk(t)):
+                raise RefactorError(f"{name} uses `{src}.{symbol}`; change it to import the symbol first.")
+            hits = [n for n in t.body if isinstance(n, ast.ImportFrom) and n.module == src and any(a.name == symbol and a.asname is None for a in n.names)]
+        else:
+            hits = []
+            if any(isinstance(n, ast.Name) and n.id == symbol for n in ast.walk(t)):
+                after = [n for n in t.body if isinstance(n, (ast.Import, ast.ImportFrom))]
+                at = _offsets(text)
+                pos = at(after[-1].end_lineno + 1, 0) if after and after[-1].end_lineno < len(text.splitlines()) else (len(text) if after else 0)
+                text = text[:pos] + (("\n" if after and not text[:pos].endswith("\n") else "") + f"from {dst} import {symbol}\n" + ("" if after else "\n\n")) + text[pos:]
+                out[name] = text
+                continue
+        if hits:
+            at = _offsets(text)
+            edits = []
+            for h in hits:
+                keep = [a for a in h.names if a.name != symbol]
+                new = (f"from {src} import " + ", ".join(a.name + (f" as {a.asname}" if a.asname else "") for a in keep) + "\n") if keep else ""
+                edits.append((at(h.lineno, 0), at(h.end_lineno + 1, 0) if h.end_lineno < len(text.splitlines()) else len(text), new + f"from {dst} import {symbol}\n"))
+            text = _splice(text, edits)
+        if text != files[name]:
+            out[name] = text
+    out.setdefault(file, rest)
+    return out
+
+
+def _signature(files: dict[str, str], file: str, symbol: str, params: list[dict]) -> dict[str, str]:
+    """params is the new parameter list in order: {name, default?}. A name the function lacks is added (it needs a default); a name left out is removed."""
+    tree = _tree(files[file])
+    fn = tree and next((n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == symbol), None)
+    if not fn:
+        raise RefactorError(f"`{symbol}` is not a top-level function in {file}; methods are not supported.")
+    a = fn.args
+    if a.vararg or a.kwarg or a.kwonlyargs or a.posonlyargs:
+        raise RefactorError("Functions with *args, **kwargs, keyword-only or positional-only parameters are not supported.")
+    old = [x.arg for x in a.args]
+    defaults = dict(zip(reversed(old), reversed(a.defaults), strict=False))
+    names = [p["name"] for p in params]
+    if len(set(names)) != len(names) or not all(re.fullmatch(r"[A-Za-z_]\w*", n) for n in names):
+        raise RefactorError("Parameter names must be unique identifiers.")
+    new_defaults: dict[str, str | None] = {p["name"]: p.get("default") or (ast.unparse(defaults[p["name"]]) if p["name"] in defaults else None) for p in params}
+    added = [n for n in names if n not in old]
+    if any(new_defaults[n] is None for n in added):
+        raise RefactorError("A new parameter needs a default value so existing calls stay valid.")
+    seen = False
+    for n in names:
+        seen = seen or new_defaults[n] is not None
+        if seen and new_defaults[n] is None:
+            raise RefactorError("A parameter without a default cannot follow one with a default.")
+    removed = [n for n in old if n not in names]
+    body_names = {m.id for s in fn.body for m in ast.walk(s) if isinstance(m, ast.Name)}
+    if used := [n for n in removed if n in body_names]:
+        raise RefactorError(f"`{symbol}` still uses {', '.join(used)}; remove that code first.")
+    src = _module(file)
+    out: dict[str, str] = {}
+    for name, text in files.items():
+        t = _tree(text)
+        if t is None:
+            continue
+        direct = name == file or any(isinstance(n, ast.ImportFrom) and n.module == src and any(x.name == symbol and x.asname is None for x in n.names) for n in t.body)
+        viaattr = any(isinstance(n, ast.Import) and any(x.name == src and x.asname is None for x in n.names) for n in t.body)
+        at, edits = _offsets(text), []
+        for c in (n for n in ast.walk(t) if isinstance(n, ast.Call)):
+            hit = (direct and isinstance(c.func, ast.Name) and c.func.id == symbol) or (viaattr and isinstance(c.func, ast.Attribute) and c.func.attr == symbol and isinstance(c.func.value, ast.Name) and c.func.value.id == src)
+            if not hit:
+                continue
+            if any(isinstance(x, ast.Starred) for x in c.args) or any(k.arg is None for k in c.keywords) or len(c.args) > len(old):
+                raise RefactorError(f"A call in {name}:{c.lineno} uses */** or too many arguments; edit it by hand first.")
+            given = {**dict(zip(old, c.args, strict=False)), **{k.arg: k.value for k in c.keywords}}
+            if bad := [k for k in given if k not in old]:
+                raise RefactorError(f"A call in {name}:{c.lineno} passes unknown argument {bad[0]}.")
+            miss = [n for n in old if n not in given and n in names and n not in defaults]
+            if miss:
+                raise RefactorError(f"A call in {name}:{c.lineno} omits {miss[0]}, which has no default.")
+            parts, positional = [], True
+            for n in names:
+                if n not in given:
+                    positional = False
+                    continue
+                v = ast.get_source_segment(text, given[n]) or ""
+                parts.append(v if positional else f"{n}={v}")
+            end = at(c.end_lineno, c.end_col_offset)
+            edits.append((at(c.lineno, c.col_offset), end, (ast.get_source_segment(text, c.func) or "") + f"({', '.join(parts)})"))
+        if name == file:
+            def_start = at(fn.lineno, fn.col_offset)
+            m = re.compile(rf"def\s+{symbol}\s*\(").search(text, def_start)
+            depth, i = 1, m.end()
+            while depth:
+                depth += (text[i] in "([{") - (text[i] in ")]}")
+                i += 1
+                if i > len(text):
+                    raise RefactorError("Could not read the parameter list.")
+            def_text = ", ".join(n + (f": {ast.unparse(next(x.annotation for x in a.args if x.arg == n))}" if n in old and next(x for x in a.args if x.arg == n).annotation else "") + (f"={new_defaults[n]}" if new_defaults[n] is not None else "") for n in names)
+            edits.append((m.end(), i - 1, def_text))
+        if edits:
+            out[name] = _splice(text, edits)
+    return out
+
+
+def refactor(files: dict[str, str], file: str, op: str, *, line: int = 1, column: int = 1, symbol: str = "", target: str = "", params: list[dict] | None = None) -> dict[str, str]:
+    """Inline variable, move symbol to another file, or change a function's signature across the project. Returns only the files that change;
+    raises RefactorError when the change is unsafe. shortcut: calls are matched by name (a local that shadows the function is not detected)."""
+    if file not in files or _tree(files[file]) is None:
+        raise RefactorError("Fix the syntax errors in this file first.")
+    if op == "inline":
+        return _inline(files, file, line, column)
+    if op == "move":
+        return _move(files, file, symbol, target)
+    if op == "signature":
+        return _signature(files, file, symbol, params or [])
+    raise RefactorError(f"Unknown refactoring {op}.")
+
+
+def _refactor_actions(tree: ast.Module, line: int) -> list[dict]:
+    out = []
+    stmt = next((n for n in ast.walk(tree) if isinstance(n, ast.Assign) and n.lineno == line and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)), None)
+    if stmt:
+        out.append({"title": f"Inline variable {stmt.targets[0].id}", "kind": "refactor.inline", "edits": [], "refactor": {"op": "inline", "line": line}})
+    for n in tree.body:
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.lineno == line:
+            out.append({"title": f"Move {n.name} to another file", "kind": "refactor.move", "edits": [], "refactor": {"op": "move", "symbol": n.name}})
+            if not isinstance(n, ast.ClassDef):
+                out.append({"title": f"Change signature of {n.name}", "kind": "refactor.rewrite", "edits": [], "refactor": {"op": "signature", "symbol": n.name, "params": [a.arg for a in n.args.args]}})
+    return out
 
 
 def _fresh(tree: ast.AST, base: str) -> str:
