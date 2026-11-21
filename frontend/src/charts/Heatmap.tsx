@@ -20,10 +20,12 @@ type Props = {
   /** Sum only additive quantities; never enable for correlations or rates. */
   totals?: boolean;
   outline?: (r: number, c: number) => boolean;
+  /** Makes cells clickable. */
+  onCell?: (r: number, c: number) => void;
 };
 
 /** Matrix heatmap rendered as a table so values stay readable and selectable; colour encodes magnitude. */
-function HeatmapImpl({ rows, cols, values, format = (v) => v.toFixed(3), centered = true, margin, rowTitle = "", colGroups, colTitle, highlightRow, outline, totals = false }: Props) {
+function HeatmapImpl({ rows, cols, values, format = (v) => v.toFixed(3), centered = true, margin, rowTitle = "", colGroups, colTitle, highlightRow, outline, onCell, totals = false }: Props) {
   const [sortRow, setSortRow] = useState<{ col: number; desc: boolean } | null>(null);
   const [sortCol, setSortCol] = useState<{ row: number; desc: boolean } | null>(null);
   const [hover, setHover] = useState<[number, number] | null>(null);
@@ -72,11 +74,11 @@ function HeatmapImpl({ rows, cols, values, format = (v) => v.toFixed(3), centere
                 const v = values[i]?.[j] ?? null;
                 const active = hover?.[0] === i && hover?.[1] === j;
                 return (
-                  <td key={`${c}-${j}`} onPointerEnter={() => setHover([i, j])} onPointerLeave={() => setHover(null)} title={`${rows[i]} · ${c}: ${v === null || !Number.isFinite(v) ? "No observation" : format(v)}`}
+                  <td key={`${c}-${j}`} onClick={onCell ? () => onCell(i, j) : undefined} onPointerEnter={() => setHover([i, j])} onPointerLeave={() => setHover(null)} title={`${rows[i]} · ${c}: ${v === null || !Number.isFinite(v) ? "No observation" : format(v)}`}
                     style={{
                       height: 34, minWidth: 58, textAlign: "center", borderRadius: 6, background: fill(v), color: "var(--text)",
                       boxShadow: active ? "inset 0 0 0 1.5px var(--text)" : outline?.(i, j) ? "inset 0 0 0 1.5px var(--warn)" : undefined,
-                      transition: "box-shadow .12s",
+                      transition: "box-shadow .12s", cursor: onCell ? "pointer" : undefined,
                     }}>
                     {v === null || !Number.isFinite(v) ? "–" : format(v)}
                   </td>

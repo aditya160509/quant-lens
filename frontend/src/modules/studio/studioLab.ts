@@ -93,7 +93,7 @@ function optimiseHero(r: FeatureResult): HeroSpec | null {
 const LiveSweep = dynamic(() => import("./views/LiveSweep"), { ssr: false });
 const BV = group(() => import("./views/BacktestViews") as Promise<Record<string, unknown>>);
 const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string, unknown>>);
-registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto, stStabilityOpt: OV.Stability, stSpread: OV.Spread }, ["stParamMap", "stPareto", "stSpread"]);
+registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto, stStabilityOpt: OV.Stability, stSpread: OV.Spread, stHistory: OV.History, stSensitivity: OV.Sensitivity }, ["stParamMap", "stPareto", "stSpread"]);
 const PV = group(() => import("./views/PortfolioViews") as Promise<Record<string, unknown>>);
 registerViews({ stTree: PV.Tree, stWeightsTime: PV.WeightsOverTime, stFrontier: PV.FrontierView, stPfRisk: PV.RiskStats, stPfBook: PV.DeployBook }, ["stWeightsTime", "stFrontier"]);
 const VV = group(() => import("./views/ValidateViews") as Promise<Record<string, unknown>>);
@@ -267,6 +267,8 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["pareto"], span: 7, view: "stPareto", title: "Trade-offs" },
           { keys: ["stability"], span: 6, view: "stStabilityOpt", title: "Stability" },
           { keys: ["spread"], span: 6, view: "stSpread", title: "Spread across the plateau" },
+          { keys: ["cells"], span: 6, view: "stHistory", title: "Best so far" },
+          { keys: ["cells"], span: 6, view: "stSensitivity", title: "Around the plateau centre" },
         ] },
         { id: "sets", label: "Top sets", items: [
           { keys: ["top_sets"], span: 12, view: "dataTable", title: "Top 10 sets" },
