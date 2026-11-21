@@ -3,7 +3,7 @@
 import { DiffEditor } from "@monaco-editor/react";
 import { Group, Panel, Separator, type GroupImperativeHandle } from "react-resizable-panels";
 import Link from "next/link";
-import { BookOpen, Bug, CircleAlert, Gauge, SquareTerminal, ChevronDown, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
+import { BookOpen, Bug, CircleAlert, Gauge, SquareTerminal, ChevronDown, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, FlaskConical, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
@@ -56,7 +56,9 @@ export type Logpoint = { file: string; line: number; message: string };
 type Tab = "tester" | "problems" | "output" | "plots" | "trades" | "debug" | "console" | "preview";
 type View = "code" | "results" | "tearsheet" | "robust" | "runs";
 const VIEW_LABEL: Record<Exclude<View, "code">, string> = { results: "Results", tearsheet: "Tearsheet", robust: "Robustness", runs: "Runs" };
-type Rail = "files" | "outline" | "search" | "versions" | "docs" | "templates";
+type Rail = "files" | "outline" | "search" | "versions" | "tests" | "docs" | "templates";
+type TestRow = { file: string; name: string; line: number; status: "passed" | "failed" | "error"; seconds: number; message?: string; error_line?: number };
+const TEST_FILE = "from studio.testing import bars\n\n\ndef test_closes_are_positive():\n    b = bars(50)\n    assert min(b[\"close\"]) > 0\n";
 type Spec = { code: string; files?: Record<string, string>; params: Record<string, { value: number; min?: number | null; max?: number | null; step?: number | null }>; [k: string]: unknown };
 export type Saved = "saved" | "draft" | "saving" | "conflict" | "new";
 
@@ -65,7 +67,7 @@ const pct = (v?: number) => (v === undefined ? "—" : `${v >= 0 ? "+" : ""}${(v
 const DOC_SCOPES = ["ctx", "portfolio_ctx", "numpy", "pandas", "math", "statistics"];
 const RAILS: [Rail, ReactNode, string][] = [
   ["files", <FileCode2 key="f" size={18} />, "Explorer"], ["outline", <ListTree key="o" size={18} />, "Outline"], ["search", <Search key="s" size={18} />, "Search"],
-  ["versions", <GitBranch key="v" size={18} />, "Versions"], ["docs", <BookOpen key="d" size={18} />, "Docs"], ["templates", <LayoutTemplate key="t" size={18} />, "Starters"],
+  ["versions", <GitBranch key="v" size={18} />, "Versions"], ["tests", <FlaskConical key="x" size={18} />, "Tests"], ["docs", <BookOpen key="d" size={18} />, "Docs"], ["templates", <LayoutTemplate key="t" size={18} />, "Starters"],
 ];
 
 const money = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -383,6 +385,17 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     const bp = Object.entries(bps).flatMap(([file, lines]) => lines.map((line) => ({ file, line })))[0];
     debug(bp ? { date: dbgDate || (prev?.bars?.[0]?.date ?? ""), breakpoint: { ...bp, condition: cond || null } } : {});
   };
+  const [tests, setTests] = useState<TestRow[]>([]);
+  const [testing, setTesting] = useState(false);
+  const testFiles = Object.keys(files).filter((f) => /^test_.*\.py$/.test(f));
+  const runTests = (only?: TestRow[]) => {
+    setTesting(true);
+    const call = (body: { file?: string; name?: string }) => studio<{ tests: TestRow[] }>("POST", "/build/test", { code: spec.code, files: spec.files ?? {}, ...body }).then((r) => r.tests);
+    void Promise.all(only ? only.map((t) => call({ file: t.file, name: t.name })) : [call({})]).then((rs) => {
+      const got = rs.flat();
+      setTests((old) => (only ? old.map((t) => got.find((g) => g.file === t.file && g.name === t.name) ?? t) : got));
+    }, (e: Error) => toast.error(e.message)).finally(() => setTesting(false));
+  };
   const addFile = () => {
     const n = window.prompt("File name", "helpers.py")?.trim();
     if (!n) return;
@@ -476,6 +489,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.fullrun", label: "Run: full backtest (recorded)", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => runCode("full") },
     { id: "studio.quickrun", label: "Run: quick (top 50, 5 years)", run: () => runCode() },
     { id: "studio.runconfigs", label: "Run: edit configurations", run: () => setRcOpen(true) },
+    { id: "studio.tests", label: "Test: run all", run: () => { revealRail("tests"); runTests(); } },
     { id: "studio.cancel", label: "Run: cancel", run: () => onCancel?.() },
     { id: "studio.chart", label: "View: chart with replay", run: () => setOpenP("chart", true) },
     { id: "studio.results", label: "View: results", run: () => openView("results") },
@@ -633,6 +647,26 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               {snaps.length ? <><h4 className="dv-sub">Local history · 7 days</h4>
                 {snaps.slice(0, 60).map((sn) => <button key={sn.at} className="dv-item" title="Restore these files into the draft" onClick={() => { replaceFiles(sn.files); toast("Snapshot restored into the draft · ⌘Z to undo"); }}>
                   {new Date(sn.at * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}<span>{Object.keys(sn.files).length} file{Object.keys(sn.files).length === 1 ? "" : "s"}</span></button>)}</> : null}
+            </div>
+          ) : rail === "tests" ? (
+            <div className="dv-list">
+              {testFiles.length ? <span className="dv-dbar">
+                <button className="btn sm" disabled={testing} onClick={() => runTests()}><Play size={12} />{testing ? "Running…" : "Run all"}</button>
+                <button className="btn sm ghost" disabled={testing || !tests.some((t) => t.status !== "passed")} onClick={() => runTests(tests.filter((t) => t.status !== "passed"))}><RotateCcw size={12} />Failed</button>
+                {tests.length ? <span className="dv-count">{tests.filter((t) => t.status === "passed").length}/{tests.length}</span> : null}
+              </span> : <button className="btn sm ghost" onClick={() => { const n = "test_main.py" in files ? `test_${Date.now().toString(36)}.py` : "test_main.py"; edit({ files: { ...(spec.files ?? {}), [n]: TEST_FILE } }); goto(n, 4); }}><FilePlus2 size={13} />New test file</button>}
+              {testFiles.map((f) => (
+                <div key={f} className="dv-tests">
+                  <button className="dv-item" onClick={() => goto(f, 1)}><FileCode2 size={12} />{f}</button>
+                  {tests.filter((t) => t.file === f).map((t) => (
+                    <div key={t.name} className="dv-file">
+                      <button className="dv-item" data-st={t.status} title={t.message ?? `${t.seconds.toFixed(3)} s`} onClick={() => goto(f, t.error_line ?? t.line)}>
+                        <i aria-label={t.status} />{t.name}{t.message ? <span>{t.message}</span> : null}</button>
+                      <button className="icon-btn" aria-label={`Run ${t.name}`} disabled={testing} onClick={() => runTests([t])}><Play size={11} /></button>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           ) : rail === "docs" ? (
             <div className="dv-list">
