@@ -359,7 +359,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://microsoft.github.io/monaco-editor/ ; https://github.com/SiMahfud/klinechartpro
 
-### 21. AI explains the paused bar and fixes a selection
+### 21. AI explains the paused bar and fixes a selection (later: owner parked AI features, 2026-11-21)
 
 **What it is:** When the debugger is paused, an "Explain this bar" item in the Debug menu sends the paused bar's values, the executed lines and the open position to the AI model. The reply is a short explanation in the Output tab: why the strategy entered or did not enter, and which condition decided it. A second action, Cmd+K on a selected block, asks for a change ("make the stop volatility-based"). The AI returns a diff that the user accepts or rejects in the editor. Nothing is applied without a click, and the AI cannot run a backtest by itself.
 
@@ -375,7 +375,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://cursor.com/help/ai-features/inline-edit ; https://cursor.com/docs/agent/overview ; https://dev.to/_d7eb1c1703182e3ce1782/cursor-ai-editor-a-developers-complete-review-2026-noc
 
-### 22. AI robustness critic
+### 22. AI robustness critic (later: owner parked AI features, 2026-11-21)
 
 **What it is:** After a robustness run (features 4 to 7), a "Critique" button in the Robustness view sends the summary numbers to the AI model. The reply lists what the tests show in plain words, names the weakest test, and suggests the next test to run (for example "the result is a spike in the ATR multiplier; run the stability view on that parameter"). It never changes parameters. Each suggestion has a Run button that starts the named test, so the AI proposes and the user decides.
 
@@ -533,7 +533,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 10. Percent-format research cells (11), then reactive cells (13) and SQL cells (14, only after dependency approval). L.
 11. Data browser with coverage and quality checks (15). M.
 12. Library, starter gallery and shared read-only links (17, 18, 19). S to M.
-13. AI explain and critique (21, 22), kept behind an accept step. M and S.
+13. AI explain and critique (21, 22), kept behind an accept step. M and S. Parked by the owner until later.
 14. Paper trading hook and divergence view (23), then live status and kill switch (24). L and M. Do these only after the owner approves live-trading scope.
 15. Review comments (20), keymap (26), layouts (27), pop-out windows (28). M each.
 
@@ -645,24 +645,24 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
 | Inspections (JetBrains) with severity levels | Live lint of correctness and style | PARTIAL (Problems, Strict toggle) | P1 |
-| Strategy-specific inspections | Look-ahead bias, future data use, unused param, missing stop, hard-coded dates | GAP | P1 |
+| Strategy-specific inspections | Look-ahead bias, future data use, unused param, missing stop, hard-coded dates | HAVE | P1 |
 | Intentions (Alt+Enter) | Context actions on correct code | GAP | P2 |
 | Change signature, move, inline, extract | Classic refactorings | GAP | P3 |
 | Type checking (Pyright-class) | Types for `ctx` and arrays | GAP | P2 |
 | Run inspection on whole project, report tab | Batch results | GAP | P3 |
-| Suppress an inspection with a comment | Per-line ignore | GAP | P3 |
+| Suppress an inspection with a comment | Per-line ignore | HAVE (`# studio: ignore[code]`) | P3 |
 
 ### Run, debug and profile
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Run configurations (named, saved, shared) | Named run presets: universe, dates, costs, inputs | GAP (one Run button, Quick or Full) | P1 |
-| Run widget with config picker | Choose config, run, debug beside the editor | PARTIAL (Execute button) | P1 |
+| Run configurations (named, saved, shared) | Named run presets: universe, dates, costs, inputs | PARTIAL (named and saved in this browser; not shared, no inputs) | P1 |
+| Run widget with config picker | Choose config, run, debug beside the editor | HAVE | P1 |
 | Rerun with last config, rerun on save | Ctrl+R, auto rerun | PARTIAL | P1 |
 | Stop / cancel | Kill a run | HAVE | P1 |
 | Breakpoints, step over, step line, step back | Standard debug control | HAVE (F9, F10, F11, Shift+F10) | P1 |
 | Conditional breakpoints | Break when an expression is true | HAVE | P1 |
-| Logpoints | Log an expression without stopping | GAP | P1 |
+| Logpoints | Log an expression without stopping | HAVE (Shift+F9, preview runs) | P1 |
 | Hit-count and triggered breakpoints | Break on the Nth hit, or after another hit | GAP | P2 |
 | Data breakpoints (break when a value changes) | Watch a variable | GAP | P2 |
 | Event breakpoints: next order, next fill, 5% loss day | Domain stops | HAVE (unique to us) | P1 |
@@ -679,10 +679,10 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Test explorer tree with run and rerun failed | Tests as a tree | GAP | P1 |
-| Strategy tests: `def test_*` using fixtures like fake bars | Unit-test indicators and signals | GAP | P1 |
+| Test explorer tree with run and rerun failed | Tests as a tree | HAVE (Tests side bar) | P1 |
+| Strategy tests: `def test_*` using fixtures like fake bars | Unit-test indicators and signals | HAVE (`from studio.testing import bars`) | P1 |
 | Coverage gutter | Lines covered by a run | GAP | P3 |
-| Run test at cursor, in file, all | Granular runs | GAP | P2 |
+| Run test at cursor, in file, all | Granular runs | PARTIAL (one test, all) | P2 |
 | Snapshot test: "results unchanged after this edit" | Guard against silent changes | GAP | P2 |
 
 ### Terminal and tasks
@@ -752,7 +752,7 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: we have a
 |---|---|---|---|
 | Remote dev | Code runs elsewhere | HAVE (code runs on our backend by design) | P3 |
 | Live share cursors | Pair editing | GAP | P3 |
-| Share a read-only link | Read-only view | GAP | P2 (already listed #19) |
+| Share a read-only link | Read-only view | HAVE (#19, with a pinned run) | P2 |
 
 ### Cursor-specific AI features
 
