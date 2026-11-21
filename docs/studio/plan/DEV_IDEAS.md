@@ -24,24 +24,24 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 ## Ranked ideas
 
-Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHECKLIST.md) · ⏸ Later (AI parked).
+Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHECKLIST.md) · ⏸ Later (AI parked) · difficulty `Easy` / `Med` / `Hard`.
 
-1. Bar replay tied to the debugger: scrub or play bars, editor line and locals follow; makes strategy bugs visible; 1 day. ↪ Moved to Chart
-2. Run any cell or function on a date range and show its returned frame in a Results tab; fastest feedback loop; 1 day. ⬜ Open
-3. Results as tabs (equity, trades, tearsheet, each run pinned and diffable beside the code); no context switch after a backtest; 1 day. ✅ Built
-4. TradingView-grade chart in the preview (lightweight-charts: drawing tools, order and fill markers, indicator panes from ctx.plot, crosshair-synced with debugger); trust in what the code did; 2 to 3 days. ↪ Moved to Chart
-5. Notebook cells (percent-format cells in a .py, inline frames and plots, shared kernel with the backtest data); research and strategy in one file; 2 days. ⬜ Open
-6. Library and examples browser (tagged starters, one-click insert, versioned shared libraries imported into main.py); removes blank-page time; 1 day. ⬜ Open
-7. AI help (explain a Problem, fix selection, write a condition from a sentence, explain a trade at the paused bar); lowers the skill bar; 1 to 2 days. ⏸ Later
-8. Code that can create: custom indicators, data transforms, universe filters, parameter sweeps and plots saved as named artefacts reusable across strategies; 2 days. ⬜ Open
-9. Split chart and code with synced cursor date; 0.5 day. ⬜ Open
-10. Command palette for every IDE action with rebindable keys; 0.5 day. ✅ Built
+1. Bar replay tied to the debugger: scrub or play bars, editor line and locals follow; makes strategy bugs visible; 1 day. ↪ Moved to Chart `Hard`
+2. Run any cell or function on a date range and show its returned frame in a Results tab; fastest feedback loop; 1 day. ⬜ Open `Med`
+3. Results as tabs (equity, trades, tearsheet, each run pinned and diffable beside the code); no context switch after a backtest; 1 day. ✅ Built `Med`
+4. TradingView-grade chart in the preview (lightweight-charts: drawing tools, order and fill markers, indicator panes from ctx.plot, crosshair-synced with debugger); trust in what the code did; 2 to 3 days. ↪ Moved to Chart `Hard`
+5. Notebook cells (percent-format cells in a .py, inline frames and plots, shared kernel with the backtest data); research and strategy in one file; 2 days. ⬜ Open `Hard`
+6. Library and examples browser (tagged starters, one-click insert, versioned shared libraries imported into main.py); removes blank-page time; 1 day. ⬜ Open `Med`
+7. AI help (explain a Problem, fix selection, write a condition from a sentence, explain a trade at the paused bar); lowers the skill bar; 1 to 2 days. ⏸ Later `Med`
+8. Code that can create: custom indicators, data transforms, universe filters, parameter sweeps and plots saved as named artefacts reusable across strategies; 2 days. ⬜ Open `Hard`
+9. Split chart and code with synced cursor date; 0.5 day. ⬜ Open `Easy`
+10. Command palette for every IDE action with rebindable keys; 0.5 day. ✅ Built `Easy`
 
 ## Feature catalogue (detailed)
 
 30 features, ranked by impact for a quant writing strategies in Studio Build. Each one lives in a view, a dropdown, a palette command or an existing panel, so no new always-visible button is needed. Licences are stated only where the page or the existing table confirmed them; "not checked" means verify before copying any code. Effort is in working days for one person: S under 1 day, M 1 to 3 days, L over 3 days.
 
-### 1. Bar replay tied to the debugger ↪ Moved to Chart
+### 1. Bar replay tied to the debugger ↪ Moved to Chart `Hard`
 
 **What it is:** The user opens the Chart view from the View dropdown and presses Replay. The chart starts at the bar they pick (click any bar, or type a date in the palette). Play, pause, step one bar, and scrub are available from the same strip under the chart, with speed 1x, 5x and 20x. At each bar the editor highlights the line that ran for that bar, and the Locals panel shows values at that bar. Stepping with the arrow keys moves both the chart cursor and the debugger, so a bug can be found by watching the bar where a position was opened or where a stop was skipped. Holding Shift while stepping jumps to the next trade, and the replay stops at each order fill. The paused bar gets a vertical line on the chart and the shaded span of any open position stays visible while paused.
 
@@ -57,7 +57,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://tradingview.com/support/solutions/43000712747-how-does-bar-replay-work ; https://tradingview.com/blog/en/bar-replay-5913 ; https://github.com/SiMahfud/klinechartpro ; https://tradingview.com/blog/en/synchronized-bar-replay-45933
 
-### 2. Results tabs with pinned, diffable runs ✅ Built
+### 2. Results tabs with pinned, diffable runs ✅ Built `Med`
 
 **What it is:** Every backtest run opens as a tab next to the code tab, labelled with the run time and a short parameter string. The user can pin a run so it stays while later runs replace the default tab. Choosing "Compare" next to two pinned runs opens a diff: a table of metrics where the difference and the percentage change are shown, and both equity curves are overlaid on one chart. The user can rename a run, tag it, and close it. Results tabs keep their filters, so opening a tearsheet from one run does not reset a trade filter set on another.
 
@@ -73,7 +73,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://quantconnect.com/docs/v2/cloud-platform/projects/ide ; https://nautilustrader.io/docs/latest/concepts/visualization ; https://tradingview.com/support/solutions/43000763320-how-to-work-with-pine-editor
 
-### 3. Tearsheet view ✅ Built
+### 3. Tearsheet view ✅ Built `Med`
 
 **What it is:** A Tearsheet view opens from the Results tab and shows one scrollable page with fixed sections in this order: key statistics (CAGR, Sharpe, Sortino, max drawdown, win rate, profit factor, exposure, average hold), returns (cumulative and monthly heatmap), drawdown (underwater curve with the top five drawdowns listed by depth and length), rolling statistics (rolling Sharpe and volatility), return distribution, and crisis or regime periods the user has chosen. Each section has a small gear icon that opens a dropdown to turn sections on or off, and the choice is saved per user. The page can be exported as a self-contained HTML file or printed.
 
@@ -89,7 +89,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://github.com/ranaroussi/quantstats ; https://quantconnect.com/docs/v2/cloud-platform/backtesting/report ; https://nautilustrader.io/docs/latest/concepts/reports ; https://nautilustrader.io/docs/latest/concepts/visualization
 
-### 4. Walk-forward runner with efficiency score ✅ Built
+### 4. Walk-forward runner with efficiency score ✅ Built `Hard`
 
 **What it is:** A Walk-forward option sits in the Optimise dropdown. The user sets the in-sample length, out-of-sample length and step (for example 2 years optimise, 6 months test, step 6 months), and chooses an optimisation target such as Sharpe or CAR/MDD. The runner optimises on each in-sample window, runs the chosen parameters on the next out-of-sample window, and stitches the out-of-sample pieces into one equity curve. The view shows a band chart with blue for in-sample and green for out-of-sample windows, a table with each window's chosen parameters, and a walk-forward efficiency (WFE) figure: the out-of-sample annualised return divided by the in-sample annualised return. A parameter that changes on every window is flagged, because that means the optimiser is fitting noise.
 
@@ -105,7 +105,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://static.ninjatrader.com/support/helpGuides/nt8/walk_forward_optimize_a_strate.htm ; https://amibroker.com/guide/h_walkforward.html ; https://buildalpha.com/walk-forward-optimization ; https://tradelyze.io/learn/walk-forward-efficiency ; https://www.mql5.com/en/articles/23250
 
-### 5. Monte Carlo robustness panel ✅ Built
+### 5. Monte Carlo robustness panel ✅ Built `Hard`
 
 **What it is:** A Robustness view runs a Monte Carlo test on a finished backtest. It has two methods. Trade-order shuffling reorders the same set of trades and recomputes the equity curve, which tests whether the timing of the trades matters. Candle resampling changes the price data slightly and reruns the strategy, which tests whether the result depends on exact prices. The user picks the number of runs (default 1000). The view shows the original result as a vertical line on a histogram of the resampled results for each metric (final return, max drawdown, Sharpe), plus a percentile for the original. A verdict card states it in plain words: below the median means the result is weaker than typical, and above the 95th percentile means the backtest may sit in the luckiest tail.
 
@@ -121,7 +121,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://docs.jesse.trade/docs/monte-carlo ; https://strategyquant.com/doc-new/monte-carlo-tests ; https://github.com/jesse-ai/jesse/blob/master/jesse/mcp/resources/monte_carlo.md
 
-### 6. Optimisation explorer with heatmap and parameter importance ✅ Built
+### 6. Optimisation explorer with heatmap and parameter importance ✅ Built `Med`
 
 **What it is:** The Optimise view shows the results of a grid sweep as a table sorted by the chosen target, with a selector to switch the target without rerunning. Below the table, two parameters can be picked for a heatmap, where each cell is coloured by the target value and the chart is labelled with both parameter values. A parameter importance bar shows which inputs moved the target most. Clicking a cell applies those parameters to the code as a new run. A history line shows the best value found so far against trial number, so the user can see when the search stopped improving.
 
@@ -137,7 +137,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://optuna.readthedocs.io/en/stable/tutorial/10_key_features/005_visualization.html ; https://github.com/optuna/optuna-dashboard ; https://github.com/Roboquant-AI/tradingview-optimizer ; https://www.metatrader5.com/en/terminal/help/algotrading/visualization
 
-### 7. Parameter plateau and stability view ✅ Built
+### 7. Parameter plateau and stability view ✅ Built `Med`
 
 **What it is:** For a chosen parameter set, the view tests each parameter one step either side of its current value, using the same data, and shows the target for each neighbour. The result is a small table and a line for each parameter: a flat line means the strategy is stable around the chosen value, and a sharp spike means it is fragile. The verdict says "plateau" when most neighbours score within a set tolerance of the chosen value, and "spike" when only the chosen value scores well. The user can apply the best neighbour (the one with the most stable surrounding score) instead of the single best value.
 
@@ -153,7 +153,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://buildalpha.com/walk-forward-optimization ; https://strategyquant.com/doc-new/monte-carlo-tests ; https://www.metatrader5.com/en/terminal/help/algotrading/strategy_optimization
 
-### 8. Chart tab drawing layer on the custom chart engine ↪ Moved to Chart
+### 8. Chart tab drawing layer on the custom chart engine ↪ Moved to Chart `Hard`
 
 **What it is:** The Chart tab gets a drawing layer. The user picks a tool from a Draw dropdown (horizontal line, trend line, rectangle, Fibonacci retracement, text note). Drawings snap to bars and to the replay cursor, so a level drawn at the entry bar stays where it was. Drawings are saved with the strategy file as a comment block (or a small sidecar JSON file in the same folder), so they survive reloads and can be shared with the code. Each drawing has an Object tree entry: toggle visibility, select, lock, delete. The tools come from the existing chart engine, so no second drawing system is built.
 
@@ -169,7 +169,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://github.com/SiMahfud/klinechartpro ; https://klinecharts.com/en-US/guide/introduction ; https://github.com/klinecharts/extension
 
-### 9. Indicator panes from ctx.plot with a plot configurator ✅ Built
+### 9. Indicator panes from ctx.plot with a plot configurator ✅ Built `Med`
 
 **What it is:** Every `ctx.plot(name, value, chart=...)` call in the strategy becomes a series. The Chart tab shows them as chips in a Plots dropdown: a checkbox per series, a choice of pane (overlay on price or its own pane below), a colour, and a line or histogram style. The user can save several plot layouts with names and switch between them, for example "entries" and "volatility". The chips show the value at the paused bar so the user can read an indicator without hovering. The strategy can ship a default layout, which loads when the file is opened.
 
@@ -185,7 +185,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://github.com/freqtrade/freqtrade/blob/develop/docs/freq-ui.md ; https://www.freqtrade.io/en/stable/plotting/ ; https://docs.freqtrade.io/en/2026.5/plotting
 
-### 10. Trade navigator with MAE and MFE ✅ Built
+### 10. Trade navigator with MAE and MFE ✅ Built `Med`
 
 **What it is:** A trade list sits under the chart. Each row shows the entry time, side, entry price, exit price, P and L, hold time, and two extra columns: MAE (the worst excursion against the position while it was open) and MFE (the best excursion in the position's favour). Clicking a row moves the chart and the replay cursor to that trade, with the entry and exit marked and the trade's price range shaded. Next and previous buttons (or the keys [ and ]) step through trades. A filter bar can show only losers, only the trades that were stopped out, or trades from one month.
 
@@ -201,7 +201,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://www.tradingview.com/pine-script-docs/concepts/strategies ; https://github.com/jesse-ai/jesse ; https://www.metatrader5.com/en/terminal/help/algotrading/visualization
 
-### 11. Percent-format research cells in the .py file ⬜ Open
+### 11. Percent-format research cells in the .py file ⬜ Open `Hard`
 
 **What it is:** The strategy file may contain research cells, marked with a `# %%` line. A cell can be a title (`# %% [markdown]`) or a code cell. Each code cell has a Run button in its top-left corner, and Shift+Enter runs it and moves to the next cell. The cell's result (a frame, a plot, a printed value) appears under the cell as an inline output, so the research sits in the same file as the strategy. Outputs are not written into the file, which keeps git diffs clean. Cells share one kernel with the backtest data, so a variable defined in a research cell can be used by the strategy's preview run.
 
@@ -217,7 +217,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://jupytext.org/formats/scripts/ ; https://jupytext.readthedocs.io/en/latest/formats.html ; https://github.com/mwouts/nbpercent ; https://docs.marimo.io/guides/coming_from/jupytext/
 
-### 12. Run any selection on a date range into a Results tab ⬜ Open
+### 12. Run any selection on a date range into a Results tab ⬜ Open `Med`
 
 **What it is:** The user selects an expression, a function name, or a block of code, presses Run selection, and picks a date range (default: the loaded window; a range picker in the popup). The result opens in a Results tab as a table or chart. Typical uses are "the signal on 2024 only" or "the feature frame for this ticker". The run does not change the strategy state, so the user can repeat it with another range without a full backtest.
 
@@ -233,7 +233,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://learn.hex.tech/docs/explore-data/cells/sql-cells/sql-cells-introduction ; https://marimo.io/use-cases ; https://docs.marimo.io/getting_started/key_concepts
 
-### 13. Reactive cells that re-run only what depends on a change ⬜ Open
+### 13. Reactive cells that re-run only what depends on a change ⬜ Open `Hard`
 
 **What it is:** In a research cell file, changing one cell re-runs only the cells that read a variable it defines, and marks the rest as stale without running them. The stale cells show a grey dot. A toggle in the cell toolbar switches between "run on change" and "manual", so a slow cell does not block typing. The user sees which cells are stale and can run them in order from one button.
 
@@ -249,7 +249,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://docs.marimo.io/getting_started/key_concepts ; https://github.com/marimo-team/marimo ; https://marimo.io
 
-### 14. SQL cells over the local data store ⬜ Open
+### 14. SQL cells over the local data store ⬜ Open `Hard`
 
 **What it is:** A research cell can be SQL instead of Python. The user writes a query against the market data tables (for example `SELECT symbol, date, close FROM bars WHERE ...`), and the result becomes a variable that Python cells can read. Autocomplete offers table and column names from the data browser. A parameter box in the cell (a symbol, a start date) is read from the query with a placeholder, so one query serves several tickers.
 
@@ -265,7 +265,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://learn.hex.tech/docs/explore-data/cells/sql-cells/sql-cells-introduction ; https://hex.tech/blog/sql-notebooks ; https://hex.tech/product/notebooks
 
-### 15. Data browser with a coverage map and quality checks ✅ Built
+### 15. Data browser with a coverage map and quality checks ✅ Built `Med`
 
 **What it is:** A Data view lists the symbols and timeframes in the workspace. For each symbol it shows a coverage bar (a timeline with gaps in a warning colour), the first and last bar, and counts of quality problems: missing bars, zero-volume bars, a price jump bigger than a set threshold (likely a split), and duplicate timestamps. Clicking a symbol opens its chart and a small table of the first and last bars. A "Use in strategy" button adds the symbol to the file's universe or a `ctx.data` call, and the choice is shown in the palette.
 
@@ -281,7 +281,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://quantconnect.com/docs/v2/cloud-platform/research/getting-started ; https://quantconnect.com/docs/v2/research-environment/key-concepts/research-engine ; https://www.zipline.io (Zipline Pipeline factor reference) ; https://www.quantrocket.com/code/
 
-### 16. Debugger locals quick-look ✅ Built
+### 16. Debugger locals quick-look ✅ Built `Easy`
 
 **What it is:** In the Locals panel of the debugger, every variable is clickable. A pandas frame or a Series opens a small popup table with the first and last rows, the shape, the dtypes and the column summary. A numeric series opens a mini sparkline across the replay window. A value that is a list of trades opens the trade navigator (feature 10). The popup closes on Escape and stays put while the replay moves, so the user can compare the value on two bars by stepping.
 
@@ -297,7 +297,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://code.visualstudio.com/docs/editing/getting-started/userinterface ; https://vscode-docs.readthedocs.io/en/stable/editor/debugging ; https://stackoverflow.com/questions/60097076/view-dataframe-while-debugging-in-vs-code
 
-### 17. Snippet and indicator library with tags ⬜ Open
+### 17. Snippet and indicator library with tags ⬜ Open `Med`
 
 **What it is:** A Library dropdown lists snippets: named blocks of code (a trailing stop, a volatility filter, a session time check) with tags, a one-line description, and an "Insert" action that places the snippet at the cursor and adds any imports it needs. Users can save a selection as a snippet, tag it, and share it inside the workspace. Each snippet can be tested from its entry: a small run on one symbol, with the result shown in a Results tab, so the user knows it works before inserting it.
 
@@ -313,7 +313,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://microsoft.github.io/monaco-editor/ ; https://stackoverflow.com/questions/48212023/how-to-insert-snippet-in-monaco-editor ; https://docs.jesse.trade/
 
-### 18. Starter gallery with cached results ⬜ Open
+### 18. Starter gallery with cached results ⬜ Open `Med`
 
 **What it is:** The New strategy dropdown lists starters by type (trend, mean reversion, breakout, options-style rules), each with a short description and a thumbnail of the equity curve from a cached run on a fixed universe. Opening a starter copies it into a new file with the code and the parameters set to tested defaults. The thumbnail is a stored image from the last run, so the gallery opens instantly. Each starter links to the library snippets it uses.
 
@@ -329,7 +329,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://www.composer.trade/ai ; https://apps.apple.com/us/app/composer-by-sofi/id6471564746 ; https://composer.trade/pricing
 
-### 19. Shareable read-only strategy link with pinned results ✅ Built
+### 19. Shareable read-only strategy link with pinned results ✅ Built `Med`
 
 **What it is:** The Share dropdown creates a link to a snapshot of the strategy file and one pinned result. The viewer sees the code, the results tab, the tearsheet, and a Clone button that copies the file into the viewer's own workspace. The snapshot does not change when the author edits later. The viewer cannot run the strategy with new data unless they clone it. Access can be set to "anyone with the link" or to named workspace members.
 
@@ -345,7 +345,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://quantconnect.com/docs/v2/cloud-platform/research/deployment
 
-### 20. Review comments on code lines and chart bars ◐ Partial
+### 20. Review comments on code lines and chart bars ◐ Partial `Med`
 
 **What it is:** A user can add a comment to a code line or to a bar on the chart. A comment on a bar keeps the bar's date, so it appears at the same point when someone replays. Comments show as small markers in the gutter and on the chart, and open in a thread with replies and a resolve tick. The author can filter to open comments. Comments are stored with the strategy snapshot and do not change the code.
 
@@ -361,7 +361,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://microsoft.github.io/monaco-editor/ ; https://github.com/SiMahfud/klinechartpro
 
-### 21. AI explains the paused bar and fixes a selection ⏸ Later
+### 21. AI explains the paused bar and fixes a selection ⏸ Later `Med`
 
 **What it is:** When the debugger is paused, an "Explain this bar" item in the Debug menu sends the paused bar's values, the executed lines and the open position to the AI model. The reply is a short explanation in the Output tab: why the strategy entered or did not enter, and which condition decided it. A second action, Cmd+K on a selected block, asks for a change ("make the stop volatility-based"). The AI returns a diff that the user accepts or rejects in the editor. Nothing is applied without a click, and the AI cannot run a backtest by itself.
 
@@ -377,7 +377,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://cursor.com/help/ai-features/inline-edit ; https://cursor.com/docs/agent/overview ; https://dev.to/_d7eb1c1703182e3ce1782/cursor-ai-editor-a-developers-complete-review-2026-noc
 
-### 22. AI robustness critic ⏸ Later
+### 22. AI robustness critic ⏸ Later `Med`
 
 **What it is:** After a robustness run (features 4 to 7), a "Critique" button in the Robustness view sends the summary numbers to the AI model. The reply lists what the tests show in plain words, names the weakest test, and suggests the next test to run (for example "the result is a spike in the ATR multiplier; run the stability view on that parameter"). It never changes parameters. Each suggestion has a Run button that starts the named test, so the AI proposes and the user decides.
 
@@ -393,7 +393,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://buildalpha.com/features ; https://www.buildalpha.com/noise-test-parameter-optimization/ ; https://buildalpha.com/walk-forward-optimization
 
-### 23. Paper trading hook with live-versus-backtest divergence ⬜ Open
+### 23. Paper trading hook with live-versus-backtest divergence ⬜ Open `Hard`
 
 **What it is:** A Live dropdown lets the user send the strategy to paper trading with one of the connected brokers. The Live view shows the paper equity against the backtest equity for the same period, with a divergence line and a count of trades that were expected but not filled, and filled at a worse price. A threshold sets an alert when the divergence passes a limit, so the user sees a broken assumption (slippage, fill timing) before real money is involved. Orders in paper mode are simulated by the broker, not by Studio, so the test is the broker's behaviour.
 
@@ -409,7 +409,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://docs.alpaca.markets/us/docs/paper-trading ; https://www.freqtrade.io/en/stable/ ; https://www.freqtrade.io/en/stable/hyperopt/
 
-### 24. Live status and kill switch panel ⬜ Open
+### 24. Live status and kill switch panel ⬜ Open `Med`
 
 **What it is:** A Live status view lists the strategies that are running live or in paper, with their open positions, today's P and L, the time of the last bar, and the last error. Each strategy has Start, Stop and Flatten buttons, and Flatten asks for a confirmation that names the number of open positions. Errors are shown with the bar and the line where they happened, which links back to the editor. A global Stop-all sits in the palette, not on the toolbar.
 
@@ -425,7 +425,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://github.com/freqtrade/freqtrade/raw/refs/heads/develop/docs/freq-ui.md ; https://www.freqtrade.io/en/stable/ ; https://jesse.trade/blog/news/jesse-300-a-new-charting-and-live-trading-experience
 
-### 25. Command palette for every action and go-to-date ✅ Built
+### 25. Command palette for every action and go-to-date ✅ Built `Easy`
 
 **What it is:** The palette (Cmd+Shift+P, already in the app) lists every IDE action, including the ones now in the View, Optimise and Live dropdowns. Typing filters by name, and each command shows its key binding. Two special commands are added: "Go to date" (type 2021-03-04 and the chart, the editor's date variable and the replay cursor move there) and "Go to symbol" (jump to a function or a parameter in the file). Recently used commands sit at the top. The palette is the way to reach a feature that has no button.
 
@@ -441,7 +441,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://jupyterlab.readthedocs.io/en/stable/user/commands.html ; https://jupyterlab.readthedocs.io/en/3.3.x/user/commands.html ; https://microsoft.github.io/monaco-editor/api/enums/monaco.keycode.html
 
-### 26. Rebindable keymap with chords ✅ Built
+### 26. Rebindable keymap with chords ✅ Built `Med`
 
 **What it is:** A Keyboard shortcuts section in the palette lets the user see every shortcut in a list and rebind any of them. Chords (two-key sequences such as Ctrl+K then Ctrl+R) are allowed for less-used commands. Conflicts are shown at the time of binding. The keymap is saved per user, and a preset (Default, Vim-like movement for the editor) can be chosen from a dropdown. Shortcuts are shown in every menu and in the palette list.
 
@@ -457,7 +457,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://github.com/microsoft/monaco-editor/issues/102 ; https://rikki.dev/posts/monaco-command-palette ; https://raw.githubusercontent.com/CodinGame/monaco-vscode-api/main/demo/src/main.views.ts
 
-### 27. Saved layouts and workspace presets ✅ Built
+### 27. Saved layouts and workspace presets ✅ Built `Med`
 
 **What it is:** The View dropdown has a Layout section with named presets: "Research" (code and cells, with the Chart docked to the right), "Debug" (code and debugger, Chart and Locals below), "Review" (Results and Tearsheet full width), and "Live" (Live status and code). The user can save the current arrangement under a name, reset to a preset, and rename or delete their own. The Explorer auto-collapses at narrow widths, which is already in place, and the presets respect that rule.
 
@@ -473,7 +473,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://code.visualstudio.com/docs/editing/getting-started/userinterface ; https://stackoverflow.com/questions/57333905/vs-code-move-debug-tab-left-panel-to-bottom ; https://github.com/microsoft/vscode/issues/118975
 
-### 28. Pop-out windows for chart and results ⬜ Open
+### 28. Pop-out windows for chart and results ⬜ Open `Hard`
 
 **What it is:** A small button-free action in the View menu, "Pop out chart", opens the Chart or a Results tab in a separate browser window that stays synced with the main window: the replay cursor, the selected run and the date are shared. On a second monitor the user can keep the code and the chart side by side. Closing the pop-out returns the panel to the main window.
 
@@ -489,7 +489,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://code.visualstudio.com/docs/editing/getting-started/userinterface ; https://github.com/microsoft/vscode/issues/118975
 
-### 29. Parameter jitter and execution-degradation stress test ✅ Built
+### 29. Parameter jitter and execution-degradation stress test ✅ Built `Med`
 
 **What it is:** A Stress tab in the Robustness view runs the strategy again with each parameter moved by a random percentage (for example plus or minus 10 percent), with commission and slippage raised by a set factor, and with the price history perturbed a little. The result is a fan chart of equity curves and a table of how often the strategy still beats a set target. The test says whether the result depends on exact inputs or on cheap fills. Each stress setting has a plain-language label, and the defaults are the ones the owner chooses.
 
@@ -505,7 +505,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://strategyquant.com/doc-new/monte-carlo-tests ; https://strategyquant.com/blog/new-robustness-tests-on-the-strategyquant-codebase-5-monte-carlo-methods-to-bulletproof-your-trading-strategies ; https://github.com/Roboquant-AI/tradingview-optimizer
 
-### 30. Chart templates and chart types ↪ Moved to Chart
+### 30. Chart templates and chart types ↪ Moved to Chart `Med`
 
 **What it is:** The Chart view's Style dropdown offers chart types (candles, hollow candles, Heikin Ashi, bars, line, area) and saved templates. A template stores the chart type, the colours, the visible plot chips (feature 9), and the drawings (feature 8) that are not tied to one file. Templates can be applied to any strategy, which is useful for a standard look across the team. The template list is in the dropdown, with a Save as template action at the bottom.
 
@@ -591,7 +591,7 @@ TakeProfit's Indie is Python-flavoured. We already have Python + `ctx.plot`, so 
 
 ## IDE feature catalogue (VS Code, JetBrains, Cursor)
 
-Tags beside each feature: ✅ Have · ◐ Partial · ⬜ Gap · ⏸ Later (AI parked).
+Tags beside each feature: ✅ Have · ◐ Partial · ⬜ Gap · ⏸ Later (AI parked) · difficulty `Easy` (minutes) / `Med` (15–30 min) / `Hard` (1–2 h+).
 
 Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging, terminal and shell integration, custom layout, profiles, Jupyter; JetBrains PyCharm help on New UI, tool windows, Run tool window, inspections, local history, scratch files, bookmarks, Structure; Cursor docs on Tab, Agent, rules, Agent Review). Tags are checked against `DevIDE.tsx`, `CodeEditor.tsx`, `BuildPage.tsx`: HAVE exists, PARTIAL exists in a smaller form, GAP missing. Priority is for a browser quant-strategy IDE: P1 do soon, P2 worth it, P3 later or skip. Items already in the 30-idea catalogue above are marked "already listed (#n)".
 
@@ -599,95 +599,95 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ✅ Multi-cursor, add next occurrence, column select | Edit many places at once | HAVE (Monaco) | P3 |
-| ✅ Command palette | Run any action by name | HAVE (F1) | P1 |
-| ✅ Quick open by file | Fuzzy jump to a file | HAVE (Ctrl+P opens Explorer, not a fuzzy picker) | PARTIAL P2 |
-| ✅ Search across project with regex, case, whole word, replace | Project find and replace | HAVE | P1 |
-| ✅ Code folding, folding regions | Collapse blocks | HAVE | P3 |
-| ✅ Sticky scroll | Pin the enclosing class or def at the top | HAVE | P3 |
-| ✅ Minimap | Overview strip | HAVE | P3 |
-| ⬜ Breadcrumbs (file > class > method) | Symbol path above the editor | GAP | P2 |
-| ✅ Outline view | Symbol tree of the file | HAVE | P1 |
-| ✅ Hover docs and signature help | API docs on hover | HAVE | P1 |
-| ✅ Autocomplete for the `ctx` API with docs | IntelliSense | HAVE | P1 |
-| ✅ Inlay hints | Inline parameter and type hints | HAVE | P2 |
-| ✅ Go to definition, peek definition | Jump or peek | HAVE (definition), peek GAP | PARTIAL P2 |
-| ⬜ Find all references | List uses of a symbol | GAP | P2 |
-| ◐ Rename symbol across files | Safe rename | PARTIAL (files rename; symbol rename unchecked) | P2 |
-| ✅ Format document and on save | Auto format | HAVE (format); on save GAP | PARTIAL P2 |
-| ◐ Quick fix lightbulb on Problems | One click fixes | PARTIAL | P1 |
-| ⬜ Code actions: extract function, extract variable, organise imports | Refactor from the lightbulb | GAP | P2 |
-| ✅ Snippets with tab stops, user snippets | Insert templates | HAVE (save selection, insert, prefix) | P2 |
-| ⬜ Emmet-like expansion | Short text to code | GAP | P3 |
-| ✅ Split editor, side by side | Two files at once | HAVE | P2 |
-| ✅ Pinned tabs and preview tabs | Single click preview, double click keep | HAVE | P3 |
-| ✅ Diff editor | Compare version and draft | HAVE | P1 |
-| ✅ Timeline / local history per file | Auto snapshots, restore | HAVE (snapshots) | P1 |
-| ⬜ Bookmarks (numbered) | Mark lines to jump back | GAP | P3 |
-| ⬜ Scratch files | Throwaway files outside the project | GAP (use New file) | P3 |
-| ⬜ Todo comment index | List of TODO and FIXME | GAP | P3 |
-| ⬜ Zen mode and distraction-free layout | Hide chrome, centre the editor | GAP | P2 |
-| ◐ Word wrap, font size, ligatures, rulers | Editor settings | PARTIAL (font size) | P3 |
-| ⬜ Cursor-style inline edit on selection (Ctrl+K) | Ask AI to rewrite selection with a diff | GAP | P2 (already listed #21) |
-| ⬜ Tab: multi-line next-edit prediction | AI autocomplete beyond the cursor | GAP | P3 |
+| ✅ `Easy` Multi-cursor, add next occurrence, column select | Edit many places at once | HAVE (Monaco) | P3 |
+| ✅ `Easy` Command palette | Run any action by name | HAVE (F1) | P1 |
+| ✅ `Easy` Quick open by file | Fuzzy jump to a file | HAVE (Ctrl+P opens Explorer, not a fuzzy picker) | PARTIAL P2 |
+| ✅ `Easy` Search across project with regex, case, whole word, replace | Project find and replace | HAVE | P1 |
+| ✅ `Easy` Code folding, folding regions | Collapse blocks | HAVE | P3 |
+| ✅ `Easy` Sticky scroll | Pin the enclosing class or def at the top | HAVE | P3 |
+| ✅ `Easy` Minimap | Overview strip | HAVE | P3 |
+| ⬜ `Med` Breadcrumbs (file > class > method) | Symbol path above the editor | GAP | P2 |
+| ✅ `Easy` Outline view | Symbol tree of the file | HAVE | P1 |
+| ✅ `Easy` Hover docs and signature help | API docs on hover | HAVE | P1 |
+| ✅ `Easy` Autocomplete for the `ctx` API with docs | IntelliSense | HAVE | P1 |
+| ✅ `Med` Inlay hints | Inline parameter and type hints | HAVE | P2 |
+| ✅ `Med` Go to definition, peek definition | Jump or peek | HAVE (definition), peek GAP | PARTIAL P2 |
+| ⬜ `Med` Find all references | List uses of a symbol | GAP | P2 |
+| ◐ `Med` Rename symbol across files | Safe rename | PARTIAL (files rename; symbol rename unchecked) | P2 |
+| ✅ `Easy` Format document and on save | Auto format | HAVE (format); on save GAP | PARTIAL P2 |
+| ◐ `Med` Quick fix lightbulb on Problems | One click fixes | PARTIAL | P1 |
+| ⬜ `Med` Code actions: extract function, extract variable, organise imports | Refactor from the lightbulb | GAP | P2 |
+| ✅ `Easy` Snippets with tab stops, user snippets | Insert templates | HAVE (save selection, insert, prefix) | P2 |
+| ⬜ `Easy` Emmet-like expansion | Short text to code | GAP | P3 |
+| ✅ `Easy` Split editor, side by side | Two files at once | HAVE | P2 |
+| ✅ `Easy` Pinned tabs and preview tabs | Single click preview, double click keep | HAVE | P3 |
+| ✅ `Easy` Diff editor | Compare version and draft | HAVE | P1 |
+| ✅ `Med` Timeline / local history per file | Auto snapshots, restore | HAVE (snapshots) | P1 |
+| ⬜ `Easy` Bookmarks (numbered) | Mark lines to jump back | GAP | P3 |
+| ⬜ `Easy` Scratch files | Throwaway files outside the project | GAP (use New file) | P3 |
+| ⬜ `Easy` Todo comment index | List of TODO and FIXME | GAP | P3 |
+| ⬜ `Easy` Zen mode and distraction-free layout | Hide chrome, centre the editor | GAP | P2 |
+| ◐ `Easy` Word wrap, font size, ligatures, rulers | Editor settings | PARTIAL (font size) | P3 |
+| ⬜ `Med` Cursor-style inline edit on selection (Ctrl+K) | Ask AI to rewrite selection with a diff | GAP | P2 (already listed #21) |
+| ⬜ `Hard` Tab: multi-line next-edit prediction | AI autocomplete beyond the cursor | GAP | P3 |
 
 ### Navigation
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ◐ Go to line / symbol in file (Ctrl+G, Ctrl+Shift+O) | Jump by line or symbol | PARTIAL (Monaco built-ins, not surfaced) | P2 |
-| ⬜ Go to symbol in project (Ctrl+T) | Search symbols across files | GAP | P2 |
-| ⬜ Back and forward navigation history | Return to previous cursor spot | GAP | P2 |
-| ◐ Recent files and recent projects | Quick reopen | PARTIAL (versions list) | P3 |
-| ⬜ Search Everywhere (JetBrains double Shift) | One box for files, symbols, actions, settings | GAP | P2 |
-| ✅ Structure tool window | Tree of classes and methods | HAVE (Outline) | P1 |
-| ✅ Jump from a log line or problem to code | Click error to line | HAVE | P1 |
-| ◐ Jump from a trade or bar to the code that made it | Chart to code | PARTIAL (log line goes to code and pauses) | P1 |
+| ◐ `Easy` Go to line / symbol in file (Ctrl+G, Ctrl+Shift+O) | Jump by line or symbol | PARTIAL (Monaco built-ins, not surfaced) | P2 |
+| ⬜ `Easy` Go to symbol in project (Ctrl+T) | Search symbols across files | GAP | P2 |
+| ⬜ `Med` Back and forward navigation history | Return to previous cursor spot | GAP | P2 |
+| ◐ `Easy` Recent files and recent projects | Quick reopen | PARTIAL (versions list) | P3 |
+| ⬜ `Easy` Search Everywhere (JetBrains double Shift) | One box for files, symbols, actions, settings | GAP | P2 |
+| ✅ `Easy` Structure tool window | Tree of classes and methods | HAVE (Outline) | P1 |
+| ✅ `Easy` Jump from a log line or problem to code | Click error to line | HAVE | P1 |
+| ◐ `Med` Jump from a trade or bar to the code that made it | Chart to code | PARTIAL (log line goes to code and pauses) | P1 |
 
 ### Refactoring and code intelligence
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ◐ Inspections (JetBrains) with severity levels | Live lint of correctness and style | PARTIAL (Problems, Strict toggle) | P1 |
-| ✅ Strategy-specific inspections | Look-ahead bias, future data use, unused param, missing stop, hard-coded dates | HAVE | P1 |
-| ⬜ Intentions (Alt+Enter) | Context actions on correct code | GAP | P2 |
-| ⬜ Change signature, move, inline, extract | Classic refactorings | GAP | P3 |
-| ⬜ Type checking (Pyright-class) | Types for `ctx` and arrays | GAP | P2 |
-| ⬜ Run inspection on whole project, report tab | Batch results | GAP | P3 |
-| ✅ Suppress an inspection with a comment | Per-line ignore | HAVE (`# studio: ignore[code]`) | P3 |
+| ◐ `Med` Inspections (JetBrains) with severity levels | Live lint of correctness and style | PARTIAL (Problems, Strict toggle) | P1 |
+| ✅ `Med` Strategy-specific inspections | Look-ahead bias, future data use, unused param, missing stop, hard-coded dates | HAVE | P1 |
+| ⬜ `Med` Intentions (Alt+Enter) | Context actions on correct code | GAP | P2 |
+| ⬜ `Hard` Change signature, move, inline, extract | Classic refactorings | GAP | P3 |
+| ⬜ `Med` Type checking (Pyright-class) | Types for `ctx` and arrays | GAP | P2 |
+| ⬜ `Med` Run inspection on whole project, report tab | Batch results | GAP | P3 |
+| ✅ `Easy` Suppress an inspection with a comment | Per-line ignore | HAVE (`# studio: ignore[code]`) | P3 |
 
 ### Run, debug and profile
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ◐ Run configurations (named, saved, shared) | Named run presets: universe, dates, costs, inputs | PARTIAL (named and saved in this browser; not shared, no inputs) | P1 |
-| ✅ Run widget with config picker | Choose config, run, debug beside the editor | HAVE | P1 |
-| ◐ Rerun with last config, rerun on save | Ctrl+R, auto rerun | PARTIAL | P1 |
-| ✅ Stop / cancel | Kill a run | HAVE | P1 |
-| ✅ Breakpoints, step over, step line, step back | Standard debug control | HAVE (F9, F10, F11, Shift+F10) | P1 |
-| ✅ Conditional breakpoints | Break when an expression is true | HAVE | P1 |
-| ✅ Logpoints | Log an expression without stopping | HAVE (Shift+F9, preview runs) | P1 |
-| ⬜ Hit-count and triggered breakpoints | Break on the Nth hit, or after another hit | GAP | P2 |
-| ⬜ Data breakpoints (break when a value changes) | Watch a variable | GAP | P2 |
-| ✅ Event breakpoints: next order, next fill, 5% loss day | Domain stops | HAVE (unique to us) | P1 |
-| ◐ Watch expressions | Pinned expressions that update per step | PARTIAL (Console evaluates once) | P1 |
-| ✅ Call stack and locals panel | Frames and variables | HAVE (locals, traceback) | P1 |
-| ✅ Debug console REPL | Evaluate while paused | HAVE (Console tab) | P1 |
-| ⬜ Inline variable values in the editor while paused | Values shown beside code | GAP | P2 |
-| ✅ Profiler (slowest lines, per function) | Where time goes | HAVE | P2 |
-| ⬜ Flame graph | Visual profile | GAP | P3 |
-| ⬜ Compound launch: run for many symbols and compare | Multi-target run | GAP | P2 |
-| ⬜ Attach to a live or paper run | Debug in production | GAP | P3 |
+| ◐ `Med` Run configurations (named, saved, shared) | Named run presets: universe, dates, costs, inputs | PARTIAL (named and saved in this browser; not shared, no inputs) | P1 |
+| ✅ `Easy` Run widget with config picker | Choose config, run, debug beside the editor | HAVE | P1 |
+| ◐ `Easy` Rerun with last config, rerun on save | Ctrl+R, auto rerun | PARTIAL | P1 |
+| ✅ `Easy` Stop / cancel | Kill a run | HAVE | P1 |
+| ✅ `Hard` Breakpoints, step over, step line, step back | Standard debug control | HAVE (F9, F10, F11, Shift+F10) | P1 |
+| ✅ `Med` Conditional breakpoints | Break when an expression is true | HAVE | P1 |
+| ✅ `Med` Logpoints | Log an expression without stopping | HAVE (Shift+F9, preview runs) | P1 |
+| ⬜ `Med` Hit-count and triggered breakpoints | Break on the Nth hit, or after another hit | GAP | P2 |
+| ⬜ `Hard` Data breakpoints (break when a value changes) | Watch a variable | GAP | P2 |
+| ✅ `Med` Event breakpoints: next order, next fill, 5% loss day | Domain stops | HAVE (unique to us) | P1 |
+| ◐ `Med` Watch expressions | Pinned expressions that update per step | PARTIAL (Console evaluates once) | P1 |
+| ✅ `Med` Call stack and locals panel | Frames and variables | HAVE (locals, traceback) | P1 |
+| ✅ `Med` Debug console REPL | Evaluate while paused | HAVE (Console tab) | P1 |
+| ⬜ `Med` Inline variable values in the editor while paused | Values shown beside code | GAP | P2 |
+| ✅ `Med` Profiler (slowest lines, per function) | Where time goes | HAVE | P2 |
+| ⬜ `Med` Flame graph | Visual profile | GAP | P3 |
+| ⬜ `Hard` Compound launch: run for many symbols and compare | Multi-target run | GAP | P2 |
+| ⬜ `Hard` Attach to a live or paper run | Debug in production | GAP | P3 |
 
 ### Testing
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ✅ Test explorer tree with run and rerun failed | Tests as a tree | HAVE (Tests side bar) | P1 |
-| ✅ Strategy tests: `def test_*` using fixtures like fake bars | Unit-test indicators and signals | HAVE (`from studio.testing import bars`) | P1 |
-| ⬜ Coverage gutter | Lines covered by a run | GAP | P3 |
-| ◐ Run test at cursor, in file, all | Granular runs | PARTIAL (one test, all) | P2 |
-| ⬜ Snapshot test: "results unchanged after this edit" | Guard against silent changes | GAP | P2 |
+| ✅ `Med` Test explorer tree with run and rerun failed | Tests as a tree | HAVE (Tests side bar) | P1 |
+| ✅ `Med` Strategy tests: `def test_*` using fixtures like fake bars | Unit-test indicators and signals | HAVE (`from studio.testing import bars`) | P1 |
+| ⬜ `Hard` Coverage gutter | Lines covered by a run | GAP | P3 |
+| ◐ `Easy` Run test at cursor, in file, all | Granular runs | PARTIAL (one test, all) | P2 |
+| ⬜ `Med` Snapshot test: "results unchanged after this edit" | Guard against silent changes | GAP | P2 |
 
 ### Terminal and tasks
 
@@ -695,81 +695,81 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: we have a
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ⬜ Integrated terminal | Shell in the panel | GAP | P2 |
-| ⬜ Tasks (tasks.json) | Named commands, run on save or on demand | GAP | P2 |
-| ⬜ Multiple and split terminals, persistent sessions | Several sessions kept across reloads | GAP | P2 |
-| ◐ Run tool window: rerun, stop, pin output, soft wrap, filter | JetBrains output control | PARTIAL (Output tab filter, level, symbol, date, CSV) | P2 |
+| ⬜ `Hard` Integrated terminal | Shell in the panel | GAP | P2 |
+| ⬜ `Med` Tasks (tasks.json) | Named commands, run on save or on demand | GAP | P2 |
+| ⬜ `Hard` Multiple and split terminals, persistent sessions | Several sessions kept across reloads | GAP | P2 |
+| ◐ `Easy` Run tool window: rerun, stop, pin output, soft wrap, filter | JetBrains output control | PARTIAL (Output tab filter, level, symbol, date, CSV) | P2 |
 
 ### Source control and history
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ✅ Versions with names, tags, lock, restore, branch | Our version model | HAVE | P1 |
-| ◐ Diff of any two versions | Side by side | PARTIAL (version vs draft) | P2 |
-| ⬜ Blame / who changed this line | Per-line history | GAP | P3 |
-| ⬜ Shelve / stash | Park changes | GAP | P3 |
-| ✅ Local history labels | Named checkpoints | HAVE (labels) | P2 |
-| ✅ Review comments on lines | Threads | HAVE (idea #20) | P2 |
-| ⬜ Agent review of a diff (Cursor Agent Review, Quick or Deep) | AI reviews the change | GAP | P2 (already listed #22) |
+| ✅ `Med` Versions with names, tags, lock, restore, branch | Our version model | HAVE | P1 |
+| ◐ `Easy` Diff of any two versions | Side by side | PARTIAL (version vs draft) | P2 |
+| ⬜ `Med` Blame / who changed this line | Per-line history | GAP | P3 |
+| ⬜ `Easy` Shelve / stash | Park changes | GAP | P3 |
+| ✅ `Easy` Local history labels | Named checkpoints | HAVE (labels) | P2 |
+| ✅ `Med` Review comments on lines | Threads | HAVE (idea #20) | P2 |
+| ⬜ `Med` Agent review of a diff (Cursor Agent Review, Quick or Deep) | AI reviews the change | GAP | P2 (already listed #22) |
 
 ### Settings, profiles, keybindings
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ◐ Settings UI with search and JSON | Searchable settings | PARTIAL (scattered toggles) | P2 |
-| ⬜ Profiles (VS Code) | Bundled settings, layout, snippets per context | GAP | P3 |
-| ◐ Keybindings editor, chords, `when` clauses | Rebind keys | PARTIAL (#26: chords, conflicts, reset; no `when`) | P2 |
-| ✅ Keyboard shortcuts cheat sheet | List of keys | HAVE (Customise Build, searchable) | P2 |
-| ✅ Theme follows workspace light and dark | Theming | HAVE | P2 |
-| ✅ Compact density | JetBrains Compact mode | HAVE | P3 |
-| ⬜ Settings sync across devices | Cloud settings | GAP | P3 |
+| ◐ `Med` Settings UI with search and JSON | Searchable settings | PARTIAL (scattered toggles) | P2 |
+| ⬜ `Med` Profiles (VS Code) | Bundled settings, layout, snippets per context | GAP | P3 |
+| ◐ `Med` Keybindings editor, chords, `when` clauses | Rebind keys | PARTIAL (#26: chords, conflicts, reset; no `when`) | P2 |
+| ✅ `Easy` Keyboard shortcuts cheat sheet | List of keys | HAVE (Customise Build, searchable) | P2 |
+| ✅ `Easy` Theme follows workspace light and dark | Theming | HAVE | P2 |
+| ✅ `Easy` Compact density | JetBrains Compact mode | HAVE | P3 |
+| ⬜ `Med` Settings sync across devices | Cloud settings | GAP | P3 |
 
 ### Layout
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ✅ Activity bar, side bar, panel, status bar | Basic shell | HAVE | P1 |
-| ✅ Toggle panel and side bar by key | Cmd+J, Cmd+B | HAVE | P1 |
-| ✅ Maximise panel | Full-height panel | HAVE | P2 |
-| ⬜ Move panel to right or left | Panel position | GAP | P2 |
-| ⬜ Panel alignment (centre, justify) | Width of panel | GAP | P3 |
-| ⬜ Drag a tab to another group or out to a window | Free layout | GAP | P2 (pop-out already listed #28) |
-| ⬜ Drag views between side bars (JetBrains tool window bars, VS Code Move View) | Custom placement | GAP | P3 |
-| ⬜ Saved layouts and presets, reset layout | Named workspaces | GAP | P2 (already listed #27) |
-| ⬜ Hide all tool windows (JetBrains Cmd+Shift+F12) | One key to focus code | GAP | P2 |
-| ✅ Status bar with run state, cursor, language, problems count | Live state strip | HAVE | P1 |
-| ⬜ Notifications centre | History of toasts | GAP | P3 |
+| ✅ `Easy` Activity bar, side bar, panel, status bar | Basic shell | HAVE | P1 |
+| ✅ `Easy` Toggle panel and side bar by key | Cmd+J, Cmd+B | HAVE | P1 |
+| ✅ `Easy` Maximise panel | Full-height panel | HAVE | P2 |
+| ⬜ `Easy` Move panel to right or left | Panel position | GAP | P2 |
+| ⬜ `Easy` Panel alignment (centre, justify) | Width of panel | GAP | P3 |
+| ⬜ `Hard` Drag a tab to another group or out to a window | Free layout | GAP | P2 (pop-out already listed #28) |
+| ⬜ `Hard` Drag views between side bars (JetBrains tool window bars, VS Code Move View) | Custom placement | GAP | P3 |
+| ✅ `Med` Saved layouts and presets, reset layout | Named workspaces | HAVE (#27 Layouts dialog) | P2 |
+| ⬜ `Easy` Hide all tool windows (JetBrains Cmd+Shift+F12) | One key to focus code | GAP | P2 |
+| ✅ `Easy` Status bar with run state, cursor, language, problems count | Live state strip | HAVE | P1 |
+| ⬜ `Easy` Notifications centre | History of toasts | GAP | P3 |
 
 ### Notebooks and data
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ⬜ Percent cells (`# %%`) with Run cell, Run above and below | Notebook-style .py | GAP | P1 (already listed #11, #13) |
-| ⬜ Interactive window | Cell results beside code | GAP | P2 |
-| ✅ Variable explorer and data viewer for DataFrames | Inspect frames | HAVE (Debug locals, last 50 rows) | P1 |
-| ◐ Rich outputs: plots, tables inline | Notebook outputs | PARTIAL (Plots tab) | P2 |
-| ⬜ SQL cells | Query the data store | GAP | P3 (already listed #14) |
+| ⬜ `Hard` Percent cells (`# %%`) with Run cell, Run above and below | Notebook-style .py | GAP | P1 (already listed #11, #13) |
+| ⬜ `Med` Interactive window | Cell results beside code | GAP | P2 |
+| ✅ `Med` Variable explorer and data viewer for DataFrames | Inspect frames | HAVE (Debug locals, last 50 rows) | P1 |
+| ◐ `Med` Rich outputs: plots, tables inline | Notebook outputs | PARTIAL (Plots tab) | P2 |
+| ⬜ `Hard` SQL cells | Query the data store | GAP | P3 (already listed #14) |
 
 ### Remote and collaboration
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ✅ Remote dev | Code runs elsewhere | HAVE (code runs on our backend by design) | P3 |
-| ⬜ Live share cursors | Pair editing | GAP | P3 |
-| ✅ Share a read-only link | Read-only view | HAVE (#19, with a pinned run) | P2 |
+| ✅ `Easy` Remote dev | Code runs elsewhere | HAVE (code runs on our backend by design) | P3 |
+| ⬜ `Hard` Live share cursors | Pair editing | GAP | P3 |
+| ✅ `Med` Share a read-only link | Read-only view | HAVE (#19, with a pinned run) | P2 |
 
 ### Cursor-specific AI features
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ⏸ Tab | Multi-line, cross-edit prediction from recent changes and linter errors | GAP | P3 |
-| ⏸ Inline edit (Cmd+K) | Prompt on a selection, diff to accept | GAP | P2 |
-| ⏸ Agent | Autonomous multi-step edits and commands | GAP | P2 |
-| ⏸ Rules (`.cursor/rules`, AGENTS.md) | Standing instructions: always, by file glob, by description, manual | GAP | P2: a "strategy rules" file the AI honours (no look-ahead, cost model) |
-| ⏸ @-mentions for context (@file, @folder, @docs, @web, @past chats) | Attach context to a prompt | GAP | P2: @run, @trades, @plot, @bar |
-| ⏸ Agent review of local changes | Quick or Deep review | GAP | P2 |
-| ⏸ Skills and slash commands | Reusable workflows | GAP | P3 |
-| ⏸ Accept or reject hunks | Per-hunk diff control | GAP | P2 |
+| ⏸ `Hard` Tab | Multi-line, cross-edit prediction from recent changes and linter errors | GAP | P3 |
+| ⏸ `Med` Inline edit (Cmd+K) | Prompt on a selection, diff to accept | GAP | P2 |
+| ⏸ `Hard` Agent | Autonomous multi-step edits and commands | GAP | P2 |
+| ⏸ `Easy` Rules (`.cursor/rules`, AGENTS.md) | Standing instructions: always, by file glob, by description, manual | GAP | P2: a "strategy rules" file the AI honours (no look-ahead, cost model) |
+| ⏸ `Med` @-mentions for context (@file, @folder, @docs, @web, @past chats) | Attach context to a prompt | GAP | P2: @run, @trades, @plot, @bar |
+| ⏸ `Med` Agent review of local changes | Quick or Deep review | GAP | P2 |
+| ⏸ `Med` Skills and slash commands | Reusable workflows | GAP | P3 |
+| ⏸ `Med` Accept or reject hunks | Per-hunk diff control | GAP | P2 |
 
 ### Terminal / bottom panel power-ups
 
@@ -777,39 +777,39 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: we have a
 
 | Power-up | What it does | Our version | Pri |
 |---|---|---|---|
-| ⬜ Shell integration (OSC 633 marks: prompt start A, end B, pre-exec C, done D with exit code, command line E, cwd P) | Terminal knows where each command starts, ends and whether it passed | Each console and CLI command becomes a block with a status, exit code and duration | P1 |
-| ⬜ Command decorations plus overview ruler | Green dot or red cross per command, also on the scrollbar | Same in the Console tab; red mark on failed runs | P2 |
-| ⬜ Command navigation (Ctrl+Up and Down) and select output | Jump command to command | Same | P2 |
-| ⬜ Command guide | Bar beside a command and its output on hover | Left border on each block | P3 |
-| ⬜ Sticky scroll in terminal | Pin the command whose output is scrolling | Pin the run name above long logs | P3 |
-| ⬜ Quick fix from output | Detect known errors and offer the next action | "Lookahead detected: shift by one bar", "Unknown symbol: did you mean", "Port busy" style fixes | P1 |
-| ⬜ Links: file:line, URLs, folders | Click output to open | Click `main.py:42`, a date, a symbol or a trade id to open code, chart or trade | P1 |
-| ⬜ Run recent command (Ctrl+Alt+R), pin, fuzzy search | History picker | History picker for Console and CLI | P1 |
-| ⬜ Go to recent directory | cd history | Recent runs picker (run id, universe, dates) | P3 |
-| ⬜ Split terminals, groups, rename, colour, icon | Several sessions | Split Console: REPL on one side, run log on the other | P2 |
-| ⬜ Persistent sessions (reconnect after reload) | Session survives | REPL state survives reload for the draft | P2 |
-| ⬜ Terminal IntelliSense | Suggest commands and flags | Autocomplete for `atlas` commands, `ctx` and symbols | P1 |
-| ⬜ Copy output as HTML, open command output in editor | Export a block | Copy or save a block as CSV, Markdown or a Results tab | P2 |
-| ✅ Find in terminal | Search output | Output tab filter (HAVE) | P3 |
+| ⬜ `Hard` Shell integration (OSC 633 marks: prompt start A, end B, pre-exec C, done D with exit code, command line E, cwd P) | Terminal knows where each command starts, ends and whether it passed | Each console and CLI command becomes a block with a status, exit code and duration | P1 |
+| ⬜ `Med` Command decorations plus overview ruler | Green dot or red cross per command, also on the scrollbar | Same in the Console tab; red mark on failed runs | P2 |
+| ⬜ `Easy` Command navigation (Ctrl+Up and Down) and select output | Jump command to command | Same | P2 |
+| ⬜ `Easy` Command guide | Bar beside a command and its output on hover | Left border on each block | P3 |
+| ⬜ `Easy` Sticky scroll in terminal | Pin the command whose output is scrolling | Pin the run name above long logs | P3 |
+| ⬜ `Med` Quick fix from output | Detect known errors and offer the next action | "Lookahead detected: shift by one bar", "Unknown symbol: did you mean", "Port busy" style fixes | P1 |
+| ⬜ `Easy` Links: file:line, URLs, folders | Click output to open | Click `main.py:42`, a date, a symbol or a trade id to open code, chart or trade | P1 |
+| ⬜ `Easy` Run recent command (Ctrl+Alt+R), pin, fuzzy search | History picker | History picker for Console and CLI | P1 |
+| ⬜ `Easy` Go to recent directory | cd history | Recent runs picker (run id, universe, dates) | P3 |
+| ⬜ `Med` Split terminals, groups, rename, colour, icon | Several sessions | Split Console: REPL on one side, run log on the other | P2 |
+| ⬜ `Med` Persistent sessions (reconnect after reload) | Session survives | REPL state survives reload for the draft | P2 |
+| ⬜ `Med` Terminal IntelliSense | Suggest commands and flags | Autocomplete for `atlas` commands, `ctx` and symbols | P1 |
+| ⬜ `Easy` Copy output as HTML, open command output in editor | Export a block | Copy or save a block as CSV, Markdown or a Results tab | P2 |
+| ✅ `Easy` Find in terminal | Search output | Output tab filter (HAVE) | P3 |
 
 **From the JetBrains Run tool window**
 
 | Power-up | What it does | Our version | Pri |
 |---|---|---|---|
-| ⬜ Rerun, stop, pause, rerun failed tests | Toolbar on the output | Rerun with the same config, rerun failed symbols only | P1 |
-| ◐ One tab per run configuration, pin a tab | Compare runs side by side | One Output tab per run, pin a run (idea #2 and DevRuns) | P2 |
-| ⬜ Soft wrap, scroll to end, filter, clear | Output hygiene | Add soft wrap and clear to Output | P3 |
-| ⬜ Rerun automatically on code change | Live feedback | "Run on save" for the quick level | P1 |
-| ◐ Console with history and variables (Python console) | REPL tied to the project | See REPL below | P1 |
+| ⬜ `Med` Rerun, stop, pause, rerun failed tests | Toolbar on the output | Rerun with the same config, rerun failed symbols only | P1 |
+| ◐ `Med` One tab per run configuration, pin a tab | Compare runs side by side | One Output tab per run, pin a run (idea #2 and DevRuns) | P2 |
+| ⬜ `Easy` Soft wrap, scroll to end, filter, clear | Output hygiene | Add soft wrap and clear to Output | P3 |
+| ⬜ `Easy` Rerun automatically on code change | Live feedback | "Run on save" for the quick level | P1 |
+| ◐ `Med` Console with history and variables (Python console) | REPL tied to the project | See REPL below | P1 |
 
 **Our own**
 
-1. ◐ **Python REPL bound to the strategy context.** `Console` already evaluates one expression at a paused bar through `POST /build/watch`. Extend it to a real REPL with statements and a persistent namespace: `ctx` (paused bar), `bars`, `trades`, `plots`, `np`, `pd`, `universe`. Show DataFrames as tables with copy and "send to Plots". Runs in the same sandbox as the strategy. P1.
-2. ⬜ **`atlas` CLI in the panel.** Commands, each a block with progress and a result link: `atlas run [--universe sp500] [--from 2018] [--cost bps=5]`, `atlas backtest`, `atlas optimise --param fast=5:30:5 --objective sharpe`, `atlas walkforward`, `atlas robust`, `atlas compare <run> <run>`, `atlas data coverage SPY`, `atlas plot <name>`, `atlas export trades.csv`. Same API calls the buttons make, so no second code path. P1.
-3. ◐ **Test runner.** `atlas test` discovers `def test_*` in `tests.py`, shows a tree with pass or fail, jumps to failures, and offers "pin this result as expected". P1.
-4. ⬜ **Tasks.** `tasks.json`-style named chains: "lint then quick run then robustness", with run-on-save. P2.
-5. ⬜ **Output as typed blocks.** A block is log, table, plot, or metric, not just text, so Output, Plots and Console share one stream. P2.
-6. ⬜ **Run history drawer.** Every command and run is searchable by name, tag, symbol, date. P2.
+1. ◐ `Hard` **Python REPL bound to the strategy context.** `Console` already evaluates one expression at a paused bar through `POST /build/watch`. Extend it to a real REPL with statements and a persistent namespace: `ctx` (paused bar), `bars`, `trades`, `plots`, `np`, `pd`, `universe`. Show DataFrames as tables with copy and "send to Plots". Runs in the same sandbox as the strategy. P1.
+2. ⬜ `Hard` **`atlas` CLI in the panel.** Commands, each a block with progress and a result link: `atlas run [--universe sp500] [--from 2018] [--cost bps=5]`, `atlas backtest`, `atlas optimise --param fast=5:30:5 --objective sharpe`, `atlas walkforward`, `atlas robust`, `atlas compare <run> <run>`, `atlas data coverage SPY`, `atlas plot <name>`, `atlas export trades.csv`. Same API calls the buttons make, so no second code path. P1.
+3. ◐ `Med` **Test runner.** `atlas test` discovers `def test_*` in `tests.py`, shows a tree with pass or fail, jumps to failures, and offers "pin this result as expected". P1.
+4. ⬜ `Med` **Tasks.** `tasks.json`-style named chains: "lint then quick run then robustness", with run-on-save. P2.
+5. ⬜ `Hard` **Output as typed blocks.** A block is log, table, plot, or metric, not just text, so Output, Plots and Console share one stream. P2.
+6. ⬜ `Med` **Run history drawer.** Every command and run is searchable by name, tag, symbol, date. P2.
 
 ---
 
