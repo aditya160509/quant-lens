@@ -133,7 +133,7 @@ The two headers merge into one 48px header. The left stripe and the header form 
 ## Checklist (in order; screenshot after each)
 
 - [x] L1 (neutral greys, inverse primary; full three-step rename open) Tokens: three surfaces, text steps and the accent, in `workspace.css`; Dev selectors read only tokens
-- [ ] L2 Fold the second `.dv-*` pass in `studio.css` into one; same pixels, fewer lines
+- [x] L2 Fold the second `.dv-*` pass in `studio.css` into one; same pixels, fewer lines (30 duplicate selectors folded, 656 → 635 lines; computed styles diffed before and after on Build Dev dark and light, Build Simple and Studio Home: no CSS-caused change)
 - [x] L3 One header: module switcher with hover flyouts, page tabs, strategy widget, run widget; `dv-bar` removed
 - [ ] L4 Landing-page nav uses the same switcher (replaces the hover lists added in D0)
 - [x] L5 Tool window stripe: 40px, 20px icons, top and bottom groups, Show names
