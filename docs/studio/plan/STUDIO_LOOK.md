@@ -134,13 +134,13 @@ The two headers merge into one 48px header. The left stripe and the header form 
 
 - [ ] L1 Tokens: three surfaces, text steps and the accent, in `workspace.css`; Dev selectors read only tokens
 - [ ] L2 Fold the second `.dv-*` pass in `studio.css` into one; same pixels, fewer lines
-- [ ] L3 One header: module switcher with hover flyouts, page tabs, strategy widget, run widget; `dv-bar` removed
+- [x] L3 One header: module switcher with hover flyouts, page tabs, strategy widget, run widget; `dv-bar` removed
 - [ ] L4 Landing-page nav uses the same switcher (replaces the hover lists added in D0)
-- [ ] L5 Tool window stripe: 40px, 20px icons, top and bottom groups, Show names
-- [ ] L6 Type pass: sans for UI, mono for code and numbers; tab and status heights
-- [ ] L7 Chart column: one header, floating drawing pill, one footer
-- [ ] L8 Tester tiles and equity-drawdown chart; Plots under Tester
-- [ ] L9 Status bar grouping
+- [x] L5 Tool window stripe: 40px, 20px icons, top and bottom groups, Show names
+- [x] L6 Type pass: sans for UI, mono for code and numbers; tab and status heights
+- [x] L7 Chart column: one header, floating drawing pill, one footer (drawing pill stays as Vela's own column)
+- [ ] L8 (tiles done in one row; equity-drawdown chart and Sharpe tile open) Tester tiles and equity-drawdown chart; Plots under Tester
+- [x] L9 Status bar grouping
 - [ ] L9b Lab pages: labelled sidebar on --bg with counts, raised content panel with its own header, Tessera card headers
 - [ ] L10 Focus mode, layout preset thumbnails, run deltas, compact mode
 - [ ] L11 Screenshots at 1440, 1280, 1024 and 390, dark and light (closes B-10)
