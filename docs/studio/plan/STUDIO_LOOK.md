@@ -15,6 +15,18 @@ Goal: make Studio the best-looking page in ATLAS. It should be as calm as the Te
 - QuantConnect IDE: the backtest result is a destination of its own, not a cramped strip.
 - Owner references: Tessera dashboard, a VS Code screenshot, and the TradingView Products menu.
 
+## Reference teardown (looked at in the browser, 2026-11-21)
+
+| App | What makes it look good | What we take | What we avoid |
+|---|---|---|---|
+| **PyCharm (New UI)** | Header is all widgets: project ▾, branch ▾, then run config ▾ ▶ 🐞 ⋮ on the right. Left stripe has a top group and a bottom group of 20px icons. Two tool windows stack in one column (Project above Agent Sessions). The status bar is a breadcrumb. | Header widgets; stripe groups; side windows that stack; breadcrumb status bar | The dense default tool-window chrome (title bars with five icons each) |
+| **Cursor** | Warm near-black base with each panel one step lighter and a 1px hairline at about 6% white. 13px text with muted labels. A single warm accent on the one primary button. Numbered choices. | One accent only on the primary action; hairline panels; muted secondary text | Marketing gradients behind the app |
+| **Linear** | The sidebar sits directly on the page background with no panel. Content is one raised panel with a large radius. Coloured glyphs appear only for projects and status. The header lives inside the panel (40px). | Sidebar on `--bg`, content raised; colour only as data; panel-owned header | Hiding everything behind hover |
+| **TradingView Supercharts** | 38px single-row top toolbar. 44px drawing stripe grouped by thin separators. A right stripe of widgets opens the right panel. 30px range bar under the chart. Panels are separated by dark gaps instead of borders. | Gap-separated panels; right widget stripe; range bar as the chart footer; grouped drawing stripe | Icon-only everything (the right stripe has no labels anywhere) |
+| **Tessera (owner pick)** | A light canvas with white cards. An 8px icon rail plus a labelled section sidebar (Home, Drafts, Your work with counts). Card headers 13px/600 with a small control on the right. Generous 16–20px padding. | Labelled sidebar with counts; card header pattern; padding | A third column of profile content |
+
+The pattern all five share is that **only one thing is loud on a screen**. That is the content (code, chart, numbers). Chrome is quiet, a single shade, and grouped.
+
 ## What is wrong now (audit of `/studio/build`, `workspace.css`, `studio.css`)
 
 1. **Two headers stacked.** `ws-top` (module menus, search, layout toggles, settings, theme) sits above `dv-bar` (Full tester, View, Simple/Dev, ⌘, ⋯, Save, Run). That is about 80px of chrome and two rows of controls with no clear owner.
@@ -95,6 +107,12 @@ The two headers merge into one 48px header. The left stripe and the header form 
 - Left (workspace): version and save state, then problems (errors and warnings), then the last run time and its result.
 - Right (file): Ln/Col, data range, engine, then the runs badge.
 
+### 8b. Two shells, one system
+
+- **Build (IDE)** follows the PyCharm and TradingView model: panels as islands on `--bg`, separated by 6px gaps (no borders), a stripe on each side, and widgets in the header.
+- **Lab pages** (Backtest, Optimise, Validate, Portfolio, Live, Home) follow the Linear and Tessera model. A labelled sidebar sits directly on `--bg`, with counts and run dots. Content is one raised panel with a 12px radius and its own 40px header (title, then filters and actions on the right). Cards inside use the Tessera header: 13px/600 title, `--text-3` subline, one control on the right.
+- Both use the same header, tokens, type and menus, so moving between them feels like one product.
+
 ### 9. Beyond the references
 
 - **Focus mode** (Zed's zen mode): ⌘⇧F hides both stripes and the bottom panel, leaving editor and chart. The header remains.
@@ -123,6 +141,7 @@ The two headers merge into one 48px header. The left stripe and the header form 
 - [ ] L7 Chart column: one header, floating drawing pill, one footer
 - [ ] L8 Tester tiles and equity-drawdown chart; Plots under Tester
 - [ ] L9 Status bar grouping
+- [ ] L9b Lab pages: labelled sidebar on --bg with counts, raised content panel with its own header, Tessera card headers
 - [ ] L10 Focus mode, layout preset thumbnails, run deltas, compact mode
 - [ ] L11 Screenshots at 1440, 1280, 1024 and 390, dark and light (closes B-10)
 
