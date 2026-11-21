@@ -556,3 +556,18 @@
 .dv-tiles dd { margin: 4px 0 0; font-size: 18px; font-weight: 600; color: var(--text); }
 .dv-tiles dd[data-tone="up"] { color: var(--up); }
 .dv-tiles dd[data-tone="down"] { color: var(--down); }
+/* Dev controls living in the workspace header: one row, no own border, the page's own bar row collapses. */
+.dv-bar.in-head { flex-wrap: nowrap; min-height: 0; padding: 0; gap: 4px; border: 0; }
+.dv-bar.in-head .btn { height: 30px; border-radius: 8px; }
+.dv-bar.in-head .dv-execute { padding: 0 14px; background: var(--accent); color: var(--bg); border: 0; font-weight: 600; }
+.dv-bar.in-head .dv-execute:hover:not(:disabled) { filter: brightness(1.08); }
+.dv[data-head] { grid-template-rows: 0 minmax(0, 1fr) 24px; }
+
+/* Tool window stripe (JetBrains New UI): 40px, 32px targets, 18px icons, top group for side windows, bottom group for the panel. */
+.dv { --ab: 44px; }
+.dv-icons { padding: 4px 0 6px; gap: 4px; }
+.dv-icons .icon-btn { width: 32px; height: 32px; margin: 0; border-radius: 8px; color: var(--text-3); }
+.dv-icons .icon-btn svg { width: 18px; height: 18px; stroke-width: 1.6; }
+.dv-icons .icon-btn:hover { color: var(--text); background: color-mix(in oklab, var(--text) 6%, transparent); }
+.dv-icons .icon-btn[aria-pressed="true"] { color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent); }
+.dv-icons-gap { flex: 1; }

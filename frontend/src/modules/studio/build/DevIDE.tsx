@@ -3,8 +3,9 @@
 import { DiffEditor } from "@monaco-editor/react";
 import { Group, Panel, Separator, type GroupImperativeHandle } from "react-resizable-panels";
 import Link from "next/link";
-import { BookOpen, Bug, ChevronDown, LayoutPanelLeft, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
+import { BookOpen, Bug, CircleAlert, Gauge, SquareTerminal, ChevronDown, LayoutPanelLeft, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import { SERIES } from "@/charts/core";
 import { Distribution } from "@/charts/Distribution";
@@ -60,8 +61,8 @@ const show = (v: unknown) => (v === null || v === undefined ? "—" : typeof v =
 const pct = (v?: number) => (v === undefined ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
 const DOC_SCOPES = ["ctx", "portfolio_ctx", "numpy", "pandas", "math", "statistics"];
 const RAILS: [Rail, ReactNode, string][] = [
-  ["files", <FileCode2 key="f" size={15} />, "Explorer"], ["outline", <ListTree key="o" size={15} />, "Outline"], ["search", <Search key="s" size={15} />, "Search"],
-  ["versions", <GitBranch key="v" size={15} />, "Versions"], ["docs", <BookOpen key="d" size={15} />, "Docs"], ["templates", <LayoutTemplate key="t" size={15} />, "Starters"],
+  ["files", <FileCode2 key="f" size={18} />, "Explorer"], ["outline", <ListTree key="o" size={18} />, "Outline"], ["search", <Search key="s" size={18} />, "Search"],
+  ["versions", <GitBranch key="v" size={18} />, "Versions"], ["docs", <BookOpen key="d" size={18} />, "Docs"], ["templates", <LayoutTemplate key="t" size={18} />, "Starters"],
 ];
 
 const money = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -111,6 +112,9 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const open_ = ws.cur.layout.open;
   const setOpenP = (p: PanelId, v: boolean | ((o: boolean) => boolean)) => ws.patch((l) => ({ ...l, open: { ...l.open, [p]: typeof v === "function" ? v(l.open[p]) : v } }));
   const [iconsOpen, setIconsOpen] = useState(true);
+  // The workspace header has a slot for page controls; on phones the controls stay in their own bar.
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => { if (!matchMedia("(max-width: 760px)").matches) setSlot(document.getElementById("ws-slot")); }, []);
   const setRailOpen = (v: boolean | ((o: boolean) => boolean)) => setOpenP("rail", v);
   const setPanelOpen = (v: boolean | ((o: boolean) => boolean)) => setOpenP("tester", v);
   const hRef = useRef<GroupImperativeHandle>(null), vRef = useRef<GroupImperativeHandle>(null);
@@ -510,8 +514,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               })() : null;
 
   return (
-    <div className="dv" data-activity={iconsOpen}>
-      <div className="dv-bar">
+    <div className="dv" data-activity={iconsOpen} data-head={slot ? "" : undefined}>
+      {slot ? createPortal(<div className="dv-bar in-head">
         <div className="dv-tools">
           <WorkspaceMenu ws={ws} />
           <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
@@ -540,12 +544,47 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
           <Play size={14} />{starting || running ? "Running…" : "Run"}
         </button>
         {running && view !== "results" ? <button className="btn" onClick={onCancel}>Cancel</button> : null}
-      </div>
+      </div>, slot) : <div className="dv-bar">
+        <div className="dv-tools">
+          <WorkspaceMenu ws={ws} />
+          <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
+            <summary className="btn sm ghost" aria-label="View menu"><LayoutPanelLeft size={14} />View<ChevronDown size={12} /></summary>
+            <div className="dv-menu" role="menu" onClick={(e) => { (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
+              <button role="menuitem" onClick={() => openView("results")}>Results</button>
+              <button role="menuitem" onClick={() => openView("tearsheet")}>Tearsheet</button>
+              <button role="menuitem" onClick={() => openView("robust")}>Robustness</button>
+              <button role="menuitem" onClick={() => openView("runs")}>Compare runs</button>
+              <hr />
+              {view !== "code" ? <button role="menuitemcheckbox" aria-checked={reportSide} onClick={() => setReportSide((visible) => !visible)}>Show chart and bottom panel</button> : null}
+              <button role="menuitemcheckbox" aria-checked={chartOpen} onClick={() => { if (view !== "code") setReportSide(true); if (!chartOpen && open_.chart) setRailOpen(false); else setOpenP("chart", !chartOpen); }}>Chart</button>
+              <button role="menuitem" onClick={openPreview}>Preview</button>
+              <button role="menuitemcheckbox" aria-checked={!!split} onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}>Split editor</button>
+              <button role="menuitemcheckbox" aria-checked={panelOpen} onClick={() => { setPanelOpen(!panelOpen); if (view !== "code") setReportSide(!panelOpen); }}>Bottom panel</button>
+              {view === "code" ? <button role="menuitemcheckbox" aria-checked={pinned.includes(active)} onClick={() => {
+                keep(active);
+                setPinned((current) => current.includes(active) ? current.filter((file) => file !== active) : [...current, active]);
+              }}>Pin active file</button> : null}
+              <button role="menuitemcheckbox" aria-checked={iconsOpen} onClick={() => setIconsOpen((o) => !o)}>Activity bar</button>
+            </div>
+          </details>
+        </div>
+        {tools}
+        <button className="btn dv-execute" disabled={!canRun || starting || running} title={!canRun ? "Add strategy code or rules to run" : "Run backtest (⌘↵)"} onClick={() => runCode()}>
+          <Play size={14} />{starting || running ? "Running…" : "Run"}
+        </button>
+        {running && view !== "results" ? <button className="btn" onClick={onCancel}>Cancel</button> : null}
+      </div>}
       <nav className="dv-icons" aria-label="Activity bar" hidden={!iconsOpen}>
         {/* Four entry points; Outline sits beside Files in the side bar header, Starters opens from ⌘⇧S and the empty editor. */}
         {RAILS.filter(([k]) => k !== "outline" && k !== "templates").map(([k, icon, l]) => {
           const on = railOpen && (rail === k || (k === "files" && rail === "outline"));
           return <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={on} onClick={() => { if (on) setRailOpen(false); else revealRail(k); }}>{icon}</button>;
+        })}
+        <span className="dv-icons-gap" />
+        {/* Bottom group opens the bottom panel (JetBrains: lower stripe icons open horizontal tool windows). */}
+        {([["tester", <Gauge key="g" size={18} />, "Tester"], ["problems", <CircleAlert key="p" size={18} />, "Problems"], ["console", <SquareTerminal key="c" size={18} />, "Console"]] as const).map(([k, icon, l]) => {
+          const on = panelOpen && tab === k;
+          return <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={on} onClick={() => { if (on) setPanelOpen(false); else { setPanelOpen(true); setTab(k); } }}>{icon}</button>;
         })}
       </nav>
       <div className="dv-body" ref={bodyRef}>
