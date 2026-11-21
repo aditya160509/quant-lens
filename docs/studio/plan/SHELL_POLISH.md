@@ -47,9 +47,9 @@ Next batch for the Build workspace. Sources: owner screenshots of `/studio/build
 
 ## Checklist
 - [x] D0 Top nav menus on every page, same bar everywhere
-- [x] D1 Labs menu in the top bar; coloured rail removed; ⌘1–⌘6
+- [x] D1 Folded into D0 (module menus); coloured rail removed. ⌘1–⌘6 not added
 - [x] D2 Activity bar cut to four; chart toolbar grouped into flyouts
 - [x] D3 Gutters invisible at rest, 2px accent on hover or drag
-- [x] D4 Strategy Tester drawer with a single summary view (closes W-8)
+- [x] D4 Tester tab with a one-screen summary (equity/drawdown strip and in-drawer settings for W-8 still open; trades strip and replay kept under the chart)
 - [x] D5 Spacing and header pass across the Dev workspace
 - [ ] Screenshots at 1440 and 1024, dark and light (closes B-10)
