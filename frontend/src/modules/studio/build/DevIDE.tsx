@@ -20,6 +20,7 @@ import { fitWorkspace, LayoutsDialog, targets, useWorkspaces, WorkspaceMenu, typ
 import { DevRobust } from "./DevRobust";
 import { DevRuns, type RunEntry } from "./DevRuns";
 import { DevTearsheet } from "./DevTearsheet";
+import { RunSummary } from "./RunSummary";
 import { tradeSummary } from "./devStats";
 
 type Log = { date: string; symbol: string | null; line: number; text: string; level: string; fields?: Record<string, unknown> | null };
@@ -91,7 +92,7 @@ function Tester({ trades, inputs }: { trades: Record<string, unknown>[]; inputs:
   return (
     <div className="dv-tester">
       <div className="dv-tester-main">
-      {s.trades ? <dl className="dv-tiles">{tiles.map(([k, v, tone]) => <div key={k}><dt>{k}</dt><dd className="num" data-tone={tone ?? undefined}>{v}{diff[k] ? <small className="dv-delta">{diff[k]}</small> : null}</dd></div>)}</dl> : <p className="dv-empty">Run the preview to see results</p>}
+      {s.trades ? <dl className="dv-tiles">{tiles.map(([k, v, tone]) => <div key={k}><dt>{k}</dt><dd className="num" data-tone={tone ?? undefined}>{v}{diff[k] ? <small className="dv-tdelta">{diff[k]}</small> : null}</dd></div>)}</dl> : <p className="dv-empty">Run the preview to see results</p>}
       {s.curve.length > 1 ? <TimeSeries data={s.curve} series={[{ key: "net", label: "Cumulative P&L", color: "var(--text-2)" }, { key: "dd", label: "Drawdown", color: "var(--down)" }]} height={140} legend={false} /> : null}
       </div>
       <aside className="dv-tester-set" aria-label="Inputs"><h4>Inputs</h4>{inputs}</aside>
@@ -497,8 +498,6 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const resultsView = view === "results" ? (() => {
                 const r = version ? runs[version] : undefined;
                 const m = quick?.result?.meta;
-                const d = quick?.delta;
-                const sign = (v: number | null | undefined, f: (x: number) => string) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${f(v)}`);
                 return (
                   <div className="dv-results">
                     <div className="dv-dbar">
@@ -512,22 +511,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                     {quick?.status === "cancelled" ? <p className="dv-empty">Cancelled</p> : null}
                     {!quick && !r && !starting && !profile ? <p className="dv-empty">Run a backtest to see results.</p> : null}
                     {m ? <>
-                      <div className="kpis">
-                        <div className="kpi"><span>Return</span><b>{pct(m.total_return)}</b>{d ? <i className="dv-delta">{sign(d.total_return, (x) => `${(x * 100).toFixed(1)} pts`)}</i> : null}</div>
-                        <div className="kpi"><span>Sharpe</span><b>{m.metrics?.sharpe?.toFixed(2) ?? "—"}</b>{d ? <i className="dv-delta">{sign(d.sharpe, (x) => x.toFixed(2))}</i> : null}</div>
-                        <div className="kpi"><span>Max drawdown</span><b>{m.metrics?.max_drawdown != null ? pct(m.metrics.max_drawdown) : "—"}</b></div>
-                        <div className="kpi"><span>Trades</span><b>{m.metrics?.trades ?? "—"}</b>{d ? <i className="dv-delta">{sign(d.trades, (x) => String(x))}</i> : null}</div>
-                      </div>
-
-                      {quick?.result?.summary_cards?.length ? <div className="dv-cards">{quick.result.summary_cards.filter((c) => !/^(sharpe|max drawdown|trades)$/i.test(c.label)).map((c) => <span key={c.label}><i>{c.label}</i><b>{c.value == null ? "—" : /win/i.test(c.label) ? `${(c.value * 100).toFixed(1)}%` : /drawdown|cagr/i.test(c.label) ? pct(c.value) : c.value.toFixed(2)}</b></span>)}</div> : null}
-                      {quick?.result?.charts?.equity_curve?.length ? <div className="dv-plot"><b>Equity vs benchmark</b><TimeSeries data={quick.result.charts.equity_curve} height={280}
-                        series={[{ key: "strategy", label: "Strategy", color: SERIES[0] }, { key: "benchmark", label: "Benchmark", color: "var(--text-3)" }]} /></div> : null}
-                      {m.trade_split ? <div className="dv-plot"><b>Closed trades by side</b><DataTable rows={Object.entries(m.trade_split).map(([side, v]) => ({ side, trades: v.count ?? 0, win_rate: v.win_rate ?? null, profit_factor: v.profit_factor ?? null, avg_win: v.avg_win ?? null, avg_loss: v.avg_loss ?? null, expectancy: v.expectancy ?? null }))} /></div> : null}
-                      {quick?.result?.tables?.trades?.length ? <>
-                        <div className="dv-plot"><b>Return per trade</b><Distribution values={quick.result.tables.trades.map((t) => t.return).filter((value): value is number => typeof value === "number" && Number.isFinite(value))} xLabel="Return per trade" height={180} format={(v) => `${(v * 100).toFixed(1)}%`} /></div>
-                        <div className="dv-plot"><b>Trades</b><DataTable rows={quick.result.tables.trades} opts={{ viewKey: "studio:dev:quicktrades" }} /></div>
-                      </> : null}
-                      {quick?.level === "full" ? <Link className="btn sm" href="/studio/backtest">Open in Backtest</Link> : null}
+                      <RunSummary quick={quick!} />
+                      <span className="dv-dbar">{quick?.job_id ? <Link className="btn sm" href={`/studio/report/${quick.job_id}`}>Open report</Link> : null}{quick?.level === "full" ? <Link className="btn sm" href="/studio/backtest">Open in Backtest</Link> : null}</span>
                     </> : !quick && r ? (
                       <div className="kpis">
                         <div className="kpi"><span>v{version} return</span><b>{pct(r.total_return)}</b></div>

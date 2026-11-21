@@ -6,7 +6,7 @@ One tracker for every acceptance id and every point in [FEATURES_PEAK.md](FEATUR
 
 Three streams, in this order. Details stay in their sections below; this is the map.
 
-**1. Workspace (new single screen), section "Workspace" at the bottom: W-1 to W-14 (open: W-5 free docking, W-11 Report page; W-7 and W-12 moved to Chart).** Panels, templates, rename/manage workspaces, Vela chart (mark B), Strategy Tester, ctx drawing calls, Inputs form, Report page, chart-first mode, old engine removal.
+**1. Workspace (new single screen), section "Workspace" at the bottom: W-1 to W-14, all done (W-7 and W-12 tracked in Chart as CH-23 and CH-19).** Panels, templates, rename/manage workspaces, Vela chart (mark B), Strategy Tester, ctx drawing calls, Inputs form, Report page, chart-first mode, old engine removal.
 
 **2. Build items still open (21), section "Build":**
 - Editor and IDE: B-13 editor groups, B-16 IDE keys (⌘\ split), B-26 undo survives reload, B-30 in-browser Pyright, B-73 logpoints, B-92 project files, B-93 libraries, B-137 shared undo / Explain
@@ -779,7 +779,7 @@ Each needs an answer before the page it blocks. Defaults are in the text.
 - [ ] OD-18 Tax and wash-sale (REVIEW G10) is not in v3. Confirm it stays out
 - [ ] OD-19 Tick data is not in v3 (REVIEW §3). Confirm it stays out
 
-## Workspace (Studio v3 single screen, plan: docs/studio/plan/workspace_plan.html): 11 / 12 done
+## Workspace (Studio v3 single screen, plan: docs/studio/plan/workspace_plan.html): 12 / 12 done
 Merges Build (141 done features move into panels unchanged), the 22 open Build items, and DEV_IDEAS catalogue items (as numbered there).
 - [x] [L] W-1 Panel system: resizable splits, snap, one spring animation, 60 fps drag, layout remembered
 - [x] [M] W-2 Panels closed by default; open from View menu, palette and shortcuts
@@ -790,7 +790,7 @@ Merges Build (141 done features move into panels unchanged), the 22 open Build i
 - [x] [L] W-8 Strategy Tester drawer: key stats, equity/drawdown, trades list, settings (Inputs card beside the results)
 - [x] [M] W-9 ctx.fill, ctx.hline, ctx.bgcolor, ctx.draw_* rendered on the chart
 - [x] [M] W-10 Declared params become an Inputs form; change a value and the chart re-runs
-- [ ] [L] W-11 Report page: performance, trades analysis, tearsheet, robustness, compare, certificate. Dev report tabs now use the full workspace by default. A standalone report page remains open.
+- [x] [L] W-11 Report page `/studio/report/:job`: Summary, Tearsheet, Robustness, Trades, Certificate (reproduce on the server); copy link, print or save as PDF; Open report from Build's Results; without an id it lists recent runs. Compare runs stays in Build's Runs tab
 - W-7 (drawings) and W-12 (chart-first mode) moved to Chart as CH-23 and CH-19.
 - [x] [S] W-13 Fix: preview too short, broken resize and pan (superseded by W-1)
 - [x] [M] W-14 Removed Studio's old Chart page and its lightweight-charts preview (owner OK 2026-11-21). The shared chart_engine stays: watchlist, trading, landing and security still use it. Features to port before it goes are inventoried in CHART_RESEARCH.md "Supercharts parity and beyond"
