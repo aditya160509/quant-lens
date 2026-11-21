@@ -714,8 +714,8 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: we have a
 |---|---|---|---|
 | Settings UI with search and JSON | Searchable settings | PARTIAL (scattered toggles) | P2 |
 | Profiles (VS Code) | Bundled settings, layout, snippets per context | GAP | P3 |
-| Keybindings editor, chords, `when` clauses | Rebind keys | GAP | P2 (already listed #26) |
-| Keyboard shortcuts cheat sheet | List of keys | GAP | P2 |
+| Keybindings editor, chords, `when` clauses | Rebind keys | PARTIAL (#26: chords, conflicts, reset; no `when`) | P2 |
+| Keyboard shortcuts cheat sheet | List of keys | HAVE (Customise Build, searchable) | P2 |
 | Theme follows workspace light and dark | Theming | HAVE | P2 |
 | Compact density | JetBrains Compact mode | HAVE | P3 |
 | Settings sync across devices | Cloud settings | GAP | P3 |
@@ -742,7 +742,7 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: we have a
 |---|---|---|---|
 | Percent cells (`# %%`) with Run cell, Run above and below | Notebook-style .py | GAP | P1 (already listed #11, #13) |
 | Interactive window | Cell results beside code | GAP | P2 |
-| Variable explorer and data viewer for DataFrames | Inspect frames | GAP | P1 |
+| Variable explorer and data viewer for DataFrames | Inspect frames | HAVE (Debug locals, last 50 rows) | P1 |
 | Rich outputs: plots, tables inline | Notebook outputs | PARTIAL (Plots tab) | P2 |
 | SQL cells | Query the data store | GAP | P3 (already listed #14) |
 

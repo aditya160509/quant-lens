@@ -15,7 +15,7 @@ Three streams, in this order. Details stay in their sections below; this is the 
 - Records: B-10 screenshots at 1440 and 1024
 - Blocked or owner: B-55 ctx.store, B-67 and B-123 (fundamentals data), B-140 AI ⌘K edit
 
-**3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 11 to 14 research, reactive and SQL cells, 17 and 18 library and starters, 20 review comments (partial), 23 and 24 paper and live hooks, 26 keymap chords, 28 pop-out windows. Later (AI parked by the owner): 21, 22. Built: 2, 3, 4, 5, 6, 7, 9, 10, 15 (Data page), 19 (share with a pinned run), 25, 27 (Layouts dialog), 29. Moved to Chart: 1, 8, 30. IDE catalogue P1 gaps built 2026-11-21: strategy inspections, run configurations, logpoints, test explorer and strategy tests.
+**3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 11 to 14 research, reactive and SQL cells, 17 and 18 library and starters, 20 review comments (partial), 23 and 24 paper and live hooks, 28 pop-out windows. Later (AI parked by the owner): 21, 22. Built: 2, 3, 4, 5, 6, 7, 9, 10, 15 (Data page), 19 (share with a pinned run), 25, 26 (keymap chords), 27 (Layouts dialog), 29. Moved to Chart: 1, 8, 30. IDE catalogue P1 gaps built 2026-11-21: strategy inspections, run configurations, logpoints, test explorer and strategy tests, DataFrame variable explorer. P1 gap left: percent cells (#11).
 
 **4. Chart, section "Chart": CH-1 to CH-50, 43 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
 
