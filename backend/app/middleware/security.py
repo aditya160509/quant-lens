@@ -15,16 +15,16 @@ A09:2021 - Security Logging: Comprehensive audit logging
 A10:2021 - SSRF: URL validation for external requests
 """
 
-import time
 import hashlib
 import logging
 import re
+import time
 from collections import defaultdict
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set, Callable
+from collections.abc import Callable
 from functools import wraps
+from typing import Any
 
-from fastapi import Request, Response, HTTPException, status
+from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -53,9 +53,9 @@ class RateLimiter:
         self.cleanup_interval = cleanup_interval
         
         # In-memory storage (use Redis for multi-instance production)
-        self._minute_buckets: Dict[str, List[float]] = defaultdict(list)
-        self._hour_buckets: Dict[str, List[float]] = defaultdict(list)
-        self._blocked_ips: Dict[str, float] = {}
+        self._minute_buckets: dict[str, list[float]] = defaultdict(list)
+        self._hour_buckets: dict[str, list[float]] = defaultdict(list)
+        self._blocked_ips: dict[str, float] = {}
         self._last_cleanup = time.time()
     
     def _cleanup(self):
@@ -106,7 +106,7 @@ class RateLimiter:
         
         return f"ip:{ip}"
     
-    def is_allowed(self, request: Request) -> tuple[bool, Optional[dict]]:
+    def is_allowed(self, request: Request) -> tuple[bool, dict | None]:
         """
         Check if request is allowed.
         Returns (allowed, rate_limit_info)
@@ -114,6 +114,13 @@ class RateLimiter:
         self._cleanup()
         now = time.time()
         key = self.get_client_key(request)
+        # Build's editor calls (lint, types, hover, lenses, outline) fire on every pause in typing; give them their own,
+        # larger bucket so editing never locks the rest of the app out. Runs stay in the normal bucket.
+        path = request.url.path
+        editor = path.startswith("/api/studio-v3/build/") and not path.startswith("/api/studio-v3/build/run")
+        scale = 5 if editor else 1
+        if editor:
+            key += ":editor"
         
         # Check if blocked
         if key in self._blocked_ips:
@@ -126,7 +133,7 @@ class RateLimiter:
         
         # Check minute limit
         minute_requests = [t for t in self._minute_buckets[key] if t > now - 60]
-        if len(minute_requests) >= self.requests_per_minute:
+        if len(minute_requests) >= self.requests_per_minute * scale:
             # Temp block for escalating violations
             self._blocked_ips[key] = now + 60  # Block for 1 minute
             return False, {
@@ -137,7 +144,7 @@ class RateLimiter:
         
         # Check hour limit
         hour_requests = [t for t in self._hour_buckets[key] if t > now - 3600]
-        if len(hour_requests) >= self.requests_per_hour:
+        if len(hour_requests) >= self.requests_per_hour * scale:
             self._blocked_ips[key] = now + 300  # Block for 5 minutes
             return False, {
                 "limit": self.requests_per_hour,
@@ -147,7 +154,7 @@ class RateLimiter:
         
         # Check burst (10 requests in 1 second)
         recent = [t for t in minute_requests if t > now - 1]
-        if len(recent) >= self.burst_limit:
+        if len(recent) >= self.burst_limit * scale:
             return False, {
                 "limit": self.burst_limit,
                 "window": "burst",
@@ -180,10 +187,10 @@ rate_limiter = RateLimiter(
 SAFE_TICKER_PATTERN = re.compile(r'^[\^]?[A-Z0-9]{1,20}(\.[A-Z]{1,4})?$')
 SAFE_SYMBOL_LIST_PATTERN = re.compile(r'^[A-Z0-9.,\s\^]{1,500}$')
 UNSAFE_PATTERNS = [
-    re.compile(r'<script', re.I),
-    re.compile(r'javascript:', re.I),
-    re.compile(r'on\w+\s*=', re.I),
-    re.compile(r'data:\s*text/html', re.I),
+    re.compile(r'<script', re.IGNORECASE),
+    re.compile(r'javascript:', re.IGNORECASE),
+    re.compile(r'on\w+\s*=', re.IGNORECASE),
+    re.compile(r'data:\s*text/html', re.IGNORECASE),
     re.compile(r'\{\{.*\}\}'),  # Template injection
     re.compile(r'\$\{.*\}'),    # Template injection
 ]
@@ -213,7 +220,7 @@ def sanitize_ticker(ticker: str) -> str:
     return clean
 
 
-def sanitize_symbol_list(symbols: str, max_symbols: int = 100) -> List[str]:
+def sanitize_symbol_list(symbols: str, max_symbols: int = 100) -> list[str]:
     """
     Sanitize comma-separated symbol list.
     """
@@ -319,10 +326,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         
         try:
             response = await call_next(request)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 the last guard: log and return a 500 for any handler failure
             import traceback
             # Log error with traceback for debugging
-            logger.error(f"Request error: {request.url.path} - {str(e)}\n{traceback.format_exc()}")
+            logger.error(f"Request error: {request.url.path} - {e!s}\n{traceback.format_exc()}")
             response = JSONResponse(
                 status_code=500,
                 content={"error": "Internal Server Error"}
@@ -366,8 +373,8 @@ class OptimizedCache:
     ):
         self.max_size = max_size
         self.default_ttl = default_ttl
-        self._store: Dict[str, dict] = {}
-        self._access_order: List[str] = []
+        self._store: dict[str, dict] = {}
+        self._access_order: list[str] = []
     
     def _evict_lru(self):
         """Evict least recently used items when at capacity"""
@@ -387,7 +394,7 @@ class OptimizedCache:
             if key in self._access_order:
                 self._access_order.remove(key)
     
-    def get(self, key: str) -> Optional[any]:
+    def get(self, key: str) -> Any | None:
         """Get value if exists and not expired"""
         if key not in self._store:
             return None
@@ -404,7 +411,7 @@ class OptimizedCache:
         
         return entry["value"]
     
-    def set(self, key: str, value: any, ttl: Optional[int] = None):
+    def set(self, key: str, value: Any, ttl: int | None = None):
         """Set value with TTL"""
         if ttl is None:
             ttl = self.default_ttl
@@ -513,12 +520,8 @@ def validate_external_url(url: str) -> bool:
         if parsed.netloc not in ALLOWED_EXTERNAL_HOSTS:
             return False
         
-        # No private IPs
-        if any(parsed.netloc.startswith(p) for p in ["127.", "10.", "192.168.", "172."]):
-            return False
-        
-        return True
-    except Exception:
+        return not any(parsed.netloc.startswith(p) for p in ["127.", "10.", "192.168.", "172."])  # no private IPs
+    except Exception:  # noqa: BLE001 any unparsable URL is refused
         return False
 
 
@@ -535,9 +538,9 @@ class AuditLogger:
     def log_auth_attempt(
         self,
         success: bool,
-        user_id: Optional[str],
+        user_id: str | None,
         ip: str,
-        reason: Optional[str] = None
+        reason: str | None = None
     ):
         """Log authentication attempt"""
         self.logger.info(
@@ -560,7 +563,7 @@ class AuditLogger:
         self,
         key: str,
         limit_type: str,
-        blocked_until: Optional[float] = None
+        blocked_until: float | None = None
     ):
         """Log rate limit event"""
         self.logger.warning(
@@ -571,7 +574,7 @@ class AuditLogger:
         self,
         ip: str,
         reason: str,
-        details: Optional[str] = None
+        details: str | None = None
     ):
         """Log suspicious activity"""
         self.logger.warning(

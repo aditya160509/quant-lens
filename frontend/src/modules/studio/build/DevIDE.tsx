@@ -117,12 +117,12 @@ function VarGrid({ t, open }: { t: VarTable; open?: boolean }) {
     <details className="dv-vgrid" open={open}><summary>{t.shape.join(" × ")}</summary>
       <div><table>
         <thead><tr><th />{t.columns.map((c, j) => <th key={c} title={t.dtypes[j]}>{c}<small>{t.dtypes[j]}</small></th>)}</tr></thead>
-        <tbody className="dv-vsum">
+        {t.shape[0] > 10 ? <tbody className="dv-vsum">
           <tr><th>min · max</th>{t.summary.map((m, j) => <td key={j}>{m?.min !== undefined ? `${show(m.min)} · ${show(m.max)}` : "—"}</td>)}</tr>
           <tr><th>mean</th>{t.summary.map((m, j) => <td key={j}>{show(m?.mean)}</td>)}</tr>
           <tr><th>missing</th>{t.summary.map((m, j) => <td key={j}>{m ? m.missing : "—"}</td>)}</tr>
           <tr><th />{t.spark.map((v, j) => <td key={j}>{(v?.filter((x) => x !== null).length ?? 0) > 1 ? <Spark values={v!.filter((x): x is number => x !== null)} /> : null}</td>)}</tr>
-        </tbody>
+        </tbody> : null}
         <tbody>{t.head.map((r, i) => row(r, t.head_index[i]))}{t.head.length ? <tr className="dv-vgap"><th>…</th>{t.columns.map((c) => <td key={c} />)}</tr> : null}{t.rows.map((r, i) => row(r, t.index[i]))}</tbody>
       </table></div>
     </details>
@@ -395,7 +395,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     return () => clearTimeout(t);
   }, [files]);
   useEffect(() => {
-    const item = (group: string, label: string, file: string, line: number, column: number, hidden: boolean) => ({ id: `nav:${JSON.stringify([file, line, column])}`, group, label, hidden });
+    const item = (group: string, label: string, file: string, line: number, column: number, hidden: boolean) => ({ id: `nav:${JSON.stringify([file, line, column, group])}`, group, label, hidden });
     const flat = (ss: Sym[], q = ""): Sym[] => ss.flatMap((x) => [{ ...x, name: q + x.name }, ...flat(x.children, `${q}${x.name}.`)]);
     const names = Object.keys(files), order = [...recent.filter((f) => names.includes(f)), ...names.filter((f) => !recent.includes(f))];
     window.dispatchEvent(new CustomEvent("studio:devitems", { detail: [

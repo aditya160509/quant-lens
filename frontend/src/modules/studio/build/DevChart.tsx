@@ -114,8 +114,8 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   }, [shown, pausedAt, onGo]);
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement;
-      if (e.metaKey || e.ctrlKey || t.closest("input, textarea, select, .monaco-editor")) return;
+      const t = e.target instanceof Element ? e.target : null;
+      if (e.metaKey || e.ctrlKey || t?.closest("input, textarea, select, .monaco-editor")) return;
       if (e.key === "]" || e.key === "[") { e.preventDefault(); hop(e.key === "]" ? 1 : -1); }
     };
     window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);

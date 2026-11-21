@@ -42,3 +42,14 @@ def test_filters(studio):  # noqa: F811
 def test_sandbox_refuses_os(studio):  # noqa: F811
     t = run(studio, files={"test_x.py": "import os\n\ndef test_a():\n    pass\n"})
     assert t["test_a"]["status"] == "error" and "not allowed" in t["test_a"]["message"]
+
+
+def test_percent_cells_run_in_order_and_show_values():
+    from app.services.studio_v3.core import strategy_tests
+
+    src = "# %% load\nfrom studio.testing import bars\nb = bars(10)\nprint('n', len(b['close']))\n# %% stats\nclass K:\n    pass\nx = sum(b['close']) / 10\nx > 0\n# %% boom\n1 / 0\n"
+    assert [c["line"] for c in strategy_tests.cells(src)] == [1, 5, 10]
+    out = strategy_tests.run_cells({"main.py": "", "research.py": src}, "research.py", 1, only=False, symbols=[])["outputs"]
+    assert [o["index"] for o in out] == [0, 1] and out[0]["stdout"] == "n 10\n" and out[1]["value"] is True and not out[1]["error"]
+    err = strategy_tests.run_cells({"main.py": "", "research.py": src}, "research.py", 2, only=True, symbols=[])["outputs"]
+    assert err[-1]["error"].startswith("ZeroDivisionError") and err[-1]["error_line"] == 11

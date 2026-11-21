@@ -210,7 +210,7 @@ def _cells_main(job: dict, sources: dict, builtins: dict, guarded_import, pyrunn
 
     builtins["__import__"] = cell_import
     builtins["print"] = print
-    namespace = {"__builtins__": builtins, "math": pyrunner.math}
+    namespace = {"__builtins__": builtins, "__name__": "__cells__", "math": pyrunner.math}
     lines = sources[job["file"]].splitlines()
     real_stdout, last = sys.stdout, len(job["parts"]) - 1
     for part in job["parts"]:
