@@ -12,6 +12,7 @@ import { TimeSeries } from "@/charts/TimeSeries";
 import { TrialChip } from "../RunHeader";
 import { GroupEditor, groupFormula, paletteOrder, toGroup } from "./BlockRows";
 import { REBINDABLE } from "./CodeEditor";
+import { FIXED, conflictWith } from "./keymap";
 import { BranchDialog } from "./Branches";
 import { MenuItem, PopMenu, Segmented, type MenuAt } from "@/workspace/ui";
 import { STUDIO_BASE } from "../base";
@@ -638,6 +639,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
 function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [d, setD] = useState<Partial<Defaults>>(readDefaults);
+  const [kq, setKq] = useState("");
   useEffect(() => { ref.current?.showModal(); }, []);
   const save = () => { try { localStorage.setItem("studio:build:defaults", JSON.stringify(d)); localStorage.removeItem("studio:build:ui"); } catch { /* blocked */ } toast.success("Defaults saved"); ref.current?.close(); };
   const exits = { ...BLANK.exits, ...d.exits }, sizing = { ...BLANK.sizing, ...d.sizing };
@@ -651,8 +653,11 @@ function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void })
         <label className="bd-num"><span>Colour by role</span><input type="checkbox" checked={!d.plain} onChange={(e) => setD({ ...d, plain: !e.target.checked })} /></label>
         <div className="bd-num"><span>Condition order</span><ol className="bd-palette">{(d.palette?.length ? paletteOrder().sort((a, b) => d.palette!.indexOf(a[1]) - d.palette!.indexOf(b[1])) : paletteOrder()).map(([, l], i, all) => (
           <li key={l}>{l}<button type="button" className="icon-btn" aria-label={`Move ${l} up`} disabled={!i} onClick={() => { const n = all.map(([, x]) => x); [n[i - 1], n[i]] = [n[i], n[i - 1]]; setD({ ...d, palette: n }); }}>↑</button></li>))}</ol></div>
-        <div className="bd-num"><span>Dev shortcuts</span><div className="bd-keys">{REBINDABLE.map(([kid, l]) => (
-          <label key={kid}><span>{l}</span><input className="input" aria-label={`Shortcut for ${l}`} placeholder="default" value={d.keys?.[kid] ?? ""} onChange={(e) => setD({ ...d, keys: { ...d.keys, [kid]: e.target.value } })} /></label>))}</div></div>
+        <div className="bd-num"><span>Dev shortcuts</span><div className="bd-keys">
+          <div className="km-bar"><input className="input" aria-label="Search shortcuts" type="search" placeholder="Search" value={kq} onChange={(e) => setKq(e.target.value)} /><button type="button" className="btn" onClick={() => setD({ ...d, keys: {} })}>Reset</button></div>
+          {FIXED.filter(([, l, k]) => `${l} ${k}`.toLowerCase().includes(kq.toLowerCase())).map(([kid, l, k]) => <div key={kid} className="km-fixed"><span>{l}</span><kbd>{k}</kbd></div>)}
+          {REBINDABLE.filter(([kid, l]) => `${l} ${d.keys?.[kid] ?? ""}`.toLowerCase().includes(kq.toLowerCase())).map(([kid, l]) => { const v = d.keys?.[kid] ?? "", c = conflictWith(kid, v, d.keys ?? {}), cl = c && (FIXED.find((f) => f[0] === c)?.[1] ?? REBINDABLE.find((r) => r[0] === c)?.[1]); return (
+          <label key={kid}><span>{l}</span><input className="input" aria-label={`Shortcut for ${l}`} aria-invalid={!!c} placeholder="default" value={v} onChange={(e) => setD({ ...d, keys: { ...d.keys, [kid]: e.target.value } })} />{c && <em className="km-conflict">Used by {cl}</em>}</label>); })}</div></div>
       </div>
       <h3 style={{ margin: 0, fontSize: 13 }}>New strategy exits</h3>
       <div className="bd-nums">{EXITS.map(([k, l, p]) => <Num key={k} label={l} pct={p} value={exits[k]} onChange={(v) => setD({ ...d, exits: { ...exits, [k]: v ?? 0 } })} />)}</div>

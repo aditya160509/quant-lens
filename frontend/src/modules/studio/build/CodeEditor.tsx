@@ -3,6 +3,7 @@
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
 import { useEffect, useRef } from "react";
 import { studio } from "../api";
+import { chordStarts, comboFromEvent } from "./keymap";
 
 type Ed = Parameters<OnMount>[0];
 type TextEdit = { line: number; column: number; end_line: number; end_column: number; text: string };
@@ -243,6 +244,11 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     editor.addAction({ id: "studio.organiseImports", label: "Organise imports", keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyO], run: () => rewrite("/build/organise-imports") });
     editor.addAction({ id: "studio.migrate", label: "Migrate to the current Studio API", run: () => rewrite("/build/migrate") });
     const custom = userKeys();
+    const starts = chordStarts(custom); let pending = 0;
+    const node = editor.getContainerDomNode(); const hint = document.createElement("div"); hint.className = "km-hint"; hint.hidden = true; node.appendChild(hint);
+    editor.onKeyDown((e) => { if (["shift", "control", "alt", "meta"].includes(e.browserEvent.key.toLowerCase())) return; clearTimeout(pending); hint.hidden = true; const cb = comboFromEvent(e.browserEvent);
+      if (starts.has(cb)) { hint.textContent = `${cb.replace(/cmd/g, "⌘").replace(/shift/g, "⇧").replace(/alt/g, "⌥").replace(/\+/g, "").toUpperCase()} was pressed, waiting for second key`; hint.hidden = false; pending = window.setTimeout(() => { hint.hidden = true; }, 1500); } });
+    editor.onDidDispose(() => { clearTimeout(pending); hint.remove(); });
     for (const a of acts.current) editor.addAction({ id: a.id, label: a.label, keybindings: custom[a.id] ? parseKeys(monaco, custom[a.id]) ?? a.keys?.(monaco) : a.keys?.(monaco), run: (x) => acts.current.find((y) => y.id === a.id)?.run(x.getPosition()?.lineNumber ?? 1) });
   };
 
@@ -260,18 +266,23 @@ export const REBINDABLE: [string, string][] = [["studio.debug", "Debug: start"],
 
 export const userKeys = (): Record<string, string> => { try { return (JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as { keys?: Record<string, string> }).keys ?? {}; } catch { return {}; } };
 
-/** "Cmd+Shift+K", "F6", "Alt+Enter" as a Monaco keybinding; null when it does not parse. */
+/** "Cmd+Shift+K", "F6", "Alt+Enter" or a chord "Cmd+K Cmd+S" as a Monaco keybinding; null when it does not parse. */
 export function parseKeys(m: Monaco, text: string): number[] | null {
-  let mod = 0, key: number | undefined;
-  for (const raw of text.split("+").map((x) => x.trim().toLowerCase()).filter(Boolean)) {
-    if (["cmd", "ctrl", "meta", "⌘"].includes(raw)) mod |= m.KeyMod.CtrlCmd;
-    else if (["shift", "⇧"].includes(raw)) mod |= m.KeyMod.Shift;
-    else if (["alt", "option", "opt", "⌥"].includes(raw)) mod |= m.KeyMod.Alt;
-    else if (raw === "enter" || raw === "return") key = m.KeyCode.Enter;
-    else if (/^f([1-9]|1[0-9])$/.test(raw)) key = (m.KeyCode as unknown as Record<string, number>)[raw.toUpperCase()];
-    else if (/^[a-z]$/.test(raw)) key = (m.KeyCode as unknown as Record<string, number>)[`Key${raw.toUpperCase()}`];
-    else if (/^[0-9]$/.test(raw)) key = (m.KeyCode as unknown as Record<string, number>)[`Digit${raw}`];
-    else return null;
-  }
-  return key === undefined ? null : [mod | key];
+  const one = (t: string): number | null => {
+    let mod = 0, key: number | undefined;
+    for (const raw of t.split("+").map((x) => x.trim().toLowerCase()).filter(Boolean)) {
+      if (["cmd", "ctrl", "meta", "⌘"].includes(raw)) mod |= m.KeyMod.CtrlCmd;
+      else if (["shift", "⇧"].includes(raw)) mod |= m.KeyMod.Shift;
+      else if (["alt", "option", "opt", "⌥"].includes(raw)) mod |= m.KeyMod.Alt;
+      else if (raw === "enter" || raw === "return") key = m.KeyCode.Enter;
+      else if (/^f([1-9]|1[0-9])$/.test(raw)) key = (m.KeyCode as unknown as Record<string, number>)[raw.toUpperCase()];
+      else if (/^[a-z]$/.test(raw)) key = (m.KeyCode as unknown as Record<string, number>)[`Key${raw.toUpperCase()}`];
+      else if (/^[0-9]$/.test(raw)) key = (m.KeyCode as unknown as Record<string, number>)[`Digit${raw}`];
+      else return null;
+    }
+    return key === undefined ? null : mod | key;
+  };
+  const steps = text.trim().split(/\s+/).map(one);
+  if (steps.length > 2 || steps.some((x) => x === null)) return null;
+  return [steps.length === 2 ? m.KeyMod.chord(steps[0]!, steps[1]!) : steps[0]!];
 }
