@@ -11,6 +11,13 @@ Next batch for the Build workspace. Sources: owner screenshots of `/studio/build
 
 ## Decisions
 
+### D0. Top nav menus (app-wide)
+- Each item in the top nav (Trade, Screener, Studio, ML, Research) opens a menu on hover or click instead of jumping straight to the page. TradingView's Products menu is the model.
+- Each menu lists the item's sub-pages as icon + name rows, e.g. Studio: Home, Build, Backtest, Optimise, Validate, Live, Library. Clicking a row takes you to that page; clicking the item's own name still goes to its default page.
+- The current page stays highlighted, so you always know where you are.
+- The same top bar and menus appear on every page, including inside Studio, so the layout no longer changes completely when you switch module.
+- Keyboard: arrow keys move through the menu, Esc closes it, Enter opens the row.
+
 ### D1. "Labs" menu replaces the coloured rail
 - Remove the coloured lab rail.
 - Add a **Labs ▾** button in the top bar, right after `ATLAS / Studio / Build`, modelled on the TradingView Products menu.
@@ -39,6 +46,7 @@ Next batch for the Build workspace. Sources: owner screenshots of `/studio/build
 - One accent colour. Status colour is used only for P&L and errors.
 
 ## Checklist
+- [ ] D0 Top nav menus on every page, same bar everywhere
 - [ ] D1 Labs menu in the top bar; coloured rail removed; ⌘1–⌘6
 - [ ] D2 Activity bar cut to four; chart toolbar grouped into flyouts
 - [ ] D3 Gutters invisible at rest, 2px accent on hover or drag
