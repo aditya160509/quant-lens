@@ -146,7 +146,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null, label?: string) => void; font?: number; savedFiles?: Record<string, string>;
   quick?: QuickRun | null; onQuickRun: (level: "quick" | "full", settings?: Record<string, unknown>) => void; onCancel?: () => void; logpoints?: Logpoint[]; onLogpoints?: (l: Logpoint[]) => void;
 }) {
-  const files = useMemo(() => ({ "main.py": spec.code, ...(spec.files ?? {}) }), [spec.code, spec.files]);
+  // Scratch files live in this browser only: they sit in `files` for the editor but never reach the spec, runs or saves.
+  const [scratch, setScratch] = useState<Record<string, string>>(() => { try { return JSON.parse(localStorage.getItem("studio:dev:scratch") ?? "{}"); } catch { return {}; } });
+  useEffect(() => { try { localStorage.setItem("studio:dev:scratch", JSON.stringify(scratch)); } catch { /* blocked */ } }, [scratch]);
+  const files = useMemo(() => ({ "main.py": spec.code, ...(spec.files ?? {}), ...scratch }), [spec.code, spec.files, scratch]);
   const [open, setOpen] = useState<string[]>(["main.py"]);
   const [active, setActive] = useState("main.py");
   const [rail, setRail] = useState<Rail>("files");
@@ -154,6 +157,14 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const open_ = ws.cur.layout.open;
   const setOpenP = (p: PanelId, v: boolean | ((o: boolean) => boolean)) => ws.patch((l) => ({ ...l, open: { ...l.open, [p]: typeof v === "function" ? v(l.open[p]) : v } }));
   const [iconsOpen, setIconsOpen] = useState(true);
+  // Zen hides the rail, icons, bottom panel and chart without touching the saved layout, so leaving it restores exactly.
+  const [zen, setZen] = useState(false);
+  useEffect(() => {
+    if (!zen) return;
+    let last = 0;
+    const esc = (e: KeyboardEvent) => { if (e.key !== "Escape") return; if (Date.now() - last < 600) setZen(false); last = Date.now(); };
+    window.addEventListener("keydown", esc, true); return () => window.removeEventListener("keydown", esc, true);
+  }, [zen]);
   // The workspace header has a slot for page controls; on phones the controls stay in their own bar.
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   useEffect(() => { if (!matchMedia("(max-width: 760px)").matches) setSlot(document.getElementById("ws-slot")); }, []);
@@ -164,8 +175,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [view, setView] = useState<View>("code");
   const [reportSide, setReportSide] = useState(false);
   const showingSide = view === "code" || reportSide;
-  const railOpen = iconsOpen && open_.rail && view === "code";
-  const panelOpen = open_.tester && (view === "code" || reportSide);
+  const railOpen = iconsOpen && open_.rail && view === "code" && !zen;
+  const panelOpen = open_.tester && (view === "code" || reportSide) && !zen;
   const bodyRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -184,7 +195,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     if (f?.view) openView(f.view); else if (leftView.current) setView("code");  // leaving Review returns to the code
     leftView.current = !!f?.view;
   }, [ws.cur.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const layout = fitWorkspace({ ...ws.cur.layout, open: { ...open_, rail: railOpen, tester: panelOpen, chart: showingSide && open_.chart, preview: false } }, width, chartFirst);
+  const layout = fitWorkspace({ ...ws.cur.layout, open: { ...open_, rail: railOpen, tester: panelOpen, chart: showingSide && open_.chart && !zen, preview: false } }, width, chartFirst);
   const chartOpen = layout.open.chart;
   // Docking (W-5): the chart sits left or right of the editor; the bottom panel sits under the editor or across the full width.
   const dock = ws.cur.layout.dock ?? {};
@@ -287,12 +298,19 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   )) : <p className="dv-empty">None</p>;
   // Name the browser tab after the strategy.
   useEffect(() => { document.title = spec.name ? `${spec.name} · Build · ATLAS` : "Build · ATLAS"; }, [spec.name]);
-  const setFile = (name: string, text: string) => (keep(name), name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
+  const setFile = (name: string, text: string) => (keep(name), name in scratch ? setScratch((s) => ({ ...s, [name]: text })) : name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
   const replaceFiles = (next: Record<string, string>) => {
-    const all = { ...files, ...next };
+    const all: Record<string, string> = { ...files, ...next };
     const { "main.py": code, ...rest } = all;
-    edit({ code, files: rest });
+    setScratch((s) => Object.fromEntries(Object.keys(s).map((f) => [f, rest[f] ?? s[f]])));
+    edit({ code, files: Object.fromEntries(Object.entries(rest).filter(([f]) => !(f in scratch))) });
   };
+  const addScratch = () => {
+    let n = 1; while (`scratch_${n}.py` in files) n++;
+    const name = `scratch_${n}.py`;
+    setScratch((s) => ({ ...s, [name]: "" })); setDiff(null); setOpen((o) => [...o, name]); setActive(name);
+  };
+  const dropScratch = (f: string) => { setScratch(({ [f]: _, ...rest }) => rest); close(f); };
   const goto = (file: string, line: number, column?: number) => { if (!(file in files)) return; setDiff(null); setOpen((o) => (o.includes(file) ? o : [...o, file])); setActive(file); setReveal({ line, column, n: Date.now() }); };
   // Single click opens a preview tab that the next single click replaces; double click or an edit keeps it (B-13).
   const peek = (f: string) => { if (!(f in files)) return; setDiff(null); setOpen((o) => (o.includes(f) ? o : [...o.filter((x) => x !== preview || pinned.includes(x)), f])); if (!open.includes(f)) setPreview(f); setActive(f); };
@@ -305,6 +323,13 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     onLogpoints?.([...logpoints.filter((p) => p !== old), ...(message ? [{ file: active, line, message }] : [])]);
   };
   const toggleBp = (line: number) => setBps((b) => { const cur = b[active] ?? []; return { ...b, [active]: cur.includes(line) ? cur.filter((x) => x !== line) : [...cur, line].sort((x, y) => x - y) }; });
+  const [bms, setBms] = useState<Record<string, number[]>>({});
+  const toggleBm = (line: number) => setBms((b) => { const cur = b[active] ?? []; return { ...b, [active]: cur.includes(line) ? cur.filter((x) => x !== line) : [...cur, line].sort((x, y) => x - y) }; });
+  const bmJump = (dir: 1 | -1, line: number) => {
+    const marks = [...(bms[active] ?? [])].sort((x, y) => x - y);
+    if (!marks.length) return toast("No bookmarks in this file");
+    goto(active, dir === 1 ? marks.find((x) => x > line) ?? marks[0] : marks.findLast((x) => x < line) ?? marks.at(-1)!);
+  };
 
   useEffect(() => {
     if (!source.trim()) { setLint([]); setTypes([]); setOutline([]); return; }
@@ -528,6 +553,11 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.profile", label: "Run: profile the preview", run: () => runProfile() },
     { id: "studio.save", label: "Strategy: save version", run: () => onSave() },
     { id: "studio.newfile", label: "File: new", run: () => addFile() },
+    { id: "studio.newscratch", label: "File: new scratch file", run: () => addScratch() },
+    { id: "studio.bm", label: "Bookmark: toggle", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyK], run: (line) => toggleBm(line) },
+    { id: "studio.bmnext", label: "Bookmark: next", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.Period], run: (line) => bmJump(1, line) },
+    { id: "studio.bmprev", label: "Bookmark: previous", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.Comma], run: (line) => bmJump(-1, line) },
+    { id: "studio.zen", label: "View: zen mode", keys: (m) => [m.KeyMod.chord(m.KeyMod.CtrlCmd | m.KeyCode.KeyK, m.KeyMod.CtrlCmd | m.KeyCode.KeyZ)], run: () => setZen((z) => !z) },
     { id: "studio.split", label: "View: split editor", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.Backslash], run: () => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active)) },
     { id: "studio.snippet", label: "Snippet: save selection", run: () => saveSnippet() },
     { id: "studio.snippets", label: "Snippet: insert", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyS], run: () => revealRail("templates") },
@@ -540,6 +570,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       {outlineRows(s.children, depth + 1)}
     </div>
   ));
+  const todos = useMemo(() => Object.entries(files).filter(([f]) => !(f in scratch)).flatMap(([f, text]) => text.split("\n").flatMap((line, i) => /#.*\b(TODO|FIXME|XXX)\b/.test(line) ? [{ file: f, line: i + 1, text: line.trim().replace(/^#\s*/, "") }] : [])), [files, scratch]);
   const docRows = (docs ?? []).filter((d) => !docQ || `${d.scope}.${d.name} ${d.documentation ?? ""}`.toLowerCase().includes(docQ.toLowerCase()));
   const TABS: [Tab, string, number | null][] = [["tester", "Tester", null], ["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["debug", "Debug", null], ["console", "Console", null], ["preview", "Preview", null]];
   const toggles = <span className="dv-toggles">
@@ -628,7 +659,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
           {rail === "files" ? (
             <div className="dv-list dv-explorer">
               <details open><summary>Files</summary>
-              {Object.keys(files).map((f) => (
+              {Object.keys(files).filter((f) => !(f in scratch)).map((f) => (
                 <div key={f} className="dv-file dv-source-file" data-on={f === active || undefined}>
                   <button className="dv-item" onClick={() => peek(f)} onDoubleClick={() => { goto(f, 1); keep(f); }}><FileCode2 size={13} />{f}</button>
                   <span className="dv-file-actions"><button className="icon-btn" title="Duplicate" aria-label={`Duplicate ${f}`} onClick={() => dupFile(f)}><FilePlus2 size={12} /></button>
@@ -637,12 +668,24 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               ))}
               <button className="btn sm ghost" onClick={addFile}><FilePlus2 size={13} />New file</button>
               </details>
+              <details open><summary>Scratch</summary>
+              {Object.keys(scratch).map((f) => (
+                <div key={f} className="dv-file dv-source-file" data-on={f === active || undefined}>
+                  <button className="dv-item" onClick={() => peek(f)}><FileCode2 size={13} />{f}</button>
+                  <span className="dv-file-actions"><button className="icon-btn" title="Delete" aria-label={`Delete ${f}`} onClick={() => dropScratch(f)}><Trash2 size={12} /></button></span>
+                </div>
+              ))}
+              <button className="btn sm ghost" onClick={addScratch}><FilePlus2 size={13} />New scratch file</button>
+              </details>
               <details open><summary>Inputs<span>{Object.keys(inputs).length}</span></summary>
                 {inputList}
               </details>
             </div>
           ) : rail === "outline" ? (
-            <div className="dv-list">{outline.length ? outlineRows(outline) : <p className="dv-empty">No classes or functions</p>}</div>
+            <div className="dv-list">{outline.length ? outlineRows(outline) : <p className="dv-empty">No classes or functions</p>}
+              <h4 className="dv-sub">TODO</h4>
+              {todos.length ? todos.map((t) => <button key={`${t.file}:${t.line}`} className="dv-item" onClick={() => goto(t.file, t.line)}>{t.text}<span>{t.file}:{t.line}</span></button>) : <p className="dv-empty">No TODO, FIXME or XXX comments</p>}
+            </div>
           ) : rail === "search" ? (
             <div className="dv-list">
               <div className="dv-search"><input className="input" autoFocus placeholder="Search" aria-label="Search project" value={q} onChange={(e) => setQ(e.target.value)} />{toggles}</div>
@@ -735,7 +778,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
             <div key={f} role="tab" aria-selected={view === "code" && !diff && f === active} className="dv-tab" tabIndex={0} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.currentTarget.click(); } }} data-preview={preview === f || undefined} data-pinned={pinned.includes(f) || undefined}
               onClick={() => { setDiff(null); setView("code"); setActive(f); }} onDoubleClick={() => keep(f)} onAuxClick={(e) => { if (e.button === 1) close(f); }}>
               {pinned.includes(f) ? <Pin size={10} aria-label="Pinned" /> : null}{f}
-              {savedFiles && (savedFiles[f] ?? "") !== (files[f] ?? "") ? <i className="dv-dirty" aria-label="Unsaved" /> : null}
+              {savedFiles && !(f in scratch) && (savedFiles[f] ?? "") !== (files[f] ?? "") ? <i className="dv-dirty" aria-label="Unsaved" /> : null}
               {open.length > 1 && !pinned.includes(f) ? <button className="icon-btn" aria-label={`Close ${f}`} onClick={(e) => { e.stopPropagation(); close(f); }}><X size={11} /></button> : null}
             </div>
           ))}
@@ -767,7 +810,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, fontSize: 13, lineHeight: 20, scrollBeyondLastLine: false, automaticLayout: true, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace" }} />
           ) : (
             <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={onSave} onRun={runCode} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
-              font={font} actions={actions} breakpoints={bps[active] ?? []} logpoints={logpoints.filter((p) => p.file === active)} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
+              font={font} actions={actions} breakpoints={bps[active] ?? []} bookmarks={bms[active] ?? []} logpoints={logpoints.filter((p) => p.file === active)} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
               onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
               project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles, paramSpecs: spec.params, problems,
                 addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
@@ -930,9 +973,9 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   );
 
   return (
-    <div className="dv" data-activity={iconsOpen} data-head={slot ? "" : undefined}>
+    <div className="dv" data-activity={iconsOpen} data-head={slot ? "" : undefined} data-zen={zen || undefined}>
       {slot ? createPortal(<div className="dv-bar in-head">{bar}</div>, slot) : <div className="dv-bar">{bar}</div>}
-      <nav className="dv-icons" aria-label="Activity bar" hidden={!iconsOpen}>
+      <nav className="dv-icons" aria-label="Activity bar" hidden={!iconsOpen || zen}>
         {/* Four entry points; Outline sits beside Files in the side bar header, Starters opens from ⌘⇧S and the empty editor. */}
         {RAILS.filter(([k]) => k !== "outline" && k !== "templates").map(([k, icon, l]) => {
           const on = railOpen && (rail === k || (k === "files" && rail === "outline"));

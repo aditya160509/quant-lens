@@ -706,3 +706,7 @@
 .dv-monaco { position: relative; }
 .km-hint { position: absolute; right: 12px; bottom: 8px; z-index: 5; padding: 3px 9px; border-radius: 6px; font-size: 12px; background: rgba(60, 60, 60, .85); color: #fff; pointer-events: none; }
 .km-hint[hidden] { display: none; }
+
+/* Editing extras */
+.dv-bm { background: var(--text-2); border-radius: 2px; width: 6px !important; height: 6px !important; margin: 8px 0 0 4px; }
+.dv[data-zen] .dv-edpane { width: min(100%, 980px); margin-inline: auto; }

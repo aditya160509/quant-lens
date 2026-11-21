@@ -174,10 +174,10 @@ function theme(monaco: Monaco, dark: boolean) {
 }
 
 /** Build › Dev: Monaco for one project file, with server completion, signature help, go to definition and line markers. */
-export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], logpoints = [], ran = [], onGutter, onComment, commentLines = [], readOnly, font = 13, snippets, onSelection, insertRef }: {
+export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], bookmarks = [], logpoints = [], ran = [], onGutter, onComment, commentLines = [], readOnly, font = 13, snippets, onSelection, insertRef }: {
   path: string; value: string; onChange: (v: string) => void; problems: Problem[]; project: Project;
   onSave: () => void; onRun: () => void; onCursor?: (line: number, column: number) => void; reveal?: { line: number; column?: number; n: number } | null;
-  actions?: EditorAction[]; breakpoints?: number[]; logpoints?: { line: number; message: string }[]; ran?: { line: number; count: number; dates: string[] }[]; onGutter?: (line: number) => void; onComment?: (line: number) => void; commentLines?: number[];
+  actions?: EditorAction[]; breakpoints?: number[]; bookmarks?: number[]; logpoints?: { line: number; message: string }[]; ran?: { line: number; count: number; dates: string[] }[]; onGutter?: (line: number) => void; onComment?: (line: number) => void; commentLines?: number[];
   readOnly?: boolean; font?: number; snippets?: UserSnippet[]; onSelection?: (text: string) => void; insertRef?: { current: ((text: string) => void) | null };
 }) {
   const deco = useRef<{ clear: () => void; set: (d: NonNullable<Parameters<Ed["createDecorationsCollection"]>[0]>) => void } | null>(null);
@@ -206,9 +206,10 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
       ...breakpoints.map((line) => ({ range: new m.monaco.Range(line, 1, line, 1), options: { glyphMarginClassName: "dv-bp", glyphMarginHoverMessage: { value: "Breakpoint" } } })),
       ...logpoints.map((p) => ({ range: new m.monaco.Range(p.line, 1, p.line, 1), options: { glyphMarginClassName: "dv-lp", glyphMarginHoverMessage: { value: `Logpoint: ${p.message}` } } })),
       ...commentLines.map((line) => ({ range: new m.monaco.Range(line, 1, line, 1), options: { linesDecorationsClassName: "dv-cmt", hoverMessage: { value: "Comment thread" } } })),
+      ...bookmarks.map((line) => ({ range: new m.monaco.Range(line, 1, line, 1), options: { linesDecorationsClassName: "dv-bm", hoverMessage: { value: "Bookmark" } } })),
       ...ran.map((r) => ({ range: new m.monaco.Range(r.line, 1, r.line, 1), options: { linesDecorationsClassName: "dv-ran", hoverMessage: { value: `Placed ${r.count} order${r.count === 1 ? "" : "s"}: ${r.dates.slice(0, 5).join(", ")}` } } })),
     ]);
-  }, [breakpoints, logpoints, ran, commentLines, path, value]);
+  }, [breakpoints, bookmarks, logpoints, ran, commentLines, path, value]);
 
   useEffect(() => {
     const m = ed.current; if (!m || !reveal) return;
@@ -252,9 +253,10 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     for (const a of acts.current) editor.addAction({ id: a.id, label: a.label, keybindings: custom[a.id] ? parseKeys(monaco, custom[a.id]) ?? a.keys?.(monaco) : a.keys?.(monaco), run: (x) => acts.current.find((y) => y.id === a.id)?.run(x.getPosition()?.lineNumber ?? 1) });
   };
 
+  const prefs = editorPrefs();
   return (
     <div className="dv-monaco"><Editor language="python" path={path} value={value} onChange={(v) => onChange(v ?? "")} onMount={mount} theme="studio" height="100%"
-      options={{ minimap: { enabled: false }, wordWrap: "on", overviewRulerLanes: 0, overviewRulerBorder: false, hideCursorInOverviewRuler: true, fontSize: font, lineHeight: Math.round(font * 1.54), fontLigatures: false, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true, fixedOverflowWidgets: true, scrollbar: { alwaysConsumeMouseWheel: false },
+      options={{ minimap: { enabled: false }, wordWrap: prefs.wrap === false ? "off" : "on", rulers: prefs.rulers ? [prefs.rulers] : [], overviewRulerLanes: 0, overviewRulerBorder: false, hideCursorInOverviewRuler: true, fontSize: font, lineHeight: Math.round(font * 1.54), fontLigatures: prefs.ligatures === true, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true, fixedOverflowWidgets: true, scrollbar: { alwaysConsumeMouseWheel: false },
         padding: { top: 10 }, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace", quickSuggestions: { strings: true, other: true, comments: false },
         bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true }, glyphMargin: true, readOnly }} /></div>
   );
@@ -265,6 +267,8 @@ export const REBINDABLE: [string, string][] = [["studio.debug", "Debug: start"],
   ["studio.panel", "Toggle panel"], ["studio.rail", "Toggle side bar"], ["studio.files", "Go to file"], ["studio.search", "Search project"], ["studio.docs", "Docs"], ["studio.fullrun", "Full run"], ["studio.quickrun", "Quick run"]];
 
 export const userKeys = (): Record<string, string> => { try { return (JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as { keys?: Record<string, string> }).keys ?? {}; } catch { return {}; } };
+/** Editor settings from Customise Build: word wrap (on unless off), ruler column (0 none), ligatures (off unless on). */
+const editorPrefs = ():{ wrap?: boolean; rulers?: number; ligatures?: boolean } => { try { return JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}"); } catch { return {}; } };
 
 /** "Cmd+Shift+K", "F6", "Alt+Enter" or a chord "Cmd+K Cmd+S" as a Monaco keybinding; null when it does not parse. */
 export function parseKeys(m: Monaco, text: string): number[] | null {
