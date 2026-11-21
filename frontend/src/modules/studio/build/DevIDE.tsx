@@ -38,7 +38,22 @@ export type DevPreview = {
   order_lines?: { file: string; line: number; count: number; dates: string[] }[] | null; locals?: Record<string, unknown> | null;
   invariants?: { count: number; rows: { date: string; symbol: string | null; file: string; line: number; text: string }[] } | null;
 };
-type Profile = { lines?: { file?: string; line: number; seconds: number; hits?: number; source?: string }[]; functions?: { function?: string; name?: string; seconds: number; calls?: number }[] };
+/** Icicle chart: one row per stack depth, width = inclusive seconds; callees sit inside their caller's span. */
+function Flame({ stacks }: { stacks: { path: string[]; seconds: number }[] }) {
+  type N = { name: string; sec: number; kids: Map<string, N> };
+  const root: N = { name: "", sec: 0, kids: new Map() };
+  for (const { path, seconds } of stacks) {
+    let n = root; // stacks are inclusive per path: a node's width is its own entry
+    for (const f of path) { let k = n.kids.get(f); if (!k) { k = { name: f, sec: 0, kids: new Map() }; n.kids.set(f, k); } n = k; }
+    n.sec = seconds;
+  }
+  const rows: { name: string; left: number; width: number; sec: number }[][] = [];
+  const total = [...root.kids.values()].reduce((a, k) => a + k.sec, 0) || 1;
+  const walk = (n: N, depth: number, left: number) => { let x = left; for (const k of [...n.kids.values()].sort((a, b) => b.sec - a.sec)) { (rows[depth] ??= []).push({ name: k.name, left: x, width: k.sec / total, sec: k.sec }); walk(k, depth + 1, x); x += k.sec / total; } };
+  walk(root, 0, 0);
+  return <div className="dv-flame">{rows.map((row, d) => <div key={d} className="dv-flame-row">{row.map((c, i) => <div key={i} title={`${c.name}  ${c.sec.toFixed(4)} s`} style={{ left: `${c.left * 100}%`, width: `${Math.max(c.width * 100, 0.2)}%` }}>{c.name}</div>)}</div>)}</div>;
+}
+type Profile = { lines?: { file?: string; line: number; seconds: number; hits?: number; source?: string }[]; functions?: { function?: string; name?: string; seconds: number; calls?: number }[]; stacks?: { path: string[]; seconds: number }[] };
 export type QuickRun = { job_id: string; level: "quick" | "full"; status: string; progress?: { percent?: number; message?: string; partial?: { symbols?: number; bars?: number; elapsed_seconds?: number; budget_seconds?: number } } | null;
   error?: string | null; delta?: { total_return: number | null; sharpe: number | null; trades: number | null } | null;
   result?: { summary_cards?: { label: string; value: number | null }[]; charts?: { equity_curve?: { date: string; strategy: number; benchmark: number | null }[] }; tables?: { trades?: Record<string, unknown>[] };
@@ -251,6 +266,9 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       .then(([r]) => setCon((c) => [...c, { q, at: date, out: r.error ?? (typeof r.value === "number" ? String(+r.value.toFixed(6)) : JSON.stringify(r.value)), err: !!r.error }]), (e: Error) => setCon((c) => [...c, { q, at: date, out: e.message, err: true }]));
   };
   const [cond, setCond] = useState("");
+  const [hitN, setHitN] = useState("");
+  const [trig, setTrig] = useState("");
+  const lastRun = useRef<{ level: "quick" | "full"; settings: Record<string, unknown> } | null>(null);
   const [bps, setBps] = useState<Record<string, number[]>>({});
   const [q, setQ] = useState(""); const [rep, setRep] = useState("");
   const [opt, setOpt] = useState({ regex: false, caseSensitive: false, word: false });
@@ -337,6 +355,17 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     if (message === undefined) return;
     onLogpoints?.([...logpoints.filter((p) => p !== old), ...(message ? [{ file: active, line, message }] : [])]);
   };
+  const inlineValues = (() => {
+    const b = dbg?.breakpoint; if (!b || b.file !== active) return [];
+    const lines = source.split("\n"), at = Math.min(b.line, lines.length) - 1, indent = (t: string) => t.length - t.trimStart().length;
+    let from = at; while (from > 0 && !/^\s*(async\s+)?def\s/.test(lines[from]!)) from--; // paused function starts at the nearest def above
+    const out: { line: number; text: string }[] = [];
+    for (let i = from; i <= at; i++) {
+      const m = /^\s*(?:self\.)?([A-Za-z_]\w*)\s*(?:[-+*/]?=)(?!=)/.exec(lines[i]!); const v = m && b.locals[m[1]!];
+      if (m && v !== undefined && indent(lines[i]!) >= indent(lines[from]!)) out.push({ line: i + 1, text: `${m[1]} = ${typeof v === "string" ? v : JSON.stringify(v)}`.slice(0, 80) });
+    }
+    return out;
+  })();
   const toggleBp = (line: number) => setBps((b) => { const cur = b[active] ?? []; return { ...b, [active]: cur.includes(line) ? cur.filter((x) => x !== line) : [...cur, line].sort((x, y) => x - y) }; });
   const [bms, setBms] = useState<Record<string, number[]>>({});
   const toggleBm = (line: number) => setBms((b) => { const cur = b[active] ?? []; return { ...b, [active]: cur.includes(line) ? cur.filter((x) => x !== line) : [...cur, line].sort((x, y) => x - y) }; });
@@ -482,9 +511,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const openView = (v: Exclude<View, "code">) => { setExtra((x) => (x.includes(v) ? x : [...x, v])); setView(v); };
   const closeView = (v: Exclude<View, "code">) => { setExtra((x) => x.filter((y) => y !== v)); if (view === v) setView("code"); };
   useEffect(() => { if (!open_.chart) setPlaying(false); }, [open_.chart]);
+  const bpExtra = () => { const [tf, tl] = trig.split(":"); return { condition: cond || null, hit: Number(hitN) > 0 ? Number(hitN) : null, trigger: trig ? { file: tf, line: Number(tl) } : null }; };
   const startDebug = () => {
     const bp = Object.entries(bps).flatMap(([file, lines]) => lines.map((line) => ({ file, line })))[0];
-    debug(bp ? { date: dbgDate || (prev?.bars?.[0]?.date ?? ""), breakpoint: { ...bp, condition: cond || null } } : {});
+    debug(bp ? { date: dbgDate || (prev?.bars?.[0]?.date ?? ""), breakpoint: { ...bp, ...bpExtra() } } : {});
   };
   const [tests, setTests] = useState<TestRow[]>([]);
   const [testing, setTesting] = useState(false);
@@ -549,8 +579,11 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const runCode = (level: "quick" | "full" = "quick") => {
     if (!canRun || starting || running) return;
     openView("results");
+    lastRun.current = { level, settings: rc.settings };
     onQuickRun(level, rc.settings);
   };
+  const rerunLast = () => { const l = lastRun.current; if (!l || !canRun || starting || running) return; openView("results"); onQuickRun(l.level, l.settings); };
+  const saveAndRun = () => { onSave(); if (rc.runOnSave && !readOnly) runCode("quick"); };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "\\" || e.key === "|")) { e.preventDefault(); setLayoutsOpen(true); return; }
@@ -602,7 +635,9 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.runs", label: "View: compare runs", run: () => openView("runs") },
     { id: "studio.robust", label: "Run: robustness (Monte Carlo)", run: () => openView("robust") },
     { id: "studio.profile", label: "Run: profile the preview", run: () => runProfile() },
-    { id: "studio.save", label: "Strategy: save version", run: () => onSave() },
+    { id: "studio.save", label: "Strategy: save version", run: () => saveAndRun() },
+    { id: "studio.rerun", label: "Run: rerun last", run: () => rerunLast() },
+    { id: "studio.runonsave", label: `Run: run on save ${rc.runOnSave ? "(on)" : "(off)"}`, run: () => rc.setRunOnSave(!rc.runOnSave) },
     { id: "studio.newfile", label: "File: new", run: () => addFile() },
     { id: "studio.newscratch", label: "File: new scratch file", run: () => addScratch() },
     { id: "studio.bm", label: "Bookmark: toggle", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyK], run: (line) => toggleBm(line) },
@@ -668,6 +703,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                     {stale && (m || r) ? <p className="bd-find warning"><b>Edited</b>the code differs from the run shown</p> : null}
                     {profile === "loading" ? <p className="dv-empty">Profiling…</p> : profile ? <div className="dv-dgrid">
                       <div><h4>Slowest lines</h4>{profile.lines?.length ? <DataTable rows={profile.lines.map((l) => ({ line: l.line, file: l.file ?? "main.py", seconds: l.seconds, hits: l.hits ?? null, source: l.source ?? "" }))} /> : <p className="dv-empty">No data</p>}</div>
+                      {profile.stacks?.length ? <div style={{ gridColumn: "1 / -1" }}><h4>Flame graph</h4><Flame stacks={profile.stacks} /></div> : null}
                       <div><h4>Time per function</h4>{profile.functions?.length ? <DataTable rows={profile.functions.map((f) => ({ function: f.function ?? f.name ?? "", seconds: f.seconds, calls: f.calls ?? null }))} /> : <p className="dv-empty">No data</p>}</div>
                     </div> : null}
                   </div>
@@ -871,8 +907,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
             <DiffEditor language="python" original={diff.files[active] ?? ""} modified={source} theme="studio" height="100%"
               options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, fontSize: 13, lineHeight: 20, scrollBeyondLastLine: false, automaticLayout: true, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace" }} />
           ) : (
-            <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={onSave} onRun={runCode} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
-              font={font} actions={actions} breakpoints={bps[active] ?? []} bookmarks={bms[active] ?? []} logpoints={logpoints.filter((p) => p.file === active)} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
+            <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={saveAndRun} onRun={runCode} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
+              font={font} actions={actions} breakpoints={bps[active] ?? []} bookmarks={bms[active] ?? []} logpoints={logpoints.filter((p) => p.file === active)} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} inline={inlineValues} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
               onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
               project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles, paramSpecs: spec.params, problems,
                 addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
@@ -1000,7 +1036,9 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                     <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "equity", loss_fraction: 0.05 })}>Next 5% loss day</button>
                     <span className="dv-sep" />
                     <input className="input" aria-label="Breakpoint condition" placeholder="condition" value={cond} onChange={(e) => setCond(e.target.value)} />
-                    <button className="btn sm" onClick={() => debug({ breakpoint: { file: active, line: cursor.line, condition: cond || null } })}>Break at {active}:{cursor.line}</button>
+                    <input className="input" type="number" min={1} style={{ width: 64 }} aria-label="Stop on hit number" placeholder="hit #" value={hitN} onChange={(e) => setHitN(e.target.value)} />
+                    <select className="input" aria-label="Only after breakpoint" value={trig} onChange={(e) => setTrig(e.target.value)}><option value="">Always on</option>{Object.entries(bps).flatMap(([f, ls]) => ls.map((l) => <option key={`${f}:${l}`} value={`${f}:${l}`}>After {f}:{l}</option>))}</select>
+                    <button className="btn sm" onClick={() => debug({ breakpoint: { file: active, line: cursor.line, ...bpExtra() } })}>Break at {active}:{cursor.line}</button>
                   </div>
                   {dbg ? (
                     <div className="dv-dgrid">
@@ -1012,7 +1050,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                         <form className="dv-dbar" onSubmit={(e) => { e.preventDefault(); if (!watchIn.trim()) return; const w = [...watches, watchIn.trim()]; setWatches(w); setWatchIn(""); try { localStorage.setItem("studio:watch", JSON.stringify(w)); } catch { /* private window */ } }}>
                           <input className="input" aria-label="Watch expression" placeholder="rsi(close, 14)" value={watchIn} onChange={(e) => setWatchIn(e.target.value)} />
                         </form>
-                        {watchRows.map((r, i) => <div key={r.expression} className="dv-watch"><code>{r.expression}</code><b className={r.error ? "error" : undefined} title={r.error ?? r.history.map((h) => `${h.date}  ${h.value}`).join("\n")}>{r.error ?? (typeof r.value === "number" ? +r.value.toFixed(4) : String(r.value))}</b>
+                        {watchRows.map((r, i) => <div key={r.expression} className="dv-watch"><code>{r.expression}</code><b className={r.error && !(r.expression in (dbg.breakpoint?.locals ?? {})) ? "error" : undefined} title={r.error ?? r.history.map((h) => `${h.date}  ${h.value}`).join("\n")}>{r.error ? String((dbg.breakpoint?.locals ?? {})[r.expression] ?? r.error) : (typeof r.value === "number" ? +r.value.toFixed(4) : String(r.value))}</b>
                           <button className="icon-btn" aria-label="Remove watch" onClick={() => { const w = watches.filter((_, k) => k !== i); setWatches(w); try { localStorage.setItem("studio:watch", JSON.stringify(w)); } catch { /* private window */ } }}>×</button></div>)}</div>
                       <div><h4>Orders</h4>{dbg.orders.length ? <DataTable rows={dbg.orders} /> : <p className="dv-empty">None this bar</p>}
                         <h4>Fills</h4>{dbg.fills.length ? <DataTable rows={dbg.fills} /> : <p className="dv-empty">None this bar</p>}</div>

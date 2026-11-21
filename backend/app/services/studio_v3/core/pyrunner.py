@@ -144,7 +144,7 @@ class _LineProfiler:
     """Seconds per strategy line (callees included) and per function, from sys.settrace on strategy frames only. Opt-in: it slows the run."""
 
     def __init__(self):
-        self.lines, self.functions, self._stack, self._last = {}, {}, [], None
+        self.lines, self.functions, self.stacks, self._stack, self._last = {}, {}, {}, [], None
 
     def _charge(self, now):
         if self._last is not None:
@@ -173,6 +173,9 @@ class _LineProfiler:
             row = self.functions.setdefault(function, [0, 0.0])
             row[0] += 1
             row[1] += now - started
+            path = tuple(f[1][1] for f in self._stack[-23:]) + (function[1],)  # shortcut: depth capped at 24 frames, 500 distinct stacks
+            if path in self.stacks or len(self.stacks) < 500:
+                self.stacks[path] = self.stacks.get(path, 0.0) + now - started
             self._last = None if caller is None else (caller[0], now)
         return self._local
 
@@ -186,7 +189,9 @@ class _LineProfiler:
     def report(self, sources):
         top = sorted(self.lines.items(), key=lambda item: -item[1])[:10]
         text = lambda f, n: (sources.get(f, "").splitlines() + [""] * n)[n - 1].strip()[:200]
+        stacks = sorted(self.stacks.items(), key=lambda item: -item[1])[:200]
         return {"lines": [{"file": f, "line": n, "seconds": round(sec, 6), "text": text(f, n)} for (f, n), sec in top],
+                "stacks": [{"path": list(path), "seconds": round(sec, 6)} for path, sec in stacks],
                 "functions": [{"file": f, "name": name, "calls": c, "seconds": round(sec, 6)}
                               for (f, name), (c, sec) in sorted(self.functions.items(), key=lambda item: -item[1][1])[:20]]}
 
@@ -1106,7 +1111,7 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
         armed = False
 
         def trace(frame, trace_event, arg):
-            nonlocal hit, hit_count, armed
+            nonlocal hit, hit_count, armed, triggered
             name = frame.f_code.co_filename
             if bp.get("step"):  # F11: after the given line runs on the paused bar, stop at the next line of any strategy file
                 if not name.startswith("<studio:"):
@@ -1118,15 +1123,21 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
                     elif name == f"<studio:{bp['file']}>" and frame.f_lineno == bp["line"]:
                         armed = True
                 return trace
-            if name != f"<studio:{bp['file']}>":
+            if name != f"<studio:{bp['file']}>" and not (trigger and name == f"<studio:{trigger['file']}>"):
+        trigger = bp.get("trigger") if bp else None
+        triggered = trigger is None
+        need = (bp or {}).get("hit") or 1
                 return None
-            if trace_event == "line" and frame.f_lineno == bp["line"]:
+            if trace_event == "line" and trigger and not triggered and name == f"<studio:{trigger['file']}>" and frame.f_lineno == trigger["line"]:
+                ctx = current_context()
+                triggered = ctx is not None and (ctx.symbol is None or ctx.symbol == target) and column in available[ctx.t]
+            if trace_event == "line" and triggered and name == f"<studio:{bp['file']}>" and frame.f_lineno == bp["line"]:
                 ctx = current_context()
                 if ctx is not None and (ctx.symbol is None or ctx.symbol == target) and column in available[ctx.t]:
                     values = {"date": ctx.date, "symbol": ctx.symbol or target}
                     if all(comparisons[op](values[name], expected) for name, op, expected in bp["condition"]):
                         hit_count += 1
-                        if ctx.t > after and hit is None:
+                        if ctx.t > after and hit is None and hit_count >= need:
                             hit = {"file": bp["file"], "line": bp["line"], "hit_count": hit_count, "bar": ctx.t,
                                    "locals": _debug_value(frame.f_locals)}
             return trace

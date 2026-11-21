@@ -10,7 +10,7 @@ const KEY = "studio:runconfigs";
 const COSTS = ["US retail", "Crypto taker", "Zero (costs off)", "Custom"]; // backend features/inputs.py COST_PROFILES
 const DEFAULT: RunConfig = { name: "Default" };
 
-function load(): { active: string; list: RunConfig[] } {
+function load(): { active: string; list: RunConfig[]; runOnSave?: boolean } {
   try { const s = JSON.parse(localStorage.getItem(KEY) ?? ""); if (Array.isArray(s.list)) return s; } catch { /* none or blocked */ }
   return { active: "Default", list: [DEFAULT] };
 }
@@ -25,7 +25,8 @@ export function useRunConfigs() {
   return {
     list: s.list, cur, settings,
     select: (name: string) => setS((p) => ({ ...p, active: name })),
-    save: (list: RunConfig[]) => setS((p) => ({ list, active: list.some((c) => c.name === p.active) ? p.active : "Default" })),
+    runOnSave: !!s.runOnSave, setRunOnSave: (v: boolean) => setS((p) => ({ ...p, runOnSave: v })),
+    save: (list: RunConfig[]) => setS((p) => ({ ...p, list, active: list.some((c) => c.name === p.active) ? p.active : "Default" })),
   };
 }
 export type RunConfigs = ReturnType<typeof useRunConfigs>;

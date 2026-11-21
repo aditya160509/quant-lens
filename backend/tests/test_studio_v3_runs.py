@@ -103,6 +103,9 @@ def test_profiler_reports_slowest_lines_and_functions(studio):  # noqa: F811
     assert lines[0]["line"] in {15, 16} and "math.sqrt" in lines[0]["text"] + lines[1]["text"]
     names = {f["name"]: f for f in result["profile"]["functions"]}
     assert names["on_bar"]["calls"] > 100 and names["init"]["calls"] == 1
+    stacks = result["profile"]["stacks"]
+    assert stacks and len(stacks) <= 200 and all(r["path"] and r["seconds"] >= 0 for r in stacks)
+    assert any(r["path"][-1] == "on_bar" for r in stacks)
 
 
 def test_logpoints_log_without_stopping(studio):  # noqa: F811

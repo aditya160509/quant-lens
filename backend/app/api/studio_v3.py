@@ -628,6 +628,8 @@ class DebugBreakpointRequest(BaseModel):
     condition: str | None = Field(default=None, max_length=500)
 
 
+    hit: int | None = Field(default=None, ge=1)  # stop on the Nth condition-true hit of the run
+    trigger: dict[str, Any] | None = None  # {file, line}: the breakpoint is live only after this line ran
 class BuildDebugRequest(PreviewRequest):
     date: dt.date
     step: Literal[-1, 0, 1] = 0
@@ -711,7 +713,14 @@ def debug_python(request: BuildDebugRequest) -> dict:
             condition = pycode.breakpoint_condition(request.breakpoint.condition)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
-        breakpoint = {"file": request.breakpoint.file, "line": request.breakpoint.line, "condition": condition, "step": request.step_line}
+        trigger = request.breakpoint.trigger
+        if trigger is not None:
+            tsource = spec.project_files().get(str(trigger.get("file")))
+            if tsource is None or not isinstance(trigger.get("line"), int) or not 1 <= trigger["line"] <= len(tsource.splitlines()):
+                raise HTTPException(422, "The trigger must be an existing line in a Python project file.")
+            trigger = {"file": trigger["file"], "line": trigger["line"]}
+        breakpoint = {"file": request.breakpoint.file, "line": request.breakpoint.line, "condition": condition, "step": request.step_line,
+                      "hit": request.breakpoint.hit, "trigger": trigger}
     try:
         return backtest.debug_bar(spec, settings, symbol, request.date.isoformat(), request.step,
                                   "breakpoint" if breakpoint else request.event, breakpoint, request.loss_fraction)

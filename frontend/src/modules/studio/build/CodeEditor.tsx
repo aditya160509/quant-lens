@@ -177,10 +177,10 @@ function theme(monaco: Monaco, dark: boolean) {
 }
 
 /** Build › Dev: Monaco for one project file, with server completion, signature help, go to definition and line markers. */
-export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], bookmarks = [], logpoints = [], ran = [], onGutter, onComment, commentLines = [], readOnly, font = 13, snippets, onSelection, insertRef }: {
+export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], bookmarks = [], logpoints = [], ran = [], inline = [], onGutter, onComment, commentLines = [], readOnly, font = 13, snippets, onSelection, insertRef }: {
   path: string; value: string; onChange: (v: string) => void; problems: Problem[]; project: Project;
   onSave: () => void; onRun: () => void; onCursor?: (line: number, column: number) => void; reveal?: { line: number; column?: number; n: number } | null;
-  actions?: EditorAction[]; breakpoints?: number[]; bookmarks?: number[]; logpoints?: { line: number; message: string }[]; ran?: { line: number; count: number; dates: string[] }[]; onGutter?: (line: number) => void; onComment?: (line: number) => void; commentLines?: number[];
+  actions?: EditorAction[]; breakpoints?: number[]; bookmarks?: number[]; logpoints?: { line: number; message: string }[]; ran?: { line: number; count: number; dates: string[] }[]; inline?: { line: number; text: string }[]; onGutter?: (line: number) => void; onComment?: (line: number) => void; commentLines?: number[];
   readOnly?: boolean; font?: number; snippets?: UserSnippet[]; onSelection?: (text: string) => void; insertRef?: { current: ((text: string) => void) | null };
 }) {
   const deco = useRef<{ clear: () => void; set: (d: NonNullable<Parameters<Ed["createDecorationsCollection"]>[0]>) => void } | null>(null);
@@ -211,8 +211,9 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
       ...commentLines.map((line) => ({ range: new m.monaco.Range(line, 1, line, 1), options: { linesDecorationsClassName: "dv-cmt", hoverMessage: { value: "Comment thread" } } })),
       ...bookmarks.map((line) => ({ range: new m.monaco.Range(line, 1, line, 1), options: { linesDecorationsClassName: "dv-bm", hoverMessage: { value: "Bookmark" } } })),
       ...ran.map((r) => ({ range: new m.monaco.Range(r.line, 1, r.line, 1), options: { linesDecorationsClassName: "dv-ran", hoverMessage: { value: `Placed ${r.count} order${r.count === 1 ? "" : "s"}: ${r.dates.slice(0, 5).join(", ")}` } } })),
+      ...inline.map((v) => ({ range: new m.monaco.Range(v.line, 1e4, v.line, 1e4), options: { after: { content: `  ${v.text}`, inlineClassName: "dv-inline" } } })),
     ]);
-  }, [breakpoints, bookmarks, logpoints, ran, commentLines, path, value]);
+  }, [breakpoints, bookmarks, logpoints, ran, inline, commentLines, path, value]);
 
   useEffect(() => {
     const m = ed.current; if (!m || !reveal) return;

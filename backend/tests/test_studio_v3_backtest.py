@@ -811,6 +811,18 @@ class Strategy:
     assert studio.post(path, json=body | {"breakpoint": invalid}).status_code == 422
 
 
+def test_build_debug_breakpoint_stops_on_the_nth_hit_and_after_its_trigger(studio):
+    code = "class Strategy:\n    def on_bar(self, ctx):\n        a = ctx.t\n        b = a + 1\n        c = b + 1\n"
+    body = {"symbol": "SPY", "date": "2015-01-01", "spec": {"code": code}, "breakpoint": {"file": "main.py", "line": 4}}
+    path = "/api/studio-v3/build/debug"
+    first = studio.post(path, json=body).json()["breakpoint"]
+    third = studio.post(path, json=body | {"breakpoint": {"file": "main.py", "line": 4, "hit": 3}}).json()["breakpoint"]
+    assert third["hit_count"] == 3 and third["locals"]["a"] > first["locals"]["a"]
+    after = {"file": "main.py", "line": 4, "trigger": {"file": "main.py", "line": 5}}  # line 5 only runs after line 4 on the same bar
+    assert studio.post(path, json=body | {"breakpoint": after}).json()["breakpoint"]["hit_count"] == 1
+    assert studio.post(path, json=body | {"breakpoint": {**after, "trigger": {"file": "main.py", "line": 99}}}).status_code == 422
+
+
 def test_build_debug_can_stop_on_an_equity_loss(studio):
     url = "/api/studio-v3/build/debug"
     request = {
