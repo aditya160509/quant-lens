@@ -152,6 +152,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const chartFirst = ws.cur.id === "chart-first";
   const layout = fitWorkspace({ ...ws.cur.layout, open: { ...open_, rail: railOpen, tester: panelOpen, chart: showingSide && open_.chart, preview: false } }, width, chartFirst);
   const chartOpen = layout.open.chart;
+  // Docking (W-5): the chart sits left or right of the editor; the bottom panel sits under the editor or across the full width.
+  const dock = ws.cur.layout.dock ?? {};
+  const full = dock.panel === "full", chartLeft = dock.chart === "left";
+  const vKeys = (v: { editor: number; tester: number }) => (full ? { top: v.editor, tester: v.tester } : v);
 
   if (chartOpen) chartSeen.current = true;
   const [extra, setExtra] = useState<Exclude<View, "code">[]>([]);
@@ -402,7 +406,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel?.(); };
     window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc);
   }, [quick, onCancel]);
-  useEffect(() => { const t = targets(layout); hRef.current?.setLayout(t.h); vRef.current?.setLayout(t.v); }, [ws.cur.id, railOpen, chartOpen, panelOpen, width]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const t = targets(layout); hRef.current?.setLayout(t.h); vRef.current?.setLayout(vKeys(t.v)); }, [ws.cur.id, railOpen, chartOpen, panelOpen, width, full, chartLeft]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Remember the exact panel sizes and close a panel pulled to the edge. */
   const onH = (l: Record<string, number>, m: { isUserInteraction: boolean }) => {
     if (!m.isUserInteraction) return;
@@ -414,7 +418,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     if (!m.isUserInteraction) return;
     ws.patch((x) => ({ open: { ...x.open, tester: x.open.tester && l.tester >= 8 }, size: { ...x.size, tester: x.open.tester && l.tester >= 8 ? l.tester : x.size.tester } }));
   };
-  const maxTester = () => { const next = !panelMax; setPanelMax(next); if (next) testerBeforeMax.current = vRef.current?.getLayout().tester ?? ws.cur.layout.size.tester; const t = next ? 85 : (testerBeforeMax.current ?? 34); ws.patch((x) => ({ ...x, size: { ...x.size, tester: t } })); vRef.current?.setLayout({ editor: 100 - t, tester: t }); };
+  const maxTester = () => { const next = !panelMax; setPanelMax(next); if (next) testerBeforeMax.current = vRef.current?.getLayout().tester ?? ws.cur.layout.size.tester; const t = next ? 85 : (testerBeforeMax.current ?? 34); ws.patch((x) => ({ ...x, size: { ...x.size, tester: t } })); vRef.current?.setLayout(vKeys({ editor: 100 - t, tester: t })); };
 
   const running = quick?.status === "queued" || quick?.status === "running";
   const runCode = (level: "quick" | "full" = "quick") => {
@@ -571,24 +575,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     {running && view !== "results" ? <button className="btn" onClick={onCancel}>Cancel</button> : null}
   </>;
 
-  return (
-    <div className="dv" data-activity={iconsOpen} data-head={slot ? "" : undefined}>
-      {slot ? createPortal(<div className="dv-bar in-head">{bar}</div>, slot) : <div className="dv-bar">{bar}</div>}
-      <nav className="dv-icons" aria-label="Activity bar" hidden={!iconsOpen}>
-        {/* Four entry points; Outline sits beside Files in the side bar header, Starters opens from ⌘⇧S and the empty editor. */}
-        {RAILS.filter(([k]) => k !== "outline" && k !== "templates").map(([k, icon, l]) => {
-          const on = railOpen && (rail === k || (k === "files" && rail === "outline"));
-          return <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={on} onClick={() => { if (on) setRailOpen(false); else revealRail(k); }}>{icon}</button>;
-        })}
-        <span className="dv-icons-gap" />
-        {/* Bottom group opens the bottom panel (JetBrains: lower stripe icons open horizontal tool windows). */}
-        {([["tester", <Gauge key="g" size={18} />, "Tester"], ["problems", <CircleAlert key="p" size={18} />, "Problems"], ["console", <SquareTerminal key="c" size={18} />, "Console"]] as const).map(([k, icon, l]) => {
-          const on = panelOpen && tab === k;
-          return <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={on} onClick={() => { if (on) setPanelOpen(false); else { setPanelOpen(true); setTab(k); } }}>{icon}</button>;
-        })}
-      </nav>
-      <div className="dv-body" ref={bodyRef}>
-      <Group orientation="horizontal" id="dv-h" groupRef={hRef} defaultLayout={targets(layout).h} onLayoutChanged={onH}>
+  const railPanel = (
       <Panel id="rail" minSize={0} maxSize="210px">
         <nav className="dv-rail" inert={!railOpen} aria-hidden={!railOpen} aria-label={RAILS.find((r) => r[0] === rail)?.[2]}>
           <h4>{rail === "files" || rail === "outline" ? (
@@ -676,9 +663,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
           )}
         </nav>
       </Panel>
-      <Separator className="dv-gutter" disabled={!railOpen} />
-      <Panel id="center" minSize={chartFirst ? "30%" : "430px"}>
-      <Group className="dv-main" orientation="vertical" id="dv-v" groupRef={vRef} defaultLayout={targets(layout).v} onLayoutChanged={onV}>
+  );
+  const editorPanel = (
       <Panel id="editor" minSize="15%" className="dv-edpane">
         <div ref={tabStrip} className="dv-tabs" role="tablist" aria-label="Open files and reports">
           {open.map((f) => (
@@ -747,7 +733,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
           </div>
         ) : null}
       </Panel>
-      <Separator className="dv-gutter" disabled={!panelOpen} />
+  );
+  const testerPanel = (
       <Panel id="tester" minSize={0}>
           <div className="dv-panel" inert={!panelOpen} aria-hidden={!panelOpen}>
             <div className="dv-phead">
@@ -854,15 +841,54 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
             </div>
           </div>
       </Panel>
-      </Group>
-      </Panel>
-      <Separator className="dv-gutter" disabled={!chartOpen} />
+  );
+  const rightPanel = (
       <Panel id="right" minSize={0}>
       <aside className="dv-side" inert={!chartOpen}>
         {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart symbol={symbol} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} /></div> : null}
       </aside>
       </Panel>
+  );
+  const centerPanel = (
+      <Panel id="center" minSize={chartFirst ? "30%" : "430px"}>
+      <Group className="dv-main" orientation="vertical" id={full ? "dv-v1" : "dv-v"} key={full ? "one" : "split"} groupRef={full ? undefined : vRef} defaultLayout={full ? { editor: 100 } : targets(layout).v} onLayoutChanged={full ? undefined : onV}>
+      {editorPanel}
+      {full ? null : <><Separator className="dv-gutter" disabled={!panelOpen} />{testerPanel}</>}
       </Group>
+      </Panel>
+  );
+  const hGroup = (
+      <Group orientation="horizontal" id={chartLeft ? "dv-hl" : "dv-h"} key={chartLeft ? "left" : "right"} groupRef={hRef} defaultLayout={targets(layout).h} onLayoutChanged={onH}>
+      {railPanel}
+      <Separator className="dv-gutter" disabled={!railOpen} />
+      {chartLeft ? <>{rightPanel}<Separator className="dv-gutter" disabled={!chartOpen} />{centerPanel}</> : <>{centerPanel}<Separator className="dv-gutter" disabled={!chartOpen} />{rightPanel}</>}
+      </Group>
+  );
+
+  return (
+    <div className="dv" data-activity={iconsOpen} data-head={slot ? "" : undefined}>
+      {slot ? createPortal(<div className="dv-bar in-head">{bar}</div>, slot) : <div className="dv-bar">{bar}</div>}
+      <nav className="dv-icons" aria-label="Activity bar" hidden={!iconsOpen}>
+        {/* Four entry points; Outline sits beside Files in the side bar header, Starters opens from ⌘⇧S and the empty editor. */}
+        {RAILS.filter(([k]) => k !== "outline" && k !== "templates").map(([k, icon, l]) => {
+          const on = railOpen && (rail === k || (k === "files" && rail === "outline"));
+          return <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={on} onClick={() => { if (on) setRailOpen(false); else revealRail(k); }}>{icon}</button>;
+        })}
+        <span className="dv-icons-gap" />
+        {/* Bottom group opens the bottom panel (JetBrains: lower stripe icons open horizontal tool windows). */}
+        {([["tester", <Gauge key="g" size={18} />, "Tester"], ["problems", <CircleAlert key="p" size={18} />, "Problems"], ["console", <SquareTerminal key="c" size={18} />, "Console"]] as const).map(([k, icon, l]) => {
+          const on = panelOpen && tab === k;
+          return <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={on} onClick={() => { if (on) setPanelOpen(false); else { setPanelOpen(true); setTab(k); } }}>{icon}</button>;
+        })}
+      </nav>
+      <div className="dv-body" ref={bodyRef}>
+      {full ? (
+        <Group orientation="vertical" id="dv-vf" key="full" groupRef={vRef} defaultLayout={vKeys(targets(layout).v)} onLayoutChanged={onV}>
+          <Panel id="top" minSize="15%">{hGroup}</Panel>
+          <Separator className="dv-gutter" disabled={!panelOpen} />
+          {testerPanel}
+        </Group>
+      ) : hGroup}
       </div>
 
       <footer className="dv-status">

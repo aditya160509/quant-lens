@@ -779,13 +779,13 @@ Each needs an answer before the page it blocks. Defaults are in the text.
 - [ ] OD-18 Tax and wash-sale (REVIEW G10) is not in v3. Confirm it stays out
 - [ ] OD-19 Tick data is not in v3 (REVIEW §3). Confirm it stays out
 
-## Workspace (Studio v3 single screen, plan: docs/studio/plan/workspace_plan.html): 10 / 12 done
+## Workspace (Studio v3 single screen, plan: docs/studio/plan/workspace_plan.html): 11 / 12 done
 Merges Build (141 done features move into panels unchanged), the 22 open Build items, and DEV_IDEAS catalogue items (as numbered there).
 - [x] [L] W-1 Panel system: resizable splits, snap, one spring animation, 60 fps drag, layout remembered
 - [x] [M] W-2 Panels closed by default; open from View menu, palette and shortcuts
 - [x] [M] W-3 Workspace templates: Code only, Code + Chart, Full tester, Chart first, plus user-saved ones
 - [x] [S] W-4 Rename, duplicate, delete and switch workspaces; per-strategy default
-- [ ] [M] W-5 Customise: panel visibility and workspace sizes are saved, including the editor split. Preview opens in the resizable bottom panel, and the Dev activity bar can be hidden. Flexible docking remains open.
+- [x] [M] W-5 Customise: panel visibility and workspace sizes are saved, including the editor split. Preview opens in the resizable bottom panel, and the Dev activity bar can be hidden. Docking: the chart sits left or right of the editor and the bottom panel under the editor or across the full width, set in the zone editor (⌘⇧\) and saved per layout.
 - [x] [L] W-6 Vela chart panel fed with bars, trades, ctx.plot, paused bar; mark B (Vela™ in status bar)
 - [x] [L] W-8 Strategy Tester drawer: key stats, equity/drawdown, trades list, settings (Inputs card beside the results)
 - [x] [M] W-9 ctx.fill, ctx.hline, ctx.bgcolor, ctx.draw_* rendered on the chart

@@ -7,7 +7,8 @@ import type { ReactNode } from "react";
 
 export type PanelId = "rail" | "chart" | "preview" | "tester";
 /** Sizes are percentages: rail and right of the width, tester of the centre height. */
-export type Layout = { open: Record<PanelId, boolean>; size: { rail: number; right: number; tester: number; chart?: number; split?: number } };
+export type Dock = { chart?: "left" | "right"; panel?: "center" | "full" };
+export type Layout = { open: Record<PanelId, boolean>; size: { rail: number; right: number; tester: number; chart?: number; split?: number }; dock?: Dock };
 export type Workspace = { id: string; name: string; builtin?: boolean; layout: Layout };
 
 const L = (open: Partial<Record<PanelId, boolean>>, right = 42, tester = 24, rail = 16): Layout => ({ open: { rail: false, chart: false, preview: false, tester: false, ...open }, size: { rail, right, tester } });
@@ -93,21 +94,29 @@ export function WorkspaceMenu({ ws, children, onCustomise }: { ws: ReturnType<ty
 type Ws = ReturnType<typeof useWorkspaces>;
 const clamp = (v: number, lo: number, hi: number) => Math.round(Math.min(hi, Math.max(lo, v)));
 
-/** A layout drawn small: side bar, editor over the bottom panel, chart on the right. */
-function Thumb({ l }: { l: Layout }) {
+/** Zone rectangles in percent for a layout: shared by the thumbnail and the zone editor. */
+function zones(l: Layout) {
   const rail = l.open.rail ? l.size.rail : 0, right = l.open.chart ? l.size.right : 0, t = l.open.tester ? l.size.tester : 0;
-  const W = 96, H = 60, g = 2, x1 = (W * rail) / 100, x2 = W - (W * right) / 100, y = H - (H * t) / 100;
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} aria-hidden className="dv-thumb">
-      {rail ? <rect x={0} y={0} width={x1 - g} height={H} rx={2} data-z="rail" /> : null}
-      <rect x={rail ? x1 : 0} y={0} width={x2 - (rail ? x1 : 0) - (right ? g : 0)} height={y - (t ? g : 0)} rx={2} data-z="editor" />
-      {t ? <rect x={rail ? x1 : 0} y={y} width={x2 - (rail ? x1 : 0) - (right ? g : 0)} height={H - y} rx={2} data-z="tester" /> : null}
-      {right ? <rect x={x2} y={0} width={W - x2} height={H} rx={2} data-z="chart" /> : null}
-    </svg>
-  );
+  const left = l.dock?.chart === "left", full = l.dock?.panel === "full";
+  const top = 100 - t, ed = { x: rail + (left ? right : 0), w: 100 - rail - right };
+  const ch = { x: left ? rail : 100 - right, w: right };
+  return {
+    rail: { x: 0, y: 0, w: rail, h: full ? top : 100 },
+    editor: { x: ed.x, y: 0, w: ed.w, h: top },
+    tester: full ? { x: 0, y: top, w: 100, h: t } : { x: ed.x, y: top, w: ed.w, h: t },
+    chart: { x: ch.x, y: 0, w: ch.w, h: full ? top : 100 },
+    edges: { rail, right, t, left, full },
+  };
 }
 
-const ZONES: [PanelId | "editor", string][] = [["rail", "Files"], ["editor", "Editor"], ["tester", "Bottom panel"], ["chart", "Chart"]];
+/** A layout drawn small: side bar, editor, bottom panel and chart where the layout docks them. */
+function Thumb({ l }: { l: Layout }) {
+  const z = zones(l), W = 96, H = 60, g = 1;
+  const r = (k: "rail" | "editor" | "tester" | "chart") => { const q = z[k]; return q.w > 0 && q.h > 0 ? <rect key={k} x={(q.x * W) / 100 + g} y={(q.y * H) / 100 + g} width={(q.w * W) / 100 - 2 * g} height={(q.h * H) / 100 - 2 * g} rx={2} data-z={k} /> : null; };
+  return <svg viewBox={`0 0 ${W} ${H}`} aria-hidden className="dv-thumb">{r("rail")}{r("editor")}{r("tester")}{r("chart")}</svg>;
+}
+
+const ZONES: ["rail" | "editor" | "tester" | "chart", string][] = [["rail", "Files"], ["editor", "Editor"], ["tester", "Bottom panel"], ["chart", "Chart"]];
 const PRESETS: [string, Partial<Record<PanelId, boolean>>][] = [["Columns", { rail: true, chart: true }], ["Rows", { tester: true }], ["Grid", { rail: true, chart: true, tester: true }], ["Editor", {}]];
 
 /** Zone editor: show or hide each zone, drag the shared edges to size them, save as a named layout. */
@@ -115,41 +124,42 @@ function ZoneEditor({ start, onSave, onCancel }: { start: Layout; onSave: (name:
   const [l, setL] = useState<Layout>(() => structuredClone(start));
   const [name, setName] = useState("");
   const box = useRef<HTMLDivElement>(null);
-  const rail = l.open.rail ? l.size.rail : 0, right = l.open.chart ? l.size.right : 0, t = l.open.tester ? l.size.tester : 0;
+  const z = zones(l), { rail, right, t, left, full } = z.edges;
   const drag = (edge: "rail" | "right" | "tester") => (e: ReactPointerEvent) => {
     e.preventDefault();
     const r = box.current!.getBoundingClientRect();
     const move = (ev: PointerEvent) => {
       const x = ((ev.clientX - r.left) / r.width) * 100, y = ((ev.clientY - r.top) / r.height) * 100;
-      setL((p) => ({ ...p, size: { ...p.size, ...(edge === "rail" ? { rail: clamp(x, 8, 40) } : edge === "right" ? { right: clamp(100 - x, 15, 75) } : { tester: clamp(100 - y, 10, 70) }) } }));
+      setL((p) => ({ ...p, size: { ...p.size, ...(edge === "rail" ? { rail: clamp(x, 8, 40) } : edge === "right" ? { right: clamp(left ? x - rail : 100 - x, 15, 75) } : { tester: clamp(100 - y, 10, 70) }) } }));
     };
     const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
   const toggle = (z: PanelId | "editor") => { if (z !== "editor") setL((p) => ({ ...p, open: { ...p.open, [z]: !p.open[z] } })); };
-  const pos: Record<string, CSSProperties> = {
-    rail: { left: 0, top: 0, width: `${rail}%`, height: "100%" },
-    editor: { left: `${rail}%`, top: 0, width: `${100 - rail - right}%`, height: `${100 - t}%` },
-    tester: { left: `${rail}%`, top: `${100 - t}%`, width: `${100 - rail - right}%`, height: `${t}%` },
-    chart: { left: `${100 - right}%`, top: 0, width: `${right}%`, height: "100%" },
-  };
+  const pct = (k: "rail" | "editor" | "tester" | "chart"): CSSProperties => ({ left: `${z[k].x}%`, top: `${z[k].y}%`, width: `${z[k].w}%`, height: `${z[k].h}%` });
+  const setDock = (d: Dock) => setL((p) => ({ ...p, dock: { ...p.dock, ...d } }));
+
   const on = (z: PanelId | "editor") => z === "editor" || l.open[z];
   return (
     <div className="dv-zones">
       <div className="dv-zones-hd">
         <b>Zone editor</b>
+        <span className="seg">
+          <button className="btn sm ghost" aria-pressed={left} onClick={() => setDock({ chart: left ? "right" : "left" })}>Chart {left ? "left" : "right"}</button>
+          <button className="btn sm ghost" aria-pressed={full} onClick={() => setDock({ panel: full ? "center" : "full" })}>Panel {full ? "full width" : "under editor"}</button>
+        </span>
         <span className="seg">{PRESETS.map(([n, o]) => <button key={n} className="btn sm ghost" onClick={() => setL((p) => ({ ...p, open: { rail: false, chart: false, preview: false, tester: false, ...o } }))}>{n}</button>)}</span>
       </div>
       <div className="dv-zones-box" ref={box}>
         {ZONES.filter(([z]) => on(z)).map(([z, label]) => (
-          <div key={z} className="dv-zone" style={pos[z]}>
+          <div key={z} className="dv-zone" style={pct(z === "editor" ? "editor" : z)}>
             <span>{label}</span>
             {z !== "editor" ? <button className="icon-btn" aria-label={`Hide ${label}`} onClick={() => toggle(z)}><X size={13} /></button> : null}
           </div>
         ))}
-        {rail ? <i className="dv-edge v" style={{ left: `${rail}%` }} onPointerDown={drag("rail")} /> : null}
-        {right ? <i className="dv-edge v" style={{ left: `${100 - right}%` }} onPointerDown={drag("right")} /> : null}
-        {t ? <i className="dv-edge h" style={{ top: `${100 - t}%`, left: `${rail}%`, width: `${100 - rail - right}%` }} onPointerDown={drag("tester")} /> : null}
+        {rail ? <i className="dv-edge v" style={{ left: `${rail}%`, height: `${z.rail.h}%`, bottom: "auto" }} onPointerDown={drag("rail")} /> : null}
+        {right ? <i className="dv-edge v" style={{ left: `${left ? rail + right : 100 - right}%`, height: `${z.chart.h}%`, bottom: "auto" }} onPointerDown={drag("right")} /> : null}
+        {t ? <i className="dv-edge h" style={{ top: `${100 - t}%`, left: `${z.tester.x}%`, width: `${z.tester.w}%` }} onPointerDown={drag("tester")} /> : null}
       </div>
       <div className="dv-zones-ft">
         {ZONES.filter(([z]) => !on(z)).map(([z, label]) => <button key={z} className="btn sm ghost" onClick={() => toggle(z)}><Plus size={12} />{label}</button>)}
