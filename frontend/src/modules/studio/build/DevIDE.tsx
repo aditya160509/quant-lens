@@ -321,9 +321,13 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     void studio<{ cells: { title: string }[]; outputs: CellRow[] }>("POST", "/build/cells", { code: spec.code, files: spec.files ?? {}, file: active, upto, only, symbols: [symbol] })
       .then((r) => setCellOut({ file: active, titles: r.cells.map((c) => c.title), rows: r.outputs }), (e: Error) => { setCellOut(null); toast.error(e.message); });
   };
-  const goto = (file: string, line: number, column?: number) => { if (!(file in files)) return; setDiff(null); setOpen((o) => (o.includes(file) ? o : [...o, file])); setActive(file); setReveal({ line, column, n: Date.now() }); };
+  // Back/forward history: positions left behind by jumps and file switches, newest last, capped at 50.
+  const nav = useRef({ s: [] as { file: string; line: number }[], i: -1, jumping: false });
+  const mark = (file: string, line: number) => { const n = nav.current, l = n.s[n.i]; if (l?.file === file && l.line === line) return; n.s = [...n.s.slice(0, n.i + 1), { file, line }].slice(-50); n.i = n.s.length - 1; };
+  const hop = (d: 1 | -1) => { const n = nav.current; if (n.i === n.s.length - 1) mark(active, cursor.line); const t = n.s[n.i + d]; if (!t) return; n.i += d; n.jumping = true; goto(t.file, t.line); n.jumping = false; };
+  const goto = (file: string, line: number, column?: number) => { if (!(file in files)) return; if (!nav.current.jumping) { mark(active, cursor.line); mark(file, line); } setDiff(null); setOpen((o) => (o.includes(file) ? o : [...o, file])); setActive(file); setReveal({ line, column, n: Date.now() }); };
   // Single click opens a preview tab that the next single click replaces; double click or an edit keeps it (B-13).
-  const peek = (f: string) => { if (!(f in files)) return; setDiff(null); setOpen((o) => (o.includes(f) ? o : [...o.filter((x) => x !== preview || pinned.includes(x)), f])); if (!open.includes(f)) setPreview(f); setActive(f); };
+  const peek = (f: string) => { if (!(f in files)) return; mark(active, cursor.line); setDiff(null); setOpen((o) => (o.includes(f) ? o : [...o.filter((x) => x !== preview || pinned.includes(x)), f])); if (!open.includes(f)) setPreview(f); setActive(f); };
   const keep = (f: string) => { if (preview === f) setPreview(null); };
   const close = (f: string) => { const rest = open.filter((x) => x !== f); setOpen(rest.length ? rest : ["main.py"]); if (active === f) setActive(rest.at(-1) ?? "main.py"); };
   const editLogpoint = (line: number) => {
@@ -370,9 +374,41 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     void studio<Snippet>("POST", "/snippets", { name, prefix, body }).then((sn) => { setSnippets((x) => [...x, sn]); toast.success(`Saved ${name}`); }, (e: Error) => toast.error(e.message));
   };
   const actionsRef = useRef<EditorAction[]>([]);
+  const gotoRef = useRef<(f: string | null, l: number, c?: number) => void>(() => undefined);
+  gotoRef.current = (f, l, c) => goto(f ?? active, l, c);
+  // Recent files (newest first) and the symbols of every file feed the shared palette (Search Everywhere, go to symbol).
+  const [recent, setRecent] = useState<string[]>([]);
+  useEffect(() => setRecent((r) => [active, ...r.filter((x) => x !== active)].slice(0, 20)), [active]);
+  const symCache = useRef(new Map<string, { code: string; syms: Sym[] }>());
+  const [projSyms, setProjSyms] = useState<{ file: string; name: string; line: number; column: number }[]>([]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const flat = (ss: Sym[], q = ""): { name: string; line: number; column: number }[] => ss.flatMap((x) => [{ name: q + x.name, line: x.line, column: x.column }, ...flat(x.children, `${q}${x.name}.`)]);
+      void Promise.all(Object.entries(files).map(async ([file, code]) => {
+        const c = symCache.current.get(file);
+        const syms = c?.code === code ? c.syms : code.trim() ? await studio<Sym[]>("POST", "/build/outline", { code }).catch(() => [] as Sym[]) : [];
+        symCache.current.set(file, { code, syms });
+        return flat(syms).map((x) => ({ file, ...x }));
+      })).then((all) => setProjSyms(all.flat()));
+    }, 600);
+    return () => clearTimeout(t);
+  }, [files]);
+  useEffect(() => {
+    const item = (group: string, label: string, file: string, line: number, column: number, hidden: boolean) => ({ id: `nav:${JSON.stringify([file, line, column])}`, group, label, hidden });
+    const flat = (ss: Sym[], q = ""): Sym[] => ss.flatMap((x) => [{ ...x, name: q + x.name }, ...flat(x.children, `${q}${x.name}.`)]);
+    const names = Object.keys(files), order = [...recent.filter((f) => names.includes(f)), ...names.filter((f) => !recent.includes(f))];
+    window.dispatchEvent(new CustomEvent("studio:devitems", { detail: [
+      ...order.map((f, i) => item("File", f, f, 1, 1, i >= 5)),
+      ...flat(outline).map((x) => item("Outline", x.name, active, x.line, x.column, true)),
+      ...projSyms.map((x) => item("Symbol", `${x.name}  ${x.file}:${x.line}`, x.file, x.line, x.column, true)),
+    ] }));
+  }, [files, recent, outline, projSyms, active]);
+  useEffect(() => () => { window.dispatchEvent(new CustomEvent("studio:devitems", { detail: [] })); }, []);
   useEffect(() => {
     const on = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
+      if (id.startsWith("nav:")) { const [f, l, c] = JSON.parse(id.slice(4)); gotoRef.current(f, l, c); return; }
+      if (id.startsWith("line:")) { const n = Number(id.slice(5)); if (n >= 1) gotoRef.current(null, Math.floor(n)); return; }
       if (id.startsWith("goto:")) { setOpenP("chart", true); replayGo(id.slice(5), undefined); return; }
       actionsRef.current.find((a) => a.id === id)?.run(cursor.line);
     };
@@ -572,6 +608,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.zen", label: "View: zen mode", keys: (m) => [m.KeyMod.chord(m.KeyMod.CtrlCmd | m.KeyCode.KeyK, m.KeyMod.CtrlCmd | m.KeyCode.KeyZ)], run: () => setZen((z) => !z) },
     { id: "studio.split", label: "View: split editor", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.Backslash], run: () => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active)) },
     { id: "studio.snippet", label: "Snippet: save selection", run: () => saveSnippet() },
+    { id: "studio.back", label: "Go: back", keys: (m) => [m.KeyMod.WinCtrl | m.KeyCode.Minus], run: () => hop(-1) },
+    { id: "studio.fwd", label: "Go: forward", keys: (m) => [m.KeyMod.WinCtrl | m.KeyMod.Shift | m.KeyCode.Minus], run: () => hop(1) },
+    { id: "studio.symproj", label: "Go to symbol in project", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyT], run: () => window.dispatchEvent(new CustomEvent("studio:palette", { detail: "Symbol " })) },
+    { id: "studio.outline", label: "Go to symbol in file", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyO], run: () => window.dispatchEvent(new CustomEvent("studio:palette", { detail: "Outline " })) },
     { id: "studio.snippets", label: "Snippet: insert", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyS], run: () => revealRail("templates") },
   ];
   actionsRef.current = actions;
@@ -916,7 +956,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                 </div>
               ) : null}
               {tab === "tester" ? <Tester trades={prev?.trades ?? []} inputs={inputList} /> : null}
-              {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades" }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
+              {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades", rowActions: (r: Record<string, unknown>) => {
+                const d = String(r.entry_date ?? "").slice(0, 10), o = d ? prev.order_lines?.find((x) => x.dates.some((y) => y.slice(0, 10) === d)) : undefined;
+                return o ? <button className="icon-btn" title={`Go to ${o.file}:${o.line}`} aria-label="Go to the line that placed this order" onClick={() => goto(o.file, o.line)}><FileCode2 size={12} /></button> : null;
+              } }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
               {tab === "cells" ? (cellOut === "running" ? <p className="dv-empty">Running…</p> : !cellOut ? <p className="dv-empty">Ctrl+Enter runs the cell at the cursor</p> : (
                 <div className="dv-cells">{cellOut.rows.map((r, i) => (
                   <section key={i}>

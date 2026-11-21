@@ -147,6 +147,16 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   useEffect(() => { void studio<{ formula: { fields: Ref[]; operators: Ref[] } }>("GET", "/manifest").then((m) => { setCatalogue([...m.formula.fields.map((f) => f.name), ...m.formula.operators.map((o) => o.example ?? o.name)]); setReference([...m.formula.operators, ...m.formula.fields]); }, () => undefined); }, []);
   const history = useRef<{ past: Spec[]; future: Spec[] }>({ past: [], future: [] });
   const [palette, setPalette] = useState(false);
+  const [seed, setSeed] = useState<{ q: string }>();
+  const [devItems, setDevItems] = useState<{ id: string; group: string; label: string; hidden: boolean }[]>([]);
+  useEffect(() => {
+    const items = (e: Event) => setDevItems((e as CustomEvent).detail);
+    const open = (e: Event) => { setSeed({ q: (e as CustomEvent<string>).detail }); setPalette(true); };
+    let last = 0; // double Shift opens Search Everywhere
+    const key = (e: KeyboardEvent) => { if (e.key !== "Shift") { last = 0; return; } if (e.repeat) return; const t = Date.now(); if (t - last < 400) { last = 0; open(new CustomEvent("x", { detail: "" })); } else last = t; };
+    window.addEventListener("studio:devitems", items); window.addEventListener("studio:palette", open); window.addEventListener("keydown", key);
+    return () => { window.removeEventListener("studio:devitems", items); window.removeEventListener("studio:palette", open); window.removeEventListener("keydown", key); };
+  }, []);
   const focus = useRef<{ role: string; start: number; end: number } | null>(null);
   const track = (role: string) => (e: React.SyntheticEvent<HTMLTextAreaElement>) => { const t = e.currentTarget; focus.current = { role, start: t.selectionStart, end: t.selectionEnd }; };
 
@@ -319,6 +329,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const blank = !loaded && !spec.code.trim() && ROLES.every(([r]) => !(spec[r] as string).trim());
   const findings = (role: string) => (blank ? [] : compiled?.findings.filter((f) => f.role === role) ?? []);
   const commands: Command[] = [
+    ...(ui === "dev" ? devItems.map((d) => ({ ...d, run: () => window.dispatchEvent(new CustomEvent("studio:dev", { detail: d.id })) })) : []),
+    ...(ui === "dev" ? [{ id: "line", group: "Go", label: "Go to line", ask: "Line number", run: (n?: string) => window.dispatchEvent(new CustomEvent("studio:dev", { detail: `line:${n}` })) }] : []),
     { id: "lift", group: "Edit", label: "Lift number to parameter", ask: "Parameter name for the number at the cursor", run: (n) => lift(n) },
     { id: "param", group: "Edit", label: "Add parameter", ask: "Parameter name", run: (n) => { if (n && /^[a-z_][a-z0-9_]*$/i.test(n)) edit({ params: { ...spec.params, [n]: { value: 0 } } }); } },
     ...(["blocks", "formula", "english"] as const).map((m) => ({ id: `mode-${m}`, group: "Mode", label: { blocks: "Blocks", formula: "Formula", english: "Plain English" }[m], run: () => { switchUi("simple"); switchMode(m); } })),
@@ -327,6 +339,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     ...(ui === "dev" ? ([["studio.quickrun", "Run", "Quick run (top 50, 5 years)", "⌘↵"], ["studio.fullrun", "Run", "Full run (recorded)", "⌘⇧↵"], ["studio.profile", "Run", "Profile the preview", ""], ["studio.tearsheet", "View", "Tearsheet", ""], ["studio.runs", "View", "Compare runs", ""], ["studio.robust", "Run", "Robustness: Monte Carlo on trades", ""], ["studio.chart", "View", "Chart with replay", ""], ["studio.cancel", "Run", "Cancel run", "Esc"],
       ["studio.debug", "Debug", "Start debugging", "F5"], ["studio.bp", "Debug", "Toggle breakpoint", "F9"], ["studio.step", "Debug", "Step one bar", "F10"], ["studio.stepback", "Debug", "Step back one bar", "⇧F10"],
       ["studio.layouts", "View", "Customise layouts", "⌘⇧\\"], ["studio.chartfirst", "View", "Chart first", ""], ["studio.panel", "View", "Toggle panel", "⌘J"], ["studio.rail", "View", "Toggle side bar", "⌘B"], ["studio.split", "View", "Split editor", "⌘\\"], ["studio.files", "View", "Go to file", "⌘P"], ["studio.search", "View", "Search project", "⌘⇧F"], ["studio.docs", "View", "Docs", "F1"],
+      ["studio.back", "Go", "Back", "Ctrl -"], ["studio.fwd", "Go", "Forward", "Ctrl ⇧-"], ["studio.symproj", "Go", "Go to symbol in project", "⌘T"], ["studio.outline", "Go", "Go to symbol in file", "⌘⇧O"],
       ["studio.newfile", "Editor", "New file", ""], ["studio.snippet", "Editor", "Save selection as snippet", ""], ["studio.snippets", "Editor", "Insert snippet", "⌘⇧S"]] as const)
       .map(([cid, group, label, hint]) => ({ id: cid, group, label, hint: hint || undefined, run: () => window.dispatchEvent(new CustomEvent("studio:dev", { detail: cid })) })) : []),
     { id: "save", group: "Strategy", label: "Save version", hint: "⌘S", run: () => void save() },
@@ -472,7 +485,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         {headRight}
       </header>)}
 
-      <Palette open={palette} onClose={() => setPalette(false)} commands={commands} />
+      <Palette open={palette} onClose={() => setPalette(false)} commands={commands} seed={seed} />
       {dialog === "branches" && loaded ? <BranchDialog id={loaded.id} name={spec.name} spec={spec} onClose={() => setDialog(null)} onMerged={(t) => router.push(`/studio/build/${t}`)} /> : null}
       {dialog === "customise" ? <CustomiseDialog spec={spec} onClose={() => setDialog(null)} /> : null}
       {recover ? (

@@ -2,19 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-export type Command = { id: string; label: string; group: string; hint?: string; ask?: string; run: (answer?: string) => void };
+export type Command = { id: string; label: string; group: string; hint?: string; hidden?: boolean; ask?: string; run: (answer?: string) => void };
 
 /** ⌘⇧P: one list of actions, filtered as you type, Enter runs the highlighted one. */
-export function Palette({ open, onClose, commands }: { open: boolean; onClose: () => void; commands: Command[] }) {
+export function Palette({ open, onClose, commands, seed }: { open: boolean; onClose: () => void; commands: Command[]; seed?: { q: string } }) {
   const [q, setQ] = useState("");
   const [at, setAt] = useState(0);
   const [asking, setAsking] = useState<Command | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const shown = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    return commands.filter((c) => words.every((w) => `${c.group} ${c.label}`.toLowerCase().includes(w))).slice(0, 40);
+    return commands.filter((c) => (words.length || !c.hidden) && words.every((w) => `${c.group} ${c.label}`.toLowerCase().includes(w))).slice(0, 40);
   }, [q, commands]);
-  useEffect(() => { if (open) { setQ(""); setAt(0); setAsking(null); setTimeout(() => input.current?.focus(), 0); } }, [open]);
+  useEffect(() => { if (open) { setQ(seed?.q ?? ""); setAt(0); setAsking(null); setTimeout(() => input.current?.focus(), 0); } }, [open, seed]);
   useEffect(() => setAt(0), [q]);
   if (!open) return null;
   const go = (c?: Command) => {

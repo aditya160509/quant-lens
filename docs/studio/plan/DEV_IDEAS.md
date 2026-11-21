@@ -639,14 +639,14 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ◐ `Easy` Go to line / symbol in file (Ctrl+G, Ctrl+Shift+O) | Jump by line or symbol | PARTIAL (Monaco built-ins, not surfaced) | P2 |
-| ⬜ `Easy` Go to symbol in project (Ctrl+T) | Search symbols across files | GAP | P2 |
-| ⬜ `Med` Back and forward navigation history | Return to previous cursor spot | GAP | P2 |
-| ◐ `Easy` Recent files and recent projects | Quick reopen | PARTIAL (versions list) | P3 |
-| ⬜ `Easy` Search Everywhere (JetBrains double Shift) | One box for files, symbols, actions, settings | GAP | P2 |
+| ✅ `Easy` Go to line / symbol in file (Ctrl+G, Ctrl+Shift+O) | Jump by line or symbol | HAVE (Monaco Ctrl+G, palette Outline) | P2 |
+| ✅ `Easy` Go to symbol in project (Ctrl+T) | Search symbols across files | HAVE (palette Symbol) | P2 |
+| ✅ `Med` Back and forward navigation history | Return to previous cursor spot | HAVE (Ctrl+-, 50 entries) | P2 |
+| ◐ `Easy` Recent files and recent projects | Quick reopen | PARTIAL (recent files in palette; no recent strategies) | P3 |
+| ◐ `Easy` Search Everywhere (JetBrains double Shift) | One box for files, symbols, actions, settings | PARTIAL (double Shift: files, symbols, actions; no settings) | P2 |
 | ✅ `Easy` Structure tool window | Tree of classes and methods | HAVE (Outline) | P1 |
 | ✅ `Easy` Jump from a log line or problem to code | Click error to line | HAVE | P1 |
-| ◐ `Med` Jump from a trade or bar to the code that made it | Chart to code | PARTIAL (log line goes to code and pauses) | P1 |
+| ◐ `Med` Jump from a trade or bar to the code that made it | Chart to code | PARTIAL (log line and Trades row go to code; no chart marker click) | P1 |
 
 ### Refactoring and code intelligence
 
