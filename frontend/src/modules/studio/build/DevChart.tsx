@@ -97,6 +97,14 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   const [hidden, setHidden] = useState<string[]>([]);
   const [own, setOwn] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<"all" | "win" | "loss">("all");
+  // Rebuild the chart when the workspace switches theme (.is-light on its root), so its colours follow.
+  const [light, setLight] = useState(false);
+  useEffect(() => {
+    const root = box.current?.closest(".ws"); if (!root) return;
+    const sync = () => setLight(root.classList.contains("is-light")); sync();
+    const obs = new MutationObserver(sync); obs.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, [bars.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
   const rows = useMemo(() => (prev?.trades ?? []).filter((t) => !t.symbol || t.symbol === sym), [prev?.trades, sym]);
   const shown = useMemo(() => rows.filter((r) => filter === "all" || (filter === "win" ? Number(r.pnl) > 0 : Number(r.pnl) <= 0)), [rows, filter]);
   const currentTrade = pausedAt ? shown.findLastIndex((r) => String(r.entry_date) <= pausedAt) : -1;
@@ -139,7 +147,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     });
     ro.observe(el);
     return () => { dead = true; ro.disconnect(); cancelAnimationFrame(frame); setChart(null); c?.destroy(); };
-  }, [barsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [barsKey, light]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Plots: one native per ctx.plot name, moved to its own pane or onto price, hidden from the Plots menu.
   useEffect(() => {

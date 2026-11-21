@@ -213,20 +213,17 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     m.editor.revealLineInCenter(reveal.line); m.editor.setPosition({ lineNumber: reveal.line, column: reveal.column ?? 1 }); m.editor.focus();
   }, [reveal, path]);
 
-  useEffect(() => {
-    const m = ed.current; if (!m) return;
-    const obs = new MutationObserver(() => theme(m.monaco, document.documentElement.dataset.theme !== "light"));
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
-    return () => obs.disconnect();
-  }, []);
-
   const mount: OnMount = (editor, monaco) => {
     ed.current = { editor, monaco };
     register(monaco);
     live.current ??= { ...context.current, owner: context };
     editor.onDidFocusEditorText(() => { live.current = { ...context.current, owner: context }; });
     editor.onDidDispose(() => { if (live.current?.owner === context) live.current = null; });
-    theme(monaco, document.documentElement.dataset.theme !== "light");
+    // The workspace marks light mode with .is-light on its root, not on <html>; follow it live.
+    const root = editor.getContainerDomNode().closest(".ws") ?? document.documentElement;
+    const sync = () => theme(monaco, !root.classList.contains("is-light")); sync();
+    const obs = new MutationObserver(sync); obs.observe(root, { attributes: true, attributeFilter: ["class"] });
+    editor.onDidDispose(() => obs.disconnect());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => keys.current.onSave());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => keys.current.onRun());
     editor.onDidChangeCursorPosition((e) => keys.current.onCursor?.(e.position.lineNumber, e.position.column));

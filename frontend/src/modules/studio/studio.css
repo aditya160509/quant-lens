@@ -79,7 +79,7 @@
 .bd-rule { display: grid; gap: 4px; }
 .bd-rule > label, .bd-rule > span { font-size: 12px; color: var(--text-2); }
 .bd-rule textarea { font: 13px/1.5 var(--code, var(--mono)); resize: vertical; height: auto; padding: 8px 10px; }
-.bd-find { margin: 0; display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; color: var(--text-2); }
+.bd-find { margin: 0; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; row-gap: 6px; font-size: 12.5px; color: var(--text-2); }
 .bd-find.error b { color: var(--down); } .bd-find.warning b { color: var(--warn); }
 .bd-find code { font: 12px var(--mono); color: var(--text); }
 .bd-desc { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text); }
@@ -119,6 +119,7 @@
 .ch-param { width: 38px; background: transparent; border: 0; border-bottom: 1px solid var(--line-2); color: var(--text); font: 12px var(--mono); text-align: center; }
 .ch-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; background: var(--island); box-shadow: inset 0 0 0 1px var(--line); }
 .bd-modes .bd-find button { margin-left: 8px; }
+.bd-modes .bd-find b { white-space: nowrap; }
 .bd-tpls { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); column-gap: 24px; }
 .bd-tpl { display: grid; gap: 3px; text-align: left; padding: 10px 2px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--text); cursor: pointer; }
 .bd-tpl:hover b { color: var(--accent); }
