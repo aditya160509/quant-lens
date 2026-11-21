@@ -101,3 +101,86 @@ uv lock --check
 ```
 
 The test path is an example for workspace changes. Choose the tests that exercise the affected path. Use `uv sync --locked` when setting up the environment. [uv lock and sync](https://docs.astral.sh/uv/concepts/projects/sync/) For broader backend verification use the repository’s full backend test command and the dependency/unused-code audits listed in the [project plan](../../plans/PLAN.md). Prefer focused checks first. If a broad gate reports existing debt, keep its output and scope any fixes to the authorized work.
+
+## 5. Detailed review checks by area
+
+Use these checks when the file handles the named responsibility. In a full backend audit, cover every tracked backend file and record exclusions such as generated artifacts or vendored code. Review shared risks once at their ownership boundary and link the evidence from each affected file. For a focused change, review the changed path and its affected callers.
+
+### 5.1 Readability, types and architecture
+
+- [ ] Names express domain meaning. Prefer `fee_bps`, `price_usd` and `available_at` where the unit or timestamp changes interpretation. Follow existing naming, formatting and layout conventions.
+- [ ] Public functions document side effects, preconditions, return and error contracts, mutation and ownership when they matter. Comments explain reasons and invariants. Remove stale comments when behavior changes.
+- [ ] Represent domain values with appropriate types. Separate absence, zero, invalid, skipped and failed states. Make defaults explicit. Use validated objects across boundaries and check narrowing after untyped I/O. Keep type suppressions narrow and justified.
+- [ ] Make control flow, lifecycle and state transitions easy to trace. Avoid mutable default arguments, hidden shared state and surprise import-time work. Pass dependencies explicitly where that makes behavior and ownership clearer.
+- [ ] Keep transport and persistence details outside numerical kernels. Reuse the canonical implementation for shared semantics. Introduce an abstraction when it resolves measured duplication or a real interface need. Preserve callers when consolidating or deleting code.
+- [ ] Keep code reviewable in small, coherent changes. Review changes in behavior, complexity, tests and documentation together. Follow the project formatter for routine style choices.
+
+[PEP 8](https://peps.python.org/pep-0008/) · [PEP 257](https://peps.python.org/pep-0257/) · [Google code review guidance](https://google.github.io/eng-practices/review/reviewer/looking-for.html)
+
+### 5.2 HTTP, events and interoperability
+
+- [ ] Publish request, response and error contracts. Validate normalized values before expensive work. Test coercion, unknown fields, malformed payloads, size limits, time zones, numeric precision and JSON round trips.
+- [ ] Preserve method semantics and response compatibility. Verify clients can distinguish invalid requests, missing data, conflicts, rate limiting, temporary unavailability and failed jobs. For background work, return a durable reference and document polling, expiry and terminal states.
+- [ ] Document compatibility for optional fields, enum evolution, pagination and versioned stored objects. Use deterministic sorting and tie-breakers. Verify page boundaries under the documented consistency model.
+- [ ] Declare cacheability and freshness for sensitive and public responses. Check private data isolation, representation variance, invalidation and conditional request behavior where applicable.
+- [ ] For streaming, WebSockets and events, review reconnect, resume, replay, message ordering, duplicate handling and slow consumers. Put bounds on message size, buffering and connection lifetime. Apply authorization to subscriptions, replays and writes.
+
+[HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110.html) · [HTTP caching](https://www.rfc-editor.org/rfc/rfc9111.html)
+
+### 5.3 Security, privacy and abuse resistance
+
+- [ ] Map principals, protected objects, trusted services and untrusted inputs. Verify object- and action-level authorization on normal, alternate and bulk routes. Test denied access with controlled fixtures. Check browser origin, CORS and CSRF rules against the authentication mechanism.
+- [ ] Use established authentication and cryptography libraries. Define credential lifetime, rotation, revocation, storage and service scope. Use configurable secret references and redact credentials at every logging and error boundary.
+- [ ] Parameterize database queries. Validate and allowlist external destinations where needed. Constrain filesystem roots, names and symlink handling, and bound archive expansion and decoded data. Keep subprocess arguments structured and controlled. Review deserialization and template evaluation as trust boundaries.
+- [ ] Minimize personal and strategy data collection. Define purpose, access, retention, deletion and export behavior, including derived artifacts, caches, logs and backups. Distinguish product audit records from debugging telemetry.
+- [ ] Apply layered resource limits and least privilege. Document what isolation provides in the deployed environment. Record authorization and sensitive administrative actions with attributable audit events and appropriate redaction.
+
+[OWASP ASVS](https://asvs.owasp.org/) · [OWASP Secrets Management](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)
+
+### 5.4 Data, storage and numerical correctness
+
+- [ ] Document schema, invariants, indexes, canonical identifiers, publication/version rules and data ownership. Check behavior for old, partial, stale, corrupt, duplicated or out-of-order input. Preserve the last valid version when ingestion fails.
+- [ ] Record transaction and consistency boundaries. Test two writers and reader visibility where relevant. Verify race-sensitive invariants in durable storage or a suitably synchronized owner. Check migrations with representative old data, interruption and restore.
+- [ ] Audit financial timestamps, split/dividend conventions, benchmark comparability, annualization, slippage and fees, position limits and train/test boundaries. Track provenance and the availability of information, including revisions and delayed publications.
+- [ ] Justify numeric representation and tolerances by units and use. Test empty, constant, extreme, near-zero and nonfinite values. Compare shape, ordering and missingness explicitly before applying numerical tolerances. Use exact checks for discrete counts, state transitions and canonical IDs.
+- [ ] Check deterministic seeds, stable ordering, parallel reduction effects and any material environment dependence. Compare optimized paths with an independent oracle or hand-computed fixtures and retain a reproduction recipe.
+
+[Studio research and engine standards](CODE_STANDARDS.md#2-quantitative-research-integrity) · [NumPy tolerance semantics](https://numpy.org/doc/stable/reference/generated/numpy.testing.assert_allclose.html)
+
+### 5.5 Performance, resource lifecycle and cost
+
+- [ ] Bound expensive dimensions before launch, including expanded work after joins, parameter products, decompression or fan-out. Budget concurrent per-job memory together with server, worker, cache and temporary disk usage.
+- [ ] Inspect algorithm scaling, event-loop blocking, repeated I/O, temporary copies, serialization and model initialization. Profile with representative inputs before restructuring. Preserve correctness and measure the trade-off across wall time, CPU, memory and I/O.
+- [ ] Define ownership and cleanup for descriptors, pools, connections, cursors, timers, tasks, child processes, temporary files, shared memory and GPU allocations where applicable. Verify limits and resource release after cancellation and failure.
+- [ ] Evaluate saturation using the metrics in section 3. Track nonlinear cost increases from retries, duplicate work, outbound calls, hot keys, artifact retention and downstream rate limits. Where billed services apply, measure cost per successful workload and cap risky fan-out.
+- [ ] For startup/runtime changes, record time to readiness, resident memory before and after first use, and the effect of worker replication. For native or accelerator paths, record actual thread counts, device utilization and memory transfers where they affect the decision.
+
+### 5.6 Testing, debugging and evidence
+
+- [ ] Use tests proportional to risk. Cover normal behavior, input boundaries, permissions, failures, concurrent execution, cancellation, retries and compatibility where relevant. Assert invariants and side effects as well as response values.
+- [ ] Keep tests reproducible and isolated. Control time, randomness, filesystem, network and persistent state. Avoid unnecessary sleeps and reliance on test order. Investigate flaky tests and record any quarantine owner and exit criteria.
+- [ ] Match the test layer to the claim. A unit test covers a function, a contract test covers a boundary, and an integration test covers wiring and side effects. Include adversarial data shapes and failure timing in approved defensive test environments when they matter.
+- [ ] Track fixture provenance, license and sensitive contents. Explain updates to golden values with correctness evidence. Keep exact verification commands and exit codes. Use representative regression cases and record what could only be inferred from static inspection.
+
+[pytest flaky-test guidance](https://docs.pytest.org/en/stable/explanation/flaky.html)
+
+### 5.7 Configuration, delivery and recovery
+
+- [ ] Validate configuration during startup or before use. Define environment precedence, safe defaults and what changes require a restart. Perform a clean install with the lockfile, check configuration compatibility, and keep secrets outside application artifacts.
+- [ ] Review artifacts and dependencies. Check pinned versions, licenses, build inputs, provenance, known vulnerabilities and the expected production dependency set. Use available CI evidence. Record missing attestations or scanners as unverified when required for the release.
+- [ ] Plan rollout and recovery for stateful or high-risk changes. Define readiness, graceful drain, job resumption, rollback criteria and when rollback itself could damage state. Validate backups by restoring them. Record acceptable data loss and recovery times where the service has those objectives.
+- [ ] Give alerts an owner and a response. Distinguish symptoms from causes, test that important signals survive failures, and connect alerts to a related dashboard or recovery procedure. Audit high-impact operations and capture incident follow-ups with owners and dates.
+
+[SLSA Build Provenance](https://slsa.dev/spec/v1.2/build-provenance) · [Google SRE data integrity](https://sre.google/sre-book/data-integrity/)
+
+## 6. Gates for a full backend audit
+
+| Gate | What to produce |
+|---|---|
+| Inventory | Reviewed commit, tracked file inventory, ownership, file categories and any exclusions with reasons. |
+| File evidence | A verdict record for each file reviewed, with caller and test references. Link shared evidence for system properties. |
+| Risk register | Findings with severity, location, impacted users or data, reproducing evidence or missing evidence, owner and next step. Distinguish existing debt from changes under review. |
+| System evidence | Representative workloads with resource measurements, correctness comparisons, failure cases and known limits. Include the deployment profile used to qualify each result. |
+| Release decision | Applicable gates, unresolved blockers, accepted limitations with an owner and review date, rollout conditions and rollback/restore evidence where needed. |
+
+A full audit can finish with known failures and blind spots if they are documented. Release readiness requires the applicable release gates to pass. Keep the findings in the review record and fix only work within the authorized scope.
