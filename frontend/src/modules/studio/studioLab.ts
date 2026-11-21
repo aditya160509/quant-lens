@@ -94,11 +94,11 @@ function optimiseHero(r: FeatureResult): HeroSpec | null {
 const LiveSweep = dynamic(() => import("./views/LiveSweep"), { ssr: false });
 const BV = group(() => import("./views/BacktestViews") as Promise<Record<string, unknown>>);
 const OV = group(() => import("./views/OptimiseViews") as Promise<Record<string, unknown>>);
-registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto, stStabilityOpt: OV.Stability, stSpread: OV.Spread }, ["stParamMap", "stPareto", "stSpread"]);
+registerViews({ stParamMap: OV.ParamMap, stImportance: OV.Importance, stPareto: OV.Pareto, stStabilityOpt: OV.Stability, stSpread: OV.Spread, stHistory: OV.History, stSensitivity: OV.Sensitivity }, ["stParamMap", "stPareto", "stSpread"]);
 const PV = group(() => import("./views/PortfolioViews") as Promise<Record<string, unknown>>);
 registerViews({ stTree: PV.Tree, stWeightsTime: PV.WeightsOverTime, stFrontier: PV.FrontierView, stPfRisk: PV.RiskStats, stPfBook: PV.DeployBook }, ["stWeightsTime", "stFrontier"]);
 const VV = group(() => import("./views/ValidateViews") as Promise<Record<string, unknown>>);
-registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout, stCertificate: VV.Certificate, stWfMatrix: VV.WfMatrix, stCpcv: VV.Cpcv, stPower: VV.Power, stPboLogits: VV.PboLogits, stPboRanks: VV.PboRanks }, ["stTiles", "stStitched"]);
+registerViews({ stTiles: VV.Tiles, stScorecard: VV.Scorecard, stStitched: VV.Stitched, stVsRandom: VV.VsRandom, stLottery: VV.Lottery, stHoldout: VV.Holdout, stCertificate: VV.Certificate, stWfMatrix: VV.WfMatrix, stCpcv: VV.Cpcv, stPower: VV.Power, stPboLogits: VV.PboLogits, stPboRanks: VV.PboRanks, stWfBands: VV.WfBands, stStress: VV.Stress }, ["stTiles", "stStitched"]);
 const LV = group(() => import("./views/LiveViews") as Promise<Record<string, unknown>>);
 registerViews({ stOrders: LV.Orders, stPaper: LV.Paper, stAlerts: LV.Alerts, stReconcile: LV.Reconcile }, ["stOrders", "stPaper"]);
 const TS = group(() => import("@/modules/screener/test/TearSheet") as Promise<Record<string, unknown>>);
@@ -180,6 +180,7 @@ export const STUDIO_LAB: LabConfig = {
         ] },
         { id: "wf", label: "Walk-forward", items: [
           { keys: ["walk_forward"], span: 12, view: "stStitched", title: "Stitched out-of-sample" },
+          { keys: ["windows"], span: 12, view: "stWfBands", title: "In-sample against out-of-sample" },
           { keys: ["windows"], span: 12, view: "dataTable", title: "Windows" },
           { keys: ["wf_matrix"], span: 6, view: "stWfMatrix", title: "Windows × in-sample length" },
           { keys: ["cpcv_paths"], span: 6, view: "stCpcv", title: "CPCV paths" },
@@ -188,6 +189,7 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["vs_random"], span: 7, view: "stVsRandom", title: "Vs random entries" },
           { keys: ["execution"], span: 5, view: "dataTable", title: "Execution" },
           { keys: ["parameters"], span: 12, view: "dataTable", title: "Nearby settings" },
+          { keys: ["stress"], span: 12, view: "stStress", title: "Stress: moved settings, dearer fills, noisy prices" },
           { keys: ["noise"], span: 6, view: "dataTable", title: "Price noise" },
           { keys: ["mcpt"], span: 6, view: "dataTable", title: "Permutation" },
           { keys: ["shocks"], span: 12, view: "dataTable", title: "Shocks" },
@@ -269,6 +271,8 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["pareto"], span: 7, view: "stPareto", title: "Trade-offs" },
           { keys: ["stability"], span: 6, view: "stStabilityOpt", title: "Stability" },
           { keys: ["spread"], span: 6, view: "stSpread", title: "Spread across the plateau" },
+          { keys: ["cells"], span: 6, view: "stHistory", title: "Best so far" },
+          { keys: ["cells"], span: 6, view: "stSensitivity", title: "Around the plateau centre" },
         ] },
         { id: "sets", label: "Top sets", items: [
           { keys: ["top_sets"], span: 12, view: "dataTable", title: "Top 10 sets" },

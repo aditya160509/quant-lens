@@ -256,7 +256,8 @@ def run_optimise(spec: Strategy, settings: Settings, method: str = "grid", objec
     rets = [c["_returns"] for c in cells]
     eff = store_effective(rets)
     trials = [{"returns": c.pop("_returns"), "sharpe": c["sharpe"], "hash": hashlib.sha256(f"{spec.hash()}:{settings.hash()}:{sorted((k, v) for k, v in c.items() if k != '_equity')}".encode()).hexdigest()[:16]} for c in cells]
-    for c in cells:
+    for i, c in enumerate(cells):
+        c["trial"] = i + 1
         c.pop("_open", None)
         c.pop("_equity", None)
     ranked = sorted(cells, key=lambda c: -(c["score"] if c["score"] is not None else -1e18))

@@ -15,7 +15,7 @@ Three streams, in this order. Details stay in their sections below; this is the 
 - Records: B-10 screenshots at 1440 and 1024
 - Blocked or owner: B-55 ctx.store, B-67 and B-123 (fundamentals data), B-140 AI ⌘K edit
 
-**3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 4 walk-forward, 6 optimisation heatmap, 7 parameter plateau, 11 to 15 research cells, reactive and SQL cells, data browser, 17 to 19 library, starters, share links, 20 review comments (partial), 21 and 22 AI explain and critic, 23 and 24 paper and live hooks, 26 keymap chords, 28 pop-out windows, 29 stress test. Built: 2, 3, 5, 9, 10, 25, 27 (Layouts dialog). Moved to Chart: 1, 8, 30.
+**3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 11 to 15 research cells, reactive and SQL cells, data browser, 17 to 19 library, starters, share links, 20 review comments (partial), 21 and 22 AI explain and critic, 23 and 24 paper and live hooks, 26 keymap chords, 28 pop-out windows. Built: 2, 3, 4, 5, 6, 7, 9, 10, 25, 27 (Layouts dialog), 29. Moved to Chart: 1, 8, 30.
 
 **4. Chart, section "Chart": CH-1 to CH-50, 43 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
 
