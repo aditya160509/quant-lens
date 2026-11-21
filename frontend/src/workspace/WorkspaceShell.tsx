@@ -181,7 +181,7 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
             {/* The mark: a globe (the atlas) with a rising line drawn across it. */}
             <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden className="ws-mark">
               <defs>
-                <linearGradient id="ws-mark-g" x1="0" y1="0" x2="0" y2="22" gradientUnits="userSpaceOnUse"><stop stopColor="oklch(0.72 0.15 235)" /><stop offset="1" stopColor="oklch(0.5 0.17 255)" /></linearGradient>
+                <linearGradient id="ws-mark-g" x1="0" y1="0" x2="0" y2="22" gradientUnits="userSpaceOnUse"><stop stopColor="oklch(0.42 0 0)" /><stop offset="1" stopColor="oklch(0.24 0 0)" /></linearGradient>
               </defs>
               <rect width="22" height="22" rx="6.5" fill="url(#ws-mark-g)" />
               <rect x="0.5" y="0.5" width="21" height="21" rx="6" stroke="white" strokeOpacity="0.22" />

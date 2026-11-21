@@ -212,18 +212,18 @@
 .dv-edpane { position: relative; }
 .dv-gutter { flex: none; position: relative; width: 6px; border-radius: 4px; background: transparent; transition: background .12s; }
 .dv-body > [data-group] > .dv-gutter[data-separator] { cursor: col-resize; } .dv-main > .dv-gutter { width: auto; height: 6px; }
-.dv-gutter[data-separator="hover"], .dv-gutter[data-separator="active"] { background: color-mix(in oklab, var(--accent) 45%, transparent); }
+
 .dv-gutter[data-separator="disabled"] { width: 0; height: 0; pointer-events: none; }
 .dv-chartpane { container-type: inline-size; min-height: 0; height: 100%; } .dv-chartpane[hidden] { display: none; }
 .dv-bar { grid-column: 1 / -1; grid-row: 1; display: flex; align-items: center; gap: 6px; padding-right: 8px; min-width: 0; border-bottom: 1px solid var(--line); }
 .dv-tabs { display: flex; flex: none; align-items: stretch; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .dv-tab { flex: none; position: relative; display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; font: 13px var(--font); color: var(--text-3); cursor: pointer; white-space: nowrap; }
-.dv-tab[aria-selected="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+.dv-tab[aria-selected="true"] { color: var(--text); background: color-mix(in oklab, var(--text) 5%, transparent); box-shadow: inset 0 -1px 0 var(--text-2); }
 .dv-tab .icon-btn { width: 16px; height: 16px; opacity: .55; }
 .dv-tab:hover .icon-btn, .dv-tab .icon-btn:focus-visible { opacity: 1; }
 .dv-tools { flex: none; display: flex; align-items: center; gap: 2px; }
 .dv-tabbtn, .dv-splitbtn { width: 28px; height: 28px; padding: 0; }
-.dv-tabbtn[aria-pressed="true"], .dv-splitbtn[aria-pressed="true"] { color: var(--accent); background: var(--line); }
+.dv-tabbtn[aria-pressed="true"], .dv-splitbtn[aria-pressed="true"] { color: var(--text); background: var(--line); }
 .dv-bar > .btn, .dv-bar > .bd-ui, .dv-bar > .input { flex: none; }
 .dv-bar .btn { height: 28px; padding: 0 10px; white-space: nowrap; }
 .dv-bar .btn.icon { width: 28px; padding: 0; }
@@ -254,7 +254,7 @@
 .dv-editor { position: relative; min-height: 0; height: 100%; overflow: hidden; }
 .dv-blank { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; justify-items: center; gap: 12px; background: var(--island); font-size: 14px; }
 .dv-blank div { display: flex; gap: 8px; }
-.dv-ptabs button[aria-selected="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+.dv-ptabs button[aria-selected="true"] { color: var(--text); box-shadow: inset 0 -1px 0 var(--text-2); }
 .dv-preview-details > summary { cursor: pointer; font-weight: 600; font-size: 12px; }
 .dv-ptabs .num { font: 10.5px var(--mono); padding: 1px 6px; border-radius: 99px; background: var(--line); }
 .dv-prob, .dv-log { display: grid; width: 100%; gap: 10px; align-items: baseline; padding: 4px 6px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 12.5px; text-align: left; cursor: pointer; }
@@ -287,7 +287,7 @@
 .dv-search .input { flex: 1; min-width: 0; }
 .dv-toggles { display: inline-flex; }
 .dv-toggles .icon-btn { width: 24px; height: 24px; }
-.dv-toggles .icon-btn[aria-pressed="true"], .dv-file .icon-btn[aria-pressed="true"] { color: var(--accent); background: var(--line); }
+.dv-toggles .icon-btn[aria-pressed="true"], .dv-file .icon-btn[aria-pressed="true"] { color: var(--text); background: var(--line); }
 .dv-count { margin: 2px 8px 6px; font: 11px var(--mono); color: var(--text-3); white-space: nowrap; }
 .dv-hit { display: grid; gap: 2px; padding: 5px 8px; border: 0; border-radius: 7px; background: none; text-align: left; cursor: pointer; }
 .dv-hit:hover { background: var(--line); }
@@ -444,7 +444,7 @@
 .dv-menu { position: absolute; z-index: 30; top: calc(100% + 4px); right: 0; min-width: 190px; display: grid; padding: 4px; border-radius: 10px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line), 0 10px 28px rgb(0 0 0 / .35); }
 .dv-menu button { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 12.5px; text-align: left; cursor: pointer; }
 .dv-menu button:hover { background: var(--line); color: var(--text); }
-.dv-menu button[aria-checked="true"]::after { content: "✓"; color: var(--accent); }
+.dv-menu button[aria-checked="true"]::after { content: "✓"; color: var(--text-2); }
 .dv-menu hr { margin: 4px 6px; border: 0; border-top: 1px solid var(--line); }
 .dv-view-pane { position: absolute; inset: 0; z-index: 3; background: var(--island); display: grid; min-height: 0; min-width: 0; }
 .dv-view-pane > .dv-pbody { overflow: auto; padding: 12px 16px; }
@@ -465,7 +465,7 @@
 .dv-chartbox { min-height: 0; min-width: 0; overflow: hidden; }
 .dv-replay { display: flex; align-items: center; gap: 4px; padding: 0 10px; min-width: 0; overflow: hidden; border-top: 1px solid var(--line); container-type: inline-size; }
 @container (max-width: 520px) { .dv-replay time, .dv-replay .seg { display: none; } }
-.dv-replay input[type="range"] { flex: 1; min-width: 0; margin: 0 8px; accent-color: var(--accent); }
+.dv-replay input[type="range"] { flex: 1; min-width: 0; margin: 0 8px; accent-color: var(--text-2); }
 .dv-replay time { min-width: 76px; text-align: right; font: 12px var(--mono); color: var(--text-3); }
 .dv-replay .seg button { min-width: 26px; }
 @container (max-width: 350px) {
@@ -496,19 +496,19 @@
 .dv-input { display: grid; gap: 4px; padding: 4px 8px; }
 .dv-input > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 12px var(--mono); color: var(--text-2); }
 .dv-input .input { width: 72px; text-align: right; }
-.dv-input input[type=range] { width: 100%; accent-color: var(--accent); }
+.dv-input input[type=range] { width: 100%; accent-color: var(--text-2); }
 
 /* File tabs belong to the editor group; controls stay in the workspace toolbar. */
 .dv { container-type: inline-size; --workspace-edge: color-mix(in oklab, var(--text) 15%, transparent); }
 .dv-bar { flex-wrap: wrap; min-height: 30px; justify-content: flex-end; padding-inline: 0; }
 .dv-bar .dv-execute { color: var(--text); border-color: var(--workspace-edge); }
-.dv-bar .dv-execute svg { color: var(--accent); }
+.dv-bar .dv-execute svg { color: currentColor; }
 .dv-bar .dv-execute:disabled { opacity: .6; }
 .bd-menu-fields { display: grid; gap: 4px; padding: 4px 8px; }
 .bd-menu-fields .bd-name, .bd-menu-fields .input { min-width: 0; width: 100%; font-size: 12px; }
 .dv-edpane > div, .dv-edpane { min-height: 0; min-width: 0; }
 .dv-edpane { display: flex; flex-direction: column; }
-.dv-tab:focus-visible, .dv-gutter:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dv-tab:focus-visible, .dv-gutter:focus-visible { outline: 2px solid var(--text-3); outline-offset: -2px; }
 .dv-source-file { position: relative; }
 .dv-file-actions { position: absolute; inset-inline-end: 0; display: flex; opacity: 0; background: var(--island); pointer-events: none; }
 .dv-source-file:hover .dv-file-actions, .dv-source-file:focus-within .dv-file-actions { opacity: 1; pointer-events: auto; }
@@ -527,13 +527,13 @@
 .dv-gutter::after { content: ""; position: absolute; inset: 0 2px; border-radius: 2px; background: transparent; transition: background .12s; }
 .dv-gutter-vertical::after, .dv-main > .dv-gutter::after { inset: 2px 0; }
 .dv-gutter[data-separator="hover"], .dv-gutter[data-separator="active"] { background: transparent; }
-.dv-gutter[data-separator="hover"]::after, .dv-gutter[data-separator="active"]::after { background: var(--accent); }
+.dv-gutter[data-separator="hover"]::after, .dv-gutter[data-separator="active"]::after { background: var(--text-3); }
 .dv-rail-tabs { display: flex; gap: 2px; }
 .dv-rail-tabs button { height: 22px; padding: 0 8px; border-radius: 5px; font: inherit; color: var(--text-3); }
 .dv-rail-tabs button[aria-selected="true"] { color: var(--text); background: color-mix(in oklab, var(--text) 8%, transparent); }
 .dv-gutter-vertical { width: auto; height: 6px; }
 
-.dv-gutter[data-separator="hover"], .dv-gutter[data-separator="active"] { background-color: var(--accent); }
+.dv-gutter[data-separator="hover"], .dv-gutter[data-separator="active"] { background-color: transparent; }
 .dv-view-pane > .dv-pbody { padding: clamp(10px, 1.5cqi, 20px); }
 .dv-dgrid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
 
@@ -554,7 +554,8 @@
 }
 .dv-tester { display: grid; gap: 12px; padding: 12px; container-type: inline-size; }
 .dv-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 0; }
-@container (max-width: 560px) { .dv-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (max-width: 760px) { .dv-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (max-width: 380px) { .dv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .dv-tiles > div { padding: 10px 12px; border-radius: 10px; background: color-mix(in oklab, var(--text) 4%, transparent); }
 .dv-tiles dt { font-size: 12px; color: var(--text-3); }
 .dv-tiles dd { margin: 4px 0 0; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: var(--text); }
@@ -563,7 +564,7 @@
 /* Dev controls living in the workspace header: one row, no own border, the page's own bar row collapses. */
 .dv-bar.in-head { flex-wrap: nowrap; min-height: 0; padding: 0; gap: 4px; border: 0; }
 .dv-bar.in-head .btn { height: 30px; border-radius: 8px; }
-.dv-bar.in-head .dv-execute { padding: 0 14px; background: var(--accent); color: var(--bg); border: 0; font-weight: 600; }
+.dv-bar.in-head .dv-execute { padding: 0 14px; background: var(--text); color: var(--bg); border: 0; font-weight: 600; }
 .dv-bar.in-head .dv-execute:hover:not(:disabled) { filter: brightness(1.08); }
 .dv[data-head] { grid-template-rows: 0 minmax(0, 1fr) 26px; }
 
@@ -573,5 +574,5 @@
 .dv-icons .icon-btn { width: 32px; height: 32px; margin: 0; border-radius: 8px; color: var(--text-3); }
 .dv-icons .icon-btn svg { width: 18px; height: 18px; stroke-width: 1.6; }
 .dv-icons .icon-btn:hover { color: var(--text); background: color-mix(in oklab, var(--text) 6%, transparent); }
-.dv-icons .icon-btn[aria-pressed="true"] { color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent); }
+.dv-icons .icon-btn[aria-pressed="true"] { color: var(--text); background: color-mix(in oklab, var(--text) 11%, transparent); }
 .dv-icons-gap { flex: 1; }
