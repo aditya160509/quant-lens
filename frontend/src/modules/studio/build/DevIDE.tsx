@@ -523,14 +523,19 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
         {running && view !== "results" ? <button className="btn" onClick={onCancel}>Cancel</button> : null}
       </div>
       <nav className="dv-icons" aria-label="Activity bar" hidden={!iconsOpen}>
-        {RAILS.map(([k, icon, l]) => <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={railOpen && rail === k} onClick={() => { if (railOpen && rail === k) setRailOpen(false); else revealRail(k); }}>{icon}</button>)}
-        <button className="icon-btn" aria-label="Hide activity bar" title="Hide activity bar" onClick={() => setIconsOpen(false)}><X size={14} /></button>
+        {/* Four entry points; Outline sits beside Files in the side bar header, Starters opens from ⌘⇧S and the empty editor. */}
+        {RAILS.filter(([k]) => k !== "outline" && k !== "templates").map(([k, icon, l]) => {
+          const on = railOpen && (rail === k || (k === "files" && rail === "outline"));
+          return <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={on} onClick={() => { if (on) setRailOpen(false); else revealRail(k); }}>{icon}</button>;
+        })}
       </nav>
       <div className="dv-body" ref={bodyRef}>
       <Group orientation="horizontal" id="dv-h" groupRef={hRef} defaultLayout={targets(layout).h} onLayoutChanged={onH}>
       <Panel id="rail" minSize={0} maxSize="210px">
         <nav className="dv-rail" inert={!railOpen} aria-hidden={!railOpen} aria-label={RAILS.find((r) => r[0] === rail)?.[2]}>
-          <h4>{RAILS.find((r) => r[0] === rail)?.[2]}<button className="icon-btn" aria-label="Close side bar" title="Close side bar (⌘B)" onClick={() => setRailOpen(false)}><X size={13} /></button></h4>
+          <h4>{rail === "files" || rail === "outline" ? (
+            <span className="dv-rail-tabs" role="tablist">{(["files", "outline"] as const).map((k) => <button key={k} role="tab" aria-selected={rail === k} onClick={() => revealRail(k)}>{k === "files" ? "Files" : "Outline"}</button>)}</span>
+          ) : RAILS.find((r) => r[0] === rail)?.[2]}<button className="icon-btn" aria-label="Close side bar" title="Close side bar (⌘B)" onClick={() => setRailOpen(false)}><X size={13} /></button></h4>
           {rail === "files" ? (
             <div className="dv-list dv-explorer">
               <details open><summary>Files</summary>

@@ -22,6 +22,14 @@ const cv = (n: string, el: Element = document.body) => {
 };
 const tint = (c: string, a: string) => (/^#[0-9a-f]{6}$/i.test(c) ? c + a : c);
 let booted: ReturnType<typeof boot> | null = null;
+/** Five flyouts instead of a column of single tools (TradingView-style groups). */
+const TOOL_GROUPS: { id: string; label: string; tools: import("@luxalgo/vela").DrawingTypeKey[] }[] = [
+  { id: "lines", label: "Lines", tools: ["trendline", "ray", "extendedline", "hline", "hray", "vline", "crossline", "parallelchannel", "regressionchannel"] },
+  { id: "fib", label: "Fibonacci and Gann", tools: ["fibretracement", "fibextension", "fibfan", "fibtimezones", "pitchfork", "gannfan", "gannbox"] },
+  { id: "shapes", label: "Shapes", tools: ["box", "ellipse", "triangle", "polyline", "freehand", "highlighter", "arrow"] },
+  { id: "text", label: "Text and marks", tools: ["text", "note", "callout", "pricelabel", "flagmark", "arrowmarkup", "arrowmarkdown"] },
+  { id: "measure", label: "Measure", tools: ["datepricerange", "position", "anchoredvwap", "fixedrangevp"] },
+];
 /** Vela loads in the browser only; the two native indicators that paint our plots and spans register once. */
 function boot() {
   return Promise.all([import("@luxalgo/vela"), import("@luxalgo/vela/plugin")]).then(([{ Vela, createTheme }, { registerNativeIndicator, stableSeriesId }]) => {
@@ -113,7 +121,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     void (booted ??= boot()).then(({ Vela, createTheme }) => {
       if (dead) return;
       const up = cv("--up", el), down = cv("--down", el);
-      c = new Vela(el, { data: bars.map((b) => ({ time: ms(b.time), open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume })), timeframe: "1d", theme: createTheme({ colors: { background: cv("--island", el), accent: cv("--s1", el) } }), upColor: up, downColor: down, height: el.clientHeight, drawings: true });
+      c = new Vela(el, { data: bars.map((b) => ({ time: ms(b.time), open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume })), timeframe: "1d", theme: createTheme({ colors: { background: cv("--island", el), accent: cv("--s1", el) } }), upColor: up, downColor: down, height: el.clientHeight, drawings: { groups: TOOL_GROUPS } });
       void c.ready().then(() => { if (dead) return; c!.renderer.set("attribution", false); handles.current.clear(); c!.addNativeIndicator("atlas.spans"); setChart(c); });
     });
     let frame = 0;

@@ -190,7 +190,7 @@ function ResearchPanels() {
 
   return (
     <Group orientation="horizontal" id={`${L.id}-columns-v2`} className={animate ? "ws-animate" : undefined} defaultLayout={outer.defaultLayout} onLayoutChanged={outer.onLayoutChanged} style={{ height: "100%" }}>
-      <Panel id="nav" panelRef={left.panelRef} onResize={left.onResize} defaultSize={left.defaultOpen ? 236 : 0} minSize={196} maxSize={340} collapsible collapsedSize={52}>
+      <Panel id="nav" panelRef={left.panelRef} onResize={left.onResize} defaultSize={left.defaultOpen ? 236 : 0} minSize={196} maxSize={340} collapsible collapsedSize={0}>
         <FeatureNav features={manifest.data ?? []} loading={manifest.isLoading} activeId={featureId} activePage={special?.id ?? pageOf(featureId)?.id ?? null} runs={runs} />
       </Panel>
       <Separator className="ws-sep" />

@@ -4,28 +4,48 @@ import { exportPrefs, importPrefs, pullPrefs, pushPrefs } from "./prefsSync";
 import "./workspace.css";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyEvent, type ReactNode } from "react";
 import {
   Activity, BrainCircuit, ChartNetwork, Command as CommandIcon, FlaskConical, Home, ListFilter, CloudDownload, CloudUpload, FileDown, FileUp, Moon, Orbit, PanelBottom, PanelLeft, PanelRight,
-  PieChart, Search, Settings2, SlidersHorizontal, Sun, type LucideIcon, CandlestickChart } from "lucide-react";
+  PieChart, Search, ChevronDown, Settings2, SlidersHorizontal, Sun, type LucideIcon, CandlestickChart } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { QuickLook } from "@/kit/QuickLook";
 import { SearchOverlay } from "@/modules/screener/search/SearchOverlay";
+import { MODULES, type ModuleLink } from "./modules";
 import { SHORTCUTS, useLayout, type Region } from "./layout";
 import { prefClasses, usePrefs, type Accent, type Density, type LineWeight, type Palette } from "./prefs";
 import { Segmented, Tooltip } from "./ui";
 
 export type Theme = "dark" | "light";
 
-type ModuleLink = { id: string; label: string; href: string; icon: LucideIcon };
-
-/** Modules shown in the rail. Research lives in the workspace; the others move in as they are rebuilt. */
-export const MODULES: ModuleLink[] = [
-  { id: "research", label: "Research", href: "/research", icon: FlaskConical },
-  { id: "ml", label: "Machine learning", href: "/ml", icon: BrainCircuit },
-  { id: "screener", label: "Screener", href: "/screener", icon: ListFilter },
-  { id: "studio", label: "Studio", href: "/studio", icon: CandlestickChart },
-];
+/** One top-bar menu per module: hover or click opens its pages; the module name itself opens the module home. */
+function ModuleMenu({ m, active, themeClass, className }: { m: ModuleLink; active: boolean; themeClass: string; className: string }) {
+  const [open, setOpen] = useState(false);
+  const Icon = m.icon;
+  const nav = (e: ReactKeyEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const links = [...e.currentTarget.querySelectorAll<HTMLAnchorElement>("a")];
+    const i = links.indexOf(document.activeElement as HTMLAnchorElement);
+    links[(i + (e.key === "ArrowDown" ? 1 : -1) + links.length) % links.length]?.focus();
+  };
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button type="button" className="ws-menu" aria-current={active ? "page" : undefined} onMouseEnter={() => setOpen(true)}>
+          {m.label}<ChevronDown size={12} strokeWidth={2} aria-hidden />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content className={`pop ws-menu-pop ws-tokens${themeClass} ${className}`} align="start" sideOffset={6} onMouseLeave={() => setOpen(false)} onKeyDown={nav}>
+          <Link href={m.href} className="item head" onClick={() => setOpen(false)}><Icon size={15} strokeWidth={1.7} />{m.label} home</Link>
+          <div className="sep" />
+          {m.pages?.map((p) => <Link key={p.href} href={p.href} className="item" onClick={() => setOpen(false)}>{p.label}</Link>)}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
 
 export type PaletteItem = { id: string; group: string; label: string; icon?: LucideIcon; meta?: string; keywords?: string[]; run: () => void };
 
@@ -109,7 +129,6 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
   }, []);
 
   const ctx = useMemo<WorkspaceCtx>(() => ({ theme, setCrumb, registerPalette }), [theme, registerPalette]);
-  const current = MODULES.find((m) => m.id === module);
 
   const builtIn: PaletteItem[] = useMemo(() => [
     ...MODULES.map((m) => ({ id: `module-${m.id}`, group: "Modules", label: m.label, icon: m.icon, run: () => router.push(m.href) })),
@@ -143,11 +162,10 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
             </svg>
             ATLAS
           </Link>
-          <nav className="ws-crumb" aria-label="Breadcrumb">
-            <span className="slash">/</span>
-            <span>{current?.label}</span>
-            {crumb ? <><span className="slash">/</span><b>{crumb}</b></> : null}
+          <nav className="ws-menus" aria-label="Modules">
+            {MODULES.map((m) => <ModuleMenu key={m.id} m={m} active={m.id === module} themeClass={themeClass} className={className} />)}
           </nav>
+          {crumb ? <nav className="ws-crumb" aria-label="Breadcrumb"><span className="slash">/</span><b>{crumb}</b></nav> : null}
           <button className="ws-search" onClick={() => setPaletteOpen(true)} aria-label="Open command palette">
             <Search size={14} strokeWidth={1.75} />
             <span className="label">Search names, screens, runs, actions</span>

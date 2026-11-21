@@ -519,9 +519,17 @@
 .dv-splithead { border-bottom: 1px solid var(--workspace-edge); }
 .dv-side { display: block; padding: 0; overflow: hidden; }
 
-.dv-gutter:not([data-separator="disabled"]) { background: var(--workspace-edge); background-clip: content-box; padding-inline: 2px 3px; }
+/* Gutters are invisible at rest; a 2px accent line shows on hover, drag or keyboard focus. */
+.dv-gutter:not([data-separator="disabled"]) { background: transparent; }
+.dv-gutter::after { content: ""; position: absolute; inset: 0 2px; border-radius: 2px; background: transparent; transition: background .12s; }
+.dv-gutter-vertical::after, .dv-main > .dv-gutter::after { inset: 2px 0; }
+.dv-gutter[data-separator="hover"], .dv-gutter[data-separator="active"] { background: transparent; }
+.dv-gutter[data-separator="hover"]::after, .dv-gutter[data-separator="active"]::after { background: var(--accent); }
+.dv-rail-tabs { display: flex; gap: 2px; }
+.dv-rail-tabs button { height: 22px; padding: 0 8px; border-radius: 5px; font: inherit; color: var(--text-3); }
+.dv-rail-tabs button[aria-selected="true"] { color: var(--text); background: color-mix(in oklab, var(--text) 8%, transparent); }
 .dv-gutter-vertical { width: auto; height: 6px; }
-.dv-gutter-vertical:not([data-separator="disabled"]), .dv-main > .dv-gutter:not([data-separator="disabled"]) { padding: 2px 0 3px; }
+
 .dv-gutter[data-separator="hover"], .dv-gutter[data-separator="active"] { background-color: var(--accent); }
 .dv-view-pane > .dv-pbody { padding: clamp(10px, 1.5cqi, 20px); }
 .dv-dgrid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
