@@ -34,6 +34,7 @@ from app.services.studio_v3.core import (
     pycode,
     qc_import,
     store,
+    strategy_tests,
     templates,
     validate,
     workspace,
@@ -173,6 +174,19 @@ def _editor_project(request: BuildProjectDocument) -> Strategy:
     if not request.file.endswith(".py"):
         raise HTTPException(422, "Select a Python file.")
     return _spec({"code": main, "files": sources})
+
+
+class BuildTestRequest(BaseModel):
+    code: str = Field(default="", max_length=200_000)  # main.py
+    files: dict[str, str] = Field(default_factory=dict, max_length=50)
+    file: str | None = Field(default=None, max_length=128)  # run one test file
+    name: str | None = Field(default=None, max_length=128)  # run one test
+
+
+@router.post("/build/test")
+def run_strategy_tests(request: BuildTestRequest) -> dict[str, Any]:
+    """Runs def test_* from the project's test_*.py files in the sandbox child; `from studio.testing import bars` is the fixture."""
+    return strategy_tests.run({**request.files, "main.py": request.code}, request.file, request.name)
 
 
 class BuildCheckRequest(BuildProjectDocument):
