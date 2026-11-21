@@ -652,12 +652,12 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ◐ `Med` Inspections (JetBrains) with severity levels | Live lint of correctness and style | PARTIAL (Problems, Strict toggle) | P1 |
+| ✅ `Med` Inspections (JetBrains) with severity levels | Live lint of correctness and style | HAVE (right-click a problem to set severity, saved per user) | P1 |
 | ✅ `Med` Strategy-specific inspections | Look-ahead bias, future data use, unused param, missing stop, hard-coded dates | HAVE | P1 |
-| ⬜ `Med` Intentions (Alt+Enter) | Context actions on correct code | GAP | P2 |
-| ⬜ `Hard` Change signature, move, inline, extract | Classic refactorings | GAP | P3 |
-| ⬜ `Med` Type checking (Pyright-class) | Types for `ctx` and arrays | GAP | P2 |
-| ⬜ `Med` Run inspection on whole project, report tab | Batch results | GAP | P3 |
+| ✅ `Med` Intentions (Alt+Enter) | Context actions on correct code | HAVE | P2 |
+| ✅ `Hard` Change signature, move, inline, extract | Classic refactorings | HAVE (/build/refactor) | P3 |
+| ✅ `Med` Type checking (Pyright-class) | Types for `ctx` and arrays | HAVE (ty in Problems) | P2 |
+| ✅ `Med` Run inspection on whole project, report tab | Batch results | HAVE (Problems: Current file / Project) | P3 |
 | ✅ `Easy` Suppress an inspection with a comment | Per-line ignore | HAVE (`# studio: ignore[code]`) | P3 |
 
 ### Run, debug and profile
@@ -666,20 +666,20 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 |---|---|---|---|
 | ◐ `Med` Run configurations (named, saved, shared) | Named run presets: universe, dates, costs, inputs | PARTIAL (named, saved on the server per user; no per-input overrides) | P1 |
 | ✅ `Easy` Run widget with config picker | Choose config, run, debug beside the editor | HAVE | P1 |
-| ◐ `Easy` Rerun with last config, rerun on save | Ctrl+R, auto rerun | PARTIAL | P1 |
+| ✅ `Easy` Rerun with last config, rerun on save | Ctrl+R, auto rerun | HAVE | P1 |
 | ✅ `Easy` Stop / cancel | Kill a run | HAVE | P1 |
 | ✅ `Hard` Breakpoints, step over, step line, step back | Standard debug control | HAVE (F9, F10, F11, Shift+F10) | P1 |
 | ✅ `Med` Conditional breakpoints | Break when an expression is true | HAVE | P1 |
 | ✅ `Med` Logpoints | Log an expression without stopping | HAVE (Shift+F9, preview runs) | P1 |
-| ⬜ `Med` Hit-count and triggered breakpoints | Break on the Nth hit, or after another hit | GAP | P2 |
+| ✅ `Med` Hit-count and triggered breakpoints | Break on the Nth hit, or after another hit | HAVE | P2 |
 | ⬜ `Hard` Data breakpoints (break when a value changes) | Watch a variable | GAP | P2 |
 | ✅ `Med` Event breakpoints: next order, next fill, 5% loss day | Domain stops | HAVE (unique to us) | P1 |
-| ◐ `Med` Watch expressions | Pinned expressions that update per step | PARTIAL (Console evaluates once) | P1 |
+| ✅ `Med` Watch expressions | Pinned expressions that update per step | HAVE (live watches) | P1 |
 | ✅ `Med` Call stack and locals panel | Frames and variables | HAVE (locals, traceback) | P1 |
-| ✅ `Med` Debug console REPL | Evaluate while paused | HAVE (Console tab) | P1 |
-| ⬜ `Med` Inline variable values in the editor while paused | Values shown beside code | GAP | P2 |
+| ✅ `Med` Debug console REPL | Evaluate while paused | HAVE (Console tab: formula at the paused bar) | P1 |
+| ✅ `Med` Inline variable values in the editor while paused | Values shown beside code | HAVE | P2 |
 | ✅ `Med` Profiler (slowest lines, per function) | Where time goes | HAVE | P2 |
-| ⬜ `Med` Flame graph | Visual profile | GAP | P3 |
+| ✅ `Med` Flame graph | Visual profile | HAVE | P3 |
 | ⬜ `Hard` Compound launch: run for many symbols and compare | Multi-target run | GAP | P2 |
 | ⬜ `Hard` Attach to a live or paper run | Debug in production | GAP | P3 |
 
@@ -689,19 +689,19 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 |---|---|---|---|
 | ✅ `Med` Test explorer tree with run and rerun failed | Tests as a tree | HAVE (Tests side bar) | P1 |
 | ✅ `Med` Strategy tests: `def test_*` using fixtures like fake bars | Unit-test indicators and signals | HAVE (`from studio.testing import bars`) | P1 |
-| ⬜ `Hard` Coverage gutter | Lines covered by a run | GAP | P3 |
-| ◐ `Easy` Run test at cursor, in file, all | Granular runs | PARTIAL (one test, all) | P2 |
-| ⬜ `Med` Snapshot test: "results unchanged after this edit" | Guard against silent changes | GAP | P2 |
+| ✅ `Hard` Coverage gutter | Lines covered by a run | HAVE (preview coverage) | P3 |
+| ✅ `Easy` Run test at cursor, in file, all | Granular runs | HAVE | P2 |
+| ✅ `Med` Snapshot test: "results unchanged after this edit" | Guard against silent changes | HAVE | P2 |
 
 ### Terminal and tasks
 
-See the "Terminal / bottom panel power-ups" subsection below. Summary: we have a watch-style Console, no terminal, no tasks, no CLI.
+See the "Terminal / bottom panel power-ups" subsection below. Summary: the Console tab is now a terminal: `atlas` commands, a Python session, saved tasks, command blocks (Terminal.tsx).
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ⬜ `Hard` Integrated terminal | Shell in the panel | GAP | P2 |
-| ⬜ `Med` Tasks (tasks.json) | Named commands, run on save or on demand | GAP | P2 |
-| ⬜ `Hard` Multiple and split terminals, persistent sessions | Several sessions kept across reloads | GAP | P2 |
+| ◐ `Hard` Integrated terminal | Shell in the panel | PARTIAL (`atlas` CLI and Python; no OS shell by design) | P2 |
+| ✅ `Med` Tasks (tasks.json) | Named commands, run on save or on demand | HAVE (`atlas task add/run`; no run-on-save) | P2 |
+| ◐ `Hard` Multiple and split terminals, persistent sessions | Several sessions kept across reloads | PARTIAL (Python session survives reloads; no split) | P2 |
 | ◐ `Easy` Run tool window: rerun, stop, pin output, soft wrap, filter | JetBrains output control | PARTIAL (Output tab filter, level, symbol, date, CSV) | P2 |
 
 ### Source control and history
@@ -709,9 +709,9 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: we have a
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
 | ✅ `Med` Versions with names, tags, lock, restore, branch | Our version model | HAVE | P1 |
-| ◐ `Easy` Diff of any two versions | Side by side | PARTIAL (version vs draft) | P2 |
+| ✅ `Easy` Diff of any two versions | Side by side | HAVE (shift-click a second version) | P2 |
 | ⬜ `Med` Blame / who changed this line | Per-line history | GAP | P3 |
-| ⬜ `Easy` Shelve / stash | Park changes | GAP | P3 |
+| ✅ `Easy` Shelve / stash | Park changes | HAVE (Shelf in Versions) | P3 |
 | ✅ `Easy` Local history labels | Named checkpoints | HAVE (labels) | P2 |
 | ✅ `Med` Review comments on lines | Threads | HAVE (idea #20) | P2 |
 | ⬜ `Med` Agent review of a diff (Cursor Agent Review, Quick or Deep) | AI reviews the change | GAP | P2 (already listed #22) |
@@ -749,7 +749,7 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: we have a
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
 | ✅ `Hard` Percent cells (`# %%`) with Run cell, Run above and below | Notebook-style .py | HAVE (lenses, Ctrl+Enter, Cells tab) | P1 (already listed #11, #13) |
-| ◐ `Med` Interactive window | Cell results beside code | PARTIAL (Cells tab; no free-typed REPL lines) | P2 |
+| ✅ `Med` Interactive window | Cell results beside code | HAVE (Cells tab, Console Python session) | P2 |
 | ✅ `Med` Variable explorer and data viewer for DataFrames | Inspect frames | HAVE (Debug locals, last 50 rows) | P1 |
 | ◐ `Med` Rich outputs: plots, tables inline | Notebook outputs | PARTIAL (tables and values in the Cells tab; no plots yet) | P2 |
 | ⬜ `Hard` SQL cells | Query the data store | GAP | P3 (already listed #14) |
@@ -781,37 +781,37 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: we have a
 
 | Power-up | What it does | Our version | Pri |
 |---|---|---|---|
-| ⬜ `Hard` Shell integration (OSC 633 marks: prompt start A, end B, pre-exec C, done D with exit code, command line E, cwd P) | Terminal knows where each command starts, ends and whether it passed | Each console and CLI command becomes a block with a status, exit code and duration | P1 |
-| ⬜ `Med` Command decorations plus overview ruler | Green dot or red cross per command, also on the scrollbar | Same in the Console tab; red mark on failed runs | P2 |
+| ✅ `Hard` Shell integration (OSC 633 marks: prompt start A, end B, pre-exec C, done D with exit code, command line E, cwd P) | Terminal knows where each command starts, ends and whether it passed | Each console and CLI command becomes a block with a status, exit code and duration | P1 |
+| ◐ `Med` Command decorations plus overview ruler | Green dot or red cross per command, also on the scrollbar | Same in the Console tab; red mark on failed runs | P2 |
 | ⬜ `Easy` Command navigation (Ctrl+Up and Down) and select output | Jump command to command | Same | P2 |
 | ⬜ `Easy` Command guide | Bar beside a command and its output on hover | Left border on each block | P3 |
 | ⬜ `Easy` Sticky scroll in terminal | Pin the command whose output is scrolling | Pin the run name above long logs | P3 |
 | ⬜ `Med` Quick fix from output | Detect known errors and offer the next action | "Lookahead detected: shift by one bar", "Unknown symbol: did you mean", "Port busy" style fixes | P1 |
-| ⬜ `Easy` Links: file:line, URLs, folders | Click output to open | Click `main.py:42`, a date, a symbol or a trade id to open code, chart or trade | P1 |
-| ⬜ `Easy` Run recent command (Ctrl+Alt+R), pin, fuzzy search | History picker | History picker for Console and CLI | P1 |
+| ✅ `Easy` Links: file:line, URLs, folders | Click output to open | Click `main.py:42`, a date, a symbol or a trade id to open code, chart or trade | P1 |
+| ◐ `Easy` Run recent command (Ctrl+Alt+R), pin, fuzzy search | History picker | History picker for Console and CLI | P1 |
 | ⬜ `Easy` Go to recent directory | cd history | Recent runs picker (run id, universe, dates) | P3 |
 | ⬜ `Med` Split terminals, groups, rename, colour, icon | Several sessions | Split Console: REPL on one side, run log on the other | P2 |
-| ⬜ `Med` Persistent sessions (reconnect after reload) | Session survives | REPL state survives reload for the draft | P2 |
-| ⬜ `Med` Terminal IntelliSense | Suggest commands and flags | Autocomplete for `atlas` commands, `ctx` and symbols | P1 |
-| ⬜ `Easy` Copy output as HTML, open command output in editor | Export a block | Copy or save a block as CSV, Markdown or a Results tab | P2 |
+| ✅ `Med` Persistent sessions (reconnect after reload) | Session survives | REPL state survives reload for the draft | P2 |
+| ◐ `Med` Terminal IntelliSense | Suggest commands and flags | Autocomplete for `atlas` commands, `ctx` and symbols | P1 |
+| ◐ `Easy` Copy output as HTML, open command output in editor | Export a block | Copy or save a block as CSV, Markdown or a Results tab | P2 |
 | ✅ `Easy` Find in terminal | Search output | Output tab filter (HAVE) | P3 |
 
 **From the JetBrains Run tool window**
 
 | Power-up | What it does | Our version | Pri |
 |---|---|---|---|
-| ⬜ `Med` Rerun, stop, pause, rerun failed tests | Toolbar on the output | Rerun with the same config, rerun failed symbols only | P1 |
+| ✅ `Med` Rerun, stop, pause, rerun failed tests | Toolbar on the output | Rerun with the same config, rerun failed symbols only | P1 |
 | ◐ `Med` One tab per run configuration, pin a tab | Compare runs side by side | One Output tab per run, pin a run (idea #2 and DevRuns) | P2 |
 | ⬜ `Easy` Soft wrap, scroll to end, filter, clear | Output hygiene | Add soft wrap and clear to Output | P3 |
-| ⬜ `Easy` Rerun automatically on code change | Live feedback | "Run on save" for the quick level | P1 |
-| ◐ `Med` Console with history and variables (Python console) | REPL tied to the project | See REPL below | P1 |
+| ✅ `Easy` Rerun automatically on code change | Live feedback | "Run on save" for the quick level | P1 |
+| ✅ `Med` Console with history and variables (Python console) | REPL tied to the project | See REPL below | P1 |
 
 **Our own**
 
 1. ◐ `Hard` **Python REPL bound to the strategy context.** `Console` already evaluates one expression at a paused bar through `POST /build/watch`. Extend it to a real REPL with statements and a persistent namespace: `ctx` (paused bar), `bars`, `trades`, `plots`, `np`, `pd`, `universe`. Show DataFrames as tables with copy and "send to Plots". Runs in the same sandbox as the strategy. P1.
-2. ⬜ `Hard` **`atlas` CLI in the panel.** Commands, each a block with progress and a result link: `atlas run [--universe sp500] [--from 2018] [--cost bps=5]`, `atlas backtest`, `atlas optimise --param fast=5:30:5 --objective sharpe`, `atlas walkforward`, `atlas robust`, `atlas compare <run> <run>`, `atlas data coverage SPY`, `atlas plot <name>`, `atlas export trades.csv`. Same API calls the buttons make, so no second code path. P1.
-3. ◐ `Med` **Test runner.** `atlas test` discovers `def test_*` in `tests.py`, shows a tree with pass or fail, jumps to failures, and offers "pin this result as expected". P1.
-4. ⬜ `Med` **Tasks.** `tasks.json`-style named chains: "lint then quick run then robustness", with run-on-save. P2.
+2. ◐ `Hard` **`atlas` CLI in the panel.** (run, test, cells, check, preview, task built; optimise/walkforward/robust/compare/data/export open) Commands, each a block with progress and a result link: `atlas run [--universe sp500] [--from 2018] [--cost bps=5]`, `atlas backtest`, `atlas optimise --param fast=5:30:5 --objective sharpe`, `atlas walkforward`, `atlas robust`, `atlas compare <run> <run>`, `atlas data coverage SPY`, `atlas plot <name>`, `atlas export trades.csv`. Same API calls the buttons make, so no second code path. P1.
+3. ✅ `Med` **Test runner.** `atlas test` discovers `def test_*` in `tests.py`, shows a tree with pass or fail, jumps to failures, and offers "pin this result as expected". P1.
+4. ✅ `Med` **Tasks.** `tasks.json`-style named chains: "lint then quick run then robustness", with run-on-save. P2.
 5. ⬜ `Hard` **Output as typed blocks.** A block is log, table, plot, or metric, not just text, so Output, Plots and Console share one stream. P2.
 6. ⬜ `Med` **Run history drawer.** Every command and run is searchable by name, tag, symbol, date. P2.
 
