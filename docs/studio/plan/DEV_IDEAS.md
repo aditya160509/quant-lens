@@ -201,7 +201,9 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://www.tradingview.com/pine-script-docs/concepts/strategies ; https://github.com/jesse-ai/jesse ; https://www.metatrader5.com/en/terminal/help/algotrading/visualization
 
-### 11. Percent-format research cells in the .py file ✅ Built `Hard`
+### 11. Percent-format research cells in the .py file ◐ Partial `Hard`
+
+**Status (2026-11-21):** Python cells run individually or from the top through the current cell. Results appear in the Cells panel, and `studio.research` supplies historical bars. Inline outputs and a kernel shared with backtests remain open (`d9e64b8`, `e88d8e0`).
 
 **What it is:** The strategy file may contain research cells, marked with a `# %%` line. A cell can be a title (`# %% [markdown]`) or a code cell. Each code cell has a Run button in its top-left corner, and Shift+Enter runs it and moves to the next cell. The cell's result (a frame, a plot, a printed value) appears under the cell as an inline output, so the research sits in the same file as the strategy. Outputs are not written into the file, which keeps git diffs clean. Cells share one kernel with the backtest data, so a variable defined in a research cell can be used by the strategy's preview run.
 
@@ -299,7 +301,9 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://code.visualstudio.com/docs/editing/getting-started/userinterface ; https://vscode-docs.readthedocs.io/en/stable/editor/debugging ; https://stackoverflow.com/questions/60097076/view-dataframe-while-debugging-in-vs-code
 
-### 17. Snippet and indicator library with tags ⬜ Open `Med`
+### 17. Snippet and indicator library with tags ◐ Partial `Med`
+
+**Status (2026-11-21):** Users can save and insert snippets. Tags, workspace sharing and testing a snippet from its library entry remain open.
 
 **What it is:** A Library dropdown lists snippets: named blocks of code (a trailing stop, a volatility filter, a session time check) with tags, a one-line description, and an "Insert" action that places the snippet at the cursor and adds any imports it needs. Users can save a selection as a snippet, tag it, and share it inside the workspace. Each snippet can be tested from its entry: a small run on one symbol, with the result shown in a Results tab, so the user knows it works before inserting it.
 
@@ -315,7 +319,9 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://microsoft.github.io/monaco-editor/ ; https://stackoverflow.com/questions/48212023/how-to-insert-snippet-in-monaco-editor ; https://docs.jesse.trade/
 
-### 18. Starter gallery with cached results ⬜ Open `Med`
+### 18. Starter gallery with cached results ◐ Partial `Med`
+
+**Status (2026-11-21):** Build has a starter gallery with cached backtest statistics. Equity thumbnails and links to the snippets used by each starter remain open.
 
 **What it is:** The New strategy dropdown lists starters by type (trend, mean reversion, breakout, options-style rules), each with a short description and a thumbnail of the equity curve from a cached run on a fixed universe. Opening a starter copies it into a new file with the code and the parameters set to tested defaults. The thumbnail is a stored image from the last run, so the gallery opens instantly. Each starter links to the library snippets it uses.
 
@@ -605,20 +611,20 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 |---|---|---|---|
 | ✅ `Easy` Multi-cursor, add next occurrence, column select | Edit many places at once | HAVE (Monaco) | P3 |
 | ✅ `Easy` Command palette | Run any action by name | HAVE (F1) | P1 |
-| ✅ `Easy` Quick open by file | Fuzzy jump to a file | HAVE (Ctrl+P opens Explorer, not a fuzzy picker) | PARTIAL P2 |
+| ✅ `Easy` Quick open by file | Fuzzy jump to a file | HAVE (file search in Search Everywhere; Ctrl+P opens Explorer) | P2 |
 | ✅ `Easy` Search across project with regex, case, whole word, replace | Project find and replace | HAVE | P1 |
 | ✅ `Easy` Code folding, folding regions | Collapse blocks | HAVE | P3 |
 | ✅ `Easy` Sticky scroll | Pin the enclosing class or def at the top | HAVE | P3 |
-| ✅ `Easy` Minimap | Overview strip | HAVE | P3 |
+| ⬜ `Easy` Minimap | Overview strip | GAP (disabled in Build editor and diff) | P3 |
 | ✅ `Med` Breadcrumbs (file > class > method) | Symbol path above the editor | HAVE (above the editor) | P2 |
 | ✅ `Easy` Outline view | Symbol tree of the file | HAVE | P1 |
 | ✅ `Easy` Hover docs and signature help | API docs on hover | HAVE | P1 |
 | ✅ `Easy` Autocomplete for the `ctx` API with docs | IntelliSense | HAVE | P1 |
 | ✅ `Med` Inlay hints | Inline parameter and type hints | HAVE | P2 |
-| ✅ `Med` Go to definition, peek definition | Jump or peek | HAVE (definition), peek GAP | PARTIAL P2 |
+| ◐ `Med` Go to definition, peek definition | Jump or peek | PARTIAL (go to definition) | P2 |
 | ✅ `Med` Find all references | List uses of a symbol | HAVE (Shift+F12) | P2 |
 | ✅ `Med` Rename symbol across files | Safe rename | HAVE (F2) | P2 |
-| ✅ `Easy` Format document and on save | Auto format | HAVE (format); on save GAP | PARTIAL P2 |
+| ◐ `Easy` Format document and on save | Auto format | PARTIAL (format selection and format `main.py` on editor save) | P2 |
 | ✅ `Med` Quick fix lightbulb on Problems | One click fixes | HAVE (unused import, unused variable and more) | P1 |
 | ✅ `Med` Code actions: extract function, extract variable, organise imports | Refactor from the lightbulb | HAVE (lightbulb) | P2 |
 | ✅ `Easy` Snippets with tab stops, user snippets | Insert templates | HAVE (save selection, insert, prefix) | P2 |
@@ -627,7 +633,7 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 | ✅ `Easy` Pinned tabs and preview tabs | Single click preview, double click keep | HAVE | P3 |
 | ✅ `Easy` Diff editor | Compare version and draft | HAVE | P1 |
 | ✅ `Med` Timeline / local history per file | Auto snapshots, restore | HAVE (snapshots) | P1 |
-| ✅ `Easy` Bookmarks (numbered) | Mark lines to jump back | HAVE (Cmd+Alt+K, next/previous; not numbered) | P3 |
+| ◐ `Easy` Bookmarks (numbered) | Mark lines to jump back | PARTIAL (Cmd+Alt+K and next/previous; numbering open) | P3 |
 | ✅ `Easy` Scratch files | Throwaway files outside the project | HAVE (browser-only scratch_*.py) | P3 |
 | ✅ `Easy` Todo comment index | List of TODO and FIXME | HAVE (Outline rail) | P3 |
 | ✅ `Easy` Zen mode and distraction-free layout | Hide chrome, centre the editor | HAVE (Cmd+K Cmd+Z) | P2 |
@@ -700,8 +706,8 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: the Conso
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
 | ◐ `Hard` Integrated terminal | Shell in the panel | PARTIAL (`atlas` CLI and Python; no OS shell by design) | P2 |
-| ✅ `Med` Tasks (tasks.json) | Named commands, run on save or on demand | HAVE (`atlas task add/run`; no run-on-save) | P2 |
-| ◐ `Hard` Multiple and split terminals, persistent sessions | Several sessions kept across reloads | PARTIAL (Python session survives reloads; no split) | P2 |
+| ◐ `Med` Tasks (tasks.json) | Named commands, run on save or on demand | PARTIAL (saved chains via `atlas task add` and `atlas task <name>`; task triggers on save remain open) | P2 |
+| ◐ `Hard` Multiple and split terminals, persistent sessions | Several sessions kept across reloads | PARTIAL (one Python session reconstructed from saved commands; multiple and split sessions remain open) | P2 |
 | ◐ `Easy` Run tool window: rerun, stop, pin output, soft wrap, filter | JetBrains output control | PARTIAL (Output tab filter, level, symbol, date, CSV) | P2 |
 
 ### Source control and history
@@ -748,7 +754,7 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: the Conso
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ✅ `Hard` Percent cells (`# %%`) with Run cell, Run above and below | Notebook-style .py | HAVE (lenses, Ctrl+Enter, Cells tab) | P1 (already listed #11, #13) |
+| ◐ `Hard` Percent cells (`# %%`) with Run cell, Run above and below | Notebook-style .py | PARTIAL (Run cell and Run above and this, Ctrl+Enter, Cells tab; Run below remains open) | P1 (already listed #11) |
 | ✅ `Med` Interactive window | Cell results beside code | HAVE (Cells tab, Console Python session) | P2 |
 | ✅ `Med` Variable explorer and data viewer for DataFrames | Inspect frames | HAVE (Debug locals, last 50 rows) | P1 |
 | ◐ `Med` Rich outputs: plots, tables inline | Notebook outputs | PARTIAL (tables and values in the Cells tab; no plots yet) | P2 |
@@ -781,17 +787,17 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: the Conso
 
 | Power-up | What it does | Our version | Pri |
 |---|---|---|---|
-| ✅ `Hard` Shell integration (OSC 633 marks: prompt start A, end B, pre-exec C, done D with exit code, command line E, cwd P) | Terminal knows where each command starts, ends and whether it passed | Each console and CLI command becomes a block with a status, exit code and duration | P1 |
+| ◐ `Hard` Shell integration (OSC 633) | Terminal knows where each command starts, ends and whether it passed | Console and CLI command blocks show status and duration. OSC 633 and shell exit codes remain open. | P1 |
 | ◐ `Med` Command decorations plus overview ruler | Green dot or red cross per command, also on the scrollbar | Same in the Console tab; red mark on failed runs | P2 |
 | ⬜ `Easy` Command navigation (Ctrl+Up and Down) and select output | Jump command to command | Same | P2 |
 | ⬜ `Easy` Command guide | Bar beside a command and its output on hover | Left border on each block | P3 |
 | ⬜ `Easy` Sticky scroll in terminal | Pin the command whose output is scrolling | Pin the run name above long logs | P3 |
 | ⬜ `Med` Quick fix from output | Detect known errors and offer the next action | "Lookahead detected: shift by one bar", "Unknown symbol: did you mean", "Port busy" style fixes | P1 |
-| ✅ `Easy` Links: file:line, URLs, folders | Click output to open | Click `main.py:42`, a date, a symbol or a trade id to open code, chart or trade | P1 |
-| ◐ `Easy` Run recent command (Ctrl+Alt+R), pin, fuzzy search | History picker | History picker for Console and CLI | P1 |
+| ◐ `Easy` Links: file:line, URLs, folders | Click output to open | Python `file:line` links open code. URLs, folders and domain links remain open. | P1 |
+| ◐ `Easy` Run recent command (Ctrl+Alt+R), pin, fuzzy search | History picker | Arrow keys recall commands and each block has Run again. Pinning and fuzzy search remain open. | P1 |
 | ⬜ `Easy` Go to recent directory | cd history | Recent runs picker (run id, universe, dates) | P3 |
 | ⬜ `Med` Split terminals, groups, rename, colour, icon | Several sessions | Split Console: REPL on one side, run log on the other | P2 |
-| ✅ `Med` Persistent sessions (reconnect after reload) | Session survives | REPL state survives reload for the draft | P2 |
+| ◐ `Med` Persistent sessions (reconnect after reload) | Session survives | Saved Python statements replay after reload. Live kernel reconnection remains open. | P2 |
 | ◐ `Med` Terminal IntelliSense | Suggest commands and flags | Autocomplete for `atlas` commands, `ctx` and symbols | P1 |
 | ◐ `Easy` Copy output as HTML, open command output in editor | Export a block | Copy or save a block as CSV, Markdown or a Results tab | P2 |
 | ✅ `Easy` Find in terminal | Search output | Output tab filter (HAVE) | P3 |
@@ -810,8 +816,8 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: the Conso
 
 1. ◐ `Hard` **Python REPL bound to the strategy context.** `Console` already evaluates one expression at a paused bar through `POST /build/watch`. Extend it to a real REPL with statements and a persistent namespace: `ctx` (paused bar), `bars`, `trades`, `plots`, `np`, `pd`, `universe`. Show DataFrames as tables with copy and "send to Plots". Runs in the same sandbox as the strategy. P1.
 2. ◐ `Hard` **`atlas` CLI in the panel.** (run, test, cells, check, preview, task built; optimise/walkforward/robust/compare/data/export open) Commands, each a block with progress and a result link: `atlas run [--universe sp500] [--from 2018] [--cost bps=5]`, `atlas backtest`, `atlas optimise --param fast=5:30:5 --objective sharpe`, `atlas walkforward`, `atlas robust`, `atlas compare <run> <run>`, `atlas data coverage SPY`, `atlas plot <name>`, `atlas export trades.csv`. Same API calls the buttons make, so no second code path. P1.
-3. ✅ `Med` **Test runner.** `atlas test` discovers `def test_*` in `tests.py`, shows a tree with pass or fail, jumps to failures, and offers "pin this result as expected". P1.
-4. ✅ `Med` **Tasks.** `tasks.json`-style named chains: "lint then quick run then robustness", with run-on-save. P2.
+3. ✅ `Med` **Test runner.** `atlas test` lists pass/fail results with Python file links. The Tests sidebar provides the tree and a separate backtest snapshot control. P1.
+4. ◐ `Med` **Tasks.** Saved command chains can run on demand. Task triggers on save remain open. P2.
 5. ⬜ `Hard` **Output as typed blocks.** A block is log, table, plot, or metric, not just text, so Output, Plots and Console share one stream. P2.
 6. ⬜ `Med` **Run history drawer.** Every command and run is searchable by name, tag, symbol, date. P2.
 
