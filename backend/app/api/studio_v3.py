@@ -1177,6 +1177,21 @@ def put_filters(request: FiltersRequest, x_studio_actor: str | None = Header(Non
     return {"filters": _refuse(home_rules.filters_put, request.filters)}
 
 
+@router.get("/build/prefs/{name}")
+def get_build_prefs(name: Literal["layouts", "runconfigs"]) -> dict[str, Any]:
+    """Build's saved layouts and run configurations, kept on the server so they follow the user across browsers."""
+    return {"value": store.kv_get(f"build:prefs:{name}")}
+
+
+@router.put("/build/prefs/{name}")
+def put_build_prefs(name: Literal["layouts", "runconfigs"], request: dict[str, Any], x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    _human_only(x_studio_actor, "Saving Build preferences")
+    if len(json.dumps(request)) > 200_000:
+        raise HTTPException(413, "Preferences are limited to 200 KB")
+    store.kv_set(f"build:prefs:{name}", request)
+    return {"value": request}
+
+
 @router.get("/home/prefs")
 def get_prefs() -> dict[str, Any]:
     return home_rules.prefs_get()

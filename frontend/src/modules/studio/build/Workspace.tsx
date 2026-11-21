@@ -4,17 +4,21 @@ import { ChevronDown, LayoutDashboard, Plus, Save, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { ReactNode } from "react";
+import { useServerPref } from "./serverPref";
 
 export type PanelId = "rail" | "chart" | "preview" | "tester";
 /** Sizes are percentages: rail and right of the width, tester of the centre height. */
 export type Dock = { chart?: "left" | "right"; panel?: "center" | "full" };
-export type Layout = { open: Record<PanelId, boolean>; size: { rail: number; right: number; tester: number; chart?: number; split?: number }; dock?: Dock };
+export type Layout = { open: Record<PanelId, boolean>; size: { rail: number; right: number; tester: number; chart?: number; split?: number }; dock?: Dock; focus?: { tab?: "debug" | "output"; view?: "results" } };
 export type Workspace = { id: string; name: string; builtin?: boolean; layout: Layout };
 
 const L = (open: Partial<Record<PanelId, boolean>>, right = 42, tester = 24, rail = 16): Layout => ({ open: { rail: false, chart: false, preview: false, tester: false, ...open }, size: { rail, right, tester } });
 const BUILTIN: Workspace[] = [
   { id: "code", name: "Code only", builtin: true, layout: L({}) },
   { id: "code-chart", name: "Code + Chart", builtin: true, layout: L({ chart: true }) },
+  { id: "research", name: "Research", builtin: true, layout: L({ rail: true, chart: true }, 40) },
+  { id: "debug", name: "Debug", builtin: true, layout: { ...L({ chart: true, tester: true }, 38, 34), focus: { tab: "debug" } } },
+  { id: "review", name: "Review", builtin: true, layout: { ...L({}), focus: { view: "results" } } },
   { id: "tester", name: "Full tester", builtin: true, layout: L({ rail: true, chart: true, tester: true }, 34, 24, 16) },
   // Chart first (W-12): the chart is the main panel on the left, code docks on the right, the tester spans the bottom.
   { id: "chart-first", name: "Chart first", builtin: true, layout: { ...L({ chart: true, tester: true }, 66, 26), dock: { chart: "left", panel: "full" } } },
@@ -25,6 +29,10 @@ type Saved = { active: string; list: Workspace[] };
 const load = (): Saved => {
   let s: Partial<Saved> = {};
   try { s = JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { /* blocked or corrupt */ }
+  return merge(s);
+};
+/** Saved layouts plus any built-in added since, with old copies migrated. */
+const merge = (s: Partial<Saved>): Saved => {
   const list = [...BUILTIN.filter((b) => !s.list?.some((w) => w.id === b.id)), ...(s.list ?? []).map((w) => {
     const { right, tester, rail } = w.layout.size;
     if (w.id === "tester" && right === 42 && tester === 36 && rail === 18) {
@@ -39,6 +47,7 @@ const load = (): Saved => {
 export function useWorkspaces() {
   const [s, setS] = useState<Saved>(() => (typeof window === "undefined" ? { active: "code", list: BUILTIN } : load()));
   useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* blocked */ } }, [s]);
+  useServerPref("layouts", s, (v) => setS(merge(v)));
   const cur = s.list.find((w) => w.id === s.active) ?? s.list[0];
   const patch = useCallback((f: (l: Layout) => Layout) => setS((p) => ({ ...p, list: p.list.map((w) => (w.id === p.active ? { ...w, layout: f(w.layout) } : w)) })), []);
   const add = (name: string, layout: Layout) => setS((p) => { const id = `u${Date.now().toString(36)}`; return { active: id, list: [...p.list, { id, name, layout: structuredClone(layout) }] }; });

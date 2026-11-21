@@ -323,6 +323,10 @@
 .dv-vgrid th, .dv-vgrid td { padding: 2px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line-2); }
 .dv-vgrid th { color: var(--text-3); font-weight: 500; position: sticky; top: 0; background: var(--bg); }
 .dv-vgrid tbody th { position: sticky; left: 0; }
+.dv-vgrid thead small { display: block; font-size: 10px; color: var(--text-3); font-weight: 400; }
+.dv-vsum td, .dv-vsum th { color: var(--text-2); }
+.dv-vsum tr:last-child td { color: var(--text-2); border-bottom: 1px solid var(--line-3, var(--line-2)); }
+.dv-vgap th, .dv-vgap td { color: var(--text-3); padding: 0 8px; }
 .dv-tests .dv-file .dv-item { padding-left: 18px; }
 .dv-tests [data-st] i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--up); }
 .dv-tests [data-st="failed"] i, .dv-tests [data-st="error"] i { background: var(--down); }

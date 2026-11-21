@@ -139,3 +139,11 @@ def test_zip_round_trip_and_limits(studio):  # noqa: F811
         z.writestr("sub/main.py", "x = 1\n")
     assert studio.post(f"{API}/strategies/import-zip", content=bad.getvalue()).status_code == 422
     assert studio.post(f"{API}/strategies/import-zip", content=b"nope").status_code == 422
+
+
+def test_build_prefs_round_trip_and_only_known_names(studio):  # noqa: F811
+    assert studio.get(f"{API}/build/prefs/layouts").json() == {"value": None}
+    saved = {"active": "debug", "list": [{"id": "u1", "name": "Mine", "layout": {}}]}
+    assert studio.put(f"{API}/build/prefs/layouts", json=saved).json()["value"] == saved
+    assert studio.get(f"{API}/build/prefs/layouts").json()["value"] == saved
+    assert studio.get(f"{API}/build/prefs/anything").status_code == 422

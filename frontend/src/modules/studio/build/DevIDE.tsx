@@ -105,14 +105,24 @@ function Tester({ trades, inputs }: { trades: Record<string, unknown>[]; inputs:
 }
 
 /** Variables at a paused bar: name and value, numbers right-aligned. */
-type VarTable = { shape: number[]; columns: string[]; index: (string | number)[]; rows: unknown[][] };
+type VarTable = { shape: number[]; columns: string[]; dtypes: string[]; summary: ({ min?: number; max?: number; mean?: number; missing: number } | null)[]; spark: ((number | null)[] | null)[];
+  head: unknown[][]; head_index: (string | number)[]; index: (string | number)[]; rows: unknown[][] };
 const tableOf = (v: unknown) => (v && typeof v === "object" && "__table__" in v ? (v as { __table__: VarTable }).__table__ : null);
-/** Variable explorer: a DataFrame, Series or array local, last 50 rows. */
+/** Variable explorer: a DataFrame, Series or array local with types, a summary, a sparkline, and its first and last rows. */
 function VarGrid({ t }: { t: VarTable }) {
+  const row = (r: unknown[], i: string | number) => <tr key={`r${i}`}><th>{i}</th>{r.map((x, j) => <td key={j}>{show(x)}</td>)}</tr>;
   return (
     <details className="dv-vgrid"><summary>{t.shape.join(" × ")}</summary>
-      <div><table><thead><tr><th />{t.columns.map((c) => <th key={c}>{c}</th>)}</tr></thead>
-        <tbody>{t.rows.map((r, i) => <tr key={i}><th>{t.index[i]}</th>{r.map((x, j) => <td key={j}>{show(x)}</td>)}</tr>)}</tbody></table></div>
+      <div><table>
+        <thead><tr><th />{t.columns.map((c, j) => <th key={c} title={t.dtypes[j]}>{c}<small>{t.dtypes[j]}</small></th>)}</tr></thead>
+        <tbody className="dv-vsum">
+          <tr><th>min · max</th>{t.summary.map((m, j) => <td key={j}>{m?.min !== undefined ? `${show(m.min)} · ${show(m.max)}` : "—"}</td>)}</tr>
+          <tr><th>mean</th>{t.summary.map((m, j) => <td key={j}>{show(m?.mean)}</td>)}</tr>
+          <tr><th>missing</th>{t.summary.map((m, j) => <td key={j}>{m ? m.missing : "—"}</td>)}</tr>
+          <tr><th />{t.spark.map((v, j) => <td key={j}>{(v?.filter((x) => x !== null).length ?? 0) > 1 ? <Spark values={v!.filter((x): x is number => x !== null)} /> : null}</td>)}</tr>
+        </tbody>
+        <tbody>{t.head.map((r, i) => row(r, t.head_index[i]))}{t.head.length ? <tr className="dv-vgap"><th>…</th>{t.columns.map((c) => <td key={c} />)}</tr> : null}{t.rows.map((r, i) => row(r, t.index[i]))}</tbody>
+      </table></div>
     </details>
   );
 }
@@ -166,6 +176,14 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     return () => observer.disconnect();
   }, []);
   const chartFirst = ws.cur.id === "chart-first";
+  // A layout can bring its own focus: Debug opens the Debug tab, Review opens Results full width.
+  const leftView = useRef(false);
+  useEffect(() => {
+    const f = ws.cur.layout.focus;
+    if (f?.tab) setTab(f.tab);
+    if (f?.view) openView(f.view); else if (leftView.current) setView("code");  // leaving Review returns to the code
+    leftView.current = !!f?.view;
+  }, [ws.cur.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const layout = fitWorkspace({ ...ws.cur.layout, open: { ...open_, rail: railOpen, tester: panelOpen, chart: showingSide && open_.chart, preview: false } }, width, chartFirst);
   const chartOpen = layout.open.chart;
   // Docking (W-5): the chart sits left or right of the editor; the bottom panel sits under the editor or across the full width.

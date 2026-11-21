@@ -281,7 +281,9 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://quantconnect.com/docs/v2/cloud-platform/research/getting-started ; https://quantconnect.com/docs/v2/research-environment/key-concepts/research-engine ; https://www.zipline.io (Zipline Pipeline factor reference) ; https://www.quantrocket.com/code/
 
-### 16. Debugger locals quick-look ✅ Built `Easy`
+### 16. Debugger locals quick-look ◐ Partial `Easy`
+
+**Status (2026-11-21):** frames, Series and arrays show shape, column types, min/max/mean/missing, a sparkline per numeric column, the first 5 and last 50 rows. Not done: a list of trades opening the trade navigator.
 
 **What it is:** In the Locals panel of the debugger, every variable is clickable. A pandas frame or a Series opens a small popup table with the first and last rows, the shape, the dtypes and the column summary. A numeric series opens a mini sparkline across the replay window. A value that is a list of trades opens the trade navigator (feature 10). The popup closes on Escape and stays put while the replay moves, so the user can compare the value on two bars by stepping.
 
@@ -458,6 +460,8 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 **Sources:** https://github.com/microsoft/monaco-editor/issues/102 ; https://rikki.dev/posts/monaco-command-palette ; https://raw.githubusercontent.com/CodinGame/monaco-vscode-api/main/demo/src/main.views.ts
 
 ### 27. Saved layouts and workspace presets ✅ Built `Med`
+
+**Status (2026-11-21):** Research, Debug (opens the Debug tab) and Review (Results full width) presets, saved on the server per user. The Live preset waits for #24 (live status panel).
 
 **What it is:** The View dropdown has a Layout section with named presets: "Research" (code and cells, with the Chart docked to the right), "Debug" (code and debugger, Chart and Locals below), "Review" (Results and Tearsheet full width), and "Live" (Live status and code). The user can save the current arrangement under a name, reset to a preset, and rename or delete their own. The Explorer auto-collapses at narrow widths, which is already in place, and the presets respect that rule.
 
@@ -660,7 +664,7 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ◐ `Med` Run configurations (named, saved, shared) | Named run presets: universe, dates, costs, inputs | PARTIAL (named and saved in this browser; not shared, no inputs) | P1 |
+| ◐ `Med` Run configurations (named, saved, shared) | Named run presets: universe, dates, costs, inputs | PARTIAL (named, saved on the server per user; no per-input overrides) | P1 |
 | ✅ `Easy` Run widget with config picker | Choose config, run, debug beside the editor | HAVE | P1 |
 | ◐ `Easy` Rerun with last config, rerun on save | Ctrl+R, auto rerun | PARTIAL | P1 |
 | ✅ `Easy` Stop / cancel | Kill a run | HAVE | P1 |

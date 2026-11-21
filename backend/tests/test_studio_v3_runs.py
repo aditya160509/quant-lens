@@ -195,3 +195,6 @@ def test_debugger_shows_frames_and_arrays_as_bounded_tables():
     assert out["n"] == 1.5
     assert out["a"]["__table__"]["shape"] == [80] and len(out["a"]["__table__"]["rows"]) == 50 and out["a"]["__table__"]["index"][0] == 30
     assert out["df"]["__table__"]["columns"] == ["x", "y"] and out["df"]["__table__"]["rows"][0] == [0.0, None]
+    df = out["df"]["__table__"]
+    assert df["dtypes"] == ["int64", "float64"] and df["summary"][1] == {"min": 1.0, "max": 2.0, "mean": 1.5, "missing": 1} and len(df["spark"][0]) == 3
+    assert out["a"]["__table__"]["head"][0] == [0.0] and out["a"]["__table__"]["head_index"] == [0, 1, 2, 3, 4] and len(out["a"]["__table__"]["spark"][0]) == 60

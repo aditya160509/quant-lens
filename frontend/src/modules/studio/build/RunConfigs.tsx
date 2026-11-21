@@ -2,6 +2,7 @@
 
 import { Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useServerPref } from "./serverPref";
 
 /** Run configurations: named settings for /build/run (universe, dates, costs, fill). "Default" sends none, so the server's quick-run defaults apply. */
 export type RunConfig = { name: string; symbols?: string; top_n?: number; start?: string; end?: string; cost_profile?: string; fill?: string };
@@ -9,7 +10,6 @@ const KEY = "studio:runconfigs";
 const COSTS = ["US retail", "Crypto taker", "Zero (costs off)", "Custom"]; // backend features/inputs.py COST_PROFILES
 const DEFAULT: RunConfig = { name: "Default" };
 
-// shortcut: configs live in this browser only; move them into the strategy spec when they need to be shared.
 function load(): { active: string; list: RunConfig[] } {
   try { const s = JSON.parse(localStorage.getItem(KEY) ?? ""); if (Array.isArray(s.list)) return s; } catch { /* none or blocked */ }
   return { active: "Default", list: [DEFAULT] };
@@ -18,6 +18,7 @@ function load(): { active: string; list: RunConfig[] } {
 export function useRunConfigs() {
   const [s, setS] = useState(() => (typeof window === "undefined" ? { active: "Default", list: [DEFAULT] } : load()));
   useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* blocked */ } }, [s]);
+  useServerPref("runconfigs", s, setS);
   const cur = s.list.find((c) => c.name === s.active) ?? DEFAULT;
   const { name: _, ...rest } = cur;
   const settings = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined && v !== ""));

@@ -995,21 +995,37 @@ def bind_indicators(strategy):
 
 
 def _debug_table(value):
-    """A DataFrame, Series or array as its last 50 rows and first 20 columns, for the debugger's variable explorer."""
+    """A DataFrame, Series or array for the debugger's variable explorer: first 5 and last 50 rows of up to 20 columns,
+    column types, a min/max/mean/missing summary, and a 60-point sparkline of each numeric column."""
     if isinstance(value, np.ndarray) and 1 <= value.ndim <= 2:
         grid = value.reshape(-1, 1) if value.ndim == 1 else value
-        tail, columns = grid[-50:, :20], [str(i) for i in range(min(grid.shape[1], 20))]
-        index = list(range(max(0, len(grid) - 50), len(grid)))
+        grid = grid[:, :20]
+        columns, index, dtypes = [str(i) for i in range(grid.shape[1])], list(range(len(grid))), [str(value.dtype)] * grid.shape[1]
     elif hasattr(value, "iloc") and hasattr(value, "columns"):  # pandas DataFrame, without importing pandas here
-        part = value.iloc[-50:, :20]
-        tail, columns, index = part.to_numpy(), [str(c)[:64] for c in part.columns], [str(i)[:32] for i in part.index]
+        part = value.iloc[:, :20]
+        grid, columns, index, dtypes = part.to_numpy(), [str(c)[:64] for c in part.columns], [str(i)[:32] for i in part.index], [str(d) for d in part.dtypes]
     elif hasattr(value, "iloc") and hasattr(value, "index") and hasattr(value, "to_numpy"):  # pandas Series
-        part = value.iloc[-50:]
-        tail, columns, index = part.to_numpy().reshape(-1, 1), [str(value.name if value.name is not None else "value")[:64]], [str(i)[:32] for i in part.index]
+        grid, columns, index, dtypes = value.to_numpy().reshape(-1, 1), [str(value.name if value.name is not None else "value")[:64]], [str(i)[:32] for i in value.index], [str(value.dtype)]
     else:
         return None
     cell = lambda x: _debug_value(x.item() if isinstance(x, np.generic) else x, 3)
-    return {"__table__": {"shape": list(np.shape(value)), "columns": columns, "index": index, "rows": [[cell(x) for x in row] for row in tail]}}
+    n = len(grid)
+    head = [] if n <= 55 else [[cell(x) for x in row] for row in grid[:5]]
+    summary, spark = [], []
+    for k in range(grid.shape[1]):
+        try:
+            col = np.asarray(grid[:, k], dtype=float)
+        except (TypeError, ValueError):  # text or object column
+            summary.append(None)
+            spark.append(None)
+            continue
+        ok = col[np.isfinite(col)]
+        summary.append({"min": _debug_value(float(ok.min())), "max": _debug_value(float(ok.max())), "mean": _debug_value(float(ok.mean())), "missing": int(n - len(ok))} if len(ok) else {"missing": int(n)})
+        picks = col[np.linspace(0, n - 1, min(n, 60)).astype(int)] if n else col
+        spark.append([_debug_value(float(x)) for x in picks])
+    return {"__table__": {"shape": list(np.shape(value)), "columns": columns, "dtypes": dtypes, "summary": summary, "spark": spark,
+                          "head": head, "head_index": [index[i] for i in range(len(head))],
+                          "index": index[max(0, n - 50):], "rows": [[cell(x) for x in row] for row in grid[-50:]]}}
 
 
 def _debug_value(value, depth=0):
