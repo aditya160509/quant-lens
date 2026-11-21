@@ -102,7 +102,7 @@ export function tradeSummary(trades: { pnl?: unknown; exit_date?: unknown; date?
   const curve = trades.flatMap((t, i) => {
     const x = Number(t.pnl); if (!Number.isFinite(x)) return [];
     cum += x; peak = Math.max(peak, cum); maxdd = Math.min(maxdd, cum - peak);
-    return [{ date: String(t.exit_date ?? t.date ?? i), net: cum }];
+    return [{ date: String(t.exit_date ?? t.date ?? i), net: cum, dd: cum - peak }];
   });
   return { net: cum, trades: pnl.length, win: pnl.length ? pnl.filter((x) => x > 0).length / pnl.length : null, pf: loss ? gain / loss : null, avg: pnl.length ? cum / pnl.length : null, maxdd, curve };
 }

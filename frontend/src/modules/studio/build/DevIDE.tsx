@@ -78,7 +78,7 @@ function Tester({ trades }: { trades: Record<string, unknown>[] }) {
   return (
     <div className="dv-tester">
       <dl className="dv-tiles">{tiles.map(([k, v, tone]) => <div key={k}><dt>{k}</dt><dd className="num" data-tone={tone ?? undefined}>{v}</dd></div>)}</dl>
-      {s.curve.length > 1 ? <TimeSeries data={s.curve} series={[{ key: "net", label: "Cumulative P&L", color: "var(--accent)" }]} height={120} legend={false} /> : null}
+      {s.curve.length > 1 ? <TimeSeries data={s.curve} series={[{ key: "net", label: "Cumulative P&L", color: "var(--text-2)" }, { key: "dd", label: "Drawdown", color: "var(--down)" }]} height={140} legend={false} /> : null}
     </div>
   );
 }

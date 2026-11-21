@@ -72,7 +72,7 @@ The two headers merge into one 48px header. The left stripe and the header form 
 - Light theme mirrors them: 0.965, 1.0, 1.0 + shadow. It also gets a "light with light header" variant.
 - Panels are inset islands: 8px gap on `--bg`, 10px radius, no borders inside. The only hairline is 1px `--line` under the header.
 - Text: `--text` 0.95, `--text-2` 0.75, `--text-3` 0.58, `--text-4` 0.42. Hover, active and focus always raise contrast.
-- Colour: one accent, used for the active state and the primary button. Green and red are used only for P&L, fills and errors.
+- Colour (owner, 2026-11-21: "no blue"): chrome is fully neutral, as in T3 Code and Cursor. Greys have zero chroma; selection is a white/black overlay; the primary button is the page inverted (white in dark, black in light). Colour is only data: P&L, chart series, errors. The editor uses JetBrains' Dark and IntelliJ Light syntax palettes.
 - `studio.css`: the second pass (line ~470 onward) is folded into the first, so each `.dv-*` selector is defined once and reads tokens only. Target: under 450 lines from 558.
 
 ### 4. Type
@@ -132,14 +132,14 @@ The two headers merge into one 48px header. The left stripe and the header form 
 
 ## Checklist (in order; screenshot after each)
 
-- [ ] L1 Tokens: three surfaces, text steps and the accent, in `workspace.css`; Dev selectors read only tokens
+- [x] L1 (neutral greys, inverse primary; full three-step rename open) Tokens: three surfaces, text steps and the accent, in `workspace.css`; Dev selectors read only tokens
 - [ ] L2 Fold the second `.dv-*` pass in `studio.css` into one; same pixels, fewer lines
 - [x] L3 One header: module switcher with hover flyouts, page tabs, strategy widget, run widget; `dv-bar` removed
 - [ ] L4 Landing-page nav uses the same switcher (replaces the hover lists added in D0)
 - [x] L5 Tool window stripe: 40px, 20px icons, top and bottom groups, Show names
 - [x] L6 Type pass: sans for UI, mono for code and numbers; tab and status heights
 - [x] L7 Chart column: one header, floating drawing pill, one footer (drawing pill stays as Vela's own column)
-- [ ] L8 (tiles done in one row; equity-drawdown chart and Sharpe tile open) Tester tiles and equity-drawdown chart; Plots under Tester
+- [x] L8 (Sharpe tile open: needs daily returns, not trades) Tester tiles and equity-drawdown chart; Plots under Tester
 - [x] L9 Status bar grouping
 - [ ] L9b Lab pages: labelled sidebar on --bg with counts, raised content panel with its own header, Tessera card headers
 - [ ] L10 Focus mode, layout preset thumbnails, run deltas, compact mode
