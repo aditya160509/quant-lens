@@ -595,6 +595,13 @@
 .dv-thumb rect { fill: color-mix(in oklab, var(--text) 12%, transparent); }
 .dv-thumb rect[data-z="editor"] { fill: color-mix(in oklab, var(--text) 22%, transparent); }
 .dv-layouts-new { justify-content: center; border: 1px dashed var(--line-2); }
+.dv-rcfg { height: 26px; max-width: 140px; padding: 0 6px; border: 1px solid var(--workspace-edge); border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-size: 12px; }
+.dv-rcfg-t { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dv-rcfg-t th { text-align: left; font-weight: 500; color: var(--text-2); padding: 4px; }
+.dv-rcfg-t td { padding: 2px 4px; }
+.dv-rcfg-t input, .dv-rcfg-t select { width: 100%; min-width: 0; height: 26px; padding: 0 6px; border: 1px solid var(--line-2); border-radius: 6px; background: transparent; color: var(--text); font: inherit; }
+.dv-rcfg-t td:nth-child(3) { width: 64px; }
+.dv-rcfg-t td:last-child { width: 28px; }
 .dv-layouts > .btn { justify-self: stretch; }
 .dv-zones { display: grid; gap: 12px; }
 .dv-zones-hd .seg { margin-left: auto; display: flex; gap: 4px; }

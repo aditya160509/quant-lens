@@ -94,14 +94,14 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const [quick, setQuick] = useState<QuickRun | null>(null);
   const runPending = useRef(false);
   const [starting, setStarting] = useState(false);
-  const quickRun = async (level: "quick" | "full") => {
+  const quickRun = async (level: "quick" | "full", settings: Record<string, unknown> = {}) => {
     if (runPending.current) return;
     runPending.current = true;
     setStarting(true);
     try {
       const sid = level === "full" ? await save(undefined, false) : loaded?.id;
       if (level === "full" && !sid) { runPending.current = false; return; }
-      const j = await studio<QuickRun>("POST", "/build/run", level === "full" ? { level, strategy_id: sid } : { level, spec, ...(sid ? { strategy_id: sid } : {}) });
+      const j = await studio<QuickRun>("POST", "/build/run", level === "full" ? { level, strategy_id: sid, settings } : { level, spec, settings, ...(sid ? { strategy_id: sid } : {}) });
       setQuick({ ...j, level, status: "queued" });
       const poll = async () => {
         const st = await studio<QuickRun>("GET", `/build/run/${j.job_id}`).catch(() => null);
@@ -510,7 +510,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         </section>
       ) : null}
       {ui === "dev" ? <DevIDE tools={headRight} canRun={!!spec.code.trim() || ROLES.some(([role]) => !!String(spec[role] ?? "").trim())} starting={starting} onPreview={() => setNudge((n) => n + 1)} spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} compileProblems={compileProblems}
-        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={(d, l) => { setPausedAt(d); setPausedLabel(l ?? "❚❚"); }} font={font} savedFiles={loaded ? { "main.py": (loaded.spec as Spec).code ?? "", ...(((loaded.spec as Spec).files as Record<string, string>) ?? {}) } : undefined} quick={quick} onQuickRun={(l) => void quickRun(l)} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid" data-compact={readDefaults().compact || undefined} data-plain={readDefaults().plain || undefined}>
+        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={(d, l) => { setPausedAt(d); setPausedLabel(l ?? "❚❚"); }} font={font} savedFiles={loaded ? { "main.py": (loaded.spec as Spec).code ?? "", ...(((loaded.spec as Spec).files as Record<string, string>) ?? {}) } : undefined} quick={quick} onQuickRun={(l, st) => void quickRun(l, st)} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid" data-compact={readDefaults().compact || undefined} data-plain={readDefaults().plain || undefined}>
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
             {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m && !spec.code.trim()} className={`btn sm${mode === m && !spec.code.trim() ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}

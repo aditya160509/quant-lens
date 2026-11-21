@@ -16,6 +16,7 @@ import { RECIPES } from "./recipes";
 import { useLayout } from "@/workspace/layout";
 import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 import { DevChart } from "./DevChart";
+import { RunConfigPicker, RunConfigsDialog, useRunConfigs } from "./RunConfigs";
 import { fitWorkspace, LayoutsDialog, targets, useWorkspaces, WorkspaceMenu, type PanelId } from "./Workspace";
 import { DevRobust } from "./DevRobust";
 import { DevRuns, type RunEntry } from "./DevRuns";
@@ -119,7 +120,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   tools?: ReactNode; spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode; canRun: boolean; starting: boolean; onPreview: () => void;
   onSave: () => void; compileProblems: Problem[];
   strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null, label?: string) => void; font?: number; savedFiles?: Record<string, string>;
-  quick?: QuickRun | null; onQuickRun: (level: "quick" | "full") => void; onCancel?: () => void;
+  quick?: QuickRun | null; onQuickRun: (level: "quick" | "full", settings?: Record<string, unknown>) => void; onCancel?: () => void;
 }) {
   const files = useMemo(() => ({ "main.py": spec.code, ...(spec.files ?? {}) }), [spec.code, spec.files]);
   const [open, setOpen] = useState<string[]>(["main.py"]);
@@ -215,6 +216,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [qc, setQc] = useState<QC | null>(null);
   const [split, setSplit] = useState<string | null>(null);
   const [layoutsOpen, setLayoutsOpen] = useState(false);
+  const rc = useRunConfigs();
+  const [rcOpen, setRcOpen] = useState(false);
   const [splitDown, setSplitDown] = useState(false);
   const editorSplitRef = useRef<GroupImperativeHandle>(null);
   useEffect(() => {
@@ -425,7 +428,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const runCode = (level: "quick" | "full" = "quick") => {
     if (!canRun || starting || running) return;
     openView("results");
-    onQuickRun(level);
+    onQuickRun(level, rc.settings);
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -464,6 +467,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.docs", label: "Docs: open reference", keys: (m) => [m.KeyCode.F1], run: () => revealRail("docs") },
     { id: "studio.fullrun", label: "Run: full backtest (recorded)", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => runCode("full") },
     { id: "studio.quickrun", label: "Run: quick (top 50, 5 years)", run: () => runCode() },
+    { id: "studio.runconfigs", label: "Run: edit configurations", run: () => setRcOpen(true) },
     { id: "studio.cancel", label: "Run: cancel", run: () => onCancel?.() },
     { id: "studio.chart", label: "View: chart with replay", run: () => setOpenP("chart", true) },
     { id: "studio.results", label: "View: results", run: () => openView("results") },
@@ -504,7 +508,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                       <button className="btn sm" disabled={!canRun || starting || running} onClick={() => runCode("full")}>Full backtest<kbd>⌘⇧↵</kbd></button>
                       <button className="btn sm" onClick={runProfile}>Profile</button>
                       {running ? <button className="btn sm" onClick={onCancel}>Cancel<kbd>Esc</kbd></button> : null}
-                      {quick ? <span className="dv-count">{quick.level === "quick" ? "Top 50 names, 5 years, not in the ledger" : "Full period, recorded in the ledger"}</span> : null}
+                      {quick ? <span className="dv-count">{rc.cur.name !== "Default" ? `${rc.cur.name}, ${quick.level === "quick" ? "not in the ledger" : "recorded in the ledger"}` : quick.level === "quick" ? "Top 50 names, 5 years, not in the ledger" : "Full period, recorded in the ledger"}</span> : null}
                     </div>
                     {running ? <div className="dv-prog"><i style={{ width: `${quick!.progress?.percent ?? 2}%` }} /><span>{quick!.progress?.message ?? "Queued"}</span></div> : null}
                     {quick?.status === "failed" ? <p className="bd-find error"><b>Failed</b>{quick.error}</p> : null}
@@ -555,7 +559,9 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       <button role="menuitemcheckbox" aria-checked={focus} onClick={() => { const on = !focus; setIconsOpen(!on); setRailOpen(!on); setPanelOpen(!on); }}>Focus mode</button>
     </WorkspaceMenu>
     <LayoutsDialog ws={ws} open={layoutsOpen} onClose={() => setLayoutsOpen(false)} />
+    <RunConfigsDialog rc={rc} open={rcOpen} onClose={() => setRcOpen(false)} />
     {tools}
+    <RunConfigPicker rc={rc} onEdit={() => setRcOpen(true)} />
     <button className="btn dv-execute" disabled={!canRun || starting || running} title={!canRun ? "Add strategy code or rules to run" : "Run backtest (⌘↵)"} onClick={() => runCode()}>
       <Play size={14} />{starting || running ? "Running…" : "Run"}
     </button>
