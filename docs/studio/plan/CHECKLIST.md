@@ -6,7 +6,7 @@ One tracker for every acceptance id and every point in [FEATURES_PEAK.md](FEATUR
 
 Three streams, in this order. Details stay in their sections below; this is the map.
 
-**1. Workspace (new single screen), section "Workspace" at the bottom: W-1 to W-14.** Panels, templates, rename/manage workspaces, Vela chart (mark B), Strategy Tester, ctx drawing calls, Inputs form, Report page, chart-first mode, old engine removal.
+**1. Workspace (new single screen), section "Workspace" at the bottom: W-1 to W-14 (open: W-5 free docking, W-11 Report page; W-7 and W-12 moved to Chart).** Panels, templates, rename/manage workspaces, Vela chart (mark B), Strategy Tester, ctx drawing calls, Inputs form, Report page, chart-first mode, old engine removal.
 
 **2. Build items still open (21), section "Build":**
 - Editor and IDE: B-13 editor groups, B-16 IDE keys (⌘\ split), B-26 undo survives reload, B-30 in-browser Pyright, B-73 logpoints, B-92 project files, B-93 libraries, B-137 shared undo / Explain
@@ -15,7 +15,9 @@ Three streams, in this order. Details stay in their sections below; this is the 
 - Records: B-10 screenshots at 1440 and 1024
 - Blocked or owner: B-55 ctx.store, B-67 and B-123 (fundamentals data), B-140 AI ⌘K edit
 
-**3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 1 replay tied to debugger (partial), 4 walk-forward, 6 optimisation heatmap, 7 parameter plateau, 8 drawing layer (now Vela, W-7), 11 to 15 research cells, reactive and SQL cells, data browser, 17 to 19 library, starters, share links, 20 review comments (partial), 21 and 22 AI explain and critic, 23 and 24 paper and live hooks, 26 keymap chords, 27 layouts (now W-3), 28 pop-out windows, 29 stress test, 30 chart templates. Built: 2, 3, 5, 9, 10, 25.
+**3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 4 walk-forward, 6 optimisation heatmap, 7 parameter plateau, 11 to 15 research cells, reactive and SQL cells, data browser, 17 to 19 library, starters, share links, 20 review comments (partial), 21 and 22 AI explain and critic, 23 and 24 paper and live hooks, 26 keymap chords, 28 pop-out windows, 29 stress test. Built: 2, 3, 5, 9, 10, 25, 27 (Layouts dialog). Moved to Chart: 1, 8, 30.
+
+**4. Chart, section "Chart": CH-1 to CH-50, 43 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
 
 ## Rules
 
@@ -39,12 +41,12 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Optimise | 11 | 10 | 1 | 8 |
 | Validate | 14 | 18 | 0 | 10 |
 | Live | 10 | 16 | 5 | 17 |
-| Chart | 6 | 15 | 6 | 18 |
+| Chart | 6 | 30 | 7 | 26 (merged list, 2026-11-21) |
 | Library | 7 | 19 | 6 | 19 |
 | Cross-page | 28 | 20 | 7 | 24 |
 | LEAN parity | 1 | 3 | 5 | 25 (rule-based tags undercount it: Docker harness, fixtures, goldens) |
 | Data refresh | 1 | 3 | 0 | 6 plus downloads running in the background |
-| **Total** | | | | **about 230 h of work, roughly 30 working sessions of 8 h** |
+| **Total** | | | | **about 238 h of work, roughly 30 working sessions of 8 h** |
 
 ## Counts (done / total)
 
@@ -57,10 +59,10 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
 | Live | 11 | 46 |
-| Chart | 6 | 35 |
+| Chart | 7 | 50 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **250** | **538** |
+| **All pages** | **251** | **553** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -529,48 +531,79 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] L-45 Freeze per version (backdate labelled); a new version starts a segment
 - [x] L-46 Alerts: Apprise channels, test send, digest on run, failures logged
 
-## Chart (`/studio/chart/:symbol?`, spec §8): 6 / 35 done
+## Chart (Build's Vela chart; one merged list, 2026-11-21): 7 / 50 done
 
-### Acceptance (PAGES)
+One list for every chart item. It merges the old Chart page items (C-1 to C-35, page deleted in W-14), W-7, W-12, DEV_IDEAS 1, 8 and 30, the multi-symbol proposal in DEV_IDEAS, and CHART_RESEARCH "Supercharts parity and beyond". Duplicates are merged; sources are in brackets. P1 first within each group.
 
-- [ ] [M] C-1 Every chart indicator matches the backend formula within 1e-6 on a fixture (partial: EMA seeds differ in the first bars (registry seeds with an SMA))
-- [ ] [M] C-2 Chart, Backtest and Live read the same close for the same symbol and date
-- [ ] [M] C-3 10 years daily plus 3 indicators first paint under 400 ms
-- [ ] [E] C-4 Clicking a trade in Backtest opens Chart zoomed to that trade with its stop and target (partial: name link and trade navigator (±20 bars) built; stop and target on this view not verified)
-- [ ] [M] C-5 Replay at 20× holds 60 fps on 5,000 bars (Playwright frame sample) (partial: replay 1×, 5×, 20× and scrub built; frame test not done)
+### Done
+- [x] CH-1 Candles and volume on Vela in the Build chart panel [W-6, was C-31]
+- [x] CH-2 ctx.plot lines on price or own pane, hline, fill, bgcolor [W-9]
+- [x] CH-3 Trades as entry and exit markers, holding spans coloured by P&L, paused bar shaded [W-6, C-14 part]
+- [x] CH-4 Trade navigator: ← → and [ ], all / win / loss filter, zoom to trade [was C-33]
+- [x] CH-5 Replay bound to the debugger: play, scrub, 1×, 2×, 5×, R key [was C-34, DEV 1 part]
+- [x] CH-6 Drawing tools in 5 groups on the chart toolbar (not yet saved) [DEV 8 part]
+- [x] CH-7 Chart follows light and dark theme live
 
-### Target additions (FEATURES_PEAK)
+### Symbols and universe runs
+- [ ] [M] CH-8 P1 Symbol picker over the run's symbols, sorted by trades or P&L, search, `,` and `.` keys [DEV multi-symbol 1, research]
+- [ ] [M] CH-9 P1 Per-symbol strip in the footer (trades, P&L, win rate); "All symbols" trade list that switches the chart [DEV multi-symbol 2]
+- [ ] [M] CH-10 P1 Universe list beside the chart: P&L, trades, win rate, max DD, sparkline; click loads the symbol [DEV multi-symbol 3, research]
+- [ ] [E] CH-11 P1 Debugger pause switches the chart to the paused symbol [DEV multi-symbol 7]
+- [ ] [M] CH-12 P1 Per-symbol stats computed on the server for 4,000-name runs; bars fetched only for the selected symbol [DEV multi-symbol 8]
+- [ ] [M] CH-13 P2 Universe heatmap (symbol × month, return); click opens symbol and date; best and worst 10 [DEV multi-symbol 4]
 
-- [ ] [H] C-6 Layouts of 1, 2, 4 (and 6, 9) charts with synced symbol, crosshair and time; each sync toggled [FP 45]
-- [ ] [M] C-7 Compare symbols as rebased % lines or indexed to 100
-- [ ] [M] C-8 Price scales: linear, log, percent, indexed to 100
-- [ ] [E] C-9 Chart types: hollow, OHLC bars, Heikin-Ashi, line, area, baseline, Renko, range, Kagi, Point and Figure, volume footprint, step (partial: candles only)
-- [ ] [M] C-10 One chart engine on every page (Backtest, Live, Library, Build preview); WebGL; 1M bars smooth; decimation above 50k points (partial: one engine on the Chart page; WebGL and 1M bars not built) [FP 45]
-- [ ] [E] C-11 Indicator popup with Inputs, Style and Visibility tabs; apply to the selected pane; indicators on indicators; templates; favourites (partial: indicators editable and kept per user; tabs, templates and favourites open)
-- [ ] [M] C-12 Indicator lab: pick an indicator, symbol and range; tune with sliders; the chart updates live with no backtest [FP 44]
-- [ ] [M] C-13 Formula-to-indicator pane: any formula string becomes a pane, so Build and Chart share one language [FP 76]
-- [ ] [E] C-14 Strategy overlay: entries and exits, stop and target lines, position shading, signal pane; two strategies at once (partial: one run: entries and exits; stop and target lines, shading and two-strategy overlay open) [FP 48]
-- [ ] [M] C-15 Click a trade marker for a card: why it fired, with the rule values at that bar [FP 48]
-- [ ] [H] C-16 Drawing tools (trend line, ray, horizontal, channel, Fibonacci, pitchfork, rectangle, text, arrow, measure, position tool, anchored VWAP); magnet to OHLC; lock, hide, group, clone; saved per symbol on the server [FP 46]
-- [ ] [H] C-17 Drawings convert into alerts and block conditions ("price crosses the line") [FP 46]
-- [ ] [M] C-18 Alerts created on the chart use the alert engine; right-click price to alert when it crosses; indicator and drawing-touch alerts
-- [ ] [M] C-19 Replay: speeds to 50×, step forward and back, jump to date, blind replay (hides future bars and ticker), simulated orders and P&L (partial: 1×, 5×, 20× and scrub built; 50×, blind replay and simulated orders open) [FP 47]
-- [ ] [H] C-20 Strategy-stepped replay: orders appear bar by bar with the debugger [FP 47]
-- [ ] C-21 Manual trading in replay, recorded to a journal (owner decision: manual replay and journal are not in v3, see OD-7)
-- [ ] [M] C-22 Data window: crosshair readout of every series; legend values [FP 29]
-- [ ] [E] C-23 Screenshot as PNG (watermark off) and export of the data in view
-- [ ] [M] C-24 Spread charts: ratio A/B and a correlation panel
-- [ ] C-25 Events layer: earnings, splits, economic releases, news; regime shading and strategy trades layers (blocked by data: no dividend, economic or news feed held)
-- [ ] [E] C-26 Automated analysis (trendlines, support and resistance, patterns) labelled as heuristics; reproducible code; can become a block
-- [ ] [H] C-27 Customise: colours per theme, font size, crosshair style, price scale side, saved layouts and templates per symbol or global, a key per tool
-- [ ] [H] C-28 Pan and zoom at 60 fps with 5 indicators on 100k bars; first paint under 1 s
-- [x] C-29 Timeframes: daily, weekly and monthly (hourly removed by decision)
-- [ ] [M] C-30 Keys and buttons: R replay, ← → trades, G from Backtest, drawing toolbar with the 12 most used, ⌘K add indicator (partial: R, ← →, trade navigator and G built; toolbar and ⌘K open)
-- [x] C-31 Candles, volume pane and indicator panes on lightweight-charts 5
-- [x] C-32 All 70 chart_engine indicators usable; editable parameters kept per user
-- [x] C-33 Trade navigator: ← → steps, zoom to trade ±20 bars
-- [x] C-34 Replay: R key, 1×, 5×, 20×, scrub
-- [x] C-35 Studio Chart embeds the full chart_engine chart
+### Layouts and views
+- [ ] [H] CH-14 P1 Multi-chart grid (1 to 16 cells) with sync toggles for symbol, interval, crosshair, time and drawings; maximise one cell; multi-cell replay [C-6, DEV multi-symbol 6, research: Vela workspace]
+- [ ] [M] CH-15 P1 Object tree and data window (crosshair readout of every series, legend values) [C-22, research: Vela]
+- [ ] [E] CH-16 P1 Range buttons (1M to All) and go to date [research: Vela]
+- [ ] [M] CH-17 P1 Compare symbols rebased to 100 or percent [C-7, DEV multi-symbol 5]
+- [ ] [E] CH-18 P1 Price scale menu: linear, log, percent, indexed to 100 [C-8, Vela has log and percent]
+- [ ] [M] CH-19 P2 Chart-first mode for non-coders: big chart, script dock, tester drawer [W-12]
+- [ ] [H] CH-20 P2 Saved chart templates and layouts per symbol or global; indicator templates; drawing style presets; colours, crosshair, scale side, a key per tool [C-11 part, C-27, DEV 30, research]
+
+### Chart types
+- [ ] [E] CH-21 P1 Type menu for what Vela has: hollow, OHLC bars, Heikin-Ashi, line, area, baseline, step [C-9 part]
+- [ ] [M] CH-22 P2 Port Renko, Kagi, line break, point and figure, range bars, volume candles from the old engine [C-9 part, research port list]
+
+### Drawings and alerts
+- [ ] [H] CH-23 P1 Drawings saved per strategy and symbol on the server; floating object toolbar; per-tool settings; lock, hide, group, clone [W-7, C-16, DEV 8]
+- [ ] [H] CH-24 P2 Drawings become alerts and block conditions ("price crosses the line") [C-17]
+- [ ] [M] CH-25 P2 Alerts from the chart: right-click a price, indicator cross, drawing touch; uses the alert engine [C-18]
+
+### Indicators and code (one language for chart and backtest)
+- [ ] [H] CH-26 P1 `class Indicator` plus `self.use(...)` in Strategy: one Python file draws on the chart and feeds the backtest, same numbers [research 3, C-13]
+- [ ] [M] CH-27 P1 Inputs, Plot and Fill declared in Python generate the settings form and styles [research 4]
+- [ ] [M] CH-28 P1 Multi-timeframe access in ctx and Indicator (`request.security` equivalent) [research 5]
+- [ ] [M] CH-29 P1 Parameter scrubber / indicator lab: drag an input, the indicator and signals redraw with no backtest [C-12, research]
+- [ ] [M] CH-30 P1 Look-ahead guard: run indicators on truncated history, report differences in Problems [research 8]
+- [ ] [M] CH-31 P2 Indicator dialog: Inputs, Style, Visibility; apply to a pane; indicator on indicator; favourites [C-11 part]
+- [ ] [M] CH-32 P2 Chart indicators match the backend formula within 1e-6 on a fixture [C-1]
+- [ ] [M] CH-33 P2 Signal pane: score, rank and percentile with the breakpoint line [research]
+- [ ] [M] CH-34 P2 Port the pattern scanner and alpha maths as Python indicators; the 20 old strategies as starters [research port list]
+- [ ] [M] CH-35 P3 Pine import via PineTS (licence check first) [DEV chart plan]
+
+### Strategy on the chart
+- [ ] [M] CH-36 P1 Orders, stop, target and trailing-stop lines per trade [C-14 part, research 6]
+- [ ] [M] CH-37 P1 Click a trade or bar for a "why" card: which rule fired, rule values at that bar [C-15, research]
+- [ ] [M] CH-38 P1 Equity, drawdown and exposure panes on the same time axis as price [research]
+- [ ] [E] CH-39 P1 Backtest trade click opens Build's chart zoomed to the trade with stop and target [C-4; symbol link done]
+- [ ] [M] CH-40 P2 Trade ribbons with MAE, MFE and exit reason [research]
+- [ ] [M] CH-41 P2 Compare two runs (or two strategies) as two marker layers with an entry diff [C-14 part, research 9]
+
+### Replay
+- [ ] [M] CH-42 P2 Replay speeds to 50×, step back, jump to date, blind replay (hide future bars) [C-19]
+- [ ] [H] CH-43 P2 Strategy-stepped replay: orders appear bar by bar with the debugger [C-20, DEV 1]
+
+### Data, export and speed
+- [ ] [E] CH-44 P1 Export chart data as CSV and the chart as PNG [C-23, research 6]
+- [ ] [H] CH-45 P1 Speed: 10 years plus 3 indicators first paint under 400 ms; 100k bars pan at 60 fps; replay 20× at 60 fps [C-3, C-5, C-28, research 10]
+- [ ] [M] CH-46 P2 Chart, Backtest and Live read the same close for the same symbol and date [C-2]
+- [ ] [M] CH-47 P2 Vela on every page (Backtest, Live, Library), then retire chart_engine once watchlist, trading, landing and security move [C-10]
+- [ ] [M] CH-48 P2 Spread and ratio charts (A/B, A−B) with a correlation pane [C-24]
+- [ ] [M] CH-49 P2 Regime ribbon behind price with P&L per regime; earnings and split markers (blocked by data for events) [C-25, research]
+- [ ] [M] CH-50 P3 Cross-sectional pane, point-in-time fundamentals, automated trendlines and patterns as labelled heuristics, screenshot to tearsheet, share link, notes on the run [C-26, research]
+
+Not planned: manual trading in replay and journal (OD-7, was C-21); watchlists, news, paper and broker trading inside the chart (other pages own these).
 
 ## Library (`/studio/library/:section?`, spec §9): 0 / 36 done
 
@@ -746,7 +779,7 @@ Each needs an answer before the page it blocks. Defaults are in the text.
 - [ ] OD-18 Tax and wash-sale (REVIEW G10) is not in v3. Confirm it stays out
 - [ ] OD-19 Tick data is not in v3 (REVIEW §3). Confirm it stays out
 
-## Workspace (Studio v3 single screen, plan: docs/studio/plan/workspace_plan.html): 8 / 14 done
+## Workspace (Studio v3 single screen, plan: docs/studio/plan/workspace_plan.html): 10 / 12 done
 Merges Build (141 done features move into panels unchanged), the 22 open Build items, and DEV_IDEAS catalogue items (as numbered there).
 - [x] [L] W-1 Panel system: resizable splits, snap, one spring animation, 60 fps drag, layout remembered
 - [x] [M] W-2 Panels closed by default; open from View menu, palette and shortcuts
@@ -754,11 +787,10 @@ Merges Build (141 done features move into panels unchanged), the 22 open Build i
 - [x] [S] W-4 Rename, duplicate, delete and switch workspaces; per-strategy default
 - [ ] [M] W-5 Customise: panel visibility and workspace sizes are saved, including the editor split. Preview opens in the resizable bottom panel, and the Dev activity bar can be hidden. Flexible docking remains open.
 - [x] [L] W-6 Vela chart panel fed with bars, trades, ctx.plot, paused bar; mark B (Vela™ in status bar)
-- [ ] [M] W-7 Drawings saved per strategy; per-tool settings and floating toolbar
 - [x] [L] W-8 Strategy Tester drawer: key stats, equity/drawdown, trades list, settings (Inputs card beside the results)
 - [x] [M] W-9 ctx.fill, ctx.hline, ctx.bgcolor, ctx.draw_* rendered on the chart
 - [x] [M] W-10 Declared params become an Inputs form; change a value and the chart re-runs
 - [ ] [L] W-11 Report page: performance, trades analysis, tearsheet, robustness, compare, certificate. Dev report tabs now use the full workspace by default. A standalone report page remains open.
-- [ ] [M] W-12 Chart-first mode for non-coders (D in the plan)
+- W-7 (drawings) and W-12 (chart-first mode) moved to Chart as CH-23 and CH-19.
 - [x] [S] W-13 Fix: preview too short, broken resize and pan (superseded by W-1)
 - [x] [M] W-14 Removed Studio's old Chart page and its lightweight-charts preview (owner OK 2026-11-21). The shared chart_engine stays: watchlist, trading, landing and security still use it. Features to port before it goes are inventoried in CHART_RESEARCH.md "Supercharts parity and beyond"
