@@ -135,7 +135,7 @@ The two headers merge into one 48px header. The left stripe and the header form 
 - [x] L1 (neutral greys, inverse primary; full three-step rename open) Tokens: three surfaces, text steps and the accent, in `workspace.css`; Dev selectors read only tokens
 - [x] L2 Fold the second `.dv-*` pass in `studio.css` into one; same pixels, fewer lines (30 duplicate selectors folded, 656 → 635 lines; computed styles diffed before and after on Build Dev dark and light, Build Simple and Studio Home: no CSS-caused change)
 - [x] L3 One header: module switcher with hover flyouts, page tabs, strategy widget, run widget; `dv-bar` removed
-- [ ] L4 Landing-page nav uses the same switcher (replaces the hover lists added in D0)
+- [x] L4 Landing-page nav uses the same switcher (replaces the hover lists added in D0): Home, Trade, Modules ▾ with the two-column module and page list
 - [x] L5 Tool window stripe: 40px, 20px icons, top and bottom groups, Show names
 - [x] L6 Type pass: sans for UI, mono for code and numbers; tab and status heights
 - [x] L7 Chart column: one header, floating drawing pill, one footer (drawing pill stays as Vela's own column)

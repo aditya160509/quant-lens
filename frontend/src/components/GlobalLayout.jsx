@@ -7,7 +7,8 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 import ThemeToggle from './ui/ThemeToggle';
-import { MODULES } from '@/workspace/modules';
+import { ModuleSwitcher } from '@/workspace/ModuleSwitcher';
+import '@/workspace/workspace.css';
 
 // Register GSAP plugins
 if (typeof window !== 'undefined') {
@@ -31,10 +32,6 @@ export default function GlobalLayout({ children }) {
     const navItems = [
         { name: "Home", path: "/" },
         { name: "Trade", path: "/trade" },
-        { name: "Screener", path: "/screener" },
-        { name: "Studio", path: "/studio" },
-        { name: "ML", path: "/ml" },
-        { name: "Research", path: "/research" },
     ];
 
     // Workspace modules render their own full-screen chrome and command palette
@@ -53,30 +50,14 @@ export default function GlobalLayout({ children }) {
                         <nav aria-label="Primary" className="flex min-w-0 flex-1 items-center gap-4 overflow-x-auto whitespace-nowrap md:overflow-visible lg:gap-6 [scrollbar-width:none]">
                             {navItems.map((item) => {
                                 const isActive = pathname === item.path || (item.path !== "/" && pathname.startsWith(item.path));
-                                const pages = MODULES.find((m) => m.href === item.path)?.pages;
-                                const link = (
-                                    <Link
-                                        href={item.path}
-                                        aria-haspopup={pages ? "menu" : undefined}
-                                        className={`text-xs font-mono tracking-wide hover:text-terminal-yellow transition-colors ${isActive ? "text-terminal-yellow border-b-2 border-terminal-yellow py-3.5" : "text-terminal-dim"
-                                            }`}
-                                    >
-                                        {item.name}{pages ? <span aria-hidden className="ml-1 opacity-50">▾</span> : null}
+                                return (
+                                    <Link key={item.name} href={item.path} className={`text-xs font-mono tracking-wide hover:text-terminal-yellow transition-colors ${isActive ? "text-terminal-yellow border-b-2 border-terminal-yellow py-3.5" : "text-terminal-dim"}`}>
+                                        {item.name}
                                     </Link>
                                 );
-                                if (!pages) return <span key={item.name}>{link}</span>;
-                                // Pages open on hover or keyboard focus, so a module is never a blind jump.
-                                return (
-                                    <div key={item.name} className="group relative">
-                                        {link}
-                                        <div role="menu" className="invisible absolute left-0 top-full z-50 min-w-[180px] rounded-lg border border-terminal-gray bg-terminal-dark p-1 opacity-0 shadow-xl transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                                            {pages.map((p) => (
-                                                <Link key={p.href} role="menuitem" href={p.href} className="block rounded-md px-3 py-1.5 text-xs text-terminal-dim hover:bg-white/5 hover:text-terminal-text focus:bg-white/5 focus:text-terminal-text focus:outline-none">{p.label}</Link>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
                             })}
+                            {/* The same switcher as inside the workspace: modules on the left, the hovered module's pages on the right. */}
+                            <span className="ws-tokens text-xs font-mono tracking-wide text-terminal-dim"><ModuleSwitcher current={undefined} label="Modules" /></span>
                         </nav>
                     </div>
 
