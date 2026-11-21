@@ -26,6 +26,7 @@ OUTPUTS = [
     {"key": "vs_random", "source": "charts", "render": "table", "label": "Vs random"},
     {"key": "execution", "source": "tables", "render": "table", "label": "Execution"},
     {"key": "parameters", "source": "tables", "render": "table", "label": "Nearby settings"},
+    {"key": "stress", "source": "charts", "render": "lineChart", "label": "Stress"},
     {"key": "noise", "source": "tables", "render": "table", "label": "Noise"},
     {"key": "mcpt", "source": "tables", "render": "table", "label": "Permutation"},
     {"key": "lottery", "source": "charts", "render": "table", "label": "Luck lottery"},

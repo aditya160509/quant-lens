@@ -125,5 +125,7 @@ def test_run_validate_new_tests_echo_sims_and_seed():
     by = {t["test"]: t for t in o["meta"]["tiles"]}
     assert {"mc_trades", "skip_trades", "regimes", "sanity", "unseen"} <= set(by)
     assert by["unseen"]["status"] in ("pass", "fail") and "cost_sweep" in o["tables"] and len(o["tables"]["cost_sweep"]) == 7
+    assert o["meta"]["stress"]["runs"] == V.PROFILES["quick"]["noise"] and {"p5", "p50", "p95", "original"} <= set(o["charts"]["stress"][0])
+    assert {"param_" + k for k in ()} <= set(o["tables"].get("windows", [{}])[0]) and "wfe" in o["meta"]["walk_forward"]
     few = V.run_validate(spec, Settings(symbols=["SPY", "QQQ", "IWM"]), sims=20)
     assert {t["test"]: t["status"] for t in few["meta"]["tiles"]}["unseen"] == "skipped"

@@ -100,6 +100,16 @@ def walk_forward(curves: list[tuple[dict, np.ndarray]], dates: pd.DatetimeIndex,
     return summary, rows, curve
 
 
+def stress(equities: list[np.ndarray], base: np.ndarray, dates: pd.DatetimeIndex, cap: float) -> tuple[list[dict], dict]:
+    """Fan of stressed equity curves (5/25/50/75/95th percentile per bar, ~120 points) and how often a stressed run still ends profitable and keeps half the Sharpe."""
+    eq = np.vstack(equities) / cap
+    idx = sorted(set(np.linspace(0, len(dates) - 1, 120).astype(int)))
+    q = np.percentile(eq[:, idx], [5, 25, 50, 75, 95], axis=0)
+    fan = [{"date": str(dates[i].date()), "original": float(base[i] / cap), **{k: float(q[j, n]) for j, k in enumerate(("p5", "p25", "p50", "p75", "p95"))}} for n, i in enumerate(idx)]
+    sr, b = np.array([_sharpe(e) for e in equities]), _sharpe(base)
+    return fan, {"runs": len(equities), "profitable": float((eq[:, -1] > 1).mean()), "half_sharpe": float((sr >= 0.5 * b).mean()) if b > 0 else 0.0}
+
+
 def vs_random(r: engine.Result, close: np.ndarray, n: int, seed: int) -> dict:
     """Random entries with the strategy's own trade count and holding times: where does the real mean trade return rank?"""
     t = r.trades[r.trades[:, engine.T_REASON] != engine.R_OPEN]
@@ -351,6 +361,15 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
                        f"with price noise the median Sharpe is {med:.2f} (original {base_sr:.2f})"))
     tables["noise"] = [{"run": i + 1, "sharpe": s} for i, s in enumerate(noise_sr)]
 
+    stage("stress", 50)
+    jit = [(k, d) for k, d in spec.parameter_definitions().items() if d.min is not None and d.max is not None and d.max > d.min]
+    stressed = []
+    for _ in range(prof["noise"]):
+        pj = {k: float(np.clip(d.value * (1 + rng.uniform(-0.1, 0.1)), d.min, d.max)) for k, d in jit}
+        pj = {k: float(round(v)) if dict(jit)[k].value.is_integer() else v for k, v in pj.items()}
+        stressed.append(simulate(spec, prep, settings, sig=C.signals(spec, _noisy(prep.sig_bars, rng, 0.1), dates, pj or None), cost_multiple=float(rng.uniform(1.0, 2.0))).equity)
+    charts["stress"], stress_meta = stress(stressed, base.equity, dates, cap)
+
     stage("permutation", 55)
     perm_sr = [_sharpe(simulate(spec, replace(prep, sig_bars=(pb := _permuted(prep.sig_bars, rng)), panel=_panel_from(p, pb)), settings).equity)
                for _ in range(prof["mcpt"])]
@@ -528,7 +547,7 @@ def run_validate(spec: Strategy, settings: Settings, sid: str | None = None, ver
                    "luck": [{"measure": k, "value": v} for k, v in lk.items() if not isinstance(v, list)], **tables},
         "meta": {"headline": headline, "grade": g, "tiles": tiles, "luck": {k: v for k, v in lk.items() if not isinstance(v, list)}, "holdout": hold,
                  "power": pw, "cpcv": cp, "related": rel, "walk_forward_mode": {"anchored": anchored, "purge": purge, "reopt": reopt},
-                 "next_test": f"Run: {nxt['name']} ({nxt['reason']})" if nxt else None, "what_would_change": change, "walk_forward": wf, "profile": profile, "sims": sims, "seed": settings.seed, "cost_breakeven": breakeven,
+                 "next_test": f"Run: {nxt['name']} ({nxt['reason']})" if nxt else None, "what_would_change": change, "walk_forward": wf, "stress": stress_meta, "profile": profile, "sims": sims, "seed": settings.seed, "cost_breakeven": breakeven,
                  "total_return": float(base.equity[-1] / cap - 1), "metrics": {"sharpe": base_sr, "trades": len(base.trades)},
                  "run_hash": run_hash, "result_hash": tile_hash, "verdict_chip": f"Grade {g['grade']}", "freshness": limits.freshness(),
                  "period": [str(dates[0].date()), str(dates[-1].date())], "spec": spec.model_dump(), "settings": settings.model_dump(), "few_trades": few},

@@ -70,6 +70,34 @@ export function Stitched({ rows }: ViewProps) {
   return <TimeSeries data={rows} series={[{ key: "oos", label: "Out of sample, stitched", color: "var(--accent)", width: 2 }]} height={260} format={(v) => `${((v - 1) * 100).toFixed(0)}%`} />;
 }
 
+/** Per window: in-sample (blue) against out-of-sample (green) Sharpe, with the efficiency and any parameter that changes every window. */
+export function WfBands({ rows, result }: ViewProps) {
+  if (rows.length < 2) return <Skipped reason="walk-forward did not run" />;
+  const wfe = (result.meta as { walk_forward?: { wfe: number | null } }).walk_forward?.wfe;
+  const params = Object.keys(rows[0]).filter((k) => k.startsWith("param_"));
+  const noisy = params.filter((k) => rows.every((r, i) => i === 0 || r[k] !== rows[i - 1][k])).map((k) => k.slice(6));
+  const bars = rows.flatMap((r) => [{ label: `W${r.window} in`, value: r.is_sharpe as number, color: "var(--s1)" }, { label: `W${r.window} out`, value: r.oos_sharpe as number, color: "var(--up)" }]).filter((b) => isNum(b.value));
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <div className="st-fig"><b>{isNum(wfe) ? pct(wfe, 0) : "—"}</b><span>efficiency: out-of-sample return per in-sample return{noisy.length ? ` · ${noisy.join(", ")} changes every window: the optimiser is fitting noise` : ""}</span></div>
+      <Bars bars={bars} format={(v) => v.toFixed(2)} signed={false} yLabel="Sharpe" height={200} />
+    </div>
+  );
+}
+
+/** Equity fan with every setting moved up to 10%, costs up to 2x and prices nudged. */
+export function Stress({ rows, result }: ViewProps) {
+  const st = (result.meta as { stress?: { runs: number; profitable: number; half_sharpe: number } }).stress;
+  if (rows.length < 2 || !st) return <Skipped reason="not run" />;
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <div className="st-fig"><b>{pct(st.profitable, 0)}</b><span>of {st.runs} stressed runs still profitable · {pct(st.half_sharpe, 0)} keep half the Sharpe · settings ±10%, costs 1–2×, prices nudged by a tenth of daily volatility</span></div>
+      <TimeSeries data={rows} band={{ lo: "p5", hi: "p95", label: "5th–95th percentile" }} series={[{ key: "p50", label: "Median", color: "var(--accent)" }, { key: "original", label: "Original", color: "var(--text-2)", dash: true }]}
+        height={240} format={(v) => `${((v - 1) * 100).toFixed(0)}%`} />
+    </div>
+  );
+}
+
 function Hist({ rows, mark, markLabel, format }: { rows: ViewProps["rows"]; mark: number; markLabel: string; format: (v: number) => string }) {
   if (!rows.length) return <Skipped reason="not run" />;
   return <Bars bars={rows.map((r) => ({ label: format(r.bin as number), value: r.count as number, color: (r.bin as number) >= mark ? "var(--down)" : undefined }))}
