@@ -578,3 +578,11 @@
 .dv-icons-gap { flex: 1; }
 
 .dv-menu .hd { padding: 6px 10px 2px; font-size: 11px; font-weight: 500; color: var(--text-4); }
+
+/* Compact mode (JetBrains "Compact mode"): the Density preference also tightens the IDE chrome. */
+.d-compact .dv { --ab: 36px; }
+.d-compact .dv[data-head] { grid-template-rows: 0 minmax(0, 1fr) 22px; }
+.d-compact .dv-icons .icon-btn { width: 28px; height: 28px; }
+.d-compact .dv-icons .icon-btn svg { width: 16px; height: 16px; }
+.d-compact .dv-tab, .d-compact .dv-ptabs button { height: 28px; font-size: 12px; }
+.d-compact .dv-status { height: 22px; font-size: 11px; }
