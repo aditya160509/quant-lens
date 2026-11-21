@@ -59,10 +59,10 @@ Tags on open items, in Claude working time including the browser check: `[E]` ab
 | Optimise | 18 | 40 |
 | Validate | 18 | 50 |
 | Live | 11 | 46 |
-| Chart | 7 | 50 |
+| Chart | 8 | 50 |
 | Library | 0 | 36 |
 | Cross-page | 2 | 58 |
-| **All pages** | **251** | **553** |
+| **All pages** | **252** | **553** |
 
 ## Portfolio (`/studio/portfolio`, spec §6): 25 / 28 done
 
@@ -531,7 +531,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [x] L-45 Freeze per version (backdate labelled); a new version starts a segment
 - [x] L-46 Alerts: Apprise channels, test send, digest on run, failures logged
 
-## Chart (Build's Vela chart; one merged list, 2026-11-21): 7 / 50 done
+## Chart (Build's Vela chart; one merged list, 2026-11-21): 8 / 50 done
 
 One list for every chart item. It merges the old Chart page items (C-1 to C-35, page deleted in W-14), W-7, W-12, DEV_IDEAS 1, 8 and 30, the multi-symbol proposal in DEV_IDEAS, and CHART_RESEARCH "Supercharts parity and beyond". Duplicates are merged; sources are in brackets. P1 first within each group.
 
@@ -566,7 +566,7 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [ ] [M] CH-22 P2 Port Renko, Kagi, line break, point and figure, range bars, volume candles from the old engine [C-9 part, research port list]
 
 ### Drawings and alerts
-- [ ] [H] CH-23 P1 Drawings saved per strategy and symbol on the server; floating object toolbar; per-tool settings; lock, hide, group, clone [W-7, C-16, DEV 8]
+- [x] [H] CH-23 P1 Drawings saved per strategy and symbol (this browser; server sync open); Vela's floating object toolbar, per-tool settings, lock, hide, clone; tool defaults and favourites remembered [W-7, C-16, DEV 8]
 - [ ] [H] CH-24 P2 Drawings become alerts and block conditions ("price crosses the line") [C-17]
 - [ ] [M] CH-25 P2 Alerts from the chart: right-click a price, indicator cross, drawing touch; uses the alert engine [C-18]
 

@@ -845,7 +845,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const rightPanel = (
       <Panel id="right" minSize={0}>
       <aside className="dv-side" inert={!chartOpen}>
-        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart symbol={symbol} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} /></div> : null}
+        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart symbol={symbol} drawKey={`${strategyId ?? "new"}:${symbol}`} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} /></div> : null}
       </aside>
       </Panel>
   );

@@ -73,8 +73,8 @@ const ms = (d: string) => Date.parse(d);
 export const SPEEDS = [1, 2, 5];
 
 /** The Chart page's engine over the preview window: trades, ctx.plot series, the paused bar, and replay controls that drive the debugger. */
-export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpeed, onGo }: {
-  symbol: string; prev: DevPreview | null; pausedAt: string | null; playing: boolean; speed: number;
+export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpeed, onGo, drawKey }: {
+  symbol: string; prev: DevPreview | null; drawKey: string; pausedAt: string | null; playing: boolean; speed: number;
   onPlay: (on: boolean) => void; onSpeed: (s: number) => void; onGo: (date: string | null, step?: 1 | -1) => void;
 }) {
   const [all, setAll] = useState<Bar[]>([]);
@@ -189,6 +189,26 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     if (pausedAt) { const r = chart.getVisibleRange(), t = ms(pausedAt); if (r && (t < r.from || t > r.to)) { const w = r.to - r.from; chart.setVisibleRange({ from: t - w / 2, to: t + w / 2 }); } }
   }, [chart, prev?.trades, sym, pausedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
+
+  // Drawings belong to the strategy and symbol (W-7); tool defaults and favourites follow the user everywhere.
+  // shortcut: kept in this browser's storage, not on the server; move to the strategy record when drawings need to sync across devices.
+  useEffect(() => {
+    if (!chart) return;
+    const key = `studio:drawings:${drawKey}`, PREFS = "studio:drawings:prefs";
+    const read = (k: string) => { try { return JSON.parse(localStorage.getItem(k) ?? "null"); } catch { return null; } };
+    const write = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* blocked or full */ } };
+    const d = chart.drawings, doc = read(key), prefs = read(PREFS);
+    if (doc) d.fromJSON(doc);
+    if (prefs?.defaults) d.setToolDefaults(prefs.defaults);
+    if (prefs?.favorites) d.setFavorites(prefs.favorites);
+    const save = () => write(key, d.toJSON());
+    const savePrefs = () => write(PREFS, { defaults: d.toolDefaults(), favorites: d.favorites() });
+    const offs = [
+      ...(["drawing:created", "drawing:edited", "drawing:removed", "drawing:replaced", "drawing:history"] as const).map((e) => chart.on(e, save)),
+      ...(["drawing:defaults", "drawing:favorites"] as const).map((e) => chart.on(e, savePrefs)),
+    ];
+    return () => offs.forEach((off) => off());
+  }, [chart, drawKey]);
 
   useEffect(() => {
     if (!playing) return;
