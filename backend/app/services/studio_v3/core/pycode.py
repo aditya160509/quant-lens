@@ -776,7 +776,7 @@ def _execute(code, bars, dates, params, symbols, cache, output, *, event_setting
     n = bars["close"].shape[1]
     meta = {"exprs": ex, "params": params, "symbols": symbols or [str(i) for i in range(n)], "dates": [str(d.date()) for d in dates],
             "event_settings": event_settings, "repaint_bars": repaint_bars or [], "modules": modules, "debug_symbol": debug_symbol, "debug_after": debug_after, "debug_event": debug_event, "debug_breakpoint": debug_breakpoint, "debug_loss": debug_loss,
-            "profile": bool(output and output.get("profile") is True)}  # a caller asks for the profiler by seeding output["profile"] = True
+            "profile": bool(output and output.get("profile") is True), "logpoints": (output or {}).pop("logpoints", None) or []}  # a caller asks for the profiler by seeding output["profile"] = True
     with tempfile.TemporaryDirectory() as d:
         src, dst = Path(d) / "in.npz", Path(d) / "out.npz"
         np.savez(src, meta=np.array(json.dumps(meta)), **{f: np.asarray(bars[f], dtype=float) for f in ("open", "high", "low", "close", "volume")}, **vals, **(extras or {}))

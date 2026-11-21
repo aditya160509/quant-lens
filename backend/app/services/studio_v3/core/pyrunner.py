@@ -191,6 +191,41 @@ class _LineProfiler:
                               for (f, name), (c, sec) in sorted(self.functions.items(), key=lambda item: -item[1][1])[:20]]}
 
 
+class _Logpoints:
+    """Logpoints: log a message when a strategy line runs, without stopping. `{expr}` parts are evaluated; a message without braces is one expression, logged as `expr = value`."""
+
+    def __init__(self, points, context):
+        self.points = {(str(p["file"]), int(p["line"])): str(p["message"])[:500] for p in points}
+        self.files = {f"<studio:{f}>" for f, _ in self.points}
+        self.context = context
+
+    def _global(self, frame, event, arg):
+        return self._local if frame.f_code.co_filename in self.files else None
+
+    def _local(self, frame, event, arg):
+        message = self.points.get((frame.f_code.co_filename[8:-1], frame.f_lineno)) if event == "line" else None
+        if message is None:
+            return self._local
+        try:
+            ctx = self.context()
+        except NameError:  # before the first context exists
+            return self._local
+        try:
+            value = eval(f"f{message!r}" if "{" in message else message, frame.f_globals, frame.f_locals)
+            text, level = (value if "{" in message else f"{message} = {value!r}"), "info"
+        except Exception as e:  # noqa: BLE001 a bad expression is logged, never stops the run
+            text, level = f"{message}: {type(e).__name__}: {e}", "warning"
+        ctx._log(text, level, frame.f_lineno)
+        return self._local
+
+    def run(self, call):
+        sys.settrace(self._global)
+        try:
+            return call()
+        finally:
+            sys.settrace(None)
+
+
 class _Log:
     """ctx.log(...) plus ctx.log.info/warning/error with key values (B-80)."""
 
@@ -1229,12 +1264,13 @@ def main():
     try:
         compiled = compile(src, "<studio:main.py>", "exec")
         profiler = _LineProfiler() if meta.get("profile") else None
+        logpoints = _Logpoints(meta["logpoints"], lambda: ctx) if meta.get("logpoints") and not profiler else None
         helper_code = {name[:-3]: compile(source, f"<studio:{name}>", "exec") for name, source in meta["modules"].items()}
         if meta["event_settings"] is not None:
             def run_events():
                 return event_run(z, meta, load_strategy, make_contexts, use_context, values, lambda: ctx)
 
-            arrays, repaint, entry_signals, warmup_report, debug = profiler.run(run_events) if profiler else run_events()
+            arrays, repaint, entry_signals, warmup_report, debug = profiler.run(run_events) if profiler else logpoints.run(run_events) if logpoints else run_events()
         else:
             cls, warmup = load_strategy()
             entries, exits = np.zeros((T, N), np.int8), np.zeros((T, N), np.int8)

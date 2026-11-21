@@ -173,10 +173,10 @@ function theme(monaco: Monaco, dark: boolean) {
 }
 
 /** Build › Dev: Monaco for one project file, with server completion, signature help, go to definition and line markers. */
-export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], ran = [], onGutter, onComment, commentLines = [], readOnly, font = 13, snippets, onSelection, insertRef }: {
+export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], logpoints = [], ran = [], onGutter, onComment, commentLines = [], readOnly, font = 13, snippets, onSelection, insertRef }: {
   path: string; value: string; onChange: (v: string) => void; problems: Problem[]; project: Project;
   onSave: () => void; onRun: () => void; onCursor?: (line: number, column: number) => void; reveal?: { line: number; column?: number; n: number } | null;
-  actions?: EditorAction[]; breakpoints?: number[]; ran?: { line: number; count: number; dates: string[] }[]; onGutter?: (line: number) => void; onComment?: (line: number) => void; commentLines?: number[];
+  actions?: EditorAction[]; breakpoints?: number[]; logpoints?: { line: number; message: string }[]; ran?: { line: number; count: number; dates: string[] }[]; onGutter?: (line: number) => void; onComment?: (line: number) => void; commentLines?: number[];
   readOnly?: boolean; font?: number; snippets?: UserSnippet[]; onSelection?: (text: string) => void; insertRef?: { current: ((text: string) => void) | null };
 }) {
   const deco = useRef<{ clear: () => void; set: (d: NonNullable<Parameters<Ed["createDecorationsCollection"]>[0]>) => void } | null>(null);
@@ -203,10 +203,11 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
     const m = ed.current; if (!m) return;
     deco.current?.set([
       ...breakpoints.map((line) => ({ range: new m.monaco.Range(line, 1, line, 1), options: { glyphMarginClassName: "dv-bp", glyphMarginHoverMessage: { value: "Breakpoint" } } })),
+      ...logpoints.map((p) => ({ range: new m.monaco.Range(p.line, 1, p.line, 1), options: { glyphMarginClassName: "dv-lp", glyphMarginHoverMessage: { value: `Logpoint: ${p.message}` } } })),
       ...commentLines.map((line) => ({ range: new m.monaco.Range(line, 1, line, 1), options: { linesDecorationsClassName: "dv-cmt", hoverMessage: { value: "Comment thread" } } })),
       ...ran.map((r) => ({ range: new m.monaco.Range(r.line, 1, r.line, 1), options: { linesDecorationsClassName: "dv-ran", hoverMessage: { value: `Placed ${r.count} order${r.count === 1 ? "" : "s"}: ${r.dates.slice(0, 5).join(", ")}` } } })),
     ]);
-  }, [breakpoints, ran, commentLines, path, value]);
+  }, [breakpoints, logpoints, ran, commentLines, path, value]);
 
   useEffect(() => {
     const m = ed.current; if (!m || !reveal) return;

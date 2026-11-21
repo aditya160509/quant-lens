@@ -105,6 +105,16 @@ def test_profiler_reports_slowest_lines_and_functions(studio):  # noqa: F811
     assert names["on_bar"]["calls"] > 100 and names["init"]["calls"] == 1
 
 
+def test_logpoints_log_without_stopping(studio):  # noqa: F811
+    code = "class Strategy:\n    def on_bar(self, ctx):\n        x = ctx.t * 2\n        if ctx.t == 5:\n            ctx.buy()\n"
+    points = [{"file": "main.py", "line": 4, "message": "x"}, {"file": "main.py", "line": 4, "message": "t={ctx.t} x={x}"}, {"file": "main.py", "line": 3, "message": "nope"}]
+    result = studio.post(f"{API}/preview", json={"symbol": "SPY", "spec": {"code": code}, "logpoints": points}).json()
+    logs = result["logs"]
+    assert result["status"] == "ok" and "logpoints" not in result
+    assert any(r["text"] == "t=0 x=0" and r["line"] == 4 for r in logs)  # the {} message wins for a line set twice
+    assert any(r["level"] == "warning" and r["text"].startswith("nope: NameError") for r in logs)
+
+
 def test_runtime_error_returns_the_locals_at_the_failing_bar(studio):  # noqa: F811
     code = "class Strategy:\n    def init(self, ctx):\n        self.seen = 0\n\n    def on_bar(self, ctx):\n        self.seen += 1\n        ratio = 1\n        if ctx.t == 30:\n            ratio = 1 / (ctx.t - 30)\n"
     result = studio.post(f"{API}/preview", json={"symbol": "SPY", "spec": {"code": code}}).json()

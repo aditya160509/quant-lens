@@ -315,6 +315,7 @@
 .dv-plotlist { display: grid; gap: 10px; }
 .dv-save-draft { color: var(--warn); } .dv-save-conflict { color: var(--down); } .dv-save-saving { color: var(--text-2); }
 .dv-bp { background: var(--down); border-radius: 50%; width: 9px !important; height: 9px !important; margin: 5px 0 0 5px; }
+.dv-lp { background: var(--text-2); width: 8px !important; height: 8px !important; margin: 6px 0 0 6px; transform: rotate(45deg); }
 .dv-ran { background: var(--up); width: 3px !important; margin-left: 3px; }
 .dv kbd { margin-left: 6px; font: 10.5px var(--mono); opacity: .55; }
 @media (max-width: 760px) { .bd-ui { display: none; } }

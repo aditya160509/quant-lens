@@ -380,12 +380,19 @@ def import_quantconnect(request: QuantConnectImportRequest) -> dict[str, Any]:
     return qc_import.convert(request.source)
 
 
+class Logpoint(BaseModel):
+    file: str = Field(max_length=200)
+    line: int = Field(ge=1)
+    message: str = Field(min_length=1, max_length=500)
+
+
 class PreviewRequest(BaseModel):
     spec: dict
     symbol: str = "SPY"
     symbols: list[str] | None = Field(default=None, max_length=50)  # default: Strategy.universe, else `symbol`
     years: float = Field(default=2.0, ge=0.5, le=10)
     repaint: bool = True  # False: skip the look-ahead replay for a fast typing preview
+    logpoints: list[Logpoint] = Field(default_factory=list, max_length=50)
 
 
 class ConditionRequest(PreviewRequest):
@@ -699,7 +706,8 @@ def debug_python(request: BuildDebugRequest) -> dict:
 @router.post("/preview", response_model=PreviewResult, response_model_exclude_unset=True)
 def preview(request: PreviewRequest) -> dict[str, Any]:
     try:
-        return backtest.preview(_spec(request.spec), request.symbol, request.years, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None, repaint=request.repaint)
+        return backtest.preview(_spec(request.spec), request.symbol, request.years, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None, repaint=request.repaint,
+                                logpoints=[p.model_dump() for p in request.logpoints])
     except backtest.Refusal as exc:
         return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
     except pycode.CodeError as exc:
@@ -1742,6 +1750,7 @@ def book_today(bid: str, req: FeatureRequest) -> dict[str, Any]:
         return backtest._clean(book.run(bid, settings))
     except backtest.Refusal as exc:
         raise HTTPException(404 if "No such" in exc.reason else 422, exc.reason) from exc
+
 
 # Data browser
 @router.get("/data/symbols")
