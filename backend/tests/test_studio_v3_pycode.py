@@ -844,3 +844,35 @@ def test_max_entries_caps_pyramiding_per_symbol():
     assert free.trades[0, engine.T_SHARES] == 40 and capped.trades[0, engine.T_SHARES] == 20
     with pytest.raises(pycode.CodeError, match="max_entries"):
         pycode.run_event(body.format(cap="max_entries = -1"), bars, dates, {}, ["AAA"], engine.Params())
+
+
+def _codes(code, params=None):
+    return [p["code"] for p in pycode.lint(code, params or {})]
+
+
+def test_lint_flags_param_never_read():
+    body = "class Strategy:\n    def on_data(self, ctx):\n        ctx.value('close')\n        {use}\n"
+    assert "studio-unused-param" in _codes(body.format(use="pass"), {"fast": 5})
+    assert "studio-unused-param" not in _codes(body.format(use="ctx.param('fast')"), {"fast": 5})
+
+
+def test_lint_flags_orders_without_a_stop():
+    body = "class Strategy:\n    def on_data(self, ctx):\n        {call}\n"
+    assert "studio-no-stop" in _codes(body.format(call="ctx.market_order('AAA', 10)"))
+    assert "studio-no-stop" not in _codes(body.format(call="ctx.bracket('AAA', 10, stop=0.05)"))
+
+
+def test_lint_flags_hardcoded_date_once_and_leaves_future_dates_to_look_ahead():
+    body = "class Strategy:\n    def on_data(self, ctx):\n        if ctx.date > '{d}':\n            pass\n"
+    assert _codes(body.format(d="2020-01-01")).count("studio-hardcoded-date") == 1
+    future = _codes(body.format(d="2999-01-01"))
+    assert "look-ahead" in future and "studio-hardcoded-date" not in future
+
+
+def test_lint_ignore_comment_silences_all_or_listed_codes():
+    line = "        if ctx.date > '2020-01-01': pass{c}\n"
+    head = "class Strategy:\n    def on_data(self, ctx):\n"
+    assert "studio-hardcoded-date" in _codes(head + line.format(c=""))
+    assert "studio-hardcoded-date" not in _codes(head + line.format(c="  # studio: ignore"))
+    assert "studio-hardcoded-date" not in _codes(head + line.format(c="  # studio: ignore[studio-hardcoded-date]"))
+    assert "studio-hardcoded-date" in _codes(head + line.format(c="  # studio: ignore[other]"))

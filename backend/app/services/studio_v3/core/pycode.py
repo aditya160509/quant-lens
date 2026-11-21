@@ -8,6 +8,7 @@ from __future__ import annotations
 import ast
 import datetime as dt
 import inspect
+import io
 import json
 import keyword
 import math
@@ -15,6 +16,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import tokenize
 from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path
@@ -607,7 +609,50 @@ def lint(code: str, params: dict[str, float], *, file: str = "main.py", modules:
         if level not in _LEVELS:
             raise ValueError(f"Severity for {code_name} must be one of {', '.join(sorted(_LEVELS))}")
     levels = severity or {}
+    ignored = _ignored(code)
+    problems = [p for p in problems if not (p["line"] in ignored and (ignored[p["line"]] is None or p["code"] in ignored[p["line"]]))]
     return [{**p, "severity": levels.get(p["code"], p["severity"])} for p in problems if levels.get(p["code"]) != "off"]
+
+
+def _ignored(code: str) -> dict[int, set[str] | None]:
+    """Lines carrying `# studio: ignore` (None = every code) or `# studio: ignore[a,b]`."""
+    found: dict[int, set[str] | None] = {}
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(code).readline):
+            m = tok.type == tokenize.COMMENT and re.search(r"#\s*studio:\s*ignore(?:\[([^\]]*)\])?", tok.string)
+            if m:
+                found[tok.start[0]] = {c.strip() for c in m.group(1).split(",")} if m.group(1) else None
+    except (tokenize.TokenError, IndentationError):
+        pass
+    return found
+
+
+_ENTRY_CALLS = {"market_order", "limit_order", "buy", "order_value", "bracket"}
+_EXIT_CALLS = {"stop_order", "stop_limit_order", "sell", "exit"}
+
+
+def _strategy_problems(tree: ast.AST, params: dict[str, float], skip: set[int]) -> list[dict]:
+    """Unused params, entries without any stop or exit, hard-coded dates (future ones are look-ahead's)."""
+    out: list[dict] = []
+    nodes = list(ast.walk(tree))
+    strings = " ".join(n.value for n in nodes if isinstance(n, ast.Constant) and isinstance(n.value, str))
+    if not any(isinstance(n, ast.Attribute) and n.attr == "params" for n in nodes):
+        for name in params:
+            if not re.search(rf"\b{re.escape(name)}\b", strings):
+                out.append({"severity": "warning", "line": 1, "column": 1, "end_column": 1, "code": "studio-unused-param",
+                            "message": f"Param {name} is never read."})
+    calls = [n for n in nodes if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]
+    entry = next((c for c in calls if c.func.attr in _ENTRY_CALLS), None)
+    if entry and not any(c.func.attr in _EXIT_CALLS or any(k.arg in {"stop", "trail"} and not (isinstance(k.value, ast.Constant) and k.value.value is None) for k in c.keywords) for c in calls):
+        out.append({"severity": "info", "line": entry.lineno, "column": entry.col_offset + 1, "end_column": (entry.end_col_offset or entry.col_offset) + 1,
+                    "code": "studio-no-stop", "message": "Orders are placed but no stop or exit is used."})
+    for n in nodes:
+        if isinstance(n, ast.Compare):
+            for x in (n.left, *n.comparators):
+                if isinstance(x, ast.Constant) and isinstance(x.value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", x.value) and id(x) not in skip:
+                    out.append({"severity": "warning", "line": x.lineno, "column": x.col_offset + 1, "end_column": (x.end_col_offset or x.col_offset) + 1,
+                                "code": "studio-hardcoded-date", "message": f"Date {x.value} is hard-coded; make it a param."})
+    return out
 
 
 def _lint(code: str, params: dict[str, float], *, file: str = "main.py", modules: set[str] | None = None, strict: bool = False) -> list[dict]:
@@ -625,7 +670,10 @@ def _lint(code: str, params: dict[str, float], *, file: str = "main.py", modules
                          "end_column": node.end_col_offset + 1, "code": "unreachable-order",
                          "message": "This order cannot be reached."})
     problems.extend(_domain_problems(tree))
-    for node, message in _lookahead_patterns(tree):
+    ahead = _lookahead_patterns(tree)
+    if file == "main.py":
+        problems.extend(_strategy_problems(tree, params, {id(n) for n, _ in ahead}))
+    for node, message in ahead:
         problems.append({"severity": "error", "line": node.lineno, "column": node.col_offset + 1, "end_column": (node.end_col_offset or node.col_offset) + 1,
                          "code": "look-ahead", "message": message})
     version = api_version(code)
