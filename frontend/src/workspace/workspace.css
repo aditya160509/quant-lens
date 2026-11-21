@@ -47,7 +47,9 @@
   /* Market states. */
   --calm: oklch(0.72 0.12 180); --normal: oklch(0.66 0.025 260); --stress: oklch(0.68 0.18 35);
   --band: oklch(0.7 0.15 255 / 0.16);
-  --shadow: 0 16px 40px oklch(0 0 0 / 0.5), 0 0 0 1px var(--line-2);
+  /* T3 Code dialog elevation: a faint top highlight, an 8% white edge, a deep soft drop. */
+  --shadow: inset 0 1px oklch(1 0 0 / 0.04), 0 0 0 1px oklch(1 0 0 / 0.08), 0 24px 72px -20px oklch(0 0 0 / 0.9);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --font: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   /* Figures use the text face with tabular digits; --code is for real code. */
   --mono: var(--font);
@@ -147,7 +149,7 @@
   --mid: oklch(0.95 0 0);
   --calm: oklch(0.58 0.11 180); --normal: oklch(0.6 0.025 260); --stress: oklch(0.6 0.19 35);
   --band: oklch(0.55 0.2 258 / 0.1);
-  --shadow: 0 16px 40px oklch(0.2 0.02 260 / 0.16), 0 0 0 1px var(--line-2);
+  --shadow: 0 0 0 1px oklch(0 0 0 / 0.08), 0 24px 64px -24px oklch(0 0 0 / 0.3);
   color-scheme: light;
 }
 
@@ -168,7 +170,7 @@
 .ws *, .ws *::before, .ws *::after, .ws-tokens *, .ws-tokens *::before, .ws-tokens *::after { box-sizing: border-box; }
 .ws-tokens { font-family: var(--font); font-variant-numeric: tabular-nums; }
 .ws button, .ws-tokens button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
-.ws :focus-visible, .ws-tokens :focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; border-radius: 6px; }
+.ws :focus-visible, .ws-tokens :focus-visible { outline: 2px solid color-mix(in oklch, var(--text) 45%, transparent); outline-offset: 1px; border-radius: 6px; }
 /* Text fields show focus by their own border, not the blue ring. */
 :where(.ws, .ws-tokens) :is(input:not([type=checkbox], [type=radio], [type=range], [type=color]), textarea, select):focus-visible { outline: none; }
 .ws ::selection { background: var(--accent-soft); }
@@ -180,7 +182,7 @@
 .ws h1, .ws h2, .ws h3, .ws h4, .ws p { margin: 0; }
 
 /* top bar */
-.ws-top { display: flex; align-items: center; gap: 12px; padding: 0 10px 0 14px; min-width: 0; }
+.ws-top { display: flex; align-items: center; gap: 12px; padding: 0 10px 0 14px; min-width: 0; position: relative; z-index: 30; }
 .ws-brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em; color: var(--text); text-decoration: none; }
 .ws-crumb { display: flex; align-items: center; gap: 7px; color: var(--text-3); min-width: 0; white-space: nowrap; overflow: hidden; font-size: 13px; }
 .ws-crumb b { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
@@ -257,7 +259,8 @@
 .btn:active:not(:disabled) { transform: scale(0.97); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 /* Primary is the inverse of the page (Cursor/T3): colour stays for data. */
-.btn.primary { background: var(--text); color: var(--bg); box-shadow: none; }
+.btn.primary { background: var(--text); color: var(--bg); box-shadow: inset 0 1px oklch(1 0 0 / 0.16); }
+.btn.primary:active { box-shadow: inset 0 1px oklch(0 0 0 / 0.08); }
 .btn.primary:hover { background: color-mix(in oklch, var(--text) 88%, var(--bg)); color: var(--bg); }
 .btn.ghost { box-shadow: none; background: none; }
 .btn.ghost:hover { background: var(--raise); }
@@ -350,7 +353,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .range::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(to right, var(--accent) var(--fill, 0%), var(--line-2) var(--fill, 0%)); }
 .range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: white; box-shadow: 0 0 0 1px var(--line-3), 0 1px 3px oklch(0 0 0 / 0.35); }
 .tokens { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 32px; padding: 4px; border-radius: var(--r); background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); }
-.tokens:focus-within { box-shadow: inset 0 0 0 1px var(--accent-line), 0 0 0 3px var(--accent-soft); }
+.tokens:focus-within { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--text) 35%, transparent); }
 .tokens input { flex: 1; min-width: 80px; height: 22px; border: 0; outline: 0; background: none; color: var(--text); font: inherit; font-size: 13px; padding: 0 4px; }
 .token { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 4px 0 7px; border-radius: 5px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line-2); font: 500 11.5px var(--mono); color: var(--text); }
 .token button { display: grid; place-items: center; width: 15px; height: 15px; border-radius: 4px; color: var(--text-3); }
@@ -756,7 +759,7 @@ nav.island { container-type: inline-size; }
 /* Floating layers open with a short scale and fade from where they were triggered. */
 @keyframes float-in { from { opacity: 0; transform: translateY(-4px) scale(0.97); } }
 @keyframes cmdk-in { from { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(0.98); } }
-.pop, .popover, .tbl-pop, .menu { transform-origin: var(--radix-popover-content-transform-origin, top left); animation: float-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.pop, .popover, .tbl-pop, .menu { transform-origin: var(--radix-popover-content-transform-origin, top left); animation: float-in 0.18s var(--ease-drawer, ease-out); }
 .cmdk { animation: cmdk-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .runs-pill { transition: transform 0.16s var(--ease), color 0.16s, border-color 0.16s; }
 .runs-pill:hover { transform: translateY(-1px); }
