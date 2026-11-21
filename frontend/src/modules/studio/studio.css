@@ -335,6 +335,9 @@
 .dv-kv dt { color: var(--text-3); }
 .dv-kv dd { margin: 0; color: var(--text); overflow-wrap: anywhere; text-align: right; }
 .dv-kv dd[data-num] { font-variant-numeric: tabular-nums; }
+.dv-kv div:has(> dd > .dv-vgrid) { flex-wrap: wrap; }
+.dv-kv dd:has(> .dv-vgrid) { flex-basis: 100%; text-align: left; }
+.dv-vgrid > div { width: fit-content; max-width: 100%; }
 .bd-cond { margin: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .bd-cond.warn b { color: var(--warn); font-weight: 600; }
 .bd-cond .bd-link, .bd-meta .bd-link { font-size: 12px; }

@@ -105,8 +105,19 @@ function Tester({ trades, inputs }: { trades: Record<string, unknown>[]; inputs:
 }
 
 /** Variables at a paused bar: name and value, numbers right-aligned. */
+type VarTable = { shape: number[]; columns: string[]; index: (string | number)[]; rows: unknown[][] };
+const tableOf = (v: unknown) => (v && typeof v === "object" && "__table__" in v ? (v as { __table__: VarTable }).__table__ : null);
+/** Variable explorer: a DataFrame, Series or array local, last 50 rows. */
+function VarGrid({ t }: { t: VarTable }) {
+  return (
+    <details className="dv-vgrid"><summary>{t.shape.join(" × ")}</summary>
+      <div><table><thead><tr><th />{t.columns.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+        <tbody>{t.rows.map((r, i) => <tr key={i}><th>{t.index[i]}</th>{r.map((x, j) => <td key={j}>{show(x)}</td>)}</tr>)}</tbody></table></div>
+    </details>
+  );
+}
 function KV({ rows }: { rows: Record<string, unknown> }) {
-  return <dl className="dv-kv">{Object.entries(rows).map(([k, v]) => <div key={k}><dt>{k}</dt><dd data-num={typeof v === "number" || undefined}>{show(v)}</dd></div>)}</dl>;
+  return <dl className="dv-kv">{Object.entries(rows).map(([k, v]) => { const t = tableOf(v); return <div key={k}><dt>{k}</dt><dd data-num={typeof v === "number" || undefined}>{t ? <VarGrid t={t} /> : show(v)}</dd></div>; })}</dl>;
 }
 
 /** Find every match of a query in the project files. */

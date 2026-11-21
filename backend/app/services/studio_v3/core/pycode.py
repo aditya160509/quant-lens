@@ -228,7 +228,8 @@ def check(code: str, params: dict[str, float], *, modules: set[str] | None = Non
 
 def check_project(code: str, params: dict[str, float], files: dict[str, str]) -> list[dict]:
     modules = {name[:-3] for name in files if name.endswith(".py")}
-    sources = {"main.py": code, **{name: source for name, source in files.items() if name.endswith(".py") and name != "main.py"}}
+    # test_*.py files are not part of the strategy; POST /build/test checks and runs them
+    sources = {"main.py": code, **{name: source for name, source in files.items() if name.endswith(".py") and name != "main.py" and not name.startswith("test_")}}
     return [
         {**finding, "file": name}
         for name, source in sources.items()
@@ -604,6 +605,8 @@ _LEVELS = {"error", "warning", "info", "off"}
 def lint(code: str, params: dict[str, float], *, file: str = "main.py", modules: set[str] | None = None,
          strictness: str = "basic", severity: dict[str, str] | None = None) -> list[dict]:
     """strictness "strict" adds unused imports and the API header; `severity` maps a problem code to error, warning, info or off (B-37)."""
+    if file.rsplit("/", 1)[-1].startswith("test_"):
+        modules = (modules or set()) | {"studio.testing"}  # the strategy-test fixture
     problems = _lint(code, params, file=file, modules=modules, strict=strictness == "strict")
     for code_name, level in (severity or {}).items():
         if level not in _LEVELS:

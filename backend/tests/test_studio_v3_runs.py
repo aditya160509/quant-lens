@@ -183,3 +183,15 @@ def test_watch_expressions_read_the_paused_bar_and_its_past_only(studio):  # noq
     assert sma["value"] == pytest.approx(sum(studio.post(f"{API}/build/watch", json={**body, "expressions": ["close"], "history": 5}).json()[0]["history"][i]["value"] for i in range(5)) / 5)
     assert bad["error"] and bad["value"] is None and rsi["value"] is not None
     assert studio.post(f"{API}/build/watch", json={**body, "date": "2016-03-05"}).status_code == 422
+
+
+def test_debugger_shows_frames_and_arrays_as_bounded_tables():
+    import numpy as np
+    import pandas as pd
+
+    from app.services.studio_v3.core.pyrunner import _debug_value
+
+    out = _debug_value({"a": np.arange(80.0), "df": pd.DataFrame({"x": range(3), "y": [np.nan, 1.0, 2.0]}), "n": np.float64(1.5)})
+    assert out["n"] == 1.5
+    assert out["a"]["__table__"]["shape"] == [80] and len(out["a"]["__table__"]["rows"]) == 50 and out["a"]["__table__"]["index"][0] == 30
+    assert out["df"]["__table__"]["columns"] == ["x", "y"] and out["df"]["__table__"]["rows"][0] == [0.0, None]

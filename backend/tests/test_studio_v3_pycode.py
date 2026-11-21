@@ -876,3 +876,10 @@ def test_lint_ignore_comment_silences_all_or_listed_codes():
     assert "studio-hardcoded-date" not in _codes(head + line.format(c="  # studio: ignore"))
     assert "studio-hardcoded-date" not in _codes(head + line.format(c="  # studio: ignore[studio-hardcoded-date]"))
     assert "studio-hardcoded-date" in _codes(head + line.format(c="  # studio: ignore[other]"))
+
+
+def test_test_files_may_import_the_fixture_and_never_block_the_strategy():
+    test_src = "from studio.testing import bars\n\n\ndef test_x():\n    assert bars(5)\n"
+    assert not [p for p in pycode.check_project("class Strategy:\n    def on_bar(self, ctx):\n        pass\n", {}, {"test_main.py": test_src}) if p["severity"] == "error"]
+    assert not [p for p in pycode.lint(test_src, {}, file="test_main.py") if "not allowed" in p["message"]]
+    assert [p for p in pycode.lint(test_src, {}, file="helpers.py") if "not allowed" in p["message"]]

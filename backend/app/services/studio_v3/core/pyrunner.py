@@ -994,7 +994,27 @@ def bind_indicators(strategy):
     return strategy
 
 
+def _debug_table(value):
+    """A DataFrame, Series or array as its last 50 rows and first 20 columns, for the debugger's variable explorer."""
+    if isinstance(value, np.ndarray) and 1 <= value.ndim <= 2:
+        grid = value.reshape(-1, 1) if value.ndim == 1 else value
+        tail, columns = grid[-50:, :20], [str(i) for i in range(min(grid.shape[1], 20))]
+        index = list(range(max(0, len(grid) - 50), len(grid)))
+    elif hasattr(value, "iloc") and hasattr(value, "columns"):  # pandas DataFrame, without importing pandas here
+        part = value.iloc[-50:, :20]
+        tail, columns, index = part.to_numpy(), [str(c)[:64] for c in part.columns], [str(i)[:32] for i in part.index]
+    elif hasattr(value, "iloc") and hasattr(value, "index") and hasattr(value, "to_numpy"):  # pandas Series
+        part = value.iloc[-50:]
+        tail, columns, index = part.to_numpy().reshape(-1, 1), [str(value.name if value.name is not None else "value")[:64]], [str(i)[:32] for i in part.index]
+    else:
+        return None
+    cell = lambda x: _debug_value(x.item() if isinstance(x, np.generic) else x, 3)
+    return {"__table__": {"shape": list(np.shape(value)), "columns": columns, "index": index, "rows": [[cell(x) for x in row] for row in tail]}}
+
+
 def _debug_value(value, depth=0):
+    if isinstance(value, np.generic):
+        value = value.item()
     if type(value) is str:
         return value[:512]
     if value is None or type(value) is bool:
@@ -1005,7 +1025,7 @@ def _debug_value(value, depth=0):
         return [_debug_value(item, depth + 1) for item in value[:20]]
     if depth < 3 and type(value) is dict:
         return {key[:128]: _debug_value(item, depth + 1) for key, item in list(value.items())[:20] if type(key) is str}
-    return None
+    return _debug_table(value) if depth < 3 else None
 
 
 def _debug_snapshot(adapter, account, submitted, bars, dates, symbols, n, captured_fills):
