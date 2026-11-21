@@ -183,12 +183,13 @@ export function Streaks({ rows, result }: ViewProps) {
 
 /** The most-traded names, each opening Chart with this run's trades on price (C-4). */
 export function OnChart({ rows, result }: ViewProps) {
-  const run = (result.meta as { run?: { id: string } }).run?.id;
+  const { run: runMeta, strategy } = result.meta as { run?: { id: string }; strategy?: { id?: string } };
+  const run = runMeta?.id;
   const top = [...rows].sort((a, b) => (b.trades as number) - (a.trades as number)).slice(0, 12);
   if (!run || !top.length) return <Skipped reason="no trades to show" />;
   return (
     <div className="ch-chips">
-      {top.map((r) => <Link key={String(r.symbol)} className="chip" href={`/studio/chart/${encodeURIComponent(String(r.symbol))}?run=${run}`}>{String(r.symbol)} · {String(r.trades)}</Link>)}
+      {top.map((r) => <Link key={String(r.symbol)} className="chip" href={`/studio/build${strategy?.id ? `/${strategy.id}` : ""}?ui=dev&symbol=${encodeURIComponent(String(r.symbol))}`}>{String(r.symbol)} · {String(r.trades)}</Link>)}
     </div>
   );
 }

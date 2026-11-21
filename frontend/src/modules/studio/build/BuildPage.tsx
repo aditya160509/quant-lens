@@ -82,7 +82,8 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     try { return (localStorage.getItem("studio:build:ui") ?? readDefaults().ui) === "dev" ? "dev" : "simple"; } catch { return "simple"; }
   });
   const [english, setEnglish] = useState("");
-  const [symbol, setSymbol] = useState("SPY");
+  // ?symbol= opens the preview on a name (Backtest → "on the chart" links here).
+  const [symbol, setSymbol] = useState(() => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("symbol")?.toUpperCase()) || "SPY");
   const [years, setYears] = useState(2);
   const [auto, setAuto] = useState(() => { try { return localStorage.getItem("studio:build:auto") !== "off"; } catch { return true; } });
   const [previewed, setPreviewed] = useState<string | null>(null);
