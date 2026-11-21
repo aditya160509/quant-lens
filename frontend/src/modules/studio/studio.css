@@ -316,6 +316,11 @@
 .dv-save-draft { color: var(--warn); } .dv-save-conflict { color: var(--down); } .dv-save-saving { color: var(--text-2); }
 .dv-bp { background: var(--down); border-radius: 50%; width: 9px !important; height: 9px !important; margin: 5px 0 0 5px; }
 .dv-lp { background: var(--text-2); width: 8px !important; height: 8px !important; margin: 6px 0 0 6px; transform: rotate(45deg); }
+.dv-tests { display: grid; gap: 1px; }
+.dv-tests .dv-file .dv-item { padding-left: 18px; }
+.dv-tests [data-st] i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--up); }
+.dv-tests [data-st="failed"] i, .dv-tests [data-st="error"] i { background: var(--down); }
+.dv-tests [data-st] span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--down); }
 .dv-ran { background: var(--up); width: 3px !important; margin-left: 3px; }
 .dv kbd { margin-left: 6px; font: 10.5px var(--mono); opacity: .55; }
 @media (max-width: 760px) { .bd-ui { display: none; } }
@@ -670,3 +675,10 @@
 .db-side li span { grid-column: 1 / -1; }
 .db-pg { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-3); }
 @media (max-width: 900px) { .db-grid:has(.db-side) { grid-template-columns: 1fr; } .db-side { position: static; } }
+
+/* Share */
+.sh { display: grid; gap: 16px; padding: 16px; max-width: 1100px; margin: 0 auto; }
+.sh-hd h1 { font-size: 18px; font-weight: 600; margin: 0; }
+.sh-hd small { margin-left: 8px; color: var(--text-3); font-weight: 400; }
+.sh-file h2 { font-size: 12px; font-weight: 500; color: var(--text-3); margin: 0 0 6px; }
+.sh-file pre { margin: 0; padding: 12px; overflow: auto; font: 12px/1.5 var(--mono); color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }

@@ -1768,3 +1768,44 @@ def data_symbol(symbol: str) -> dict[str, Any]:
     if out is None:
         raise HTTPException(404, f"No data for {symbol}")
     return out
+
+
+# Share links
+class ShareRequest(BaseModel):
+    strategy_id: str
+    version: int | None = None
+    job_id: str | None = None
+
+
+@router.post("/pinned-share")
+def share_create(request: ShareRequest) -> dict[str, Any]:
+    from app.services.studio_v3.core import share
+
+    saved = _known(store.get, request.strategy_id, request.version)
+    result = None
+    if request.job_id:
+        job = job_status(request.job_id)
+        result = {k: job[k] for k in ("job_id", "status", "result") if k in job}
+    spec = _spec(saved["spec"])
+    snap = {"name": saved["name"], "version": saved["version"], "files": spec.project_files(),
+            "params": {k: v.model_dump() for k, v in spec.params.items()}, "run": result}
+    return {"token": share.create(snap)}
+
+
+@router.get("/pinned-share/{token}")
+def share_get(token: str) -> dict[str, Any]:
+    from app.services.studio_v3.core import share
+
+    snap = share.get(token)
+    if snap is None:
+        raise HTTPException(404, "Unknown or revoked link")
+    return snap
+
+
+@router.delete("/pinned-share/{token}")
+def share_revoke(token: str) -> dict[str, Any]:
+    from app.services.studio_v3.core import share
+
+    if not share.revoke(token):
+        raise HTTPException(404, "Unknown or revoked link")
+    return {"revoked": True}
