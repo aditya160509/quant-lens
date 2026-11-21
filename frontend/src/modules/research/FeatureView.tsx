@@ -1,5 +1,6 @@
 "use client";
 
+import { MODULES } from "@/workspace/modules";
 import { GlassContent, GlassScene, GlassScrollEdges, GlassSurface } from "@glass-sdk/liquid-glass";
 import "@glass-sdk/liquid-glass/styles.css";
 import { ChartScope } from "@/charts/ChartScope";
@@ -543,6 +544,8 @@ function Caveats({ items }: { items: string[] }) {
 function PageSwitch({ featureId }: { featureId: string }) {
   const page = pageOf(featureId);
   if (!page || page.features.length < 2) return null;
+  // Each test already has its own header tab (Studio): pills would repeat them.
+  if (page.features.every((id) => MODULES.some((m) => m.pages?.some((p) => p.href === featureHref(id))))) return null;
   return (
     <div className="page-switch" role="tablist" aria-label={page.label}>
       <span className="pg">{page.label}</span>

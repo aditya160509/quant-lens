@@ -207,6 +207,7 @@
 .ws-slot:empty { display: none; }
 .ws-slot:not(:empty) ~ .ws-search { margin-left: 0; width: auto; }
 .ws-slot:not(:empty) ~ .ws-search .label { display: none; }
+.ws-slot:not(:empty) ~ .ws-layout-toggles { display: none; }
 .ws-search { margin-left: auto; display: flex; align-items: center; gap: 8px; height: 34px; width: 440px; max-width: 40vw; padding: 0 8px 0 12px; border-radius: var(--r); background: var(--island); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-3); transition: box-shadow 0.15s var(--ease), color 0.15s; }
 .ws-search:hover { box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text-2); }
 .ws-search .kbd { margin-left: auto; }
