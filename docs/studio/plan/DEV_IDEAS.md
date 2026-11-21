@@ -591,101 +591,103 @@ TakeProfit's Indie is Python-flavoured. We already have Python + `ctx.plot`, so 
 
 ## IDE feature catalogue (VS Code, JetBrains, Cursor)
 
+Tags beside each feature: ✅ Have · ◐ Partial · ⬜ Gap · ⏸ Later (AI parked).
+
 Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging, terminal and shell integration, custom layout, profiles, Jupyter; JetBrains PyCharm help on New UI, tool windows, Run tool window, inspections, local history, scratch files, bookmarks, Structure; Cursor docs on Tab, Agent, rules, Agent Review). Tags are checked against `DevIDE.tsx`, `CodeEditor.tsx`, `BuildPage.tsx`: HAVE exists, PARTIAL exists in a smaller form, GAP missing. Priority is for a browser quant-strategy IDE: P1 do soon, P2 worth it, P3 later or skip. Items already in the 30-idea catalogue above are marked "already listed (#n)".
 
 ### Editing
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Multi-cursor, add next occurrence, column select | Edit many places at once | HAVE (Monaco) | P3 |
-| Command palette | Run any action by name | HAVE (F1) | P1 |
-| Quick open by file | Fuzzy jump to a file | HAVE (Ctrl+P opens Explorer, not a fuzzy picker) | PARTIAL P2 |
-| Search across project with regex, case, whole word, replace | Project find and replace | HAVE | P1 |
-| Code folding, folding regions | Collapse blocks | HAVE | P3 |
-| Sticky scroll | Pin the enclosing class or def at the top | HAVE | P3 |
-| Minimap | Overview strip | HAVE | P3 |
-| Breadcrumbs (file > class > method) | Symbol path above the editor | GAP | P2 |
-| Outline view | Symbol tree of the file | HAVE | P1 |
-| Hover docs and signature help | API docs on hover | HAVE | P1 |
-| Autocomplete for the `ctx` API with docs | IntelliSense | HAVE | P1 |
-| Inlay hints | Inline parameter and type hints | HAVE | P2 |
-| Go to definition, peek definition | Jump or peek | HAVE (definition), peek GAP | PARTIAL P2 |
-| Find all references | List uses of a symbol | GAP | P2 |
-| Rename symbol across files | Safe rename | PARTIAL (files rename; symbol rename unchecked) | P2 |
-| Format document and on save | Auto format | HAVE (format); on save GAP | PARTIAL P2 |
-| Quick fix lightbulb on Problems | One click fixes | PARTIAL | P1 |
-| Code actions: extract function, extract variable, organise imports | Refactor from the lightbulb | GAP | P2 |
-| Snippets with tab stops, user snippets | Insert templates | HAVE (save selection, insert, prefix) | P2 |
-| Emmet-like expansion | Short text to code | GAP | P3 |
-| Split editor, side by side | Two files at once | HAVE | P2 |
-| Pinned tabs and preview tabs | Single click preview, double click keep | HAVE | P3 |
-| Diff editor | Compare version and draft | HAVE | P1 |
-| Timeline / local history per file | Auto snapshots, restore | HAVE (snapshots) | P1 |
-| Bookmarks (numbered) | Mark lines to jump back | GAP | P3 |
-| Scratch files | Throwaway files outside the project | GAP (use New file) | P3 |
-| Todo comment index | List of TODO and FIXME | GAP | P3 |
-| Zen mode and distraction-free layout | Hide chrome, centre the editor | GAP | P2 |
-| Word wrap, font size, ligatures, rulers | Editor settings | PARTIAL (font size) | P3 |
-| Cursor-style inline edit on selection (Ctrl+K) | Ask AI to rewrite selection with a diff | GAP | P2 (already listed #21) |
-| Tab: multi-line next-edit prediction | AI autocomplete beyond the cursor | GAP | P3 |
+| ✅ Multi-cursor, add next occurrence, column select | Edit many places at once | HAVE (Monaco) | P3 |
+| ✅ Command palette | Run any action by name | HAVE (F1) | P1 |
+| ✅ Quick open by file | Fuzzy jump to a file | HAVE (Ctrl+P opens Explorer, not a fuzzy picker) | PARTIAL P2 |
+| ✅ Search across project with regex, case, whole word, replace | Project find and replace | HAVE | P1 |
+| ✅ Code folding, folding regions | Collapse blocks | HAVE | P3 |
+| ✅ Sticky scroll | Pin the enclosing class or def at the top | HAVE | P3 |
+| ✅ Minimap | Overview strip | HAVE | P3 |
+| ⬜ Breadcrumbs (file > class > method) | Symbol path above the editor | GAP | P2 |
+| ✅ Outline view | Symbol tree of the file | HAVE | P1 |
+| ✅ Hover docs and signature help | API docs on hover | HAVE | P1 |
+| ✅ Autocomplete for the `ctx` API with docs | IntelliSense | HAVE | P1 |
+| ✅ Inlay hints | Inline parameter and type hints | HAVE | P2 |
+| ✅ Go to definition, peek definition | Jump or peek | HAVE (definition), peek GAP | PARTIAL P2 |
+| ⬜ Find all references | List uses of a symbol | GAP | P2 |
+| ◐ Rename symbol across files | Safe rename | PARTIAL (files rename; symbol rename unchecked) | P2 |
+| ✅ Format document and on save | Auto format | HAVE (format); on save GAP | PARTIAL P2 |
+| ◐ Quick fix lightbulb on Problems | One click fixes | PARTIAL | P1 |
+| ⬜ Code actions: extract function, extract variable, organise imports | Refactor from the lightbulb | GAP | P2 |
+| ✅ Snippets with tab stops, user snippets | Insert templates | HAVE (save selection, insert, prefix) | P2 |
+| ⬜ Emmet-like expansion | Short text to code | GAP | P3 |
+| ✅ Split editor, side by side | Two files at once | HAVE | P2 |
+| ✅ Pinned tabs and preview tabs | Single click preview, double click keep | HAVE | P3 |
+| ✅ Diff editor | Compare version and draft | HAVE | P1 |
+| ✅ Timeline / local history per file | Auto snapshots, restore | HAVE (snapshots) | P1 |
+| ⬜ Bookmarks (numbered) | Mark lines to jump back | GAP | P3 |
+| ⬜ Scratch files | Throwaway files outside the project | GAP (use New file) | P3 |
+| ⬜ Todo comment index | List of TODO and FIXME | GAP | P3 |
+| ⬜ Zen mode and distraction-free layout | Hide chrome, centre the editor | GAP | P2 |
+| ◐ Word wrap, font size, ligatures, rulers | Editor settings | PARTIAL (font size) | P3 |
+| ⬜ Cursor-style inline edit on selection (Ctrl+K) | Ask AI to rewrite selection with a diff | GAP | P2 (already listed #21) |
+| ⬜ Tab: multi-line next-edit prediction | AI autocomplete beyond the cursor | GAP | P3 |
 
 ### Navigation
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Go to line / symbol in file (Ctrl+G, Ctrl+Shift+O) | Jump by line or symbol | PARTIAL (Monaco built-ins, not surfaced) | P2 |
-| Go to symbol in project (Ctrl+T) | Search symbols across files | GAP | P2 |
-| Back and forward navigation history | Return to previous cursor spot | GAP | P2 |
-| Recent files and recent projects | Quick reopen | PARTIAL (versions list) | P3 |
-| Search Everywhere (JetBrains double Shift) | One box for files, symbols, actions, settings | GAP | P2 |
-| Structure tool window | Tree of classes and methods | HAVE (Outline) | P1 |
-| Jump from a log line or problem to code | Click error to line | HAVE | P1 |
-| Jump from a trade or bar to the code that made it | Chart to code | PARTIAL (log line goes to code and pauses) | P1 |
+| ◐ Go to line / symbol in file (Ctrl+G, Ctrl+Shift+O) | Jump by line or symbol | PARTIAL (Monaco built-ins, not surfaced) | P2 |
+| ⬜ Go to symbol in project (Ctrl+T) | Search symbols across files | GAP | P2 |
+| ⬜ Back and forward navigation history | Return to previous cursor spot | GAP | P2 |
+| ◐ Recent files and recent projects | Quick reopen | PARTIAL (versions list) | P3 |
+| ⬜ Search Everywhere (JetBrains double Shift) | One box for files, symbols, actions, settings | GAP | P2 |
+| ✅ Structure tool window | Tree of classes and methods | HAVE (Outline) | P1 |
+| ✅ Jump from a log line or problem to code | Click error to line | HAVE | P1 |
+| ◐ Jump from a trade or bar to the code that made it | Chart to code | PARTIAL (log line goes to code and pauses) | P1 |
 
 ### Refactoring and code intelligence
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Inspections (JetBrains) with severity levels | Live lint of correctness and style | PARTIAL (Problems, Strict toggle) | P1 |
-| Strategy-specific inspections | Look-ahead bias, future data use, unused param, missing stop, hard-coded dates | HAVE | P1 |
-| Intentions (Alt+Enter) | Context actions on correct code | GAP | P2 |
-| Change signature, move, inline, extract | Classic refactorings | GAP | P3 |
-| Type checking (Pyright-class) | Types for `ctx` and arrays | GAP | P2 |
-| Run inspection on whole project, report tab | Batch results | GAP | P3 |
-| Suppress an inspection with a comment | Per-line ignore | HAVE (`# studio: ignore[code]`) | P3 |
+| ◐ Inspections (JetBrains) with severity levels | Live lint of correctness and style | PARTIAL (Problems, Strict toggle) | P1 |
+| ✅ Strategy-specific inspections | Look-ahead bias, future data use, unused param, missing stop, hard-coded dates | HAVE | P1 |
+| ⬜ Intentions (Alt+Enter) | Context actions on correct code | GAP | P2 |
+| ⬜ Change signature, move, inline, extract | Classic refactorings | GAP | P3 |
+| ⬜ Type checking (Pyright-class) | Types for `ctx` and arrays | GAP | P2 |
+| ⬜ Run inspection on whole project, report tab | Batch results | GAP | P3 |
+| ✅ Suppress an inspection with a comment | Per-line ignore | HAVE (`# studio: ignore[code]`) | P3 |
 
 ### Run, debug and profile
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Run configurations (named, saved, shared) | Named run presets: universe, dates, costs, inputs | PARTIAL (named and saved in this browser; not shared, no inputs) | P1 |
-| Run widget with config picker | Choose config, run, debug beside the editor | HAVE | P1 |
-| Rerun with last config, rerun on save | Ctrl+R, auto rerun | PARTIAL | P1 |
-| Stop / cancel | Kill a run | HAVE | P1 |
-| Breakpoints, step over, step line, step back | Standard debug control | HAVE (F9, F10, F11, Shift+F10) | P1 |
-| Conditional breakpoints | Break when an expression is true | HAVE | P1 |
-| Logpoints | Log an expression without stopping | HAVE (Shift+F9, preview runs) | P1 |
-| Hit-count and triggered breakpoints | Break on the Nth hit, or after another hit | GAP | P2 |
-| Data breakpoints (break when a value changes) | Watch a variable | GAP | P2 |
-| Event breakpoints: next order, next fill, 5% loss day | Domain stops | HAVE (unique to us) | P1 |
-| Watch expressions | Pinned expressions that update per step | PARTIAL (Console evaluates once) | P1 |
-| Call stack and locals panel | Frames and variables | HAVE (locals, traceback) | P1 |
-| Debug console REPL | Evaluate while paused | HAVE (Console tab) | P1 |
-| Inline variable values in the editor while paused | Values shown beside code | GAP | P2 |
-| Profiler (slowest lines, per function) | Where time goes | HAVE | P2 |
-| Flame graph | Visual profile | GAP | P3 |
-| Compound launch: run for many symbols and compare | Multi-target run | GAP | P2 |
-| Attach to a live or paper run | Debug in production | GAP | P3 |
+| ◐ Run configurations (named, saved, shared) | Named run presets: universe, dates, costs, inputs | PARTIAL (named and saved in this browser; not shared, no inputs) | P1 |
+| ✅ Run widget with config picker | Choose config, run, debug beside the editor | HAVE | P1 |
+| ◐ Rerun with last config, rerun on save | Ctrl+R, auto rerun | PARTIAL | P1 |
+| ✅ Stop / cancel | Kill a run | HAVE | P1 |
+| ✅ Breakpoints, step over, step line, step back | Standard debug control | HAVE (F9, F10, F11, Shift+F10) | P1 |
+| ✅ Conditional breakpoints | Break when an expression is true | HAVE | P1 |
+| ✅ Logpoints | Log an expression without stopping | HAVE (Shift+F9, preview runs) | P1 |
+| ⬜ Hit-count and triggered breakpoints | Break on the Nth hit, or after another hit | GAP | P2 |
+| ⬜ Data breakpoints (break when a value changes) | Watch a variable | GAP | P2 |
+| ✅ Event breakpoints: next order, next fill, 5% loss day | Domain stops | HAVE (unique to us) | P1 |
+| ◐ Watch expressions | Pinned expressions that update per step | PARTIAL (Console evaluates once) | P1 |
+| ✅ Call stack and locals panel | Frames and variables | HAVE (locals, traceback) | P1 |
+| ✅ Debug console REPL | Evaluate while paused | HAVE (Console tab) | P1 |
+| ⬜ Inline variable values in the editor while paused | Values shown beside code | GAP | P2 |
+| ✅ Profiler (slowest lines, per function) | Where time goes | HAVE | P2 |
+| ⬜ Flame graph | Visual profile | GAP | P3 |
+| ⬜ Compound launch: run for many symbols and compare | Multi-target run | GAP | P2 |
+| ⬜ Attach to a live or paper run | Debug in production | GAP | P3 |
 
 ### Testing
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Test explorer tree with run and rerun failed | Tests as a tree | HAVE (Tests side bar) | P1 |
-| Strategy tests: `def test_*` using fixtures like fake bars | Unit-test indicators and signals | HAVE (`from studio.testing import bars`) | P1 |
-| Coverage gutter | Lines covered by a run | GAP | P3 |
-| Run test at cursor, in file, all | Granular runs | PARTIAL (one test, all) | P2 |
-| Snapshot test: "results unchanged after this edit" | Guard against silent changes | GAP | P2 |
+| ✅ Test explorer tree with run and rerun failed | Tests as a tree | HAVE (Tests side bar) | P1 |
+| ✅ Strategy tests: `def test_*` using fixtures like fake bars | Unit-test indicators and signals | HAVE (`from studio.testing import bars`) | P1 |
+| ⬜ Coverage gutter | Lines covered by a run | GAP | P3 |
+| ◐ Run test at cursor, in file, all | Granular runs | PARTIAL (one test, all) | P2 |
+| ⬜ Snapshot test: "results unchanged after this edit" | Guard against silent changes | GAP | P2 |
 
 ### Terminal and tasks
 
@@ -693,81 +695,81 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: we have a
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Integrated terminal | Shell in the panel | GAP | P2 |
-| Tasks (tasks.json) | Named commands, run on save or on demand | GAP | P2 |
-| Multiple and split terminals, persistent sessions | Several sessions kept across reloads | GAP | P2 |
-| Run tool window: rerun, stop, pin output, soft wrap, filter | JetBrains output control | PARTIAL (Output tab filter, level, symbol, date, CSV) | P2 |
+| ⬜ Integrated terminal | Shell in the panel | GAP | P2 |
+| ⬜ Tasks (tasks.json) | Named commands, run on save or on demand | GAP | P2 |
+| ⬜ Multiple and split terminals, persistent sessions | Several sessions kept across reloads | GAP | P2 |
+| ◐ Run tool window: rerun, stop, pin output, soft wrap, filter | JetBrains output control | PARTIAL (Output tab filter, level, symbol, date, CSV) | P2 |
 
 ### Source control and history
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Versions with names, tags, lock, restore, branch | Our version model | HAVE | P1 |
-| Diff of any two versions | Side by side | PARTIAL (version vs draft) | P2 |
-| Blame / who changed this line | Per-line history | GAP | P3 |
-| Shelve / stash | Park changes | GAP | P3 |
-| Local history labels | Named checkpoints | HAVE (labels) | P2 |
-| Review comments on lines | Threads | HAVE (idea #20) | P2 |
-| Agent review of a diff (Cursor Agent Review, Quick or Deep) | AI reviews the change | GAP | P2 (already listed #22) |
+| ✅ Versions with names, tags, lock, restore, branch | Our version model | HAVE | P1 |
+| ◐ Diff of any two versions | Side by side | PARTIAL (version vs draft) | P2 |
+| ⬜ Blame / who changed this line | Per-line history | GAP | P3 |
+| ⬜ Shelve / stash | Park changes | GAP | P3 |
+| ✅ Local history labels | Named checkpoints | HAVE (labels) | P2 |
+| ✅ Review comments on lines | Threads | HAVE (idea #20) | P2 |
+| ⬜ Agent review of a diff (Cursor Agent Review, Quick or Deep) | AI reviews the change | GAP | P2 (already listed #22) |
 
 ### Settings, profiles, keybindings
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Settings UI with search and JSON | Searchable settings | PARTIAL (scattered toggles) | P2 |
-| Profiles (VS Code) | Bundled settings, layout, snippets per context | GAP | P3 |
-| Keybindings editor, chords, `when` clauses | Rebind keys | PARTIAL (#26: chords, conflicts, reset; no `when`) | P2 |
-| Keyboard shortcuts cheat sheet | List of keys | HAVE (Customise Build, searchable) | P2 |
-| Theme follows workspace light and dark | Theming | HAVE | P2 |
-| Compact density | JetBrains Compact mode | HAVE | P3 |
-| Settings sync across devices | Cloud settings | GAP | P3 |
+| ◐ Settings UI with search and JSON | Searchable settings | PARTIAL (scattered toggles) | P2 |
+| ⬜ Profiles (VS Code) | Bundled settings, layout, snippets per context | GAP | P3 |
+| ◐ Keybindings editor, chords, `when` clauses | Rebind keys | PARTIAL (#26: chords, conflicts, reset; no `when`) | P2 |
+| ✅ Keyboard shortcuts cheat sheet | List of keys | HAVE (Customise Build, searchable) | P2 |
+| ✅ Theme follows workspace light and dark | Theming | HAVE | P2 |
+| ✅ Compact density | JetBrains Compact mode | HAVE | P3 |
+| ⬜ Settings sync across devices | Cloud settings | GAP | P3 |
 
 ### Layout
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Activity bar, side bar, panel, status bar | Basic shell | HAVE | P1 |
-| Toggle panel and side bar by key | Cmd+J, Cmd+B | HAVE | P1 |
-| Maximise panel | Full-height panel | HAVE | P2 |
-| Move panel to right or left | Panel position | GAP | P2 |
-| Panel alignment (centre, justify) | Width of panel | GAP | P3 |
-| Drag a tab to another group or out to a window | Free layout | GAP | P2 (pop-out already listed #28) |
-| Drag views between side bars (JetBrains tool window bars, VS Code Move View) | Custom placement | GAP | P3 |
-| Saved layouts and presets, reset layout | Named workspaces | GAP | P2 (already listed #27) |
-| Hide all tool windows (JetBrains Cmd+Shift+F12) | One key to focus code | GAP | P2 |
-| Status bar with run state, cursor, language, problems count | Live state strip | HAVE | P1 |
-| Notifications centre | History of toasts | GAP | P3 |
+| ✅ Activity bar, side bar, panel, status bar | Basic shell | HAVE | P1 |
+| ✅ Toggle panel and side bar by key | Cmd+J, Cmd+B | HAVE | P1 |
+| ✅ Maximise panel | Full-height panel | HAVE | P2 |
+| ⬜ Move panel to right or left | Panel position | GAP | P2 |
+| ⬜ Panel alignment (centre, justify) | Width of panel | GAP | P3 |
+| ⬜ Drag a tab to another group or out to a window | Free layout | GAP | P2 (pop-out already listed #28) |
+| ⬜ Drag views between side bars (JetBrains tool window bars, VS Code Move View) | Custom placement | GAP | P3 |
+| ⬜ Saved layouts and presets, reset layout | Named workspaces | GAP | P2 (already listed #27) |
+| ⬜ Hide all tool windows (JetBrains Cmd+Shift+F12) | One key to focus code | GAP | P2 |
+| ✅ Status bar with run state, cursor, language, problems count | Live state strip | HAVE | P1 |
+| ⬜ Notifications centre | History of toasts | GAP | P3 |
 
 ### Notebooks and data
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Percent cells (`# %%`) with Run cell, Run above and below | Notebook-style .py | GAP | P1 (already listed #11, #13) |
-| Interactive window | Cell results beside code | GAP | P2 |
-| Variable explorer and data viewer for DataFrames | Inspect frames | HAVE (Debug locals, last 50 rows) | P1 |
-| Rich outputs: plots, tables inline | Notebook outputs | PARTIAL (Plots tab) | P2 |
-| SQL cells | Query the data store | GAP | P3 (already listed #14) |
+| ⬜ Percent cells (`# %%`) with Run cell, Run above and below | Notebook-style .py | GAP | P1 (already listed #11, #13) |
+| ⬜ Interactive window | Cell results beside code | GAP | P2 |
+| ✅ Variable explorer and data viewer for DataFrames | Inspect frames | HAVE (Debug locals, last 50 rows) | P1 |
+| ◐ Rich outputs: plots, tables inline | Notebook outputs | PARTIAL (Plots tab) | P2 |
+| ⬜ SQL cells | Query the data store | GAP | P3 (already listed #14) |
 
 ### Remote and collaboration
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Remote dev | Code runs elsewhere | HAVE (code runs on our backend by design) | P3 |
-| Live share cursors | Pair editing | GAP | P3 |
-| Share a read-only link | Read-only view | HAVE (#19, with a pinned run) | P2 |
+| ✅ Remote dev | Code runs elsewhere | HAVE (code runs on our backend by design) | P3 |
+| ⬜ Live share cursors | Pair editing | GAP | P3 |
+| ✅ Share a read-only link | Read-only view | HAVE (#19, with a pinned run) | P2 |
 
 ### Cursor-specific AI features
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| Tab | Multi-line, cross-edit prediction from recent changes and linter errors | GAP | P3 |
-| Inline edit (Cmd+K) | Prompt on a selection, diff to accept | GAP | P2 |
-| Agent | Autonomous multi-step edits and commands | GAP | P2 |
-| Rules (`.cursor/rules`, AGENTS.md) | Standing instructions: always, by file glob, by description, manual | GAP | P2: a "strategy rules" file the AI honours (no look-ahead, cost model) |
-| @-mentions for context (@file, @folder, @docs, @web, @past chats) | Attach context to a prompt | GAP | P2: @run, @trades, @plot, @bar |
-| Agent review of local changes | Quick or Deep review | GAP | P2 |
-| Skills and slash commands | Reusable workflows | GAP | P3 |
-| Accept or reject hunks | Per-hunk diff control | GAP | P2 |
+| ⏸ Tab | Multi-line, cross-edit prediction from recent changes and linter errors | GAP | P3 |
+| ⏸ Inline edit (Cmd+K) | Prompt on a selection, diff to accept | GAP | P2 |
+| ⏸ Agent | Autonomous multi-step edits and commands | GAP | P2 |
+| ⏸ Rules (`.cursor/rules`, AGENTS.md) | Standing instructions: always, by file glob, by description, manual | GAP | P2: a "strategy rules" file the AI honours (no look-ahead, cost model) |
+| ⏸ @-mentions for context (@file, @folder, @docs, @web, @past chats) | Attach context to a prompt | GAP | P2: @run, @trades, @plot, @bar |
+| ⏸ Agent review of local changes | Quick or Deep review | GAP | P2 |
+| ⏸ Skills and slash commands | Reusable workflows | GAP | P3 |
+| ⏸ Accept or reject hunks | Per-hunk diff control | GAP | P2 |
 
 ### Terminal / bottom panel power-ups
 
@@ -775,39 +777,39 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: we have a
 
 | Power-up | What it does | Our version | Pri |
 |---|---|---|---|
-| Shell integration (OSC 633 marks: prompt start A, end B, pre-exec C, done D with exit code, command line E, cwd P) | Terminal knows where each command starts, ends and whether it passed | Each console and CLI command becomes a block with a status, exit code and duration | P1 |
-| Command decorations plus overview ruler | Green dot or red cross per command, also on the scrollbar | Same in the Console tab; red mark on failed runs | P2 |
-| Command navigation (Ctrl+Up and Down) and select output | Jump command to command | Same | P2 |
-| Command guide | Bar beside a command and its output on hover | Left border on each block | P3 |
-| Sticky scroll in terminal | Pin the command whose output is scrolling | Pin the run name above long logs | P3 |
-| Quick fix from output | Detect known errors and offer the next action | "Lookahead detected: shift by one bar", "Unknown symbol: did you mean", "Port busy" style fixes | P1 |
-| Links: file:line, URLs, folders | Click output to open | Click `main.py:42`, a date, a symbol or a trade id to open code, chart or trade | P1 |
-| Run recent command (Ctrl+Alt+R), pin, fuzzy search | History picker | History picker for Console and CLI | P1 |
-| Go to recent directory | cd history | Recent runs picker (run id, universe, dates) | P3 |
-| Split terminals, groups, rename, colour, icon | Several sessions | Split Console: REPL on one side, run log on the other | P2 |
-| Persistent sessions (reconnect after reload) | Session survives | REPL state survives reload for the draft | P2 |
-| Terminal IntelliSense | Suggest commands and flags | Autocomplete for `atlas` commands, `ctx` and symbols | P1 |
-| Copy output as HTML, open command output in editor | Export a block | Copy or save a block as CSV, Markdown or a Results tab | P2 |
-| Find in terminal | Search output | Output tab filter (HAVE) | P3 |
+| ⬜ Shell integration (OSC 633 marks: prompt start A, end B, pre-exec C, done D with exit code, command line E, cwd P) | Terminal knows where each command starts, ends and whether it passed | Each console and CLI command becomes a block with a status, exit code and duration | P1 |
+| ⬜ Command decorations plus overview ruler | Green dot or red cross per command, also on the scrollbar | Same in the Console tab; red mark on failed runs | P2 |
+| ⬜ Command navigation (Ctrl+Up and Down) and select output | Jump command to command | Same | P2 |
+| ⬜ Command guide | Bar beside a command and its output on hover | Left border on each block | P3 |
+| ⬜ Sticky scroll in terminal | Pin the command whose output is scrolling | Pin the run name above long logs | P3 |
+| ⬜ Quick fix from output | Detect known errors and offer the next action | "Lookahead detected: shift by one bar", "Unknown symbol: did you mean", "Port busy" style fixes | P1 |
+| ⬜ Links: file:line, URLs, folders | Click output to open | Click `main.py:42`, a date, a symbol or a trade id to open code, chart or trade | P1 |
+| ⬜ Run recent command (Ctrl+Alt+R), pin, fuzzy search | History picker | History picker for Console and CLI | P1 |
+| ⬜ Go to recent directory | cd history | Recent runs picker (run id, universe, dates) | P3 |
+| ⬜ Split terminals, groups, rename, colour, icon | Several sessions | Split Console: REPL on one side, run log on the other | P2 |
+| ⬜ Persistent sessions (reconnect after reload) | Session survives | REPL state survives reload for the draft | P2 |
+| ⬜ Terminal IntelliSense | Suggest commands and flags | Autocomplete for `atlas` commands, `ctx` and symbols | P1 |
+| ⬜ Copy output as HTML, open command output in editor | Export a block | Copy or save a block as CSV, Markdown or a Results tab | P2 |
+| ✅ Find in terminal | Search output | Output tab filter (HAVE) | P3 |
 
 **From the JetBrains Run tool window**
 
 | Power-up | What it does | Our version | Pri |
 |---|---|---|---|
-| Rerun, stop, pause, rerun failed tests | Toolbar on the output | Rerun with the same config, rerun failed symbols only | P1 |
-| One tab per run configuration, pin a tab | Compare runs side by side | One Output tab per run, pin a run (idea #2 and DevRuns) | P2 |
-| Soft wrap, scroll to end, filter, clear | Output hygiene | Add soft wrap and clear to Output | P3 |
-| Rerun automatically on code change | Live feedback | "Run on save" for the quick level | P1 |
-| Console with history and variables (Python console) | REPL tied to the project | See REPL below | P1 |
+| ⬜ Rerun, stop, pause, rerun failed tests | Toolbar on the output | Rerun with the same config, rerun failed symbols only | P1 |
+| ◐ One tab per run configuration, pin a tab | Compare runs side by side | One Output tab per run, pin a run (idea #2 and DevRuns) | P2 |
+| ⬜ Soft wrap, scroll to end, filter, clear | Output hygiene | Add soft wrap and clear to Output | P3 |
+| ⬜ Rerun automatically on code change | Live feedback | "Run on save" for the quick level | P1 |
+| ◐ Console with history and variables (Python console) | REPL tied to the project | See REPL below | P1 |
 
 **Our own**
 
-1. **Python REPL bound to the strategy context.** `Console` already evaluates one expression at a paused bar through `POST /build/watch`. Extend it to a real REPL with statements and a persistent namespace: `ctx` (paused bar), `bars`, `trades`, `plots`, `np`, `pd`, `universe`. Show DataFrames as tables with copy and "send to Plots". Runs in the same sandbox as the strategy. P1.
-2. **`atlas` CLI in the panel.** Commands, each a block with progress and a result link: `atlas run [--universe sp500] [--from 2018] [--cost bps=5]`, `atlas backtest`, `atlas optimise --param fast=5:30:5 --objective sharpe`, `atlas walkforward`, `atlas robust`, `atlas compare <run> <run>`, `atlas data coverage SPY`, `atlas plot <name>`, `atlas export trades.csv`. Same API calls the buttons make, so no second code path. P1.
-3. **Test runner.** `atlas test` discovers `def test_*` in `tests.py`, shows a tree with pass or fail, jumps to failures, and offers "pin this result as expected". P1.
-4. **Tasks.** `tasks.json`-style named chains: "lint then quick run then robustness", with run-on-save. P2.
-5. **Output as typed blocks.** A block is log, table, plot, or metric, not just text, so Output, Plots and Console share one stream. P2.
-6. **Run history drawer.** Every command and run is searchable by name, tag, symbol, date. P2.
+1. ◐ **Python REPL bound to the strategy context.** `Console` already evaluates one expression at a paused bar through `POST /build/watch`. Extend it to a real REPL with statements and a persistent namespace: `ctx` (paused bar), `bars`, `trades`, `plots`, `np`, `pd`, `universe`. Show DataFrames as tables with copy and "send to Plots". Runs in the same sandbox as the strategy. P1.
+2. ⬜ **`atlas` CLI in the panel.** Commands, each a block with progress and a result link: `atlas run [--universe sp500] [--from 2018] [--cost bps=5]`, `atlas backtest`, `atlas optimise --param fast=5:30:5 --objective sharpe`, `atlas walkforward`, `atlas robust`, `atlas compare <run> <run>`, `atlas data coverage SPY`, `atlas plot <name>`, `atlas export trades.csv`. Same API calls the buttons make, so no second code path. P1.
+3. ◐ **Test runner.** `atlas test` discovers `def test_*` in `tests.py`, shows a tree with pass or fail, jumps to failures, and offers "pin this result as expected". P1.
+4. ⬜ **Tasks.** `tasks.json`-style named chains: "lint then quick run then robustness", with run-on-save. P2.
+5. ⬜ **Output as typed blocks.** A block is log, table, plot, or metric, not just text, so Output, Plots and Console share one stream. P2.
+6. ⬜ **Run history drawer.** Every command and run is searchable by name, tag, symbol, date. P2.
 
 ---
 
