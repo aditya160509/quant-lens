@@ -68,7 +68,8 @@ function ModuleSwitcher({ current, themeClass, className }: { current: ModuleLin
 function PageTabs({ current }: { current: ModuleLink | undefined }) {
   const path = usePathname() ?? "";
   if (!current?.pages) return null;
-  const on = current.pages.find((p) => path === p.href || path.startsWith(p.href + "/"))?.href;
+  // Longest match wins, so the module root (Home) is active only on the root itself.
+  const on = current.pages.filter((p) => path === p.href || path.startsWith(p.href + "/")).sort((x, y) => y.href.length - x.href.length)[0]?.href;
   return (
     <nav className="ws-tabs" aria-label={`${current.label} pages`}>
       {current.pages.map((p) => <Link key={p.href} href={p.href} aria-current={p.href === on ? "page" : undefined}>{p.label}</Link>)}

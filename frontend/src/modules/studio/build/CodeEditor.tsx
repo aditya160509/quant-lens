@@ -157,11 +157,17 @@ function hex(css: string, fallback: string): string {
   const [r, g, b, a] = c.getImageData(0, 0, 1, 1).data;
   return `#${[r, g, b, ...(a < 255 ? [a] : [])].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
+/** JetBrains New UI syntax palettes (Dark and IntelliJ Light): readable in both themes, no neon. */
+const rules = (pairs: [string, string][]) => pairs.map(([token, foreground]) => ({ token, foreground }));
+const SYNTAX = {
+  dark: rules([["keyword", "CF8E6D"], ["string", "6AAB73"], ["number", "2AACB8"], ["type", "C77DBB"], ["delimiter", "BCBEC4"], ["identifier", "BCBEC4"]]),
+  light: rules([["keyword", "0033B3"], ["string", "067D17"], ["number", "1750EB"], ["type", "871094"], ["delimiter", "080808"], ["identifier", "080808"]]),
+};
 function theme(monaco: Monaco, dark: boolean) {
   const el = document.querySelector(".ws") ?? document.documentElement;
   const v = (n: string, f: string) => hex(getComputedStyle(el).getPropertyValue(n).trim() || f, f);
   const bg = v("--island", dark ? "#16181d" : "#ffffff"), text = v("--text", dark ? "#e6e6e6" : "#111111"), muted = v("--text-3", "#7a7f87"), line = v("--line", dark ? "#262a31" : "#e6e6e6");
-  monaco.editor.defineTheme("studio", { base: dark ? "vs-dark" : "vs", inherit: true, rules: [{ token: "comment", foreground: muted.slice(1, 7), fontStyle: "italic" }],
+  monaco.editor.defineTheme("studio", { base: dark ? "vs-dark" : "vs", inherit: true, rules: [{ token: "comment", foreground: muted.slice(1, 7), fontStyle: "italic" }, ...SYNTAX[dark ? "dark" : "light"]],
     colors: { "editor.background": bg, "editor.foreground": text, "editorLineNumber.foreground": muted, "editorLineNumber.activeForeground": text, "editor.lineHighlightBackground": line, "editor.lineHighlightBorder": "#00000000", "editorGutter.background": bg, "editorWidget.background": bg, "editorWidget.border": line, "editorIndentGuide.background1": line } });
   monaco.editor.setTheme("studio");
 }
