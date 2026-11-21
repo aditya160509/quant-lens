@@ -709,8 +709,21 @@ def _lint(code: str, params: dict[str, float], *, file: str = "main.py", modules
         location, end = row["location"], row["end_location"]
         problems.append({"severity": "warning" if row["code"] in {"F841", "F401"} else "error", "line": location["row"],
                          "column": location["column"], "end_column": end["column"],
-                         "code": row["code"], "message": row["message"]})
+                         "code": row["code"], "message": row["message"],
+                         **_ruff_fix(row, code)})
     return [{**problem, "file": file} for problem in sorted(problems, key=lambda p: (p["line"], p["column"], p["code"]))]
+
+
+def _ruff_fix(row: dict, code: str) -> dict:
+    """Quick fix for an unused import (ruff's own edit) or an unused variable (prefix `_`)."""
+    if row["code"] == "F841":
+        return {"fix": {"title": "Prefix with _", "edits": [{"line": row["location"]["row"], "column": row["location"]["column"],
+                                                            "end_line": row["location"]["row"], "end_column": row["location"]["column"], "text": "_"}]}}
+    if row["code"] == "F401" and row.get("fix"):
+        edits = [{"line": e["location"]["row"], "column": e["location"]["column"], "end_line": e["end_location"]["row"],
+                  "end_column": e["end_location"]["column"], "text": e["content"]} for e in row["fix"]["edits"]]
+        return {"fix": {"title": "Remove unused import", "edits": edits}}
+    return {}
 
 
 class CodeError(Exception):

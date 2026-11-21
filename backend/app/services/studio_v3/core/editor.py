@@ -223,6 +223,12 @@ def code_actions(code: str, line: int, column: int, end_line: int | None = None,
             actions.append({"title": "Wrap in if ctx.position == 0", "kind": "refactor.rewrite",
                             "edits": [{"line": line, "column": 1, "end_line": end_line, "end_column": len(lines[end_line - 1]) + 1,
                                        "text": " " * indent + "if ctx.position == 0:\n" + body}]})
+    if end_line is not None and end_column is not None and end_line >= line:
+        actions.extend(_extract_actions(tree, code, line, column, end_line, end_column))
+    organised = organise_imports(code)
+    if organised != code:
+        actions.append({"title": "Organise imports", "kind": "source.organizeImports",
+                        "edits": [{"line": 1, "column": 1, "end_line": len(lines) + 1, "end_column": 1, "text": organised}]})
     strategy = next((n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Strategy"), None)
     if strategy and not any(isinstance(n, ast.FunctionDef) and n.name == "on_fill" for n in strategy.body):
         last = strategy.body[-1]
@@ -230,6 +236,73 @@ def code_actions(code: str, line: int, column: int, end_line: int | None = None,
                         "edits": [{"line": last.end_lineno + 1, "column": 1, "end_line": last.end_lineno + 1, "end_column": 1,
                                    "text": "\n    def on_fill(self, ctx, fill):\n        pass\n"}]})
     return actions
+
+
+def _fresh(tree: ast.AST, base: str) -> str:
+    taken = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)} | {n.name for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.ClassDef))}
+    name, i = base, 1
+    while name in taken:
+        i += 1
+        name = f"{base}_{i}"
+    return name
+
+
+def _extract_actions(tree: ast.Module, code: str, line: int, column: int, end_line: int, end_column: int) -> list[dict]:
+    """Extract variable (selected expression) and extract function (selected whole statements of a function body).
+    shortcut: columns are read as character offsets (ast uses UTF-8 bytes) and extracted code takes every outer name it reads
+    as a parameter; an expression inside a lambda or comprehension, or statements with return/yield/break/continue, are left alone."""
+    lines = code.splitlines()
+    out: list[dict] = []
+    first, last = lines[line - 1], lines[end_line - 1]
+    col, end_col = column, end_column
+    while col <= len(first) and first[col - 1].isspace():
+        col += 1
+    while end_col > 1 and end_col - 2 < len(last) and last[end_col - 2].isspace():
+        end_col -= 1
+    parents = {id(c): p for p in ast.walk(tree) for c in ast.iter_child_nodes(p)}
+    expr = next((n for n in ast.walk(tree) if isinstance(n, ast.expr) and (n.lineno, n.col_offset + 1, n.end_lineno, n.end_col_offset + 1) == (line, col, end_line, end_col)), None)
+    if expr is not None and not isinstance(getattr(expr, "ctx", None), (ast.Store, ast.Del)):
+        chain, node = [], expr
+        while id(node) in parents:
+            node = parents[id(node)]
+            chain.append(node)
+        stmt = next((n for n in chain if isinstance(n, ast.stmt)), None)
+        scoped = any(isinstance(n, (ast.Lambda, ast.comprehension, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)) for n in chain[: chain.index(stmt)]) if stmt else True
+        if stmt is not None and not scoped and not isinstance(stmt, (ast.While, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            name = _fresh(tree, "value")
+            text = ast.get_source_segment(code, expr) or ""
+            out.append({"title": f"Extract variable {name}", "kind": "refactor.extract", "edits": [
+                {"line": stmt.lineno, "column": 1, "end_line": stmt.lineno, "end_column": 1, "text": " " * stmt.col_offset + f"{name} = {text}\n"},
+                _edit(expr, name)]})
+    func = next((n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.body[0].lineno <= line and end_line <= n.end_lineno), None)
+    if func is not None:
+        inner = [n for n in ast.walk(func) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n is not func and n.body[0].lineno <= line and end_line <= n.end_lineno]
+        func = inner[-1] if inner else func
+        body = next((b for n in ast.walk(func) for f in ("body", "orelse", "finalbody") if isinstance(b := getattr(n, f, None), list) and b and any(
+            isinstance(x, ast.stmt) and x.lineno >= line for x in b)
+            and (picked := [x for x in b if isinstance(x, ast.stmt) and line <= x.lineno and x.end_lineno <= end_line]) and picked[0].lineno == line and picked[-1].end_lineno == end_line), None)
+        picked = [x for x in body or [] if line <= x.lineno and x.end_lineno <= end_line]
+        nodes = [m for x in picked for m in ast.walk(x)]
+        if picked and not any(isinstance(m, (ast.Return, ast.Yield, ast.YieldFrom, ast.Await, ast.Break, ast.Continue)) for m in nodes):
+            bound = {a.arg for a in ast.walk(func.args) if isinstance(a, ast.arg)} | {m.id for m in ast.walk(func) if isinstance(m, ast.Name) and isinstance(m.ctx, ast.Store)
+                     and not line <= m.lineno <= end_line}
+            stored = {m.id for m in nodes if isinstance(m, ast.Name) and isinstance(m.ctx, ast.Store)}
+            args = sorted({m.id for m in nodes if isinstance(m, ast.Name) and isinstance(m.ctx, ast.Load) and m.id in bound})
+            after = {m.id for m in ast.walk(func) if isinstance(m, ast.Name) and isinstance(m.ctx, ast.Load) and m.lineno > end_line}
+            returns = sorted(stored & after)
+            name = _fresh(tree, "extracted")
+            indent = picked[0].col_offset
+            call = f"{name}({', '.join(args)})"
+            if returns:
+                call = f"{', '.join(returns)} = {call}"
+            body_text = "\n".join(("    " + x[indent:]) if x.strip() else x for x in lines[line - 1:end_line])
+            tail = f"\n    return {', '.join(returns)}" if returns else ""
+            top = next(n for n in tree.body if n.lineno <= line <= n.end_lineno)
+            top_line = min([top.lineno, *[d.lineno for d in getattr(top, "decorator_list", [])]])
+            out.append({"title": f"Extract function {name}", "kind": "refactor.extract", "edits": [
+                {"line": top_line, "column": 1, "end_line": top_line, "end_column": 1, "text": f"def {name}({', '.join(args)}):\n{body_text}{tail}\n\n\n"},
+                {"line": line, "column": 1, "end_line": end_line, "end_column": len(last) + 1, "text": " " * indent + call}]})
+    return out
 
 
 # --- imports and formatting (B-21) -----------------------------------------------

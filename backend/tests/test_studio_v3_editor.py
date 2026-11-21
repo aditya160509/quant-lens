@@ -93,3 +93,15 @@ def test_editor_routes_and_codelens_true_rate(studio):  # noqa: F811
     assert studio.post(f"{API}/organise-imports", json={"code": "import sys\n"}).json() == {"code": ""}
     assert studio.post(f"{API}/migrate", json={"code": "x = 1\n"}).json()["to_version"] == 1
     assert studio.post(f"{API}/hover", json={"code": code, "line": 3, "column": 23}).json()["lookback_bars"] == 0
+
+
+def test_extract_variable_extract_function_and_quick_fixes():
+    code = "import os\n\n\ndef f(a, b):\n    t = 0\n    x = (a + b) * 2\n    y = x + 1\n    return y + t\n"
+    acts = {a["title"]: a for a in editor.code_actions(code, 6, 10, 6, 15)}
+    assert acts["Extract variable value"]["edits"][0]["text"] == "    value = a + b\n" and acts["Extract variable value"]["edits"][1]["text"] == "value"
+    fn = {a["title"]: a for a in editor.code_actions(code, 6, 1, 7, 14)}["Extract function extracted"]["edits"]
+    assert "def extracted(a, b):" in fn[0]["text"] and "return y" in fn[0]["text"]
+    assert fn[1]["text"] == "    y = extracted(a, b)"
+    assert "Organise imports" in {a["title"]: a for a in editor.code_actions(code, 1, 1)}
+    fixes = {p["code"]: p["fix"]["title"] for p in pycode.lint("import os\n\n\ndef f():\n    z = 1\n", {}, strictness="strict") if p.get("fix")}
+    assert fixes["F401"] == "Remove unused import" and fixes["F841"] == "Prefix with _"
