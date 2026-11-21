@@ -411,6 +411,7 @@ class PreviewRequest(BaseModel):
     years: float = Field(default=2.0, ge=0.5, le=10)
     repaint: bool = True  # False: skip the look-ahead replay for a fast typing preview
     logpoints: list[Logpoint] = Field(default_factory=list, max_length=50)
+    coverage: bool = False  # record which strategy lines ran (the coverage gutter); slows the preview
 
 
 class ConditionRequest(PreviewRequest):
@@ -619,6 +620,7 @@ class PreviewResult(BaseModel):
     settings_overrides: dict[str, Any] | None = None
     order_lines: list[dict[str, Any]] | None = None  # {file, line, count, dates[<=5]}: strategy lines that placed orders
     profile: dict[str, Any] | None = None  # only from POST /build/profile
+    coverage: dict[str, Any] | None = None  # {file: {hit, lines}} when the request asked for coverage
     invariants: dict[str, Any] | None = None  # {count, rows[{date, symbol, file, line, text}]}; present only when an assert_invariant failed
 
 
@@ -626,10 +628,10 @@ class DebugBreakpointRequest(BaseModel):
     file: str = Field(default="main.py", max_length=128)
     line: int = Field(ge=1)
     condition: str | None = Field(default=None, max_length=500)
-
-
     hit: int | None = Field(default=None, ge=1)  # stop on the Nth condition-true hit of the run
     trigger: dict[str, Any] | None = None  # {file, line}: the breakpoint is live only after this line ran
+
+
 class BuildDebugRequest(PreviewRequest):
     date: dt.date
     step: Literal[-1, 0, 1] = 0
@@ -734,7 +736,7 @@ def debug_python(request: BuildDebugRequest) -> dict:
 def preview(request: PreviewRequest) -> dict[str, Any]:
     try:
         return backtest.preview(_spec(request.spec), request.symbol, request.years, symbols=[normalize_symbol(s) for s in request.symbols] if request.symbols else None, repaint=request.repaint,
-                                logpoints=[p.model_dump() for p in request.logpoints])
+                                logpoints=[p.model_dump() for p in request.logpoints], coverage=request.coverage)
     except backtest.Refusal as exc:
         return {"status": "skipped", "reason": exc.reason, "bars": [], "trades": []}
     except pycode.CodeError as exc:

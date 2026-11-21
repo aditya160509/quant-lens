@@ -797,7 +797,7 @@ def _execute(code, bars, dates, params, symbols, cache, output, *, event_setting
     n = bars["close"].shape[1]
     meta = {"exprs": ex, "params": params, "symbols": symbols or [str(i) for i in range(n)], "dates": [str(d.date()) for d in dates],
             "event_settings": event_settings, "repaint_bars": repaint_bars or [], "modules": modules, "debug_symbol": debug_symbol, "debug_after": debug_after, "debug_event": debug_event, "debug_breakpoint": debug_breakpoint, "debug_loss": debug_loss,
-            "profile": bool(output and output.get("profile") is True), "logpoints": (output or {}).pop("logpoints", None) or []}  # a caller asks for the profiler by seeding output["profile"] = True
+            "profile": bool(output and output.get("profile") is True), "logpoints": (output or {}).pop("logpoints", None) or [], "coverage": bool((output or {}).pop("coverage", False))}  # a caller asks for the profiler by seeding output["profile"] = True
     with tempfile.TemporaryDirectory() as d:
         src, dst = Path(d) / "in.npz", Path(d) / "out.npz"
         np.savez(src, meta=np.array(json.dumps(meta)), **{f: np.asarray(bars[f], dtype=float) for f in ("open", "high", "low", "close", "volume")}, **vals, **(extras or {}))
@@ -824,6 +824,8 @@ def _execute(code, bars, dates, params, symbols, cache, output, *, event_setting
                 output["repaint"] = res["repaint"]
             if (res.get("invariants") or {}).get("count"):  # absent unless something broke, so clean reports keep their shape
                 output["invariants"] = res["invariants"]
+            if res.get("coverage") is not None:  # only when the caller asked for it
+                output["coverage"] = res["coverage"]
             for key in ("order_lines", "profile"):  # only what the caller seeded with True, so reports keep their shape
                 if output.get(key) is True:
                     output[key] = res.get(key) or ([] if key == "order_lines" else None)

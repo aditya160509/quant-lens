@@ -201,3 +201,11 @@ def test_debugger_shows_frames_and_arrays_as_bounded_tables():
     df = out["df"]["__table__"]
     assert df["dtypes"] == ["int64", "float64"] and df["summary"][1] == {"min": 1.0, "max": 2.0, "mean": 1.5, "missing": 1} and len(df["spark"][0]) == 3
     assert out["a"]["__table__"]["head"][0] == [0.0] and out["a"]["__table__"]["head_index"] == [0, 1, 2, 3, 4] and len(out["a"]["__table__"]["spark"][0]) == 60
+
+
+def test_coverage_marks_lines_that_ran(studio):  # noqa: F811
+    code = "class Strategy:\n    def on_bar(self, ctx):\n        if ctx.t < 0:\n            ctx.buy()\n        x = 1\n"
+    plain = studio.post(f"{API}/preview", json={"symbol": "SPY", "spec": {"code": code}}).json()
+    assert "coverage" not in plain
+    cov = studio.post(f"{API}/preview", json={"symbol": "SPY", "spec": {"code": code}, "coverage": True}).json()["coverage"]["main.py"]
+    assert 3 in cov["hit"] and 5 in cov["hit"] and 4 not in cov["hit"] and {3, 4, 5} <= set(cov["lines"])

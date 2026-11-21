@@ -197,17 +197,22 @@ class _LineProfiler:
 
 
 class _Logpoints:
-    """Logpoints: log a message when a strategy line runs, without stopping. `{expr}` parts are evaluated; a message without braces is one expression, logged as `expr = value`."""
+    """Logpoints: log a message when a strategy line runs, without stopping. `{expr}` parts are evaluated; a message without braces is one expression, logged as `expr = value`.
+    With `coverage`, it also records every strategy line that ran (the coverage gutter)."""
 
-    def __init__(self, points, context):
+    def __init__(self, points, context, coverage=False):
         self.points = {(str(p["file"]), int(p["line"])): str(p["message"])[:500] for p in points}
         self.files = {f"<studio:{f}>" for f, _ in self.points}
         self.context = context
+        self.hit = set() if coverage else None
 
     def _global(self, frame, event, arg):
-        return self._local if frame.f_code.co_filename in self.files else None
+        name = frame.f_code.co_filename
+        return self._local if name in self.files or (self.hit is not None and name.startswith("<studio:")) else None
 
     def _local(self, frame, event, arg):
+        if self.hit is not None and event == "line":
+            self.hit.add((frame.f_code.co_filename[8:-1], frame.f_lineno))
         message = self.points.get((frame.f_code.co_filename[8:-1], frame.f_lineno)) if event == "line" else None
         if message is None:
             return self._local
@@ -229,6 +234,16 @@ class _Logpoints:
             return call()
         finally:
             sys.settrace(None)
+
+    def coverage(self, codes):
+        """{file: {"hit": lines that ran, "lines": every executable line}} for the compiled strategy files."""
+        def lines(code):
+            found = {n for _, _, n in code.co_lines() if n}
+            for const in code.co_consts:
+                if hasattr(const, "co_lines"):
+                    found |= lines(const)
+            return found
+        return {name: {"hit": sorted(n for f, n in self.hit if f == name), "lines": sorted(lines(code))} for name, code in codes.items()}
 
 
 class _Log:
@@ -1109,6 +1124,9 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
                        "Gt": operator.gt, "GtE": operator.ge}
 
         armed = False
+        trigger = bp.get("trigger") if bp else None
+        triggered = trigger is None
+        need = (bp or {}).get("hit") or 1
 
         def trace(frame, trace_event, arg):
             nonlocal hit, hit_count, armed, triggered
@@ -1124,9 +1142,6 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
                         armed = True
                 return trace
             if name != f"<studio:{bp['file']}>" and not (trigger and name == f"<studio:{trigger['file']}>"):
-        trigger = bp.get("trigger") if bp else None
-        triggered = trigger is None
-        need = (bp or {}).get("hit") or 1
                 return None
             if trace_event == "line" and trigger and not triggered and name == f"<studio:{trigger['file']}>" and frame.f_lineno == trigger["line"]:
                 ctx = current_context()
@@ -1311,7 +1326,7 @@ def main():
     try:
         compiled = compile(src, "<studio:main.py>", "exec")
         profiler = _LineProfiler() if meta.get("profile") else None
-        logpoints = _Logpoints(meta["logpoints"], lambda: ctx) if meta.get("logpoints") and not profiler else None
+        logpoints = _Logpoints(meta["logpoints"], lambda: ctx, meta.get("coverage")) if (meta.get("logpoints") or meta.get("coverage")) and not profiler else None
         helper_code = {name[:-3]: compile(source, f"<studio:{name}>", "exec") for name, source in meta["modules"].items()}
         if meta["event_settings"] is not None:
             def run_events():
@@ -1370,7 +1385,8 @@ def main():
     np.savez(sys.argv[2], **arrays)
     sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "draw": draw, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report, "debug": debug, "risk_events": risk_events,
                                 "order_lines": sorted(order_lines.values(), key=lambda r: (r["file"], r["line"])), "invariants": invariants,
-                                "profile": profiler.report({"main.py": src, **meta["modules"]}) if profiler else None}))
+                                "profile": profiler.report({"main.py": src, **meta["modules"]}) if profiler else None,
+                                "coverage": logpoints.coverage({"main.py": compiled, **{f"{k}.py": v for k, v in helper_code.items()}}) if logpoints and logpoints.hit is not None else None}))
 
 
 if __name__ == "__main__":

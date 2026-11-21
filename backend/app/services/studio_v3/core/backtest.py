@@ -546,7 +546,7 @@ def resolve_universe(attribute: list[str] | str | None, fallback: list[str], lim
         raise Refusal(f"Strategy.universe {attribute!r} is not a symbol list, library universe or index name.", [str(exc)]) from exc
 
 
-def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] | None = None, *, profile: bool = False, repaint: bool = True, logpoints: list[dict] | None = None) -> dict:
+def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] | None = None, *, profile: bool = False, repaint: bool = True, logpoints: list[dict] | None = None, coverage: bool = False) -> dict:
     """Build's preview: one name, the last `years` of development bars, closes plus the trades the rule takes there (B-5).
     repaint=False skips the look-ahead replay (most of the time on Python code) so a typing preview stays fast; Build asks for it once typing stops."""
     found = C.compile_spec(spec)
@@ -558,7 +558,7 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] 
     prep = prepare(settings)
     p = prep.panel
     lo = max(0, int(p.dates.searchsorted(p.dates[-1] - pd.DateOffset(days=int(365 * years)))))
-    output: dict = {"order_lines": True, "profile": profile, **({"logpoints": logpoints} if logpoints else {})}
+    output: dict = {"order_lines": True, "profile": profile, **({"logpoints": logpoints} if logpoints else {}), **({"coverage": True} if coverage else {})}
     if spec.code.strip():
         # Start a year before the window so history-based code is warm, then shift the bar indexes back to the full panel.
         run_from = max(0, lo - 252)

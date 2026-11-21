@@ -94,6 +94,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   const [pausedLabel, setPausedLabel] = useState("❚❚");
   const [quick, setQuick] = useState<QuickRun | null>(null);
   const [logpoints, setLogpoints] = useState<Logpoint[]>([]);
+  const [coverage, setCoverage] = useState(false);
   const runPending = useRef(false);
   const [starting, setStarting] = useState(false);
   const quickRun = async (level: "quick" | "full", settings: Record<string, unknown> = {}) => {
@@ -215,14 +216,14 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
   useEffect(() => {
     if (!compiled?.ok || !symbol.trim() || (!auto && !nudge)) return;
     const hash = compiled.hash;
-    const body = { spec, symbol: symbol.trim().toUpperCase(), years, logpoints };
+    const body = { spec, symbol: symbol.trim().toUpperCase(), years, logpoints, coverage };
     const request = new AbortController();
     let checked = false;
     const t = setTimeout(() => void studio<Preview>("POST", "/preview", { ...body, repaint: false }, request.signal).then((r) => { if (!request.signal.aborted && !checked) { setPrev(r); setPreviewed(hash); } }, (e) => { if (!request.signal.aborted && !checked) setPrev({ status: "skipped", reason: e instanceof Error ? e.message : "failed", bars: [], trades: [] }); }), 120);
     // The look-ahead replay is the slow part, so it runs once typing has stopped (B-5).
     const full = setTimeout(() => void studio<Preview>("POST", "/preview", body, request.signal).then((r) => { if (!request.signal.aborted) { checked = true; setPrev(r); setPreviewed(hash); } }, () => undefined).finally(() => { if (!request.signal.aborted) setNudge(0); }), 1200);
     return () => { clearTimeout(t); clearTimeout(full); request.abort(); };
-  }, [spec, symbol, years, compiled?.ok, auto, nudge, logpoints]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [spec, symbol, years, compiled?.ok, auto, nudge, logpoints, coverage]); // eslint-disable-line react-hooks/exhaustive-deps
   const stale = !!prev && !!previewed && !!compiled?.hash && previewed !== compiled.hash;
 
   // Browser copy of unsaved edits, offered back when the page reopens with something different (B-27).
@@ -525,7 +526,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
         </section>
       ) : null}
       {ui === "dev" ? <DevIDE tools={headRight} canRun={!!spec.code.trim() || ROLES.some(([role]) => !!String(spec[role] ?? "").trim())} starting={starting} onPreview={() => setNudge((n) => n + 1)} spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} compileProblems={compileProblems}
-        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={(d, l) => { setPausedAt(d); setPausedLabel(l ?? "❚❚"); }} font={font} savedFiles={loaded ? { "main.py": (loaded.spec as Spec).code ?? "", ...(((loaded.spec as Spec).files as Record<string, string>) ?? {}) } : undefined} quick={quick} onQuickRun={(l, st) => void quickRun(l, st)} logpoints={logpoints} onLogpoints={setLogpoints} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid" data-compact={readDefaults().compact || undefined} data-plain={readDefaults().plain || undefined}>
+        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={(d, l) => { setPausedAt(d); setPausedLabel(l ?? "❚❚"); }} font={font} savedFiles={loaded ? { "main.py": (loaded.spec as Spec).code ?? "", ...(((loaded.spec as Spec).files as Record<string, string>) ?? {}) } : undefined} quick={quick} onQuickRun={(l, st) => void quickRun(l, st)} logpoints={logpoints} onLogpoints={setLogpoints} coverage={coverage} onCoverage={setCoverage} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid" data-compact={readDefaults().compact || undefined} data-plain={readDefaults().plain || undefined}>
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
             {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m && !spec.code.trim()} className={`btn sm${mode === m && !spec.code.trim() ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}

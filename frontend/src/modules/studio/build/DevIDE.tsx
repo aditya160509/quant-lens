@@ -37,6 +37,7 @@ export type DevPreview = {
   warmup?: { bars: number; first_eligible_date: string | null } | null; settings_overrides?: Record<string, unknown> | null;
   order_lines?: { file: string; line: number; count: number; dates: string[] }[] | null; locals?: Record<string, unknown> | null;
   invariants?: { count: number; rows: { date: string; symbol: string | null; file: string; line: number; text: string }[] } | null;
+  coverage?: Record<string, { hit: number[]; lines: number[] }> | null;
 };
 /** Icicle chart: one row per stack depth, width = inclusive seconds; callees sit inside their caller's span. */
 function Flame({ stacks }: { stacks: { path: string[]; seconds: number }[] }) {
@@ -157,11 +158,11 @@ function finder(query: string, opt: { regex: boolean; caseSensitive: boolean; wo
 }
 
 /** Build › Dev: a project rail, the editor in tabs, Problems / Output / Plots / Trades / Debug below, preview and checks on the right, a status bar. */
-export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting, onPreview, onSave, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel, savedFiles, logpoints = [], onLogpoints }: {
+export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting, onPreview, onSave, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel, savedFiles, logpoints = [], onLogpoints, coverage = false, onCoverage }: {
   tools?: ReactNode; spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode; canRun: boolean; starting: boolean; onPreview: () => void;
   onSave: () => void; compileProblems: Problem[];
   strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null, label?: string) => void; font?: number; savedFiles?: Record<string, string>;
-  quick?: QuickRun | null; onQuickRun: (level: "quick" | "full", settings?: Record<string, unknown>) => void; onCancel?: () => void; logpoints?: Logpoint[]; onLogpoints?: (l: Logpoint[]) => void;
+  quick?: QuickRun | null; onQuickRun: (level: "quick" | "full", settings?: Record<string, unknown>) => void; onCancel?: () => void; logpoints?: Logpoint[]; onLogpoints?: (l: Logpoint[]) => void; coverage?: boolean; onCoverage?: (on: boolean) => void;
 }) {
   // Scratch files live in this browser only: they sit in `files` for the editor but never reach the spec, runs or saves.
   const [scratch, setScratch] = useState<Record<string, string>>(() => { try { return JSON.parse(localStorage.getItem("studio:dev:scratch") ?? "{}"); } catch { return {}; } });
@@ -527,6 +528,22 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       setTests((old) => (only ? old.map((t) => got.find((g) => g.file === t.file && g.name === t.name) ?? t) : got));
     }, (e: Error) => toast.error(e.message)).finally(() => setTesting(false));
   };
+  const runTestFile = (file: string) => {
+    setTesting(true);
+    void studio<{ tests: TestRow[] }>("POST", "/build/test", { code: spec.code, files: spec.files ?? {}, file }).then((r) => setTests((old) => [...old.filter((t) => t.file !== file), ...r.tests]), (e: Error) => toast.error(e.message)).finally(() => setTesting(false));
+  };
+  const runTestAtCursor = (line: number) => {
+    const name = (files[active] ?? "").split("\n").slice(0, line).reverse().map((t) => /^def (test_\w+)/.exec(t)?.[1]).find(Boolean);
+    if (!/^test_.*\.py$/.test(active) || !name) return toast("Put the cursor in a def test_ function");
+    revealRail("tests"); runTests([{ file: active, name, line, status: "passed", seconds: 0 }]);
+    setTests((old) => (old.some((t) => t.file === active && t.name === name) ? old : [...old, { file: active, name, line, status: "passed", seconds: 0 }]));
+  };
+  // Snapshot test: pin the preview's headline numbers; every later preview is compared with them.
+  const snapKey = `studio:snapshot:${strategyId ?? "draft"}`;
+  const [snap, setSnap] = useState<{ total_return: number; trades: number; last: string; orders?: string } | null>(() => { try { return JSON.parse(localStorage.getItem(`studio:snapshot:${strategyId ?? "draft"}`) ?? "null"); } catch { return null; } });
+  const nowSnap = prev?.status === "ok" ? { total_return: Number((prev as { total_return?: number }).total_return ?? 0), trades: prev.trades.length, last: String(prev.trades.at(-1)?.entry_date ?? ""), orders: JSON.stringify((prev.order_lines ?? []).map((o) => [o.file, o.line, o.count, o.dates[0]])) } : null;
+  const pinSnap = (v: typeof snap) => { setSnap(v); try { if (v) localStorage.setItem(snapKey, JSON.stringify(v)); else localStorage.removeItem(snapKey); } catch { /* blocked */ } };
+  const snapSame = !!snap && !!nowSnap && Math.abs(snap.total_return - nowSnap.total_return) < 1e-9 && snap.trades === nowSnap.trades && snap.last === nowSnap.last && (snap.orders ?? nowSnap.orders) === nowSnap.orders;
   const addFile = () => {
     const n = window.prompt("File name", "helpers.py")?.trim();
     if (!n) return;
@@ -628,6 +645,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.cell", label: "Cells: run cell", keys: (m) => [m.KeyMod.WinCtrl | m.KeyCode.Enter], run: (line) => runCell(line) },
     { id: "studio.cellabove", label: "Cells: run above and this cell", keys: (m) => [m.KeyMod.WinCtrl | m.KeyMod.Shift | m.KeyCode.Enter], run: (line) => runCell(line, false) },
     { id: "studio.tests", label: "Test: run all", run: () => { revealRail("tests"); runTests(); } },
+    { id: "studio.testcursor", label: "Test: run at cursor", run: (line) => runTestAtCursor(line) },
+    { id: "studio.coverage", label: "Test: toggle coverage gutter", run: () => { onCoverage?.(!coverage); onPreview(); } },
     { id: "studio.cancel", label: "Run: cancel", run: () => onCancel?.() },
     { id: "studio.chart", label: "View: chart with replay", run: () => setOpenP("chart", true) },
     { id: "studio.results", label: "View: results", run: () => openView("results") },
@@ -826,7 +845,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               </span> : <button className="btn sm ghost" onClick={() => { const n = "test_main.py" in files ? `test_${Date.now().toString(36)}.py` : "test_main.py"; edit({ files: { ...(spec.files ?? {}), [n]: TEST_FILE } }); goto(n, 4); }}><FilePlus2 size={13} />New test file</button>}
               {testFiles.map((f) => (
                 <div key={f} className="dv-tests">
-                  <button className="dv-item" onClick={() => goto(f, 1)}><FileCode2 size={12} />{f}</button>
+                  <div className="dv-file"><button className="dv-item" onClick={() => goto(f, 1)}><FileCode2 size={12} />{f}</button><button className="icon-btn" aria-label={`Run ${f}`} disabled={testing} onClick={() => runTestFile(f)}><Play size={11} /></button></div>
                   {tests.filter((t) => t.file === f).map((t) => (
                     <div key={t.name} className="dv-file">
                       <button className="dv-item" data-st={t.status} title={t.message ?? `${t.seconds.toFixed(3)} s`} onClick={() => goto(f, t.error_line ?? t.line)}>
@@ -836,6 +855,11 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                   ))}
                 </div>
               ))}
+              <h4 className="dv-sub">Snapshot</h4>
+              {snap ? <div className="dv-tests"><div className="dv-file"><span className="dv-item" data-st={!nowSnap || stale ? undefined : snapSame ? "passed" : "failed"}><i aria-hidden />{!nowSnap || stale ? "Preview is out of date" : snapSame ? "Results unchanged" : `Changed: return ${pct(snap.total_return)} → ${pct(nowSnap.total_return)}, trades ${snap.trades} → ${nowSnap.trades}${snap.orders !== nowSnap.orders ? ", orders differ" : ""}`}</span>
+                <button className="icon-btn" aria-label="Clear snapshot" onClick={() => pinSnap(null)}><X size={11} /></button></div></div> : null}
+              <button className="btn sm ghost" disabled={!nowSnap} onClick={() => { pinSnap(nowSnap); toast("Results pinned"); }}>{snap ? "Pin these results instead" : "Pin current results"}</button>
+              <label className="dv-strict"><input type="checkbox" checked={coverage} onChange={(e) => { onCoverage?.(e.target.checked); onPreview(); }} />Coverage gutter</label>
             </div>
           ) : rail === "docs" ? (
             <div className="dv-list">
@@ -908,7 +932,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, fontSize: 13, lineHeight: 20, scrollBeyondLastLine: false, automaticLayout: true, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace" }} />
           ) : (
             <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={saveAndRun} onRun={runCode} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
-              font={font} actions={actions} breakpoints={bps[active] ?? []} bookmarks={bms[active] ?? []} logpoints={logpoints.filter((p) => p.file === active)} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} inline={inlineValues} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
+              font={font} actions={actions} breakpoints={bps[active] ?? []} bookmarks={bms[active] ?? []} logpoints={logpoints.filter((p) => p.file === active)} coverage={coverage ? prev?.coverage?.[active] ?? null : null} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} inline={inlineValues} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
               onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
               project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles, paramSpecs: spec.params, problems,
                 addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
