@@ -67,6 +67,7 @@ type Member = { name: string; kind: string; signature: string | null; documentat
 type Version = { version: number; created: number; actor: string };
 type Timeline = Version & { name: string; tags: string[]; locked: boolean; sharpe: number | null; total_return: number | null; spark: number[] };
 type Snapshot = { at: number; files: Record<string, string> };
+type Shelved = { name: string; at: number; files: Record<string, string> };
 type Snippet = { id: string; name: string; prefix: string; body: string; description: string };
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 export type Logpoint = { file: string; line: number; message: string };
@@ -275,7 +276,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [opt, setOpt] = useState({ regex: false, caseSensitive: false, word: false });
   const [docs, setDocs] = useState<(Member & { scope: string })[] | null>(null);
   const [docQ, setDocQ] = useState("");
-  const [diff, setDiff] = useState<{ version: number; files: Record<string, string> } | null>(null);
+  const [diff, setDiff] = useState<{ version: number; files: Record<string, string>; to?: { version: number; files: Record<string, string> } } | null>(null);
+  const shelfKey = `studio:shelf:${strategyId ?? "draft"}`;
+  const [shelf, setShelf] = useState<Shelved[]>(() => { try { return JSON.parse(localStorage.getItem(shelfKey) ?? "[]"); } catch { return []; } });
+  const writeShelf = (next: Shelved[]) => { setShelf(next); try { localStorage.setItem(shelfKey, JSON.stringify(next)); } catch { toast.error("Shelf could not be saved"); } };
   const [lastPreview, setLastPreview] = useState<string | null>(null);
   const [qc, setQc] = useState<QC | null>(null);
   const [split, setSplit] = useState<string | null>(null);
@@ -565,10 +569,27 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     const next = Object.fromEntries(Object.entries(files).map(([f, t]) => [f, t.replace(re, rep)]));
     replaceFiles(next); toast.success(`Replaced ${hits.length} line${hits.length === 1 ? "" : "s"}`);
   };
-  const openDiff = (v: number) => {
+  // Diff a saved version against the draft, or against a second version when `right` is given.
+  const openDiff = (v: number, right?: number) => {
     if (!strategyId) return;
-    void studio<{ files: Record<string, string> }>("GET", `/strategies/${strategyId}/files?version=${v}`).then((r) => setDiff({ version: v, files: r.files }), (e: Error) => toast.error(e.message));
+    const load = (n: number) => studio<{ files: Record<string, string> }>("GET", `/strategies/${strategyId}/files?version=${n}`).then((r) => r.files);
+    void Promise.all([load(v), right == null ? null : load(right)]).then(([files, to]) => setDiff({ version: v, files, to: right != null && to ? { version: right, files: to } : undefined }), (e: Error) => toast.error(e.message));
   };
+  // Park the draft's files on the shelf, then reset the draft to the latest saved version (⌘Z undoes the reset).
+  const shelveChanges = () => {
+    const last = timeline[timeline.length - 1]?.version;
+    if (!strategyId || last == null) return;
+    const name = window.prompt("Shelf name", `Shelf ${shelf.length + 1}`)?.trim(); if (!name) return;
+    const draft = files;
+    void studio<{ files: Record<string, string> }>("GET", `/strategies/${strategyId}/files?version=${last}`).then((r) => {
+      writeShelf([{ name, at: Date.now(), files: draft }, ...shelf]);
+      const { "main.py": code = "", ...rest } = r.files;
+      edit({ code, files: Object.fromEntries(Object.entries(rest).filter(([f]) => !(f in scratch))) });
+      toast(`Shelved ${name} · draft reset to v${last} · ⌘Z to undo`);
+    }, (e: Error) => toast.error(e.message));
+  };
+  const unshelve = (s: Shelved) => { replaceFiles(s.files); toast(`${s.name} unshelved · ⌘Z to undo`); };
+  const dropShelf = (s: Shelved) => { if (window.confirm(`Delete shelf "${s.name}"? This cannot be undone.`)) writeShelf(shelf.filter((x) => x.at !== s.at)); };
   const runProfile = () => {
     openView("results"); setProfile("loading");
     void studio<{ profile?: Profile }>("POST", "/build/profile", { spec, symbol }).then((r) => setProfile(r.profile ?? {}), (e: Error) => { setProfile(null); toast.error(e.message); });
@@ -818,7 +839,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
             <div className="dv-list">
               {timeline.length ? [...timeline].reverse().map((v) => (
                 <div key={v.version} className="dv-ver" data-on={diff?.version === v.version || undefined}>
-                  <button className="dv-tpl" onClick={() => (diff?.version === v.version ? setDiff(null) : openDiff(v.version))}>
+                  <button className="dv-tpl" onClick={(e) => (e.shiftKey && diff && diff.version !== v.version ? openDiff(diff.version, v.version) : diff?.version === v.version ? setDiff(null) : openDiff(v.version))} title="Shift-click another version to compare it with the open one">
                     <b>v{v.version}{v.name ? ` ${v.name}` : ""}{v.locked ? <Lock size={11} style={{ marginLeft: 5 }} aria-label="Locked" /> : null} <span className="dv-muted">{new Date(v.created * 1000).toLocaleDateString()} · {v.actor}</span></b>
                     {v.tags.length ? <span className="dv-tags">{v.tags.map((t) => <i key={t}>{t}</i>)}</span> : null}
                     <span>{v.total_return != null ? `${pct(v.total_return)} · Sharpe ${v.sharpe?.toFixed(2) ?? "—"}` : "not run"}</span>
@@ -835,6 +856,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               {snaps.length ? <><h4 className="dv-sub">Local history · 7 days</h4>
                 {snaps.slice(0, 60).map((sn) => <button key={sn.at} className="dv-item" title="Restore these files into the draft" onClick={() => { replaceFiles(sn.files); toast("Snapshot restored into the draft · ⌘Z to undo"); }}>
                   {new Date(sn.at * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}<span>{Object.keys(sn.files).length} file{Object.keys(sn.files).length === 1 ? "" : "s"}</span></button>)}</> : null}
+              <div className="shelf-head"><h4 className="dv-sub">Shelf</h4><button className="btn sm ghost" disabled={!timeline.length} onClick={shelveChanges}>Shelve changes</button></div>
+              {shelf.map((s) => <div key={s.at} className="dv-file shelf-row"><span className="dv-item" title={`${s.name} · ${new Date(s.at).toLocaleString()}`}>{s.name}<span>{Object.keys(s.files).length} files</span></span>
+                <button className="btn sm ghost" onClick={() => unshelve(s)}>Unshelve</button>
+                <button className="icon-btn" aria-label={`Delete shelf ${s.name}`} onClick={() => dropShelf(s)}><Trash2 size={12} /></button></div>)}
             </div>
           ) : rail === "tests" ? (
             <div className="dv-list">
@@ -904,7 +929,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
             </div>
           ))}
           {extra.map((v) => <div key={v} role="tab" aria-selected={view === v} className="dv-tab" tabIndex={0} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setView(v); } }} onClick={() => setView(v)}>{VIEW_LABEL[v]}<button className="icon-btn" aria-label={`Close ${v}`} onClick={(e) => { e.stopPropagation(); closeView(v); }}><X size={11} /></button></div>)}
-          {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ draft · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
+          {diff ? <div role="tab" aria-selected className="dv-tab">v{diff.version} ↔ {diff.to ? `v${diff.to.version}` : "draft"} · {active}<button className="icon-btn" aria-label="Close diff" onClick={() => setDiff(null)}><X size={11} /></button></div> : null}
         </div>
         {view === "code" && !diff ? <nav className="dv-crumbs" aria-label="Breadcrumbs"><button onClick={() => revealRail("files")}>{active}</button>{crumbs.map((c) => <button key={`${c.name}${c.line}`} onClick={() => goto(active, c.line, c.column)}>{c.name}</button>)}</nav> : null}
         <div className="dv-editor">
@@ -928,7 +953,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
             </div>
           ) : null}
           {diff ? (
-            <DiffEditor language="python" original={diff.files[active] ?? ""} modified={source} theme="studio" height="100%"
+            <DiffEditor language="python" original={diff.files[active] ?? ""} modified={diff.to ? diff.to.files[active] ?? "" : source} theme="studio" height="100%"
               options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, fontSize: 13, lineHeight: 20, scrollBeyondLastLine: false, automaticLayout: true, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace" }} />
           ) : (
             <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={saveAndRun} onRun={runCode} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}

@@ -735,3 +735,8 @@
 .dv-flame { display: grid; gap: 1px; }
 .dv-flame-row { position: relative; height: 18px; }
 .dv-flame-row > div { position: absolute; top: 0; height: 17px; box-sizing: border-box; padding: 0 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 11px/17px var(--mono); background: color-mix(in srgb, var(--up) 35%, var(--bg-2, transparent)); border-radius: 2px; }
+
+/* Shelf */
+.shelf-head { display: flex; align-items: center; justify-content: space-between; padding-right: 4px; }
+.shelf-row .dv-item span { margin-left: auto; color: var(--text-4); }
+.shelf-row .btn { flex: none; }
