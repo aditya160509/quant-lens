@@ -640,3 +640,32 @@
 .rp-cert p { margin: 0; color: var(--text-2); font-size: 13px; }
 @media (max-width: 760px) { .rp-list a { grid-template-columns: 1fr; gap: 2px; } }
 @media print { .ws-top, .ws-rail, .rp-act, .rp-tabs { display: none !important; } .rp { padding: 0; } }
+
+/* Data browser */
+.db { padding: 16px 20px; display: grid; gap: 12px; }
+.db-hd { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.db-hd h1 { margin: 0; font-size: 18px; color: var(--text); }
+.db-hd input[type="text"], .db-hd input:not([type]) { height: 28px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 6px; background: transparent; color: var(--text); }
+.db-hd label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+.db-n { margin-left: auto; font-size: 12px; color: var(--text-3); }
+.db-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.db-grid:has(.db-side) { grid-template-columns: minmax(0, 1fr) 320px; }
+.db-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; color: var(--text); }
+.db-tbl th { text-align: left; font-weight: 500; color: var(--text-3); padding: 6px 8px; border-bottom: 1px solid var(--line-2); }
+.db-tbl td { padding: 5px 8px; border-bottom: 1px solid var(--line-2); font-variant-numeric: tabular-nums; }
+.db-tbl tbody tr { cursor: pointer; }
+.db-tbl tbody tr:hover, .db-tbl tr[aria-selected="true"] { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.db-zero { color: var(--text-3); }
+.db-flag { font-weight: 600; }
+.db-strip { display: flex; gap: 1px; width: 160px; height: 14px; }
+.db-strip i { flex: 1; background: var(--text); border-radius: 1px; }
+.db-strip i.db-low { outline: 1px solid var(--text-2); outline-offset: -1px; background: transparent; }
+.db-side { border: 1px solid var(--line-2); border-radius: 8px; padding: 12px; max-height: 70vh; overflow: auto; position: sticky; top: 12px; }
+.db-side h2 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 8px; font-size: 14px; color: var(--text); }
+.db-side ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.db-side li { display: grid; grid-template-columns: 70px 1fr; gap: 2px 8px; font-size: 12px; color: var(--text-2); }
+.db-side li b { color: var(--text); font-weight: 500; }
+.db-side li time { color: var(--text-3); }
+.db-side li span { grid-column: 1 / -1; }
+.db-pg { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-3); }
+@media (max-width: 900px) { .db-grid:has(.db-side) { grid-template-columns: 1fr; } .db-side { position: static; } }

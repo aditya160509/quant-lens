@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { Blend, FileText, Radio, FlaskConical, PencilRuler, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Blend, Database, FileText, Radio, FlaskConical, PencilRuler, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { STUDIO_BASE } from "./base";
 import { StudioContext, StrategiesPicker, StrategyPicker } from "./RunHeader";
 import { isNum, pct } from "@/modules/research/format";
@@ -23,6 +23,7 @@ const PAGES: Page[] = [
   { id: "test", label: "Test", icon: FlaskConical, question: "", features: ["st01", "st02", "st03"] },
   { id: "portfolio", label: "Portfolio", icon: Blend, question: "", features: ["st04"] },
   { id: "live", label: "Live", icon: Radio, question: "", features: ["st05"] },
+  { id: "data", label: "Data", icon: Database, question: "", features: [], slug: "data" },
   { id: "report", label: "Report", icon: FileText, question: "", features: [], slug: "report" },
 ];
 
@@ -113,6 +114,7 @@ registerAlternates({ stTradeShape: [{ label: "Returns", view: "stTradeReturns" }
 const TRADE_COLUMNS = ["symbol", "side", "entry_date", "exit_date", "entry", "exit", "shares", "pnl", "return", "bars", "mae", "mfe", "exit_reason", "costs", "signal_date"];
 const BuildPage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./build/BuildPage"), { ssr: false });
 const ReportPage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./report/ReportPage"), { ssr: false });
+const DataPage = dynamic<{ features: FeatureSpec[] }>(() => import("./data/DataPage"), { ssr: false });
 const HomePage = dynamic<{ features: FeatureSpec[]; runs: RunRecord[] }>(() => import("./home/StudioHome"), { ssr: false });
 
 export const STUDIO_LAB: LabConfig = {
@@ -295,6 +297,6 @@ export const STUDIO_LAB: LabConfig = {
   takeaway: (_feature, key, view, result) => lead(view ?? key, result),
   runLabel: (f) => ({ st02: "Run sweep", st03: "Run validation", st04: "Combine", st05: "Get signals" } as Record<string, string>)[f] ?? "Run backtest",
   defaultUniverse: "Top names by liquidity",
-  specials: { build: BuildPage, report: ReportPage },
+  specials: { build: BuildPage, data: DataPage, report: ReportPage },
   overview: { home: HomePage, intro: "", stages: [] },
 };

@@ -1742,3 +1742,20 @@ def book_today(bid: str, req: FeatureRequest) -> dict[str, Any]:
         return backtest._clean(book.run(bid, settings))
     except backtest.Refusal as exc:
         raise HTTPException(404 if "No such" in exc.reason else 422, exc.reason) from exc
+
+# Data browser
+@router.get("/data/symbols")
+def data_symbols(q: str = "", flagged: bool = False, offset: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200)) -> dict[str, Any]:
+    from app.services.studio_v3.core import data_browser
+
+    return data_browser.listing(q, flagged, offset, limit)
+
+
+@router.get("/data/symbols/{symbol}")
+def data_symbol(symbol: str) -> dict[str, Any]:
+    from app.services.studio_v3.core import data_browser
+
+    out = data_browser.detail(symbol)
+    if out is None:
+        raise HTTPException(404, f"No data for {symbol}")
+    return out
