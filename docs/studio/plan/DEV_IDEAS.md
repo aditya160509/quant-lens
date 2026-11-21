@@ -24,22 +24,24 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 ## Ranked ideas
 
-1. Bar replay tied to the debugger: scrub or play bars, editor line and locals follow; makes strategy bugs visible; 1 day.
-2. Run any cell or function on a date range and show its returned frame in a Results tab; fastest feedback loop; 1 day.
-3. Results as tabs (equity, trades, tearsheet, each run pinned and diffable beside the code); no context switch after a backtest; 1 day.
-4. TradingView-grade chart in the preview (lightweight-charts: drawing tools, order and fill markers, indicator panes from ctx.plot, crosshair-synced with debugger); trust in what the code did; 2 to 3 days.
-5. Notebook cells (percent-format cells in a .py, inline frames and plots, shared kernel with the backtest data); research and strategy in one file; 2 days.
-6. Library and examples browser (tagged starters, one-click insert, versioned shared libraries imported into main.py); removes blank-page time; 1 day.
-7. AI help (explain a Problem, fix selection, write a condition from a sentence, explain a trade at the paused bar); lowers the skill bar; 1 to 2 days.
-8. Code that can create: custom indicators, data transforms, universe filters, parameter sweeps and plots saved as named artefacts reusable across strategies; 2 days.
-9. Split chart and code with synced cursor date; 0.5 day.
-10. Command palette for every IDE action with rebindable keys; 0.5 day.
+Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHECKLIST.md) · ⏸ Later (AI parked).
+
+1. Bar replay tied to the debugger: scrub or play bars, editor line and locals follow; makes strategy bugs visible; 1 day. ↪ Moved to Chart
+2. Run any cell or function on a date range and show its returned frame in a Results tab; fastest feedback loop; 1 day. ⬜ Open
+3. Results as tabs (equity, trades, tearsheet, each run pinned and diffable beside the code); no context switch after a backtest; 1 day. ✅ Built
+4. TradingView-grade chart in the preview (lightweight-charts: drawing tools, order and fill markers, indicator panes from ctx.plot, crosshair-synced with debugger); trust in what the code did; 2 to 3 days. ↪ Moved to Chart
+5. Notebook cells (percent-format cells in a .py, inline frames and plots, shared kernel with the backtest data); research and strategy in one file; 2 days. ⬜ Open
+6. Library and examples browser (tagged starters, one-click insert, versioned shared libraries imported into main.py); removes blank-page time; 1 day. ⬜ Open
+7. AI help (explain a Problem, fix selection, write a condition from a sentence, explain a trade at the paused bar); lowers the skill bar; 1 to 2 days. ⏸ Later
+8. Code that can create: custom indicators, data transforms, universe filters, parameter sweeps and plots saved as named artefacts reusable across strategies; 2 days. ⬜ Open
+9. Split chart and code with synced cursor date; 0.5 day. ⬜ Open
+10. Command palette for every IDE action with rebindable keys; 0.5 day. ✅ Built
 
 ## Feature catalogue (detailed)
 
 30 features, ranked by impact for a quant writing strategies in Studio Build. Each one lives in a view, a dropdown, a palette command or an existing panel, so no new always-visible button is needed. Licences are stated only where the page or the existing table confirmed them; "not checked" means verify before copying any code. Effort is in working days for one person: S under 1 day, M 1 to 3 days, L over 3 days.
 
-### 1. Bar replay tied to the debugger
+### 1. Bar replay tied to the debugger ↪ Moved to Chart
 
 **What it is:** The user opens the Chart view from the View dropdown and presses Replay. The chart starts at the bar they pick (click any bar, or type a date in the palette). Play, pause, step one bar, and scrub are available from the same strip under the chart, with speed 1x, 5x and 20x. At each bar the editor highlights the line that ran for that bar, and the Locals panel shows values at that bar. Stepping with the arrow keys moves both the chart cursor and the debugger, so a bug can be found by watching the bar where a position was opened or where a stop was skipped. Holding Shift while stepping jumps to the next trade, and the replay stops at each order fill. The paused bar gets a vertical line on the chart and the shaded span of any open position stays visible while paused.
 
@@ -55,7 +57,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://tradingview.com/support/solutions/43000712747-how-does-bar-replay-work ; https://tradingview.com/blog/en/bar-replay-5913 ; https://github.com/SiMahfud/klinechartpro ; https://tradingview.com/blog/en/synchronized-bar-replay-45933
 
-### 2. Results tabs with pinned, diffable runs
+### 2. Results tabs with pinned, diffable runs ✅ Built
 
 **What it is:** Every backtest run opens as a tab next to the code tab, labelled with the run time and a short parameter string. The user can pin a run so it stays while later runs replace the default tab. Choosing "Compare" next to two pinned runs opens a diff: a table of metrics where the difference and the percentage change are shown, and both equity curves are overlaid on one chart. The user can rename a run, tag it, and close it. Results tabs keep their filters, so opening a tearsheet from one run does not reset a trade filter set on another.
 
@@ -71,7 +73,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://quantconnect.com/docs/v2/cloud-platform/projects/ide ; https://nautilustrader.io/docs/latest/concepts/visualization ; https://tradingview.com/support/solutions/43000763320-how-to-work-with-pine-editor
 
-### 3. Tearsheet view
+### 3. Tearsheet view ✅ Built
 
 **What it is:** A Tearsheet view opens from the Results tab and shows one scrollable page with fixed sections in this order: key statistics (CAGR, Sharpe, Sortino, max drawdown, win rate, profit factor, exposure, average hold), returns (cumulative and monthly heatmap), drawdown (underwater curve with the top five drawdowns listed by depth and length), rolling statistics (rolling Sharpe and volatility), return distribution, and crisis or regime periods the user has chosen. Each section has a small gear icon that opens a dropdown to turn sections on or off, and the choice is saved per user. The page can be exported as a self-contained HTML file or printed.
 
@@ -87,7 +89,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://github.com/ranaroussi/quantstats ; https://quantconnect.com/docs/v2/cloud-platform/backtesting/report ; https://nautilustrader.io/docs/latest/concepts/reports ; https://nautilustrader.io/docs/latest/concepts/visualization
 
-### 4. Walk-forward runner with efficiency score
+### 4. Walk-forward runner with efficiency score ✅ Built
 
 **What it is:** A Walk-forward option sits in the Optimise dropdown. The user sets the in-sample length, out-of-sample length and step (for example 2 years optimise, 6 months test, step 6 months), and chooses an optimisation target such as Sharpe or CAR/MDD. The runner optimises on each in-sample window, runs the chosen parameters on the next out-of-sample window, and stitches the out-of-sample pieces into one equity curve. The view shows a band chart with blue for in-sample and green for out-of-sample windows, a table with each window's chosen parameters, and a walk-forward efficiency (WFE) figure: the out-of-sample annualised return divided by the in-sample annualised return. A parameter that changes on every window is flagged, because that means the optimiser is fitting noise.
 
@@ -103,7 +105,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://static.ninjatrader.com/support/helpGuides/nt8/walk_forward_optimize_a_strate.htm ; https://amibroker.com/guide/h_walkforward.html ; https://buildalpha.com/walk-forward-optimization ; https://tradelyze.io/learn/walk-forward-efficiency ; https://www.mql5.com/en/articles/23250
 
-### 5. Monte Carlo robustness panel
+### 5. Monte Carlo robustness panel ✅ Built
 
 **What it is:** A Robustness view runs a Monte Carlo test on a finished backtest. It has two methods. Trade-order shuffling reorders the same set of trades and recomputes the equity curve, which tests whether the timing of the trades matters. Candle resampling changes the price data slightly and reruns the strategy, which tests whether the result depends on exact prices. The user picks the number of runs (default 1000). The view shows the original result as a vertical line on a histogram of the resampled results for each metric (final return, max drawdown, Sharpe), plus a percentile for the original. A verdict card states it in plain words: below the median means the result is weaker than typical, and above the 95th percentile means the backtest may sit in the luckiest tail.
 
@@ -119,7 +121,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://docs.jesse.trade/docs/monte-carlo ; https://strategyquant.com/doc-new/monte-carlo-tests ; https://github.com/jesse-ai/jesse/blob/master/jesse/mcp/resources/monte_carlo.md
 
-### 6. Optimisation explorer with heatmap and parameter importance
+### 6. Optimisation explorer with heatmap and parameter importance ✅ Built
 
 **What it is:** The Optimise view shows the results of a grid sweep as a table sorted by the chosen target, with a selector to switch the target without rerunning. Below the table, two parameters can be picked for a heatmap, where each cell is coloured by the target value and the chart is labelled with both parameter values. A parameter importance bar shows which inputs moved the target most. Clicking a cell applies those parameters to the code as a new run. A history line shows the best value found so far against trial number, so the user can see when the search stopped improving.
 
@@ -135,7 +137,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://optuna.readthedocs.io/en/stable/tutorial/10_key_features/005_visualization.html ; https://github.com/optuna/optuna-dashboard ; https://github.com/Roboquant-AI/tradingview-optimizer ; https://www.metatrader5.com/en/terminal/help/algotrading/visualization
 
-### 7. Parameter plateau and stability view
+### 7. Parameter plateau and stability view ✅ Built
 
 **What it is:** For a chosen parameter set, the view tests each parameter one step either side of its current value, using the same data, and shows the target for each neighbour. The result is a small table and a line for each parameter: a flat line means the strategy is stable around the chosen value, and a sharp spike means it is fragile. The verdict says "plateau" when most neighbours score within a set tolerance of the chosen value, and "spike" when only the chosen value scores well. The user can apply the best neighbour (the one with the most stable surrounding score) instead of the single best value.
 
@@ -151,7 +153,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://buildalpha.com/walk-forward-optimization ; https://strategyquant.com/doc-new/monte-carlo-tests ; https://www.metatrader5.com/en/terminal/help/algotrading/strategy_optimization
 
-### 8. Chart tab drawing layer on the custom chart engine
+### 8. Chart tab drawing layer on the custom chart engine ↪ Moved to Chart
 
 **What it is:** The Chart tab gets a drawing layer. The user picks a tool from a Draw dropdown (horizontal line, trend line, rectangle, Fibonacci retracement, text note). Drawings snap to bars and to the replay cursor, so a level drawn at the entry bar stays where it was. Drawings are saved with the strategy file as a comment block (or a small sidecar JSON file in the same folder), so they survive reloads and can be shared with the code. Each drawing has an Object tree entry: toggle visibility, select, lock, delete. The tools come from the existing chart engine, so no second drawing system is built.
 
@@ -167,7 +169,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://github.com/SiMahfud/klinechartpro ; https://klinecharts.com/en-US/guide/introduction ; https://github.com/klinecharts/extension
 
-### 9. Indicator panes from ctx.plot with a plot configurator
+### 9. Indicator panes from ctx.plot with a plot configurator ✅ Built
 
 **What it is:** Every `ctx.plot(name, value, chart=...)` call in the strategy becomes a series. The Chart tab shows them as chips in a Plots dropdown: a checkbox per series, a choice of pane (overlay on price or its own pane below), a colour, and a line or histogram style. The user can save several plot layouts with names and switch between them, for example "entries" and "volatility". The chips show the value at the paused bar so the user can read an indicator without hovering. The strategy can ship a default layout, which loads when the file is opened.
 
@@ -183,7 +185,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://github.com/freqtrade/freqtrade/blob/develop/docs/freq-ui.md ; https://www.freqtrade.io/en/stable/plotting/ ; https://docs.freqtrade.io/en/2026.5/plotting
 
-### 10. Trade navigator with MAE and MFE
+### 10. Trade navigator with MAE and MFE ✅ Built
 
 **What it is:** A trade list sits under the chart. Each row shows the entry time, side, entry price, exit price, P and L, hold time, and two extra columns: MAE (the worst excursion against the position while it was open) and MFE (the best excursion in the position's favour). Clicking a row moves the chart and the replay cursor to that trade, with the entry and exit marked and the trade's price range shaded. Next and previous buttons (or the keys [ and ]) step through trades. A filter bar can show only losers, only the trades that were stopped out, or trades from one month.
 
@@ -199,7 +201,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://www.tradingview.com/pine-script-docs/concepts/strategies ; https://github.com/jesse-ai/jesse ; https://www.metatrader5.com/en/terminal/help/algotrading/visualization
 
-### 11. Percent-format research cells in the .py file
+### 11. Percent-format research cells in the .py file ⬜ Open
 
 **What it is:** The strategy file may contain research cells, marked with a `# %%` line. A cell can be a title (`# %% [markdown]`) or a code cell. Each code cell has a Run button in its top-left corner, and Shift+Enter runs it and moves to the next cell. The cell's result (a frame, a plot, a printed value) appears under the cell as an inline output, so the research sits in the same file as the strategy. Outputs are not written into the file, which keeps git diffs clean. Cells share one kernel with the backtest data, so a variable defined in a research cell can be used by the strategy's preview run.
 
@@ -215,7 +217,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://jupytext.org/formats/scripts/ ; https://jupytext.readthedocs.io/en/latest/formats.html ; https://github.com/mwouts/nbpercent ; https://docs.marimo.io/guides/coming_from/jupytext/
 
-### 12. Run any selection on a date range into a Results tab
+### 12. Run any selection on a date range into a Results tab ⬜ Open
 
 **What it is:** The user selects an expression, a function name, or a block of code, presses Run selection, and picks a date range (default: the loaded window; a range picker in the popup). The result opens in a Results tab as a table or chart. Typical uses are "the signal on 2024 only" or "the feature frame for this ticker". The run does not change the strategy state, so the user can repeat it with another range without a full backtest.
 
@@ -231,7 +233,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://learn.hex.tech/docs/explore-data/cells/sql-cells/sql-cells-introduction ; https://marimo.io/use-cases ; https://docs.marimo.io/getting_started/key_concepts
 
-### 13. Reactive cells that re-run only what depends on a change
+### 13. Reactive cells that re-run only what depends on a change ⬜ Open
 
 **What it is:** In a research cell file, changing one cell re-runs only the cells that read a variable it defines, and marks the rest as stale without running them. The stale cells show a grey dot. A toggle in the cell toolbar switches between "run on change" and "manual", so a slow cell does not block typing. The user sees which cells are stale and can run them in order from one button.
 
@@ -247,7 +249,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://docs.marimo.io/getting_started/key_concepts ; https://github.com/marimo-team/marimo ; https://marimo.io
 
-### 14. SQL cells over the local data store
+### 14. SQL cells over the local data store ⬜ Open
 
 **What it is:** A research cell can be SQL instead of Python. The user writes a query against the market data tables (for example `SELECT symbol, date, close FROM bars WHERE ...`), and the result becomes a variable that Python cells can read. Autocomplete offers table and column names from the data browser. A parameter box in the cell (a symbol, a start date) is read from the query with a placeholder, so one query serves several tickers.
 
@@ -263,7 +265,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://learn.hex.tech/docs/explore-data/cells/sql-cells/sql-cells-introduction ; https://hex.tech/blog/sql-notebooks ; https://hex.tech/product/notebooks
 
-### 15. Data browser with a coverage map and quality checks
+### 15. Data browser with a coverage map and quality checks ✅ Built
 
 **What it is:** A Data view lists the symbols and timeframes in the workspace. For each symbol it shows a coverage bar (a timeline with gaps in a warning colour), the first and last bar, and counts of quality problems: missing bars, zero-volume bars, a price jump bigger than a set threshold (likely a split), and duplicate timestamps. Clicking a symbol opens its chart and a small table of the first and last bars. A "Use in strategy" button adds the symbol to the file's universe or a `ctx.data` call, and the choice is shown in the palette.
 
@@ -279,7 +281,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://quantconnect.com/docs/v2/cloud-platform/research/getting-started ; https://quantconnect.com/docs/v2/research-environment/key-concepts/research-engine ; https://www.zipline.io (Zipline Pipeline factor reference) ; https://www.quantrocket.com/code/
 
-### 16. Debugger locals quick-look
+### 16. Debugger locals quick-look ✅ Built
 
 **What it is:** In the Locals panel of the debugger, every variable is clickable. A pandas frame or a Series opens a small popup table with the first and last rows, the shape, the dtypes and the column summary. A numeric series opens a mini sparkline across the replay window. A value that is a list of trades opens the trade navigator (feature 10). The popup closes on Escape and stays put while the replay moves, so the user can compare the value on two bars by stepping.
 
@@ -295,7 +297,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://code.visualstudio.com/docs/editing/getting-started/userinterface ; https://vscode-docs.readthedocs.io/en/stable/editor/debugging ; https://stackoverflow.com/questions/60097076/view-dataframe-while-debugging-in-vs-code
 
-### 17. Snippet and indicator library with tags
+### 17. Snippet and indicator library with tags ⬜ Open
 
 **What it is:** A Library dropdown lists snippets: named blocks of code (a trailing stop, a volatility filter, a session time check) with tags, a one-line description, and an "Insert" action that places the snippet at the cursor and adds any imports it needs. Users can save a selection as a snippet, tag it, and share it inside the workspace. Each snippet can be tested from its entry: a small run on one symbol, with the result shown in a Results tab, so the user knows it works before inserting it.
 
@@ -311,7 +313,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://microsoft.github.io/monaco-editor/ ; https://stackoverflow.com/questions/48212023/how-to-insert-snippet-in-monaco-editor ; https://docs.jesse.trade/
 
-### 18. Starter gallery with cached results
+### 18. Starter gallery with cached results ⬜ Open
 
 **What it is:** The New strategy dropdown lists starters by type (trend, mean reversion, breakout, options-style rules), each with a short description and a thumbnail of the equity curve from a cached run on a fixed universe. Opening a starter copies it into a new file with the code and the parameters set to tested defaults. The thumbnail is a stored image from the last run, so the gallery opens instantly. Each starter links to the library snippets it uses.
 
@@ -327,7 +329,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://www.composer.trade/ai ; https://apps.apple.com/us/app/composer-by-sofi/id6471564746 ; https://composer.trade/pricing
 
-### 19. Shareable read-only strategy link with pinned results
+### 19. Shareable read-only strategy link with pinned results ✅ Built
 
 **What it is:** The Share dropdown creates a link to a snapshot of the strategy file and one pinned result. The viewer sees the code, the results tab, the tearsheet, and a Clone button that copies the file into the viewer's own workspace. The snapshot does not change when the author edits later. The viewer cannot run the strategy with new data unless they clone it. Access can be set to "anyone with the link" or to named workspace members.
 
@@ -343,7 +345,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://quantconnect.com/docs/v2/cloud-platform/research/deployment
 
-### 20. Review comments on code lines and chart bars
+### 20. Review comments on code lines and chart bars ◐ Partial
 
 **What it is:** A user can add a comment to a code line or to a bar on the chart. A comment on a bar keeps the bar's date, so it appears at the same point when someone replays. Comments show as small markers in the gutter and on the chart, and open in a thread with replies and a resolve tick. The author can filter to open comments. Comments are stored with the strategy snapshot and do not change the code.
 
@@ -359,7 +361,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://microsoft.github.io/monaco-editor/ ; https://github.com/SiMahfud/klinechartpro
 
-### 21. AI explains the paused bar and fixes a selection (later: owner parked AI features, 2026-11-21)
+### 21. AI explains the paused bar and fixes a selection ⏸ Later
 
 **What it is:** When the debugger is paused, an "Explain this bar" item in the Debug menu sends the paused bar's values, the executed lines and the open position to the AI model. The reply is a short explanation in the Output tab: why the strategy entered or did not enter, and which condition decided it. A second action, Cmd+K on a selected block, asks for a change ("make the stop volatility-based"). The AI returns a diff that the user accepts or rejects in the editor. Nothing is applied without a click, and the AI cannot run a backtest by itself.
 
@@ -375,7 +377,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://cursor.com/help/ai-features/inline-edit ; https://cursor.com/docs/agent/overview ; https://dev.to/_d7eb1c1703182e3ce1782/cursor-ai-editor-a-developers-complete-review-2026-noc
 
-### 22. AI robustness critic (later: owner parked AI features, 2026-11-21)
+### 22. AI robustness critic ⏸ Later
 
 **What it is:** After a robustness run (features 4 to 7), a "Critique" button in the Robustness view sends the summary numbers to the AI model. The reply lists what the tests show in plain words, names the weakest test, and suggests the next test to run (for example "the result is a spike in the ATR multiplier; run the stability view on that parameter"). It never changes parameters. Each suggestion has a Run button that starts the named test, so the AI proposes and the user decides.
 
@@ -391,7 +393,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://buildalpha.com/features ; https://www.buildalpha.com/noise-test-parameter-optimization/ ; https://buildalpha.com/walk-forward-optimization
 
-### 23. Paper trading hook with live-versus-backtest divergence
+### 23. Paper trading hook with live-versus-backtest divergence ⬜ Open
 
 **What it is:** A Live dropdown lets the user send the strategy to paper trading with one of the connected brokers. The Live view shows the paper equity against the backtest equity for the same period, with a divergence line and a count of trades that were expected but not filled, and filled at a worse price. A threshold sets an alert when the divergence passes a limit, so the user sees a broken assumption (slippage, fill timing) before real money is involved. Orders in paper mode are simulated by the broker, not by Studio, so the test is the broker's behaviour.
 
@@ -407,7 +409,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://docs.alpaca.markets/us/docs/paper-trading ; https://www.freqtrade.io/en/stable/ ; https://www.freqtrade.io/en/stable/hyperopt/
 
-### 24. Live status and kill switch panel
+### 24. Live status and kill switch panel ⬜ Open
 
 **What it is:** A Live status view lists the strategies that are running live or in paper, with their open positions, today's P and L, the time of the last bar, and the last error. Each strategy has Start, Stop and Flatten buttons, and Flatten asks for a confirmation that names the number of open positions. Errors are shown with the bar and the line where they happened, which links back to the editor. A global Stop-all sits in the palette, not on the toolbar.
 
@@ -423,7 +425,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://github.com/freqtrade/freqtrade/raw/refs/heads/develop/docs/freq-ui.md ; https://www.freqtrade.io/en/stable/ ; https://jesse.trade/blog/news/jesse-300-a-new-charting-and-live-trading-experience
 
-### 25. Command palette for every action and go-to-date
+### 25. Command palette for every action and go-to-date ✅ Built
 
 **What it is:** The palette (Cmd+Shift+P, already in the app) lists every IDE action, including the ones now in the View, Optimise and Live dropdowns. Typing filters by name, and each command shows its key binding. Two special commands are added: "Go to date" (type 2021-03-04 and the chart, the editor's date variable and the replay cursor move there) and "Go to symbol" (jump to a function or a parameter in the file). Recently used commands sit at the top. The palette is the way to reach a feature that has no button.
 
@@ -439,7 +441,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://jupyterlab.readthedocs.io/en/stable/user/commands.html ; https://jupyterlab.readthedocs.io/en/3.3.x/user/commands.html ; https://microsoft.github.io/monaco-editor/api/enums/monaco.keycode.html
 
-### 26. Rebindable keymap with chords
+### 26. Rebindable keymap with chords ✅ Built
 
 **What it is:** A Keyboard shortcuts section in the palette lets the user see every shortcut in a list and rebind any of them. Chords (two-key sequences such as Ctrl+K then Ctrl+R) are allowed for less-used commands. Conflicts are shown at the time of binding. The keymap is saved per user, and a preset (Default, Vim-like movement for the editor) can be chosen from a dropdown. Shortcuts are shown in every menu and in the palette list.
 
@@ -455,7 +457,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://github.com/microsoft/monaco-editor/issues/102 ; https://rikki.dev/posts/monaco-command-palette ; https://raw.githubusercontent.com/CodinGame/monaco-vscode-api/main/demo/src/main.views.ts
 
-### 27. Saved layouts and workspace presets
+### 27. Saved layouts and workspace presets ✅ Built
 
 **What it is:** The View dropdown has a Layout section with named presets: "Research" (code and cells, with the Chart docked to the right), "Debug" (code and debugger, Chart and Locals below), "Review" (Results and Tearsheet full width), and "Live" (Live status and code). The user can save the current arrangement under a name, reset to a preset, and rename or delete their own. The Explorer auto-collapses at narrow widths, which is already in place, and the presets respect that rule.
 
@@ -471,7 +473,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://code.visualstudio.com/docs/editing/getting-started/userinterface ; https://stackoverflow.com/questions/57333905/vs-code-move-debug-tab-left-panel-to-bottom ; https://github.com/microsoft/vscode/issues/118975
 
-### 28. Pop-out windows for chart and results
+### 28. Pop-out windows for chart and results ⬜ Open
 
 **What it is:** A small button-free action in the View menu, "Pop out chart", opens the Chart or a Results tab in a separate browser window that stays synced with the main window: the replay cursor, the selected run and the date are shared. On a second monitor the user can keep the code and the chart side by side. Closing the pop-out returns the panel to the main window.
 
@@ -487,7 +489,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://code.visualstudio.com/docs/editing/getting-started/userinterface ; https://github.com/microsoft/vscode/issues/118975
 
-### 29. Parameter jitter and execution-degradation stress test
+### 29. Parameter jitter and execution-degradation stress test ✅ Built
 
 **What it is:** A Stress tab in the Robustness view runs the strategy again with each parameter moved by a random percentage (for example plus or minus 10 percent), with commission and slippage raised by a set factor, and with the price history perturbed a little. The result is a fan chart of equity curves and a table of how often the strategy still beats a set target. The test says whether the result depends on exact inputs or on cheap fills. Each stress setting has a plain-language label, and the defaults are the ones the owner chooses.
 
@@ -503,7 +505,7 @@ Decisions: no new dependency. Reuse StudioChart (lightweight-charts) for the Cha
 
 **Sources:** https://strategyquant.com/doc-new/monte-carlo-tests ; https://strategyquant.com/blog/new-robustness-tests-on-the-strategyquant-codebase-5-monte-carlo-methods-to-bulletproof-your-trading-strategies ; https://github.com/Roboquant-AI/tradingview-optimizer
 
-### 30. Chart templates and chart types
+### 30. Chart templates and chart types ↪ Moved to Chart
 
 **What it is:** The Chart view's Style dropdown offers chart types (candles, hollow candles, Heikin Ashi, bars, line, area) and saved templates. A template stores the chart type, the colours, the visible plot chips (feature 9), and the drawings (feature 8) that are not tied to one file. Templates can be applied to any strategy, which is useful for a standard look across the team. The template list is in the dropdown, with a Save as template action at the bottom.
 
