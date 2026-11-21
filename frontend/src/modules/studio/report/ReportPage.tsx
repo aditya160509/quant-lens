@@ -45,7 +45,7 @@ export default function ReportPage({ id }: { features: FeatureSpec[]; id?: strin
         <span className="rp-act">
           {meta?.strategy?.id ? <Link className="btn sm ghost" href={`/studio/build/${meta.strategy.id}?ui=dev`}>Open in Build</Link> : null}
           <button className="btn sm ghost" aria-label="Copy link" title="Copy link" onClick={() => void navigator.clipboard.writeText(location.href).then(() => toast.success("Link copied"))}><Link2 size={14} /></button>
-          {meta?.strategy?.id ? <button className="btn sm ghost" aria-label="Share link" title="Share link" onClick={() => void studio<{ token: string }>("POST", "/pinned-share", { strategy_id: meta.strategy?.id, version: meta.strategy?.version ?? undefined, job_id: id }).then((r) => navigator.clipboard.writeText(`${location.origin}/studio/share/${r.token}`)).then(() => toast.success("Share link copied"), (e: Error) => toast.error(e.message))}><Share2 size={14} /></button> : null}
+          {meta?.strategy?.id ? <button className="btn sm ghost" aria-label="Share link" title="Share link" onClick={() => void studio<{ token: string }>("POST", `/strategies/${meta.strategy?.id}/share?${new URLSearchParams({ job_id: id, ...(meta.strategy?.version ? { version: String(meta.strategy.version) } : {}) })}`).then((r) => navigator.clipboard.writeText(`${location.origin}/studio/share/${r.token}`)).then(() => toast.success("Share link copied"), (e: Error) => toast.error(e.message))}><Share2 size={14} /></button> : null}
           <button className="btn sm ghost" aria-label="Print or save as PDF" title="Print or save as PDF" onClick={() => window.print()}><Printer size={14} /></button>
         </span>
       </header>

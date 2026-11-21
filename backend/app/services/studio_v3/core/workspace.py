@@ -207,10 +207,11 @@ def delete_comment(sid: str, comment_id: str) -> None:
 # --- read-only share links and forks (B-131) ---------------------------------
 
 
-def share(sid: str, version: int | None = None) -> dict:
+def share(sid: str, version: int | None = None, job_id: str | None = None) -> dict:
+    """`job_id` pins one finished run to the link (DEV_IDEAS 19)."""
     saved = store.get(sid, version)
     token = secrets.token_urlsafe(12)
-    store.kv_set(f"share:{token}", {"strategy_id": sid, "version": saved["version"], "created": time.time()})
+    store.kv_set(f"share:{token}", {"strategy_id": sid, "version": saved["version"], "job_id": job_id, "created": time.time()})
     return {"token": token, "version": saved["version"]}
 
 
@@ -229,7 +230,7 @@ def revoke_share(token: str) -> None:
 def read_share(token: str) -> dict:
     row = _shared(token)
     saved = store.get(row["strategy_id"], row["version"])
-    return {"name": saved["name"], "version": row["version"], "read_only": True, "files": Strategy(**saved["spec"]).project_files()}
+    return {"name": saved["name"], "version": row["version"], "read_only": True, "files": Strategy(**saved["spec"]).project_files(), "job_id": row.get("job_id")}
 
 
 def fork_share(token: str, actor: str = "human") -> dict:

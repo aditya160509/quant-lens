@@ -83,6 +83,9 @@ def test_share_link_is_read_only_and_forks(studio):  # noqa: F811
     token = studio.post(f"{API}/strategies/{sid}/share").json()["token"]
     shared = studio.get(f"{API}/share/{token}").json()
     assert shared["read_only"] and shared["files"] == {"main.py": "a = 1\nb = 2\n"}
+    assert shared["run"] is None
+    pinned = studio.post(f"{API}/strategies/{sid}/share", params={"job_id": "gone"}).json()["token"]
+    assert studio.get(f"{API}/share/{pinned}").json()["run"] is None  # a missing run never breaks the link
     fork = studio.post(f"{API}/share/{token}/fork").json()
     assert fork["id"] != sid and fork["spec"]["code"] == "a = 1\nb = 2\n"
     studio.delete(f"{API}/share/{token}")
