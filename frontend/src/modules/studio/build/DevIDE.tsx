@@ -23,6 +23,7 @@ import { DevRuns, type RunEntry } from "./DevRuns";
 import { DevTearsheet } from "./DevTearsheet";
 import { RunSummary } from "./RunSummary";
 import { tradeSummary } from "./devStats";
+import { NotifyBell } from "./NotifyBell";
 
 type Log = { date: string; symbol: string | null; line: number; text: string; level: string; fields?: Record<string, unknown> | null };
 type Point = { date: string; symbol: string | null; value: number | null };
@@ -553,6 +554,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "\\" || e.key === "|")) { e.preventDefault(); setLayoutsOpen(true); return; }
+      // Hide all tool windows (JetBrains Cmd+Shift+F12): outside the editor here, inside it through the action below.
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "F12" && !(e.target instanceof Element && e.target.closest(".monaco-editor"))) { e.preventDefault(); setZen((z) => !z); return; }
       if (e.defaultPrevented || e.repeat || e.key !== "Enter" || !(e.metaKey || e.ctrlKey) || (e.target instanceof Element && e.target.closest(".monaco-editor"))) return;
       e.preventDefault();
       runCode(e.shiftKey ? "full" : "quick");
@@ -606,6 +609,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.bmnext", label: "Bookmark: next", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.Period], run: (line) => bmJump(1, line) },
     { id: "studio.bmprev", label: "Bookmark: previous", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.Comma], run: (line) => bmJump(-1, line) },
     { id: "studio.zen", label: "View: zen mode", keys: (m) => [m.KeyMod.chord(m.KeyMod.CtrlCmd | m.KeyCode.KeyK, m.KeyMod.CtrlCmd | m.KeyCode.KeyZ)], run: () => setZen((z) => !z) },
+    { id: "studio.hidetools", label: "View: hide all tool windows", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.F12], run: () => setZen((z) => !z) },
     { id: "studio.split", label: "View: split editor", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.Backslash], run: () => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active)) },
     { id: "studio.snippet", label: "Snippet: save selection", run: () => saveSnippet() },
     { id: "studio.back", label: "Go: back", keys: (m) => [m.KeyMod.WinCtrl | m.KeyCode.Minus], run: () => hop(-1) },
@@ -685,6 +689,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       {view !== "code" ? <button role="menuitemcheckbox" aria-checked={reportSide} onClick={() => setReportSide((visible) => !visible)}>Chart and bottom panel</button> : null}
       <button role="menuitemcheckbox" aria-checked={chartOpen} onClick={() => { if (view !== "code") setReportSide(true); if (!chartOpen && open_.chart) setRailOpen(false); else setOpenP("chart", !chartOpen); }}>Chart</button>
       <button role="menuitemcheckbox" aria-checked={panelOpen} onClick={() => { setPanelOpen(!panelOpen); if (view !== "code") setReportSide(!panelOpen); }}>Bottom panel</button>
+      <button role="menuitemradio" aria-checked={!full} onClick={() => ws.patch((l) => ({ ...l, dock: { ...l.dock, panel: "center" } }))}>Panel under editor</button>
+      <button role="menuitemradio" aria-checked={full} onClick={() => ws.patch((l) => ({ ...l, dock: { ...l.dock, panel: "full" } }))}>Panel full width</button>
       <button role="menuitemcheckbox" aria-checked={!!split} onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}>Split editor</button>
       <button role="menuitemcheckbox" aria-checked={iconsOpen} onClick={() => setIconsOpen((o) => !o)}>Tool strip</button>
       {view === "code" ? <button role="menuitemcheckbox" aria-checked={pinned.includes(active)} onClick={() => {
@@ -1078,7 +1084,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
         {quick && ["queued", "running"].includes(quick.status) ? <span className="dv-runchip">{quick.progress?.partial ? `bar ${quick.progress.partial.bars?.toLocaleString() ?? "…"} · ${quick.progress.partial.symbols ?? "…"} symbols · ${quick.progress.partial.elapsed_seconds?.toFixed(1) ?? "0"} s of ${quick.progress.partial.budget_seconds ?? "…"} s` : `${quick.level} run ${quick.progress?.percent ?? 0}%`}</span> : null}
         {trial}
         {open_.chart ? <a href="https://www.vela.dev" target="_blank" rel="noreferrer">Vela™</a> : null}
-        <span>{prev ? `${prev.status === "ok" ? `preview ${symbol}` : prev.status}${lastPreview ? ` · ${lastPreview}` : ""}` : "no preview"}</span><span>Python 3.12</span>
+        <span>{prev ? `${prev.status === "ok" ? `preview ${symbol}` : prev.status}${lastPreview ? ` · ${lastPreview}` : ""}` : "no preview"}</span><NotifyBell /><span>Python 3.12</span>
       </footer>
 
       <dialog ref={qcRef} className="sh-import" aria-label="Open a QuantConnect algorithm" onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
