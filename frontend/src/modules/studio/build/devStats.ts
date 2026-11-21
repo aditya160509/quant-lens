@@ -93,3 +93,16 @@ export function bootstrapTrades(pnl: number[], capital: number, runs: number, se
 }
 
 export const percentile = (xs: number[], v: number) => (xs.filter((x) => x <= v).length / (xs.length || 1)) * 100;
+
+/** Strategy Tester summary from closed trades: net P&L, win rate, profit factor and the worst fall in cumulative P&L, in currency. */
+export function tradeSummary(trades: { pnl?: unknown; exit_date?: unknown; date?: unknown }[]) {
+  const pnl = trades.map((t) => Number(t.pnl)).filter(Number.isFinite);
+  const gain = pnl.filter((x) => x > 0).reduce((s, x) => s + x, 0), loss = -pnl.filter((x) => x < 0).reduce((s, x) => s + x, 0);
+  let cum = 0, peak = 0, maxdd = 0;
+  const curve = trades.flatMap((t, i) => {
+    const x = Number(t.pnl); if (!Number.isFinite(x)) return [];
+    cum += x; peak = Math.max(peak, cum); maxdd = Math.min(maxdd, cum - peak);
+    return [{ date: String(t.exit_date ?? t.date ?? i), net: cum }];
+  });
+  return { net: cum, trades: pnl.length, win: pnl.length ? pnl.filter((x) => x > 0).length / pnl.length : null, pf: loss ? gain / loss : null, avg: pnl.length ? cum / pnl.length : null, maxdd, curve };
+}

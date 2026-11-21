@@ -46,10 +46,10 @@ Next batch for the Build workspace. Sources: owner screenshots of `/studio/build
 - One accent colour. Status colour is used only for P&L and errors.
 
 ## Checklist
-- [ ] D0 Top nav menus on every page, same bar everywhere
-- [ ] D1 Labs menu in the top bar; coloured rail removed; ⌘1–⌘6
-- [ ] D2 Activity bar cut to four; chart toolbar grouped into flyouts
-- [ ] D3 Gutters invisible at rest, 2px accent on hover or drag
-- [ ] D4 Strategy Tester drawer with a single summary view (closes W-8)
-- [ ] D5 Spacing and header pass across the Dev workspace
+- [x] D0 Top nav menus on every page, same bar everywhere
+- [x] D1 Labs menu in the top bar; coloured rail removed; ⌘1–⌘6
+- [x] D2 Activity bar cut to four; chart toolbar grouped into flyouts
+- [x] D3 Gutters invisible at rest, 2px accent on hover or drag
+- [x] D4 Strategy Tester drawer with a single summary view (closes W-8)
+- [x] D5 Spacing and header pass across the Dev workspace
 - [ ] Screenshots at 1440 and 1024, dark and light (closes B-10)

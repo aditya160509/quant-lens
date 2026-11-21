@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { excursions, monthly, shuffleTrades, stats, topDrawdowns } from "../build/devStats";
+import { excursions, monthly, shuffleTrades, stats, topDrawdowns, tradeSummary } from "../build/devStats";
 
 const eq = [100, 110, 99, 105, 120, 90, 95].map((value, i) => ({ date: `2024-0${i + 1}-01`, value }));
 
@@ -25,5 +25,14 @@ describe("dev stats", () => {
     const r = [10, -5, 2, -8, 4], a = shuffleTrades(r, 100, 50, 7), b = shuffleTrades(r, 100, 50, 7);
     expect(a.final.every((x) => Math.abs(x - a.orig.ret) < 1e-9)).toBe(true);
     expect(a.dd).toEqual(b.dd);
+  });
+  it("summarises trades for the tester drawer", () => {
+    const s = tradeSummary([{ pnl: 100 }, { pnl: -50 }, { pnl: -30 }, { pnl: 80 }, { pnl: "x" }]);
+    expect(s.net).toBe(100);
+    expect(s.trades).toBe(4);
+    expect(s.win).toBe(0.5);
+    expect(s.pf).toBeCloseTo(180 / 80);
+    expect(s.maxdd).toBe(-80);
+    expect(tradeSummary([]).pf).toBeNull();
   });
 });

@@ -19,6 +19,7 @@ import { fitWorkspace, targets, useWorkspaces, WorkspaceMenu, type PanelId } fro
 import { DevRobust } from "./DevRobust";
 import { DevRuns, type RunEntry } from "./DevRuns";
 import { DevTearsheet } from "./DevTearsheet";
+import { tradeSummary } from "./devStats";
 
 type Log = { date: string; symbol: string | null; line: number; text: string; level: string; fields?: Record<string, unknown> | null };
 type Point = { date: string; symbol: string | null; value: number | null };
@@ -48,7 +49,7 @@ type Timeline = Version & { name: string; tags: string[]; locked: boolean; sharp
 type Snapshot = { at: number; files: Record<string, string> };
 type Snippet = { id: string; name: string; prefix: string; body: string; description: string };
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
-type Tab = "problems" | "output" | "plots" | "trades" | "debug" | "console" | "preview";
+type Tab = "tester" | "problems" | "output" | "plots" | "trades" | "debug" | "console" | "preview";
 type View = "code" | "results" | "tearsheet" | "robust" | "runs";
 const VIEW_LABEL: Record<Exclude<View, "code">, string> = { results: "Results", tearsheet: "Tearsheet", robust: "Robustness", runs: "Runs" };
 type Rail = "files" | "outline" | "search" | "versions" | "docs" | "templates";
@@ -62,6 +63,24 @@ const RAILS: [Rail, ReactNode, string][] = [
   ["files", <FileCode2 key="f" size={15} />, "Explorer"], ["outline", <ListTree key="o" size={15} />, "Outline"], ["search", <Search key="s" size={15} />, "Search"],
   ["versions", <GitBranch key="v" size={15} />, "Versions"], ["docs", <BookOpen key="d" size={15} />, "Docs"], ["templates", <LayoutTemplate key="t" size={15} />, "Starters"],
 ];
+
+const money = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+/** Strategy Tester summary: every headline number on one screen, colour only where it means gain or loss. */
+function Tester({ trades }: { trades: Record<string, unknown>[] }) {
+  const s = useMemo(() => tradeSummary(trades), [trades]);
+  if (!s.trades) return <p className="dv-empty">Run the preview to see results</p>;
+  const tiles: [string, string, "up" | "down" | null][] = [
+    ["Net P&L", money(s.net), s.net >= 0 ? "up" : "down"], ["Max drawdown", money(s.maxdd), s.maxdd < 0 ? "down" : null],
+    ["Win rate", s.win === null ? "–" : `${(s.win * 100).toFixed(0)}%`, null], ["Profit factor", s.pf === null ? "–" : s.pf.toFixed(2), s.pf === null ? null : s.pf >= 1 ? "up" : "down"],
+    ["Trades", String(s.trades), null], ["Avg trade", s.avg === null ? "–" : money(s.avg), s.avg === null ? null : s.avg >= 0 ? "up" : "down"],
+  ];
+  return (
+    <div className="dv-tester">
+      <dl className="dv-tiles">{tiles.map(([k, v, tone]) => <div key={k}><dt>{k}</dt><dd className="num" data-tone={tone ?? undefined}>{v}</dd></div>)}</dl>
+      {s.curve.length > 1 ? <TimeSeries data={s.curve} series={[{ key: "net", label: "Cumulative P&L", color: "var(--accent)" }]} height={120} legend={false} /> : null}
+    </div>
+  );
+}
 
 /** Variables at a paused bar: name and value, numbers right-aligned. */
 function KV({ rows }: { rows: Record<string, unknown> }) {
@@ -132,7 +151,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const debugRef = useRef<(b: Record<string, unknown>, quiet?: boolean) => Promise<void> | void>(() => undefined);
   const [panelMax, setPanelMax] = useState(false);
   const testerBeforeMax = useRef<number | null>(null);
-  const [tab, setTab] = useState<Tab>("problems");
+  const [tab, setTab] = useState<Tab>("tester");
   const [lint, setLint] = useState<Problem[]>([]);
   const [types, setTypes] = useState<Problem[]>([]);
   const [outline, setOutline] = useState<Sym[]>([]);
@@ -431,7 +450,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     </div>
   ));
   const docRows = (docs ?? []).filter((d) => !docQ || `${d.scope}.${d.name} ${d.documentation ?? ""}`.toLowerCase().includes(docQ.toLowerCase()));
-  const TABS: [Tab, string, number | null][] = [["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["debug", "Debug", null], ["console", "Console", null], ["preview", "Preview", null]];
+  const TABS: [Tab, string, number | null][] = [["tester", "Tester", null], ["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["debug", "Debug", null], ["console", "Console", null], ["preview", "Preview", null]];
   const toggles = <span className="dv-toggles">
     <button className="icon-btn" aria-pressed={opt.caseSensitive} title="Match case" onClick={() => setOpt((o) => ({ ...o, caseSensitive: !o.caseSensitive }))}><CaseSensitive size={14} /></button>
     <button className="icon-btn" aria-pressed={opt.word} title="Whole word" onClick={() => setOpt((o) => ({ ...o, word: !o.word }))}><WholeWord size={14} /></button>
@@ -753,6 +772,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                   {!plots.length && !Object.keys(prev?.tables ?? {}).length ? <p className="dv-empty">No plots</p> : null}
                 </div>
               ) : null}
+              {tab === "tester" ? <Tester trades={prev?.trades ?? []} /> : null}
               {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades" }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
               {tab === "console" ? (
                 <div className="dv-console" onClick={(e) => (e.currentTarget.querySelector("input") as HTMLInputElement | null)?.focus()}>
