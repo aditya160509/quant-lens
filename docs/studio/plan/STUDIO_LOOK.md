@@ -142,7 +142,7 @@ The two headers merge into one 48px header. The left stripe and the header form 
 - [x] L8 (Sharpe tile open: needs daily returns, not trades) Tester tiles and equity-drawdown chart; Plots under Tester
 - [x] L9 Status bar grouping
 - [x] L9b Lab pages: raised content panel with its own header (in place). Dropped the labelled runs sidebar: lab pages show one run, the runs drawer already lists them, and a sidebar costs width the user asked to get back
-- [ ] L10 Focus mode (done), compact mode (done: Density pref tightens stripe, tabs, status bar), layout preset thumbnails, run deltas
+- [ ] L10 Focus mode (done), compact mode (done: Density pref tightens stripe, tabs, status bar), run deltas (done: Tester tiles show a fading ±delta after a re-run), layout preset thumbnails
 - [x] L11 Screenshots at 1440, 1280, 1024 and 390, dark and light (closes B-10). Found and fixed: header under the chart toolbar, editor and chart stuck dark in light theme, squeezed Python notice on phones
 
 Each step is done when it is verified in the browser with a screenshot, `tsc` is clean, the Studio tests pass, and the work is committed.

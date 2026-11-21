@@ -69,6 +69,20 @@ const money = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v).toLocaleString
 /** Strategy Tester summary: every headline number on one screen, colour only where it means gain or loss. */
 function Tester({ trades, inputs }: { trades: Record<string, unknown>[]; inputs: ReactNode }) {
   const s = useMemo(() => tradeSummary(trades), [trades]);
+  // Run feedback in place: after a re-run, tiles that moved show a ±delta that fades out.
+  const last = useRef<typeof s | null>(null);
+  const [diff, setDiff] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const p = last.current; last.current = s;
+    if (!p?.trades || !s.trades) return;
+    const sign = (v: number, f: (x: number) => string) => (v ? `${v > 0 ? "+" : "−"}${f(Math.abs(v))}` : "");
+    const d: Record<string, string> = {
+      "Net P&L": sign(s.net - p.net, money), "Max drawdown": sign(s.maxdd - p.maxdd, money), Trades: sign(s.trades - p.trades, String),
+      "Win rate": s.win !== null && p.win !== null ? sign(Math.round((s.win - p.win) * 100), (x) => `${x}pp`) : "",
+    };
+    setDiff(d);
+    const t = setTimeout(() => setDiff({}), 3000); return () => clearTimeout(t);
+  }, [s]);
   const tiles: [string, string, "up" | "down" | null][] = [
     ["Net P&L", money(s.net), s.net >= 0 ? "up" : "down"], ["Max drawdown", money(s.maxdd), s.maxdd < 0 ? "down" : null],
     ["Win rate", s.win === null ? "–" : `${(s.win * 100).toFixed(0)}%`, null], ["Profit factor", s.pf === null ? "–" : s.pf.toFixed(2), s.pf === null ? null : s.pf >= 1 ? "up" : "down"],
@@ -77,7 +91,7 @@ function Tester({ trades, inputs }: { trades: Record<string, unknown>[]; inputs:
   return (
     <div className="dv-tester">
       <div className="dv-tester-main">
-      {s.trades ? <dl className="dv-tiles">{tiles.map(([k, v, tone]) => <div key={k}><dt>{k}</dt><dd className="num" data-tone={tone ?? undefined}>{v}</dd></div>)}</dl> : <p className="dv-empty">Run the preview to see results</p>}
+      {s.trades ? <dl className="dv-tiles">{tiles.map(([k, v, tone]) => <div key={k}><dt>{k}</dt><dd className="num" data-tone={tone ?? undefined}>{v}{diff[k] ? <small className="dv-delta">{diff[k]}</small> : null}</dd></div>)}</dl> : <p className="dv-empty">Run the preview to see results</p>}
       {s.curve.length > 1 ? <TimeSeries data={s.curve} series={[{ key: "net", label: "Cumulative P&L", color: "var(--text-2)" }, { key: "dd", label: "Drawdown", color: "var(--down)" }]} height={140} legend={false} /> : null}
       </div>
       <aside className="dv-tester-set" aria-label="Inputs"><h4>Inputs</h4>{inputs}</aside>
