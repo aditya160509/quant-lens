@@ -183,7 +183,7 @@
 /* Build › Dev */
 .bd[data-ui="dev"] { display: flex; flex-direction: column; height: 100%; min-height: 0; width: 100%; box-sizing: border-box; padding: 0; gap: 0; }
 .bd[data-ui="dev"] > .dv { flex: 1 1 0; }
-.dv { --ab: 30px; display: grid; grid-template-columns: var(--ab) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) 24px; min-height: 0; overflow: hidden; background: var(--island); box-shadow: inset 0 1px 0 var(--line); --line: color-mix(in oklab, var(--text) 6%, transparent); }
+.dv { --ab: 30px; display: grid; grid-template-columns: var(--ab) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) 26px; min-height: 0; overflow: hidden; background: var(--island); box-shadow: inset 0 1px 0 var(--line); --line: color-mix(in oklab, var(--text) 6%, transparent); }
 .dv-icons { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; align-items: center; border-right: 1px solid var(--line); }
 .dv-icons .icon-btn { width: var(--ab); height: var(--ab); border-radius: 0; color: var(--text-3); }
 .dv-icons .icon-btn svg { width: 17px; height: 17px; stroke-width: 1.5; }
@@ -217,8 +217,8 @@
 .dv-chartpane { container-type: inline-size; min-height: 0; height: 100%; } .dv-chartpane[hidden] { display: none; }
 .dv-bar { grid-column: 1 / -1; grid-row: 1; display: flex; align-items: center; gap: 6px; padding-right: 8px; min-width: 0; border-bottom: 1px solid var(--line); }
 .dv-tabs { display: flex; flex: none; align-items: stretch; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.dv-tab { flex: none; position: relative; display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 7px; font: 12px var(--mono); color: var(--text-3); cursor: pointer; white-space: nowrap; }
-.dv-tab[aria-selected="true"] { color: var(--text); box-shadow: inset 0 -1px 0 var(--accent); }
+.dv-tab { flex: none; position: relative; display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; font: 13px var(--font); color: var(--text-3); cursor: pointer; white-space: nowrap; }
+.dv-tab[aria-selected="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
 .dv-tab .icon-btn { width: 16px; height: 16px; opacity: .55; }
 .dv-tab:hover .icon-btn, .dv-tab .icon-btn:focus-visible { opacity: 1; }
 .dv-tools { flex: none; display: flex; align-items: center; gap: 2px; }
@@ -232,14 +232,15 @@
 .dv-panel { height: 100%; display: grid; grid-template-rows: 34px minmax(0, 1fr); min-height: 0; }
 .dv-phead { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
 .dv-ptabs { display: flex; flex: 1; min-width: 0; gap: 2px; padding: 0 8px; overflow-x: auto; scrollbar-width: none; }
-.dv-ptabs button { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: 0; background: none; color: var(--text-3); font-size: 12px; cursor: pointer; white-space: nowrap; }
+.dv-ptabs button { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border: 0; background: none; color: var(--text-3); font-size: 13px; cursor: pointer; white-space: nowrap; }
 .dv-phead > .icon-btn { flex: none; align-self: center; width: 26px; height: 26px; padding: 0; }
 .dv-pbody { overflow: auto; padding: 6px 10px 10px; }
 .dv-side { position: relative; height: 100%; display: grid; grid-template-rows: minmax(0, 1fr); align-content: stretch; gap: 10px; padding: 8px; overflow: auto; min-width: 0; }
 .dv-thread { position: absolute; z-index: 20; top: 8px; right: 16px; width: 320px; display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line), 0 8px 24px rgb(0 0 0 / .3); }
 .dv-cmt { background: var(--accent); border-radius: 50%; width: 7px !important; height: 7px !important; margin: 7px 0 0 4px; cursor: pointer; }
-.dv-status { grid-column: 1 / -1; grid-row: 3; display: flex; align-items: stretch; gap: 0; padding: 0 92px 0 0; height: 24px; border-top: 1px solid var(--line); background: var(--panel); font: 11.5px var(--mono); color: var(--text-3); white-space: nowrap; overflow: hidden; }
-.dv-status > * { display: inline-flex; align-items: center; padding: 0 10px; border-right: 1px solid var(--line); }
+.dv-status { grid-column: 1 / -1; grid-row: 3; display: flex; align-items: stretch; gap: 0; padding: 0 92px 0 0; height: 26px; border-top: 1px solid var(--line); background: var(--bg); font: 12px var(--font); color: var(--text-3); white-space: nowrap; overflow: hidden; }
+.dv-status > * { display: inline-flex; align-items: center; padding: 0 10px; }
+.dv-status .num, .dv-status b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .dv-status > button:hover { background: var(--line); color: var(--text); }
 .dv-item:hover { color: var(--text); background: var(--line); }
 .dv-k { width: 15px; height: 15px; display: inline-grid; place-items: center; border-radius: 4px; font: 600 9.5px var(--mono); font-style: normal; text-transform: uppercase; color: var(--bg, #000); background: var(--text-3); }
@@ -447,11 +448,12 @@
 .dv-menu hr { margin: 4px 6px; border: 0; border-top: 1px solid var(--line); }
 .dv-view-pane { position: absolute; inset: 0; z-index: 3; background: var(--island); display: grid; min-height: 0; min-width: 0; }
 .dv-view-pane > .dv-pbody { overflow: auto; padding: 12px 16px; }
-.dv-chart { height: 100%; display: grid; grid-template-rows: minmax(0, 1fr) auto 40px; min-height: 0; min-width: 0; }
+.dv-chart { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 40px; min-height: 0; min-width: 0; }
 .dv-nav { min-width: 0; border-top: 1px solid var(--line); }
-.dv-navbar { display: flex; align-items: center; gap: 6px; padding: 4px 10px; }
+.dv-navbar { display: flex; align-items: center; gap: 4px; padding: 0; flex: none; }
+.dv-fsep { width: 1px; height: 18px; margin: 0 6px; background: var(--line-2); flex: none; }
 .dv-navbar select { width: auto; flex: none; }
-.dv-navbar b { flex: 1; font-size: 12px; font-weight: 600; }
+.dv-navbar b { font-size: 12px; font-weight: 500; color: var(--text-2); margin-right: 4px; }
 .dv-navbar b span { margin-left: 6px; color: var(--text-3); font-weight: 400; }
 .dv-plots { top: auto; bottom: calc(100% + 4px); min-width: 260px; }
 .dv-plots > div { display: flex; align-items: center; gap: 8px; padding: 4px 8px; }
@@ -461,9 +463,10 @@
 .dv-gear { position: absolute; top: 0; right: 0; z-index: 2; }
 .dv-chart > .dv-empty { margin: 16px; }
 .dv-chartbox { min-height: 0; min-width: 0; overflow: hidden; }
-.dv-replay { display: flex; align-items: center; gap: 4px; padding: 0 10px; border-top: 1px solid var(--line); }
+.dv-replay { display: flex; align-items: center; gap: 4px; padding: 0 10px; min-width: 0; overflow: hidden; border-top: 1px solid var(--line); container-type: inline-size; }
+@container (max-width: 520px) { .dv-replay time, .dv-replay .seg { display: none; } }
 .dv-replay input[type="range"] { flex: 1; min-width: 0; margin: 0 8px; accent-color: var(--accent); }
-.dv-replay time { min-width: 84px; text-align: right; font: 12px var(--mono); color: var(--text-3); }
+.dv-replay time { min-width: 76px; text-align: right; font: 12px var(--mono); color: var(--text-3); }
 .dv-replay .seg button { min-width: 26px; }
 @container (max-width: 350px) {
   .dv-replay time { display: none; }
@@ -549,11 +552,12 @@
   .dv-icons .icon-btn { width: 32px; height: 34px; }
   .dv-bar { justify-content: flex-start; }
 }
-.dv-tester { display: grid; gap: 12px; padding: 12px 16px; }
-.dv-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 0; }
+.dv-tester { display: grid; gap: 12px; padding: 12px; container-type: inline-size; }
+.dv-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 0; }
+@container (max-width: 560px) { .dv-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .dv-tiles > div { padding: 10px 12px; border-radius: 10px; background: color-mix(in oklab, var(--text) 4%, transparent); }
 .dv-tiles dt { font-size: 12px; color: var(--text-3); }
-.dv-tiles dd { margin: 4px 0 0; font-size: 18px; font-weight: 600; color: var(--text); }
+.dv-tiles dd { margin: 4px 0 0; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: var(--text); }
 .dv-tiles dd[data-tone="up"] { color: var(--up); }
 .dv-tiles dd[data-tone="down"] { color: var(--down); }
 /* Dev controls living in the workspace header: one row, no own border, the page's own bar row collapses. */
@@ -561,7 +565,7 @@
 .dv-bar.in-head .btn { height: 30px; border-radius: 8px; }
 .dv-bar.in-head .dv-execute { padding: 0 14px; background: var(--accent); color: var(--bg); border: 0; font-weight: 600; }
 .dv-bar.in-head .dv-execute:hover:not(:disabled) { filter: brightness(1.08); }
-.dv[data-head] { grid-template-rows: 0 minmax(0, 1fr) 24px; }
+.dv[data-head] { grid-template-rows: 0 minmax(0, 1fr) 26px; }
 
 /* Tool window stripe (JetBrains New UI): 40px, 32px targets, 18px icons, top group for side windows, bottom group for the panel. */
 .dv { --ab: 44px; }

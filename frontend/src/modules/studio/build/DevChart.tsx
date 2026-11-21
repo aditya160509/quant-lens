@@ -192,8 +192,16 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   return (
     <div className="dv-chart">
       <div className="dv-chartbox" ref={box} />
-      {rows.length || Object.keys(prev?.plots ?? {}).length ? (
-        <div className="dv-nav">
+      <div className="dv-replay">
+        <button className="icon-btn" aria-label="Back one bar" title="Back one bar" onClick={() => onGo(null, -1)}><ChevronLeft size={15} /></button>
+        <button className="icon-btn" aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause" : "Play"} onClick={() => onPlay(!playing)}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>
+        <button className="icon-btn" aria-label="Forward one bar" title="Forward one bar" onClick={() => onGo(null, 1)}><ChevronRight size={15} /></button>
+        <input type="range" min={0} max={bars.length - 1} value={Math.max(at, 0)} aria-label="Replay position" onChange={(e) => { onPlay(false); onGo(bars[Number(e.target.value)].time); }} />
+        <span className="seg" role="group" aria-label="Speed">{SPEEDS.map((s) => <button key={s} type="button" aria-pressed={speed === s} onClick={() => onSpeed(s)}>{s}x</button>)}</span>
+        <time>{pausedAt ?? bars.at(-1)?.time}</time>
+        {/* One chart footer (TradingView range bar): replay on the left, trade navigator on the right. */}
+        {rows.length || Object.keys(prev?.plots ?? {}).length ? <>
+          <span className="dv-fsep" aria-hidden />
           <div className="dv-navbar">
             <b>Trades<span>{currentTrade >= 0 ? `${currentTrade + 1} / ` : ""}{shown.length}</span></b>
             <select className="input sm" aria-label="Filter trades" value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}><option value="all">All</option><option value="win">Winners</option><option value="loss">Losers</option></select>
@@ -214,16 +222,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
               </details>
             ) : null}
           </div>
-
-        </div>
-      ) : null}
-      <div className="dv-replay">
-        <button className="icon-btn" aria-label="Back one bar" title="Back one bar" onClick={() => onGo(null, -1)}><ChevronLeft size={15} /></button>
-        <button className="icon-btn" aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause" : "Play"} onClick={() => onPlay(!playing)}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>
-        <button className="icon-btn" aria-label="Forward one bar" title="Forward one bar" onClick={() => onGo(null, 1)}><ChevronRight size={15} /></button>
-        <input type="range" min={0} max={bars.length - 1} value={Math.max(at, 0)} aria-label="Replay position" onChange={(e) => { onPlay(false); onGo(bars[Number(e.target.value)].time); }} />
-        <span className="seg" role="group" aria-label="Speed">{SPEEDS.map((s) => <button key={s} type="button" aria-pressed={speed === s} onClick={() => onSpeed(s)}>{s}x</button>)}</span>
-        <time>{pausedAt ?? bars.at(-1)?.time}</time>
+        </> : null}
       </div>
     </div>
   );
