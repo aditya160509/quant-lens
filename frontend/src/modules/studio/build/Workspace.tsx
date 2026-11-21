@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronDown, LayoutDashboard } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { ChevronDown, LayoutDashboard, Plus, Save, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { ReactNode } from "react";
 
 export type PanelId = "rail" | "chart" | "preview" | "tester";
@@ -44,6 +45,7 @@ export function useWorkspaces() {
     switchTo: (id: string) => setS((p) => ({ ...p, active: id })),
     add,
     rename: (id: string, name: string) => setS((p) => ({ ...p, list: p.list.map((w) => (w.id === id ? { ...w, name } : w)) })),
+    reset: () => setS((p) => ({ ...p, list: p.list.map((w) => (w.id === p.active && w.builtin ? BUILTIN.find((b) => b.id === w.id) ?? w : w)) })),
     remove: (id: string) => setS((p) => { const list = p.list.filter((w) => w.id !== id || w.builtin); return { list, active: list.some((w) => w.id === p.active) ? p.active : "code" }; }),
   };
 }
@@ -68,7 +70,7 @@ export function fitWorkspace(layout: Layout, width: number, chartFirst: boolean)
   return { open: { ...open, chart }, size: { ...size, rail: rail / available * 100, right: right / available * 100 } };
 }
 
-export function WorkspaceMenu({ ws, children }: { ws: ReturnType<typeof useWorkspaces>; children?: ReactNode }) {
+export function WorkspaceMenu({ ws, children, onCustomise }: { ws: ReturnType<typeof useWorkspaces>; children?: ReactNode; onCustomise?: () => void }) {
   const { cur } = ws;
   return (
     <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
@@ -77,6 +79,7 @@ export function WorkspaceMenu({ ws, children }: { ws: ReturnType<typeof useWorks
         <div className="hd">Workspace</div>
         {ws.list.map((w) => <button key={w.id} role="menuitemradio" aria-checked={w.id === cur.id} onClick={() => ws.switchTo(w.id)}>{w.name}</button>)}
         <hr />
+        {onCustomise ? <button role="menuitem" onClick={onCustomise}>Customise layouts…<kbd>{"⌘⇧\\"}</kbd></button> : null}
         <button role="menuitem" onClick={() => { const n = window.prompt("Save workspace as")?.trim(); if (n) ws.add(n, cur.layout); }}>Save as…</button>
         <button role="menuitem" onClick={() => ws.add(`${cur.name} copy`, cur.layout)}>Duplicate</button>
         {cur.builtin ? null : <button role="menuitem" onClick={() => { const n = window.prompt("Rename workspace", cur.name)?.trim(); if (n) ws.rename(cur.id, n); }}>Rename</button>}
@@ -86,3 +89,102 @@ export function WorkspaceMenu({ ws, children }: { ws: ReturnType<typeof useWorks
     </details>
   );
 }
+
+type Ws = ReturnType<typeof useWorkspaces>;
+const clamp = (v: number, lo: number, hi: number) => Math.round(Math.min(hi, Math.max(lo, v)));
+
+/** A layout drawn small: side bar, editor over the bottom panel, chart on the right. */
+function Thumb({ l }: { l: Layout }) {
+  const rail = l.open.rail ? l.size.rail : 0, right = l.open.chart ? l.size.right : 0, t = l.open.tester ? l.size.tester : 0;
+  const W = 96, H = 60, g = 2, x1 = (W * rail) / 100, x2 = W - (W * right) / 100, y = H - (H * t) / 100;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} aria-hidden className="dv-thumb">
+      {rail ? <rect x={0} y={0} width={x1 - g} height={H} rx={2} data-z="rail" /> : null}
+      <rect x={rail ? x1 : 0} y={0} width={x2 - (rail ? x1 : 0) - (right ? g : 0)} height={y - (t ? g : 0)} rx={2} data-z="editor" />
+      {t ? <rect x={rail ? x1 : 0} y={y} width={x2 - (rail ? x1 : 0) - (right ? g : 0)} height={H - y} rx={2} data-z="tester" /> : null}
+      {right ? <rect x={x2} y={0} width={W - x2} height={H} rx={2} data-z="chart" /> : null}
+    </svg>
+  );
+}
+
+const ZONES: [PanelId | "editor", string][] = [["rail", "Files"], ["editor", "Editor"], ["tester", "Bottom panel"], ["chart", "Chart"]];
+const PRESETS: [string, Partial<Record<PanelId, boolean>>][] = [["Columns", { rail: true, chart: true }], ["Rows", { tester: true }], ["Grid", { rail: true, chart: true, tester: true }], ["Editor", {}]];
+
+/** Zone editor: show or hide each zone, drag the shared edges to size them, save as a named layout. */
+function ZoneEditor({ start, onSave, onCancel }: { start: Layout; onSave: (name: string, l: Layout) => void; onCancel: () => void }) {
+  const [l, setL] = useState<Layout>(() => structuredClone(start));
+  const [name, setName] = useState("");
+  const box = useRef<HTMLDivElement>(null);
+  const rail = l.open.rail ? l.size.rail : 0, right = l.open.chart ? l.size.right : 0, t = l.open.tester ? l.size.tester : 0;
+  const drag = (edge: "rail" | "right" | "tester") => (e: ReactPointerEvent) => {
+    e.preventDefault();
+    const r = box.current!.getBoundingClientRect();
+    const move = (ev: PointerEvent) => {
+      const x = ((ev.clientX - r.left) / r.width) * 100, y = ((ev.clientY - r.top) / r.height) * 100;
+      setL((p) => ({ ...p, size: { ...p.size, ...(edge === "rail" ? { rail: clamp(x, 8, 40) } : edge === "right" ? { right: clamp(100 - x, 15, 75) } : { tester: clamp(100 - y, 10, 70) }) } }));
+    };
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  };
+  const toggle = (z: PanelId | "editor") => { if (z !== "editor") setL((p) => ({ ...p, open: { ...p.open, [z]: !p.open[z] } })); };
+  const pos: Record<string, CSSProperties> = {
+    rail: { left: 0, top: 0, width: `${rail}%`, height: "100%" },
+    editor: { left: `${rail}%`, top: 0, width: `${100 - rail - right}%`, height: `${100 - t}%` },
+    tester: { left: `${rail}%`, top: `${100 - t}%`, width: `${100 - rail - right}%`, height: `${t}%` },
+    chart: { left: `${100 - right}%`, top: 0, width: `${right}%`, height: "100%" },
+  };
+  const on = (z: PanelId | "editor") => z === "editor" || l.open[z];
+  return (
+    <div className="dv-zones">
+      <div className="dv-zones-hd">
+        <b>Zone editor</b>
+        <span className="seg">{PRESETS.map(([n, o]) => <button key={n} className="btn sm ghost" onClick={() => setL((p) => ({ ...p, open: { rail: false, chart: false, preview: false, tester: false, ...o } }))}>{n}</button>)}</span>
+      </div>
+      <div className="dv-zones-box" ref={box}>
+        {ZONES.filter(([z]) => on(z)).map(([z, label]) => (
+          <div key={z} className="dv-zone" style={pos[z]}>
+            <span>{label}</span>
+            {z !== "editor" ? <button className="icon-btn" aria-label={`Hide ${label}`} onClick={() => toggle(z)}><X size={13} /></button> : null}
+          </div>
+        ))}
+        {rail ? <i className="dv-edge v" style={{ left: `${rail}%` }} onPointerDown={drag("rail")} /> : null}
+        {right ? <i className="dv-edge v" style={{ left: `${100 - right}%` }} onPointerDown={drag("right")} /> : null}
+        {t ? <i className="dv-edge h" style={{ top: `${100 - t}%`, left: `${rail}%`, width: `${100 - rail - right}%` }} onPointerDown={drag("tester")} /> : null}
+      </div>
+      <div className="dv-zones-ft">
+        {ZONES.filter(([z]) => !on(z)).map(([z, label]) => <button key={z} className="btn sm ghost" onClick={() => toggle(z)}><Plus size={12} />{label}</button>)}
+        <span style={{ flex: 1 }} />
+        <input className="input sm" aria-label="Layout name" placeholder="Layout name" value={name} onChange={(e) => setName(e.target.value)} />
+        <button className="btn sm primary" onClick={() => onSave(name.trim() || "Custom layout", l)}>Save and apply</button>
+        <button className="btn sm ghost" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/** Layouts (⌘⇧\): every saved layout as a thumbnail, a zone editor for new ones, save the current arrangement. The active layout is remembered as the default. */
+export function LayoutsDialog({ ws, open, onClose }: { ws: Ws; open: boolean; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { const d = ref.current; if (!d) return; if (open && !d.open) d.showModal(); if (!open && d.open) d.close(); if (!open) setEditing(false); }, [open]);
+  return (
+    <dialog ref={ref} className="dv-layouts" data-wide={editing || undefined} onClose={onClose} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      {editing ? <ZoneEditor start={ws.cur.layout} onCancel={() => setEditing(false)} onSave={(n, l) => { ws.add(n, l); setEditing(false); onClose(); }} /> : (
+        <>
+          <div className="dv-layouts-hd"><b>Layouts</b><span style={{ flex: 1 }} />{ws.cur.builtin ? <button className="btn sm ghost" onClick={ws.reset}>Reset</button> : null}<button className="btn sm" onClick={onClose}>Done</button></div>
+          <div className="dv-layouts-grid">
+            {ws.list.map((w) => (
+              <div key={w.id} className="dv-layout" aria-current={w.id === ws.cur.id || undefined}>
+                <button onClick={() => ws.switchTo(w.id)}><Thumb l={w.layout} /><span>{w.name}</span></button>
+                {w.builtin ? null : <button className="icon-btn" aria-label={`Delete ${w.name}`} onClick={() => ws.remove(w.id)}><X size={12} /></button>}
+              </div>
+            ))}
+          </div>
+          <button className="btn sm ghost dv-layouts-new" onClick={() => setEditing(true)}><Plus size={13} />New grid layout</button>
+          <button className="btn sm ghost" onClick={() => { const n = window.prompt("Save current arrangement as")?.trim(); if (n) ws.add(n, ws.cur.layout); }}><Save size={13} />Save current arrangement as a template</button>
+        </>
+      )}
+    </dialog>
+  );
+}
+

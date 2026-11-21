@@ -16,7 +16,7 @@ import { RECIPES } from "./recipes";
 import { useLayout } from "@/workspace/layout";
 import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 import { DevChart } from "./DevChart";
-import { fitWorkspace, targets, useWorkspaces, WorkspaceMenu, type PanelId } from "./Workspace";
+import { fitWorkspace, LayoutsDialog, targets, useWorkspaces, WorkspaceMenu, type PanelId } from "./Workspace";
 import { DevRobust } from "./DevRobust";
 import { DevRuns, type RunEntry } from "./DevRuns";
 import { DevTearsheet } from "./DevTearsheet";
@@ -209,6 +209,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [lastPreview, setLastPreview] = useState<string | null>(null);
   const [qc, setQc] = useState<QC | null>(null);
   const [split, setSplit] = useState<string | null>(null);
+  const [layoutsOpen, setLayoutsOpen] = useState(false);
   const [splitDown, setSplitDown] = useState(false);
   const editorSplitRef = useRef<GroupImperativeHandle>(null);
   useEffect(() => {
@@ -423,6 +424,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "\\" || e.key === "|")) { e.preventDefault(); setLayoutsOpen(true); return; }
       if (e.defaultPrevented || e.repeat || e.key !== "Enter" || !(e.metaKey || e.ctrlKey) || (e.target instanceof Element && e.target.closest(".monaco-editor"))) return;
       e.preventDefault();
       runCode(e.shiftKey ? "full" : "quick");
@@ -448,6 +450,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.step", label: "Debug: step one bar", keys: (m) => [m.KeyCode.F10], run: () => debug({ step: 1 }) },
     { id: "studio.stepline", label: "Debug: step line", keys: (m) => [m.KeyCode.F11], run: (l) => stepLine(l) },
     { id: "studio.stepback", label: "Debug: step back one bar", keys: (m) => [m.KeyMod.Shift | m.KeyCode.F10], run: () => debug({ step: -1 }) },
+    { id: "studio.layouts", label: "View: customise layouts", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Backslash], run: () => setLayoutsOpen(true) },
     { id: "studio.panel", label: "View: toggle panel", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyJ], run: () => setPanelOpen((o) => !o) },
     { id: "studio.rail", label: "View: toggle side bar", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyB], run: () => { if (railOpen) setRailOpen(false); else revealRail(rail); } },
     { id: "studio.files", label: "Go to file", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyP], run: () => revealRail("files") },
@@ -539,7 +542,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const focus = !iconsOpen && !railOpen && !panelOpen;
   // One Layout menu (JetBrains: header widgets hide actions in drop-downs): workspace, views, panels, focus.
   const bar = <>
-    <WorkspaceMenu ws={ws}>
+    <WorkspaceMenu ws={ws} onCustomise={() => setLayoutsOpen(true)}>
       <div className="hd">Open</div>
       <button role="menuitem" onClick={() => openView("results")}>Results</button>
       <button role="menuitem" onClick={() => openView("tearsheet")}>Tearsheet</button>
@@ -560,6 +563,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       <hr />
       <button role="menuitemcheckbox" aria-checked={focus} onClick={() => { const on = !focus; setIconsOpen(!on); setRailOpen(!on); setPanelOpen(!on); }}>Focus mode</button>
     </WorkspaceMenu>
+    <LayoutsDialog ws={ws} open={layoutsOpen} onClose={() => setLayoutsOpen(false)} />
     {tools}
     <button className="btn dv-execute" disabled={!canRun || starting || running} title={!canRun ? "Add strategy code or rules to run" : "Run backtest (⌘↵)"} onClick={() => runCode()}>
       <Play size={14} />{starting || running ? "Running…" : "Run"}

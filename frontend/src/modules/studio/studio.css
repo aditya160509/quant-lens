@@ -597,3 +597,39 @@
 @keyframes dv-delta { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 .rm .dv-delta { animation: none; }
 
+
+/* Layouts dialog (Hermes): thumbnails of every layout, a zone editor for new ones. */
+.dv-layouts { position: fixed; inset: 0; margin: auto; height: fit-content; max-height: calc(100vh - 32px); overflow: auto; width: min(560px, calc(100vw - 32px)); padding: 16px; border: 0; border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); display: none; }
+.dv-layouts[open] { display: grid; gap: 12px; animation: float-in .18s var(--ease-drawer, ease-out); }
+.dv-layouts[data-wide] { width: min(1100px, calc(100vw - 32px)); }
+.dv-layouts::backdrop { background: oklch(0 0 0 / 0.5); backdrop-filter: blur(2px); }
+.dv-layouts-hd, .dv-zones-hd, .dv-zones-ft { display: flex; align-items: center; gap: 8px; }
+.dv-layouts-hd b, .dv-zones-hd b { font-size: 14px; font-weight: 600; }
+.dv-layouts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.dv-layout { position: relative; }
+.dv-layout > button:first-child { width: 100%; display: grid; gap: 6px; padding: 8px; border: 0; border-radius: 10px; background: color-mix(in oklab, var(--text) 3%, transparent); box-shadow: inset 0 0 0 1px var(--line); color: var(--text-2); font-size: 12px; text-align: left; cursor: pointer; }
+.dv-layout > button:first-child:hover { color: var(--text); background: color-mix(in oklab, var(--text) 6%, transparent); }
+.dv-layout[aria-current] > button:first-child { color: var(--text); box-shadow: inset 0 0 0 1.5px var(--text-2); }
+.dv-layout .icon-btn { position: absolute; top: 4px; right: 4px; opacity: 0; }
+.dv-layout:hover .icon-btn, .dv-layout .icon-btn:focus-visible { opacity: 1; }
+.dv-thumb { width: 100%; height: auto; }
+.dv-thumb rect { fill: color-mix(in oklab, var(--text) 12%, transparent); }
+.dv-thumb rect[data-z="editor"] { fill: color-mix(in oklab, var(--text) 22%, transparent); }
+.dv-layouts-new { justify-content: center; border: 1px dashed var(--line-2); }
+.dv-layouts > .btn { justify-self: stretch; }
+.dv-zones { display: grid; gap: 12px; }
+.dv-zones-hd .seg { margin-left: auto; display: flex; gap: 4px; }
+.dv-zones-box { position: relative; height: min(62vh, 560px); border-radius: 10px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); user-select: none; touch-action: none; }
+.dv-zone { position: absolute; display: grid; place-items: center; padding: 3px; }
+.dv-zone::before { content: ""; position: absolute; inset: 3px; border-radius: 8px; background: color-mix(in oklab, var(--text) 6%, transparent); box-shadow: inset 0 0 0 1px var(--line-2); }
+.dv-zone span { position: relative; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.dv-zone .icon-btn { position: absolute; top: 8px; right: 8px; }
+.dv-edge { position: absolute; z-index: 1; background: transparent; }
+.dv-edge.v { top: 0; bottom: 0; width: 10px; margin-left: -5px; cursor: col-resize; }
+.dv-edge.h { height: 10px; margin-top: -5px; cursor: row-resize; }
+.dv-edge::after { content: ""; position: absolute; inset: 0; margin: auto; border-radius: 2px; background: var(--text-3); }
+.dv-edge.v::after { width: 3px; height: 36px; }
+.dv-edge.h::after { height: 3px; width: 36px; }
+.dv-edge:hover::after { background: var(--text); }
+.dv-zones-ft .input { width: 200px; }
+.dv-menu kbd { margin-left: auto; padding-left: 12px; font: 11px var(--font); color: var(--text-4); }
