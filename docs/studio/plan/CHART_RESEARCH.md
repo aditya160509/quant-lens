@@ -207,3 +207,225 @@ All of it: DrawingEngine registry and tools, IndicatorEngine registry, DataAdapt
 - Vela's performance claims and its drawing tool count (~67 from its own doc) are not tested; star count differed between API (1,335) and the README page (511).
 - TakeProfit built-in indicator count, community page, bots page and AI/MCP pages were read only by title or snippet. The blog at takeprofit.com/@TakeProfit was not read.
 - I did not run any third-party code.
+
+---
+
+## Supercharts parity and beyond
+
+Added 2026-11-21. Sources: our code (`frontend/src/components/chart_engine/`, `modules/studio/chart/ChartPage.tsx`, `modules/studio/build/DevChart.tsx`), Vela docs in `node_modules/@luxalgo/vela/docs/user/` (workspace, drawing-tools, renderer-features, scripting-engines), TradingView `/features`, "Getting started with Supercharts", "How to sync the charts of my layout", multi-chart layout and layout guides, TakeProfit Indie docs (What is Indie, Indicator code structure, comparison posts), Pine Script v6 docs. Tags: HAVE (works in Vela and our DevChart today), VELA (Vela supports it, not wired into DevChart), OLD (only in the old engine, lost on delete), GAP (nowhere). Priority P1 to P3.
+
+### 1. Inventory of the old `/studio/chart` and `components/chart_engine` (so nothing is lost on delete)
+
+`/studio/chart` is `ChartPage.tsx` (153 lines). It has two parts: a light `StudioChart` view (one symbol from `/bars`, day, week, month timeframes, indicators from `getAllIndicators()`, a backtest's trades, a trade navigator, replay with 1x, 5x, 20x and key `R`) and `FullChart`, which mounts `q360_chart_core` (the same chart `/trade` uses). Counts are from grep and are not de-duplicated (unverified).
+
+| Area | What exists | Where | Carry to Vela / DevChart? |
+|---|---|---|---|
+| Chart types (16) | candlestick, hollow candle, volume candles, bars, Heikin-Ashi, line, line with markers, step line, area, HLC area, baseline, Renko, Kagi, point and figure, range bars, line break | `types.ts` `ChartType`, `DataAdapter/` | Vela has 9 styles plus hollow candles. Missing: volume candles, HLC area, Renko, Kagi, P&F, range, line break. Port as Vela plugin chart types or pre-transform bars (P2) |
+| Scale modes | auto, manual, log, percent | `types.ts` | Vela has log and percent (HAVE) |
+| Drawing tools | about 99 distinct ids in 18 files: lines, channels, Fib and extended Fib, Gann and extended Gann, pitchforks, Elliott, patterns and extended patterns, shapes, brush, measurement, projection, volume, text | `DrawingEngine/` | Vela ships about 67 tools covering the same families. Drop the old set (HAVE). Check for lost ones: extended Fib and Gann variants, Elliott sub-types |
+| Drawing state | tool registry, `drawingsLocked`, drawing toolbar | `DrawingEngine/registry.ts`, `state/ChartState.ts`, `DrawingToolbar.tsx` | Vela has lock, magnet (3 states), keep drawing, favourites, eraser, undo, clipboard, per-symbol drawings (HAVE) |
+| Indicators (about 69 ids) | SMA, EMA, WMA, HMA, DEMA, TEMA, ZLEMA, KAMA, FRAMA, McGinley, VWMA, RSI, MACD, Stoch, CCI, ROC, MFI, TSI, KST, Coppock, Fisher, TRIX, Ultimate, Aroon, Vortex, ADX, ATR, NATR, Bollinger, Keltner, Donchian, Supertrend, SAR, Ichimoku, VWAP, OBV, CMF, A/D, Force, Pivot, Chop, Ulcer, Mass, hist vol and more | `IndicatorEngine/registry.ts`, `IndicatorMenu.tsx`, `IndicatorPaneRenderer.tsx` | Vela has 70+ native studies with settings dialog and persistence (HAVE). Diff the list once; port any missing as Python indicators (P2) |
+| Candle pattern scanner | about 25 candlestick patterns (doji, hammer, shooting star, engulfing and more) with a selector | `PatternScanner/` | OLD. Port as one Python indicator that returns marks (`ctx.mark`) (P2) |
+| Strategy engine | about 20 built-in strategies: MA cross, dual MA, RSI, MACD, Bollinger, Stochastic, momentum, consecutive up or down, bar up or down, inside bar, outside bar, greedy, channel breakout, Supertrend and more, with a selector | `StrategyEngine/` | OLD. Superseded by our Python `class Strategy` and starters; port the 20 as starter files so the gallery covers them (P2) |
+| Alerts | price cross above or below, enter or exit range, percent change, indicator cross, indicator zone (overbought, oversold, custom), MA crossover, volume spike, candle pattern; browser and sound notification; manager UI | `AlertEngine/` | VELA has alerts and a bell in its workspace. Our condition list is richer. Port conditions as alert definitions on server (P2). Backtest chart does not need alerts; live and paper do |
+| Replay | play, pause, speed 1x, 5x, 20x, scrub slider, key R (page); DevChart has its own debugger-bound replay | `ChartPage.tsx`, `DevChart.tsx` | HAVE (DevChart). Vela also has multi-cell replay (VELA) |
+| Multi-chart | 11 layouts (1, 2H, 2V, 3H, 3V, 3L, 3R, 4, 5, 6, 8), layout menu with icons, symbol search per cell, synced crosshair timestamp | `q360_chart_core.tsx` | VELA workspace: layouts up to the registry, sync links for viewport, symbol, timeframe, crosshair, drawings, style, named groups (P1 to wire) |
+| Compare | `compareSymbols` overlay on the chart | `q360_chart_core.tsx` | GAP in DevChart. Vela API has compare; verify (P2) |
+| Right panels | watchlist panel, alerts panel, alpha panel (percent, z-score, ratio vs a reference) | `components/watchlist/` (WatchlistPanel, AlphaPanel, useWatchlist), `AlphaEngine/math.ts` | OLD. Alpha panel is a real quant idea; keep the maths (`AlphaEngine/math.ts`) and rebuild as an indicator or a pane (P2). Watchlist belongs to Universe page |
+| Intraday | intraday wrapper and adapter for minute bars | `IntradayChartWrapper.tsx`, `DataAdapter/intraday.ts` | Studio uses daily; keep as reference for later (P3) |
+| Misc | mini chart thumbnail, stable container (resize safe), oscillator and volume blocker messages | `MiniChart.tsx`, `StableChartContainer.tsx` | MiniChart: keep for cards (check users before delete). Others obsolete |
+
+**Before deleting:** (1) `rg` for imports of `chart_engine/` from `/trade` and any other page, because `FullChart` says it is the same chart `/trade` uses; do not delete if `/trade` still mounts it. (2) Move `AlphaEngine/math.ts` and the alert condition types somewhere kept. (3) Convert the 20 strategies and the pattern scanner into starter files. (4) Screenshot the old page for reference.
+
+### 2. TradingView Supercharts feature list, with our status
+
+Most demanded for a quant who backtests: marked **(M)**.
+
+**Charts and layout**
+
+| Feature | Detail (from TradingView docs) | Tag | Pri |
+|---|---|---|---|
+| Multi-chart layouts, 1 to 16 charts per layout (M) | Plan-dependent count; layout menu | VELA (workspace), old engine had 8 | P1 |
+| Sync: symbol, interval, crosshair, time, date range (M) | Select Layout menu toggles | VELA (sync links: viewport, symbol, timeframe, crosshair, drawings, style) | P1 |
+| Sync groups by colour or emoji | Symbol/interval groups per chart | VELA (named groups) | P2 |
+| Sync drawings in layout or globally | Same symbol only | VELA (drawings link) | P2 |
+| Saved layouts, rename, copy, share, cloud save | Each layout is a workspace | GAP (persist state doc exists in Vela) | P2 |
+| Maximise one chart in a grid | | VELA (`maximizeCell`) | P2 |
+| Quick search for any action (M) | Global command search | GAP on chart (Studio has F1 for code) | P2 |
+| Symbol search by typing | Type letters to open | VELA | P1 |
+| Time zone setting, exchange time | Bottom bar | VELA | P3 |
+| Range buttons 1D 5D 1M 3M 6M YTD 1Y 5Y All, Go to date | Bottom bar | VELA (bottom bar ranges) | P1 |
+| Undo and redo for chart changes | | VELA | P2 |
+| Snapshot image, copy link | Take a snapshot | VELA (screenshot export) | P2 |
+| Fullscreen, theme, mobile layout | | VELA (mobile drawer) | P3 |
+
+**Chart types (20+)**
+
+| Feature | Tag | Pri |
+|---|---|---|
+| Candles, bars, line, area, baseline, step line, line with markers, columns, Heikin-Ashi, hollow candles | HAVE (Vela) | P1 |
+| HLC area, high-low, volume candles | OLD or GAP | P3 |
+| Renko, Kagi, line break, point and figure, range bars | OLD (old engine) | P2 |
+| Volume footprint, TPO, session volume profile (M for futures only) | GAP (Vela has visible-range volume profile) | P3 |
+| Custom intervals incl. seconds and range bars | GAP (daily only) | P3 |
+| Spreads and custom formula symbols (A/B, A-B) | GAP | P2 (ratio and spread are useful to quants) |
+| Compare and overlay symbols | OLD, Vela API (verify) | P1 |
+| Log and percent scale, auto, lock scale | HAVE (Vela) | P1 |
+| Extended hours and sessions | GAP | P3 |
+
+**Drawing tools (110+ at TradingView; families from the left toolbar)**
+
+| Family | Tag | Pri |
+|---|---|---|
+| Cursors, eraser, measure, zoom in | HAVE (Vela measure, eraser, magnifier) | P1 |
+| Trend lines, rays, extended lines, horizontal and vertical lines, cross line | HAVE (Vela) | P1 |
+| Channels, pitchforks | HAVE | P2 |
+| Gann and Fibonacci (retracement, extension, channel, time zones, fan, arcs, spiral) | HAVE (Vela Fib and Gann) | P2 |
+| Patterns: Elliott, harmonic (XABCD, Gartley, Cypher), head and shoulders, triangle | HAVE (Vela, with ratio badges) | P3 |
+| Forecasting and measurement: long and short position, price range, date range, projection, bars pattern | PARTIAL (Vela Forecast & Measure) | P2 |
+| Shapes: rectangle, circle, ellipse, polyline, arrow, brush, highlighter | HAVE | P2 |
+| Annotations: text, note, callout, price label, flag | HAVE | P2 |
+| Icons, emojis, stickers | HAVE (stamps) | P3 |
+| Magnet weak and strong, keep drawing, lock all, hide all, favourites toolbar | HAVE (Vela) | P1 |
+| Drawing templates (saved style presets per tool) | GAP | P3 |
+| Alerts on drawings | VELA (alerts in drawing-tools) | P3 |
+| Object tree: hide, lock, group, z-order, rename (M) | VELA (object tree) | P1 |
+| Data window: OHLC and indicator values under the crosshair (M) | VELA (data-window readout) | P1 |
+
+**Indicators and scripting**
+
+| Feature | Detail | Tag | Pri |
+|---|---|---|---|
+| Built-in indicator library (400+ indicators and strategies at TradingView) | Vela has 70+, old engine about 69 | HAVE (about 70) | P1 |
+| Indicator settings: inputs, style, visibility per timeframe | Dialog per indicator | HAVE (Vela legend and dialog) | P1 |
+| Multi-pane indicators, pane resize, move to pane | | HAVE (Vela panes) | P1 |
+| Indicator templates (saved sets, remember symbol and interval) | | GAP | P2 |
+| Public library of 100,000+ community scripts | Marketplace | GAP | P3 |
+| Pine Script editor with autocomplete, version control, profiler, logs (M) | Our editor has these for Python | HAVE (our IDE) | P1 |
+| Custom indicators in the chart from code (M) | See section 3 | PARTIAL (ctx.plot on a Strategy) | P1 |
+| Multi-timeframe data in scripts (`request.security`) (M) | Higher-timeframe values in a lower chart | GAP | P1 |
+| Candlestick pattern recognition | | OLD | P2 |
+| Auto chart patterns | | GAP | P3 |
+| Seasonals | Yearly seasonality overlay | PARTIAL (Seasonality view in results) | P3 |
+| Technical rating gauge | Summary signal | GAP | P3 |
+
+**Strategy, replay, alerts, tools**
+
+| Feature | Detail | Tag | Pri |
+|---|---|---|---|
+| Strategy Tester: overview, performance summary, list of trades, properties (M) | Bottom tab | HAVE (Tester, Tearsheet, Results) | P1 |
+| Trades and orders shown on chart, drag orders | | PARTIAL (trades on chart; orders not) | P1 |
+| Deep Backtesting (full history, intraday) | | GAP | P3 |
+| Bar replay, 9 speeds, step, autoplay, replay trading (M) | | HAVE (DevChart replay bound to debugger), multi-chart replay VELA | P1 |
+| Alerts: 13 conditions, drawings, scripts, watchlists, webhooks, multi-condition | | VELA (alert bell), conditions OLD | P2 |
+| Watchlists, flagged symbols, news, calendars | Right toolbar | GAP (Universe page has lists) | P2 |
+| Screeners (stocks, ETFs, Pine Screener) in chart | | GAP on chart (Screener v2 exists elsewhere) | P2 |
+| Heatmaps by sector | | GAP on chart | P3 |
+| Paper trading, broker trading | | GAP (paper hook is idea #23) | P3 |
+| Export chart data CSV | Right-click, export | GAP | P1 |
+| Publish ideas, social, Minds | | GAP | P3 |
+| Fundamentals on chart (100+ metrics, earnings, dividends markers) | | GAP (marks API supports events) | P2 |
+| Options chain, yield curves, macro maps | | GAP | P3 |
+
+**GAP P1 count for this table:** 3 (code-driven multi-timeframe `request.security` equivalent; export chart data CSV; orders on chart). Items tagged VELA with P1 (multi-chart, sync, object tree, data window, ranges, compare) are wiring work, not research gaps: wire the Vela workspace into the Chart tab.
+
+### 3. Custom indicator language: Pine, Indie, or native Python
+
+**Facts collected**
+
+| | Pine Script v6 | Indie (TakeProfit) | Our Python today |
+|---|---|---|---|
+| Syntax | Own language, indentation based, `:=` reassign | A dialect and subset of Python with decorators `@indicator`, `@algorithm`, `@sec_context`, `@param.*`, `@plot.line`, `@plot.fill`; type hints required on helper functions; entry is `Main` function or class with `calc` | Full Python 3.12 |
+| Execution model | Runs bar by bar on TradingView servers; series are implicit (`close[1]`) | Server-side bar by bar; series indexed `self.close[0]`, `[1]` (note: `[0]` is current) | Strategy `on_bar` per bar and vectorised pandas |
+| Strategies | `strategy()` with `strategy.entry` and order simulation | `@algorithm`-style strategies with exchange emulator, live trading | `class Strategy` with `ctx` |
+| Multi-symbol and timeframe | `request.security`, dynamic requests in v6 | `Context.calc_on` with secondary contexts | `ctx` on universes (up to ~4,000) |
+| Tooling | Cloud editor, profiler, logs | IDE widget, MCP server so an LLM compiles and validates code | Monaco with debugger, profiler, Output |
+| Licence and portability | Closed; PineTS runtime is AGPL | Closed platform language; no Pine importer, MCP converts | Ours |
+| Limits | Compute and request caps, no files, no network | Subset of Python (no arbitrary libs) | Sandboxed |
+
+**What Indie gets right.** One decorated entry point, declarative `@param` inputs that auto-build the settings form, `@plot.*` decorators that declare how outputs look, secondary contexts for other symbols, and an MCP server so an LLM can compile-check its own code. It is Python-shaped so a Python user is at home, but it is a restricted dialect, so you cannot use pandas or numpy.
+
+**Recommendation: native Python, one unification.** Do not adopt Pine (separate language, AGPL runtime, no gain for Python users) and do not copy Indie's restricted dialect. Keep full Python on the backend, as already decided. Add one small base class so the same file drives chart plots and backtests:
+
+- `class Indicator`: computes named series from bars. Declares `inputs` and `plots`. Pure function of data, so it runs vectorised (fast) or bar by bar.
+- `class Strategy`: unchanged, but can `use` an indicator, so `self.ema = self.use(Ema, length=20)` gives the same numbers on the chart and in the backtest. One code path, no drift between what you see and what trades.
+- The chart runs `Indicator` classes through the same pyrunner and draws them with `registerNativeIndicator` (already used for `atlas.plot`). The backtest imports the same class.
+
+```python
+# indicators.py
+from atlas import Indicator, Input, Plot, Fill
+
+class KeltnerSqueeze(Indicator):
+    overlay = False                        # own pane (True = on price)
+    length  = Input.int(20, min=2, max=200, title="Length")
+    mult    = Input.float(1.5, step=0.1, title="ATR mult")
+    ma      = Plot.line("Basis", color="#4f8cff")
+    upper   = Plot.line("Upper", color="#888", style="dashed")
+    lower   = Plot.line("Lower", color="#888", style="dashed")
+    squeeze = Plot.histogram("Squeeze", color=lambda v: "#e5484d" if v else "#30a46c")
+    band    = Fill(upper, lower, color="#4f8cff22")
+
+    def calc(self, bars):                  # bars: pandas DataFrame, full history, no look-ahead by contract
+        basis = bars.close.ewm(span=self.length).mean()
+        atr   = self.atr(bars, self.length)
+        self.ma[:]      = basis
+        self.upper[:]   = basis + self.mult * atr
+        self.lower[:]   = basis - self.mult * atr
+        bb_width        = bars.close.rolling(self.length).std() * 2
+        self.squeeze[:] = (bb_width < (self.upper - self.lower) / 2).astype(float)
+```
+
+```python
+# main.py
+from atlas import Strategy
+from indicators import KeltnerSqueeze
+
+class Strategy(Strategy):
+    def init(self):
+        self.k = self.use(KeltnerSqueeze, length=20, mult=1.5)   # same code as on the chart
+        self.universe("sp500")
+
+    def on_bar(self, ctx):
+        k = self.k[ctx.symbol]              # values up to ctx.date only
+        if k.squeeze[-2] and not k.squeeze[-1] and ctx.close > k.ma[-1]:
+            ctx.buy(size=0.02)              # 2% of equity
+```
+
+How it works: the platform runs `calc` over bars once, caches by (class source hash, inputs, symbol), and serves the numbers to both places. A look-ahead guard runs `calc` on a truncated history and compares the last values to the full-history run, and reports a Problem if they differ. Inputs become the settings form on the chart and the Inputs panel in the IDE with no extra code. Marketplace and sharing come later as importing a file.
+
+**Optional Pine import.** Keep PineTS (AGPL) out of the product. If users ask, offer a Pine to Python converter as an AI action (like TakeProfit's MCP converter), which outputs a normal `Indicator` file the user owns.
+
+### 4. Beyond TradingView for a quant platform
+
+| Idea | Why it matters | Pri |
+|---|---|---|
+| Universe-aware chart: symbol list with per-symbol P&L, heatmap, linked chart (see DEV_IDEAS) | TradingView is one symbol at a time; our runs are 4,000 | P1 |
+| Chart a **signal**, not just price: show the score, rank and percentile as a pane, with the breakpoint line | Quants debug ranks | P1 |
+| Debugger-bound replay that stops on order, fill, 5% loss day, with locals (already built) | Nobody else ties replay to code state | P1 |
+| Bar-level "why": click a bar to see the decision log and which rule fired | Trust in results | P1 |
+| Trade ribbons with MAE and MFE bars and exit reason on the chart | Better than plain arrows | P1 |
+| Cross-sectional pane: on any date, scatter or bar of the signal across the universe, with the chosen names highlighted | Factor research | P2 |
+| Point-in-time data: show fundamentals and universe membership as of each bar, mark delisted names | No survivorship | P2 |
+| Regime ribbon behind price (volatility or trend regime) with strategy P&L per regime | Already have regime stats | P2 |
+| Equity, drawdown and exposure panes synced to the price chart time axis, so click an equity dip to see price | One time axis | P1 |
+| Corporate actions and earnings markers from the marks API | Context for gaps | P2 |
+| Compare two runs on the chart: trades of run A and run B as two marker layers, with a diff of entries | Debug a change | P2 |
+| Parameter scrubber: drag an input and the indicator and signals redraw live (indicator-only, no backtest) | Fast intuition | P1 |
+| Order and risk lines: stop, target, trailing stop levels drawn per trade | Verify exits | P2 |
+| Notes and annotations stored with the run, shown on replay | Research journal | P3 |
+| Shareable chart link with run, symbol, date range and drawings | Collaboration | P3 |
+| AI "explain this bar" and "draw what the strategy saw" | Learning | P3 |
+| Screenshot to report: one click to push the chart image into the tearsheet | Papers and write-ups | P2 |
+
+### Top recommendations (short list)
+
+1. Wire Vela's workspace (multi-chart, sync links, object tree, data window, ranges, replay) into the Chart tab: most TradingView parity is already in the package.
+2. Add a symbol picker and universe list linked to the chart for multi-symbol runs.
+3. Introduce `class Indicator` plus `self.use(...)` in Strategy: one code, two outputs.
+4. Add inputs and plots declared in Python (`Input`, `Plot`, `Fill`) so settings forms and styles are generated.
+5. Add multi-timeframe access in `ctx` and `Indicator` (a `request.security` equivalent).
+6. Show orders, stops and targets on the chart; export chart data as CSV.
+7. Port the old engine's missing pieces before delete: Renko, Kagi, P&F, range, line break, volume candles as Vela chart types; 20 strategies as starters; the pattern scanner and alpha maths as Python indicators.
+8. Add a look-ahead guard that runs indicators on truncated history and reports Problems.
+9. Compare two runs on one chart.
+10. Run perf spike on Vela with 100k bars before dropping the old engine (the first decision in section 3.3).
