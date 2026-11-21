@@ -761,4 +761,4 @@ Merges Build (141 done features move into panels unchanged), the 22 open Build i
 - [ ] [L] W-11 Report page: performance, trades analysis, tearsheet, robustness, compare, certificate. Dev report tabs now use the full workspace by default. A standalone report page remains open.
 - [ ] [M] W-12 Chart-first mode for non-coders (D in the plan)
 - [x] [S] W-13 Fix: preview too short, broken resize and pan (superseded by W-1)
-- [ ] [M] W-14 Remove the old chart engine and SVG preview once unused (ask owner first)
+- [x] [M] W-14 Removed Studio's old Chart page and its lightweight-charts preview (owner OK 2026-11-21). The shared chart_engine stays: watchlist, trading, landing and security still use it. Features to port before it goes are inventoried in CHART_RESEARCH.md "Supercharts parity and beyond"

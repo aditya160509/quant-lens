@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { Blend, CandlestickChart, Radio, FlaskConical, PencilRuler, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Blend, Radio, FlaskConical, PencilRuler, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { STUDIO_BASE } from "./base";
 import { StudioContext, StrategiesPicker, StrategyPicker } from "./RunHeader";
 import { isNum, pct } from "@/modules/research/format";
@@ -23,7 +23,6 @@ const PAGES: Page[] = [
   { id: "test", label: "Test", icon: FlaskConical, question: "", features: ["st01", "st02", "st03"] },
   { id: "portfolio", label: "Portfolio", icon: Blend, question: "", features: ["st04"] },
   { id: "live", label: "Live", icon: Radio, question: "", features: ["st05"] },
-  { id: "chart", label: "Chart", icon: CandlestickChart, question: "", features: [], slug: "chart" },
 ];
 
 type RawFeature = { id: string; name: string; inputs: InputSpec[]; outputs: { key: string; label: string; source: "tables" | "charts"; render: string }[] };
@@ -112,7 +111,6 @@ registerAlternates({ stTradeShape: [{ label: "Returns", view: "stTradeReturns" }
 
 const TRADE_COLUMNS = ["symbol", "side", "entry_date", "exit_date", "entry", "exit", "shares", "pnl", "return", "bars", "mae", "mfe", "exit_reason", "costs", "signal_date"];
 const BuildPage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./build/BuildPage"), { ssr: false });
-const ChartPage = dynamic<{ features: FeatureSpec[]; id?: string }>(() => import("./chart/ChartPage"), { ssr: false });
 const HomePage = dynamic<{ features: FeatureSpec[]; runs: RunRecord[] }>(() => import("./home/StudioHome"), { ssr: false });
 
 export const STUDIO_LAB: LabConfig = {
@@ -291,6 +289,6 @@ export const STUDIO_LAB: LabConfig = {
   takeaway: (_feature, key, view, result) => lead(view ?? key, result),
   runLabel: (f) => ({ st02: "Run sweep", st03: "Run validation", st04: "Combine", st05: "Get signals" } as Record<string, string>)[f] ?? "Run backtest",
   defaultUniverse: "Top names by liquidity",
-  specials: { build: BuildPage, chart: ChartPage },
+  specials: { build: BuildPage },
   overview: { home: HomePage, intro: "", stages: [] },
 };

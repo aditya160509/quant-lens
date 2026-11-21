@@ -11,7 +11,7 @@ export const MODULES: ModuleLink[] = [
   { id: "studio", blurb: "Write, test and run strategies", label: "Studio", href: "/studio", icon: CandlestickChart, pages: [
     { label: "Home", href: "/studio" },
     { label: "Build", href: "/studio/build" }, { label: "Backtest", href: "/studio/backtest" }, { label: "Optimise", href: "/studio/optimise" },
-    { label: "Validate", href: "/studio/validate" }, { label: "Portfolio", href: "/studio/portfolio" }, { label: "Live", href: "/studio/live" }, { label: "Chart", href: "/studio/chart" }] },
+    { label: "Validate", href: "/studio/validate" }, { label: "Portfolio", href: "/studio/portfolio" }, { label: "Live", href: "/studio/live" }] },
   { id: "ml", blurb: "Models, risk and allocation", label: "ML", href: "/ml", icon: BrainCircuit, pages: [
     { label: "Overview", href: "/ml" },
     { label: "Validate", href: "/ml/validate" }, { label: "Alpha", href: "/ml/alpha" }, { label: "Volatility & risk", href: "/ml/volatility" },
