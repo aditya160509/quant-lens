@@ -53,3 +53,5 @@ Next batch for the Build workspace. Sources: owner screenshots of `/studio/build
 - [x] D4 Tester tab with a one-screen summary (equity/drawdown strip and in-drawer settings for W-8 still open; trades strip and replay kept under the chart)
 - [x] D5 Spacing and header pass across the Dev workspace
 - [ ] Screenshots at 1440 and 1024, dark and light (closes B-10)
+
+> Superseded for visuals by [STUDIO_LOOK.md](STUDIO_LOOK.md) (2026-11-21).
