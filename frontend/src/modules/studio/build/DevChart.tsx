@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Pause, Play, Settings2, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Pause, Play, Settings2, SlidersHorizontal } from "lucide-react";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Vela as VelaChart } from "@luxalgo/vela";
 import { studio } from "../api";
@@ -81,9 +81,9 @@ const download = (name: string, href: string) => { const a = document.createElem
 
 /** The Chart page's engine over the preview window: trades, ctx.plot series, the paused bar, and replay controls that drive the debugger. */
 const NO_NOTES: string[] = [];
-export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpeed, onGo, onMark, onNote, notes = NO_NOTES, drawKey }: {
+export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpeed, onGo, onMark, onNote, notes = NO_NOTES, drawKey, max, onMax }: {
   symbol: string; prev: DevPreview | null; drawKey: string; pausedAt: string | null; playing: boolean; speed: number;
-  onPlay: (on: boolean) => void; onSpeed: (s: number) => void; onGo: (date: string | null, step?: 1 | -1) => void; onMark?: (date: string) => void; onNote?: (date: string) => void; notes?: string[];
+  onPlay: (on: boolean) => void; onSpeed: (s: number) => void; onGo: (date: string | null, step?: 1 | -1) => void; onMark?: (date: string) => void; onNote?: (date: string) => void; notes?: string[]; max?: boolean; onMax?: () => void;
 }) {
   const [all, setAll] = useState<Bar[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -294,11 +294,12 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   if (error || !bars.length) return <div className="dv-empty">{error ? `No bars: ${error}` : prev ? "Loading bars" : "Run a preview to chart it"}</div>;
   return (
     <div className="dv-chart">
-      <div className="dv-chartbar">
+      <div className="dv-chartbar" onDoubleClick={(e) => { if (e.target === e.currentTarget) onMax?.(); }}>
         {perSym.length > 1 ? <select className="input sm" aria-label="Symbol" title="Symbol ( , and . step)" value={sym} onChange={(e) => setPick(e.target.value)}>
           {perSym.map(([k, r]) => <option key={k} value={k}>{k} · {r.n} trades · {r.pnl >= 0 ? "+" : ""}{r.pnl.toFixed(0)} · {Math.round((r.wins / r.n) * 100)}% win</option>)}
         </select> : <b>{sym}</b>}
-        <span className="seg" role="group" aria-label="Range">{RANGES.map((r) => <button key={r} type="button" onClick={() => chart?.setVisibleRangePreset(r)}>{r === "ALL" ? "All" : r}</button>)}</span>
+        <select className="input sm dv-rng-sel" aria-label="Range" value="" onChange={(e) => e.target.value && chart?.setVisibleRangePreset(e.target.value as (typeof RANGES)[number])}><option value="">Range</option>{RANGES.map((r) => <option key={r} value={r}>{r === "ALL" ? "All" : r}</option>)}</select>
+        <span className="seg dv-rng" role="group" aria-label="Range">{RANGES.map((r) => <button key={r} type="button" onClick={() => chart?.setVisibleRangePreset(r)}>{r === "ALL" ? "All" : r}</button>)}</span>
         <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
           <summary className="btn sm ghost" aria-label="Chart settings"><Settings2 size={13} /></summary>
           <div className="dv-menu dv-chartmenu" role="menu">
@@ -313,6 +314,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
             <button type="button" onClick={exportCsv}>Export CSV</button>
           </div>
         </details>
+        {onMax ? <button type="button" className="icon-btn" aria-label={max ? "Restore chart" : "Maximise chart"} title={max ? "Restore (Esc)" : "Maximise chart (⌘⇧↵)"} onClick={onMax}>{max ? <Minimize2 size={13} /> : <Maximize2 size={13} />}</button> : null}
       </div>
       <div className="dv-chartbox" ref={box} />
       {readout?.date ? <div className="dv-dw" aria-label="Data window">

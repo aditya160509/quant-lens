@@ -196,6 +196,13 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [iconsOpen, setIconsOpen] = useState(true);
   // Zen hides the rail, icons, bottom panel and chart without touching the saved layout, so leaving it restores exactly.
   const [zen, setZen] = useState(false);
+  // Maximised chart: the chart takes the whole body (CSS collapses the other panels), the saved layout is untouched.
+  const [maxChart, setMaxChart] = useState(false);
+  useEffect(() => {
+    if (!maxChart) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && !(e.target instanceof Element && e.target.closest("input, textarea, select, .monaco-editor, [role=dialog]"))) setMaxChart(false); };
+    window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc);
+  }, [maxChart]);
   useEffect(() => {
     if (!zen) return;
     let last = 0;
@@ -864,6 +871,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     ...[1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((n): EditorAction[] => [
       { id: `studio.nbm${n}`, label: `Bookmark ${n}: set`, keys: (m) => [m.KeyMod.WinCtrl | m.KeyMod.Shift | (m.KeyCode.Digit0 + n)], run: (line) => setNumbered(n, line) },
       { id: `studio.nbmgo${n}`, label: `Bookmark ${n}: go`, keys: (m) => [m.KeyMod.WinCtrl | (m.KeyCode.Digit0 + n)], run: () => goNumbered(n) }]),
+    { id: "studio.maxchart", label: "View: maximise chart", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => { setZen(false); if (!chartOpen) setOpenP("chart", true); setMaxChart((x) => !x); } },
     { id: "studio.zen", label: "View: zen mode", keys: (m) => [m.KeyMod.chord(m.KeyMod.CtrlCmd | m.KeyCode.KeyK, m.KeyMod.CtrlCmd | m.KeyCode.KeyZ)], run: () => setZen((z) => !z) },
     { id: "studio.hidetools", label: "View: hide all tool windows", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.F12], run: () => setZen((z) => !z) },
     { id: "studio.split", label: "View: split editor", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.Backslash], run: () => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active)) },
@@ -1259,7 +1267,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
         onDragOver={(e) => { if (!e.dataTransfer.types.includes("text/x-studio-file")) return; e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setDropSide(e.clientX > r.left + r.width / 2 ? "split" : "main"); }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropSide(null); }}
         onDrop={(e) => { const f = e.dataTransfer.getData("text/x-studio-file"); setDropSide(null); if (!f || !(f in files)) return; e.preventDefault(); setDiff(null); setView("code"); if (dropSide === "split") setSplit(f); else setActive(f); }}>
-        <div ref={tabStrip} className="dv-tabs" role="tablist" aria-label="Open files and reports">
+        <div ref={tabStrip} className="dv-tabs" role="tablist" aria-label="Open files and reports" onDoubleClick={(e) => { if (e.target === e.currentTarget) setZen((z) => !z); }}>
           {open.map((f) => (
             <div key={f} role="tab" aria-selected={view === "code" && !diff && f === active} className="dv-tab" tabIndex={0} draggable onDragStart={(e) => { e.dataTransfer.setData("text/x-studio-file", f); e.dataTransfer.effectAllowed = "move"; }} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.currentTarget.click(); } }} data-preview={preview === f || undefined} data-pinned={pinned.includes(f) || undefined}
               onClick={() => { setDiff(null); setView("code"); setActive(f); }} onDoubleClick={() => keep(f)} onAuxClick={(e) => { if (e.button === 1) close(f); }}>
@@ -1357,7 +1365,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const rightPanel = (
       <Panel id="right" minSize={0}>
       <aside className="dv-side" inert={!chartOpen}>
-        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart onMark={markToCode} onNote={openBarThread} notes={[...new Set(cmts.filter((c) => c.date && !c.resolved).map((c) => c.date!))]} symbol={dbg?.symbol ?? symbol} drawKey={strategyId ?? "new"} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} /></div> : null}
+        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart onMark={markToCode} onNote={openBarThread} notes={[...new Set(cmts.filter((c) => c.date && !c.resolved).map((c) => c.date!))]} symbol={dbg?.symbol ?? symbol} drawKey={strategyId ?? "new"} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} max={maxChart} onMax={() => setMaxChart((x) => !x)} /></div> : null}
       </aside>
       </Panel>
   );
@@ -1379,7 +1387,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   );
 
   return (
-    <div className="dv" data-activity={iconsOpen} data-head={slot ? "" : undefined} data-zen={zen || undefined}>
+    <div className="dv" data-activity={iconsOpen} data-head={slot ? "" : undefined} data-zen={zen || undefined} data-max={maxChart && chartOpen ? "chart" : undefined}>
       {slot ? createPortal(<div className="dv-bar in-head">{bar}</div>, slot) : <div className="dv-bar">{bar}</div>}
       <nav className="dv-icons" aria-label="Activity bar" hidden={!iconsOpen || zen}>
         {/* Four entry points; Outline sits beside Files in the side bar header, Starters opens from ⌘⇧S and the empty editor. */}

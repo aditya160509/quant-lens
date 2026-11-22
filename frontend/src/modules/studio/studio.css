@@ -791,3 +791,15 @@
 .dv-side-view { flex: 1; min-height: 0; overflow: auto; padding: 4px 2px; }
 .dv-sel-code { opacity: .7; font-size: 11.5px; max-height: 120px; overflow: auto; }
 .dv-popout { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: var(--bg); } .dv-popout > * { flex: 1; min-height: 0; }
+
+/* Chart fits any width: below 420px the range buttons fold into a select and the footer drops the date. */
+.dv-chart { container-type: inline-size; }
+.dv-rng-sel { display: none; width: auto; }
+@container (max-width: 420px) {
+  .dv-rng { display: none; } .dv-rng-sel { display: block; }
+  .dv-replay time, .dv-replay .seg, .dv-replay .dv-fsep { display: none; }
+}
+/* Maximised chart: every other panel folds to zero; the saved sizes are untouched, so restore is exact. */
+.dv[data-max="chart"] .dv-body [data-panel]:is(#rail, #center, #tester) { flex: 0 0 0px !important; min-width: 0 !important; min-height: 0 !important; overflow: hidden; }
+.dv[data-max="chart"] .dv-body [data-panel]:is(#right, #top) { flex: 1 1 0px !important; }
+.dv[data-max="chart"] .dv-body .dv-gutter { display: none; }
