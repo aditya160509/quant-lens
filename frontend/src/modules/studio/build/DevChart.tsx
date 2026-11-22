@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Pause, Play, SlidersHorizontal } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Pause, Play, Settings2, SlidersHorizontal } from "lucide-react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Vela as VelaChart } from "@luxalgo/vela";
 import { studio } from "../api";
 import type { DevPreview, Draw } from "./DevIDE";
@@ -70,7 +70,14 @@ function boot() {
 }
 const ms = (d: string) => Date.parse(d);
 
-export const SPEEDS = [1, 2, 5];
+export const SPEEDS = [1, 2, 5, 10, 20, 50];
+const RANGES = ["1M", "3M", "6M", "1Y", "5Y", "YTD", "ALL"] as const;
+const STYLES = [["candles", "Candles"], ["hollow", "Hollow candles"], ["bars", "OHLC bars"], ["heikinashi", "Heikin-Ashi"], ["line", "Line"], ["linemarkers", "Line with markers"], ["stepline", "Step line"], ["area", "Area"], ["baseline", "Baseline"], ["columns", "Columns"]] as const;
+const SCALES = [["price", "Linear"], ["log", "Log"], ["percent", "Percent"], ["indexed", "Indexed to 100"]] as const;
+type View = { style: string; scale: string; dw: boolean; blind: boolean };
+const VIEW_KEY = "studio:chart:view";
+const readView = (): View => { try { return { style: "candles", scale: "price", dw: false, blind: false, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") }; } catch { return { style: "candles", scale: "price", dw: false, blind: false }; } };
+const download = (name: string, href: string) => { const a = document.createElement("a"); a.href = href; a.download = name; a.click(); };
 
 /** The Chart page's engine over the preview window: trades, ctx.plot series, the paused bar, and replay controls that drive the debugger. */
 const NO_NOTES: string[] = [];
@@ -83,7 +90,24 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   const box = useRef<HTMLDivElement>(null);
   const [chart, setChart] = useState<VelaChart | null>(null);
   const handles = useRef(new Map<string, { h: { setVisible: (v: boolean) => void; moveTo: (t: "price" | { newPane: true }) => void; remove: () => void }; own: boolean }>());
-  const sym = symbol.trim().toUpperCase();
+  // Symbol picker over the run's symbols (`,` and `.` step through them); the prop (debugger's paused symbol) wins when it changes.
+  const [pick, setPick] = useState<string | null>(null);
+  useEffect(() => setPick(null), [symbol]);
+  const sym = (pick ?? symbol).trim().toUpperCase();
+  const perSym = useMemo(() => {
+    const m = new Map<string, { n: number; pnl: number; wins: number }>();
+    for (const t of prev?.trades ?? []) { const k = String(t.symbol ?? symbol).toUpperCase(), r = m.get(k) ?? { n: 0, pnl: 0, wins: 0 }; r.n++; r.pnl += Number(t.pnl) || 0; if (Number(t.pnl) > 0) r.wins++; m.set(k, r); }
+    return [...m].sort((a, b) => b[1].n - a[1].n);
+  }, [prev?.trades, symbol]);
+  const [view, setView] = useState<View>(readView);
+  const setV = (p: Partial<View>) => setView((v) => { const n = { ...v, ...p }; try { localStorage.setItem(VIEW_KEY, JSON.stringify(n)); } catch { /* private mode */ } return n; });
+  const [compare, setCompare] = useState<string[]>([]);
+  const [cmpBars, setCmpBars] = useState<Record<string, Bar[]>>({});
+  useEffect(() => {
+    const want = compare.filter((c) => !cmpBars[c]); if (!want.length) return;
+    void studio<{ bars: Record<string, Bar[]> }>("GET", `/bars?symbols=${encodeURIComponent(want.join(","))}&tf=1d`).then((d) => setCmpBars((x) => ({ ...x, ...d.bars })), () => undefined);
+  }, [compare]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [readout, setReadout] = useState<import("@luxalgo/vela").DataWindowReadout | null>(null);
   useEffect(() => {
     if (!sym) return;
     setError(null);
@@ -118,9 +142,10 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
       const t = e.target instanceof Element ? e.target : null;
       if (e.metaKey || e.ctrlKey || t?.closest("input, textarea, select, .monaco-editor")) return;
       if (e.key === "]" || e.key === "[") { e.preventDefault(); hop(e.key === "]" ? 1 : -1); }
+      if ((e.key === "," || e.key === ".") && perSym.length > 1) { e.preventDefault(); const i = perSym.findIndex(([k]) => k === sym); setPick(perSym[(i + (e.key === "." ? 1 : -1) + perSym.length) % perSym.length]![0]); }
     };
     window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);
-  }, [hop]);
+  }, [hop, perSym, sym]);
   const valueAt = (name: string) => { const pts = prev?.plots?.[name]?.filter((p) => !p.symbol || p.symbol === sym) ?? []; const hit = pausedAt ? pts.findLast((p) => p.date <= pausedAt) : pts.at(-1); return hit?.value == null ? "—" : +hit.value.toFixed(4); };
   const plots = prev?.plots;
   const barsKey = `${sym}:${bars.length}:${bars[0]?.time}:${bars.at(-1)?.time}`;
@@ -153,11 +178,14 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   // Plots: one native per ctx.plot name, moved to its own pane or onto price, hidden from the Plots menu.
   useEffect(() => {
     if (!chart) return;
-    const names = Object.keys(plots ?? {});
+    // Compare symbols ride on the price pane as plain series; the Percent or Indexed scale rebases them with price.
+    const cmp = Object.fromEntries(compare.filter((c) => cmpBars[c]).map((c) => [c, cmpBars[c]!.map((b) => ({ date: b.time, symbol: null, value: b.close }))]));
+    const src = { ...plots, ...cmp };
+    const names = Object.keys(src);
     names.forEach((n, i) => {
-      feed.plots[n] = (plots?.[n] ?? []).filter((p) => !p.symbol || p.symbol === sym).map((p) => ({ time: ms(p.date), value: p.value }));
+      feed.plots[n] = (src[n] ?? []).filter((p) => !p.symbol || p.symbol === sym).map((p) => ({ time: ms(p.date), value: p.value }));
       feed.colors[n] = cv(`--s${(i % 6) + 1}`, box.current ?? undefined);
-      const wantOwn = own[n] ?? prev?.plot_charts?.[n] !== "main";
+      const wantOwn = n in cmp ? false : own[n] ?? prev?.plot_charts?.[n] !== "main";
       feed.own[n] = wantOwn;
       let e = handles.current.get(n);
       if (e && e.own !== wantOwn) { e.h.remove(); e = undefined; }
@@ -168,7 +196,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     feed.draw = prev?.draw ?? null;
     feed.bg = (prev?.draw?.bg ?? []).map((b) => ({ from: ms(b.date), to: ms(b.date) + 864e5, color: b.color }));
     push();
-  }, [chart, plots, hidden, own, sym, prev?.plot_charts, prev?.draw]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chart, plots, hidden, own, sym, prev?.plot_charts, prev?.draw, compare, cmpBars]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trades as markers on the lane, held spans and the paused bar as shading, the view follows the paused bar.
   useEffect(() => {
@@ -214,7 +242,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   // shortcut: kept in this browser's storage, not on the server; move to the strategy record when drawings need to sync across devices.
   useEffect(() => {
     if (!chart) return;
-    const key = `studio:drawings:${drawKey}`, PREFS = "studio:drawings:prefs";
+    const key = `studio:drawings:${drawKey}:${sym}`, PREFS = "studio:drawings:prefs";
     const read = (k: string) => { try { return JSON.parse(localStorage.getItem(k) ?? "null"); } catch { return null; } };
     const write = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* blocked or full */ } };
     const d = chart.drawings, doc = read(key), prefs = read(PREFS);
@@ -228,7 +256,34 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
       ...(["drawing:defaults", "drawing:favorites"] as const).map((e) => chart.on(e, savePrefs)),
     ];
     return () => offs.forEach((off) => off());
-  }, [chart, drawKey]);
+  }, [chart, drawKey, sym]);
+
+  // Chart type and price scale (Vela renderer features).
+  useEffect(() => {
+    if (!chart) return;
+    const hollow = view.style === "hollow";
+    chart.renderer.set({ priceStyle: hollow ? "candles" : view.style, logScale: view.scale === "log", scaleMode: view.scale === "log" ? "price" : view.scale });
+    if (hollow) chart.renderer.set("upColor", cv("--island", box.current ?? undefined)); // shortcut: hollow = up candles filled with the background; Vela has no hollow style
+    else chart.renderer.set("upColor", cv("--up", box.current ?? undefined));
+  }, [chart, view.style, view.scale]);
+  // Data window: the readout of every series at the crosshair.
+  useEffect(() => {
+    if (!chart || !view.dw) return setReadout(null);
+    setReadout(chart.renderer.dataWindowReadout());
+    return chart.renderer.onCrosshairMove(() => setReadout(chart.renderer.dataWindowReadout()));
+  }, [chart, view.dw]);
+  // Blind replay: bars after the paused one stay hidden.
+  useEffect(() => {
+    if (!chart) return;
+    if (view.blind && pausedAt) void chart.replay.start({ from: ms(pausedAt) });
+    else if (chart.replay.state.active) chart.replay.stop();
+  }, [chart, view.blind, pausedAt]);
+  const exportCsv = () => {
+    const names = Object.keys(plots ?? {}), by = names.map((n) => new Map((plots?.[n] ?? []).filter((p) => !p.symbol || p.symbol === sym).map((p) => [p.date, p.value])));
+    const rowsOut = bars.map((b) => [b.time, b.open, b.high, b.low, b.close, b.volume, ...by.map((m) => m.get(b.time) ?? "")].join(","));
+    download(`${sym}.csv`, URL.createObjectURL(new Blob([["date,open,high,low,close,volume", ...names].join(",") + "\n" + rowsOut.join("\n")], { type: "text/csv" })));
+  };
+  const exportPng = () => { const url = chart?.renderer.screenshot(); if (url) download(`${sym}.png`, url); };
 
   useEffect(() => {
     if (!playing) return;
@@ -239,7 +294,32 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   if (error || !bars.length) return <div className="dv-empty">{error ? `No bars: ${error}` : prev ? "Loading bars" : "Run a preview to chart it"}</div>;
   return (
     <div className="dv-chart">
+      <div className="dv-chartbar">
+        {perSym.length > 1 ? <select className="input sm" aria-label="Symbol" title="Symbol ( , and . step)" value={sym} onChange={(e) => setPick(e.target.value)}>
+          {perSym.map(([k, r]) => <option key={k} value={k}>{k} · {r.n} trades · {r.pnl >= 0 ? "+" : ""}{r.pnl.toFixed(0)} · {Math.round((r.wins / r.n) * 100)}% win</option>)}
+        </select> : <b>{sym}</b>}
+        <span className="seg" role="group" aria-label="Range">{RANGES.map((r) => <button key={r} type="button" onClick={() => chart?.setVisibleRangePreset(r)}>{r === "ALL" ? "All" : r}</button>)}</span>
+        <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
+          <summary className="btn sm ghost" aria-label="Chart settings"><Settings2 size={13} /></summary>
+          <div className="dv-menu dv-chartmenu" role="menu">
+            <label>Type<select className="input sm" value={view.style} onChange={(e) => setV({ style: e.target.value })}>{STYLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+            <label>Scale<select className="input sm" value={view.scale} onChange={(e) => setV({ scale: e.target.value })}>{SCALES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+            <label>Go to<input className="input sm" type="date" min={bars[0]?.time} max={bars.at(-1)?.time} onChange={(e) => e.target.value && onGo(e.target.value)} /></label>
+            <label>Compare<input className="input sm" placeholder="QQQ, IWM" defaultValue={compare.join(", ")} onKeyDown={(e) => { if (e.key !== "Enter") return; const next = e.currentTarget.value.split(",").map((x) => x.trim().toUpperCase()).filter((x) => x && x !== sym); setCompare(next); if (next.length && view.scale === "price") setV({ scale: "percent" }); }} /></label>
+            <label className="dv-check"><input type="checkbox" checked={view.dw} onChange={(e) => setV({ dw: e.target.checked })} />Data window</label>
+            <label className="dv-check"><input type="checkbox" checked={view.blind} onChange={(e) => setV({ blind: e.target.checked })} />Blind replay</label>
+            <hr />
+            <button type="button" onClick={exportPng}>Export PNG</button>
+            <button type="button" onClick={exportCsv}>Export CSV</button>
+          </div>
+        </details>
+      </div>
       <div className="dv-chartbox" ref={box} />
+      {readout?.date ? <div className="dv-dw" aria-label="Data window">
+        <b>{readout.date}</b>
+        {readout.ohlc ? <dl><dt>O</dt><dd>{readout.ohlc.o}</dd><dt>H</dt><dd>{readout.ohlc.h}</dd><dt>L</dt><dd>{readout.ohlc.l}</dd><dt>C</dt><dd>{readout.ohlc.c}</dd>{readout.ohlc.vol ? <><dt>Vol</dt><dd>{readout.ohlc.vol}</dd></> : null}</dl> : null}
+        {readout.groups.map((g) => <dl key={g.name}>{g.rows.map((r) => <Fragment key={r.label}><dt style={{ color: r.color }}>{r.label}</dt><dd>{r.value}</dd></Fragment>)}</dl>)}
+      </div> : null}
       <div className="dv-replay">
         <button className="icon-btn" aria-label="Back one bar" title="Back one bar" onClick={() => onGo(null, -1)}><ChevronLeft size={15} /></button>
         <button className="icon-btn" aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause" : "Play"} onClick={() => onPlay(!playing)}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>

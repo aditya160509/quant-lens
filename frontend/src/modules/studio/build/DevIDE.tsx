@@ -615,7 +615,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   /** Replay moves the debugger one bar or to a date; chart, Debug locals, watches and Console follow dbg. Overlapping requests are dropped. */
   // Pop-out chart: send it the chart's state; it sends replay moves back.
   const chartChan = useRef<BroadcastChannel | null>(null);
-  const chartState = { type: "state", symbol, prev, pausedAt: dbg?.date ?? null, drawKey: `${strategyId ?? "new"}:${symbol}` };
+  const chartState = { type: "state", symbol: dbg?.symbol ?? symbol, prev, pausedAt: dbg?.date ?? null, drawKey: strategyId ?? "new" };
   const chartStateRef = useRef(chartState); chartStateRef.current = chartState;
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;
@@ -1357,7 +1357,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const rightPanel = (
       <Panel id="right" minSize={0}>
       <aside className="dv-side" inert={!chartOpen}>
-        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart onMark={markToCode} onNote={openBarThread} notes={[...new Set(cmts.filter((c) => c.date && !c.resolved).map((c) => c.date!))]} symbol={symbol} drawKey={`${strategyId ?? "new"}:${symbol}`} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} /></div> : null}
+        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart onMark={markToCode} onNote={openBarThread} notes={[...new Set(cmts.filter((c) => c.date && !c.resolved).map((c) => c.date!))]} symbol={dbg?.symbol ?? symbol} drawKey={strategyId ?? "new"} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} /></div> : null}
       </aside>
       </Panel>
   );

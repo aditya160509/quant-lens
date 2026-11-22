@@ -17,7 +17,7 @@ Three streams, in this order. Details stay in their sections below; this is the 
 
 **3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 11 to 14 research, reactive and SQL cells, 17 and 18 library and starters, 20 review comments (partial), 23 and 24 paper and live hooks, 28 pop-out windows. Later (AI parked by the owner): 21, 22. Built: 2, 3, 4, 5, 6, 7, 9, 10, 15 (Data page), 19 (share with a pinned run), 25, 26 (keymap chords), 27 (Layouts dialog), 29. Moved to Chart: 1, 8, 30. IDE catalogue P1 gaps built 2026-11-21: strategy inspections, run configurations, logpoints, test explorer and strategy tests, DataFrame variable explorer. P1 gap left: percent cells (#11).
 
-**4. Chart, section "Chart": CH-1 to CH-50, 43 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
+**4. Chart, section "Chart": CH-1 to CH-50, 34 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
 
 ## Rules
 
@@ -545,24 +545,24 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [x] CH-7 Chart follows light and dark theme live
 
 ### Symbols and universe runs
-- [ ] [M] CH-8 P1 Symbol picker over the run's symbols, sorted by trades or P&L, search, `,` and `.` keys [DEV multi-symbol 1, research]
+- [x] [M] CH-8 P1 Symbol picker over the run's symbols, sorted by trades or P&L, search, `,` and `.` keys [DEV multi-symbol 1, research] (symbol menu in the chart bar, sorted by trades with P&L and win rate; `,` and `.` step)
 - [ ] [M] CH-9 P1 Per-symbol strip in the footer (trades, P&L, win rate); "All symbols" trade list that switches the chart [DEV multi-symbol 2]
 - [ ] [M] CH-10 P1 Universe list beside the chart: P&L, trades, win rate, max DD, sparkline; click loads the symbol [DEV multi-symbol 3, research]
-- [ ] [E] CH-11 P1 Debugger pause switches the chart to the paused symbol [DEV multi-symbol 7]
+- [x] [E] CH-11 P1 Debugger pause switches the chart to the paused symbol [DEV multi-symbol 7] (chart follows the debugger's paused symbol)
 - [ ] [M] CH-12 P1 Per-symbol stats computed on the server for 4,000-name runs; bars fetched only for the selected symbol [DEV multi-symbol 8]
 - [ ] [M] CH-13 P2 Universe heatmap (symbol × month, return); click opens symbol and date; best and worst 10 [DEV multi-symbol 4]
 
 ### Layouts and views
 - [ ] [H] CH-14 P1 Multi-chart grid (1 to 16 cells) with sync toggles for symbol, interval, crosshair, time and drawings; maximise one cell; multi-cell replay [C-6, DEV multi-symbol 6, research: Vela workspace]
-- [ ] [M] CH-15 P1 Object tree and data window (crosshair readout of every series, legend values) [C-22, research: Vela]
-- [ ] [E] CH-16 P1 Range buttons (1M to All) and go to date [research: Vela]
-- [ ] [M] CH-17 P1 Compare symbols rebased to 100 or percent [C-7, DEV multi-symbol 5]
-- [ ] [E] CH-18 P1 Price scale menu: linear, log, percent, indexed to 100 [C-8, Vela has log and percent]
+- [x] [M] CH-15 P1 Object tree and data window (crosshair readout of every series, legend values) [C-22, research: Vela] (data window: date, OHLCV and every series at the crosshair; Vela's legend lists the objects)
+- [x] [E] CH-16 P1 Range buttons (1M to All) and go to date [research: Vela] (1M to All in the chart bar; Go to date in chart settings)
+- [x] [M] CH-17 P1 Compare symbols rebased to 100 or percent [C-7, DEV multi-symbol 5] (Compare in chart settings; switches to Percent so both rebase)
+- [x] [E] CH-18 P1 Price scale menu: linear, log, percent, indexed to 100 [C-8, Vela has log and percent] (Linear, Log, Percent, Indexed to 100)
 - [x] [M] CH-19 P2 Chart-first mode: big chart on the left, code docked right, tester across the bottom; one click (Layout menu or palette) flips to and from it. Simple mode keeps its own screen [W-12]
 - [ ] [H] CH-20 P2 Saved chart templates and layouts per symbol or global; indicator templates; drawing style presets; colours, crosshair, scale side, a key per tool [C-11 part, C-27, DEV 30, research]
 
 ### Chart types
-- [ ] [E] CH-21 P1 Type menu for what Vela has: hollow, OHLC bars, Heikin-Ashi, line, area, baseline, step [C-9 part]
+- [x] [E] CH-21 P1 Type menu for what Vela has: hollow, OHLC bars, Heikin-Ashi, line, area, baseline, step [C-9 part] (candles, hollow, OHLC bars, Heikin-Ashi, line, line with markers, step, area, baseline, columns)
 - [ ] [M] CH-22 P2 Port Renko, Kagi, line break, point and figure, range bars, volume candles from the old engine [C-9 part, research port list]
 
 ### Drawings and alerts
@@ -591,11 +591,11 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [ ] [M] CH-41 P2 Compare two runs (or two strategies) as two marker layers with an entry diff [C-14 part, research 9]
 
 ### Replay
-- [ ] [M] CH-42 P2 Replay speeds to 50×, step back, jump to date, blind replay (hide future bars) [C-19]
+- [x] [M] CH-42 P2 Replay speeds to 50×, step back, jump to date, blind replay (hide future bars) [C-19] (1× to 50×, back one bar, go to date, blind replay; speed is capped by the debugger's step time)
 - [ ] [H] CH-43 P2 Strategy-stepped replay: orders appear bar by bar with the debugger [C-20, DEV 1]
 
 ### Data, export and speed
-- [ ] [E] CH-44 P1 Export chart data as CSV and the chart as PNG [C-23, research 6]
+- [x] [E] CH-44 P1 Export chart data as CSV and the chart as PNG [C-23, research 6] (Export PNG and CSV in chart settings)
 - [ ] [H] CH-45 P1 Speed: 10 years plus 3 indicators first paint under 400 ms; 100k bars pan at 60 fps; replay 20× at 60 fps [C-3, C-5, C-28, research 10]
 - [ ] [M] CH-46 P2 Chart, Backtest and Live read the same close for the same symbol and date [C-2]
 - [ ] [M] CH-47 P2 Vela on every page (Backtest, Live, Library), then retire chart_engine once watchlist, trading, landing and security move [C-10]
