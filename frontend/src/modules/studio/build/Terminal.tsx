@@ -7,17 +7,17 @@ import toast from "react-hot-toast";
 import { studio } from "../api";
 
 /** One command and its result, shown as a block with a status, a duration and its output. */
-type Block = { id: number; cmd: string; status: "run" | "ok" | "err"; ms: number; out: string; value?: unknown; at: string };
+type Block = { id: number; cmd: string; status: "run" | "ok" | "err"; ms: number; out: string; value?: unknown; plots?: unknown[]; at: string };
 type Problem = { severity: string; line: number; message: string; code?: string };
 type TestRow = { file: string; name: string; status: string; message?: string; error_line?: number | null };
-type CellRow = { index: number | null; stdout: string; value: unknown; error: string | null; error_line: number | null };
+type CellRow = { index: number | null; stdout: string; value: unknown; error: string | null; error_line: number | null; plots?: unknown[] };
 
 export type TerminalHost = {
   files: Record<string, string>; code: string; extra: Record<string, string>; active: string; symbol: string; storeKey: string;
   /** Set while the debugger is paused: plain input is then a formula watched at that bar, as the old Console did. */
   paused: { symbol: string; date: string } | null; spec: unknown;
   run: (level: "quick" | "full", settings: Record<string, unknown>) => void; preview: () => void;
-  goto: (file: string, line: number) => void; render: (value: unknown) => ReactNode;
+  goto: (file: string, line: number) => void; render: (value: unknown) => ReactNode; plots: (plots: unknown[]) => ReactNode;
 };
 
 const HELP = `atlas run [quick|full] [--symbols A,B] [--top 50] [--from 2018-01-01] [--to 2024-12-31] [--costs "US retail"] [--fill same_close]
@@ -28,9 +28,9 @@ atlas preview               refresh the preview
 atlas compare SPY,QQQ,IWM   preview each symbol and compare return, trades, win rate
 atlas task add <name> <cmd && cmd>   save a task;  atlas task <name>  run it;  atlas task list | rm <name>
 clear                       clear the blocks;  reset  forget the Python session
-Anything else is Python, run in a session that keeps its variables; load, np and pd are ready.
+Anything else is Python, run in a session that keeps its variables; load, plot, sql, np and pd are ready.
 While the debugger is paused, plain input is a formula evaluated at the paused bar.`;
-const PRELUDE = "from studio.research import load\nimport numpy as np\nimport pandas as pd";
+const PRELUDE = "from studio.research import load, plot, sql\nimport numpy as np\nimport pandas as pd";
 const COMMANDS = ["atlas run quick", "atlas run full", "atlas test", "atlas cells", "atlas check", "atlas preview", "atlas compare", "atlas task list", "atlas task add", "atlas help", "clear", "reset"];
 
 /** Split a command line on spaces, keeping "quoted parts" together. */
@@ -80,10 +80,10 @@ export function Terminal({ host }: { host: TerminalHost }) {
     const last = r.outputs.at(-1);
     if (last?.error) return { status: "err" as const, out: `${last.stdout}${last.error}` };
     setSession(cells);
-    return { status: "ok" as const, out: last?.stdout ?? "", value: last?.value ?? undefined };
+    return { status: "ok" as const, out: last?.stdout ?? "", value: last?.value ?? undefined, plots: last?.plots };
   };
 
-  const exec = async (line: string): Promise<{ status: "ok" | "err"; out: string; value?: unknown }> => {
+  const exec = async (line: string): Promise<{ status: "ok" | "err"; out: string; value?: unknown; plots?: unknown[] }> => {
     const [head, sub, ...rest] = words(line);
     if (head !== "atlas") {
       if (host.paused) {
@@ -167,6 +167,7 @@ export function Terminal({ host }: { host: TerminalHost }) {
             <button className="icon-btn" aria-label="Copy output" title="Copy output" onClick={() => void navigator.clipboard.writeText(`› ${b.cmd}\n${b.out}`).then(() => toast("Copied"))}><Copy size={11} /></button>
           </header>
           {b.out ? <pre data-err={b.status === "err" || undefined}>{linked(b.out)}</pre> : null}
+          {b.plots?.length ? host.plots(b.plots) : null}
           {b.value !== undefined && b.value !== null ? host.render(b.value) : null}
         </section>
       ))}

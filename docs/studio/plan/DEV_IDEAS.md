@@ -309,7 +309,7 @@ Tags: ✅ Built · ◐ Partial · ⬜ Open · ↪ Moved to Chart (CH list in CHE
 
 **Sources:** https://docs.marimo.io/getting_started/key_concepts ; https://github.com/marimo-team/marimo ; https://marimo.io
 
-### 14. SQL cells over the local data store ⬜ Open `Hard`
+### 14. SQL cells over the local data store ✅ Built `Hard`
 
 **What it is:** A research cell can be SQL instead of Python. The user writes a query against the market data tables (for example `SELECT symbol, date, close FROM bars WHERE ...`), and the result becomes a variable that Python cells can read. Autocomplete offers table and column names from the data browser. A parameter box in the cell (a symbol, a start date) is read from the query with a placeholder, so one query serves several tickers.
 
@@ -799,9 +799,9 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: the Conso
 | ✅ `Easy` Activity bar, side bar, panel, status bar | Basic shell | HAVE | P1 |
 | ✅ `Easy` Toggle panel and side bar by key | Cmd+J, Cmd+B | HAVE | P1 |
 | ✅ `Easy` Maximise panel | Full-height panel | HAVE | P2 |
-| ⬜ `Easy` Move panel to right or left | Panel position | GAP (needs a third column in the layout model) | P2 |
+| ✅ `Easy` Move panel to right or left | Panel position | HAVE (View › Panel left/right of editor) | P2 |
 | ✅ `Easy` Panel alignment (centre, justify) | Width of panel | HAVE (View menu) | P3 |
-| ⬜ `Hard` Drag a tab to another group or out to a window | Free layout | GAP | P2 (pop-out already listed #28) |
+| ◐ `Hard` Drag a tab to another group or out to a window | Free layout | PARTIAL (drag a tab onto the right half of the editor opens it in the second group; out to a window is #28) | P2 (pop-out already listed #28) |
 | ⬜ `Hard` Drag views between side bars (JetBrains tool window bars, VS Code Move View) | Custom placement | GAP | P3 |
 | ✅ `Med` Saved layouts and presets, reset layout | Named workspaces | HAVE (#27 Layouts dialog) | P2 |
 | ✅ `Easy` Hide all tool windows (JetBrains Cmd+Shift+F12) | One key to focus code | HAVE (Cmd+Shift+F12) | P2 |
@@ -815,8 +815,8 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: the Conso
 | ◐ `Hard` Percent cells (`# %%`) with Run cell, Run above and below | Notebook-style .py | PARTIAL (Run cell and Run above and this, Ctrl+Enter, Cells tab; Run below remains open) | P1 (already listed #11) |
 | ✅ `Med` Interactive window | Cell results beside code | HAVE (Cells tab, Console Python session) | P2 |
 | ✅ `Med` Variable explorer and data viewer for DataFrames | Inspect frames | HAVE (Debug locals, last 50 rows) | P1 |
-| ◐ `Med` Rich outputs: plots, tables inline | Notebook outputs | PARTIAL (tables and values in the Cells tab; no plots yet) | P2 |
-| ⬜ `Hard` SQL cells | Query the data store | GAP | P3 (already listed #14) |
+| ✅ `Med` Rich outputs: plots, tables inline | Notebook outputs | HAVE (`plot()` in cells and the Console, tables) | P2 |
+| ✅ `Hard` SQL cells | Query the data store | HAVE (`sql("select … from bars")` over loaded bars and notebook DataFrames) | P3 (already listed #14) |
 
 ### Remote and collaboration
 
@@ -866,7 +866,7 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: the Conso
 |---|---|---|---|
 | ✅ `Med` Rerun, stop, pause, rerun failed tests | Toolbar on the output | Rerun with the same config, rerun failed symbols only | P1 |
 | ◐ `Med` One tab per run configuration, pin a tab | Compare runs side by side | One Output tab per run, pin a run (idea #2 and DevRuns) | P2 |
-| ⬜ `Easy` Soft wrap, scroll to end, filter, clear | Output hygiene | Add soft wrap and clear to Output | P3 |
+| ✅ `Easy` Soft wrap, scroll to end, filter, clear | Output hygiene | HAVE in Output | P3 |
 | ✅ `Easy` Rerun automatically on code change | Live feedback | "Run on save" for the quick level | P1 |
 | ✅ `Med` Console with history and variables (Python console) | REPL tied to the project | See REPL below | P1 |
 

@@ -8,7 +8,7 @@ import { useServerPref } from "./serverPref";
 
 export type PanelId = "rail" | "chart" | "preview" | "tester";
 /** Sizes are percentages: rail and right of the width, tester of the centre height. */
-export type Dock = { chart?: "left" | "right"; panel?: "center" | "full" };
+export type Dock = { chart?: "left" | "right"; panel?: "center" | "full" | "left" | "right" };
 export type Layout = { open: Record<PanelId, boolean>; size: { rail: number; right: number; tester: number; chart?: number; split?: number }; dock?: Dock; focus?: { tab?: "debug" | "output"; view?: "results" } };
 export type Workspace = { id: string; name: string; builtin?: boolean; layout: Layout };
 
@@ -115,8 +115,14 @@ function zones(l: Layout) {
   const ch = { x: left ? rail : 100 - right, w: right };
   return {
     rail: { x: 0, y: 0, w: rail, h: full ? top : 100 },
-    editor: { x: ed.x, y: 0, w: ed.w, h: top },
-    tester: full ? { x: 0, y: top, w: 100, h: t } : { x: ed.x, y: top, w: ed.w, h: t },
+    ...(l.dock?.panel === "left" || l.dock?.panel === "right" ? (() => {
+      // Panel beside the editor: the tester share is a width, not a height.
+      const pw = ed.w * t / 100, pl = l.dock?.panel === "left";
+      return { editor: { x: ed.x + (pl ? pw : 0), y: 0, w: ed.w - pw, h: 100 }, tester: { x: pl ? ed.x : ed.x + ed.w - pw, y: 0, w: pw, h: 100 } };
+    })() : {
+      editor: { x: ed.x, y: 0, w: ed.w, h: top },
+      tester: full ? { x: 0, y: top, w: 100, h: t } : { x: ed.x, y: top, w: ed.w, h: t },
+    }),
     chart: { x: ch.x, y: 0, w: ch.w, h: full ? top : 100 },
     edges: { rail, right, t, left, full },
   };

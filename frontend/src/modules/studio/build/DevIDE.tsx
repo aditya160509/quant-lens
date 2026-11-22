@@ -3,7 +3,7 @@
 import { DiffEditor } from "@monaco-editor/react";
 import { Group, Panel, Separator, type GroupImperativeHandle } from "react-resizable-panels";
 import Link from "next/link";
-import { BookOpen, Bug, CircleAlert, Gauge, SquareTerminal, ChevronDown, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, FlaskConical, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
+import { ArrowDownToLine, Eraser, WrapText, BookOpen, Bug, CircleAlert, Gauge, SquareTerminal, ChevronDown, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, FlaskConical, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
@@ -74,7 +74,15 @@ type Snippet = { id: string; name: string; prefix: string; body: string; descrip
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 export type Logpoint = { file: string; line: number; message: string };
 type Tab = "tester" | "problems" | "output" | "plots" | "trades" | "debug" | "console" | "cells" | "preview";
-type CellRow = { index: number | null; line?: number; stdout: string; value: unknown; error: string | null; error_line: number | null; seconds: number };
+type CellPlot = { name: string; x: string[]; series: Record<string, (number | null)[]> };
+type CellRow = { index: number | null; line?: number; stdout: string; value: unknown; error: string | null; error_line: number | null; seconds: number; plots?: CellPlot[] };
+/** plot() output from a cell or the Console's Python session. */
+export function CellPlots({ plots }: { plots?: CellPlot[] }) {
+  return <>{(plots ?? []).map((p, i) => {
+    const keys = Object.keys(p.series);
+    return <div key={i} className="dv-plot"><b>{p.name}</b><TimeSeries data={p.x.map((d, j) => ({ date: d, ...Object.fromEntries(keys.map((k) => [k, p.series[k]![j]])) }))} series={keys.map((k, j) => ({ key: k, label: k, color: SERIES[j % SERIES.length]! }))} height={180} legend={keys.length > 1} /></div>;
+  })}</>;
+}
 type View = "code" | "results" | "tearsheet" | "robust" | "runs";
 const VIEW_LABEL: Record<Exclude<View, "code">, string> = { results: "Results", tearsheet: "Tearsheet", robust: "Robustness", runs: "Runs" };
 type Rail = "files" | "outline" | "search" | "versions" | "tests" | "docs" | "templates";
@@ -220,7 +228,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const chartOpen = layout.open.chart;
   // Docking (W-5): the chart sits left or right of the editor; the bottom panel sits under the editor or across the full width.
   const dock = ws.cur.layout.dock ?? {};
-  const full = dock.panel === "full", chartLeft = dock.chart === "left";
+  const full = dock.panel === "full", chartLeft = dock.chart === "left", pside = dock.panel === "left" || dock.panel === "right" ? dock.panel : null;
   const vKeys = (v: { editor: number; tester: number }) => (full ? { top: v.editor, tester: v.tester } : v);
 
   if (chartOpen) chartSeen.current = true;
@@ -254,6 +262,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   // Dev wants the width: the workspace sidebar closes while Dev is open and comes back after (user feedback 2026-11-20).
   useEffect(() => { const was = useLayout.getState().open.left; useLayout.getState().set("left", false, true); return () => useLayout.getState().set("left", was, true); }, []);
   const [logQ, setLogQ] = useState("");
+  const [logWrap, setLogWrap] = useState(false);
+  const [logCleared, setLogCleared] = useState<unknown>(null); // the cleared logs array; the next preview brings new output back
   const [logLevel, setLogLevel] = useState<string>("all");
   const [logSym, setLogSym] = useState("");
   const [logFrom, setLogFrom] = useState("");
@@ -285,6 +295,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [rcOpen, setRcOpen] = useState(false);
   const [splitDown, setSplitDown] = useState(false);
   const editorSplitRef = useRef<GroupImperativeHandle>(null);
+  const [dropSide, setDropSide] = useState<"main" | "split" | null>(null); // a tab dragged over the editor: right half opens it in the second group
   useEffect(() => {
     const primary = split && !diff ? (ws.cur.layout.size.split ?? 50) : 100;
     editorSplitRef.current?.setLayout({ primary, secondary: 100 - primary });
@@ -505,7 +516,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const hadErrors = useRef(0);
   useEffect(() => { if (errors && !hadErrors.current) { setPanelOpen(true); setTab("problems"); } hadErrors.current = errors; }, [errors]);
   const logRe = finder(logQ, opt);
-  const logs = (prev?.logs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logSym || l.symbol === logSym) && (!logFrom || l.date >= logFrom) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}${l.fields ? Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("") : ""}`))));
+  const logs = (logCleared === prev?.logs ? [] : prev?.logs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logSym || l.symbol === logSym) && (!logFrom || l.date >= logFrom) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}${l.fields ? Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("") : ""}`))));
   const plots = Object.entries(prev?.plots ?? {});
   // B-81: the plots of the preview before this one, overlaid dashed when "Previous run" is on.
   const [before, setBefore] = useState<Record<string, Point[]> | null>(null);
@@ -641,7 +652,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel?.(); };
     window.addEventListener("keydown", esc); return () => window.removeEventListener("keydown", esc);
   }, [quick, onCancel]);
-  useEffect(() => { const t = targets(layout); hRef.current?.setLayout(t.h); vRef.current?.setLayout(vKeys(t.v)); }, [ws.cur.id, railOpen, chartOpen, panelOpen, width, full, chartLeft]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const t = targets(layout); hRef.current?.setLayout(t.h); vRef.current?.setLayout(vKeys(t.v)); }, [ws.cur.id, pside, railOpen, chartOpen, panelOpen, width, full, chartLeft]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Remember the exact panel sizes and close a panel pulled to the edge. */
   const onH = (l: Record<string, number>, m: { isUserInteraction: boolean }) => {
     if (!m.isUserInteraction) return;
@@ -812,7 +823,9 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       {view !== "code" ? <button role="menuitemcheckbox" aria-checked={reportSide} onClick={() => setReportSide((visible) => !visible)}>Chart and bottom panel</button> : null}
       <button role="menuitemcheckbox" aria-checked={chartOpen} onClick={() => { if (view !== "code") setReportSide(true); if (!chartOpen && open_.chart) setRailOpen(false); else setOpenP("chart", !chartOpen); }}>Chart</button>
       <button role="menuitemcheckbox" aria-checked={panelOpen} onClick={() => { setPanelOpen(!panelOpen); if (view !== "code") setReportSide(!panelOpen); }}>Bottom panel</button>
-      <button role="menuitemradio" aria-checked={!full} onClick={() => ws.patch((l) => ({ ...l, dock: { ...l.dock, panel: "center" } }))}>Panel under editor</button>
+      <button role="menuitemradio" aria-checked={!full && !pside} onClick={() => ws.patch((l) => ({ ...l, dock: { ...l.dock, panel: "center" } }))}>Panel under editor</button>
+      <button role="menuitemradio" aria-checked={pside === "left"} onClick={() => ws.patch((l) => ({ ...l, dock: { ...l.dock, panel: "left" } }))}>Panel left of editor</button>
+      <button role="menuitemradio" aria-checked={pside === "right"} onClick={() => ws.patch((l) => ({ ...l, dock: { ...l.dock, panel: "right" } }))}>Panel right of editor</button>
       <button role="menuitemradio" aria-checked={full} onClick={() => ws.patch((l) => ({ ...l, dock: { ...l.dock, panel: "full" } }))}>Panel full width</button>
       <button role="menuitemcheckbox" aria-checked={!!split} onClick={() => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active))}>Split editor</button>
       <button role="menuitemcheckbox" aria-checked={iconsOpen} onClick={() => setIconsOpen((o) => !o)}>Tool strip</button>
@@ -965,10 +978,13 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       </Panel>
   );
   const editorPanel = (
-      <Panel id="editor" minSize="15%" className="dv-edpane">
+      <Panel id="editor" minSize="15%" className="dv-edpane" data-drop={dropSide ?? undefined}
+        onDragOver={(e) => { if (!e.dataTransfer.types.includes("text/x-studio-file")) return; e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setDropSide(e.clientX > r.left + r.width / 2 ? "split" : "main"); }}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropSide(null); }}
+        onDrop={(e) => { const f = e.dataTransfer.getData("text/x-studio-file"); setDropSide(null); if (!f || !(f in files)) return; e.preventDefault(); setDiff(null); setView("code"); if (dropSide === "split") setSplit(f); else setActive(f); }}>
         <div ref={tabStrip} className="dv-tabs" role="tablist" aria-label="Open files and reports">
           {open.map((f) => (
-            <div key={f} role="tab" aria-selected={view === "code" && !diff && f === active} className="dv-tab" tabIndex={0} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.currentTarget.click(); } }} data-preview={preview === f || undefined} data-pinned={pinned.includes(f) || undefined}
+            <div key={f} role="tab" aria-selected={view === "code" && !diff && f === active} className="dv-tab" tabIndex={0} draggable onDragStart={(e) => { e.dataTransfer.setData("text/x-studio-file", f); e.dataTransfer.effectAllowed = "move"; }} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.currentTarget.click(); } }} data-preview={preview === f || undefined} data-pinned={pinned.includes(f) || undefined}
               onClick={() => { setDiff(null); setView("code"); setActive(f); }} onDoubleClick={() => keep(f)} onAuxClick={(e) => { if (e.button === 1) close(f); }}>
               {pinned.includes(f) ? <Pin size={10} aria-label="Pinned" /> : null}{f}
               {savedFiles && !(f in scratch) && (savedFiles[f] ?? "") !== (files[f] ?? "") ? <i className="dv-dirty" aria-label="Unsaved" /> : null}
@@ -1071,10 +1087,17 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                     {(() => { const syms = [...new Set((prev?.logs ?? []).map((l) => l.symbol).filter(Boolean))] as string[]; return syms.length > 1 ? <select className="input" aria-label="Symbol" style={{ width: "auto" }} value={logSym} onChange={(e) => setLogSym(e.target.value)}><option value="">All symbols</option>{syms.map((x) => <option key={x}>{x}</option>)}</select> : null; })()}
                     <input className="input" type="date" aria-label="From date" style={{ width: "auto" }} value={logFrom} onChange={(e) => setLogFrom(e.target.value)} />
                     <button className="btn sm ghost" disabled={!logs.length} onClick={() => { const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`; const csv = ["level,date,symbol,line,message", ...logs.map((l) => [l.level, l.date, l.symbol, l.line, l.text].map(q).join(","))].join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "output.csv"; a.click(); URL.revokeObjectURL(a.href); }}>CSV</button>
+                    <button className="icon-btn" aria-label="Soft wrap" title="Soft wrap" aria-pressed={logWrap} onClick={() => setLogWrap((w) => !w)}><WrapText size={13} /></button>
+                    <button className="icon-btn" aria-label="Scroll to end" title="Scroll to end" onClick={(e) => { const b = e.currentTarget.closest(".dv-pbody"); b?.scrollTo({ top: b.scrollHeight }); }}><ArrowDownToLine size={13} /></button>
+                    <button className="icon-btn" aria-label="Clear output" title="Clear until the next preview" disabled={!prev?.logs?.length} onClick={() => setLogCleared(prev?.logs ?? null)}><Eraser size={13} /></button>
                     <span className="dv-count">{logs.length.toLocaleString()} of {(prev?.logs?.length ?? 0).toLocaleString()}</span>
                   </div>
                   {logs.length ? (() => {
                     // Virtual list: only the rows in view (plus a margin) are in the page, so 5,000 lines scroll smoothly (B-79).
+                    // Soft wrap gives rows their own height, so it renders the last 2,000 lines without the virtual list.
+                    if (logWrap) return <div className="dv-logs-wrap">{logs.slice(-2000).map((l, i) => (
+                      <button key={i} className="dv-log" data-level={l.level} onClick={() => { goto("main.py", l.line); onPause?.(l.date); }}><time>{l.date}</time><span>{l.symbol ?? ""}</span>
+                        <code>{l.text}{l.fields ? <em>{Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("")}</em> : null}</code><i>:{l.line}</i></button>))}</div>;
                     const ROW = 24, first = Math.max(0, Math.floor(logTop / ROW) - 20), rows = logs.slice(first, first + 80);
                     return <div className="dv-logs" style={{ height: logs.length * ROW }}>
                       {rows.map((l, i) => (
@@ -1111,6 +1134,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                   <section key={i}>
                     <h4><button className="dv-item" onClick={() => r.line && goto(cellOut.file, r.line)}>{r.index === null ? "Cells" : `Cell ${r.index + 1}${cellOut.titles[r.index] ? ` · ${cellOut.titles[r.index]}` : ""}`}</button><i>{r.seconds.toFixed(3)} s</i></h4>
                     {r.stdout ? <pre>{r.stdout}</pre> : null}
+                    <CellPlots plots={r.plots} />
                     {r.error ? <p className="bd-find error"><b>{r.error_line ? <button className="dv-item" onClick={() => goto(cellOut.file, r.error_line!)}>line {r.error_line}</button> : "Error"}</b>{r.error}</p> : null}
                     {r.value !== null && r.value !== undefined ? (tableOf(r.value) ? <VarGrid t={tableOf(r.value)!} open /> : typeof r.value === "object" ? <KV rows={r.value as Record<string, unknown>} /> : <pre>{show(r.value)}</pre>) : null}
                   </section>
@@ -1119,6 +1143,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               {tab === "console" ? (
                 <Terminal host={{ files, code: spec.code, extra: spec.files ?? {}, active, symbol, storeKey: strategyId ?? "draft", spec, paused: dbg ? { symbol: dbg.symbol ?? symbol, date: dbg.date } : null, preview: onPreview, goto,
                   run: (level, settings) => { if (!canRun || starting || running) throw new Error("A run is already going or runs are off here"); const s = { ...rc.settings, ...settings }; openView("results"); lastRun.current = { level, settings: s }; onQuickRun(level, s); },
+                  plots: (p) => <CellPlots plots={p as CellPlot[]} />,
                   render: (v) => (tableOf(v) ? <VarGrid t={tableOf(v)!} open /> : typeof v === "object" ? <KV rows={v as Record<string, unknown>} /> : <pre>{show(v)}</pre>) }} />
               ) : null}
               {tab === "debug" ? (
@@ -1172,9 +1197,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   );
   const centerPanel = (
       <Panel id="center" minSize={chartFirst ? "30%" : "430px"}>
-      <Group className="dv-main" orientation="vertical" id={full ? "dv-v1" : "dv-v"} key={full ? "one" : "split"} groupRef={full ? undefined : vRef} defaultLayout={full ? { editor: 100 } : targets(layout).v} onLayoutChanged={full ? undefined : onV}>
+      <Group className="dv-main" orientation={pside ? "horizontal" : "vertical"} id={full ? "dv-v1" : `dv-v${pside ?? ""}`} key={full ? "one" : pside ?? "split"} groupRef={full ? undefined : vRef} defaultLayout={full ? { editor: 100 } : targets(layout).v} onLayoutChanged={full ? undefined : onV}>
+      {pside === "left" ? <>{testerPanel}<Separator className="dv-gutter" disabled={!panelOpen} /></> : null}
       {editorPanel}
-      {full ? null : <><Separator className="dv-gutter" disabled={!panelOpen} />{testerPanel}</>}
+      {full || pside === "left" ? null : <><Separator className="dv-gutter" disabled={!panelOpen} />{testerPanel}</>}
       </Group>
       </Panel>
   );

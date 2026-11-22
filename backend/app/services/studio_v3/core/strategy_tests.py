@@ -201,10 +201,39 @@ def _cells_main(job: dict, sources: dict, builtins: dict, guarded_import, pyrunn
         b = job["bars"][name]
         return pd.DataFrame({k: np.array(v, dtype=float) for k, v in b.items() if k != "dates"}, index=pd.to_datetime(b["dates"]))
 
+    plots: list[dict] = []
+
+    def plot(data, name: str | None = None) -> None:
+        """Draw a Series, DataFrame or list under the cell (up to 2,000 points, evenly thinned)."""
+        frame = data.to_frame(name or data.name or "value") if isinstance(data, pd.Series) else pd.DataFrame(data) if not isinstance(data, pd.DataFrame) else data
+        frame = frame.select_dtypes("number").iloc[:, :8]
+        if frame.empty:
+            raise ValueError("plot() needs numbers")
+        frame = frame.iloc[:: max(1, len(frame) // 2000)]
+        x = [str(i)[:10] for i in frame.index]
+        plots.append({"name": name or ", ".join(map(str, frame.columns)), "x": x,
+                      "series": {str(c): [None if not np.isfinite(v) else float(v) for v in frame[c].to_numpy(dtype=float)] for c in frame.columns}})
+
+    def sql(query: str) -> "pd.DataFrame":
+        """SQL over every DataFrame in the notebook plus `bars` (symbol, date, open, high, low, close, volume of the loaded symbols)."""
+        import sqlite3
+
+        con = sqlite3.connect(":memory:")
+        try:
+            long = [load_bars(sym).rename_axis("date").reset_index().assign(symbol=sym) for sym in job["bars"]]
+            if long:
+                pd.concat(long).assign(date=lambda f: f["date"].dt.strftime("%Y-%m-%d")).to_sql("bars", con, index=False)
+            for key, value in namespace.items():
+                if isinstance(value, pd.DataFrame) and key.isidentifier() and not key.startswith("_"):
+                    value.reset_index().to_sql(key, con, index=False, if_exists="replace")
+            return pd.read_sql_query(query, con)
+        finally:
+            con.close()
+
     def cell_import(name, globals_=None, locals_=None, fromlist=(), level=0):
         if not level and name == RESEARCH:
             module = ModuleType(name)
-            module.load = load_bars
+            module.load, module.sql, module.plot = load_bars, sql, plot
             return module
         return guarded_import(name, globals_, locals_, fromlist, level)
 
@@ -216,6 +245,7 @@ def _cells_main(job: dict, sources: dict, builtins: dict, guarded_import, pyrunn
     for part in job["parts"]:
         t0, buf = time.perf_counter(), io.StringIO()
         row = {"index": part["index"], "line": part["line"], "stdout": "", "value": None, "error": None, "error_line": None}
+        plots.clear()
         try:
             tree = ast.parse("\n".join(lines[part["line"] - 1:part["end"]]))
             ast.increment_lineno(tree, part["line"] - 1)
@@ -232,6 +262,7 @@ def _cells_main(job: dict, sources: dict, builtins: dict, guarded_import, pyrunn
             row["error"] = f"{type(e).__name__}: {e}"[:1024]
             row["error_line"] = frames[-1].lineno if frames else getattr(e, "lineno", None)
         row["stdout"] = buf.getvalue()[-20_000:]
+        row["plots"] = list(plots)
         row["seconds"] = round(time.perf_counter() - t0, 4)
         if not job["only"] or part["index"] == last or row["error"]:
             real_stdout.write(json.dumps(row) + "\n")

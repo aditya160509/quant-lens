@@ -44,6 +44,15 @@ def test_sandbox_refuses_os(studio):  # noqa: F811
     assert t["test_a"]["status"] == "error" and "not allowed" in t["test_a"]["message"]
 
 
+def test_cells_sql_and_plot():
+    from app.services.studio_v3.core import strategy_tests
+
+    src = "# %%\nimport pandas as pd\nfrom studio.research import plot, sql\ndf = pd.DataFrame({'a': [1, 2, 3], 'b': [4.0, 5.0, 6.0]})\nplot(df['b'])\n# %%\nsql('select sum(a) as s from df where b > 4')\n"
+    out = strategy_tests.run_cells({"main.py": "", "nb.py": src}, "nb.py", 1, only=False, symbols=[])["outputs"]
+    assert not out[0]["error"] and out[0]["plots"][0]["series"]["b"] == [4.0, 5.0, 6.0]
+    assert not out[1]["error"] and "5" in str(out[1]["value"])
+
+
 def test_percent_cells_run_in_order_and_show_values():
     from app.services.studio_v3.core import strategy_tests
 
