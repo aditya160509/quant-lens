@@ -73,9 +73,9 @@ const ms = (d: string) => Date.parse(d);
 export const SPEEDS = [1, 2, 5];
 
 /** The Chart page's engine over the preview window: trades, ctx.plot series, the paused bar, and replay controls that drive the debugger. */
-export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpeed, onGo, drawKey }: {
+export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpeed, onGo, onMark, drawKey }: {
   symbol: string; prev: DevPreview | null; drawKey: string; pausedAt: string | null; playing: boolean; speed: number;
-  onPlay: (on: boolean) => void; onSpeed: (s: number) => void; onGo: (date: string | null, step?: 1 | -1) => void;
+  onPlay: (on: boolean) => void; onSpeed: (s: number) => void; onGo: (date: string | null, step?: 1 | -1) => void; onMark?: (date: string) => void;
 }) {
   const [all, setAll] = useState<Bar[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -188,6 +188,15 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     push();
     if (pausedAt) { const r = chart.getVisibleRange(), t = ms(pausedAt); if (r && (t < r.from || t > r.to)) { const w = r.to - r.from; chart.setVisibleRange({ from: t - w / 2, to: t + w / 2 }); } }
   }, [chart, prev?.trades, sym, pausedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Alt+click a bar with an order: open the line that placed it.
+  const alt = useRef(false);
+  useEffect(() => {
+    const el = box.current; if (!chart || !el) return;
+    const down = (e: PointerEvent) => { alt.current = e.altKey; };
+    el.addEventListener("pointerdown", down, true);
+    const off = chart.renderer.onClick((e) => { if (alt.current && e.time != null) onMark?.(new Date(e.time).toISOString().slice(0, 10)); });
+    return () => { el.removeEventListener("pointerdown", down, true); off(); };
+  }, [chart, onMark]);
 
 
   // Drawings belong to the strategy and symbol (W-7); tool defaults and favourites follow the user everywhere.

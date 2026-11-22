@@ -45,7 +45,7 @@ const EXITS: [string, string, boolean][] = [["stop", "Stop", true], ["stop_atr",
   ["breakeven", "Breakeven at", true], ["scale_at", "Scale out at", true], ["scale_frac", "Scale out share", true]];
 const LIMITS: [string, string, boolean][] = [["max_drawdown", "Max drawdown", true], ["max_drawdown_months", "Max drawdown months", false], ["min_trades", "Min trades", false],
   ["min_years", "Min years", false], ["max_beta", "Max beta", false], ["max_cost_share", "Max cost share", true], ["min_start_pass", "Min start dates passing", true]];
-type Defaults = { ui: "simple" | "dev"; mode: "blocks" | "formula" | "english"; exits: Record<string, number>; sizing: Spec["sizing"]; compact: boolean; plain: boolean; palette: string[]; keys: Record<string, string>; wrap: boolean; rulers: number; ligatures: boolean };
+type Defaults = { ui: "simple" | "dev"; mode: "blocks" | "formula" | "english"; exits: Record<string, number>; sizing: Spec["sizing"]; compact: boolean; plain: boolean; palette: string[]; keys: Record<string, string>; wrap: boolean; rulers: number; ligatures: boolean; minimap: boolean };
 const readDefaults = (): Partial<Defaults> => { try { return JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as Partial<Defaults>; } catch { return {}; } };
 const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : "Failed");
 
@@ -104,7 +104,11 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     try {
       const sid = level === "full" ? await save(undefined, false) : loaded?.id;
       if (level === "full" && !sid) { runPending.current = false; return; }
-      const j = await studio<QuickRun>("POST", "/build/run", level === "full" ? { level, strategy_id: sid, settings } : { level, spec, settings, ...(sid ? { strategy_id: sid } : {}) });
+      // Run-config input overrides ("fast=10 slow=50") change quick runs only; full runs stay on the saved version for the trial ledger.
+      const { params: over, ...rest } = settings;
+      const pairs = String(over ?? "").split(/[\s,]+/).map((x) => x.split("=")).filter(([k, v]) => k && spec.params[k] && v !== undefined && v !== "" && Number.isFinite(Number(v)));
+      const runSpec = pairs.length ? { ...spec, params: { ...spec.params, ...Object.fromEntries(pairs.map(([k, v]) => [k!, { ...spec.params[k!]!, value: Number(v) }])) } } : spec;
+      const j = await studio<QuickRun>("POST", "/build/run", level === "full" ? { level, strategy_id: sid, settings: rest } : { level, spec: runSpec, settings: rest, ...(sid ? { strategy_id: sid } : {}) });
       setQuick({ ...j, level, status: "queued" });
       const poll = async () => {
         const st = await studio<QuickRun>("GET", `/build/run/${j.job_id}`).catch(() => null);
@@ -203,7 +207,18 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
     if (next === "dev" && !spec.code.trim()) void studio<{ code: string }>("POST", "/to-python", { spec }).then((r) => edit({ code: r.code }), fail);
   }
   const switchMode = (m: "blocks" | "formula" | "english") => setMode(m);
-  const formatSave = () => void studio<{ code: string }>("POST", "/format-python", { code: spec.code }).then((r) => { const next = { ...spec, code: r.code }; if (r.code !== spec.code) edit({ code: r.code }); return save(next); }, fail);
+  // Format main.py and every other .py file, then save.
+  const formatSave = () => {
+    const fmt = (code: string) => studio<{ code: string }>("POST", "/format-python", { code }).then((r) => r.code, () => code);
+    const own = (spec.files ?? {}) as Record<string, string>;
+    const py = Object.entries(own).filter(([f]) => f.endsWith(".py"));
+    void Promise.all([fmt(spec.code), ...py.map(([, c]) => fmt(c))]).then(([code, ...rest]) => {
+      const files = { ...own, ...Object.fromEntries(py.map(([f], i) => [f, rest[i]!])) };
+      const next = { ...spec, code: code!, files };
+      if (code !== spec.code || py.some(([f, c]) => files[f] !== c)) edit({ code: code!, files });
+      return save(next);
+    }, fail);
+  };
   const edit = (next: Partial<Spec>) => readOnly ? void toast("Read-only", { id: "ro" }) : setSpec((cur) => { history.current.past = [...history.current.past.slice(-49), cur]; history.current.future = []; setDirty(true); return { ...cur, ...next }; });
 
   // Live compile, 250 ms after typing stops.
@@ -667,6 +682,7 @@ function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void })
         <label className="bd-num"><span>Colour by role</span><input type="checkbox" checked={!d.plain} onChange={(e) => setD({ ...d, plain: !e.target.checked })} /></label>
         <label className="bd-num"><span>Editor word wrap</span><input type="checkbox" checked={d.wrap !== false} onChange={(e) => setD({ ...d, wrap: e.target.checked })} /></label>
         <label className="bd-num"><span>Editor rulers</span><Segmented<number> label="Editor rulers" value={d.rulers ?? 0} onChange={(rulers) => setD({ ...d, rulers })} options={[0, 80, 100, 120].map((v) => ({ value: v, label: v ? String(v) : "None" }))} /></label>
+        <label className="bd-num"><span>Editor minimap</span><input type="checkbox" checked={!!d.minimap} onChange={(e) => setD({ ...d, minimap: e.target.checked })} /></label>
         <label className="bd-num"><span>Editor ligatures</span><input type="checkbox" checked={!!d.ligatures} onChange={(e) => setD({ ...d, ligatures: e.target.checked })} /></label>
         <div className="bd-num"><span>Condition order</span><ol className="bd-palette">{(d.palette?.length ? paletteOrder().sort((a, b) => d.palette!.indexOf(a[1]) - d.palette!.indexOf(b[1])) : paletteOrder()).map(([, l], i, all) => (
           <li key={l}>{l}<button type="button" className="icon-btn" aria-label={`Move ${l} up`} disabled={!i} onClick={() => { const n = all.map(([, x]) => x); [n[i - 1], n[i]] = [n[i], n[i - 1]]; setD({ ...d, palette: n }); }}>↑</button></li>))}</ol></div>

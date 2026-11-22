@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerPref } from "./serverPref";
 
 /** Run configurations: named settings for /build/run (universe, dates, costs, fill). "Default" sends none, so the server's quick-run defaults apply. */
-export type RunConfig = { name: string; symbols?: string; top_n?: number; start?: string; end?: string; cost_profile?: string; fill?: string };
+export type RunConfig = { name: string; symbols?: string; top_n?: number; start?: string; end?: string; cost_profile?: string; fill?: string; params?: string };
 const KEY = "studio:runconfigs";
 const COSTS = ["US retail", "Crypto taker", "Zero (costs off)", "Custom"]; // backend features/inputs.py COST_PROFILES
 const DEFAULT: RunConfig = { name: "Default" };
@@ -55,7 +55,7 @@ export function RunConfigsDialog({ rc, open, onClose }: { rc: RunConfigs; open: 
         <button className="btn sm" disabled={bad} title={bad ? "Each configuration needs a unique name" : undefined} onClick={() => { rc.save(rows.map((c) => ({ ...c, name: c.name.trim() }))); onClose(); }}>Save</button>
       </div>
       <table className="dv-rcfg-t">
-        <thead><tr><th>Name</th><th>Symbols</th><th>Top N</th><th>Start</th><th>End</th><th>Costs</th><th>Fill</th><th /></tr></thead>
+        <thead><tr><th>Name</th><th>Symbols</th><th>Top N</th><th>Start</th><th>End</th><th>Costs</th><th>Fill</th><th>Inputs</th><th /></tr></thead>
         <tbody>{rows.map((c, i) => {
           const fixed = i === 0 && c.name === "Default";
           return (
@@ -67,6 +67,7 @@ export function RunConfigsDialog({ rc, open, onClose }: { rc: RunConfigs; open: 
               <td><input aria-label="End" type="date" value={c.end ?? ""} disabled={fixed} onChange={(e) => set(i, "end", e.target.value)} /></td>
               <td><select aria-label="Costs" value={c.cost_profile ?? ""} disabled={fixed} onChange={(e) => set(i, "cost_profile", e.target.value)}><option value="">Default</option>{COSTS.map((x) => <option key={x}>{x}</option>)}</select></td>
               <td><select aria-label="Fill" value={c.fill ?? ""} disabled={fixed} onChange={(e) => set(i, "fill", e.target.value)}><option value="">Next open</option><option value="same_close">Same close</option></select></td>
+              <td><input aria-label="Inputs" placeholder="fast=10 slow=50" title="Input overrides, quick runs only" value={c.params ?? ""} disabled={fixed} onChange={(e) => set(i, "params", e.target.value)} /></td>
               <td>{fixed ? null : <button className="icon-btn" aria-label={`Delete ${c.name}`} onClick={() => setRows((r) => r.filter((_, j) => j !== i))}><X size={12} /></button>}</td>
             </tr>
           );

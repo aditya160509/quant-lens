@@ -649,6 +649,7 @@ class DebugBreakpointRequest(BaseModel):
     condition: str | None = Field(default=None, max_length=500)
     hit: int | None = Field(default=None, ge=1)  # stop on the Nth condition-true hit of the run
     trigger: dict[str, Any] | None = None  # {file, line}: the breakpoint is live only after this line ran
+    watch: str | None = Field(default=None, max_length=64, pattern=r"^(self\.)?[A-Za-z_]\w*$")  # data breakpoint: stop where this value changes
 
 
 class BuildDebugRequest(PreviewRequest):
@@ -698,6 +699,7 @@ class DebugBreakpointHit(BaseModel):
     line: int
     hit_count: int
     locals: dict[str, Any]
+    watch: dict[str, Any] | None = None  # data breakpoint: {name, before, after}
 
 
 class BuildDebugResult(BaseModel):
@@ -741,7 +743,7 @@ def debug_python(request: BuildDebugRequest) -> dict:
                 raise HTTPException(422, "The trigger must be an existing line in a Python project file.")
             trigger = {"file": trigger["file"], "line": trigger["line"]}
         breakpoint = {"file": request.breakpoint.file, "line": request.breakpoint.line, "condition": condition, "step": request.step_line,
-                      "hit": request.breakpoint.hit, "trigger": trigger}
+                      "hit": request.breakpoint.hit, "trigger": trigger, "watch": request.breakpoint.watch}
     try:
         return backtest.debug_bar(spec, settings, symbol, request.date.isoformat(), request.step,
                                   "breakpoint" if breakpoint else request.event, breakpoint, request.loss_fraction)

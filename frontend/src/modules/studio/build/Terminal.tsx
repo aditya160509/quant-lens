@@ -25,12 +25,13 @@ atlas test [file]           run def test_* (all, or one file)
 atlas cells <file> [n]      run the # %% cells of a file up to cell n
 atlas check [file]          lint a file
 atlas preview               refresh the preview
+atlas compare SPY,QQQ,IWM   preview each symbol and compare return, trades, win rate
 atlas task add <name> <cmd && cmd>   save a task;  atlas task <name>  run it;  atlas task list | rm <name>
 clear                       clear the blocks;  reset  forget the Python session
 Anything else is Python, run in a session that keeps its variables; load, np and pd are ready.
 While the debugger is paused, plain input is a formula evaluated at the paused bar.`;
 const PRELUDE = "from studio.research import load\nimport numpy as np\nimport pandas as pd";
-const COMMANDS = ["atlas run quick", "atlas run full", "atlas test", "atlas cells", "atlas check", "atlas preview", "atlas task list", "atlas task add", "atlas help", "clear", "reset"];
+const COMMANDS = ["atlas run quick", "atlas run full", "atlas test", "atlas cells", "atlas check", "atlas preview", "atlas compare", "atlas task list", "atlas task add", "atlas help", "clear", "reset"];
 
 /** Split a command line on spaces, keeping "quoted parts" together. */
 export const words = (line: string) => [...line.matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2]);
@@ -93,6 +94,17 @@ export function Terminal({ host }: { host: TerminalHost }) {
     }
     if (!sub || sub === "help") return { status: "ok", out: HELP };
     if (sub === "run") { const { level, settings } = runArgs(rest); host.run(level, settings); return { status: "ok", out: `Started a ${level} run${Object.keys(settings).length ? ` with ${JSON.stringify(settings)}` : ""}. Results open beside the code.` }; }
+    if (sub === "compare") {
+      // Compound launch: preview each symbol over the same window and compare.
+      const syms = rest.join(",").split(/[\s,]+/).map((x) => x.toUpperCase()).filter(Boolean).slice(0, 12);
+      if (syms.length < 2) return { status: "err", out: "atlas compare SPY,QQQ,IWM (2 to 12 symbols)" };
+      type P = { status: string; reason?: string; total_return?: number; trades: { return: number }[] };
+      const rows = await Promise.all(syms.map((symbol) => studio<P>("POST", "/preview", { spec: host.spec, symbol, repaint: false }).then((r) => [symbol, r] as const, (e: Error) => [symbol, { status: "error", reason: e.message, trades: [] }] as const)));
+      const pct = (x?: number) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
+      const table = [["Symbol", "Return", "Trades", "Win rate"], ...rows.map(([sym, r]) => (r.status === "ok" ? [sym, pct(r.total_return), String(r.trades.length), r.trades.length ? pct(r.trades.filter((t) => t.return > 0).length / r.trades.length) : "—"] : [sym, r.reason ?? r.status, "", ""]))];
+      const w = table[0]!.map((_, c) => Math.max(...table.map((r) => r[c]!.length)));
+      return { status: "ok", out: table.map((r) => r.map((x, c) => (c ? x.padStart(w[c]!) : x.padEnd(w[c]!))).join("  ")).join("\n") };
+    }
     if (sub === "preview") { host.preview(); return { status: "ok", out: "Preview refreshed" }; }
     if (sub === "test") {
       const r = await studio<{ tests: TestRow[] }>("POST", "/build/test", { ...project(), ...(rest[0] ? { file: rest[0] } : {}) });

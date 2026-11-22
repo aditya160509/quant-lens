@@ -3,6 +3,7 @@
 The child runs user callbacks with restricted builtins. Event runs use Studio's shared fill engine.
 """
 
+import copy
 import importlib
 import inspect
 import json
@@ -1048,6 +1049,24 @@ def _debug_table(value):
                           "index": index[max(0, n - 50):], "rows": [[cell(x) for x in row] for row in grid[-50:]]}}
 
 
+_MISSING = object()
+
+
+def _watched(frame, path):
+    """The value of `name` or `self.name` in this frame, or _MISSING when it is not in scope."""
+    if path.startswith("self."):
+        owner = frame.f_locals.get("self", _MISSING)
+        return _MISSING if owner is _MISSING else getattr(owner, path[5:], _MISSING)
+    return frame.f_locals.get(path, _MISSING)
+
+
+def _changed(old, new):
+    try:
+        return bool(np.any(np.asarray(old != new)))
+    except (TypeError, ValueError):  # shapes or types that do not compare
+        return repr(old) != repr(new)
+
+
 def _debug_value(value, depth=0):
     if isinstance(value, np.generic):
         value = value.item()
@@ -1127,6 +1146,7 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
         trigger = bp.get("trigger") if bp else None
         triggered = trigger is None
         need = (bp or {}).get("hit") or 1
+        watched = [_MISSING]
 
         def trace(frame, trace_event, arg):
             nonlocal hit, hit_count, armed, triggered
@@ -1140,6 +1160,20 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
                         hit = {"file": name[8:-1], "line": frame.f_lineno, "hit_count": 1, "bar": ctx.t, "locals": _debug_value(frame.f_locals)}
                     elif name == f"<studio:{bp['file']}>" and frame.f_lineno == bp["line"]:
                         armed = True
+                return trace
+            if bp.get("watch"):  # data breakpoint: stop at the first line where the watched value differs from its last seen value
+                if not name.startswith("<studio:"):
+                    return None
+                if trace_event == "line" and hit is None:
+                    value = _watched(frame, bp["watch"])
+                    if value is not _MISSING:
+                        ctx = current_context()
+                        if watched[0] is not _MISSING and _changed(watched[0], value) and ctx is not None and (ctx.symbol is None or ctx.symbol == target) and column in available[ctx.t]:
+                            hit_count += 1
+                            if ctx.t > after and hit_count >= need:
+                                hit = {"file": name[8:-1], "line": frame.f_lineno, "hit_count": hit_count, "bar": ctx.t, "locals": _debug_value(frame.f_locals),
+                                       "watch": {"name": bp["watch"], "before": _debug_value(watched[0]), "after": _debug_value(value)}}
+                        watched[0] = copy.copy(value)
                 return trace
             if name != f"<studio:{bp['file']}>" and not (trigger and name == f"<studio:{trigger['file']}>"):
                 return None

@@ -823,6 +823,14 @@ def test_build_debug_breakpoint_stops_on_the_nth_hit_and_after_its_trigger(studi
     assert studio.post(path, json=body | {"breakpoint": {**after, "trigger": {"file": "main.py", "line": 99}}}).status_code == 422
 
 
+def test_build_debug_data_breakpoint_stops_where_a_value_changes(studio):
+    code = "class Strategy:\n    def __init__(self):\n        self.n = 0\n    def on_bar(self, ctx):\n        if ctx.t % 10 == 0:\n            self.n += 1\n        x = 1\n"
+    body = {"symbol": "SPY", "date": "2015-01-01", "spec": {"code": code}, "breakpoint": {"file": "main.py", "line": 6, "watch": "self.n"}}
+    hit = studio.post("/api/studio-v3/build/debug", json=body).json()["breakpoint"]
+    assert hit["line"] == 7 and hit["watch"]["after"] == hit["watch"]["before"] + 1
+    assert studio.post("/api/studio-v3/build/debug", json=body | {"breakpoint": {"file": "main.py", "line": 6, "watch": "1bad"}}).status_code == 422
+
+
 def test_build_debug_can_stop_on_an_equity_loss(studio):
     url = "/api/studio-v3/build/debug"
     request = {

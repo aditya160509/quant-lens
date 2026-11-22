@@ -63,7 +63,7 @@ export type QuickRun = { job_id: string; level: "quick" | "full"; status: string
     meta?: { headline?: string; total_return?: number; metrics?: Record<string, number | null>; trade_split?: Record<string, Record<string, number>> } } };
 type Sym = { name: string; kind: string; line: number; column: number; children: Sym[] };
 type Debug = { date: string; symbol: string; bar_index: number; state: Record<string, unknown>; context: Record<string, number | null>; orders: Record<string, unknown>[]; fills: Record<string, unknown>[];
-  previous_date: string | null; next_date: string | null; breakpoint?: { file: string; line: number; hit_count: number; locals: Record<string, unknown> } | null; equity_change?: number | null };
+  previous_date: string | null; next_date: string | null; breakpoint?: { file: string; line: number; hit_count: number; locals: Record<string, unknown>; watch?: { name: string; before: unknown; after: unknown } | null } | null; equity_change?: number | null };
 type QC = { ok: boolean; code: string; symbols: string[]; converted: { line: number; before: string; after: string }[]; unconverted: { line: number; source: string; reason: string }[] };
 type Member = { name: string; kind: string; signature: string | null; documentation: string | null };
 type Version = { version: number; created: number; actor: string };
@@ -266,6 +266,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [cond, setCond] = useState("");
   const [hitN, setHitN] = useState("");
   const [trig, setTrig] = useState("");
+  const [dwatch, setDwatch] = useState("");
   const lastRun = useRef<{ level: "quick" | "full"; settings: Record<string, unknown> } | null>(null);
   const [bps, setBps] = useState<Record<string, number[]>>({});
   const [q, setQ] = useState(""); const [rep, setRep] = useState("");
@@ -319,6 +320,14 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   )) : <p className="dv-empty">None</p>;
   // Name the browser tab after the strategy.
   useEffect(() => { document.title = spec.name ? `${spec.name} · Build · ATLAS` : "Build · ATLAS"; }, [spec.name]);
+  // Recent strategies (palette: "Open recent"), newest first.
+  const [recentStrats, setRecentStrats] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    let list: { id: string; name: string }[] = [];
+    try { list = JSON.parse(localStorage.getItem("studio:recent") ?? "[]"); } catch { /* none */ }
+    if (strategyId) { list = [{ id: strategyId, name: String(spec.name || "Untitled") }, ...list.filter((r) => r.id !== strategyId)].slice(0, 10); try { localStorage.setItem("studio:recent", JSON.stringify(list)); } catch { /* blocked */ } }
+    setRecentStrats(list.filter((r) => r.id !== strategyId));
+  }, [strategyId, spec.name]);
   const setFile = (name: string, text: string) => (keep(name), name in scratch ? setScratch((s) => ({ ...s, [name]: text })) : name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
   const replaceFiles = (next: Record<string, string>) => {
     const all: Record<string, string> = { ...files, ...next };
@@ -401,6 +410,12 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const toggleBp = (line: number) => setBps((b) => { const cur = b[active] ?? []; return { ...b, [active]: cur.includes(line) ? cur.filter((x) => x !== line) : [...cur, line].sort((x, y) => x - y) }; });
   const [bms, setBms] = useState<Record<string, number[]>>({});
   const toggleBm = (line: number) => setBms((b) => { const cur = b[active] ?? []; return { ...b, [active]: cur.includes(line) ? cur.filter((x) => x !== line) : [...cur, line].sort((x, y) => x - y) }; });
+  // Numbered bookmarks (JetBrains): Ctrl+Shift+N sets mark N on this line, Ctrl+N jumps to it in any file.
+  const [nbm, setNbm] = useState<Record<number, { file: string; line: number }>>({});
+  const setNumbered = (n: number, line: number) => setNbm((b) => { const cur = b[n]; const { [n]: _gone, ...rest } = b; return cur && cur.file === active && cur.line === line ? rest : { ...rest, [n]: { file: active, line } }; });
+  const goNumbered = (n: number) => { const m = nbm[n]; if (m) goto(m.file, m.line); else toast(`No bookmark ${n}`); };
+  const orderLines = prev?.order_lines;
+  const markToCode = useCallback((d: string) => { const o = orderLines?.find((x) => x.dates.some((y) => y.slice(0, 10) === d)); if (o) gotoRef.current(o.file, o.line); else toast(`No order line for ${d}`); }, [orderLines]);
   const bmJump = (dir: 1 | -1, line: number) => {
     const marks = [...(bms[active] ?? [])].sort((x, y) => x - y);
     if (!marks.length) return toast("No bookmarks in this file");
@@ -694,6 +709,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.cellabove", label: "Cells: run above and this cell", keys: (m) => [m.KeyMod.WinCtrl | m.KeyMod.Shift | m.KeyCode.Enter], run: (line) => runCell(line, false) },
     { id: "studio.tests", label: "Test: run all", run: () => { revealRail("tests"); runTests(); } },
     { id: "studio.testcursor", label: "Test: run at cursor", run: (line) => runTestAtCursor(line) },
+    ...recentStrats.map((r) => ({ id: `studio.recent.${r.id}`, label: `Open recent: ${r.name}`, run: () => window.location.assign(`/studio/build/${r.id}?ui=dev`) })),
     { id: "studio.coverage", label: "Test: toggle coverage gutter", run: () => { onCoverage?.(!coverage); onPreview(); } },
     { id: "studio.cancel", label: "Run: cancel", run: () => onCancel?.() },
     { id: "studio.chart", label: "View: chart with replay", run: () => setOpenP("chart", true) },
@@ -710,6 +726,9 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.bm", label: "Bookmark: toggle", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.KeyK], run: (line) => toggleBm(line) },
     { id: "studio.bmnext", label: "Bookmark: next", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.Period], run: (line) => bmJump(1, line) },
     { id: "studio.bmprev", label: "Bookmark: previous", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Alt | m.KeyCode.Comma], run: (line) => bmJump(-1, line) },
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((n): EditorAction[] => [
+      { id: `studio.nbm${n}`, label: `Bookmark ${n}: set`, keys: (m) => [m.KeyMod.WinCtrl | m.KeyMod.Shift | (m.KeyCode.Digit0 + n)], run: (line) => setNumbered(n, line) },
+      { id: `studio.nbmgo${n}`, label: `Bookmark ${n}: go`, keys: (m) => [m.KeyMod.WinCtrl | (m.KeyCode.Digit0 + n)], run: () => goNumbered(n) }]),
     { id: "studio.zen", label: "View: zen mode", keys: (m) => [m.KeyMod.chord(m.KeyMod.CtrlCmd | m.KeyCode.KeyK, m.KeyMod.CtrlCmd | m.KeyCode.KeyZ)], run: () => setZen((z) => !z) },
     { id: "studio.hidetools", label: "View: hide all tool windows", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.F12], run: () => setZen((z) => !z) },
     { id: "studio.split", label: "View: split editor", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.Backslash], run: () => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active)) },
@@ -985,7 +1004,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, fontSize: 13, lineHeight: 20, scrollBeyondLastLine: false, automaticLayout: true, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace" }} />
           ) : (
             <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={saveAndRun} onRun={runCode} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
-              font={font} actions={actions} breakpoints={bps[active] ?? []} bookmarks={bms[active] ?? []} logpoints={logpoints.filter((p) => p.file === active)} coverage={coverage ? prev?.coverage?.[active] ?? null : null} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} inline={inlineValues} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
+              font={font} actions={actions} breakpoints={bps[active] ?? []} bookmarks={[...(bms[active] ?? []), ...Object.values(nbm).filter((b) => b.file === active).map((b) => b.line)]} logpoints={logpoints.filter((p) => p.file === active)} coverage={coverage ? prev?.coverage?.[active] ?? null : null} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} inline={inlineValues} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
               onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
               project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles, paramSpecs: spec.params, problems,
                 refactor, addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
@@ -1118,10 +1137,13 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                     <input className="input" type="number" min={1} style={{ width: 64 }} aria-label="Stop on hit number" placeholder="hit #" value={hitN} onChange={(e) => setHitN(e.target.value)} />
                     <select className="input" aria-label="Only after breakpoint" value={trig} onChange={(e) => setTrig(e.target.value)}><option value="">Always on</option>{Object.entries(bps).flatMap(([f, ls]) => ls.map((l) => <option key={`${f}:${l}`} value={`${f}:${l}`}>After {f}:{l}</option>))}</select>
                     <button className="btn sm" onClick={() => debug({ breakpoint: { file: active, line: cursor.line, ...bpExtra() } })}>Break at {active}:{cursor.line}</button>
+                    <span className="dv-sep" />
+                    <input className="input" style={{ width: 120 }} aria-label="Break when this value changes" placeholder="self.position" value={dwatch} onChange={(e) => setDwatch(e.target.value.trim())} />
+                    <button className="btn sm" disabled={!/^(self\.)?[A-Za-z_]\w*$/.test(dwatch)} onClick={() => debug({ breakpoint: { file: active, line: 1, watch: dwatch, hit: Number(hitN) > 0 ? Number(hitN) : null } })}>Break on change</button>
                   </div>
                   {dbg ? (
                     <div className="dv-dgrid">
-                      <div><h4>{dbg.symbol} · {dbg.date} · bar {dbg.bar_index}{dbg.breakpoint ? ` · hit ${dbg.breakpoint.hit_count}` : ""}{dbg.equity_change != null ? ` · ${pct(dbg.equity_change)}` : ""}</h4>
+                      <div><h4>{dbg.symbol} · {dbg.date} · bar {dbg.bar_index}{dbg.breakpoint ? ` · hit ${dbg.breakpoint.hit_count}` : ""}{dbg.breakpoint?.watch ? ` · ${dbg.breakpoint.watch.name}: ${JSON.stringify(dbg.breakpoint.watch.before)} → ${JSON.stringify(dbg.breakpoint.watch.after)}` : ""}{dbg.equity_change != null ? ` · ${pct(dbg.equity_change)}` : ""}</h4>
                         <KV rows={dbg.context} /></div>
                       <div><h4>{dbg.breakpoint ? "Locals and self" : "self"}</h4>
                         {Object.keys({ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }).length ? <KV rows={{ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }} /> : <p className="dv-empty">No attributes</p>}</div>
@@ -1144,7 +1166,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const rightPanel = (
       <Panel id="right" minSize={0}>
       <aside className="dv-side" inert={!chartOpen}>
-        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart symbol={symbol} drawKey={`${strategyId ?? "new"}:${symbol}`} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} /></div> : null}
+        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart onMark={markToCode} symbol={symbol} drawKey={`${strategyId ?? "new"}:${symbol}`} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} /></div> : null}
       </aside>
       </Panel>
   );

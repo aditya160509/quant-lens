@@ -673,7 +673,7 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 | ✅ `Easy` Search across project with regex, case, whole word, replace | Project find and replace | HAVE | P1 |
 | ✅ `Easy` Code folding, folding regions | Collapse blocks | HAVE | P3 |
 | ✅ `Easy` Sticky scroll | Pin the enclosing class or def at the top | HAVE | P3 |
-| ⬜ `Easy` Minimap | Overview strip | GAP (disabled in Build editor and diff) | P3 |
+| ✅ `Easy` Minimap | Overview strip | HAVE (Customise Build › Editor minimap) | P3 |
 | ✅ `Med` Breadcrumbs (file > class > method) | Symbol path above the editor | HAVE (above the editor) | P2 |
 | ✅ `Easy` Outline view | Symbol tree of the file | HAVE | P1 |
 | ✅ `Easy` Hover docs and signature help | API docs on hover | HAVE | P1 |
@@ -682,7 +682,7 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 | ◐ `Med` Go to definition, peek definition | Jump or peek | PARTIAL (go to definition) | P2 |
 | ✅ `Med` Find all references | List uses of a symbol | HAVE (Shift+F12) | P2 |
 | ✅ `Med` Rename symbol across files | Safe rename | HAVE (F2) | P2 |
-| ◐ `Easy` Format document and on save | Auto format | PARTIAL (format selection and format `main.py` on editor save) | P2 |
+| ✅ `Easy` Format document and on save | Auto format | HAVE (every .py file on save, format selection) | P2 |
 | ✅ `Med` Quick fix lightbulb on Problems | One click fixes | HAVE (unused import, unused variable and more) | P1 |
 | ✅ `Med` Code actions: extract function, extract variable, organise imports | Refactor from the lightbulb | HAVE (lightbulb) | P2 |
 | ✅ `Easy` Snippets with tab stops, user snippets | Insert templates | HAVE (save selection, insert, prefix) | P2 |
@@ -691,7 +691,7 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 | ✅ `Easy` Pinned tabs and preview tabs | Single click preview, double click keep | HAVE | P3 |
 | ✅ `Easy` Diff editor | Compare version and draft | HAVE | P1 |
 | ✅ `Med` Timeline / local history per file | Auto snapshots, restore | HAVE (snapshots) | P1 |
-| ◐ `Easy` Bookmarks (numbered) | Mark lines to jump back | PARTIAL (Cmd+Alt+K and next/previous; numbering open) | P3 |
+| ✅ `Easy` Bookmarks (numbered) | Mark lines to jump back | HAVE (Cmd+Alt+K, next/previous; Ctrl+Shift+1–9 set, Ctrl+1–9 go) | P3 |
 | ✅ `Easy` Scratch files | Throwaway files outside the project | HAVE (browser-only scratch_*.py) | P3 |
 | ✅ `Easy` Todo comment index | List of TODO and FIXME | HAVE (Outline rail) | P3 |
 | ✅ `Easy` Zen mode and distraction-free layout | Hide chrome, centre the editor | HAVE (Cmd+K Cmd+Z) | P2 |
@@ -706,11 +706,11 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 | ✅ `Easy` Go to line / symbol in file (Ctrl+G, Ctrl+Shift+O) | Jump by line or symbol | HAVE (palette) | P2 |
 | ✅ `Easy` Go to symbol in project (Ctrl+T) | Search symbols across files | HAVE (palette "Symbol") | P2 |
 | ✅ `Med` Back and forward navigation history | Return to previous cursor spot | HAVE (Ctrl+- / Ctrl+Shift+-) | P2 |
-| ◐ `Easy` Recent files and recent projects | Quick reopen | PARTIAL (recent files first; no recent projects) | P3 |
+| ✅ `Easy` Recent files and recent projects | Quick reopen | HAVE (recent files; palette "Open recent" strategies) | P3 |
 | ✅ `Easy` Search Everywhere (JetBrains double Shift) | One box for files, symbols, actions, settings | HAVE (files, symbols, commands) | P2 |
 | ✅ `Easy` Structure tool window | Tree of classes and methods | HAVE (Outline) | P1 |
 | ✅ `Easy` Jump from a log line or problem to code | Click error to line | HAVE | P1 |
-| ◐ `Med` Jump from a trade or bar to the code that made it | Chart to code | PARTIAL (Trades tab rows; not chart markers) | P1 |
+| ✅ `Med` Jump from a trade or bar to the code that made it | Chart to code | HAVE (Trades tab rows; Alt+click a bar on the chart) | P1 |
 
 ### Refactoring and code intelligence
 
@@ -728,7 +728,7 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 
 | Feature | What it is | Tag | Pri |
 |---|---|---|---|
-| ◐ `Med` Run configurations (named, saved, shared) | Named run presets: universe, dates, costs, inputs | PARTIAL (named, saved on the server per user; no per-input overrides) | P1 |
+| ✅ `Med` Run configurations (named, saved, shared) | Named run presets: universe, dates, costs, inputs | HAVE (saved per user; input overrides apply to quick runs) | P1 |
 | ✅ `Easy` Run widget with config picker | Choose config, run, debug beside the editor | HAVE | P1 |
 | ✅ `Easy` Rerun with last config, rerun on save | Ctrl+R, auto rerun | HAVE | P1 |
 | ✅ `Easy` Stop / cancel | Kill a run | HAVE | P1 |
@@ -736,7 +736,7 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 | ✅ `Med` Conditional breakpoints | Break when an expression is true | HAVE | P1 |
 | ✅ `Med` Logpoints | Log an expression without stopping | HAVE (Shift+F9, preview runs) | P1 |
 | ✅ `Med` Hit-count and triggered breakpoints | Break on the Nth hit, or after another hit | HAVE | P2 |
-| ⬜ `Hard` Data breakpoints (break when a value changes) | Watch a variable | GAP | P2 |
+| ✅ `Hard` Data breakpoints (break when a value changes) | Watch a variable | HAVE (Debug › Break on change, shows before → after) | P2 |
 | ✅ `Med` Event breakpoints: next order, next fill, 5% loss day | Domain stops | HAVE (unique to us) | P1 |
 | ✅ `Med` Watch expressions | Pinned expressions that update per step | HAVE (live watches) | P1 |
 | ✅ `Med` Call stack and locals panel | Frames and variables | HAVE (locals, traceback) | P1 |
@@ -744,7 +744,7 @@ Researched 2026-11-21 from the official docs (VS Code docs on editing, debugging
 | ✅ `Med` Inline variable values in the editor while paused | Values shown beside code | HAVE | P2 |
 | ✅ `Med` Profiler (slowest lines, per function) | Where time goes | HAVE | P2 |
 | ✅ `Med` Flame graph | Visual profile | HAVE | P3 |
-| ⬜ `Hard` Compound launch: run for many symbols and compare | Multi-target run | GAP | P2 |
+| ✅ `Hard` Compound launch: run for many symbols and compare | Multi-target run | HAVE (`atlas compare SPY,QQQ,IWM`) | P2 |
 | ⬜ `Hard` Attach to a live or paper run | Debug in production | GAP | P3 |
 
 ### Testing

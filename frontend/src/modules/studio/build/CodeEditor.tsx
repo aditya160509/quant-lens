@@ -263,7 +263,7 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
   const prefs = editorPrefs();
   return (
     <div className="dv-monaco"><Editor language="python" path={path} value={value} onChange={(v) => onChange(v ?? "")} onMount={mount} theme="studio" height="100%"
-      options={{ minimap: { enabled: false }, wordWrap: prefs.wrap === false ? "off" : "on", rulers: prefs.rulers ? [prefs.rulers] : [], overviewRulerLanes: 0, overviewRulerBorder: false, hideCursorInOverviewRuler: true, fontSize: font, lineHeight: Math.round(font * 1.54), fontLigatures: prefs.ligatures === true, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true, fixedOverflowWidgets: true, scrollbar: { alwaysConsumeMouseWheel: false },
+      options={{ minimap: { enabled: prefs.minimap === true }, wordWrap: prefs.wrap === false ? "off" : "on", rulers: prefs.rulers ? [prefs.rulers] : [], overviewRulerLanes: 0, overviewRulerBorder: false, hideCursorInOverviewRuler: true, fontSize: font, lineHeight: Math.round(font * 1.54), fontLigatures: prefs.ligatures === true, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true, fixedOverflowWidgets: true, scrollbar: { alwaysConsumeMouseWheel: false },
         padding: { top: 10 }, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace", quickSuggestions: { strings: true, other: true, comments: false },
         bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true }, glyphMargin: true, readOnly }} /></div>
   );
@@ -275,7 +275,7 @@ export const REBINDABLE: [string, string][] = [["studio.debug", "Debug: start"],
 
 export const userKeys = (): Record<string, string> => { try { return (JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as { keys?: Record<string, string> }).keys ?? {}; } catch { return {}; } };
 /** Editor settings from Customise Build: word wrap (on unless off), ruler column (0 none), ligatures (off unless on). */
-const editorPrefs = ():{ wrap?: boolean; rulers?: number; ligatures?: boolean } => { try { return JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}"); } catch { return {}; } };
+const editorPrefs = ():{ wrap?: boolean; rulers?: number; ligatures?: boolean; minimap?: boolean } => { try { return JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}"); } catch { return {}; } };
 
 /** "Cmd+Shift+K", "F6", "Alt+Enter" or a chord "Cmd+K Cmd+S" as a Monaco keybinding; null when it does not parse. */
 export function parseKeys(m: Monaco, text: string): number[] | null {
