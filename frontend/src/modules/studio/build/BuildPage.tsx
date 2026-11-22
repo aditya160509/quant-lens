@@ -2,7 +2,7 @@
 
 import { Command as CommandIcon, BookmarkPlus, CircleCheck, CircleDashed, CircleX, Download, GitBranch, GitMerge, Settings2, Link2, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import toast from "react-hot-toast";
 import { defaultsFor } from "@/modules/research/StudyForm";
 import { useStudies } from "@/modules/research/store";
@@ -18,6 +18,7 @@ import { BranchDialog } from "./Branches";
 import { MenuItem, PopMenu, Segmented, type MenuAt } from "@/workspace/ui";
 import { STUDIO_BASE } from "../base";
 import type { Problem } from "./CodeEditor";
+import { ChartPopout } from "./ChartPopout";
 import { DevIDE, type DevPreview, type Logpoint, type QuickRun, type Saved } from "./DevIDE";
 import { Palette, type Command } from "./Palette";
 import { specDiff, type Group } from "./blocks";
@@ -65,7 +66,14 @@ function Num({ label, value, pct, onChange, empty }: { label: string; value: num
 }
 
 /** Build: write the rule, see it compile as you type, save immutable versions, run. */
-export default function BuildPage({ features, id }: { features: FeatureSpec[]; id?: string }) {
+const noSub = () => () => undefined;
+/** ?popout=chart opens only the chart, fed by the Build window (ChartPopout). */
+export default function BuildPage(props: { features: FeatureSpec[]; id?: string }) {
+  const popout = useSyncExternalStore(noSub, () => new URLSearchParams(window.location.search).get("popout") === "chart", () => false);
+  return popout ? <ChartPopout /> : <BuildEditor {...props} />;
+}
+
+function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string }) {
   // Settings sync: the server copy (saved from any browser) replaces this browser's on load.
   useEffect(() => { void studio<{ value: Partial<Defaults> | null }>("GET", "/build/prefs/settings").then((r) => { if (r.value) try { localStorage.setItem("studio:build:defaults", JSON.stringify(r.value)); } catch { /* blocked */ } }, () => undefined); }, []);
   const router = useRouter();

@@ -1,6 +1,6 @@
 "use client";
 
-import { Columns2, Copy, Download, Pin, RotateCcw, Trash2 } from "lucide-react";
+import { Columns2, Copy, Download, Pin, RotateCcw, Tag, Trash2 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import toast from "react-hot-toast";
@@ -37,6 +37,7 @@ Anything else is Python, run in a session that keeps its variables; load, plot, 
 While the debugger is paused, plain input is a formula evaluated at the paused bar.`;
 const PRELUDE = "from studio.research import load, plot, sql\nimport numpy as np\nimport pandas as pd";
 const COMMANDS = ["atlas run quick", "atlas run full", "atlas run quick --symbols ", "atlas run quick --from ", "atlas test", "atlas cells", "atlas check", "atlas preview", "atlas compare ", "atlas task list", "atlas task add ", "atlas task add --on-save ", "atlas help", "clear", "reset"];
+const TERM_COLORS = ["blue", "green", "amber", "red", "violet"];
 const SUBS = ["run", "test", "cells", "check", "preview", "compare", "task", "help"];
 /** Edit distance, for "did you mean". */
 function dist(a: string, b: string) {
@@ -85,6 +86,23 @@ export function Terminal({ host }: { host: TerminalHost }) {
   const [pins, setPins] = useState<string[]>(() => load("studio:termpins", []));
   const [pick, setPick] = useState(false); // Ctrl+R: fuzzy history search
   const listId = useId();
+  // Name and colour per terminal (JetBrains tab rename / colour), remembered per terminal.
+  const [label, setLabel] = useState<{ name: string; color: string }>(() => load(`studio:term:label:${host.storeKey}`, { name: "", color: "" }));
+  const relabel = () => {
+    const name = window.prompt("Terminal name (blank for none)", label.name); if (name === null) return;
+    const color = window.prompt(`Colour: ${TERM_COLORS.join(", ")} (blank for none)`, label.color) ?? label.color;
+    const next = { name: name.trim(), color: TERM_COLORS.includes(color.trim()) ? color.trim() : "" };
+    setLabel(next); try { localStorage.setItem(`studio:term:label:${host.storeKey}`, JSON.stringify(next)); } catch { /* private mode */ }
+  };
+  // Console completions: names the session assigned, and load('SYM') from the market file's symbols.
+  const names = [...new Set(session.flatMap((st) => [...st.matchAll(/^(\w+)\s*=(?!=)/gm)].map((m) => m[1]!)))];
+  const symQ = /load\(['"]([A-Za-z0-9.^-]*)$/.exec(input)?.[1];
+  const [syms, setSyms] = useState<string[]>([]);
+  useEffect(() => {
+    if (symQ === undefined) return;
+    const t = setTimeout(() => void studio<{ symbols: { symbol: string }[] }>("GET", `/data/symbols?q=${encodeURIComponent(symQ)}&limit=20`).then((r) => setSyms(r.symbols.map((x) => x.symbol)), () => undefined), 150);
+    return () => clearTimeout(t);
+  }, [symQ]);
   useEffect(() => { save("studio:termhist", history); }, [history]);
   useEffect(() => { save("studio:termpins", pins); }, [pins]);
   useEffect(() => { save(`studio:repl:${host.storeKey}`, session); }, [session, host.storeKey]);
@@ -95,15 +113,16 @@ export function Terminal({ host }: { host: TerminalHost }) {
   const done = (id: number, t0: number, patch: Partial<Block>) => setBlocks((b) => b.map((x) => (x.id === id ? { ...x, status: "ok", ms: performance.now() - t0, ...patch } : x)));
   const project = () => ({ code: host.code, files: host.extra });
 
+  // Python runs in a live kernel (one per session): only the new statement runs; after a restart the saved statements replay once.
   const python = async (src: string) => {
-    const file = "__session__.py", cells = [...session, src];
-    const text = [PRELUDE, ...cells].map((c) => `# %%\n${c}`).join("\n");
-    // Every symbol named in load("X") is loaded, plus the chart symbol (max 5, the server's limit).
-    const syms = [...new Set([host.symbol, ...[...cells.join("\n").matchAll(/load\(\s*["']([\w.^=-]+)["']/g)].map((m) => m[1]!.toUpperCase())])].slice(0, 5);
-    const r = await studio<{ outputs: CellRow[] }>("POST", "/build/cells", { ...project(), files: { ...host.extra, [file]: text }, file, upto: cells.length, only: true, symbols: syms });
+    const file = "__session__.py", key = `console:${host.storeKey}`;
+    const syms = [...new Set([host.symbol, ...[...[...session, src].join("\n").matchAll(/load\(\s*["']([\w.^=-]+)["']/g)].map((m) => m[1]!.toUpperCase())])].slice(0, 5);
+    const call = (cells: string[], run: number[]) => studio<{ outputs: CellRow[]; restarted: boolean }>("POST", "/build/kernel", { key, ...project(), files: { ...host.extra, [file]: [PRELUDE, ...cells].map((c) => `# %%\n${c}`).join("\n") }, file, cells: run, symbols: syms });
+    let r = await call([src], [1]);
+    if (r.restarted) r = await call([...session, src], [...Array(session.length + 2).keys()]);
     const last = r.outputs.at(-1);
     if (last?.error) return { status: "err" as const, out: `${last.stdout}${last.error}` };
-    setSession(cells);
+    setSession((x) => [...x, src]);
     return { status: "ok" as const, out: last?.stdout ?? "", value: last?.value ?? undefined, plots: last?.plots };
   };
 
@@ -174,7 +193,7 @@ export function Terminal({ host }: { host: TerminalHost }) {
     setInput(""); hist.current = -1; setPick(false);
     setHistory((h) => [cmd, ...h.filter((x) => x !== cmd)].slice(0, 100));
     if (cmd === "clear") return setBlocks([]);
-    if (cmd === "reset") { setSession([]); return toast("Python session reset"); }
+    if (cmd === "reset") { setSession([]); void studio("DELETE", `/build/kernel/console:${host.storeKey}`).catch(() => undefined); return toast("Python session reset"); }
     const id = push(cmd), t0 = performance.now();
     void exec(cmd).then((r) => done(id, t0, r), (e: Error) => done(id, t0, { status: "err", out: e.message }));
   };
@@ -219,7 +238,7 @@ export function Terminal({ host }: { host: TerminalHost }) {
   const picks = pick ? [...new Set([...pins, ...history])].filter((h) => fuzzy(input, h)).slice(0, 12) : [];
 
   return (
-    <div className="dv-term-wrap">
+    <div className="dv-term-wrap" data-color={label.color || undefined}>
     <div className="dv-term" ref={box} onClick={(e) => { if (e.target === e.currentTarget) (e.currentTarget.querySelector("input") as HTMLInputElement | null)?.focus(); }}>
       {blocks.map((b) => (
         <section key={b.id} className="dv-term-block" data-st={b.status} tabIndex={-1} data-block={b.id}
@@ -238,7 +257,7 @@ export function Terminal({ host }: { host: TerminalHost }) {
       ))}
       <div ref={end} />
       {pick ? <ul className="dv-term-pick" aria-label="History">{picks.length ? picks.map((h) => <li key={h}><button type="button" onClick={() => submit(h)}>{pins.includes(h) ? <Pin size={10} /> : null}{h}</button></li>) : <li className="dv-empty">No match</li>}</ul> : null}
-      <form onSubmit={(e) => { e.preventDefault(); submit(pick && picks[0] && !input.startsWith("atlas ") ? picks[0] : input); }}><span>{pick ? "⌕" : "›"}</span>
+      <form onSubmit={(e) => { e.preventDefault(); submit(pick && picks[0] && !input.startsWith("atlas ") ? picks[0] : input); }}>{label.name ? <span className="dv-term-name">{label.name}</span> : null}<span>{pick ? "⌕" : "›"}</span>
         <input aria-label="Terminal" list={listId} spellCheck={false} autoComplete="off" value={input} placeholder={host.paused ? `formula at ${host.paused.date}` : "atlas help, or Python"} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => {
           if (e.ctrlKey && e.key.toLowerCase() === "r") { e.preventDefault(); setPick((p) => !p); return; }
           if (e.key === "Escape" && pick) { setPick(false); return; }
@@ -248,8 +267,9 @@ export function Terminal({ host }: { host: TerminalHost }) {
           hist.current = k; setInput(qs[k] ?? "");
         }} />
         {session.length ? <button type="button" className="icon-btn" aria-label="Reset Python session" title={`Python session: ${session.length} statements · reset`} onClick={() => submit("reset")}><Trash2 size={11} /></button> : null}
+        <button type="button" className="icon-btn" aria-label="Rename terminal" title="Name and colour this terminal" onClick={relabel}><Tag size={11} /></button>
         {host.split ? <button type="button" className="icon-btn" aria-label="Split terminal" title="Split terminal" aria-pressed={host.split.on} onClick={host.split.toggle}><Columns2 size={11} /></button> : null}
-        <datalist id={listId}>{[...new Set([...pins, ...COMMANDS, ...Object.keys(tasks).map((t) => `atlas task ${t}`), ...history.slice(0, 30)])].map((c) => <option key={c} value={c} />)}</datalist>
+        <datalist id={listId}>{[...new Set([...(symQ !== undefined ? syms.map((x) => input.replace(/[A-Za-z0-9.^-]*$/, x) + "')") : []), ...pins, ...COMMANDS, ...names, ...Object.keys(tasks).map((t) => `atlas task ${t}`), ...history.slice(0, 30)])].map((c) => <option key={c} value={c} />)}</datalist>
       </form>
     </div>
     {/* Overview ruler: one mark per command, red when it failed; click to jump. */}

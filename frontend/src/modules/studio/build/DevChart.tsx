@@ -190,6 +190,15 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     push();
     if (pausedAt) { const r = chart.getVisibleRange(), t = ms(pausedAt); if (r && (t < r.from || t > r.to)) { const w = r.to - r.from; chart.setVisibleRange({ from: t - w / 2, to: t + w / 2 }); } }
   }, [chart, prev?.trades, sym, pausedAt, notes]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Synced cursor date: the bar under the crosshair is broadcast; the editor lights the lines that placed orders that day.
+  useEffect(() => {
+    if (!chart) return;
+    let last = "";
+    return chart.renderer.onCrosshairMove((e) => {
+      const d = e.time == null ? "" : new Date(e.time).toISOString().slice(0, 10);
+      if (d !== last) { last = d; window.dispatchEvent(new CustomEvent("studio:cursor-date", { detail: d })); }
+    });
+  }, [chart]);
   // Alt+click a bar with an order: open the line that placed it.
   const alt = useRef(false), shift = useRef(false); // Shift+click a bar: comment on it
   useEffect(() => {

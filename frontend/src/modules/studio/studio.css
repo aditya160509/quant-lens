@@ -753,6 +753,9 @@
 
 /* Terminal power-ups: guide, sticky command, ruler, history search, quick fix */
 .dv-term-wrap { position: relative; height: 100%; }
+.dv-term-wrap[data-color] { box-shadow: inset 2px 0 0 var(--tc); }
+.dv-term-wrap[data-color="blue"] { --tc: #4c8dff; } .dv-term-wrap[data-color="green"] { --tc: #2fb67c; } .dv-term-wrap[data-color="amber"] { --tc: #e0a526; } .dv-term-wrap[data-color="red"] { --tc: #e5534b; } .dv-term-wrap[data-color="violet"] { --tc: #9a6cf0; }
+.dv-term-name { font-size: 10.5px; padding: 0 6px; border-radius: 4px; color: var(--tc, var(--muted)); background: var(--line-2); white-space: nowrap; }
 .dv-term-block { border-left: 2px solid transparent; padding-left: 8px; margin-left: -10px; outline: 0; }
 .dv-term-block:hover, .dv-term-block:focus { border-left-color: var(--line-2); }
 .dv-term-block[data-st="err"] { border-left-color: color-mix(in oklch, var(--down) 55%, transparent); }
@@ -770,3 +773,10 @@
 .bd-json { min-height: 320px; font: 12px var(--mono); white-space: pre; resize: vertical; }
 .bd-set-body { display: grid; gap: 12px; }
 .bd-tpl-spark { width: 60px; height: 16px; color: var(--text-3); vertical-align: middle; margin-right: 6px; }
+.dv-paper { position: relative; } .dv-paper .dv-sbtn[data-on] { color: var(--up); }
+.dv-paper-pop { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 40; display: grid; gap: 8px; width: 260px; padding: 10px; border-radius: 10px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-2), 0 18px 40px -18px oklch(0 0 0 / .55); font-size: 12px; }
+.dv-paper-pop p { margin: 0; color: var(--text-2); } .dv-paper-pop label { display: grid; gap: 4px; color: var(--text-3); }
+.dv-cursor-day { background: color-mix(in oklch, var(--accent) 14%, transparent); }
+.dv-side-view { flex: 1; min-height: 0; overflow: auto; padding: 4px 2px; }
+.dv-sel-code { opacity: .7; font-size: 11.5px; max-height: 120px; overflow: auto; }
+.dv-popout { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: var(--bg); } .dv-popout > * { flex: 1; min-height: 0; }

@@ -12,6 +12,7 @@ import io
 import json
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from pathlib import Path
@@ -58,6 +59,91 @@ def run_cells(files: dict[str, str], file: str, upto: int, only: bool = False, s
     payload = {"files": sources, "fixture": FIXTURE, "cells": {"file": file, "parts": parts[:upto + 1], "only": only, "bars": bars}}
     outputs = _child(payload, [])
     return {"cells": parts, "outputs": outputs, "seconds": round(time.perf_counter() - start, 3)}
+
+
+# --- kernels: a sandboxed cells child kept alive per session, so variables survive between runs -----------------
+_kernels: dict[str, dict] = {}
+_kernels_lock = threading.Lock()
+MAX_KERNELS, IDLE_S = 8, 900
+
+
+def _bars_payload(symbols: list[str]) -> dict:
+    import numpy as np
+
+    from . import data
+
+    bars = {}
+    for sym in symbols[:5]:
+        panel = data.panel([sym], None, None)
+        if len(panel.dates):
+            bars[sym] = {"dates": [str(d.date()) for d in panel.dates], **{k: [float(v) if np.isfinite(v) else None for v in getattr(panel, k)[:, 0]] for k in ("open", "high", "low", "close", "volume") if hasattr(panel, k)}}
+    return bars
+
+
+def kernel_reset(key: str) -> None:
+    with _kernels_lock:
+        k = _kernels.pop(key, None)
+    if k:
+        k["p"].kill()
+
+
+def kernel_run(key: str, files: dict[str, str], file: str, indices: list[int], symbols: list[str]) -> dict:
+    """Runs the given cells of `file` in the session's live namespace (started on first use, or again after it died,
+    idled out or the symbols changed: then `restarted` is true and earlier cells must be re-run by the caller)."""
+    from . import pycode
+
+    sources = {n: s for n, s in files.items() if n.endswith(".py")}
+    if file not in sources:
+        raise KeyError(f"No file {file}")
+    parts = cells(sources[file])
+    problems = pycode.check(sources[file], {}, modules={n[:-3] for n in sources} | {RESEARCH, FIXTURE}, entry=False)
+    if problems:
+        p = problems[0]
+        return {"cells": parts, "outputs": [{"index": None, "error": p["message"], "error_line": p["line"], "stdout": "", "value": None, "seconds": 0.0}], "restarted": False}
+    chosen = [parts[i] for i in dict.fromkeys(indices) if 0 <= i < len(parts)]
+    now = time.time()
+    with _kernels_lock:
+        for name, k in list(_kernels.items()):  # idle, dead or over the cap: stop the oldest
+            if now - k["used"] > IDLE_S or k["p"].poll() is not None:
+                k["p"].kill(); _kernels.pop(name)
+        k = _kernels.get(key)
+        if k and k["symbols"] != tuple(symbols):
+            k["p"].kill(); _kernels.pop(key); k = None
+        restarted = k is None
+        if k is None:
+            while len(_kernels) >= MAX_KERNELS:
+                oldest = min(_kernels, key=lambda n: _kernels[n]["used"])
+                _kernels.pop(oldest)["p"].kill()
+            from .pycode import _limits
+            proc = subprocess.Popen([sys.executable, "-I", str(THIS)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                                    preexec_fn=_limits, env={"PATH": "/usr/bin:/bin"})  # noqa: PLW1509 same limits as the one-shot child
+            proc.stdin.write(json.dumps({"files": sources, "fixture": FIXTURE, "cells": {"kernel": True, "bars": _bars_payload(symbols), "file": file, "parts": [], "only": False}}) + "\n")
+            k = _kernels[key] = {"p": proc, "symbols": tuple(symbols), "used": now, "lock": threading.Lock()}
+        k["used"] = now
+    return {"cells": parts, "outputs": _kernel_call(key, k, {"files": sources, "file": file, "parts": chosen, "only": False}), "restarted": restarted}
+
+
+def _kernel_call(key: str, k: dict, req: dict) -> list[dict]:
+    from .pycode import TIMEOUT_S
+
+    out: list[dict] = []
+    with k["lock"]:
+        timer = threading.Timer(TIMEOUT_S, k["p"].kill)
+        timer.start()
+        try:
+            k["p"].stdin.write(json.dumps(req) + "\n"); k["p"].stdin.flush()
+            for line in k["p"].stdout:
+                row = json.loads(line)
+                if row.get("done"):
+                    return out
+                out.append(row)
+        except (BrokenPipeError, json.JSONDecodeError, OSError):
+            pass
+        finally:
+            timer.cancel()
+    kernel_reset(key)  # the child died or timed out: the next call starts a fresh one
+    out.append({"index": None, "stdout": "", "value": None, "error": f"The kernel stopped (time limit {TIMEOUT_S} s of CPU, or it crashed); run again to restart it", "error_line": None, "seconds": 0.0})
+    return out
 
 
 def discover(source: str) -> list[tuple[str, int]]:
@@ -130,7 +216,7 @@ def _child_main() -> None:
     spec = importlib.util.spec_from_file_location("pyrunner", THIS.with_name("pyrunner.py"))
     pyrunner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(pyrunner)
-    payload = json.loads(sys.stdin.read())
+    payload = json.loads(sys.stdin.readline())  # one line: a kernel keeps reading requests after it
     sources, fixture = payload["files"], payload["fixture"]
     builtins = {**pyrunner.SAFE_BUILTINS, "AssertionError": AssertionError}
     cache: dict[str, ModuleType] = {}
@@ -240,8 +326,20 @@ def _cells_main(job: dict, sources: dict, builtins: dict, guarded_import, pyrunn
     builtins["__import__"] = cell_import
     builtins["print"] = print
     namespace = {"__builtins__": builtins, "__name__": "__cells__", "math": pyrunner.math}
+    real_stdout = sys.stdout
+    if job.get("kernel"):  # stay alive: each stdin line runs some cells in the same namespace, then prints {"done": true}
+        for raw in sys.stdin:
+            req = json.loads(raw)
+            sources.clear(); sources.update(req["files"])
+            _run_parts({**job, **req}, sources, namespace, plots, pyrunner, real_stdout)
+            real_stdout.write('{"done": true}\n'); real_stdout.flush()
+        return
+    _run_parts(job, sources, namespace, plots, pyrunner, real_stdout)
+
+
+def _run_parts(job: dict, sources: dict, namespace: dict, plots: list, pyrunner, real_stdout) -> None:
     lines = sources[job["file"]].splitlines()
-    real_stdout, last = sys.stdout, len(job["parts"]) - 1
+    last = len(job["parts"]) - 1
     for part in job["parts"]:
         t0, buf = time.perf_counter(), io.StringIO()
         row = {"index": part["index"], "line": part["line"], "stdout": "", "value": None, "error": None, "error_line": None}

@@ -17,6 +17,7 @@ import { useLayout } from "@/workspace/layout";
 import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 import { useServerPref } from "./serverPref";
 import { DevChart } from "./DevChart";
+import { CHART_CHANNEL } from "./ChartPopout";
 import { RunConfigPicker, RunConfigsDialog, useRunConfigs } from "./RunConfigs";
 import { fitWorkspace, LayoutsDialog, targets, useWorkspaces, WorkspaceMenu, type PanelId } from "./Workspace";
 import { DevRobust } from "./DevRobust";
@@ -74,6 +75,12 @@ type Snippet = { id: string; name: string; prefix: string; body: string; descrip
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 export type Logpoint = { file: string; line: number; message: string };
 type Tab = "tester" | "problems" | "output" | "plots" | "trades" | "debug" | "console" | "cells" | "preview";
+/** The chart's crosshair date in the status bar (listens to studio:cursor-date, so DevIDE does not re-render on mouse moves). */
+function CursorDate() {
+  const [d, setD] = useState("");
+  useEffect(() => { const on = (e: Event) => setD((e as CustomEvent<string>).detail); window.addEventListener("studio:cursor-date", on); return () => window.removeEventListener("studio:cursor-date", on); }, []);
+  return d ? <span title="Chart cursor date">{d}</span> : null;
+}
 const hasCellsFor = (src?: string) => /^\s*# %%/m.test(src ?? "");
 type CellPlot = { name: string; x: string[]; series: Record<string, (number | null)[]> };
 type CellRow = { index: number | null; line?: number; stdout: string; value: unknown; error: string | null; error_line: number | null; seconds: number; plots?: CellPlot[] };
@@ -84,8 +91,8 @@ export function CellPlots({ plots }: { plots?: CellPlot[] }) {
     return <div key={i} className="dv-plot"><b>{p.name}</b><TimeSeries data={p.x.map((d, j) => ({ date: d, ...Object.fromEntries(keys.map((k) => [k, p.series[k]![j]])) }))} series={keys.map((k, j) => ({ key: k, label: k, color: SERIES[j % SERIES.length]! }))} height={180} legend={keys.length > 1} /></div>;
   })}</>;
 }
-type View = "code" | "results" | "tearsheet" | "robust" | "runs";
-const VIEW_LABEL: Record<Exclude<View, "code">, string> = { results: "Results", tearsheet: "Tearsheet", robust: "Robustness", runs: "Runs" };
+type View = "code" | "results" | "tearsheet" | "robust" | "runs" | "selection";
+const VIEW_LABEL: Record<Exclude<View, "code">, string> = { results: "Results", tearsheet: "Tearsheet", robust: "Robustness", runs: "Runs", selection: "Selection" };
 type Rail = "files" | "outline" | "search" | "versions" | "tests" | "docs" | "templates";
 type TestRow = { file: string; name: string; line: number; status: "passed" | "failed" | "error"; seconds: number; message?: string; error_line?: number };
 const TEST_FILE = "from studio.testing import bars\n\n\ndef test_closes_are_positive():\n    b = bars(50)\n    assert min(b[\"close\"]) > 0\n";
@@ -310,6 +317,21 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [snaps, setSnaps] = useState<Snapshot[]>([]);
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [snipTag, setSnipTag] = useState<string | null>(null);
+  // Artefacts: a file saved by name and kind (indicator, transform, filter, sweep, plot) that any strategy can add as lib_<name>.py.
+  // Adding copies the code into the project, so a strategy's hash and results never change when the artefact is edited later.
+  type Artefact = { name: string; kind: string; code: string; updated: number };
+  const [artefacts, setArtefacts] = useState<Artefact[]>([]);
+  useServerPref("artefacts", artefacts, setArtefacts);
+  const saveArtefact = (file: string) => {
+    const name = window.prompt("Artefact name", file.replace(/^lib_|\.py$/g, ""))?.trim().replace(/\W+/g, "_").toLowerCase(); if (!name) return;
+    const kind = window.prompt("Kind: indicator, transform, filter, sweep or plot", "indicator")?.trim().toLowerCase() || "indicator";
+    setArtefacts((a) => [...a.filter((x) => x.name !== name), { name, kind, code: files[file] ?? "", updated: Date.now() }]); toast.success(`Saved artefact ${name}`);
+  };
+  const addArtefact = (a: Artefact) => {
+    const f = `lib_${a.name}.py`;
+    if (f in files && files[f] !== a.code && !window.confirm(`${f} differs from the saved artefact. Replace it?`)) return;
+    edit({ files: { ...(spec.files ?? {}), [f]: a.code } }); goto(f, 1); toast(`Added ${f}: import it with from lib_${a.name} import …`);
+  };
   const selection = useRef("");
   const insertAt = useRef<((text: string) => void) | null>(null);
   const qcRef = useRef<HTMLDialogElement>(null);
@@ -387,19 +409,39 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const dropScratch = (f: string) => { setScratch(({ [f]: _, ...rest }) => rest); close(f); };
   const [cellOut, setCellOut] = useState<{ file: string; titles: string[]; rows: CellRow[] } | "running" | null>(null);
   const hasCells = /^\s*# %%/m.test(files[active] ?? "");
-  // below: run every cell and show this one and the ones after it (cells above still run first; no live kernel).
-  const runCell = (line: number, only = true, below = false, quiet = false) => {
-    const starts = [1, ...(files[active] ?? "").split("\n").flatMap((t, i) => (i && /^\s*# %%/.test(t) ? [i + 1] : []))];
-    const at = starts.filter((s0) => s0 <= line).length - 1, upto = below ? starts.length - 1 : at;
+  // Cells run in a live kernel per file: variables survive between runs. If the kernel (re)started, the cells above re-run first.
+  const cellParts = (src: string) => { const lines = src.split("\n"), starts = [0, ...lines.flatMap((t, i) => (i && /^\s*# %%/.test(t) ? [i] : []))]; return starts.map((a, k) => lines.slice(a, starts[k + 1] ?? lines.length).join("\n")); };
+  const lastRan = useRef<Record<string, string[]>>({});
+  const runCells = (want: number[], quiet = false) => {
+    const file = active, src = files[file] ?? "", parts = cellParts(src), key = `cells:${strategyId ?? "draft"}:${file}`;
     if (!quiet) { setPanelOpen(true); setTab("cells"); }
     setCellOut("running");
-    void studio<{ cells: { title: string }[]; outputs: CellRow[] }>("POST", "/build/cells", { code: spec.code, files: spec.files ?? {}, file: active, upto, only: below ? false : only, symbols: [symbol] })
-      .then((r) => setCellOut({ file: active, titles: r.cells.map((c) => c.title), rows: below ? r.outputs.filter((o) => (o.index ?? 0) >= at) : r.outputs }), (e: Error) => { setCellOut(null); toast.error(e.message); });
+    const call = (cells: number[]) => studio<{ cells: { title: string }[]; outputs: CellRow[]; restarted: boolean }>("POST", "/build/kernel", { key, code: spec.code, files: spec.files ?? {}, file, cells, symbols: [symbol] });
+    void call(want).then(async (r) => {
+      if (r.restarted && Math.min(...want) > 0) r = await call([...Array(Math.max(...want) + 1).keys()]);
+      lastRan.current[file] = parts;
+      setCellOut({ file, titles: r.cells.map((c) => c.title), rows: r.outputs.filter((o) => o.index == null || want.includes(o.index)) });
+    }).catch((e: Error) => { setCellOut(null); toast.error(e.message); });
   };
-  // Reactive cells: with Auto-run on, an edit re-runs every cell after a pause (all cells re-run; no dependency tracking).
+  const runCell = (line: number, only = true, below = false, quiet = false) => {
+    const starts = [1, ...(files[active] ?? "").split("\n").flatMap((t, i) => (i && /^\s*# %%/.test(t) ? [i + 1] : []))];
+    const at = starts.filter((s0) => s0 <= line).length - 1, n = starts.length;
+    runCells(below ? [...Array(n - at).keys()].map((k) => k + at) : only ? [at] : [...Array(at + 1).keys()], quiet);
+  };
+  // Reactive cells: with Auto-run on, an edit re-runs the changed cells and every later cell that reads a name they assign.
   const [autoCells, setAutoCells] = useState(false);
   const cellSrc = hasCellsFor(files[active]) ? files[active] : null;
-  useEffect(() => { if (!autoCells || !cellSrc) return; const t = setTimeout(() => runCell(1, false, true, true), 900); return () => clearTimeout(t); }, [autoCells, cellSrc]); // eslint-disable-line react-hooks/exhaustive-deps
+  const reactive = () => {
+    const parts = cellParts(files[active] ?? ""), before = lastRan.current[active] ?? [];
+    const dirty = new Set(parts.flatMap((t, i) => (t !== before[i] ? [i] : [])));
+    for (let i = 0; i < parts.length; i++) {
+      if (!dirty.has(i)) continue;
+      const names = [...parts[i]!.matchAll(/^\s*([A-Za-z_]\w*)\s*(?:[-+*/]?=)(?!=)/gm)].map((m) => m[1]!);
+      for (let j = i + 1; j < parts.length; j++) if (names.some((n) => new RegExp(`\\b${n}\\b`).test(parts[j]!))) dirty.add(j);
+    }
+    if (dirty.size) runCells([...dirty].sort((a, b) => a - b), true);
+  };
+  useEffect(() => { if (!autoCells || !cellSrc) return; const t = setTimeout(reactive, 900); return () => clearTimeout(t); }, [autoCells, cellSrc]); // eslint-disable-line react-hooks/exhaustive-deps
   // Back/forward history: positions left behind by jumps and file switches, newest last, capped at 50.
   const nav = useRef({ s: [] as { file: string; line: number }[], i: -1, jumping: false });
   const mark = (file: string, line: number) => { const n = nav.current, l = n.s[n.i]; if (l?.file === file && l.line === line) return; n.s = [...n.s.slice(0, n.i + 1), { file, line }].slice(-50); n.i = n.s.length - 1; };
@@ -525,7 +567,11 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const hadErrors = useRef(0);
   useEffect(() => { if (errors && !hadErrors.current) { setPanelOpen(true); setTab("problems"); } hadErrors.current = errors; }, [errors]);
   const logRe = finder(logQ, opt);
-  const logs = (logCleared === prev?.logs ? [] : prev?.logs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logSym || l.symbol === logSym) && (!logFrom || l.date >= logFrom) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}${l.fields ? Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("") : ""}`))));
+  // Pinned outputs (JetBrains pin tab): keep a preview's Output under a name to compare with later previews.
+  const [pinnedOut, setPinnedOut] = useState<{ id: number; label: string; logs: NonNullable<DevPreview["logs"]> }[]>([]);
+  const [outSrc, setOutSrc] = useState(0); // 0 = the live preview
+  const srcLogs = outSrc ? pinnedOut.find((p) => p.id === outSrc)?.logs : prev?.logs;
+  const logs = (logCleared === srcLogs ? [] : srcLogs ?? []).filter((l) => (logLevel === "all" || l.level === logLevel) && (!logSym || l.symbol === logSym) && (!logFrom || l.date >= logFrom) && (!logRe || (logRe.lastIndex = 0, logRe.test(`${l.date} ${l.symbol ?? ""} ${l.text}${l.fields ? Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("") : ""}`))));
   const plots = Object.entries(prev?.plots ?? {});
   // B-81: the plots of the preview before this one, overlaid dashed when "Previous run" is on.
   const [before, setBefore] = useState<Record<string, Point[]> | null>(null);
@@ -567,11 +613,24 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     return studio<Debug>("POST", "/build/debug", { spec, symbol, date, ...body }).then((d) => { setDbg(d); setDbgDate(d.date); onPause?.(d.date, `❚❚ ${Math.round(Number(d.context.quantity ?? 0))} held${d.orders.length ? ` · ${d.orders.length} pending` : ""}`); if (d.breakpoint) goto(d.breakpoint.file, d.breakpoint.line); if (!d.next_date) setPlaying(false); }, (e: Error) => { setPlaying(false); toast.error(e.message); });
   };
   /** Replay moves the debugger one bar or to a date; chart, Debug locals, watches and Console follow dbg. Overlapping requests are dropped. */
+  // Pop-out chart: send it the chart's state; it sends replay moves back.
+  const chartChan = useRef<BroadcastChannel | null>(null);
+  const chartState = { type: "state", symbol, prev, pausedAt: dbg?.date ?? null, drawKey: `${strategyId ?? "new"}:${symbol}` };
+  const chartStateRef = useRef(chartState); chartStateRef.current = chartState;
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const c = chartChan.current = new BroadcastChannel(CHART_CHANNEL);
+    c.onmessage = (e: MessageEvent<{ type: string; date: string | null; step?: 1 | -1 }>) => { if (e.data.type === "hello") c.postMessage(chartStateRef.current); else if (e.data.type === "go") replayRef.current(e.data.date, e.data.step); };
+    return () => c.close();
+  }, []);
+  useEffect(() => { chartChan.current?.postMessage(chartState); }, [symbol, prev, dbg?.date, strategyId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const replayRef = useRef<(date: string | null, step?: 1 | -1) => void>(() => undefined);
   const replayGo = useCallback((date: string | null, step?: 1 | -1) => {
     if (stepping.current) return;
     stepping.current = true;
     void Promise.resolve(date ? debugRef.current({ date }, true) : debugRef.current({ step }, true)).finally(() => { stepping.current = false; });
   }, []);
+  replayRef.current = replayGo;
   const [runLog, setRunLog] = useState<RunEntry[]>([]);
   useEffect(() => {
     if (quick?.status !== "completed" || !quick.result?.meta) return;
@@ -687,9 +746,39 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     onQuickRun(level, rc.settings);
   };
   const rerunLast = () => { const l = lastRun.current; if (!l || !canRun || starting || running) return; openView("results"); onQuickRun(l.level, l.settings); };
+  // Paper: the strategy's paper record (freeze, stop and flatten, debug a paper day) in the status bar.
+  type PaperSeg = { version: number; from: string; to?: string; backdated: boolean };
+  const [paper, setPaper] = useState<{ segments: PaperSeg[]; last: { total_return?: number; paper_day?: number; at?: number } | null; freshness: { tone: string; age_days: number } } | null>(null);
+  const [paperOpen, setPaperOpen] = useState(false);
+  const loadPaper = useCallback(() => { if (strategyId) void studio<NonNullable<typeof paper>>("GET", `/strategies/${strategyId}/paper`).then(setPaper, () => setPaper(null)); }, [strategyId]);
+  useEffect(loadPaper, [loadPaper]);
+  const paperRun = paper?.segments.find((x) => !x.to);
+  const paperAct = (path: string, body: object, msg: string) => void studio("POST", `/strategies/${strategyId}${path}`, body).then(() => { toast.success(msg); loadPaper(); }, (e: Error) => toast.error(e.message));
+  // ?debug=YYYY-MM-DD (from Live): open with the debugger paused on that paper day.
+  useEffect(() => { const d = new URLSearchParams(window.location.search).get("debug"); if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) { setPanelOpen(true); setTab("debug"); debug({ date: d }); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [savedTick, setSavedTick] = useState(0); // terminal tasks added with --on-save run on each tick
   const [termSplit, setTermSplit] = useState(false);
+  // Views moved from the bottom panel to the side bar (drag a panel tab onto the side bar; drag it back or use Move to panel).
+  const [moved, setMoved] = useState<Tab[]>(() => { try { return JSON.parse(localStorage.getItem("studio:dev:moved") ?? "[]"); } catch { return []; } });
+  useEffect(() => { try { localStorage.setItem("studio:dev:moved", JSON.stringify(moved)); } catch { /* blocked */ } }, [moved]);
+  const [sideTab, setSideTab] = useState<Tab | null>(null);
+  const movedTab = (t: Tab) => moved.includes(t);
+  const toSide = (t: Tab) => { setMoved((m) => (m.includes(t) ? m : [...m, t])); setSideTab(t); setRailOpen(true); };
+  const toPanel = (t: Tab) => { setMoved((m) => m.filter((x) => x !== t)); if (sideTab === t) setSideTab(null); setPanelOpen(true); setTab(t); };
   const [termCmd, setTermCmd] = useState({ cmd: "", n: 0 }); // "Run selection in Console" sends code here
+  // Run selection on a date range: the selected code runs with load() cut to the range; its output opens in a Selection tab.
+  const [selOut, setSelOut] = useState<{ code: string; range: string; row: CellRow | null } | null>(null);
+  const runSelection = () => {
+    const code = selection.current.trim(); if (!code) return toast("Select some Python first");
+    const dflt = [rc.settings.start, rc.settings.end].filter(Boolean).join(" ");
+    const range = window.prompt("Date range: from to (YYYY-MM-DD YYYY-MM-DD, blank for all)", String(dflt)); if (range === null) return;
+    const [from = "", to = ""] = range.trim().split(/\s+/);
+    const ok = (d: string) => !d || /^\d{4}-\d{2}-\d{2}$/.test(d); if (!ok(from) || !ok(to)) return toast.error("Use YYYY-MM-DD");
+    const prelude = `from studio.research import load as load_all, plot, sql\nimport numpy as np\nimport pandas as pd\n\n\ndef load(symbol=""):\n    return load_all(symbol).loc[${from ? `"${from}"` : "None"}:${to ? `"${to}"` : "None"}]`;
+    setSelOut({ code, range: range.trim() || "all dates", row: null }); openView("selection");
+    void studio<{ outputs: CellRow[] }>("POST", "/build/cells", { code: spec.code, files: { ...(spec.files ?? {}), "__selection__.py": `# %%\n${prelude}\n# %%\n${code}` }, file: "__selection__.py", upto: 1, only: true, symbols: [symbol] })
+      .then((r) => setSelOut((x) => x && { ...x, row: r.outputs.at(-1) ?? null }), (e: Error) => setSelOut((x) => x && { ...x, row: { index: null, stdout: "", value: null, error: e.message, error_line: null, seconds: 0 } }));
+  };
   // Blame: walk saved versions newest to oldest while this line's text is still in the file; the last one is where it came from.
   const blame = (line: number) => {
     const text = (files[active] ?? "").split("\n")[line - 1]?.trim();
@@ -727,7 +816,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const revealRail = (next: Rail) => {
     setView("code");
     setIconsOpen(true);
-    setRail(next);
+    setRail(next); setSideTab(null);
     setRailOpen(true);
   };
   const actions: EditorAction[] = [
@@ -739,6 +828,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.stepback", label: "Debug: step back one bar", keys: (m) => [m.KeyMod.Shift | m.KeyCode.F10], run: () => debug({ step: -1 }) },
     { id: "studio.layouts", label: "View: customise layouts", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Backslash], run: () => setLayoutsOpen(true) },
     { id: "studio.chartfirst", label: "View: chart first", run: () => ws.flipChartFirst() },
+    { id: "studio.popchart", label: "View: pop out chart", run: () => window.open(`${window.location.pathname}?popout=chart`, "atlas-chart", "popup,width=1200,height=760") },
     { id: "studio.panel", label: "View: toggle panel", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyJ], run: () => setPanelOpen((o) => !o) },
     { id: "studio.rail", label: "View: toggle side bar", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyB], run: () => { if (railOpen) setRailOpen(false); else revealRail(rail); } },
     { id: "studio.files", label: "Go to file", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyP], run: () => revealRail("files") },
@@ -754,6 +844,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     ...recentStrats.map((r) => ({ id: `studio.recent.${r.id}`, label: `Open recent: ${r.name}`, run: () => window.location.assign(`/studio/build/${r.id}?ui=dev`) })),
     { id: "studio.blame", label: "Blame: when did this line change", run: (line) => blame(line) },
     { id: "studio.runsel", label: "Run selection in Console", keys: (m) => [m.KeyMod.Shift | m.KeyMod.Alt | m.KeyCode.KeyE], run: () => { const t = selection.current.trim(); if (!t) return toast("Select some Python first"); setPanelOpen(true); setTab("console"); setTermCmd((c) => ({ cmd: t, n: c.n + 1 })); } },
+    { id: "studio.runselrange", label: "Run selection on a date range", keys: (m) => [m.KeyMod.Shift | m.KeyMod.Alt | m.KeyCode.KeyR], run: () => runSelection() },
     { id: "studio.coverage", label: "Test: toggle coverage gutter", run: () => { onCoverage?.(!coverage); onPreview(); } },
     { id: "studio.cancel", label: "Run: cancel", run: () => onCancel?.() },
     { id: "studio.chart", label: "View: chart with replay", run: () => setOpenP("chart", true) },
@@ -884,9 +975,147 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     {running && view !== "results" ? <button className="btn" onClick={onCancel}>Cancel</button> : null}
   </>;
 
+  // One renderer for a bottom-panel view, so a view dragged to the side bar draws the same content there.
+  const panelBody = (tab: Tab, inSide: boolean) => (
+            <>
+              {panelOpen && tab === "preview" ? side : null}
+              {tab === "problems" ? <label className="dv-strict"><input type="checkbox" checked={strict} onChange={(e) => { setStrict(e.target.checked); try { localStorage.setItem("studio:dev:strict", e.target.checked ? "1" : "0"); } catch { /* blocked */ } }} />Strict</label> : null}
+              {tab === "problems" ? <div className="seg dv-strict" role="group" aria-label="Scope">{(["file", "project"] as const).map((k) => <button key={k} type="button" aria-pressed={scope === k} onClick={() => (k === "project" && !report.length ? void inspectProject() : setScope(k))}>{k === "file" ? "Current file" : "Project"}</button>)}</div> : null}
+              {tab === "problems" && scope === "project" ? (report.length ? Object.entries(Object.groupBy(report, (p) => p.file)).map(([f, list]) => (
+                <div key={f}><h4 className="dv-sub">{f} · {list!.length}</h4>
+                  {Object.entries(Object.groupBy(list!, (p) => p.code || "other")).map(([c, group]) => group!.map((p, i) => (
+                    <button key={`${c}${i}`} className="dv-prob" onClick={() => { setScope("file"); goto(p.file, p.line, p.column); }}><b className={p.severity}>{p.severity}</b><span>{p.message}</span><i>{p.line}:{p.column} {c}</i></button>
+                  )))}
+                </div>
+              )) : <p className="dv-empty">No problems</p>) : null}
+              {tab === "problems" && scope === "file" ? (problems.length ? <>
+                {problems.map((p, i) => (
+                  <button key={i} className="dv-prob" title={lint.includes(p) ? "Right-click to set severity" : undefined} onContextMenu={(e) => { if (lint.includes(p) && p.code) { e.preventDefault(); setSeverity(p.code); } }} onClick={() => goto(p.file, p.line, p.column)}><b className={p.severity}>{p.severity}</b><span>{p.message}</span><i>{p.file}:{p.line}:{p.column}{p.code ? ` ${p.code}` : ""}</i></button>
+                ))}
+                {prev?.locals ? <div className="dv-trace"><h4 className="dv-sub">At the failing bar</h4><KV rows={prev.locals} /></div> : null}
+                {prev?.problem?.traceback?.length ? <div className="dv-trace">{prev.problem.traceback.map((f, i) => <button key={i} className="dv-item" onClick={() => goto(f.file, f.line, f.column)}>{f.function}<span>{f.file}:{f.line}</span></button>)}</div> : null}
+              </> : <p className="dv-empty">No problems</p>) : null}
+              {tab === "output" ? (
+                <>
+                  <div className="dv-search dv-logbar">
+                    <input className="input" placeholder="Filter" aria-label="Filter output" value={logQ} onChange={(e) => setLogQ(e.target.value)} />{toggles}
+                    <div className="seg" role="group" aria-label="Level">{["all", "info", "warning", "error"].map((l) => <button key={l} type="button" aria-pressed={logLevel === l} onClick={() => setLogLevel(l)}>{l}</button>)}</div>
+                    {(() => { const syms = [...new Set((srcLogs ?? []).map((l) => l.symbol).filter(Boolean))] as string[]; return syms.length > 1 ? <select className="input" aria-label="Symbol" style={{ width: "auto" }} value={logSym} onChange={(e) => setLogSym(e.target.value)}><option value="">All symbols</option>{syms.map((x) => <option key={x}>{x}</option>)}</select> : null; })()}
+                    <input className="input" type="date" aria-label="From date" style={{ width: "auto" }} value={logFrom} onChange={(e) => setLogFrom(e.target.value)} />
+                    <button className="btn sm ghost" disabled={!logs.length} onClick={() => { const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`; const csv = ["level,date,symbol,line,message", ...logs.map((l) => [l.level, l.date, l.symbol, l.line, l.text].map(q).join(","))].join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "output.csv"; a.click(); URL.revokeObjectURL(a.href); }}>CSV</button>
+                    <select className="input" aria-label="Output source" style={{ width: "auto" }} value={outSrc} onChange={(e) => setOutSrc(Number(e.target.value))}><option value={0}>Preview</option>{pinnedOut.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select>
+                    <button className="icon-btn" aria-label="Pin output" title="Keep this preview's output in its own tab" disabled={!prev?.logs?.length || !!outSrc} onClick={() => { const id = Date.now(); setPinnedOut((x) => [...x.slice(-9), { id, label: `Pinned ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`, logs: prev!.logs! }]); setOutSrc(id); }}><Pin size={13} /></button>
+                    {outSrc ? <button className="icon-btn" aria-label="Unpin output" title="Remove this pinned output" onClick={() => { setPinnedOut((x) => x.filter((p) => p.id !== outSrc)); setOutSrc(0); }}><X size={13} /></button> : null}
+                    <button className="icon-btn" aria-label="Soft wrap" title="Soft wrap" aria-pressed={logWrap} onClick={() => setLogWrap((w) => !w)}><WrapText size={13} /></button>
+                    <button className="icon-btn" aria-label="Scroll to end" title="Scroll to end" onClick={(e) => { const b = e.currentTarget.closest(".dv-pbody"); b?.scrollTo({ top: b.scrollHeight }); }}><ArrowDownToLine size={13} /></button>
+                    <button className="icon-btn" aria-label="Clear output" title="Clear until the next preview" disabled={!srcLogs?.length} onClick={() => setLogCleared(srcLogs ?? null)}><Eraser size={13} /></button>
+                    <span className="dv-count">{logs.length.toLocaleString()} of {(srcLogs?.length ?? 0).toLocaleString()}</span>
+                  </div>
+                  {logs.length ? (() => {
+                    // Virtual list: only the rows in view (plus a margin) are in the page, so 5,000 lines scroll smoothly (B-79).
+                    // Soft wrap gives rows their own height, so it renders the last 2,000 lines without the virtual list.
+                    if (logWrap) return <div className="dv-logs-wrap">{logs.slice(-2000).map((l, i) => (
+                      <button key={i} className="dv-log" data-level={l.level} onClick={() => { goto("main.py", l.line); onPause?.(l.date); }}><time>{l.date}</time><span>{l.symbol ?? ""}</span>
+                        <code>{l.text}{l.fields ? <em>{Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("")}</em> : null}</code><i>:{l.line}</i></button>))}</div>;
+                    const ROW = 24, first = Math.max(0, Math.floor(logTop / ROW) - 20), rows = logs.slice(first, first + 80);
+                    return <div className="dv-logs" style={{ height: logs.length * ROW }}>
+                      {rows.map((l, i) => (
+                        <button key={first + i} className="dv-log" data-level={l.level} style={{ top: (first + i) * ROW }} onClick={() => { goto("main.py", l.line); onPause?.(l.date); }}><time>{l.date}</time><span>{l.symbol ?? ""}</span>
+                          <code>{l.text}{l.fields ? <em>{Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("")}</em> : null}</code><i>:{l.line}</i></button>
+                      ))}</div>;
+                  })() : <p className="dv-empty">{srcLogs?.length ? "Nothing matches" : "No output"}</p>}
+                </>
+              ) : null}
+              {tab === "plots" ? (
+                <div className="dv-plotlist">
+                  {plots.length ? <div className="dv-chips">{plots.map(([n], i) => <button key={n} className="pill" aria-pressed={plotsOn[n] !== false} onClick={() => setPlotsOn((o) => ({ ...o, [n]: o[n] === false }))}><i style={{ background: SERIES[i % SERIES.length] }} />{n}</button>)}{before ? <button className="pill" aria-pressed={showBefore} onClick={() => setShowBefore(!showBefore)}>Previous run</button> : null}</div> : null}
+                  {mainPlots.length && priceRows.length ? <div className="dv-plot"><b>Price · {symbol}</b><TimeSeries data={priceRows} height={200} legend={false}
+                    series={[{ key: "close", label: symbol, color: "var(--text-3)" }, ...mainPlots.filter(([n]) => plotsOn[n] !== false).map(([n]) => ({ key: n, label: n, color: SERIES[plots.findIndex(([x]) => x === n) % SERIES.length] }))]}
+                    markers={(prev?.marks ?? []).filter((m) => m.symbol === symbol).map((m) => ({ date: m.date, label: m.label, color: "var(--accent)" }))} /></div> : null}
+                  {plots.filter(([n]) => prev?.plot_charts?.[n] !== "main" && plotsOn[n] !== false).map(([name, pts]) => (
+                    <div key={name} className="dv-plot"><b>{name}</b>{(() => {
+                      const old = showBefore ? new Map((before?.[name] ?? []).map((p) => [p.date, p.value])) : null;
+                      const color = SERIES[plots.findIndex(([x]) => x === name) % SERIES.length];
+                      return <TimeSeries data={pts.filter((p) => p.value !== null).map((p) => ({ date: p.date, v: p.value, ...(old ? { b: old.get(p.date) ?? null } : {}) }))} series={[{ key: "v", label: name, color }, ...(old?.size ? [{ key: "b", label: `${name} (previous)`, color: "var(--text-4)" }] : [])]} height={140} legend={!!old?.size} />;
+                    })()}</div>
+                  ))}
+                  {Object.entries(prev?.tables ?? {}).map(([name, rows]) => <div key={name} className="dv-plot"><b>{name}</b><DataTable rows={rows.map((r) => ({ date: r.date, symbol: r.symbol, ...r.cells }))} opts={{ viewKey: `studio:dev:table:${name}` }} /></div>)}
+                  {!plots.length && !Object.keys(prev?.tables ?? {}).length ? <p className="dv-empty">No plots</p> : null}
+                </div>
+              ) : null}
+              {tab === "tester" ? <Tester trades={prev?.trades ?? []} inputs={inputList} /> : null}
+              {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades", rowActions: (r: Record<string, unknown>) => {
+                const d = String(r.entry_date ?? "").slice(0, 10), o = d ? prev.order_lines?.find((x) => x.dates.some((y) => y.slice(0, 10) === d)) : undefined;
+                return o ? <button className="icon-btn" title={`Go to ${o.file}:${o.line}`} aria-label="Go to the line that placed this order" onClick={() => goto(o.file, o.line)}><FileCode2 size={12} /></button> : null;
+              } }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
+              {tab === "cells" ? <label className="dv-strict"><input type="checkbox" checked={autoCells} onChange={(e) => setAutoCells(e.target.checked)} />Auto-run on edit</label> : null}
+              {tab === "cells" ? (cellOut === "running" ? <p className="dv-empty">Running…</p> : !cellOut ? <p className="dv-empty">Ctrl+Enter runs the cell at the cursor</p> : (
+                <div className="dv-cells">{cellOut.rows.map((r, i) => (
+                  <section key={i}>
+                    <h4><button className="dv-item" onClick={() => r.line && goto(cellOut.file, r.line)}>{r.index === null ? "Cells" : `Cell ${r.index + 1}${cellOut.titles[r.index] ? ` · ${cellOut.titles[r.index]}` : ""}`}</button><i>{r.seconds.toFixed(3)} s</i></h4>
+                    {r.stdout ? <pre>{r.stdout}</pre> : null}
+                    <CellPlots plots={r.plots} />
+                    {r.error ? <p className="bd-find error"><b>{r.error_line ? <button className="dv-item" onClick={() => goto(cellOut.file, r.error_line!)}>line {r.error_line}</button> : "Error"}</b>{r.error}</p> : null}
+                    {r.value !== null && r.value !== undefined ? (tableOf(r.value) ? <VarGrid t={tableOf(r.value)!} open /> : typeof r.value === "object" ? <KV rows={r.value as Record<string, unknown>} /> : <pre>{show(r.value)}</pre>) : null}
+                  </section>
+                ))}</div>
+              )) : null}
+              {/* Kept mounted while the panel is open so --on-save tasks run from any tab. */}
+              {inSide === moved.includes("console") ? <div hidden={tab !== "console"} className={termSplit ? "dv-term-split" : "dv-term-host"}>
+                <Terminal host={{ ...termHost, split: { on: termSplit, toggle: () => setTermSplit((x) => !x) } }} />
+                {termSplit ? <Terminal host={{ ...termHost, storeKey: `${termHost.storeKey}:2`, saved: 0 }} /> : null}
+              </div> : null}
+              {tab === "debug" ? (
+                <div className="dv-debug">
+                  <div className="dv-dbar">
+                    <input className="input" type="date" aria-label="Stop at date" value={dbgDate} onChange={(e) => setDbgDate(e.target.value)} />
+                    <button className="btn sm primary" onClick={() => debug({ date: dbgDate })}><Bug size={13} />Stop here<kbd>F5</kbd></button>
+                    <button className="btn sm" disabled={!dbg?.previous_date} onClick={() => debug({ step: -1 })}><StepBack size={13} />Bar</button>
+                    <button className="btn sm" disabled={!dbg?.next_date} onClick={() => debug({ step: 1 })}><StepForward size={13} />Bar<kbd>F10</kbd></button>
+                    <button className="btn sm" disabled={!dbg} onClick={() => stepLine()}><CornerDownRight size={13} />Line<kbd>F11</kbd></button>
+                    <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "order" })}>Next order</button>
+                    <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "fill" })}>Next fill</button>
+                    <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "equity", loss_fraction: 0.05 })}>Next 5% loss day</button>
+                    <span className="dv-sep" />
+                    <input className="input" aria-label="Breakpoint condition" placeholder="condition" value={cond} onChange={(e) => setCond(e.target.value)} />
+                    <input className="input" type="number" min={1} style={{ width: 64 }} aria-label="Stop on hit number" placeholder="hit #" value={hitN} onChange={(e) => setHitN(e.target.value)} />
+                    <select className="input" aria-label="Only after breakpoint" value={trig} onChange={(e) => setTrig(e.target.value)}><option value="">Always on</option>{Object.entries(bps).flatMap(([f, ls]) => ls.map((l) => <option key={`${f}:${l}`} value={`${f}:${l}`}>After {f}:{l}</option>))}</select>
+                    <button className="btn sm" onClick={() => debug({ breakpoint: { file: active, line: cursor.line, ...bpExtra() } })}>Break at {active}:{cursor.line}</button>
+                    <span className="dv-sep" />
+                    <input className="input" style={{ width: 120 }} aria-label="Break when this value changes" placeholder="self.position" value={dwatch} onChange={(e) => setDwatch(e.target.value.trim())} />
+                    <button className="btn sm" disabled={!/^(self\.)?[A-Za-z_]\w*$/.test(dwatch)} onClick={() => debug({ breakpoint: { file: active, line: 1, watch: dwatch, hit: Number(hitN) > 0 ? Number(hitN) : null } })}>Break on change</button>
+                  </div>
+                  {dbg ? (
+                    <div className="dv-dgrid">
+                      <div><h4>{dbg.symbol} · {dbg.date} · bar {dbg.bar_index}{dbg.breakpoint ? ` · hit ${dbg.breakpoint.hit_count}` : ""}{dbg.breakpoint?.watch ? ` · ${dbg.breakpoint.watch.name}: ${JSON.stringify(dbg.breakpoint.watch.before)} → ${JSON.stringify(dbg.breakpoint.watch.after)}` : ""}{dbg.equity_change != null ? ` · ${pct(dbg.equity_change)}` : ""}</h4>
+                        <KV rows={dbg.context} /></div>
+                      <div><h4>{dbg.breakpoint ? "Locals and self" : "self"}</h4>
+                        {Object.entries({ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }).filter(([, v]) => Array.isArray(v) && v.length > 0 && typeof v[0] === "object" && v[0] !== null && "entry_date" in v[0]).map(([k]) => <button key={k} className="btn sm ghost" onClick={() => setTab("trades")}>{k}: open in Trades</button>)}
+                        {Object.keys({ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }).length ? <KV rows={{ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }} /> : <p className="dv-empty">No attributes</p>}</div>
+                      <div><h4>Watch</h4>
+                        <form className="dv-dbar" onSubmit={(e) => { e.preventDefault(); if (!watchIn.trim()) return; const w = [...watches, watchIn.trim()]; setWatches(w); setWatchIn(""); try { localStorage.setItem("studio:watch", JSON.stringify(w)); } catch { /* private window */ } }}>
+                          <input className="input" aria-label="Watch expression" placeholder="rsi(close, 14)" value={watchIn} onChange={(e) => setWatchIn(e.target.value)} />
+                        </form>
+                        {watchRows.map((r, i) => <div key={r.expression} className="dv-watch"><code>{r.expression}</code><b className={r.error && !(r.expression in (dbg.breakpoint?.locals ?? {})) ? "error" : undefined} title={r.error ?? r.history.map((h) => `${h.date}  ${h.value}`).join("\n")}>{r.error ? String((dbg.breakpoint?.locals ?? {})[r.expression] ?? r.error) : (typeof r.value === "number" ? +r.value.toFixed(4) : String(r.value))}</b>
+                          <button className="icon-btn" aria-label="Remove watch" onClick={() => { const w = watches.filter((_, k) => k !== i); setWatches(w); try { localStorage.setItem("studio:watch", JSON.stringify(w)); } catch { /* private window */ } }}>×</button></div>)}</div>
+                      <div><h4>Orders</h4>{dbg.orders.length ? <DataTable rows={dbg.orders} /> : <p className="dv-empty">None this bar</p>}
+                        <h4>Fills</h4>{dbg.fills.length ? <DataTable rows={dbg.fills} /> : <p className="dv-empty">None this bar</p>}</div>
+                    </div>
+                  ) : <p className="dv-empty">Stops at the last preview trade, or the date set</p>}
+                </div>
+              ) : null}
+            </>
+  );
   const railPanel = (
-      <Panel id="rail" minSize={0} maxSize="210px">
-        <nav className="dv-rail" inert={!railOpen} aria-hidden={!railOpen} aria-label={RAILS.find((r) => r[0] === rail)?.[2]}>
+      <Panel id="rail" minSize={0} maxSize={sideTab ? "520px" : "210px"}>
+        <nav className="dv-rail" inert={!railOpen} aria-hidden={!railOpen} aria-label={sideTab ? TABS.find(([k]) => k === sideTab)?.[1] : RAILS.find((r) => r[0] === rail)?.[2]}
+          onDragOver={(e) => { if (e.dataTransfer.types.includes("text/x-studio-view")) e.preventDefault(); }} onDrop={(e) => { const t = e.dataTransfer.getData("text/x-studio-view") as Tab; if (t) { e.preventDefault(); toSide(t); } }}>
+          {sideTab ? <>
+            <h4><span className="dv-rail-tabs" role="tablist">{moved.map((k) => <button key={k} role="tab" aria-selected={sideTab === k} draggable onDragStart={(e) => e.dataTransfer.setData("text/x-studio-view", k)} onClick={() => setSideTab(k)}>{TABS.find(([x]) => x === k)?.[1] ?? k}</button>)}</span>
+              <button className="icon-btn" aria-label="Move to panel" title="Move back to the bottom panel" onClick={() => toPanel(sideTab)}><Minimize2 size={12} /></button>
+              <button className="icon-btn" aria-label="Close side bar" onClick={() => setRailOpen(false)}><X size={13} /></button></h4>
+            <div className="dv-side-view">{panelBody(sideTab, true)}</div>
+          </> : <>
           <h4>{rail === "files" || rail === "outline" ? (
             <span className="dv-rail-tabs" role="tablist">{(["files", "outline"] as const).map((k) => <button key={k} role="tab" aria-selected={rail === k} onClick={() => revealRail(k)}>{k === "files" ? "Files" : "Outline"}</button>)}</span>
           ) : RAILS.find((r) => r[0] === rail)?.[2]}<button className="icon-btn" aria-label="Close side bar" title="Close side bar (⌘B)" onClick={() => setRailOpen(false)}><X size={13} /></button></h4>
@@ -1011,8 +1240,17 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                 </div>
               ))}
               <button className="btn sm ghost" onClick={saveSnippet}><FilePlus2 size={13} />Save selection as snippet</button>
+              <h4 className="dv-sub">Artefacts</h4>
+              {artefacts.map((a) => (
+                <div key={a.name} className="dv-file">
+                  <button className="dv-item" title={`Add lib_${a.name}.py to this strategy`} onClick={() => addArtefact(a)}><code>{a.kind}</code>{a.name}</button>
+                  <button className="icon-btn" aria-label={`Delete artefact ${a.name}`} onClick={() => { if (window.confirm(`Delete artefact ${a.name}?`)) setArtefacts((x) => x.filter((y) => y.name !== a.name)); }}><Trash2 size={12} /></button>
+                </div>
+              ))}
+              <button className="btn sm ghost" disabled={active === "main.py"} title={active === "main.py" ? "Open a module file to save it" : undefined} onClick={() => saveArtefact(active)}><FilePlus2 size={13} />Save {active} as artefact</button>
             </div>
           )}
+          </>}
         </nav>
       </Panel>
   );
@@ -1037,7 +1275,15 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
         <div className="dv-editor">
           {view !== "code" ? (
             <div key={view} className="dv-view-pane" data-kind={view}>
-              <div className="dv-pbody">{view === "tearsheet" ? <DevTearsheet quick={quick ?? null} /> : view === "robust" ? <DevRobust quick={quick ?? null} /> : view === "runs" ? <DevRuns runs={runLog} onPin={pinRun} onRename={renameRun} /> : resultsView}</div>
+              <div className="dv-pbody">{view === "selection" ? (selOut ? <div className="dv-cells"><section>
+                <h4><span>{selOut.range}</span>{selOut.row ? <i>{selOut.row.seconds.toFixed(3)} s</i> : null}</h4>
+                <pre className="dv-sel-code">{selOut.code}</pre>
+                {!selOut.row ? <p className="dv-empty">Running…</p> : <>
+                  {selOut.row.stdout ? <pre>{selOut.row.stdout}</pre> : null}
+                  <CellPlots plots={selOut.row.plots} />
+                  {selOut.row.error ? <p className="bd-find error"><b>Error</b>{selOut.row.error}</p> : null}
+                  {selOut.row.value !== null && selOut.row.value !== undefined ? (tableOf(selOut.row.value) ? <VarGrid t={tableOf(selOut.row.value)!} open /> : typeof selOut.row.value === "object" ? <KV rows={selOut.row.value as Record<string, unknown>} /> : <pre>{show(selOut.row.value)}</pre>) : null}
+                </>}</section></div> : <p className="dv-empty">Select code and press Shift+Alt+R</p>) : view === "tearsheet" ? <DevTearsheet quick={quick ?? null} /> : view === "robust" ? <DevRobust quick={quick ?? null} /> : view === "runs" ? <DevRuns runs={runLog} onPin={pinRun} onRename={renameRun} /> : resultsView}</div>
             </div>
           ) : null}
           <div className="dv-code" hidden={view !== "code"}>
@@ -1096,136 +1342,14 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       <Panel id="tester" minSize={0}>
           <div className="dv-panel" inert={!panelOpen} aria-hidden={!panelOpen}>
             <div className="dv-phead">
-              <div className="dv-ptabs" role="tablist" aria-label="Bottom panel">
-              {TABS.map(([k, l, n]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{l}{n ? <span className="num">{n}</span> : null}</button>)}
+              <div className="dv-ptabs" role="tablist" aria-label="Bottom panel" onDragOver={(e) => { if (e.dataTransfer.types.includes("text/x-studio-view")) e.preventDefault(); }} onDrop={(e) => { const t = e.dataTransfer.getData("text/x-studio-view") as Tab; if (t) { e.preventDefault(); toPanel(t); } }}>
+              {TABS.filter(([k]) => !moved.includes(k)).map(([k, l, n]) => <button key={k} role="tab" aria-selected={tab === k} draggable onDragStart={(e) => e.dataTransfer.setData("text/x-studio-view", k)} onClick={() => setTab(k)}>{l}{n ? <span className="num">{n}</span> : null}</button>)}
               </div>
               <button className="icon-btn" aria-label={panelMax ? "Restore panel" : "Maximise panel"} title={panelMax ? "Restore panel" : "Maximise panel"} onClick={maxTester}>{panelMax ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
               <button className="icon-btn" aria-label="Hide panel" title="Hide panel ⌘J" onClick={() => setPanelOpen(false)}><X size={13} /></button>
             </div>
             <div className="dv-pbody" onScroll={(e) => { if (tab === "output") setLogTop(e.currentTarget.scrollTop); }}>
-              {panelOpen && tab === "preview" ? side : null}
-              {tab === "problems" ? <label className="dv-strict"><input type="checkbox" checked={strict} onChange={(e) => { setStrict(e.target.checked); try { localStorage.setItem("studio:dev:strict", e.target.checked ? "1" : "0"); } catch { /* blocked */ } }} />Strict</label> : null}
-              {tab === "problems" ? <div className="seg dv-strict" role="group" aria-label="Scope">{(["file", "project"] as const).map((k) => <button key={k} type="button" aria-pressed={scope === k} onClick={() => (k === "project" && !report.length ? void inspectProject() : setScope(k))}>{k === "file" ? "Current file" : "Project"}</button>)}</div> : null}
-              {tab === "problems" && scope === "project" ? (report.length ? Object.entries(Object.groupBy(report, (p) => p.file)).map(([f, list]) => (
-                <div key={f}><h4 className="dv-sub">{f} · {list!.length}</h4>
-                  {Object.entries(Object.groupBy(list!, (p) => p.code || "other")).map(([c, group]) => group!.map((p, i) => (
-                    <button key={`${c}${i}`} className="dv-prob" onClick={() => { setScope("file"); goto(p.file, p.line, p.column); }}><b className={p.severity}>{p.severity}</b><span>{p.message}</span><i>{p.line}:{p.column} {c}</i></button>
-                  )))}
-                </div>
-              )) : <p className="dv-empty">No problems</p>) : null}
-              {tab === "problems" && scope === "file" ? (problems.length ? <>
-                {problems.map((p, i) => (
-                  <button key={i} className="dv-prob" title={lint.includes(p) ? "Right-click to set severity" : undefined} onContextMenu={(e) => { if (lint.includes(p) && p.code) { e.preventDefault(); setSeverity(p.code); } }} onClick={() => goto(p.file, p.line, p.column)}><b className={p.severity}>{p.severity}</b><span>{p.message}</span><i>{p.file}:{p.line}:{p.column}{p.code ? ` ${p.code}` : ""}</i></button>
-                ))}
-                {prev?.locals ? <div className="dv-trace"><h4 className="dv-sub">At the failing bar</h4><KV rows={prev.locals} /></div> : null}
-                {prev?.problem?.traceback?.length ? <div className="dv-trace">{prev.problem.traceback.map((f, i) => <button key={i} className="dv-item" onClick={() => goto(f.file, f.line, f.column)}>{f.function}<span>{f.file}:{f.line}</span></button>)}</div> : null}
-              </> : <p className="dv-empty">No problems</p>) : null}
-              {tab === "output" ? (
-                <>
-                  <div className="dv-search dv-logbar">
-                    <input className="input" placeholder="Filter" aria-label="Filter output" value={logQ} onChange={(e) => setLogQ(e.target.value)} />{toggles}
-                    <div className="seg" role="group" aria-label="Level">{["all", "info", "warning", "error"].map((l) => <button key={l} type="button" aria-pressed={logLevel === l} onClick={() => setLogLevel(l)}>{l}</button>)}</div>
-                    {(() => { const syms = [...new Set((prev?.logs ?? []).map((l) => l.symbol).filter(Boolean))] as string[]; return syms.length > 1 ? <select className="input" aria-label="Symbol" style={{ width: "auto" }} value={logSym} onChange={(e) => setLogSym(e.target.value)}><option value="">All symbols</option>{syms.map((x) => <option key={x}>{x}</option>)}</select> : null; })()}
-                    <input className="input" type="date" aria-label="From date" style={{ width: "auto" }} value={logFrom} onChange={(e) => setLogFrom(e.target.value)} />
-                    <button className="btn sm ghost" disabled={!logs.length} onClick={() => { const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`; const csv = ["level,date,symbol,line,message", ...logs.map((l) => [l.level, l.date, l.symbol, l.line, l.text].map(q).join(","))].join("\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "output.csv"; a.click(); URL.revokeObjectURL(a.href); }}>CSV</button>
-                    <button className="icon-btn" aria-label="Soft wrap" title="Soft wrap" aria-pressed={logWrap} onClick={() => setLogWrap((w) => !w)}><WrapText size={13} /></button>
-                    <button className="icon-btn" aria-label="Scroll to end" title="Scroll to end" onClick={(e) => { const b = e.currentTarget.closest(".dv-pbody"); b?.scrollTo({ top: b.scrollHeight }); }}><ArrowDownToLine size={13} /></button>
-                    <button className="icon-btn" aria-label="Clear output" title="Clear until the next preview" disabled={!prev?.logs?.length} onClick={() => setLogCleared(prev?.logs ?? null)}><Eraser size={13} /></button>
-                    <span className="dv-count">{logs.length.toLocaleString()} of {(prev?.logs?.length ?? 0).toLocaleString()}</span>
-                  </div>
-                  {logs.length ? (() => {
-                    // Virtual list: only the rows in view (plus a margin) are in the page, so 5,000 lines scroll smoothly (B-79).
-                    // Soft wrap gives rows their own height, so it renders the last 2,000 lines without the virtual list.
-                    if (logWrap) return <div className="dv-logs-wrap">{logs.slice(-2000).map((l, i) => (
-                      <button key={i} className="dv-log" data-level={l.level} onClick={() => { goto("main.py", l.line); onPause?.(l.date); }}><time>{l.date}</time><span>{l.symbol ?? ""}</span>
-                        <code>{l.text}{l.fields ? <em>{Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("")}</em> : null}</code><i>:{l.line}</i></button>))}</div>;
-                    const ROW = 24, first = Math.max(0, Math.floor(logTop / ROW) - 20), rows = logs.slice(first, first + 80);
-                    return <div className="dv-logs" style={{ height: logs.length * ROW }}>
-                      {rows.map((l, i) => (
-                        <button key={first + i} className="dv-log" data-level={l.level} style={{ top: (first + i) * ROW }} onClick={() => { goto("main.py", l.line); onPause?.(l.date); }}><time>{l.date}</time><span>{l.symbol ?? ""}</span>
-                          <code>{l.text}{l.fields ? <em>{Object.entries(l.fields).map(([k, v]) => ` ${k}=${show(v)}`).join("")}</em> : null}</code><i>:{l.line}</i></button>
-                      ))}</div>;
-                  })() : <p className="dv-empty">{prev?.logs?.length ? "Nothing matches" : "No output"}</p>}
-                </>
-              ) : null}
-              {tab === "plots" ? (
-                <div className="dv-plotlist">
-                  {plots.length ? <div className="dv-chips">{plots.map(([n], i) => <button key={n} className="pill" aria-pressed={plotsOn[n] !== false} onClick={() => setPlotsOn((o) => ({ ...o, [n]: o[n] === false }))}><i style={{ background: SERIES[i % SERIES.length] }} />{n}</button>)}{before ? <button className="pill" aria-pressed={showBefore} onClick={() => setShowBefore(!showBefore)}>Previous run</button> : null}</div> : null}
-                  {mainPlots.length && priceRows.length ? <div className="dv-plot"><b>Price · {symbol}</b><TimeSeries data={priceRows} height={200} legend={false}
-                    series={[{ key: "close", label: symbol, color: "var(--text-3)" }, ...mainPlots.filter(([n]) => plotsOn[n] !== false).map(([n]) => ({ key: n, label: n, color: SERIES[plots.findIndex(([x]) => x === n) % SERIES.length] }))]}
-                    markers={(prev?.marks ?? []).filter((m) => m.symbol === symbol).map((m) => ({ date: m.date, label: m.label, color: "var(--accent)" }))} /></div> : null}
-                  {plots.filter(([n]) => prev?.plot_charts?.[n] !== "main" && plotsOn[n] !== false).map(([name, pts]) => (
-                    <div key={name} className="dv-plot"><b>{name}</b>{(() => {
-                      const old = showBefore ? new Map((before?.[name] ?? []).map((p) => [p.date, p.value])) : null;
-                      const color = SERIES[plots.findIndex(([x]) => x === name) % SERIES.length];
-                      return <TimeSeries data={pts.filter((p) => p.value !== null).map((p) => ({ date: p.date, v: p.value, ...(old ? { b: old.get(p.date) ?? null } : {}) }))} series={[{ key: "v", label: name, color }, ...(old?.size ? [{ key: "b", label: `${name} (previous)`, color: "var(--text-4)" }] : [])]} height={140} legend={!!old?.size} />;
-                    })()}</div>
-                  ))}
-                  {Object.entries(prev?.tables ?? {}).map(([name, rows]) => <div key={name} className="dv-plot"><b>{name}</b><DataTable rows={rows.map((r) => ({ date: r.date, symbol: r.symbol, ...r.cells }))} opts={{ viewKey: `studio:dev:table:${name}` }} /></div>)}
-                  {!plots.length && !Object.keys(prev?.tables ?? {}).length ? <p className="dv-empty">No plots</p> : null}
-                </div>
-              ) : null}
-              {tab === "tester" ? <Tester trades={prev?.trades ?? []} inputs={inputList} /> : null}
-              {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades", rowActions: (r: Record<string, unknown>) => {
-                const d = String(r.entry_date ?? "").slice(0, 10), o = d ? prev.order_lines?.find((x) => x.dates.some((y) => y.slice(0, 10) === d)) : undefined;
-                return o ? <button className="icon-btn" title={`Go to ${o.file}:${o.line}`} aria-label="Go to the line that placed this order" onClick={() => goto(o.file, o.line)}><FileCode2 size={12} /></button> : null;
-              } }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
-              {tab === "cells" ? <label className="dv-strict"><input type="checkbox" checked={autoCells} onChange={(e) => setAutoCells(e.target.checked)} />Auto-run on edit</label> : null}
-              {tab === "cells" ? (cellOut === "running" ? <p className="dv-empty">Running…</p> : !cellOut ? <p className="dv-empty">Ctrl+Enter runs the cell at the cursor</p> : (
-                <div className="dv-cells">{cellOut.rows.map((r, i) => (
-                  <section key={i}>
-                    <h4><button className="dv-item" onClick={() => r.line && goto(cellOut.file, r.line)}>{r.index === null ? "Cells" : `Cell ${r.index + 1}${cellOut.titles[r.index] ? ` · ${cellOut.titles[r.index]}` : ""}`}</button><i>{r.seconds.toFixed(3)} s</i></h4>
-                    {r.stdout ? <pre>{r.stdout}</pre> : null}
-                    <CellPlots plots={r.plots} />
-                    {r.error ? <p className="bd-find error"><b>{r.error_line ? <button className="dv-item" onClick={() => goto(cellOut.file, r.error_line!)}>line {r.error_line}</button> : "Error"}</b>{r.error}</p> : null}
-                    {r.value !== null && r.value !== undefined ? (tableOf(r.value) ? <VarGrid t={tableOf(r.value)!} open /> : typeof r.value === "object" ? <KV rows={r.value as Record<string, unknown>} /> : <pre>{show(r.value)}</pre>) : null}
-                  </section>
-                ))}</div>
-              )) : null}
-              {/* Kept mounted while the panel is open so --on-save tasks run from any tab. */}
-              <div hidden={tab !== "console"} className={termSplit ? "dv-term-split" : "dv-term-host"}>
-                <Terminal host={{ ...termHost, split: { on: termSplit, toggle: () => setTermSplit((x) => !x) } }} />
-                {termSplit ? <Terminal host={{ ...termHost, storeKey: `${termHost.storeKey}:2`, saved: 0 }} /> : null}
-              </div>
-              {tab === "debug" ? (
-                <div className="dv-debug">
-                  <div className="dv-dbar">
-                    <input className="input" type="date" aria-label="Stop at date" value={dbgDate} onChange={(e) => setDbgDate(e.target.value)} />
-                    <button className="btn sm primary" onClick={() => debug({ date: dbgDate })}><Bug size={13} />Stop here<kbd>F5</kbd></button>
-                    <button className="btn sm" disabled={!dbg?.previous_date} onClick={() => debug({ step: -1 })}><StepBack size={13} />Bar</button>
-                    <button className="btn sm" disabled={!dbg?.next_date} onClick={() => debug({ step: 1 })}><StepForward size={13} />Bar<kbd>F10</kbd></button>
-                    <button className="btn sm" disabled={!dbg} onClick={() => stepLine()}><CornerDownRight size={13} />Line<kbd>F11</kbd></button>
-                    <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "order" })}>Next order</button>
-                    <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "fill" })}>Next fill</button>
-                    <button className="btn sm" disabled={!dbg} onClick={() => debug({ event: "equity", loss_fraction: 0.05 })}>Next 5% loss day</button>
-                    <span className="dv-sep" />
-                    <input className="input" aria-label="Breakpoint condition" placeholder="condition" value={cond} onChange={(e) => setCond(e.target.value)} />
-                    <input className="input" type="number" min={1} style={{ width: 64 }} aria-label="Stop on hit number" placeholder="hit #" value={hitN} onChange={(e) => setHitN(e.target.value)} />
-                    <select className="input" aria-label="Only after breakpoint" value={trig} onChange={(e) => setTrig(e.target.value)}><option value="">Always on</option>{Object.entries(bps).flatMap(([f, ls]) => ls.map((l) => <option key={`${f}:${l}`} value={`${f}:${l}`}>After {f}:{l}</option>))}</select>
-                    <button className="btn sm" onClick={() => debug({ breakpoint: { file: active, line: cursor.line, ...bpExtra() } })}>Break at {active}:{cursor.line}</button>
-                    <span className="dv-sep" />
-                    <input className="input" style={{ width: 120 }} aria-label="Break when this value changes" placeholder="self.position" value={dwatch} onChange={(e) => setDwatch(e.target.value.trim())} />
-                    <button className="btn sm" disabled={!/^(self\.)?[A-Za-z_]\w*$/.test(dwatch)} onClick={() => debug({ breakpoint: { file: active, line: 1, watch: dwatch, hit: Number(hitN) > 0 ? Number(hitN) : null } })}>Break on change</button>
-                  </div>
-                  {dbg ? (
-                    <div className="dv-dgrid">
-                      <div><h4>{dbg.symbol} · {dbg.date} · bar {dbg.bar_index}{dbg.breakpoint ? ` · hit ${dbg.breakpoint.hit_count}` : ""}{dbg.breakpoint?.watch ? ` · ${dbg.breakpoint.watch.name}: ${JSON.stringify(dbg.breakpoint.watch.before)} → ${JSON.stringify(dbg.breakpoint.watch.after)}` : ""}{dbg.equity_change != null ? ` · ${pct(dbg.equity_change)}` : ""}</h4>
-                        <KV rows={dbg.context} /></div>
-                      <div><h4>{dbg.breakpoint ? "Locals and self" : "self"}</h4>
-                        {Object.entries({ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }).filter(([, v]) => Array.isArray(v) && v.length > 0 && typeof v[0] === "object" && v[0] !== null && "entry_date" in v[0]).map(([k]) => <button key={k} className="btn sm ghost" onClick={() => setTab("trades")}>{k}: open in Trades</button>)}
-                        {Object.keys({ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }).length ? <KV rows={{ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }} /> : <p className="dv-empty">No attributes</p>}</div>
-                      <div><h4>Watch</h4>
-                        <form className="dv-dbar" onSubmit={(e) => { e.preventDefault(); if (!watchIn.trim()) return; const w = [...watches, watchIn.trim()]; setWatches(w); setWatchIn(""); try { localStorage.setItem("studio:watch", JSON.stringify(w)); } catch { /* private window */ } }}>
-                          <input className="input" aria-label="Watch expression" placeholder="rsi(close, 14)" value={watchIn} onChange={(e) => setWatchIn(e.target.value)} />
-                        </form>
-                        {watchRows.map((r, i) => <div key={r.expression} className="dv-watch"><code>{r.expression}</code><b className={r.error && !(r.expression in (dbg.breakpoint?.locals ?? {})) ? "error" : undefined} title={r.error ?? r.history.map((h) => `${h.date}  ${h.value}`).join("\n")}>{r.error ? String((dbg.breakpoint?.locals ?? {})[r.expression] ?? r.error) : (typeof r.value === "number" ? +r.value.toFixed(4) : String(r.value))}</b>
-                          <button className="icon-btn" aria-label="Remove watch" onClick={() => { const w = watches.filter((_, k) => k !== i); setWatches(w); try { localStorage.setItem("studio:watch", JSON.stringify(w)); } catch { /* private window */ } }}>×</button></div>)}</div>
-                      <div><h4>Orders</h4>{dbg.orders.length ? <DataTable rows={dbg.orders} /> : <p className="dv-empty">None this bar</p>}
-                        <h4>Fills</h4>{dbg.fills.length ? <DataTable rows={dbg.fills} /> : <p className="dv-empty">None this bar</p>}</div>
-                    </div>
-                  ) : <p className="dv-empty">Stops at the last preview trade, or the date set</p>}
-                </div>
-              ) : null}
+              {panelBody(movedTab(tab) ? TABS.find(([k]) => !moved.includes(k))?.[0] ?? "tester" : tab, false)}
             </div>
           </div>
       </Panel>
@@ -1266,8 +1390,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
         <span className="dv-icons-gap" />
         {/* Bottom group opens the bottom panel (JetBrains: lower stripe icons open horizontal tool windows). */}
         {([["tester", <Gauge key="g" size={18} />, "Tester"], ["problems", <CircleAlert key="p" size={18} />, "Problems"], ["console", <SquareTerminal key="c" size={18} />, "Console"]] as const).map(([k, icon, l]) => {
-          const on = panelOpen && tab === k;
-          return <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={on} onClick={() => { if (on) setPanelOpen(false); else { setPanelOpen(true); setTab(k); } }}>{icon}</button>;
+          const side = moved.includes(k), on = side ? railOpen && sideTab === k : panelOpen && tab === k;
+          return <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={on} onClick={() => { if (side) { if (on) setRailOpen(false); else { setSideTab(k); setRailOpen(true); } } else if (on) setPanelOpen(false); else { setPanelOpen(true); setTab(k); } }}>{icon}</button>;
         })}
       </nav>
       <div className="dv-body" ref={bodyRef}>
@@ -1281,7 +1405,19 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       </div>
 
       <footer className="dv-status">
-        <span>{active}</span><span>Ln {cursor.line}, Col {cursor.column}</span>
+        <span>{active}</span><span>Ln {cursor.line}, Col {cursor.column}</span><CursorDate />
+        {strategyId ? <span className="dv-paper"><button className="dv-sbtn" aria-expanded={paperOpen} onClick={() => setPaperOpen((o) => !o)} data-on={paperRun ? "" : undefined}>
+          {paperRun ? `Paper v${paperRun.version}${paper?.last?.total_return != null ? ` · ${(paper.last.total_return * 100).toFixed(1)}%` : ""}${paper?.last?.paper_day != null ? ` · today ${(paper.last.paper_day * 100).toFixed(2)}%` : ""}` : "Paper off"}</button>
+          {paperOpen ? <div className="dv-paper-pop" role="dialog" aria-label="Paper">
+            {paper?.freshness.tone === "red" ? <p className="dv-empty">Data is {paper.freshness.age_days} days old; paper waits for fresh data.</p> : null}
+            {paperRun ? <>
+              <p>v{paperRun.version} on paper since {paperRun.from}{paperRun.backdated ? " (backdated)" : ""}</p>
+              <button className="btn sm" onClick={() => { if (window.confirm(`Stop v${paperRun.version} on paper and close its paper positions?`)) paperAct("/paper/stop", { version: paperRun.version }, "Paper stopped"); }}>Stop and flatten</button>
+              <label>Debug a paper day <input className="input" type="date" min={paperRun.from} onChange={(e) => { if (e.target.value) { setPaperOpen(false); setPanelOpen(true); setTab("debug"); debug({ date: e.target.value }); } }} /></label>
+            </> : <button className="btn sm primary" disabled={!version} onClick={() => paperAct("/freeze", { version }, `v${version} frozen to paper`)}>Freeze v{version ?? ""} to paper</button>}
+            <Link className="btn sm ghost" href="/studio/live">Open Live</Link>
+          </div> : null}
+        </span> : null}
         <button className="dv-sbtn" onClick={() => { setPanelOpen(true); setTab("problems"); }}><b className="error">{errors}</b> errors <b className="warning">{warnings}</b> warnings</button>
         <span className={`dv-save dv-save-${saved}`}>{{ saved: "Saved", draft: "Draft", saving: "Saving…", conflict: "Conflict: reload", new: "Not saved" }[saved]}</span>
         {prev?.warmup ? <span>warm-up {prev.warmup.bars} bars{prev.warmup.first_eligible_date ? ` · trades from ${prev.warmup.first_eligible_date}` : ""}</span> : null}

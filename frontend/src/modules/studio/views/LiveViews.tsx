@@ -7,7 +7,7 @@ import type { ViewProps } from "@/modules/research/outputs/types";
 import { studio } from "../api";
 import { Skipped } from "./BacktestViews";
 
-type Forward = { status: string; from: string; backdated: boolean; reason?: string; days?: number; return?: number; expected?: number; band?: number; drift?: boolean; drift_from?: string | null;
+type Forward = { status: string; from: string; to?: string | null; backdated: boolean; reason?: string; days?: number; return?: number; expected?: number; band?: number; drift?: boolean; drift_from?: string | null;
   live_sharpe?: number | null; backtest_sharpe?: number; drawdown_odds?: { at_backtest: number; at_half: number } };
 type LiveMeta = { as_of: string; stale: boolean; stale_days: number; orders: string; forward: Forward | null; channels: string[]; strategy?: { id: string | null; version: number | null; name: string };
   reconcile: { matched?: number; model?: number; real?: number; same_share?: number | null; avg_fill_bps?: number | null; skipped?: number; extra?: number } };
@@ -51,6 +51,8 @@ export function Paper({ result }: ViewProps) {
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <input className="input" type="date" aria-label="Backdate start" value={from} onChange={(e) => setFrom(e.target.value)} />
         <button className="btn" disabled={busy || !sid} onClick={freeze}>{busy ? "Freezing…" : `Freeze v${m.strategy?.version ?? ""} to paper`}</button>
+        {f && !f.to && sid ? <button className="btn ghost" onClick={() => { if (window.confirm("Stop paper and close its paper positions?")) void studio("POST", `/strategies/${sid}/paper/stop`, { version: m.strategy?.version }).then(() => toast.success("Paper stopped. Run again to see the final record."), (e) => toast.error(e instanceof Error ? e.message : "Failed")); }}>Stop and flatten</button> : null}
+        {sid ? <a className="btn ghost" href={`/studio/build/${sid}?ui=dev&debug=${m.as_of}`}>Debug {m.as_of} in Build</a> : null}
       </div>
     </div>
   );

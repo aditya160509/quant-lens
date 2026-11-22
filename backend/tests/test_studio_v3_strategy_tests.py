@@ -44,6 +44,18 @@ def test_sandbox_refuses_os(studio):  # noqa: F811
     assert t["test_a"]["status"] == "error" and "not allowed" in t["test_a"]["message"]
 
 
+def test_kernel_keeps_variables_between_runs():
+    from app.services.studio_v3.core import strategy_tests as st
+
+    src = "# %%\nx = 2\n# %%\nx = x * 10\nx\n"
+    try:
+        first = st.kernel_run("t:k", {"main.py": "", "nb.py": src}, "nb.py", [0, 1], [])
+        again = st.kernel_run("t:k", {"main.py": "", "nb.py": src}, "nb.py", [1], [])  # x is still 20 in the live namespace
+        assert first["restarted"] and not again["restarted"] and again["outputs"][-1]["value"] == 200
+    finally:
+        st.kernel_reset("t:k")
+
+
 def test_cells_sql_and_plot():
     from app.services.studio_v3.core import strategy_tests
 

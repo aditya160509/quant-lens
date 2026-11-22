@@ -33,6 +33,18 @@ def freeze(sid: str, version: int, as_of: str | None, actor: str) -> dict:
     return seg
 
 
+def stop(sid: str, version: int, actor: str) -> dict:
+    """Stop and flatten a paper segment: its record ends today (open paper positions are closed at that bar)."""
+    segs = store.kv_get(f"paper:{sid}", [])
+    seg = next((s for s in segs if s["version"] == version and not s.get("to")), None)
+    if seg is None:
+        raise KeyError(f"v{version} is not running on paper")
+    seg["to"] = time.strftime("%Y-%m-%d")
+    store.kv_set(f"paper:{sid}", segs)
+    store.log(actor, "stop_paper", sid, seg)
+    return seg
+
+
 def segments(sid: str | None) -> list[dict]:
     return store.kv_get(f"paper:{sid}", []) if sid else []
 
@@ -144,14 +156,19 @@ def run_live(spec: Strategy, settings: Settings, sid: str | None, version: int |
     r = simulate(spec, prep, settings, sig=sig)
     seg = next((s for s in reversed(segments(sid)) if s["version"] == version), None)
     forward, curve, fills = None, [], []
-    if seg:
+    if seg and fresh["tone"] == "red" and not seg.get("to"):
+        # OD-8: paper never advances on stale data; it waits for the daily update.
+        forward = {"status": "stale", "from": seg["from"], "backdated": seg["backdated"], "reason": f"data is {fresh['age_days']} days old; paper waits for fresh data"}
+    elif seg:
         lo = int(dates.searchsorted(pd.Timestamp(seg["from"])))
+        # stopped: the record ends at the stop date
+        equity = np.asarray(r.equity)[:int(dates.searchsorted(pd.Timestamp(seg["to"]), side="right"))] if seg.get("to") else np.asarray(r.equity)
         dev_eq = simulate(spec, prepare(settings), settings).equity
         dev_daily = np.diff(dev_eq) / dev_eq[:-1]
         if lo >= len(dates) - 1:
             forward = {"status": "waiting", "from": seg["from"], "backdated": seg["backdated"], "reason": f"no bar after {seg['from']} yet; data ends {as_of}"}
         else:
-            eq = r.equity[lo:] / r.equity[lo]
+            eq = equity[lo:] / equity[lo]
             p5, p50, p95 = band(dev_daily, len(eq) - 1, settings.seed)
             curve = [{"date": str(dates[lo + i].date()), "paper": float(eq[i]), "p5": float(1 + (p5[i - 1] if i else 0)), "p50": float(1 + (p50[i - 1] if i else 0)),
                       "p95": float(1 + (p95[i - 1] if i else 0))} for i in range(len(eq))]
@@ -159,7 +176,7 @@ def run_live(spec: Strategy, settings: Settings, sid: str | None, version: int |
             fills = [x for x in trades_table(r, p) if x["entry_date"] >= seg["from"]]
             live_daily = np.diff(eq) / eq[:-1]
             sr_bt = M.sharpe(dev_daily) or 0.0
-            forward = {"status": "ok", "from": seg["from"], "backdated": seg["backdated"], "days": len(eq) - 1, "return": float(eq[-1] - 1), "expected": float(p50[-1]),
+            forward = {"status": "ok", "from": seg["from"], "to": seg.get("to"), "backdated": seg["backdated"], "days": len(eq) - 1, "return": float(eq[-1] - 1), "expected": float(p50[-1]),
                        "band": float((p95[-1] - p5[-1]) / 2), "drift": bool(out_of), "drift_from": out_of[0] if out_of else None,
                        "live_sharpe": M.sharpe(live_daily) if len(live_daily) > 2 else None, "backtest_sharpe": sr_bt,
                        "drawdown_odds": _drawdown_odds(dev_daily, float(M.max_drawdown(eq)), len(eq), settings.seed)}

@@ -198,6 +198,31 @@ class BuildCellsRequest(BaseModel):
     symbols: list[str] = Field(default_factory=lambda: ["SPY"], max_length=5)
 
 
+class KernelRequest(BaseModel):
+    key: str = Field(pattern=r"^[\w:.-]{1,80}$")  # one live namespace per key (a notebook file or a Console session)
+    code: str = Field(default="", max_length=200_000)
+    files: dict[str, str] = Field(default_factory=dict)
+    file: str = Field(default="main.py", max_length=128)
+    cells: list[int] = Field(default_factory=list, max_length=500)
+    symbols: list[str] = Field(default_factory=lambda: ["SPY"], max_length=5)
+
+
+@router.post("/build/kernel")
+def run_kernel(request: KernelRequest, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Runs the chosen cells in a live namespace kept between calls; `restarted` says it started fresh (re-run earlier cells)."""
+    try:
+        return strategy_tests.kernel_run(f"{_actor(x_studio_actor)}:{request.key}", {**request.files, "main.py": request.code}, request.file, request.cells,
+                                         [normalize_symbol(s) for s in request.symbols])
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@router.delete("/build/kernel/{key}")
+def reset_kernel(key: str, x_studio_actor: str | None = Header(None)) -> dict[str, bool]:
+    strategy_tests.kernel_reset(f"{_actor(x_studio_actor)}:{key}")
+    return {"reset": True}
+
+
 @router.post("/build/cells")
 def run_cells(request: BuildCellsRequest) -> dict[str, Any]:
     """Runs the `# %%` cells of one file up to `upto` in the sandbox child; `from studio.research import load` returns a symbol's bars as a DataFrame."""
@@ -796,6 +821,23 @@ def freeze_paper(sid: str, request: FreezeRequest, x_studio_actor: str | None = 
     return live.freeze(sid, s["version"], request.as_of, actor)
 
 
+@router.post("/strategies/{sid}/paper/stop")
+def stop_paper(sid: str, request: FreezeRequest, x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+    """Stop and flatten a version's paper record. Like freezing, it needs a human click."""
+    actor = _actor(x_studio_actor)
+    if actor.startswith("agent"):
+        raise HTTPException(403, "Stopping paper needs a human click")
+    s = _known(store.get, sid, request.version)
+    return _guarded(live.stop, sid, s["version"], actor)
+
+
+@router.get("/strategies/{sid}/paper")
+def paper_status(sid: str) -> dict[str, Any]:
+    """Paper segments and the latest Live run's summary (return, today's P&L, time), for the Build status strip."""
+    _known(store.get, sid)
+    return {"segments": live.segments(sid), "last": home_rules._last_live(sid), "freshness": limits.freshness()}
+
+
 class ChannelsRequest(BaseModel):
     urls: list[str]
     quiet: str = ""
@@ -1236,13 +1278,13 @@ def put_filters(request: FiltersRequest, x_studio_actor: str | None = Header(Non
 
 
 @router.get("/build/prefs/{name}")
-def get_build_prefs(name: Literal["layouts", "runconfigs", "inspections", "settings", "profiles"]) -> dict[str, Any]:
+def get_build_prefs(name: Literal["layouts", "runconfigs", "inspections", "settings", "profiles", "artefacts"]) -> dict[str, Any]:
     """Build's saved layouts and run configurations, kept on the server so they follow the user across browsers."""
     return {"value": store.kv_get(f"build:prefs:{name}")}
 
 
 @router.put("/build/prefs/{name}")
-def put_build_prefs(name: Literal["layouts", "runconfigs", "inspections", "settings", "profiles"], request: dict[str, Any], x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+def put_build_prefs(name: Literal["layouts", "runconfigs", "inspections", "settings", "profiles", "artefacts"], request: dict[str, Any], x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
     _human_only(x_studio_actor, "Saving Build preferences")
     if len(json.dumps(request)) > 200_000:
         raise HTTPException(413, "Preferences are limited to 200 KB")

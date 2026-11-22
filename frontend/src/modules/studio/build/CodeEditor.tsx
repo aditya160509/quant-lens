@@ -189,6 +189,19 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
   const acts = useRef(actions); acts.current = actions;
   const ed = useRef<{ editor: Ed; monaco: Monaco } | null>(null);
   const ctxKeys = useRef<Record<string, { set: (v: boolean) => void }>>({});
+  // Chart crosshair date (studio:cursor-date): highlight the lines that placed an order on that bar.
+  const ranRef = useRef(ran); ranRef.current = ran;
+  useEffect(() => {
+    let col: ReturnType<Ed["createDecorationsCollection"]> | null = null, colEd: Ed | null = null;
+    const on = (e: Event) => {
+      const m = ed.current, d = (e as CustomEvent<string>).detail; if (!m) return;
+      if (!col || colEd !== m.editor) { col = m.editor.createDecorationsCollection(); colEd = m.editor; }
+      const hits = d ? ranRef.current.filter((r) => r.dates.some((x) => x.slice(0, 10) === d)) : [];
+      col.set(hits.map((r) => ({ range: new m.monaco.Range(r.line, 1, r.line, 1), options: { isWholeLine: true, className: "dv-cursor-day", hoverMessage: { value: `Order on ${d}` } } })));
+    };
+    window.addEventListener("studio:cursor-date", on);
+    return () => { window.removeEventListener("studio:cursor-date", on); col?.clear(); };
+  }, []);
   const whenSig = JSON.stringify(when);
   useEffect(() => { for (const k of WHEN) ctxKeys.current[k]?.set(!!when[k]); }, [whenSig]); // eslint-disable-line react-hooks/exhaustive-deps
   const keys = useRef({ onSave, onRun, onCursor, onGutter, onComment }); keys.current = { onSave, onRun, onCursor, onGutter, onComment };

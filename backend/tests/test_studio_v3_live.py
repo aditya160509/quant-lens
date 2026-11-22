@@ -1,6 +1,7 @@
 """Live acceptance (PAGES L-4, L-5, L-6, L-7)."""
 
 import numpy as np
+import pytest
 
 from app.services.studio_v3.core import live as L
 from app.services.studio_v3.core import store
@@ -23,6 +24,9 @@ def test_freeze_segments_and_broken_channel_is_recorded(tmp_path, monkeypatch): 
     L.freeze("x", 1, "2025-01-01", "human")
     L.freeze("x", 2, None, "human")
     assert [s["version"] for s in L.segments("x")] == [1, 2] and L.segments("x")[0]["backdated"]
+    assert L.stop("x", 2, "human")["to"] and L.segments("x")[1]["to"]
+    with pytest.raises(KeyError):
+        L.stop("x", 2, "human")  # already stopped
     L.set_channels("x", ["notascheme://nothing"])
     out = L.deliver("x", "t", "b")
     assert out[0]["ok"] is False and out[0]["error"]
