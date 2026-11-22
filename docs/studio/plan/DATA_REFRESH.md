@@ -30,11 +30,11 @@ Sample total 3.3× the rows. Screener counts (equities): US 19,851, DE 76,697 (c
 ```
 backend/data/market/
   tickers.parquet                               ticker, yahoo, name, asset, country, exchange, currency, source
-  asset=<equity|etf|index|fx|crypto|future|delisted>/country=<us|in|…|xx>/data.parquet
+  asset=<equity|etf|index|fx|crypto|future|delisted>/country=<us|in|…|xx>/part-NNN.parquet
   _staging/                                     raw batches (resume), _no_data.txt (tickers Yahoo does not serve)
 ```
 
-Each data file: date (Date), ticker, open, high, low, close, adj_close (float32), volume (float64), dividends, splits (float32); zstd level 6, sorted by ticker then date. Read it all as one table with `pl.scan_parquet("backend/data/market/asset=*/country=*/data.parquet", hive_partitioning=True)`; a filter on asset or country reads only those files.
+Each data file: date (Date), ticker, open, high, low, close, adj_close (float32), volume (float64), dividends, splits (float32); zstd level 6, sorted by ticker then date. Read it all as one table with `pl.scan_parquet("backend/data/market/asset=*/country=*/*.parquet", hive_partitioning=True)`; a filter on asset or country reads only those files.
 
 Why split: a US run never opens the crypto or Indian files; the daily job rewrites a few small files instead of one large one; crypto (7 days) and FX (24/5) calendars stay out of the stock calendars. Float32 halves disk and memory, which is what lets 1962-onward history fit in 16 GB.
 
@@ -48,13 +48,22 @@ cd backend
 .venv/bin/python scripts/yahoo_market.py update                   # daily: only the days after each ticker's last stored date, then build
 ```
 
+The full first fill, run in the background and logged (the Mac stays awake while it runs):
+
+```bash
+cd backend && caffeinate -i nohup .venv/bin/python scripts/yahoo_market.py all > data/market/_run.log 2>&1 &
+```
+
+`status` prints progress: tickers found, fetched, no data, left by asset class, rate-limit waits, the last log lines and the store size.
+
 `--regions us,in`, `--assets equity,fx`, `--batch 100`, `--limit N` narrow a run. `MARKET_DIR=/some/dir` writes a scratch store (used for tests).
 
 - **Discovery:** Yahoo screener per region × exchange (250 a page, 10,000 a query), `all_cryptocurrencies_us` for crypto, FX crosses built from 42 currencies, 52 continuous futures, 66 indices, plus every ticker in the old file under its old name.
-- **Speed:** one `yf.download` call per batch of 100 with threads; measured 18–22 tickers a second. 50,000 tickers is about 45 minutes if Yahoo does not throttle.
+- **Speed:** one `yf.download` call per batch of 100, up to 32 requests in parallel; no proxies or IP rotation (that would evade Yahoo's blocking); measured 18–22 tickers a second. 50,000 tickers is about 45 minutes if Yahoo does not throttle.
 - **Safety:** `yf.download` does not raise on HTTP 429; it logs the error and returns empty data. The script reads yfinance's error list after every batch. A rate-limit hit waits 30 s, 2 min, 10 min, then 30 min, halves the batch and retries. Clean batches grow it back by 10. Tickers with no data go to `_no_data.txt` and are skipped next time. Every batch is written as soon as it lands, so a stop loses nothing.
 - **Only missing days after the first fill:** `update` reads each ticker's last stored date and asks Yahoo from there (5 days of overlap, newest download wins), one call per batch per asset/country. New tickers found since the last run get full history.
 - **Why the first fill re-downloads what we already hold:** Yahoo's cost is per request, not per row. Our 2015–2026 rows and the missing pre-2015 rows come back in the same one request, so skipping held dates saves nothing; asking for the two gaps separately doubles the requests. Fresh full series also keep one consistent split and dividend adjustment instead of splicing Yahoo's onto the old file's mixed adjustment.
+- **Memory:** each asset/country builds in parts of about 200 MB of staged data, split by ticker hash (`PART_MB` changes it), so Germany's ~77k listings fit in 16 GB.
 - **Old file:** read, never changed. Tickers Yahoo no longer serves keep their old rows in `asset=delisted`.
 
 ## Limits
@@ -69,7 +78,7 @@ cd backend
 
 ## Open steps
 
-1. Run `discover`, `download`, `build` for everything (about 1–3 hours, longer if throttled).
+1. Run `all` in the background (estimate: about 230,000 tickers, 4–14 hours depending on throttling; 5–10 GB on disk), watched with `status`.
 2. Point `studio_v3/core/data.py` and `screener_v2/core/performance.py` at the new store (one scan with hive partitions), with a start-date floor for full-universe runs.
 3. Schedule `update` after the US close; expose the freshness date (Live already reads it).
 4. Data audit (DR-4) on the new store; then retire `market_universe.parquet` (backup kept).

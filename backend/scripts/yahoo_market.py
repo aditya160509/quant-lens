@@ -8,7 +8,7 @@
 Writes only under backend/data/market/ (the old market_universe.parquet is read, never changed):
     tickers.parquet                              one row per ticker: ticker, yahoo, name, asset, country, exchange, currency, source
     _staging/<asset>/<country>/<batch>.parquet   raw downloads, one file per batch (resume skips tickers already staged)
-    asset=<asset>/country=<country>/data.parquet the store: date, ticker, OHLC, adj_close, volume, dividends, splits; float32, zstd, sorted
+    asset=<asset>/country=<country>/part-NNN.parquet the store: date, ticker, OHLC, adj_close, volume, dividends, splits; float32, zstd, sorted
 
 Rate limits: Yahoo publishes none. yf.download does not raise on HTTP 429; it records the error and returns empty columns.
 So each batch is checked against yfinance's error list: a rate-limit hit waits (30 s, 2 min, 10 min, 30 min), halves the
@@ -455,7 +455,9 @@ def _fetch(
         auto_adjust=False,
         actions=True,
         group_by="ticker",
-        threads=True,
+        threads=min(
+            32, len(batch)
+        ),  # parallel requests per batch; the rate-limit back-off shrinks the batch if Yahoo pushes back
         progress=False,
         timeout=30,
     )
@@ -579,44 +581,68 @@ def build(stage: Path = STAGE) -> None:
         p for p in stage.glob("*/*") if p.is_dir() and any(p.glob("*.parquet"))
     ):
         asset, country = d.parent.name, d.name
-        df = (
-            pl.scan_parquet(str(d / "*.parquet"))
-            .with_columns(pl.col("date").cast(pl.Date))
-            .join(names.lazy().select("yahoo", "ticker"), on="yahoo", how="left")
-            .unique(["ticker", "date"], keep="last", maintain_order=True)
-            .filter(pl.col("close").is_finite() & (pl.col("close") > 0))
-            .with_columns(
-                [pl.col(c).cast(pl.Float32) for c in f32]
-                + [pl.col("volume").cast(pl.Float64)]
-            )
-            .select(
-                "date",
-                "ticker",
-                "open",
-                "high",
-                "low",
-                "close",
-                "adj_close",
-                "volume",
-                "dividends",
-                "splits",
-            )
-            .sort("ticker", "date")
-            .collect()
+        # Parts of about 200 MB of staged (compressed) data each, split by ticker hash, so even Germany's ~77k listings
+        # build in bounded memory. A ticker's rows always land in one part, sorted by ticker then date.
+        n = max(
+            1,
+            -(
+                -sum(f.stat().st_size for f in d.glob("*.parquet"))
+                // (int(os.environ.get("PART_MB", "200")) * 2**20)
+            ),
         )
-        dest = OUT / f"asset={asset}" / f"country={country}" / "data.parquet"
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dest.with_suffix(".tmp")
-        df.write_parquet(
-            tmp,
-            compression="zstd",
-            compression_level=6,
-            statistics=True,
-            row_group_size=250_000,
-        )
-        tmp.replace(dest)  # atomic swap: a reader never sees half a file
+        out_dir = OUT / f"asset={asset}" / f"country={country}"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tickers = rows = 0
+        for k in range(n):
+            df = (
+                pl.scan_parquet(str(d / "*.parquet"))
+                .filter(pl.col("yahoo").hash() % n == k)
+                .with_columns(pl.col("date").cast(pl.Date))
+                .join(names.lazy().select("yahoo", "ticker"), on="yahoo", how="left")
+                .unique(["ticker", "date"], keep="last", maintain_order=True)
+                .filter(pl.col("close").is_finite() & (pl.col("close") > 0))
+                .with_columns(
+                    [pl.col(c).cast(pl.Float32) for c in f32]
+                    + [pl.col("volume").cast(pl.Float64)]
+                )
+                .select(
+                    "date",
+                    "ticker",
+                    "open",
+                    "high",
+                    "low",
+                    "close",
+                    "adj_close",
+                    "volume",
+                    "dividends",
+                    "splits",
+                )
+                .sort("ticker", "date")
+                .collect()
+            )
+            dest = out_dir / f"part-{k:03d}.parquet"
+            tmp = dest.with_suffix(".tmp")
+            df.write_parquet(
+                tmp,
+                compression="zstd",
+                compression_level=6,
+                statistics=True,
+                row_group_size=250_000,
+            )
+            tmp.replace(dest)  # atomic swap: a reader never sees half a file
+            tickers, rows = tickers + df["ticker"].n_unique(), rows + df.height
+        for stale in out_dir.glob(
+            "*.parquet"
+        ):  # parts from an earlier build with a different part count
+            if (
+                stale.name != "data.parquet"
+                and int(stale.stem.split("-")[1]) >= n
+                or stale.name == "data.parquet"
+            ):
+                stale.unlink()
+        mb = sum(f.stat().st_size for f in out_dir.glob("*.parquet")) / 2**20
         print(
-            f"{asset}/{country}: {df['ticker'].n_unique()} tickers, {df.height} rows, {dest.stat().st_size / 2**20:.1f} MB"
+            f"{asset}/{country}: {tickers} tickers, {rows} rows, {n} part(s), {mb:.1f} MB"
         )
     # Delisted names: Yahoo dropped them, the old file still has their history.
     if OLD.exists() and DEAD.exists():
@@ -663,7 +689,7 @@ def build(stage: Path = STAGE) -> None:
 def update(assets: set[str], batch: int) -> None:
     """Daily: each stored ticker fetches only from its last stored date (minus 5 days, so late corrections land), new tickers
     fetch full history, then rebuild (duplicates keep the newest download)."""
-    files = list(OUT.glob("asset=*/country=*/data.parquet"))
+    files = list(OUT.glob("asset=*/country=*/*.parquet"))
     if not files:
         raise SystemExit("No store yet: run download and build first.")
     last = (
@@ -686,6 +712,29 @@ def update(assets: set[str], batch: int) -> None:
     download(assets, batch, None, since=since)
     download(assets, batch, None)  # tickers discovered since the last run: full history
     build()
+
+
+def status() -> None:
+    """Progress of a run: tickers found, staged, with no data, rate-limit waits and the last log lines."""
+    t = pl.read_parquet(TICKERS) if TICKERS.exists() else None
+    staged = _staged() if STAGE.exists() else set()
+    dead = set(DEAD.read_text().split()) if DEAD.exists() else set()
+    print(
+        f"tickers found: {t.height if t is not None else 0}   fetched with data: {len(staged - dead)}   no data: {len(dead)}"
+    )
+    if t is not None:
+        left = t.filter(~pl.col("yahoo").is_in(list(staged)))
+        print(f"left: {left.height}")
+        print(left.group_by("asset").len().sort("len", descending=True))
+    log = OUT / "_run.log"
+    if log.exists():
+        lines = log.read_text(errors="ignore").splitlines()
+        print(f"rate-limit waits so far: {sum('rate limited' in x for x in lines)}")
+        print("\n".join(x for x in lines[-5:]))
+    parts = list(OUT.glob("asset=*/country=*/*.parquet"))
+    print(
+        f"store: {len(parts)} files, {sum(f.stat().st_size for f in parts) / 2**30:.2f} GB"
+    )
 
 
 def _self_check() -> None:
@@ -711,7 +760,9 @@ def _self_check() -> None:
 if __name__ == "__main__":
     _self_check()
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["discover", "download", "build", "update"])
+    ap.add_argument(
+        "cmd", choices=["discover", "download", "build", "update", "status", "all"]
+    )
     ap.add_argument("--regions", default="")
     ap.add_argument("--assets", default="equity,etf,crypto,fx,future,index")
     ap.add_argument("--batch", type=int, default=100)
@@ -722,6 +773,12 @@ if __name__ == "__main__":
         discover([r for r in a.regions.split(",") if r] or None, assets)
     elif a.cmd == "download":
         download(assets, a.batch, a.limit)
+    elif a.cmd == "status":
+        status()
+    elif a.cmd == "all":  # the first fill: discover, download, build
+        discover([r for r in a.regions.split(",") if r] or None, assets)
+        download(assets, a.batch, a.limit)
+        build()
     elif a.cmd == "build":
         build()
     else:
