@@ -444,13 +444,13 @@ def _staged() -> set[str]:
 
 
 def _fetch(
-    batch: list[str], period: str
+    batch: list[str], period: str, start: str | None = None
 ) -> tuple[pl.DataFrame | None, bool, list[str]]:
-    """One yf.download call. Returns (rows, rate_limited, tickers with no data)."""
+    """One yf.download call (from `start` when given, else `period`). Returns (rows, rate_limited, tickers with no data)."""
     yfs._ERRORS.clear()
     raw = yf.download(
         batch,
-        period=period,
+        **({"start": start} if start else {"period": period}),
         interval="1d",
         auto_adjust=False,
         actions=True,
@@ -485,7 +485,10 @@ def _fetch(
         frames.append(
             pl.from_pandas(d.reset_index())
             .rename({"Date": "date"})
-            .with_columns(pl.lit(y).alias("yahoo"))
+            .with_columns(
+                pl.lit(y).alias("yahoo"),
+                *[pl.col(c).cast(pl.Float64) for c in COLS.values() if c in d.columns],
+            )
         )
     rows = (
         pl.concat(
@@ -509,9 +512,18 @@ def download(
     limit: int | None,
     period: str = "max",
     stage: Path = STAGE,
+    since: pl.DataFrame | None = None,
 ) -> None:
+    """Full history for tickers not staged yet; with `since` (yahoo, start), only the days from each ticker's start."""
     t = pl.read_parquet(TICKERS).filter(pl.col("asset").is_in(list(assets)))
-    done = _staged() if period == "max" else set()
+    if since is not None:
+        # One start per asset/country (the earliest), so a batch is one call, not one call per ticker.
+        t = t.join(since, on="yahoo").with_columns(
+            pl.col("start").min().over("asset", "country")
+        )
+    else:
+        t = t.with_columns(pl.lit(None, pl.String).alias("start"))
+    done = _staged() if since is None else set()
     todo = t.filter(~pl.col("yahoo").is_in(list(done)))
     if limit:
         todo = todo.head(limit)
@@ -519,8 +531,8 @@ def download(
         f"{todo.height} to fetch ({t.height - todo.height} already staged), period={period}"
     )
     size, n0, t0 = batch, 0, time.time()
-    for (asset, country), grp in todo.group_by(
-        ["asset", "country"], maintain_order=True
+    for (asset, country, start), grp in todo.group_by(
+        ["asset", "country", "start"], maintain_order=True
     ):
         syms, i = grp["yahoo"].to_list(), 0
         while i < len(syms):
@@ -533,7 +545,7 @@ def download(
                     time.sleep(wait)
                     size = max(10, size // 2)
                     chunk = syms[i : i + size]
-                rows, limited, empty = _fetch(chunk, period)
+                rows, limited, empty = _fetch(chunk, period, start)
                 if not limited:
                     break
             else:
@@ -546,7 +558,7 @@ def download(
                 rows.write_parquet(
                     d / f"{int(time.time() * 1000)}.parquet", compression="zstd"
                 )
-            if empty and period == "max":
+            if empty and since is None:
                 with DEAD.open("a") as f:
                     f.write("\n".join(empty) + "\n")
             i += len(chunk)
@@ -563,7 +575,9 @@ def build(stage: Path = STAGE) -> None:
     """Staged batches (and, for tickers Yahoo no longer serves, the old file's rows) -> one sorted float32 file per asset/country."""
     names = pl.read_parquet(TICKERS).select("yahoo", "ticker", "asset", "country")
     f32 = ["open", "high", "low", "close", "adj_close", "dividends", "splits"]
-    for d in sorted(p for p in stage.glob("*/*") if p.is_dir()):
+    for d in sorted(
+        p for p in stage.glob("*/*") if p.is_dir() and any(p.glob("*.parquet"))
+    ):
         asset, country = d.parent.name, d.name
         df = (
             pl.scan_parquet(str(d / "*.parquet"))
@@ -647,8 +661,30 @@ def build(stage: Path = STAGE) -> None:
 
 
 def update(assets: set[str], batch: int) -> None:
-    """Daily: fetch the last 10 days for every ticker, then rebuild (staged history + new days; duplicates keep the newest)."""
-    download(assets, batch, None, period="10d", stage=STAGE)
+    """Daily: each stored ticker fetches only from its last stored date (minus 5 days, so late corrections land), new tickers
+    fetch full history, then rebuild (duplicates keep the newest download)."""
+    files = list(OUT.glob("asset=*/country=*/data.parquet"))
+    if not files:
+        raise SystemExit("No store yet: run download and build first.")
+    last = (
+        pl.scan_parquet([str(f) for f in files])
+        .group_by("ticker")
+        .agg(pl.col("date").max())
+        .collect()
+    )
+    since = (
+        pl.read_parquet(TICKERS)
+        .select("yahoo", "ticker")
+        .join(last, on="ticker")
+        .select(
+            "yahoo",
+            (pl.col("date") - pl.duration(days=5))
+            .dt.strftime("%Y-%m-%d")
+            .alias("start"),
+        )
+    )
+    download(assets, batch, None, since=since)
+    download(assets, batch, None)  # tickers discovered since the last run: full history
     build()
 
 

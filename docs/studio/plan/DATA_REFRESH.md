@@ -45,7 +45,7 @@ cd backend
 .venv/bin/python scripts/yahoo_market.py discover                 # all regions and assets -> tickers.parquet (old names kept)
 .venv/bin/python scripts/yahoo_market.py download                 # full history, resumable
 .venv/bin/python scripts/yahoo_market.py build                    # staging -> the store, atomic swap per file
-.venv/bin/python scripts/yahoo_market.py update                   # daily: last 10 days for every ticker, then build
+.venv/bin/python scripts/yahoo_market.py update                   # daily: only the days after each ticker's last stored date, then build
 ```
 
 `--regions us,in`, `--assets equity,fx`, `--batch 100`, `--limit N` narrow a run. `MARKET_DIR=/some/dir` writes a scratch store (used for tests).
@@ -53,6 +53,8 @@ cd backend
 - **Discovery:** Yahoo screener per region × exchange (250 a page, 10,000 a query), `all_cryptocurrencies_us` for crypto, FX crosses built from 42 currencies, 52 continuous futures, 66 indices, plus every ticker in the old file under its old name.
 - **Speed:** one `yf.download` call per batch of 100 with threads; measured 18–22 tickers a second. 50,000 tickers is about 45 minutes if Yahoo does not throttle.
 - **Safety:** `yf.download` does not raise on HTTP 429; it logs the error and returns empty data. The script reads yfinance's error list after every batch. A rate-limit hit waits 30 s, 2 min, 10 min, then 30 min, halves the batch and retries. Clean batches grow it back by 10. Tickers with no data go to `_no_data.txt` and are skipped next time. Every batch is written as soon as it lands, so a stop loses nothing.
+- **Only missing days after the first fill:** `update` reads each ticker's last stored date and asks Yahoo from there (5 days of overlap, newest download wins), one call per batch per asset/country. New tickers found since the last run get full history.
+- **Why the first fill re-downloads what we already hold:** Yahoo's cost is per request, not per row. Our 2015–2026 rows and the missing pre-2015 rows come back in the same one request, so skipping held dates saves nothing; asking for the two gaps separately doubles the requests. Fresh full series also keep one consistent split and dividend adjustment instead of splicing Yahoo's onto the old file's mixed adjustment.
 - **Old file:** read, never changed. Tickers Yahoo no longer serves keep their old rows in `asset=delisted`.
 
 ## Limits
@@ -62,6 +64,7 @@ cd backend
 - Hourly bars only go back 730 days; 1-minute 7 days. This store is daily only.
 - Some indices only serve 5 days (`^OMXS30`); they land in `_no_data.txt`.
 - The old file has no asset type, so its ETFs (SPY, XLE) are filed under `asset=equity` until discovery's screener rows relabel them.
+- `adj_close` for older days changes after each new dividend; `update` only appends, so run a full `download` again every few months (or compute the adjustment from the dividends and splits columns).
 - Memory: a dates × symbols × 5 panel for every symbol from 1962 is about 3 GB in float64. Runs over the whole store need a start-date floor or float32 panels.
 
 ## Open steps
