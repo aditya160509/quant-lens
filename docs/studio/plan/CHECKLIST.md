@@ -733,13 +733,17 @@ Not planned: manual trading in replay and journal (OD-7, was C-21); watchlists, 
 
 ## Data refresh (phase 9, after the whole build)
 
+Plan, measurements and limits: [DATA_REFRESH.md](DATA_REFRESH.md). Downloader written and tested on a sample: `backend/scripts/yahoo_market.py` (discover, download, build, update).
+
 Until it lands, every result's limits popover states the data as it is (mixed adjustment, most tickers end 2026-01-28 to 2026-02-01, daily only).
 
-- [ ] [M] DR-1 Rebuild daily parquet from Yahoo period max: one total-return adjustment for OHLC, plus RawClose, Dividends, Splits; delisted names keep old rows; stage, validate, back up, swap
+- [ ] [M] DR-1 Rebuild daily parquet from Yahoo period max: one total-return adjustment for OHLC, plus RawClose, Dividends, Splits; delisted names keep old rows; stage, validate, back up, swap (downloader done; full run open)
 - [x] DR-2 Hourly parquet dropped 2026-11-16 (Studio is daily only; Yahoo keeps 730 days of hourly bars)
 - [ ] [E] DR-3 Daily update job (end-of-day append, same adjustment), logged; freshness date exposed (needed before Live is used for real)
 - [ ] [M] DR-4 Data audit: symbols per year, bars per symbol, rows / 252, gaps, adjusted status, delisted share, fundamentals lag (Y-2)
 - [ ] [M] DR-5 India and non-equity coverage measured; result written into PLAN §5.3
+- [ ] [M] DR-6 Every Yahoo ticker: equities in 59 regions, ETFs, FX, crypto, futures, indices; split store `backend/data/market/asset=*/country=*/data.parquet` (float32, zstd)
+- [ ] [M] DR-7 Point Studio's data.py and the Screener loader at the split store, with a start-date floor for full-universe runs
 
 ## LEAN parity (research/LEAN_PARITY.md §7, in order)
 
