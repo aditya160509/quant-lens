@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Pause, Play, Settings2, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, List, Maximize2, Minimize2, Pause, Play, Settings2, SlidersHorizontal } from "lucide-react";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Vela as VelaChart } from "@luxalgo/vela";
 import { studio } from "../api";
@@ -10,7 +10,7 @@ type Bar = { time: string; open: number; high: number; low: number; close: numbe
 
 type Pt = { time: number; value: number | null };
 /** What the Vela natives read: ctx.plot series, held spans, the paused bar. Written by DevChart, read by the one chart on screen. */
-const feed = { plots: {} as Record<string, Pt[]>, colors: {} as Record<string, string>, draw: null as Draw | null, own: {} as Record<string, boolean>, bg: [] as { from: number; to: number; color: string }[], spans: [] as { from: number; to: number; color: string }[], subs: new Set<() => void>() };
+const feed = { tradeLines: [] as { price: number; color: string; title: string; from: number; to: number }[], plots: {} as Record<string, Pt[]>, colors: {} as Record<string, string>, draw: null as Draw | null, own: {} as Record<string, boolean>, bg: [] as { from: number; to: number; color: string }[], spans: [] as { from: number; to: number; color: string }[], subs: new Set<() => void>() };
 const push = () => feed.subs.forEach((f) => f());
 let probe: CanvasRenderingContext2D | null = null;
 /** A theme token as #rrggbb (tokens resolve to lab() in the browser; Vela wants hex). Read on the chart's own element, where the tokens live. */
@@ -60,7 +60,10 @@ function boot() {
         let ctx: import("@luxalgo/vela/plugin").NativeIndicatorContext | null = null, off = () => {};
         const run = () => ctx?.emit({
           backgrounds: [...feed.spans, ...feed.bg].map((x, i) => ({ id: `span${i}`, paneId: "", from: x.from, to: x.to, color: x.color, overlay: true })),
-          priceLines: (feed.draw?.hlines ?? []).filter((h) => h.chart === "main").map((h, i) => ({ id: `h${i}`, paneId: "", price: h.value, color: h.color ?? "#888888", lineStyle: "dashed" as const, width: 1, title: h.name })),
+          priceLines: [...(feed.draw?.hlines ?? []).filter((h) => h.chart === "main").map((h, i) => ({ id: `h${i}`, paneId: "", price: h.value, color: h.color ?? "#888888", lineStyle: "dashed" as const, width: 1, title: h.name })),],
+          // The trade under the cursor: entry, exit, MAE and MFE levels drawn across its holding span.
+          lines: feed.tradeLines.map((l, i) => ({ id: `t${i}`, paneId: "", xloc: "bar_time" as const, x1: l.from, y1: l.price, x2: l.to, y2: l.price, extend: "none" as const, color: l.color, invisible: false, width: 1, style: "dashed" as const, arrowLeft: false, arrowRight: false, overlay: true })),
+          labels: feed.tradeLines.map((l, i) => ({ id: `tl${i}`, paneId: "", xloc: "bar_time" as const, x: l.from, y: l.price, yloc: "price" as const, text: l.title, style: "label_left" as const, color: "#00000000", textColor: l.color, size: "small" as const, textAlign: "left" as const, fontFamily: "default" as const, noFill: true })),
         });
         return { start: (c) => { ctx = c; off = (feed.subs.add(run), () => feed.subs.delete(run)); run(); }, onBars: run, onViewport: () => {}, setInputs: () => {}, suspend: () => {}, resume: run, stop: () => { off(); ctx = null; } };
       },
@@ -74,7 +77,7 @@ export const SPEEDS = [1, 2, 5, 10, 20, 50];
 const RANGES = ["1M", "3M", "6M", "1Y", "5Y", "YTD", "ALL"] as const;
 const STYLES = [["candles", "Candles"], ["hollow", "Hollow candles"], ["bars", "OHLC bars"], ["heikinashi", "Heikin-Ashi"], ["line", "Line"], ["linemarkers", "Line with markers"], ["stepline", "Step line"], ["area", "Area"], ["baseline", "Baseline"], ["columns", "Columns"]] as const;
 const SCALES = [["price", "Linear"], ["log", "Log"], ["percent", "Percent"], ["indexed", "Indexed to 100"]] as const;
-type View = { style: string; scale: string; dw: boolean; blind: boolean };
+type View = { style: string; scale: string; dw: boolean; blind: boolean; eq?: boolean };
 const VIEW_KEY = "studio:chart:view";
 const readView = (): View => { try { return { style: "candles", scale: "price", dw: false, blind: false, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") }; } catch { return { style: "candles", scale: "price", dw: false, blind: false }; } };
 const download = (name: string, href: string) => { const a = document.createElement("a"); a.href = href; a.download = name; a.click(); };
@@ -95,8 +98,12 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   useEffect(() => setPick(null), [symbol]);
   const sym = (pick ?? symbol).trim().toUpperCase();
   const perSym = useMemo(() => {
-    const m = new Map<string, { n: number; pnl: number; wins: number }>();
-    for (const t of prev?.trades ?? []) { const k = String(t.symbol ?? symbol).toUpperCase(), r = m.get(k) ?? { n: 0, pnl: 0, wins: 0 }; r.n++; r.pnl += Number(t.pnl) || 0; if (Number(t.pnl) > 0) r.wins++; m.set(k, r); }
+    const m = new Map<string, { n: number; pnl: number; wins: number; dd: number; peak: number; curve: number[] }>();
+    for (const t of [...(prev?.trades ?? [])].sort((a, b) => String(a.exit_date).localeCompare(String(b.exit_date)))) {
+      const k = String(t.symbol ?? symbol).toUpperCase(), r = m.get(k) ?? { n: 0, pnl: 0, wins: 0, dd: 0, peak: 0, curve: [0] };
+      r.n++; r.pnl += Number(t.pnl) || 0; if (Number(t.pnl) > 0) r.wins++;
+      r.peak = Math.max(r.peak, r.pnl); r.dd = Math.min(r.dd, r.pnl - r.peak); r.curve.push(r.pnl); m.set(k, r);
+    }
     return [...m].sort((a, b) => b[1].n - a[1].n);
   }, [prev?.trades, symbol]);
   const [view, setView] = useState<View>(readView);
@@ -107,6 +114,16 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     const want = compare.filter((c) => !cmpBars[c]); if (!want.length) return;
     void studio<{ bars: Record<string, Bar[]> }>("GET", `/bars?symbols=${encodeURIComponent(want.join(","))}&tf=1d`).then((d) => setCmpBars((x) => ({ ...x, ...d.bars })), () => undefined);
   }, [compare]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [drawer, setDrawer] = useState<null | "symbols" | "months">(null);
+  // Symbol × month heatmap: summed trade return by exit month.
+  const months = useMemo(() => {
+    if (drawer !== "months") return null;
+    const cols = [...new Set((prev?.trades ?? []).map((t) => String(t.exit_date).slice(0, 7)))].sort();
+    const cell = new Map<string, number>();
+    for (const t of prev?.trades ?? []) { const k = `${String(t.symbol ?? symbol).toUpperCase()}|${String(t.exit_date).slice(0, 7)}`; cell.set(k, (cell.get(k) ?? 0) + (Number(t.return) || 0)); }
+    const max = Math.max(1e-9, ...[...cell.values()].map(Math.abs));
+    return { cols, cell, max, rows: perSym.slice(0, 40).map(([k]) => k) };
+  }, [drawer, prev?.trades, perSym, symbol]);
   const [readout, setReadout] = useState<import("@luxalgo/vela").DataWindowReadout | null>(null);
   useEffect(() => {
     if (!sym) return;
@@ -131,6 +148,22 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     return () => obs.disconnect();
   }, [bars.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
   const rows = useMemo(() => (prev?.trades ?? []).filter((t) => !t.symbol || t.symbol === sym), [prev?.trades, sym]);
+  // Equity, drawdown and exposure of this symbol's trades on the price time axis (marked to the close while open).
+  const eqPlots = useMemo(() => {
+    if (!view.eq || !rows.length) return null;
+    const eq: { date: string; symbol: null; value: number }[] = [], dd: typeof eq = [], ex: typeof eq = [];
+    let peak = 0;
+    for (const b of bars) {
+      let v = 0, pos = 0;
+      for (const t of rows) {
+        const dir = String(t.side).toLowerCase() === "short" ? -1 : 1, en = String(t.entry_date), xd = String(t.exit_date);
+        if (xd <= b.time) v += Number(t.pnl) || 0;
+        else if (en <= b.time) { v += (b.close - Number(t.entry)) * Number(t.shares) * dir; pos += dir * Number(t.shares) * b.close; }
+      }
+      peak = Math.max(peak, v); eq.push({ date: b.time, symbol: null, value: v }); dd.push({ date: b.time, symbol: null, value: v - peak }); ex.push({ date: b.time, symbol: null, value: pos });
+    }
+    return { Equity: eq, Drawdown: dd, Exposure: ex };
+  }, [view.eq, rows, bars]);
   const shown = useMemo(() => rows.filter((r) => filter === "all" || (filter === "win" ? Number(r.pnl) > 0 : Number(r.pnl) <= 0)), [rows, filter]);
   const currentTrade = pausedAt ? shown.findLastIndex((r) => String(r.entry_date) <= pausedAt) : -1;
   const hop = useCallback((d: 1 | -1) => {
@@ -180,7 +213,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     if (!chart) return;
     // Compare symbols ride on the price pane as plain series; the Percent or Indexed scale rebases them with price.
     const cmp = Object.fromEntries(compare.filter((c) => cmpBars[c]).map((c) => [c, cmpBars[c]!.map((b) => ({ date: b.time, symbol: null, value: b.close }))]));
-    const src = { ...plots, ...cmp };
+    const src = { ...plots, ...cmp, ...eqPlots };
     const names = Object.keys(src);
     names.forEach((n, i) => {
       feed.plots[n] = (src[n] ?? []).filter((p) => !p.symbol || p.symbol === sym).map((p) => ({ time: ms(p.date), value: p.value }));
@@ -196,7 +229,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     feed.draw = prev?.draw ?? null;
     feed.bg = (prev?.draw?.bg ?? []).map((b) => ({ from: ms(b.date), to: ms(b.date) + 864e5, color: b.color }));
     push();
-  }, [chart, plots, hidden, own, sym, prev?.plot_charts, prev?.draw, compare, cmpBars]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chart, plots, hidden, own, sym, prev?.plot_charts, prev?.draw, compare, cmpBars, eqPlots]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trades as markers on the lane, held spans and the paused bar as shading, the view follows the paused bar.
   useEffect(() => {
@@ -208,16 +241,27 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
       const long = String(t.side).toLowerCase() !== "short", win = Number(t.pnl) >= 0, ret = `${(Number(t.return) * 100).toFixed(1)}%`;
       return [
         { id: `in${i}`, time: ms(String(t.entry_date)), group: "trades", title: `${long ? "Long" : "Short"} entry`, tooltip: `${long ? "Long" : "Short"} ${String(t.entry_date)}`, glyph: { shape: "diamond" as const, color: long ? up : down, letter: long ? "B" : "S" } },
-        { id: `out${i}`, time: ms(String(t.exit_date)), group: "trades", title: `Exit ${ret}`, tooltip: `Exit ${ret}`, glyph: { shape: "square" as const, color: win ? up : down, letter: "X" } },
+        { id: `out${i}`, time: ms(String(t.exit_date)), group: "trades", title: `Exit ${ret}`, tooltip: `Exit ${ret} · ${String(t.exit_reason ?? "")} · ${Number(t.bars) || 0} bars · MAE ${(Number(t.mae) * 100).toFixed(1)}% · MFE ${(Number(t.mfe) * 100).toFixed(1)}%`, glyph: { shape: "square" as const, color: win ? up : down, letter: "X" } },
       ];
     }), ...notes.map((d) => ({ id: `note${d}`, time: ms(d), group: "notes", title: "Comment", tooltip: `Comment on ${d} (Shift+click the bar to open)`, glyph: { shape: "circle" as const, color: cv("--accent", box.current ?? undefined), letter: "C" } }))]);
     feed.spans = [
       ...trades.map((t) => ({ from: ms(String(t.entry_date)), to: ms(String(t.exit_date)), color: tint(Number(t.pnl) >= 0 ? up : down, "1f") })),
       ...(pausedAt ? [{ from: ms(pausedAt), to: ms(pausedAt) + 864e5, color: tint(cv("--s1", box.current ?? undefined), "55") }] : []),
     ];
+    const cur = pausedAt ? trades.find((t) => String(t.entry_date) <= pausedAt && pausedAt <= String(t.exit_date)) : undefined;
+    const dir = String(cur?.side).toLowerCase() === "short" ? -1 : 1, en = Number(cur?.entry);
+    const span = cur ? { from: ms(String(cur.entry_date)), to: ms(String(cur.exit_date)) } : { from: 0, to: 0 };
+    feed.tradeLines = cur ? [
+      { price: en, color: "#8a8f98", title: "Entry" , ...span },
+      { price: Number(cur.exit), color: Number(cur.pnl) >= 0 ? up : down, title: `Exit · ${String(cur.exit_reason ?? "")}` , ...span },
+      ...(Number.isFinite(Number(cur.mae)) ? [{ price: en * (1 + dir * Number(cur.mae)), color: down, title: "MAE" , ...span }] : []),
+      ...(Number.isFinite(Number(cur.mfe)) ? [{ price: en * (1 + dir * Number(cur.mfe)), color: up, title: "MFE" , ...span }] : []),
+    ] : [];
     push();
     if (pausedAt) { const r = chart.getVisibleRange(), t = ms(pausedAt); if (r && (t < r.from || t > r.to)) { const w = r.to - r.from; chart.setVisibleRange({ from: t - w / 2, to: t + w / 2 }); } }
   }, [chart, prev?.trades, sym, pausedAt, notes]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Click a trade marker: the debugger pauses on that bar, so the rule values that fired show in Debug.
+  useEffect(() => chart?.on("mark:click", (e) => { if (/^(in|out)\d+$/.test(e.id)) onGo(new Date(e.time).toISOString().slice(0, 10)); }), [chart, onGo]);
   // Synced cursor date: the bar under the crosshair is broadcast; the editor lights the lines that placed orders that day.
   useEffect(() => {
     if (!chart) return;
@@ -300,6 +344,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
         </select> : <b>{sym}</b>}
         <select className="input sm dv-rng-sel" aria-label="Range" value="" onChange={(e) => e.target.value && chart?.setVisibleRangePreset(e.target.value as (typeof RANGES)[number])}><option value="">Range</option>{RANGES.map((r) => <option key={r} value={r}>{r === "ALL" ? "All" : r}</option>)}</select>
         <span className="seg dv-rng" role="group" aria-label="Range">{RANGES.map((r) => <button key={r} type="button" onClick={() => chart?.setVisibleRangePreset(r)}>{r === "ALL" ? "All" : r}</button>)}</span>
+        {rows.length || perSym.length ? <button type="button" className="icon-btn" aria-label="Symbols and months" aria-pressed={!!drawer} title="Symbols and months" onClick={() => setDrawer((d) => (d ? null : "symbols"))}><List size={13} /></button> : null}
         <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
           <summary className="btn sm ghost" aria-label="Chart settings"><Settings2 size={13} /></summary>
           <div className="dv-menu dv-chartmenu" role="menu">
@@ -308,6 +353,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
             <label>Go to<input className="input sm" type="date" min={bars[0]?.time} max={bars.at(-1)?.time} onChange={(e) => e.target.value && onGo(e.target.value)} /></label>
             <label>Compare<input className="input sm" placeholder="QQQ, IWM" defaultValue={compare.join(", ")} onKeyDown={(e) => { if (e.key !== "Enter") return; const next = e.currentTarget.value.split(",").map((x) => x.trim().toUpperCase()).filter((x) => x && x !== sym); setCompare(next); if (next.length && view.scale === "price") setV({ scale: "percent" }); }} /></label>
             <label className="dv-check"><input type="checkbox" checked={view.dw} onChange={(e) => setV({ dw: e.target.checked })} />Data window</label>
+            <label className="dv-check"><input type="checkbox" checked={!!view.eq} onChange={(e) => setV({ eq: e.target.checked })} />Equity, drawdown, exposure</label>
             <label className="dv-check"><input type="checkbox" checked={view.blind} onChange={(e) => setV({ blind: e.target.checked })} />Blind replay</label>
             <hr />
             <button type="button" onClick={exportPng}>Export PNG</button>
@@ -317,6 +363,18 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
         {onMax ? <button type="button" className="icon-btn" aria-label={max ? "Restore chart" : "Maximise chart"} title={max ? "Restore (Esc)" : "Maximise chart (⌘⇧↵)"} onClick={onMax}>{max ? <Minimize2 size={13} /> : <Maximize2 size={13} />}</button> : null}
       </div>
       <div className="dv-chartbox" ref={box} />
+      {drawer ? <div className="dv-symdrawer" role="dialog" aria-label="Symbols">
+        <header><span className="seg" role="group">{(["symbols", "months"] as const).map((d) => <button key={d} type="button" aria-pressed={drawer === d} onClick={() => setDrawer(d)}>{d === "symbols" ? "Symbols" : "Months"}</button>)}</span>
+          <button type="button" className="icon-btn" aria-label="Close" onClick={() => setDrawer(null)}>×</button></header>
+        {drawer === "symbols" ? <table className="dv-symtable"><thead><tr><th>Symbol</th><th>Trades</th><th>P&L</th><th>Win</th><th>Max DD</th><th aria-label="Curve" /></tr></thead>
+          <tbody>{perSym.map(([k, r]) => { const lo = Math.min(...r.curve), hi = Math.max(...r.curve), span = hi - lo || 1; return (
+            <tr key={k} aria-selected={k === sym} onClick={() => setPick(k)}><td>{k}</td><td>{r.n}</td><td className={r.pnl >= 0 ? "up" : "down"}>{r.pnl.toFixed(0)}</td><td>{Math.round((r.wins / r.n) * 100)}%</td><td className="down">{r.dd.toFixed(0)}</td>
+              <td><svg viewBox="0 0 60 16" width="60" height="16" aria-hidden><polyline fill="none" stroke="currentColor" strokeWidth="1.2" points={r.curve.map((v, i) => `${(i / Math.max(1, r.curve.length - 1)) * 60},${16 - ((v - lo) / span) * 16}`).join(" ")} /></svg></td></tr>); })}</tbody></table>
+        : months ? <div className="dv-heat" style={{ gridTemplateColumns: `56px repeat(${months.cols.length}, minmax(8px, 22px))` }}>
+          <span />{months.cols.map((c) => <span key={c} className="dv-heat-col">{c.endsWith("-01") ? c.slice(0, 4) : ""}</span>)}
+          {months.rows.map((k) => <Fragment key={k}><b>{k}</b>{months.cols.map((c) => { const v = months.cell.get(`${k}|${c}`); return <button key={c} type="button" title={`${k} ${c}: ${v == null ? "no trades" : `${(v * 100).toFixed(1)}%`}`} style={v == null ? undefined : { background: `color-mix(in oklab, var(${v >= 0 ? "--up" : "--down"}) ${Math.round(20 + 80 * Math.abs(v) / months.max)}%, transparent)` }} onClick={() => { setPick(k); const t = (prev?.trades ?? []).find((x) => String(x.symbol ?? symbol).toUpperCase() === k && String(x.exit_date).startsWith(c)); if (t) onGo(String(t.entry_date)); setDrawer(null); }} />; })}</Fragment>)}
+        </div> : null}
+      </div> : null}
       {readout?.date ? <div className="dv-dw" aria-label="Data window">
         <b>{readout.date}</b>
         {readout.ohlc ? <dl><dt>O</dt><dd>{readout.ohlc.o}</dd><dt>H</dt><dd>{readout.ohlc.h}</dd><dt>L</dt><dd>{readout.ohlc.l}</dd><dt>C</dt><dd>{readout.ohlc.c}</dd>{readout.ohlc.vol ? <><dt>Vol</dt><dd>{readout.ohlc.vol}</dd></> : null}</dl> : null}

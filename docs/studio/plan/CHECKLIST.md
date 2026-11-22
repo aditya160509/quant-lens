@@ -17,7 +17,7 @@ Three streams, in this order. Details stay in their sections below; this is the 
 
 **3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 11 to 14 research, reactive and SQL cells, 17 and 18 library and starters, 20 review comments (partial), 23 and 24 paper and live hooks, 28 pop-out windows. Later (AI parked by the owner): 21, 22. Built: 2, 3, 4, 5, 6, 7, 9, 10, 15 (Data page), 19 (share with a pinned run), 25, 26 (keymap chords), 27 (Layouts dialog), 29. Moved to Chart: 1, 8, 30. IDE catalogue P1 gaps built 2026-11-21: strategy inspections, run configurations, logpoints, test explorer and strategy tests, DataFrame variable explorer. P1 gap left: percent cells (#11).
 
-**4. Chart, section "Chart": CH-1 to CH-50, 34 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
+**4. Chart, section "Chart": CH-1 to CH-50, 28 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
 
 ## Rules
 
@@ -546,11 +546,11 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 
 ### Symbols and universe runs
 - [x] [M] CH-8 P1 Symbol picker over the run's symbols, sorted by trades or P&L, search, `,` and `.` keys [DEV multi-symbol 1, research] (symbol menu in the chart bar, sorted by trades with P&L and win rate; `,` and `.` step)
-- [ ] [M] CH-9 P1 Per-symbol strip in the footer (trades, P&L, win rate); "All symbols" trade list that switches the chart [DEV multi-symbol 2]
-- [ ] [M] CH-10 P1 Universe list beside the chart: P&L, trades, win rate, max DD, sparkline; click loads the symbol [DEV multi-symbol 3, research]
+- [x] [M] CH-9 P1 Per-symbol strip in the footer (trades, P&L, win rate); "All symbols" trade list that switches the chart [DEV multi-symbol 2] (Symbols drawer in the chart bar lists every symbol; click switches the chart)
+- [x] [M] CH-10 P1 Universe list beside the chart: P&L, trades, win rate, max DD, sparkline; click loads the symbol [DEV multi-symbol 3, research] (Symbols drawer: P&L, trades, win rate, max DD, P&L sparkline)
 - [x] [E] CH-11 P1 Debugger pause switches the chart to the paused symbol [DEV multi-symbol 7] (chart follows the debugger's paused symbol)
 - [ ] [M] CH-12 P1 Per-symbol stats computed on the server for 4,000-name runs; bars fetched only for the selected symbol [DEV multi-symbol 8]
-- [ ] [M] CH-13 P2 Universe heatmap (symbol × month, return); click opens symbol and date; best and worst 10 [DEV multi-symbol 4]
+- [x] [M] CH-13 P2 Universe heatmap (symbol × month, return); click opens symbol and date; best and worst 10 [DEV multi-symbol 4] (Months tab: symbol × month heatmap; click opens the symbol at that month's trade)
 
 ### Layouts and views
 - [ ] [H] CH-14 P1 Multi-chart grid (1 to 16 cells) with sync toggles for symbol, interval, crosshair, time and drawings; maximise one cell; multi-cell replay [C-6, DEV multi-symbol 6, research: Vela workspace]
@@ -583,11 +583,11 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [ ] [M] CH-35 P3 Pine import via PineTS (licence check first) [DEV chart plan]
 
 ### Strategy on the chart
-- [ ] [M] CH-36 P1 Orders, stop, target and trailing-stop lines per trade [C-14 part, research 6]
-- [ ] [M] CH-37 P1 Click a trade or bar for a "why" card: which rule fired, rule values at that bar [C-15, research]
-- [ ] [M] CH-38 P1 Equity, drawdown and exposure panes on the same time axis as price [research]
+- [ ] [M] CH-36 P1 Orders, stop, target and trailing-stop lines per trade [C-14 part, research 6] (partial: entry and exit lines across the trade under the cursor; stop, target and trailing stop need the engine to record them)
+- [x] [M] CH-37 P1 Click a trade or bar for a "why" card: which rule fired, rule values at that bar [C-15, research] (click a trade marker: the debugger pauses on that bar and Debug shows the rule values)
+- [x] [M] CH-38 P1 Equity, drawdown and exposure panes on the same time axis as price [research] (Equity, drawdown, exposure in chart settings; marked to the close while a trade is open)
 - [ ] [E] CH-39 P1 Backtest trade click opens Build's chart zoomed to the trade with stop and target [C-4; symbol link done]
-- [ ] [M] CH-40 P2 Trade ribbons with MAE, MFE and exit reason [research]
+- [x] [M] CH-40 P2 Trade ribbons with MAE, MFE and exit reason [research] (exit marker tooltip: return, exit reason, bars, MAE, MFE; MAE and MFE levels drawn for the trade under the cursor)
 - [ ] [M] CH-41 P2 Compare two runs (or two strategies) as two marker layers with an entry diff [C-14 part, research 9]
 
 ### Replay

@@ -803,3 +803,17 @@
 .dv[data-max="chart"] .dv-body [data-panel]:is(#rail, #center, #tester) { flex: 0 0 0px !important; min-width: 0 !important; min-height: 0 !important; overflow: hidden; }
 .dv[data-max="chart"] .dv-body [data-panel]:is(#right, #top) { flex: 1 1 0px !important; }
 .dv[data-max="chart"] .dv-body .dv-gutter { display: none; }
+/* Symbols and months drawer over the chart (universe list, symbol × month heatmap). */
+.dv-symdrawer { position: absolute; top: 34px; left: 0; bottom: 40px; z-index: 40; width: min(460px, 100%); display: flex; flex-direction: column; background: color-mix(in oklab, var(--panel) 94%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: var(--shadow); border-right: 1px solid var(--line); }
+.dv-symdrawer > header { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.dv-symtable { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; overflow: auto; display: block; flex: 1; }
+.dv-symtable th { position: sticky; top: 0; background: var(--panel); text-align: right; font-weight: 500; color: var(--text-2); padding: 4px 8px; }
+.dv-symtable td { text-align: right; padding: 3px 8px; border-top: 1px solid var(--line); }
+.dv-symtable :is(th, td):first-child { text-align: left; }
+.dv-symtable tr[aria-selected="true"] td { background: var(--line); }
+.dv-symtable tbody tr { cursor: pointer; } .dv-symtable tbody tr:hover td { background: color-mix(in oklab, var(--text) 5%, transparent); }
+.dv-symtable .up { color: var(--up); } .dv-symtable .down { color: var(--down); } .dv-symtable svg { color: var(--text-2); vertical-align: middle; }
+.dv-heat { display: grid; gap: 1px; padding: 8px; overflow: auto; flex: 1; align-content: start; font-size: 10.5px; }
+.dv-heat > b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-heat > button { height: 14px; min-width: 8px; border: 0; padding: 0; border-radius: 2px; background: var(--line); cursor: pointer; }
+.dv-heat-col { color: var(--text-2); white-space: nowrap; overflow: visible; }
