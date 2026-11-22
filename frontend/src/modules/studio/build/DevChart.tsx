@@ -73,9 +73,10 @@ const ms = (d: string) => Date.parse(d);
 export const SPEEDS = [1, 2, 5];
 
 /** The Chart page's engine over the preview window: trades, ctx.plot series, the paused bar, and replay controls that drive the debugger. */
-export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpeed, onGo, onMark, drawKey }: {
+const NO_NOTES: string[] = [];
+export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpeed, onGo, onMark, onNote, notes = NO_NOTES, drawKey }: {
   symbol: string; prev: DevPreview | null; drawKey: string; pausedAt: string | null; playing: boolean; speed: number;
-  onPlay: (on: boolean) => void; onSpeed: (s: number) => void; onGo: (date: string | null, step?: 1 | -1) => void; onMark?: (date: string) => void;
+  onPlay: (on: boolean) => void; onSpeed: (s: number) => void; onGo: (date: string | null, step?: 1 | -1) => void; onMark?: (date: string) => void; onNote?: (date: string) => void; notes?: string[];
 }) {
   const [all, setAll] = useState<Bar[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -174,29 +175,30 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     if (!chart) return;
     const up = cv("--up", box.current ?? undefined), down = cv("--down", box.current ?? undefined), trades = (prev?.trades ?? []).filter((t) => !t.symbol || t.symbol === sym);
     chart.marks.defineGroup({ id: "trades", label: "Trades" });
-    chart.marks.set(trades.flatMap((t, i) => {
+    chart.marks.defineGroup({ id: "notes", label: "Comments" });
+    chart.marks.set([...trades.flatMap((t, i) => {
       const long = String(t.side).toLowerCase() !== "short", win = Number(t.pnl) >= 0, ret = `${(Number(t.return) * 100).toFixed(1)}%`;
       return [
         { id: `in${i}`, time: ms(String(t.entry_date)), group: "trades", title: `${long ? "Long" : "Short"} entry`, tooltip: `${long ? "Long" : "Short"} ${String(t.entry_date)}`, glyph: { shape: "diamond" as const, color: long ? up : down, letter: long ? "B" : "S" } },
         { id: `out${i}`, time: ms(String(t.exit_date)), group: "trades", title: `Exit ${ret}`, tooltip: `Exit ${ret}`, glyph: { shape: "square" as const, color: win ? up : down, letter: "X" } },
       ];
-    }));
+    }), ...notes.map((d) => ({ id: `note${d}`, time: ms(d), group: "notes", title: "Comment", tooltip: `Comment on ${d} (Shift+click the bar to open)`, glyph: { shape: "circle" as const, color: cv("--accent", box.current ?? undefined), letter: "C" } }))]);
     feed.spans = [
       ...trades.map((t) => ({ from: ms(String(t.entry_date)), to: ms(String(t.exit_date)), color: tint(Number(t.pnl) >= 0 ? up : down, "1f") })),
       ...(pausedAt ? [{ from: ms(pausedAt), to: ms(pausedAt) + 864e5, color: tint(cv("--s1", box.current ?? undefined), "55") }] : []),
     ];
     push();
     if (pausedAt) { const r = chart.getVisibleRange(), t = ms(pausedAt); if (r && (t < r.from || t > r.to)) { const w = r.to - r.from; chart.setVisibleRange({ from: t - w / 2, to: t + w / 2 }); } }
-  }, [chart, prev?.trades, sym, pausedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chart, prev?.trades, sym, pausedAt, notes]); // eslint-disable-line react-hooks/exhaustive-deps
   // Alt+click a bar with an order: open the line that placed it.
-  const alt = useRef(false);
+  const alt = useRef(false), shift = useRef(false); // Shift+click a bar: comment on it
   useEffect(() => {
     const el = box.current; if (!chart || !el) return;
-    const down = (e: PointerEvent) => { alt.current = e.altKey; };
+    const down = (e: PointerEvent) => { alt.current = e.altKey; shift.current = e.shiftKey; };
     el.addEventListener("pointerdown", down, true);
-    const off = chart.renderer.onClick((e) => { if (alt.current && e.time != null) onMark?.(new Date(e.time).toISOString().slice(0, 10)); });
+    const off = chart.renderer.onClick((e) => { if (e.time == null) return; const d = new Date(e.time).toISOString().slice(0, 10); if (alt.current) onMark?.(d); else if (shift.current) onNote?.(d); });
     return () => { el.removeEventListener("pointerdown", down, true); off(); };
-  }, [chart, onMark]);
+  }, [chart, onMark, onNote]);
 
 
   // Drawings belong to the strategy and symbol (W-7); tool defaults and favourites follow the user everywhere.

@@ -61,7 +61,7 @@ def test_local_history_keeps_seven_days_and_skips_duplicates(studio):  # noqa: F
 def test_snippets_crud_validates_prefix(studio):  # noqa: F811
     made = studio.post(f"{API}/snippets", json={"name": "Entry", "prefix": "entry", "body": "ctx.buy()"}).json()
     assert studio.get(f"{API}/snippets").json() == [made]
-    assert studio.put(f"{API}/snippets/{made['id']}", json={"name": "Entry", "prefix": "entry", "body": "ctx.sell()"}).json()["body"] == "ctx.sell()"
+    assert studio.put(f"{API}/snippets/{made['id']}", json={"name": "Entry", "prefix": "entry", "body": "ctx.sell()", "tags": ["Exit", "exit ", "risk"]}).json()["tags"] == ["exit", "risk"]
     assert studio.post(f"{API}/snippets", json={"name": "Bad", "prefix": "has space", "body": "x"}).status_code == 422
     assert studio.delete(f"{API}/snippets/{made['id']}").json() == {"deleted": True}
     assert studio.delete(f"{API}/snippets/{made['id']}").status_code == 404
@@ -74,6 +74,10 @@ def test_line_comment_threads_and_replies(studio):  # noqa: F811
     assert (reply["file"], reply["line"], reply["thread_id"], reply["version"]) == ("main.py", 2, first["thread_id"], first["version"])
     assert [c["text"] for c in studio.get(f"{API}/strategies/{sid}/comments").json()] == ["why 2?", "tuned"]
     assert studio.post(f"{API}/strategies/{sid}/comments", json={"text": "x", "thread_id": "nope"}).status_code == 404
+    bar = studio.post(f"{API}/strategies/{sid}/comments", json={"text": "gap down", "date": "2020-03-16"}).json()
+    assert bar["date"] == "2020-03-16" and studio.post(f"{API}/strategies/{sid}/comments", json={"text": "y", "thread_id": bar["thread_id"]}).json()["date"] == "2020-03-16"
+    assert studio.put(f"{API}/strategies/{sid}/comments/threads/{bar['thread_id']}/resolved").json() == {"resolved": True}
+    assert all(c.get("resolved") for c in studio.get(f"{API}/strategies/{sid}/comments").json() if c["thread_id"] == bar["thread_id"])
     assert studio.delete(f"{API}/strategies/{sid}/comments/{first['id']}").json() == {"deleted": True}
     assert studio.get(f"{API}/strategies/missing/comments").status_code == 404
 

@@ -750,3 +750,23 @@
 [data-drop] > .dv-edpane::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5; background: color-mix(in oklch, var(--accent) 10%, transparent); box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--accent) 45%, transparent); }
 [data-drop="split"] > .dv-edpane::after { left: 50%; }
 [data-drop="main"] > .dv-edpane::after { right: 50%; }
+
+/* Terminal power-ups: guide, sticky command, ruler, history search, quick fix */
+.dv-term-wrap { position: relative; height: 100%; }
+.dv-term-block { border-left: 2px solid transparent; padding-left: 8px; margin-left: -10px; outline: 0; }
+.dv-term-block:hover, .dv-term-block:focus { border-left-color: var(--line-2); }
+.dv-term-block[data-st="err"] { border-left-color: color-mix(in oklch, var(--down) 55%, transparent); }
+.dv-term-block header { position: sticky; top: -6px; z-index: 1; background: var(--panel, var(--bg)); }
+.dv-term-fix { margin-top: 4px; }
+.dv-term-ruler { position: absolute; top: 4px; bottom: 4px; right: 2px; width: 4px; pointer-events: none; }
+.dv-term-ruler button { position: absolute; left: 0; width: 4px; height: 3px; padding: 0; border: 0; border-radius: 1px; background: var(--up); pointer-events: auto; cursor: pointer; }
+.dv-term-ruler button[data-st="err"] { background: var(--down); } .dv-term-ruler button[data-st="run"] { background: var(--accent); }
+.dv-term-pick { list-style: none; margin: 6px 0 0; padding: 4px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line); max-height: 220px; overflow: auto; }
+.dv-term-pick button { all: unset; display: flex; gap: 6px; align-items: center; width: 100%; padding: 2px 6px; border-radius: 4px; cursor: pointer; color: var(--text-2); }
+.dv-term-pick button:hover { background: var(--line); color: var(--text); }
+.dv-term-split { display: grid; grid-template-columns: 1fr 1fr; height: 100%; } .dv-term-split > * + * { border-left: 1px solid var(--line); }
+.dv-term-host { height: 100%; } .dv-term-split[hidden], .dv-term-host[hidden] { display: none; }
+.bd-set-hd { display: flex; gap: 8px; align-items: center; } .bd-set-hd b { flex: 1; } .bd-set-hd .input { width: auto; min-width: 0; }
+.bd-json { min-height: 320px; font: 12px var(--mono); white-space: pre; resize: vertical; }
+.bd-set-body { display: grid; gap: 12px; }
+.bd-tpl-spark { width: 60px; height: 16px; color: var(--text-3); vertical-align: middle; margin-right: 6px; }

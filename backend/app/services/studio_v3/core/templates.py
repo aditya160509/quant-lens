@@ -211,7 +211,7 @@ _stats_running = threading.Event()
 
 def stats() -> dict:
     from . import data, store
-    key = f"template_stats:{data.data_version()}"
+    key = f"template_stats:v2:{data.data_version()}"  # v2 adds the equity spark
     done = store.kv_get(key)
     if done is not None:
         return {"status": "ready", "stats": done}
@@ -239,7 +239,8 @@ def _compute_stats(key: str) -> None:
                 sd = float(np.std(rets))
                 out[name] = {"total_return": float(eq[-1] / eq[0] - 1), "sharpe": float(np.mean(rets) / sd * np.sqrt(252)) if sd > 0 else None,
                              "max_drawdown": float((eq / np.maximum.accumulate(eq) - 1).min()), "trades": len(r.trades),
-                             "start": str(prep.panel.dates[0].date()), "end": str(prep.panel.dates[-1].date()), "symbols": len(prep.panel.symbols)}
+                             "start": str(prep.panel.dates[0].date()), "end": str(prep.panel.dates[-1].date()), "symbols": len(prep.panel.symbols),
+                             "spark": [round(float(x), 4) for x in (eq / eq[0])[:: max(1, len(eq) // 60)]]}
             except Exception as exc:  # noqa: BLE001 one broken starter must not hide the others
                 out[name] = {"error": str(exc)[:200]}
         store.kv_set(key, out)

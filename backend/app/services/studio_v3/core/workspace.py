@@ -153,13 +153,14 @@ def snippets() -> list[dict]:
     return store.kv_get("snippets", [])
 
 
-def save_snippet(name: str, prefix: str, body: str, description: str = "", snippet_id: str | None = None) -> dict:
+def save_snippet(name: str, prefix: str, body: str, description: str = "", snippet_id: str | None = None, tags: list[str] | None = None) -> dict:
     rows = snippets()
     if snippet_id is None and len(rows) >= MAX_SNIPPETS:
         raise Refused(f"At most {MAX_SNIPPETS} snippets.")
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,31}", prefix):
         raise Refused("A snippet prefix is a word of up to 32 letters, digits or underscores.")
-    row = {"id": snippet_id or secrets.token_hex(4), "name": name.strip()[:80], "prefix": prefix, "body": body[:20_000], "description": description[:300]}
+    row = {"id": snippet_id or secrets.token_hex(4), "name": name.strip()[:80], "prefix": prefix, "body": body[:20_000], "description": description[:300],
+           "tags": sorted({t.strip().lower()[:24] for t in tags or [] if t.strip()})}
     if snippet_id and not any(r["id"] == snippet_id for r in rows):
         raise KeyError(f"Unknown snippet {snippet_id}")
     rows = [row if r["id"] == row["id"] else r for r in rows] if snippet_id else [*rows, row]
@@ -183,7 +184,8 @@ def comments(sid: str) -> list[dict]:
     return store.kv_get(f"comments:{sid}", [])
 
 
-def add_comment(sid: str, file: str, line: int, text: str, author: str = "you", thread_id: str | None = None) -> dict:
+def add_comment(sid: str, file: str, line: int, text: str, author: str = "you", thread_id: str | None = None, date: str | None = None) -> dict:
+    """A line comment, or with `date` a comment on that chart bar; a reply joins its thread's place."""
     store.get(sid)  # unknown strategy -> KeyError -> 404
     rows = comments(sid)
     if len(rows) >= MAX_COMMENTS:
@@ -191,10 +193,17 @@ def add_comment(sid: str, file: str, line: int, text: str, author: str = "you", 
     if thread_id and not any(r["thread_id"] == thread_id for r in rows):
         raise KeyError(f"Unknown thread {thread_id}")
     head = next((r for r in rows if r["thread_id"] == thread_id), None)
-    row = {"id": secrets.token_hex(4), "thread_id": thread_id or secrets.token_hex(4), "file": head["file"] if head else file, "line": head["line"] if head else line,
+    row = {"id": secrets.token_hex(4), "thread_id": thread_id or secrets.token_hex(4), "file": head["file"] if head else file, "line": head["line"] if head else line, "date": head.get("date") if head else date,
            "text": text.strip()[:4000], "author": author.strip()[:60] or "you", "version": store.get(sid)["version"], "created": time.time()}
     store.kv_set(f"comments:{sid}", [*rows, row])
     return row
+
+
+def resolve_thread(sid: str, thread_id: str, resolved: bool) -> None:
+    rows = comments(sid)
+    if not any(r["thread_id"] == thread_id for r in rows):
+        raise KeyError(f"Unknown thread {thread_id}")
+    store.kv_set(f"comments:{sid}", [{**r, "resolved": resolved} if r["thread_id"] == thread_id else r for r in rows])
 
 
 def delete_comment(sid: str, comment_id: str) -> None:

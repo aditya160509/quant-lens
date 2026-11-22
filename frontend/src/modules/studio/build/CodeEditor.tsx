@@ -3,7 +3,7 @@
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
 import { useEffect, useRef } from "react";
 import { studio } from "../api";
-import { chordStarts, comboFromEvent } from "./keymap";
+import { chordStarts, comboFromEvent, splitWhen, WHEN, whenExpr } from "./keymap";
 
 type Ed = Parameters<OnMount>[0];
 type TextEdit = { line: number; column: number; end_line: number; end_column: number; text: string };
@@ -125,7 +125,7 @@ function register(monaco: Monaco) {
       const lenses = await studio<{ line: number; title: string; command: string; arguments: Record<string, unknown> }[]>("POST", "/build/codelens", { code: model.getValue(), symbol: live.current?.symbols[0] ?? "SPY", params: values() }).catch(() => []);
       // Percent cells: "# %%" lines get Run cell and Run above lenses (handled by the project's lens callback).
       const cellLines = model.getLinesContent().flatMap((t, i) => (/^\s*# %%/.test(t) ? [i + 1] : []));
-      const cellLenses = cellLines.flatMap((line) => [["Run cell", true], ["Run above and this", false]].map(([title, only], k) => ({ range: new monaco.Range(line, 1, line, 1), id: `cell${line}.${k}`, command: { id: "studio.lens", title: String(title), arguments: ["cell", { line, only }] } })));
+      const cellLenses = cellLines.flatMap((line) => ([["Run cell", { only: true }], ["Run above and this", { only: false }], ["Run this and below", { below: true }]] as const).map(([title, how], k) => ({ range: new monaco.Range(line, 1, line, 1), id: `cell${line}.${k}`, command: { id: "studio.lens", title, arguments: ["cell", { line, ...how }] } })));
       return { lenses: [...cellLenses, ...lenses.map((l, i) => ({ range: new monaco.Range(l.line, 1, l.line, 1), id: `lens${i}`, command: { id: "studio.lens", title: l.title, arguments: [l.command, l.arguments] } }))], dispose: () => undefined };
     },
   });
@@ -178,15 +178,19 @@ function theme(monaco: Monaco, dark: boolean) {
 }
 
 /** Build › Dev: Monaco for one project file, with server completion, signature help, go to definition and line markers. */
-export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], bookmarks = [], logpoints = [], ran = [], inline = [], coverage = null, onGutter, onComment, commentLines = [], readOnly, font = 13, snippets, onSelection, insertRef }: {
+export function CodeEditor({ path, value, onChange, problems, project, onSave, onRun, onCursor, reveal, actions = [], breakpoints = [], bookmarks = [], logpoints = [], ran = [], inline = [], coverage = null, onGutter, onComment, commentLines = [], readOnly, font = 13, snippets, onSelection, insertRef, when = {} }: {
   path: string; value: string; onChange: (v: string) => void; problems: Problem[]; project: Project;
   onSave: () => void; onRun: () => void; onCursor?: (line: number, column: number) => void; reveal?: { line: number; column?: number; n: number } | null;
+  /** Context keys for keybinding when clauses (keymap WHEN). */ when?: Partial<Record<(typeof WHEN)[number], boolean>>;
   actions?: EditorAction[]; breakpoints?: number[]; bookmarks?: number[]; logpoints?: { line: number; message: string }[]; ran?: { line: number; count: number; dates: string[] }[]; inline?: { line: number; text: string }[]; coverage?: { hit: number[]; lines: number[] } | null; onGutter?: (line: number) => void; onComment?: (line: number) => void; commentLines?: number[];
   readOnly?: boolean; font?: number; snippets?: UserSnippet[]; onSelection?: (text: string) => void; insertRef?: { current: ((text: string) => void) | null };
 }) {
   const deco = useRef<{ clear: () => void; set: (d: NonNullable<Parameters<Ed["createDecorationsCollection"]>[0]>) => void } | null>(null);
   const acts = useRef(actions); acts.current = actions;
   const ed = useRef<{ editor: Ed; monaco: Monaco } | null>(null);
+  const ctxKeys = useRef<Record<string, { set: (v: boolean) => void }>>({});
+  const whenSig = JSON.stringify(when);
+  useEffect(() => { for (const k of WHEN) ctxKeys.current[k]?.set(!!when[k]); }, [whenSig]); // eslint-disable-line react-hooks/exhaustive-deps
   const keys = useRef({ onSave, onRun, onCursor, onGutter, onComment }); keys.current = { onSave, onRun, onCursor, onGutter, onComment };
   const context = useRef({ ...project, snippets });
   useEffect(() => {
@@ -251,13 +255,14 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
       run: (x) => { const r = x.getSelection(); if (r) rewrite("/build/format-range", { start_line: r.startLineNumber, end_line: r.endLineNumber }); } });
     editor.addAction({ id: "studio.organiseImports", label: "Organise imports", keybindings: [monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyO], run: () => rewrite("/build/organise-imports") });
     editor.addAction({ id: "studio.migrate", label: "Migrate to the current Studio API", run: () => rewrite("/build/migrate") });
+    for (const k of WHEN) ctxKeys.current[k] = editor.createContextKey(`studio.${k}`, !!when[k]);
     const custom = userKeys();
     const starts = chordStarts(custom); let pending = 0;
     const node = editor.getContainerDomNode(); const hint = document.createElement("div"); hint.className = "km-hint"; hint.hidden = true; node.appendChild(hint);
     editor.onKeyDown((e) => { if (["shift", "control", "alt", "meta"].includes(e.browserEvent.key.toLowerCase())) return; clearTimeout(pending); hint.hidden = true; const cb = comboFromEvent(e.browserEvent);
       if (starts.has(cb)) { hint.textContent = `${cb.replace(/cmd/g, "⌘").replace(/shift/g, "⇧").replace(/alt/g, "⌥").replace(/\+/g, "").toUpperCase()} was pressed, waiting for second key`; hint.hidden = false; pending = window.setTimeout(() => { hint.hidden = true; }, 1500); } });
     editor.onDidDispose(() => { clearTimeout(pending); hint.remove(); });
-    for (const a of acts.current) editor.addAction({ id: a.id, label: a.label, keybindings: custom[a.id] ? parseKeys(monaco, custom[a.id]) ?? a.keys?.(monaco) : a.keys?.(monaco), run: (x) => acts.current.find((y) => y.id === a.id)?.run(x.getPosition()?.lineNumber ?? 1) });
+    for (const a of acts.current) editor.addAction({ id: a.id, label: a.label, keybindings: custom[a.id] ? parseKeys(monaco, splitWhen(custom[a.id]!).keys) ?? a.keys?.(monaco) : a.keys?.(monaco), precondition: custom[a.id] ? whenExpr(splitWhen(custom[a.id]!).when) ?? undefined : undefined, run: (x) => acts.current.find((y) => y.id === a.id)?.run(x.getPosition()?.lineNumber ?? 1) });
   };
 
   const prefs = editorPrefs();

@@ -1014,6 +1014,7 @@ class CommentBody(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     author: str = Field(default="you", max_length=60)
     thread_id: str | None = Field(default=None, max_length=16)
+    date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")  # a comment on this chart bar
 
 
 @router.get("/strategies/{sid}/comments")
@@ -1028,6 +1029,12 @@ def add_comment(sid: str, request: CommentBody) -> dict[str, Any]:
     return _guarded(workspace.add_comment, sid, **request.model_dump())
 
 
+@router.put("/strategies/{sid}/comments/threads/{thread_id}/resolved")
+def resolve_comment_thread(sid: str, thread_id: str, resolved: bool = True) -> dict[str, bool]:
+    _guarded(workspace.resolve_thread, sid, thread_id, resolved)
+    return {"resolved": resolved}
+
+
 @router.delete("/strategies/{sid}/comments/{comment_id}")
 def remove_comment(sid: str, comment_id: str) -> dict[str, bool]:
     _guarded(workspace.delete_comment, sid, comment_id)
@@ -1039,6 +1046,7 @@ class SnippetBody(BaseModel):
     prefix: str = Field(min_length=1, max_length=32)
     body: str = Field(max_length=20_000)
     description: str = Field(default="", max_length=300)
+    tags: list[str] = Field(default_factory=list, max_length=8)
 
 
 @router.get("/snippets")
@@ -1228,13 +1236,13 @@ def put_filters(request: FiltersRequest, x_studio_actor: str | None = Header(Non
 
 
 @router.get("/build/prefs/{name}")
-def get_build_prefs(name: Literal["layouts", "runconfigs", "inspections"]) -> dict[str, Any]:
+def get_build_prefs(name: Literal["layouts", "runconfigs", "inspections", "settings", "profiles"]) -> dict[str, Any]:
     """Build's saved layouts and run configurations, kept on the server so they follow the user across browsers."""
     return {"value": store.kv_get(f"build:prefs:{name}")}
 
 
 @router.put("/build/prefs/{name}")
-def put_build_prefs(name: Literal["layouts", "runconfigs", "inspections"], request: dict[str, Any], x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+def put_build_prefs(name: Literal["layouts", "runconfigs", "inspections", "settings", "profiles"], request: dict[str, Any], x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
     _human_only(x_studio_actor, "Saving Build preferences")
     if len(json.dumps(request)) > 200_000:
         raise HTTPException(413, "Preferences are limited to 200 KB")

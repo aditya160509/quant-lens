@@ -13,6 +13,7 @@ import { TrialChip } from "../RunHeader";
 import { GroupEditor, groupFormula, paletteOrder, toGroup } from "./BlockRows";
 import { REBINDABLE } from "./CodeEditor";
 import { FIXED, conflictWith } from "./keymap";
+import { useServerPref } from "./serverPref";
 import { BranchDialog } from "./Branches";
 import { MenuItem, PopMenu, Segmented, type MenuAt } from "@/workspace/ui";
 import { STUDIO_BASE } from "../base";
@@ -46,6 +47,8 @@ const EXITS: [string, string, boolean][] = [["stop", "Stop", true], ["stop_atr",
 const LIMITS: [string, string, boolean][] = [["max_drawdown", "Max drawdown", true], ["max_drawdown_months", "Max drawdown months", false], ["min_trades", "Min trades", false],
   ["min_years", "Min years", false], ["max_beta", "Max beta", false], ["max_cost_share", "Max cost share", true], ["min_start_pass", "Min start dates passing", true]];
 type Defaults = { ui: "simple" | "dev"; mode: "blocks" | "formula" | "english"; exits: Record<string, number>; sizing: Spec["sizing"]; compact: boolean; plain: boolean; palette: string[]; keys: Record<string, string>; wrap: boolean; rulers: number; ligatures: boolean; minimap: boolean };
+type Profile = { name: string; defaults: Partial<Defaults>; layouts: unknown };
+const writeDefaults = (d: Partial<Defaults>) => { try { localStorage.setItem("studio:build:defaults", JSON.stringify(d)); localStorage.removeItem("studio:build:ui"); } catch { /* blocked */ } void studio("PUT", "/build/prefs/settings", d).catch(() => undefined); };
 const readDefaults = (): Partial<Defaults> => { try { return JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as Partial<Defaults>; } catch { return {}; } };
 const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : "Failed");
 
@@ -63,6 +66,8 @@ function Num({ label, value, pct, onChange, empty }: { label: string; value: num
 
 /** Build: write the rule, see it compile as you type, save immutable versions, run. */
 export default function BuildPage({ features, id }: { features: FeatureSpec[]; id?: string }) {
+  // Settings sync: the server copy (saved from any browser) replaces this browser's on load.
+  useEffect(() => { void studio<{ value: Partial<Defaults> | null }>("GET", "/build/prefs/settings").then((r) => { if (r.value) try { localStorage.setItem("studio:build:defaults", JSON.stringify(r.value)); } catch { /* blocked */ } }, () => undefined); }, []);
   const router = useRouter();
   const templates = useTemplates();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -476,7 +481,7 @@ export default function BuildPage({ features, id }: { features: FeatureSpec[]; i
           <MenuItem icon={<Upload size={13} />} onClick={() => { setMore(null); zipInput.current?.click(); }}>Import project (.zip)</MenuItem>
           <MenuItem icon={<GitMerge size={13} />} disabled={!loaded} onClick={() => { setMore(null); setDialog("branches"); }}>Compare and merge…</MenuItem>
           <MenuItem icon={<BookmarkPlus size={13} />} disabled={blank} onClick={() => { setMore(null); const name = spec.name || "Untitled"; saveMine([{ name, rule: String(spec.entry ?? ""), spec: { ...spec } }, ...mine.filter((t) => t.name !== name)].slice(0, 24)); toast.success(`Saved "${name}" as a template`); }}>Save as my template</MenuItem>
-          <MenuItem icon={<Settings2 size={13} />} onClick={() => { setMore(null); setDialog("customise"); }}>Customise…</MenuItem>
+          <MenuItem icon={<Settings2 size={13} />} onClick={() => { setMore(null); setDialog("customise"); }}>Settings…</MenuItem>
           <div className="hd">Editor font</div>
           <div style={{ padding: "2px 8px 8px" }}><Segmented<number> label="Editor font size" value={font} onChange={(v) => { setFont(v); try { localStorage.setItem("studio:dev:font", String(v)); } catch { /* blocked */ } }} options={[12, 13, 14, 15].map((v) => ({ value: v, label: String(v) }))} /></div>
         </PopMenu>
@@ -669,12 +674,33 @@ function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void })
   const ref = useRef<HTMLDialogElement>(null);
   const [d, setD] = useState<Partial<Defaults>>(readDefaults);
   const [kq, setKq] = useState("");
+  const [q, setQ] = useState("");
+  const [json, setJson] = useState<string | null>(null); // raw JSON view of the settings while editing
+  const body = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.showModal(); }, []);
-  const save = () => { try { localStorage.setItem("studio:build:defaults", JSON.stringify(d)); localStorage.removeItem("studio:build:ui"); } catch { /* blocked */ } toast.success("Defaults saved"); ref.current?.close(); };
+  // Search: hide every setting whose label does not match.
+  useEffect(() => { for (const el of body.current?.querySelectorAll<HTMLElement>(".bd-num, h3") ?? []) el.hidden = !!q && !el.textContent?.toLowerCase().includes(q.toLowerCase()); }, [q, json]);
+  const [profiles, setProfiles] = useState<Profile[]>(() => { try { return JSON.parse(localStorage.getItem("studio:build:profiles") ?? "[]"); } catch { return []; } });
+  useEffect(() => { try { localStorage.setItem("studio:build:profiles", JSON.stringify(profiles)); } catch { /* blocked */ } }, [profiles]);
+  useServerPref("profiles", profiles, setProfiles);
+  const save = () => { writeDefaults(d); toast.success("Settings saved"); ref.current?.close(); };
+  const fromJson = (text: string) => { try { const v: unknown = JSON.parse(text); if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("Settings must be a JSON object"); setD(v as Partial<Defaults>); setJson(null); } catch (e) { toast.error((e as Error).message); } };
+  // A profile bundles these settings (shortcuts included) with the Dev layouts.
+  const layouts = () => { try { return JSON.parse(localStorage.getItem("studio:dev:workspaces") ?? "null"); } catch { return null; } };
+  const saveProfile = () => { const name = window.prompt("Profile name")?.trim(); if (name) setProfiles((p) => [...p.filter((x) => x.name !== name), { name, defaults: d, layouts: layouts() }]); };
+  const applyProfile = (p: Profile) => { setD(p.defaults); try { if (p.layouts) localStorage.setItem("studio:dev:workspaces", JSON.stringify(p.layouts)); } catch { /* blocked */ } writeDefaults(p.defaults); toast.success(`Profile ${p.name}: reload Dev to apply its layouts`); };
   const exits = { ...BLANK.exits, ...d.exits }, sizing = { ...BLANK.sizing, ...d.sizing };
   return (
-    <dialog ref={ref} className="sh-import" aria-label="Customise Build" onClose={onClose} onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
-      <b style={{ fontSize: 15 }}>Customise Build</b>
+    <dialog ref={ref} className="sh-import" aria-label="Settings" onClose={onClose} onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
+      <div className="bd-set-hd"><b style={{ fontSize: 15 }}>Settings</b>
+        <input className="input" type="search" aria-label="Search settings" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select className="input" aria-label="Profile" value="" onChange={(e) => { const v = e.target.value; if (v === "\u0000save") saveProfile(); else if (v.startsWith("\u0000rm:")) setProfiles((p) => p.filter((x) => x.name !== v.slice(4))); else { const p = profiles.find((x) => x.name === v); if (p) applyProfile(p); } }}>
+          <option value="">Profiles</option>{profiles.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+          <option value={"\u0000save"}>Save current as profile…</option>{profiles.map((p) => <option key={`rm${p.name}`} value={`\u0000rm:${p.name}`}>Delete {p.name}</option>)}
+        </select>
+        <button className="btn sm" aria-pressed={json !== null} onClick={() => setJson(json === null ? JSON.stringify(d, null, 2) : null)}>JSON</button></div>
+      {json !== null ? <><textarea className="input bd-json" aria-label="Settings JSON" spellCheck={false} value={json} onChange={(e) => setJson(e.target.value)} /><button className="btn sm" onClick={() => fromJson(json)}>Apply JSON</button></> : null}
+      <div ref={body} hidden={json !== null} className="bd-set-body">
       <div className="bd-nums">
         <label className="bd-num"><span>Open in</span><Segmented<"simple" | "dev"> label="Default interface" value={d.ui ?? "simple"} onChange={(ui) => setD({ ...d, ui })} options={[{ value: "simple", label: "Simple" }, { value: "dev", label: "Dev" }]} /></label>
         <label className="bd-num"><span>Simple starts in</span><select className="input" value={d.mode ?? "formula"} onChange={(e) => setD({ ...d, mode: e.target.value as Defaults["mode"] })}><option value="blocks">Blocks</option><option value="formula">Formula</option><option value="english">Plain English</option></select></label>
@@ -701,6 +727,7 @@ function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void })
         <Num label="Value" value={sizing.value} onChange={(v) => setD({ ...d, sizing: { ...sizing, value: v ?? 0 } })} />
         <Num label="Max positions" value={sizing.max_positions} onChange={(v) => setD({ ...d, sizing: { ...sizing, max_positions: v ?? 0 } })} />
       </div>
+      </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button className="btn" onClick={() => setD({ ...d, exits: spec.exits, sizing: spec.sizing })}>Use this strategy's</button>
         <button className="btn" onClick={() => ref.current?.close()}>Cancel</button>
@@ -710,7 +737,7 @@ function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void })
   );
 }
 
-type TplStats = { status: string; stats: Record<string, { total_return?: number; sharpe?: number | null; max_drawdown?: number; trades?: number; symbols?: number; start?: string; end?: string; error?: string }> };
+type TplStats = { status: string; stats: Record<string, { spark?: number[]; total_return?: number; sharpe?: number | null; max_drawdown?: number; trades?: number; symbols?: number; start?: string; end?: string; error?: string }> };
 let tplStats: Promise<TplStats> | null = null;
 const loadTplStats = (): Promise<TplStats> => {
   tplStats ??= studio<TplStats>("GET", "/templates/stats").then((r) => { if (r.status !== "ready") { tplStats = null; return new Promise<TplStats>((ok) => setTimeout(() => ok(loadTplStats()), 2000)); } return r; }, (e) => { tplStats = null; throw e; });
@@ -722,5 +749,7 @@ function TplStat({ name }: { name: string }) {
   const [r, setR] = useState<TplStats["stats"][string] | null>(null);
   useEffect(() => { void loadTplStats().then((s) => setR(s.stats[name] ?? null), () => undefined); }, [name]);
   if (!r || r.total_return == null) return null;
-  return <i className="bd-tpl-stat" data-neg={r.total_return < 0 || undefined} title={`${r.symbols} names, ${r.start} to ${r.end}`}>{r.total_return >= 0 ? "+" : ""}{(r.total_return * 100).toFixed(0)}% · Sharpe {r.sharpe?.toFixed(2) ?? "—"} · DD {((r.max_drawdown ?? 0) * 100).toFixed(0)}% · {r.trades} trades</i>;
+  const sp = r.spark ?? [], lo = Math.min(...sp), hi = Math.max(...sp);
+  const spark = sp.length > 1 ? <svg className="bd-tpl-spark" viewBox="0 0 60 16" preserveAspectRatio="none" aria-hidden><polyline fill="none" stroke="currentColor" strokeWidth="1.2" points={sp.map((v, i) => `${(i / (sp.length - 1)) * 60},${16 - ((v - lo) / (hi - lo || 1)) * 15}`).join(" ")} /></svg> : null;
+  return <>{spark}<i className="bd-tpl-stat" data-neg={r.total_return < 0 || undefined} title={`${r.symbols} names, ${r.start} to ${r.end}`}>{r.total_return >= 0 ? "+" : ""}{(r.total_return * 100).toFixed(0)}% · Sharpe {r.sharpe?.toFixed(2) ?? "—"} · DD {((r.max_drawdown ?? 0) * 100).toFixed(0)}% · {r.trades} trades</i></>;
 }

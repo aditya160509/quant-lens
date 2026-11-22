@@ -25,7 +25,7 @@ import { DevTearsheet } from "./DevTearsheet";
 import { RunSummary } from "./RunSummary";
 import { tradeSummary } from "./devStats";
 import { NotifyBell } from "./NotifyBell";
-import { Terminal } from "./Terminal";
+import { Terminal, type TerminalHost } from "./Terminal";
 
 type Log = { date: string; symbol: string | null; line: number; text: string; level: string; fields?: Record<string, unknown> | null };
 type Point = { date: string; symbol: string | null; value: number | null };
@@ -70,10 +70,11 @@ type Version = { version: number; created: number; actor: string };
 type Timeline = Version & { name: string; tags: string[]; locked: boolean; sharpe: number | null; total_return: number | null; spark: number[] };
 type Snapshot = { at: number; files: Record<string, string> };
 type Shelved = { name: string; at: number; files: Record<string, string> };
-type Snippet = { id: string; name: string; prefix: string; body: string; description: string };
+type Snippet = { id: string; name: string; prefix: string; body: string; description: string; tags?: string[] };
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 export type Logpoint = { file: string; line: number; message: string };
 type Tab = "tester" | "problems" | "output" | "plots" | "trades" | "debug" | "console" | "cells" | "preview";
+const hasCellsFor = (src?: string) => /^\s*# %%/m.test(src ?? "");
 type CellPlot = { name: string; x: string[]; series: Record<string, (number | null)[]> };
 type CellRow = { index: number | null; line?: number; stdout: string; value: unknown; error: string | null; error_line: number | null; seconds: number; plots?: CellPlot[] };
 /** plot() output from a cell or the Console's Python session. */
@@ -308,6 +309,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [timeline, setTimeline] = useState<Timeline[]>([]);
   const [snaps, setSnaps] = useState<Snapshot[]>([]);
   const [snippets, setSnippets] = useState<Snippet[]>([]);
+  const [snipTag, setSnipTag] = useState<string | null>(null);
   const selection = useRef("");
   const insertAt = useRef<((text: string) => void) | null>(null);
   const qcRef = useRef<HTMLDialogElement>(null);
@@ -385,13 +387,19 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const dropScratch = (f: string) => { setScratch(({ [f]: _, ...rest }) => rest); close(f); };
   const [cellOut, setCellOut] = useState<{ file: string; titles: string[]; rows: CellRow[] } | "running" | null>(null);
   const hasCells = /^\s*# %%/m.test(files[active] ?? "");
-  const runCell = (line: number, only = true) => {
+  // below: run every cell and show this one and the ones after it (cells above still run first; no live kernel).
+  const runCell = (line: number, only = true, below = false, quiet = false) => {
     const starts = [1, ...(files[active] ?? "").split("\n").flatMap((t, i) => (i && /^\s*# %%/.test(t) ? [i + 1] : []))];
-    const upto = starts.filter((s0) => s0 <= line).length - 1;
-    setPanelOpen(true); setTab("cells"); setCellOut("running");
-    void studio<{ cells: { title: string }[]; outputs: CellRow[] }>("POST", "/build/cells", { code: spec.code, files: spec.files ?? {}, file: active, upto, only, symbols: [symbol] })
-      .then((r) => setCellOut({ file: active, titles: r.cells.map((c) => c.title), rows: r.outputs }), (e: Error) => { setCellOut(null); toast.error(e.message); });
+    const at = starts.filter((s0) => s0 <= line).length - 1, upto = below ? starts.length - 1 : at;
+    if (!quiet) { setPanelOpen(true); setTab("cells"); }
+    setCellOut("running");
+    void studio<{ cells: { title: string }[]; outputs: CellRow[] }>("POST", "/build/cells", { code: spec.code, files: spec.files ?? {}, file: active, upto, only: below ? false : only, symbols: [symbol] })
+      .then((r) => setCellOut({ file: active, titles: r.cells.map((c) => c.title), rows: below ? r.outputs.filter((o) => (o.index ?? 0) >= at) : r.outputs }), (e: Error) => { setCellOut(null); toast.error(e.message); });
   };
+  // Reactive cells: with Auto-run on, an edit re-runs every cell after a pause (all cells re-run; no dependency tracking).
+  const [autoCells, setAutoCells] = useState(false);
+  const cellSrc = hasCellsFor(files[active]) ? files[active] : null;
+  useEffect(() => { if (!autoCells || !cellSrc) return; const t = setTimeout(() => runCell(1, false, true, true), 900); return () => clearTimeout(t); }, [autoCells, cellSrc]); // eslint-disable-line react-hooks/exhaustive-deps
   // Back/forward history: positions left behind by jumps and file switches, newest last, capped at 50.
   const nav = useRef({ s: [] as { file: string; line: number }[], i: -1, jumping: false });
   const mark = (file: string, line: number) => { const n = nav.current, l = n.s[n.i]; if (l?.file === file && l.line === line) return; n.s = [...n.s.slice(0, n.i + 1), { file, line }].slice(-50); n.i = n.s.length - 1; };
@@ -459,7 +467,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     const body = selection.current; if (!body.trim()) return toast.error("Select some code first");
     const name = window.prompt("Snippet name")?.trim(); if (!name) return;
     const prefix = window.prompt("Trigger prefix", name.toLowerCase().replace(/\W+/g, "_").slice(0, 20))?.trim(); if (!prefix) return;
-    void studio<Snippet>("POST", "/snippets", { name, prefix, body }).then((sn) => { setSnippets((x) => [...x, sn]); toast.success(`Saved ${name}`); }, (e: Error) => toast.error(e.message));
+    const tags = (window.prompt("Tags (comma separated)", "") ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+    void studio<Snippet>("POST", "/snippets", { name, prefix, body, tags }).then((sn) => { setSnippets((x) => [...x, sn]); toast.success(`Saved ${name}`); }, (e: Error) => toast.error(e.message));
   };
   const actionsRef = useRef<EditorAction[]>([]);
   const gotoRef = useRef<(f: string | null, l: number, c?: number) => void>(() => undefined);
@@ -530,16 +539,20 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     if (!dbg || !watches.length) { setWatchRows([]); return; }
     void studio<typeof watchRows>("POST", "/build/watch", { spec, symbol: dbg.symbol, date: dbg.date, expressions: watches }).then(setWatchRows, () => undefined);
   }, [dbg, watches]); // eslint-disable-line react-hooks/exhaustive-deps
-  type Cmt = { id: string; thread_id: string; file: string; line: number; text: string; author: string; created: number };
+  type Cmt = { id: string; thread_id: string; file: string; line: number; text: string; author: string; created: number; date?: string | null; resolved?: boolean };
   const [cmts, setCmts] = useState<Cmt[]>([]);
-  const [thread, setThread] = useState<{ file: string; line: number } | null>(null);
+  const [thread, setThread] = useState<{ file: string; line: number; date?: string } | null>(null);
+  const inThread = (c: Cmt, t: { file: string; line: number; date?: string }) => (t.date ? c.date === t.date : !c.date && c.file === t.file && c.line === t.line);
+  // Shift+click a chart bar: a comment thread on that bar's date.
+  const openBarThread = useCallback((date: string) => { if (!strategyId) return toast.error("Save the strategy to comment"); setThread({ file: "main.py", line: 1, date }); setCmtText(""); }, [strategyId]);
+  const resolveThread = (tid: string, resolved: boolean) => void studio("PUT", `/strategies/${strategyId}/comments/threads/${tid}/resolved?resolved=${resolved}`).then(loadCmts, (e: Error) => toast.error(e.message));
   const [cmtText, setCmtText] = useState("");
   const loadCmts = () => { if (strategyId) void studio<Cmt[]>("GET", `/strategies/${strategyId}/comments`).then(setCmts, () => undefined); };
   useEffect(loadCmts, [strategyId]); // eslint-disable-line react-hooks/exhaustive-deps
   const openThread = (line: number) => { if (!strategyId) return toast.error("Save the strategy to comment"); setThread({ file: active, line }); setCmtText(""); setTimeout(() => document.querySelector<HTMLInputElement>(".dv-thread input")?.focus(), 80); };
   const postCmt = () => {
     if (!thread || !cmtText.trim()) return;
-    const first = cmts.find((c) => c.file === thread.file && c.line === thread.line);
+    const first = cmts.find((c) => inThread(c, thread));
     void studio("POST", `/strategies/${strategyId}/comments`, { ...thread, text: cmtText.trim(), ...(first ? { thread_id: first.thread_id } : {}) }).then(() => { setCmtText(""); loadCmts(); }, (e: Error) => toast.error(e.message));
   };
   const dropCmt = (id: string) => void studio("DELETE", `/strategies/${strategyId}/comments/${id}`).then(loadCmts, (e: Error) => toast.error(e.message));
@@ -674,7 +687,25 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     onQuickRun(level, rc.settings);
   };
   const rerunLast = () => { const l = lastRun.current; if (!l || !canRun || starting || running) return; openView("results"); onQuickRun(l.level, l.settings); };
-  const saveAndRun = () => { onSave(); if (rc.runOnSave && !readOnly) runCode("quick"); };
+  const [savedTick, setSavedTick] = useState(0); // terminal tasks added with --on-save run on each tick
+  const [termSplit, setTermSplit] = useState(false);
+  const [termCmd, setTermCmd] = useState({ cmd: "", n: 0 }); // "Run selection in Console" sends code here
+  // Blame: walk saved versions newest to oldest while this line's text is still in the file; the last one is where it came from.
+  const blame = (line: number) => {
+    const text = (files[active] ?? "").split("\n")[line - 1]?.trim();
+    if (!strategyId || !text) return toast(strategyId ? "Empty line" : "Save a version first");
+    const vs = [...versions].sort((a, b) => b.version - a.version).slice(0, 30);
+    void (async () => {
+      let from: Version | null = null;
+      for (const v of vs) {
+        const r = await studio<{ files: Record<string, string> }>("GET", `/strategies/${strategyId}/files?version=${v.version}`).catch(() => null);
+        if (!r || !(r.files[active] ?? "").split("\n").some((x) => x.trim() === text)) break;
+        from = v;
+      }
+      toast(from ? `Line ${line} unchanged since v${from.version} · ${new Date(from.created * 1000).toLocaleDateString()} · ${from.actor}` : `Line ${line} is new in the draft`, { duration: 6000 });
+    })();
+  };
+  const saveAndRun = () => { onSave(); setSavedTick((n) => n + 1); if (rc.runOnSave && !readOnly) runCode("quick"); };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "\\" || e.key === "|")) { e.preventDefault(); setLayoutsOpen(true); return; }
@@ -721,6 +752,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.tests", label: "Test: run all", run: () => { revealRail("tests"); runTests(); } },
     { id: "studio.testcursor", label: "Test: run at cursor", run: (line) => runTestAtCursor(line) },
     ...recentStrats.map((r) => ({ id: `studio.recent.${r.id}`, label: `Open recent: ${r.name}`, run: () => window.location.assign(`/studio/build/${r.id}?ui=dev`) })),
+    { id: "studio.blame", label: "Blame: when did this line change", run: (line) => blame(line) },
+    { id: "studio.runsel", label: "Run selection in Console", keys: (m) => [m.KeyMod.Shift | m.KeyMod.Alt | m.KeyCode.KeyE], run: () => { const t = selection.current.trim(); if (!t) return toast("Select some Python first"); setPanelOpen(true); setTab("console"); setTermCmd((c) => ({ cmd: t, n: c.n + 1 })); } },
     { id: "studio.coverage", label: "Test: toggle coverage gutter", run: () => { onCoverage?.(!coverage); onPreview(); } },
     { id: "studio.cancel", label: "Run: cancel", run: () => onCancel?.() },
     { id: "studio.chart", label: "View: chart with replay", run: () => setOpenP("chart", true) },
@@ -764,6 +797,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   ));
   const todos = useMemo(() => Object.entries(files).filter(([f]) => !(f in scratch)).flatMap(([f, text]) => text.split("\n").flatMap((line, i) => /#.*\b(TODO|FIXME|XXX)\b/.test(line) ? [{ file: f, line: i + 1, text: line.trim().replace(/^#\s*/, "") }] : [])), [files, scratch]);
   const docRows = (docs ?? []).filter((d) => !docQ || `${d.scope}.${d.name} ${d.documentation ?? ""}`.toLowerCase().includes(docQ.toLowerCase()));
+  const termHost: TerminalHost = { inject: termCmd, files, code: spec.code, extra: spec.files ?? {}, active, symbol, storeKey: strategyId ?? "draft", spec, paused: dbg ? { symbol: dbg.symbol ?? symbol, date: dbg.date } : null, preview: onPreview, goto, saved: savedTick, atDate: (d: string) => { setTab("debug"); debug({ date: d }); },
+                  run: (level, settings) => { if (!canRun || starting || running) throw new Error("A run is already going or runs are off here"); const s = { ...rc.settings, ...settings }; openView("results"); lastRun.current = { level, settings: s }; onQuickRun(level, s); },
+                  plots: (p) => <CellPlots plots={p as CellPlot[]} />,
+                  render: (v) => (tableOf(v) ? <VarGrid t={tableOf(v)!} open /> : typeof v === "object" ? <KV rows={v as Record<string, unknown>} /> : <pre>{show(v)}</pre>) };
   const TABS: [Tab, string, number | null][] = [["tester", "Tester", null], ["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["debug", "Debug", null], ["console", "Console", null], ...(hasCells || cellOut ? [["cells", "Cells", null] as [Tab, string, null]] : []), ["preview", "Preview", null]];
   const toggles = <span className="dv-toggles">
     <button className="icon-btn" aria-pressed={opt.caseSensitive} title="Match case" onClick={() => setOpt((o) => ({ ...o, caseSensitive: !o.caseSensitive }))}><CaseSensitive size={14} /></button>
@@ -790,7 +827,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                     {!quick && !r && !starting && !profile ? <p className="dv-empty">Run a backtest to see results.</p> : null}
                     {m ? <>
                       <RunSummary quick={quick!} />
-                      <span className="dv-dbar">{quick?.job_id ? <Link className="btn sm" href={`/studio/report/${quick.job_id}`}>Open report</Link> : null}{quick?.level === "full" ? <Link className="btn sm" href="/studio/backtest">Open in Backtest</Link> : null}</span>
+                      <span className="dv-dbar">{quick?.job_id ? <><Link className="btn sm" href={`/studio/report/${quick.job_id}`}>Open report</Link><button className="btn sm ghost" title="Open the report in its own window" onClick={() => window.open(`/studio/report/${quick.job_id}`, "atlas-report", "popup,width=1180,height=820")}>Pop out</button></> : null}{quick?.level === "full" ? <Link className="btn sm" href="/studio/backtest">Open in Backtest</Link> : null}</span>
                     </> : !quick && r ? (
                       <div className="kpis">
                         <div className="kpi"><span>v{version} return</span><b>{pct(r.total_return)}</b></div>
@@ -965,9 +1002,11 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               {(pyTemplates.data ?? []).map((t) => <button key={t.name} className="dv-tpl" onClick={() => { edit({ ...(t.spec as Partial<Spec>) }); setOpen(["main.py"]); setActive("main.py"); }}><b>{t.name}</b><span>{t.rule}</span></button>)}
               <button className="btn sm ghost" onClick={() => { setQc(null); qcRef.current?.showModal(); }}><Upload size={13} />QuantConnect algorithm</button>
               <h4 className="dv-sub">My snippets</h4>
-              {snippets.map((sn) => (
+              {(() => { const all = [...new Set(snippets.flatMap((sn) => sn.tags ?? []))].sort(); return all.length ? <div className="dv-chips">{all.map((t) => <button key={t} className="pill" aria-pressed={snipTag === t} onClick={() => setSnipTag((x) => (x === t ? null : t))}>{t}</button>)}</div> : null; })()}
+              {snippets.filter((sn) => !snipTag || sn.tags?.includes(snipTag)).map((sn) => (
                 <div key={sn.id} className="dv-file">
                   <button className="dv-item" title={sn.body} onClick={() => insertAt.current?.(sn.body)}><code>{sn.prefix}</code>{sn.name}</button>
+                  <button className="icon-btn" title="Try in Console" aria-label={`Try ${sn.name} in Console`} onClick={() => { setPanelOpen(true); setTab("console"); setTermCmd((c) => ({ cmd: sn.body, n: c.n + 1 })); }}><Play size={12} /></button>
                   <button className="icon-btn" aria-label={`Delete ${sn.name}`} onClick={() => void studio("DELETE", `/snippets/${sn.id}`).then(() => setSnippets((x) => x.filter((y) => y.id !== sn.id)))}><Trash2 size={12} /></button>
                 </div>
               ))}
@@ -1020,11 +1059,11 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false }, fontSize: 13, lineHeight: 20, scrollBeyondLastLine: false, automaticLayout: true, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace" }} />
           ) : (
             <CodeEditor path={active} value={source} onChange={(t) => setFile(active, t)} problems={problems} onSave={saveAndRun} onRun={runCode} reveal={reveal} onCursor={(line, column) => setCursor({ line, column })}
-              font={font} actions={actions} breakpoints={bps[active] ?? []} bookmarks={[...(bms[active] ?? []), ...Object.values(nbm).filter((b) => b.file === active).map((b) => b.line)]} logpoints={logpoints.filter((p) => p.file === active)} coverage={coverage ? prev?.coverage?.[active] ?? null : null} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} inline={inlineValues} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
+              font={font} when={{ debugPaused: !!dbg, panelOpen, cellsFile: hasCells, testFile: /(^|\/)test_[^/]*\.py$/.test(active) }} actions={actions} breakpoints={bps[active] ?? []} bookmarks={[...(bms[active] ?? []), ...Object.values(nbm).filter((b) => b.file === active).map((b) => b.line)]} logpoints={logpoints.filter((p) => p.file === active)} coverage={coverage ? prev?.coverage?.[active] ?? null : null} ran={(prev?.order_lines ?? []).filter((o) => o.file === active)} inline={inlineValues} onGutter={toggleBp} onComment={openThread} commentLines={cmts.filter((c) => c.file === active && !c.date && !c.resolved).map((c) => c.line)} readOnly={readOnly} snippets={snippets}
               onSelection={(t) => { selection.current = t; }} insertRef={insertAt}
               project={{ file: active, files, params: Object.keys(spec.params), symbols: [symbol], goto, replace: replaceFiles, paramSpecs: spec.params, problems,
                 refactor, addParam: (name, value) => edit({ params: { ...spec.params, [name]: { value, min: +(value / 2).toPrecision(3), max: +(value * 2).toPrecision(3), step: Math.max(1, Math.round(value / 10)) } } }),
-                lens: (command, args) => { if (command === "cell") runCell(Number(args.line), args.only !== false); else if (command === "debug") debug({ date: String(args.date ?? "") }); else if (command === "inspect_condition") { setTab("output"); toast(`${String(args.expression)} on ${String(args.symbol)}`); } else if (command === "run_symbol") { openPreview(); onPreview(); } else runCode("full"); } }} />
+                lens: (command, args) => { if (command === "cell") runCell(Number(args.line), args.only !== false, args.below === true); else if (command === "debug") debug({ date: String(args.date ?? "") }); else if (command === "inspect_condition") { setTab("output"); toast(`${String(args.expression)} on ${String(args.symbol)}`); } else if (command === "run_symbol") { openPreview(); onPreview(); } else runCode("full"); } }} />
           )}
           </Panel>
           <Separator className={`dv-gutter ${splitDown ? "dv-gutter-vertical" : ""}`} disabled={!split || Boolean(diff)} />
@@ -1041,9 +1080,11 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
           </div>
         </div>
         {thread ? (
-          <div className="dv-thread" role="dialog" aria-label={`Comments on ${thread.file}:${thread.line}`}>
-            <header><b>{thread.file}:{thread.line}</b><button className="icon-btn" aria-label="Close thread" onClick={() => setThread(null)}><X size={12} /></button></header>
-            {cmts.filter((c) => c.file === thread.file && c.line === thread.line).map((c) => (
+          <div className="dv-thread" role="dialog" aria-label={thread.date ? `Comments on bar ${thread.date}` : `Comments on ${thread.file}:${thread.line}`}>
+            <header><b>{thread.date ? `Bar ${thread.date}` : `${thread.file}:${thread.line}`}</b>
+              {(() => { const head = cmts.find((c) => inThread(c, thread)); return head ? <button className="btn sm ghost" onClick={() => resolveThread(head.thread_id, !head.resolved)}>{head.resolved ? "Reopen" : "Resolve"}</button> : null; })()}
+              <button className="icon-btn" aria-label="Close thread" onClick={() => setThread(null)}><X size={12} /></button></header>
+            {cmts.filter((c) => inThread(c, thread)).map((c) => (
               <p key={c.id}><i>{c.author}</i>{c.text}<button className="icon-btn" aria-label="Delete comment" onClick={() => dropCmt(c.id)}><Trash2 size={12} /></button></p>
             ))}
             <form onSubmit={(e) => { e.preventDefault(); postCmt(); }}><input className="input" autoFocus aria-label="Reply" placeholder="Comment" value={cmtText} onChange={(e) => setCmtText(e.target.value)} /><button className="btn sm primary" disabled={!cmtText.trim()}>Post</button></form>
@@ -1129,6 +1170,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                 const d = String(r.entry_date ?? "").slice(0, 10), o = d ? prev.order_lines?.find((x) => x.dates.some((y) => y.slice(0, 10) === d)) : undefined;
                 return o ? <button className="icon-btn" title={`Go to ${o.file}:${o.line}`} aria-label="Go to the line that placed this order" onClick={() => goto(o.file, o.line)}><FileCode2 size={12} /></button> : null;
               } }} /> : <p className="dv-empty">No trades in the preview</p>) : null}
+              {tab === "cells" ? <label className="dv-strict"><input type="checkbox" checked={autoCells} onChange={(e) => setAutoCells(e.target.checked)} />Auto-run on edit</label> : null}
               {tab === "cells" ? (cellOut === "running" ? <p className="dv-empty">Running…</p> : !cellOut ? <p className="dv-empty">Ctrl+Enter runs the cell at the cursor</p> : (
                 <div className="dv-cells">{cellOut.rows.map((r, i) => (
                   <section key={i}>
@@ -1140,12 +1182,11 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                   </section>
                 ))}</div>
               )) : null}
-              {tab === "console" ? (
-                <Terminal host={{ files, code: spec.code, extra: spec.files ?? {}, active, symbol, storeKey: strategyId ?? "draft", spec, paused: dbg ? { symbol: dbg.symbol ?? symbol, date: dbg.date } : null, preview: onPreview, goto,
-                  run: (level, settings) => { if (!canRun || starting || running) throw new Error("A run is already going or runs are off here"); const s = { ...rc.settings, ...settings }; openView("results"); lastRun.current = { level, settings: s }; onQuickRun(level, s); },
-                  plots: (p) => <CellPlots plots={p as CellPlot[]} />,
-                  render: (v) => (tableOf(v) ? <VarGrid t={tableOf(v)!} open /> : typeof v === "object" ? <KV rows={v as Record<string, unknown>} /> : <pre>{show(v)}</pre>) }} />
-              ) : null}
+              {/* Kept mounted while the panel is open so --on-save tasks run from any tab. */}
+              <div hidden={tab !== "console"} className={termSplit ? "dv-term-split" : "dv-term-host"}>
+                <Terminal host={{ ...termHost, split: { on: termSplit, toggle: () => setTermSplit((x) => !x) } }} />
+                {termSplit ? <Terminal host={{ ...termHost, storeKey: `${termHost.storeKey}:2`, saved: 0 }} /> : null}
+              </div>
               {tab === "debug" ? (
                 <div className="dv-debug">
                   <div className="dv-dbar">
@@ -1171,6 +1212,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
                       <div><h4>{dbg.symbol} · {dbg.date} · bar {dbg.bar_index}{dbg.breakpoint ? ` · hit ${dbg.breakpoint.hit_count}` : ""}{dbg.breakpoint?.watch ? ` · ${dbg.breakpoint.watch.name}: ${JSON.stringify(dbg.breakpoint.watch.before)} → ${JSON.stringify(dbg.breakpoint.watch.after)}` : ""}{dbg.equity_change != null ? ` · ${pct(dbg.equity_change)}` : ""}</h4>
                         <KV rows={dbg.context} /></div>
                       <div><h4>{dbg.breakpoint ? "Locals and self" : "self"}</h4>
+                        {Object.entries({ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }).filter(([, v]) => Array.isArray(v) && v.length > 0 && typeof v[0] === "object" && v[0] !== null && "entry_date" in v[0]).map(([k]) => <button key={k} className="btn sm ghost" onClick={() => setTab("trades")}>{k}: open in Trades</button>)}
                         {Object.keys({ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }).length ? <KV rows={{ ...dbg.state, ...(dbg.breakpoint?.locals ?? {}) }} /> : <p className="dv-empty">No attributes</p>}</div>
                       <div><h4>Watch</h4>
                         <form className="dv-dbar" onSubmit={(e) => { e.preventDefault(); if (!watchIn.trim()) return; const w = [...watches, watchIn.trim()]; setWatches(w); setWatchIn(""); try { localStorage.setItem("studio:watch", JSON.stringify(w)); } catch { /* private window */ } }}>
@@ -1191,7 +1233,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const rightPanel = (
       <Panel id="right" minSize={0}>
       <aside className="dv-side" inert={!chartOpen}>
-        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart onMark={markToCode} symbol={symbol} drawKey={`${strategyId ?? "new"}:${symbol}`} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} /></div> : null}
+        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart onMark={markToCode} onNote={openBarThread} notes={[...new Set(cmts.filter((c) => c.date && !c.resolved).map((c) => c.date!))]} symbol={symbol} drawKey={`${strategyId ?? "new"}:${symbol}`} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} /></div> : null}
       </aside>
       </Panel>
   );

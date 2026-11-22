@@ -15,15 +15,29 @@ export function comboFromEvent(e: { metaKey: boolean; ctrlKey: boolean; shiftKey
   return normCombo([e.metaKey || e.ctrlKey ? "cmd" : "", e.shiftKey ? "shift" : "", e.altKey ? "alt" : "", k].filter(Boolean).join("+"));
 }
 
+/** Contexts a binding can require: "F5 when !debugPaused", "Cmd+E when cellsFile && !testFile". */
+export const WHEN = ["debugPaused", "panelOpen", "cellsFile", "testFile"] as const;
+/** "Cmd+K when debugPaused" -> { keys: "Cmd+K", when: "debugPaused" }. */
+export const splitWhen = (text: string): { keys: string; when: string } => { const [keys = "", when = ""] = text.split(/\s+when\s+/i); return { keys: keys.trim(), when: when.trim() }; };
+/** A when clause as a Monaco context expression ("studio.x && !studio.y"), or null when it names an unknown context. */
+export function whenExpr(when: string): string | null {
+  if (!when) return null;
+  const terms = when.split(/\s*&&\s*/);
+  const ok = terms.every((t) => (WHEN as readonly string[]).includes(t.replace(/^!/, "")));
+  return ok ? terms.map((t) => (t.startsWith("!") ? `!studio.${t.slice(1)}` : `studio.${t}`)).join(" && ") : null;
+}
+
 export const FIXED: [string, string, string][] = [["studio.save", "Save", "Cmd+S"], ["studio.run", "Run", "Cmd+Enter"], ["studio.formatSelection", "Format selection", "Cmd+K Cmd+F"], ["studio.organiseImports", "Organise imports", "Shift+Alt+O"]];
 
 /** Id of the action that already uses `text` (same chord, or one is a prefix of the other), else null. */
 export function conflictWith(id: string, text: string, user: Record<string, string>, fixed = FIXED): string | null {
-  const a = normChord(text); if (!a.length) return null;
+  const mine = splitWhen(text), a = normChord(mine.keys); if (!a.length) return null;
   const all: [string, string][] = [...fixed.map(([i, , k]) => [i, k] as [string, string]), ...Object.entries(user).filter(([i]) => !fixed.some((f) => f[0] === i))];
   for (const [other, keys] of all) {
     if (other === id) continue;
-    const b = normChord(keys); const n = Math.min(a.length, b.length);
+    const theirs = splitWhen(keys);
+    if (mine.when && theirs.when && mine.when !== theirs.when) continue; // different contexts never fire together
+    const b = normChord(theirs.keys); const n = Math.min(a.length, b.length);
     if (n && a.slice(0, n).join(" ") === b.slice(0, n).join(" ")) return other;
   }
   return null;
@@ -31,4 +45,4 @@ export function conflictWith(id: string, text: string, user: Record<string, stri
 
 /** First steps of all two-step chords, to know when to show the waiting hint. */
 export const chordStarts = (user: Record<string, string>, fixed = FIXED): Set<string> =>
-  new Set([...fixed.map((f) => f[2]), ...Object.values(user)].map(normChord).filter((c) => c.length > 1).map((c) => c[0]));
+  new Set([...fixed.map((f) => f[2]), ...Object.values(user).map((k) => splitWhen(k).keys)].map(normChord).filter((c) => c.length > 1).map((c) => c[0]));
