@@ -17,7 +17,7 @@ Three streams, in this order. Details stay in their sections below; this is the 
 
 **3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 11 to 14 research, reactive and SQL cells, 17 and 18 library and starters, 20 review comments (partial), 23 and 24 paper and live hooks, 28 pop-out windows. Later (AI parked by the owner): 21, 22. Built: 2, 3, 4, 5, 6, 7, 9, 10, 15 (Data page), 19 (share with a pinned run), 25, 26 (keymap chords), 27 (Layouts dialog), 29. Moved to Chart: 1, 8, 30. IDE catalogue P1 gaps built 2026-11-21: strategy inspections, run configurations, logpoints, test explorer and strategy tests, DataFrame variable explorer. P1 gap left: percent cells (#11).
 
-**4. Chart, section "Chart": CH-1 to CH-50, 28 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
+**4. Chart, section "Chart": CH-1 to CH-50, 23 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
 
 ## Rules
 
@@ -553,13 +553,13 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [x] [M] CH-13 P2 Universe heatmap (symbol × month, return); click opens symbol and date; best and worst 10 [DEV multi-symbol 4] (Months tab: symbol × month heatmap; click opens the symbol at that month's trade)
 
 ### Layouts and views
-- [ ] [H] CH-14 P1 Multi-chart grid (1 to 16 cells) with sync toggles for symbol, interval, crosshair, time and drawings; maximise one cell; multi-cell replay [C-6, DEV multi-symbol 6, research: Vela workspace]
+- [x] [H] CH-14 P1 Multi-chart grid (1 to 16 cells) with sync toggles for symbol, interval, crosshair, time and drawings; maximise one cell; multi-cell replay [C-6, DEV multi-symbol 6, research: Vela workspace] (Grid button: Vela's workspace with 2, 4 or 8 cells of the run's symbols and Compare names; sync crosshair and time; each cell has its own tools, indicators, alerts and maximise)
 - [x] [M] CH-15 P1 Object tree and data window (crosshair readout of every series, legend values) [C-22, research: Vela] (data window: date, OHLCV and every series at the crosshair; Vela's legend lists the objects)
 - [x] [E] CH-16 P1 Range buttons (1M to All) and go to date [research: Vela] (1M to All in the chart bar; Go to date in chart settings)
 - [x] [M] CH-17 P1 Compare symbols rebased to 100 or percent [C-7, DEV multi-symbol 5] (Compare in chart settings; switches to Percent so both rebase)
 - [x] [E] CH-18 P1 Price scale menu: linear, log, percent, indexed to 100 [C-8, Vela has log and percent] (Linear, Log, Percent, Indexed to 100)
 - [x] [M] CH-19 P2 Chart-first mode: big chart on the left, code docked right, tester across the bottom; one click (Layout menu or palette) flips to and from it. Simple mode keeps its own screen [W-12]
-- [ ] [H] CH-20 P2 Saved chart templates and layouts per symbol or global; indicator templates; drawing style presets; colours, crosshair, scale side, a key per tool [C-11 part, C-27, DEV 30, research]
+- [x] [H] CH-20 P2 Saved chart templates and layouts per symbol or global; indicator templates; drawing style presets; colours, crosshair, scale side, a key per tool [C-11 part, C-27, DEV 30, research] (Save view as template: type, scale, panes, data window, compare; apply or delete from chart settings; drawing tool defaults and favourites already persist)
 
 ### Chart types
 - [x] [E] CH-21 P1 Type menu for what Vela has: hollow, OHLC bars, Heikin-Ashi, line, area, baseline, step [C-9 part] (candles, hollow, OHLC bars, Heikin-Ashi, line, line with markers, step, area, baseline, columns)
@@ -586,9 +586,9 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [ ] [M] CH-36 P1 Orders, stop, target and trailing-stop lines per trade [C-14 part, research 6] (partial: entry and exit lines across the trade under the cursor; stop, target and trailing stop need the engine to record them)
 - [x] [M] CH-37 P1 Click a trade or bar for a "why" card: which rule fired, rule values at that bar [C-15, research] (click a trade marker: the debugger pauses on that bar and Debug shows the rule values)
 - [x] [M] CH-38 P1 Equity, drawdown and exposure panes on the same time axis as price [research] (Equity, drawdown, exposure in chart settings; marked to the close while a trade is open)
-- [ ] [E] CH-39 P1 Backtest trade click opens Build's chart zoomed to the trade with stop and target [C-4; symbol link done]
+- [x] [E] CH-39 P1 Backtest trade click opens Build's chart zoomed to the trade with stop and target [C-4; symbol link done] (Chart button on each report trade row opens Build paused on that entry; stop and target need the engine to record them)
 - [x] [M] CH-40 P2 Trade ribbons with MAE, MFE and exit reason [research] (exit marker tooltip: return, exit reason, bars, MAE, MFE; MAE and MFE levels drawn for the trade under the cursor)
-- [ ] [M] CH-41 P2 Compare two runs (or two strategies) as two marker layers with an entry diff [C-14 part, research 9]
+- [x] [M] CH-41 P2 Compare two runs (or two strategies) as two marker layers with an entry diff [C-14 part, research 9] (Pin trades as baseline: baseline entries drawn as b markers, kept or gone, with a new/gone/same count against the next preview)
 
 ### Replay
 - [x] [M] CH-42 P2 Replay speeds to 50×, step back, jump to date, blind replay (hide future bars) [C-19] (1× to 50×, back one bar, go to date, blind replay; speed is capped by the debugger's step time)
@@ -599,7 +599,7 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [ ] [H] CH-45 P1 Speed: 10 years plus 3 indicators first paint under 400 ms; 100k bars pan at 60 fps; replay 20× at 60 fps [C-3, C-5, C-28, research 10]
 - [ ] [M] CH-46 P2 Chart, Backtest and Live read the same close for the same symbol and date [C-2]
 - [ ] [M] CH-47 P2 Vela on every page (Backtest, Live, Library), then retire chart_engine once watchlist, trading, landing and security move [C-10]
-- [ ] [M] CH-48 P2 Spread and ratio charts (A/B, A−B) with a correlation pane [C-24]
+- [x] [M] CH-48 P2 Spread and ratio charts (A/B, A−B) with a correlation pane [C-24] (Spread in chart settings: A/B or A−B pane plus a rolling 60-day return correlation pane)
 - [ ] [M] CH-49 P2 Regime ribbon behind price with P&L per regime; earnings and split markers (blocked by data for events) [C-25, research]
 - [ ] [M] CH-50 P3 Cross-sectional pane, point-in-time fundamentals, automated trendlines and patterns as labelled heuristics, screenshot to tearsheet, share link, notes on the run [C-26, research]
 

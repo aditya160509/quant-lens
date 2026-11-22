@@ -1,9 +1,10 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, List, Maximize2, Minimize2, Pause, Play, Settings2, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutGrid, List, Maximize2, Minimize2, Pause, Play, Settings2, SlidersHorizontal } from "lucide-react";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Vela as VelaChart } from "@luxalgo/vela";
 import { studio } from "../api";
+import { ChartGrid } from "./ChartGrid";
 import type { DevPreview, Draw } from "./DevIDE";
 
 type Bar = { time: string; open: number; high: number; low: number; close: number; volume: number };
@@ -110,10 +111,18 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   const setV = (p: Partial<View>) => setView((v) => { const n = { ...v, ...p }; try { localStorage.setItem(VIEW_KEY, JSON.stringify(n)); } catch { /* private mode */ } return n; });
   const [compare, setCompare] = useState<string[]>([]);
   const [cmpBars, setCmpBars] = useState<Record<string, Bar[]>>({});
+  // Spread or ratio against one other symbol, with its rolling 60-day return correlation.
+  const [spread, setSpread] = useState<{ sym: string; mode: "ratio" | "diff" } | null>(null);
+  const [grid, setGrid] = useState(false);
+  // A run's trades pinned as a baseline layer: the next preview's entries diff against it.
+  const [baseline, setBaseline] = useState<{ sym: string; dates: string[] } | null>(null);
+  const TPL_KEY = "studio:chart:templates";
+  const [templates, setTemplates] = useState<Record<string, View & { compare: string[] }>>(() => { try { return JSON.parse(localStorage.getItem(TPL_KEY) ?? "{}"); } catch { return {}; } });
+  const saveTemplates = (t: typeof templates) => { setTemplates(t); try { localStorage.setItem(TPL_KEY, JSON.stringify(t)); } catch { /* private mode */ } };
   useEffect(() => {
-    const want = compare.filter((c) => !cmpBars[c]); if (!want.length) return;
+    const want = [...compare, ...(spread ? [spread.sym] : [])].filter((c) => !cmpBars[c]); if (!want.length) return;
     void studio<{ bars: Record<string, Bar[]> }>("GET", `/bars?symbols=${encodeURIComponent(want.join(","))}&tf=1d`).then((d) => setCmpBars((x) => ({ ...x, ...d.bars })), () => undefined);
-  }, [compare]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [compare, spread?.sym]); // eslint-disable-line react-hooks/exhaustive-deps
   const [drawer, setDrawer] = useState<null | "symbols" | "months">(null);
   // Symbol × month heatmap: summed trade return by exit month.
   const months = useMemo(() => {
@@ -149,6 +158,8 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   }, [bars.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
   const rows = useMemo(() => (prev?.trades ?? []).filter((t) => !t.symbol || t.symbol === sym), [prev?.trades, sym]);
   // Equity, drawdown and exposure of this symbol's trades on the price time axis (marked to the close while open).
+  const gridSyms = useMemo(() => [...new Set([sym, ...compare, ...perSym.map(([k]) => k)])].slice(0, 8), [sym, compare, perSym]);
+  const gridTheme = useMemo(() => { const el = box.current ?? undefined; return { background: cv("--island", el), accent: cv("--s1", el), up: cv("--up", el), down: cv("--down", el) }; }, [grid, light]); // eslint-disable-line react-hooks/exhaustive-deps
   const eqPlots = useMemo(() => {
     if (!view.eq || !rows.length) return null;
     const eq: { date: string; symbol: null; value: number }[] = [], dd: typeof eq = [], ex: typeof eq = [];
@@ -213,12 +224,24 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     if (!chart) return;
     // Compare symbols ride on the price pane as plain series; the Percent or Indexed scale rebases them with price.
     const cmp = Object.fromEntries(compare.filter((c) => cmpBars[c]).map((c) => [c, cmpBars[c]!.map((b) => ({ date: b.time, symbol: null, value: b.close }))]));
-    const src = { ...plots, ...cmp, ...eqPlots };
+    const sp: Record<string, { date: string; symbol: null; value: number | null }[]> = {};
+    if (spread && cmpBars[spread.sym]) {
+      const b = new Map(cmpBars[spread.sym]!.map((x) => [x.time, x.close])), pts = bars.filter((x) => b.has(x.time));
+      sp[`${sym}${spread.mode === "ratio" ? "/" : "−"}${spread.sym}`] = pts.map((x) => ({ date: x.time, symbol: null, value: spread.mode === "ratio" ? x.close / b.get(x.time)! : x.close - b.get(x.time)! }));
+      const ra = pts.map((x, i) => (i ? x.close / pts[i - 1]!.close - 1 : 0)), rb = pts.map((x, i) => (i ? b.get(x.time)! / b.get(pts[i - 1]!.time)! - 1 : 0));
+      sp[`Corr 60d ${spread.sym}`] = pts.map((x, i) => {
+        if (i < 60) return { date: x.time, symbol: null, value: null };
+        const a = ra.slice(i - 59, i + 1), c = rb.slice(i - 59, i + 1), ma = a.reduce((p, v) => p + v, 0) / 60, mc = c.reduce((p, v) => p + v, 0) / 60;
+        let cov = 0, va = 0, vc = 0; for (let k = 0; k < 60; k++) { cov += (a[k]! - ma) * (c[k]! - mc); va += (a[k]! - ma) ** 2; vc += (c[k]! - mc) ** 2; }
+        return { date: x.time, symbol: null, value: va && vc ? cov / Math.sqrt(va * vc) : null };
+      });
+    }
+    const src = { ...plots, ...cmp, ...eqPlots, ...sp };
     const names = Object.keys(src);
     names.forEach((n, i) => {
       feed.plots[n] = (src[n] ?? []).filter((p) => !p.symbol || p.symbol === sym).map((p) => ({ time: ms(p.date), value: p.value }));
       feed.colors[n] = cv(`--s${(i % 6) + 1}`, box.current ?? undefined);
-      const wantOwn = n in cmp ? false : own[n] ?? prev?.plot_charts?.[n] !== "main";
+      const wantOwn = n in sp ? true : n in cmp ? false : own[n] ?? prev?.plot_charts?.[n] !== "main";
       feed.own[n] = wantOwn;
       let e = handles.current.get(n);
       if (e && e.own !== wantOwn) { e.h.remove(); e = undefined; }
@@ -229,7 +252,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     feed.draw = prev?.draw ?? null;
     feed.bg = (prev?.draw?.bg ?? []).map((b) => ({ from: ms(b.date), to: ms(b.date) + 864e5, color: b.color }));
     push();
-  }, [chart, plots, hidden, own, sym, prev?.plot_charts, prev?.draw, compare, cmpBars, eqPlots]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chart, plots, hidden, own, sym, prev?.plot_charts, prev?.draw, compare, cmpBars, eqPlots, spread]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trades as markers on the lane, held spans and the paused bar as shading, the view follows the paused bar.
   useEffect(() => {
@@ -237,13 +260,15 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     const up = cv("--up", box.current ?? undefined), down = cv("--down", box.current ?? undefined), trades = (prev?.trades ?? []).filter((t) => !t.symbol || t.symbol === sym);
     chart.marks.defineGroup({ id: "trades", label: "Trades" });
     chart.marks.defineGroup({ id: "notes", label: "Comments" });
+    chart.marks.defineGroup({ id: "baseline", label: "Baseline entries" });
+    const now = new Set(trades.map((t) => String(t.entry_date))), base = baseline?.sym === sym ? baseline.dates : [];
     chart.marks.set([...trades.flatMap((t, i) => {
       const long = String(t.side).toLowerCase() !== "short", win = Number(t.pnl) >= 0, ret = `${(Number(t.return) * 100).toFixed(1)}%`;
       return [
         { id: `in${i}`, time: ms(String(t.entry_date)), group: "trades", title: `${long ? "Long" : "Short"} entry`, tooltip: `${long ? "Long" : "Short"} ${String(t.entry_date)}`, glyph: { shape: "diamond" as const, color: long ? up : down, letter: long ? "B" : "S" } },
         { id: `out${i}`, time: ms(String(t.exit_date)), group: "trades", title: `Exit ${ret}`, tooltip: `Exit ${ret} · ${String(t.exit_reason ?? "")} · ${Number(t.bars) || 0} bars · MAE ${(Number(t.mae) * 100).toFixed(1)}% · MFE ${(Number(t.mfe) * 100).toFixed(1)}%`, glyph: { shape: "square" as const, color: win ? up : down, letter: "X" } },
       ];
-    }), ...notes.map((d) => ({ id: `note${d}`, time: ms(d), group: "notes", title: "Comment", tooltip: `Comment on ${d} (Shift+click the bar to open)`, glyph: { shape: "circle" as const, color: cv("--accent", box.current ?? undefined), letter: "C" } }))]);
+    }), ...base.map((d) => ({ id: `base${d}`, time: ms(d), group: "baseline", title: now.has(d) ? "Baseline entry (kept)" : "Baseline entry (gone now)", tooltip: `Baseline entry ${d}${now.has(d) ? "" : " · not in this run"}`, glyph: { shape: "circle" as const, color: now.has(d) ? "#8a8f98" : down, letter: "b" } })), ...notes.map((d) => ({ id: `note${d}`, time: ms(d), group: "notes", title: "Comment", tooltip: `Comment on ${d} (Shift+click the bar to open)`, glyph: { shape: "circle" as const, color: cv("--accent", box.current ?? undefined), letter: "C" } }))]);
     feed.spans = [
       ...trades.map((t) => ({ from: ms(String(t.entry_date)), to: ms(String(t.exit_date)), color: tint(Number(t.pnl) >= 0 ? up : down, "1f") })),
       ...(pausedAt ? [{ from: ms(pausedAt), to: ms(pausedAt) + 864e5, color: tint(cv("--s1", box.current ?? undefined), "55") }] : []),
@@ -259,7 +284,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     ] : [];
     push();
     if (pausedAt) { const r = chart.getVisibleRange(), t = ms(pausedAt); if (r && (t < r.from || t > r.to)) { const w = r.to - r.from; chart.setVisibleRange({ from: t - w / 2, to: t + w / 2 }); } }
-  }, [chart, prev?.trades, sym, pausedAt, notes]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chart, prev?.trades, sym, pausedAt, notes, baseline]); // eslint-disable-line react-hooks/exhaustive-deps
   // Click a trade marker: the debugger pauses on that bar, so the rule values that fired show in Debug.
   useEffect(() => chart?.on("mark:click", (e) => { if (/^(in|out)\d+$/.test(e.id)) onGo(new Date(e.time).toISOString().slice(0, 10)); }), [chart, onGo]);
   // Synced cursor date: the bar under the crosshair is broadcast; the editor lights the lines that placed orders that day.
@@ -344,6 +369,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
         </select> : <b>{sym}</b>}
         <select className="input sm dv-rng-sel" aria-label="Range" value="" onChange={(e) => e.target.value && chart?.setVisibleRangePreset(e.target.value as (typeof RANGES)[number])}><option value="">Range</option>{RANGES.map((r) => <option key={r} value={r}>{r === "ALL" ? "All" : r}</option>)}</select>
         <span className="seg dv-rng" role="group" aria-label="Range">{RANGES.map((r) => <button key={r} type="button" onClick={() => chart?.setVisibleRangePreset(r)}>{r === "ALL" ? "All" : r}</button>)}</span>
+        <button type="button" className="icon-btn" aria-label="Grid" aria-pressed={grid} disabled={gridSyms.length < 2} title={gridSyms.length < 2 ? "Grid: add Compare symbols or run on several" : "Grid of symbols"} onClick={() => setGrid((g) => !g)}><LayoutGrid size={13} /></button>
         {rows.length || perSym.length ? <button type="button" className="icon-btn" aria-label="Symbols and months" aria-pressed={!!drawer} title="Symbols and months" onClick={() => setDrawer((d) => (d ? null : "symbols"))}><List size={13} /></button> : null}
         <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
           <summary className="btn sm ghost" aria-label="Chart settings"><Settings2 size={13} /></summary>
@@ -352,6 +378,14 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
             <label>Scale<select className="input sm" value={view.scale} onChange={(e) => setV({ scale: e.target.value })}>{SCALES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
             <label>Go to<input className="input sm" type="date" min={bars[0]?.time} max={bars.at(-1)?.time} onChange={(e) => e.target.value && onGo(e.target.value)} /></label>
             <label>Compare<input className="input sm" placeholder="QQQ, IWM" defaultValue={compare.join(", ")} onKeyDown={(e) => { if (e.key !== "Enter") return; const next = e.currentTarget.value.split(",").map((x) => x.trim().toUpperCase()).filter((x) => x && x !== sym); setCompare(next); if (next.length && view.scale === "price") setV({ scale: "percent" }); }} /></label>
+            <label>Spread<span className="dv-spread"><input className="input sm" placeholder="QQQ" defaultValue={spread?.sym ?? ""} onKeyDown={(e) => { if (e.key !== "Enter") return; const v = e.currentTarget.value.trim().toUpperCase(); setSpread(v && v !== sym ? { sym: v, mode: spread?.mode ?? "ratio" } : null); }} />
+              <select className="input sm" aria-label="Spread type" value={spread?.mode ?? "ratio"} onChange={(e) => spread && setSpread({ ...spread, mode: e.target.value as "ratio" | "diff" })}><option value="ratio">A/B</option><option value="diff">A−B</option></select></span></label>
+            <label>Template<select className="input sm" value="" onChange={(e) => { const t = templates[e.target.value]; if (!t) return; const { compare: c, ...v } = t; setV(v); setCompare(c); }}><option value="">Apply…</option>{Object.keys(templates).map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+            <button type="button" onClick={() => { const n = window.prompt("Template name", "")?.trim(); if (n) saveTemplates({ ...templates, [n]: { ...view, compare } }); }}>Save view as template</button>
+            {Object.keys(templates).length ? <button type="button" onClick={() => { const n = window.prompt(`Delete which template? ${Object.keys(templates).join(", ")}`, "")?.trim(); if (n && templates[n]) { const { [n]: _, ...rest } = templates; saveTemplates(rest); } }}>Delete a template</button> : null}
+            <button type="button" onClick={() => setBaseline(baseline ? null : { sym, dates: rows.map((t) => String(t.entry_date)) })}>{baseline ? `Clear baseline (${baseline.dates.length} entries)` : "Pin trades as baseline"}</button>
+            {baseline?.sym === sym ? <p className="dv-base-diff">{(() => { const now = new Set(rows.map((t) => String(t.entry_date))), was = new Set(baseline.dates); const added = [...now].filter((d) => !was.has(d)).length, gone = [...was].filter((d) => !now.has(d)).length; return `vs baseline: ${added} new entries, ${gone} gone, ${now.size - added} same`; })()}</p> : null}
+            <hr />
             <label className="dv-check"><input type="checkbox" checked={view.dw} onChange={(e) => setV({ dw: e.target.checked })} />Data window</label>
             <label className="dv-check"><input type="checkbox" checked={!!view.eq} onChange={(e) => setV({ eq: e.target.checked })} />Equity, drawdown, exposure</label>
             <label className="dv-check"><input type="checkbox" checked={view.blind} onChange={(e) => setV({ blind: e.target.checked })} />Blind replay</label>
@@ -363,6 +397,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
         {onMax ? <button type="button" className="icon-btn" aria-label={max ? "Restore chart" : "Maximise chart"} title={max ? "Restore (Esc)" : "Maximise chart (⌘⇧↵)"} onClick={onMax}>{max ? <Minimize2 size={13} /> : <Maximize2 size={13} />}</button> : null}
       </div>
       <div className="dv-chartbox" ref={box} />
+      {grid && gridSyms.length > 1 ? <div className="dv-grid-over"><ChartGrid symbols={gridSyms} theme={gridTheme} /></div> : null}
       {drawer ? <div className="dv-symdrawer" role="dialog" aria-label="Symbols">
         <header><span className="seg" role="group">{(["symbols", "months"] as const).map((d) => <button key={d} type="button" aria-pressed={drawer === d} onClick={() => setDrawer(d)}>{d === "symbols" ? "Symbols" : "Months"}</button>)}</span>
           <button type="button" className="icon-btn" aria-label="Close" onClick={() => setDrawer(null)}>×</button></header>

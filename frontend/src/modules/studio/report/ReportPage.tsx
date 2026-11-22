@@ -54,7 +54,7 @@ export default function ReportPage({ id }: { features: FeatureSpec[]; id?: strin
           {tab === "Summary" ? <RunSummary quick={q} /> : null}
           {tab === "Tearsheet" ? <DevTearsheet quick={q} /> : null}
           {tab === "Robustness" ? <DevRobust quick={q} /> : null}
-          {tab === "Trades" ? (q.result?.tables?.trades?.length ? <DataTable rows={q.result.tables.trades} opts={{ viewKey: "studio:report:trades" }} /> : <p className="dv-empty">No trades</p>) : null}
+          {tab === "Trades" ? (q.result?.tables?.trades?.length ? <DataTable rows={q.result.tables.trades} opts={{ viewKey: "studio:report:trades", rowActions: meta?.strategy?.id ? (r: Record<string, unknown>) => <Link className="btn sm ghost" title="Open Build's chart paused on this entry" href={`/studio/build/${meta.strategy!.id}?ui=dev&symbol=${encodeURIComponent(String(r.symbol ?? ""))}&debug=${String(r.entry_date ?? "")}`}>Chart</Link> : undefined }} /> : <p className="dv-empty">No trades</p>) : null}
           {tab === "Certificate" ? (
             <div className="rp-cert">
               <p>Re-run this job on the server from its stored settings and compare the result hash.</p>
