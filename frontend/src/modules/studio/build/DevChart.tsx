@@ -76,10 +76,37 @@ const ms = (d: string) => Date.parse(d);
 
 export const SPEEDS = [1, 2, 5, 10, 20, 50];
 const RANGES = ["1M", "3M", "6M", "1Y", "5Y", "YTD", "ALL"] as const;
-const STYLES = [["candles", "Candles"], ["hollow", "Hollow candles"], ["bars", "OHLC bars"], ["heikinashi", "Heikin-Ashi"], ["line", "Line"], ["linemarkers", "Line with markers"], ["stepline", "Step line"], ["area", "Area"], ["baseline", "Baseline"], ["columns", "Columns"]] as const;
+const STYLES = [["candles", "Candles"], ["hollow", "Hollow candles"], ["bars", "OHLC bars"], ["heikinashi", "Heikin-Ashi"], ["line", "Line"], ["linemarkers", "Line with markers"], ["stepline", "Step line"], ["area", "Area"], ["baseline", "Baseline"], ["columns", "Columns"], ["renko", "Renko (ATR 14 box)"], ["linebreak", "Line break (3)"]] as const;
 const SCALES = [["price", "Linear"], ["log", "Log"], ["percent", "Percent"], ["indexed", "Indexed to 100"]] as const;
 type View = { style: string; scale: string; dw: boolean; blind: boolean; eq?: boolean };
 const VIEW_KEY = "studio:chart:view";
+type Ohlcv = { time: number; open: number; high: number; low: number; close: number; volume: number };
+/** Price-only bar types: each new brick or line is stamped with the bar that completed it (1 ms apart when one bar makes several). */
+export function transformBars(src: Ohlcv[], style: string): Ohlcv[] {
+  if (style !== "renko" && style !== "linebreak" || src.length < 2) return src;
+  const out: Ohlcv[] = [];
+  if (style === "renko") {
+    // Box = average true range over the last 14 bars of the window, fixed for the whole chart.
+    const tr = src.slice(-15).map((b, i, a) => (i ? Math.max(b.high - b.low, Math.abs(b.high - a[i - 1]!.close), Math.abs(b.low - a[i - 1]!.close)) : 0)).slice(1);
+    const box = tr.reduce((p, v) => p + v, 0) / tr.length || src[0]!.close * 0.01;
+    let last = src[0]!.close;
+    for (const b of src) {
+      let k = 0;
+      while (b.close >= last + box) { out.push({ time: b.time + k++, open: last, high: last + box, low: last, close: last + box, volume: k === 1 ? b.volume : 0 }); last += box; }
+      while (b.close <= last - box) { out.push({ time: b.time + k++, open: last, high: last, low: last - box, close: last - box, volume: k === 1 ? b.volume : 0 }); last -= box; }
+    }
+    return out;
+  }
+  // Three-line break: a new line only when the close breaks the high or low of the last three lines.
+  out.push({ ...src[0]!, open: src[0]!.open, high: Math.max(src[0]!.open, src[0]!.close), low: Math.min(src[0]!.open, src[0]!.close) });
+  for (const b of src.slice(1)) {
+    const prev = out.slice(-3), top = Math.max(...prev.map((x) => x.high)), bot = Math.min(...prev.map((x) => x.low)), l = out.at(-1)!;
+    const up = l.close >= l.open;
+    if (b.close > (up ? l.close : top)) out.push({ time: b.time, open: up ? l.close : l.open, high: b.close, low: up ? l.close : l.open, close: b.close, volume: b.volume });
+    else if (b.close < (up ? bot : l.close)) out.push({ time: b.time, open: up ? l.open : l.close, high: up ? l.open : l.close, low: b.close, close: b.close, volume: b.volume });
+  }
+  return out;
+}
 const readView = (): View => { try { return { style: "candles", scale: "price", dw: false, blind: false, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") }; } catch { return { style: "candles", scale: "price", dw: false, blind: false }; } };
 const download = (name: string, href: string) => { const a = document.createElement("a"); a.href = href; a.download = name; a.click(); };
 
@@ -192,14 +219,15 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   }, [hop, perSym, sym]);
   const valueAt = (name: string) => { const pts = prev?.plots?.[name]?.filter((p) => !p.symbol || p.symbol === sym) ?? []; const hit = pausedAt ? pts.findLast((p) => p.date <= pausedAt) : pts.at(-1); return hit?.value == null ? "—" : +hit.value.toFixed(4); };
   const plots = prev?.plots;
-  const barsKey = `${sym}:${bars.length}:${bars[0]?.time}:${bars.at(-1)?.time}`;
+  const derived = view.style === "renko" || view.style === "linebreak" ? view.style : "";
+  const barsKey = `${sym}:${bars.length}:${bars[0]?.time}:${bars.at(-1)?.time}:${derived}`;
   useEffect(() => {
     const el = box.current; if (!el || !bars.length) return;
     let dead = false, c: VelaChart | null = null;
     void (booted ??= boot()).then(({ Vela, createTheme }) => {
       if (dead) return;
       const up = cv("--up", el), down = cv("--down", el);
-      c = new Vela(el, { data: bars.map((b) => ({ time: ms(b.time), open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume })), timeframe: "1d", theme: createTheme({ colors: { background: cv("--island", el), accent: cv("--s1", el) } }), upColor: up, downColor: down, height: el.clientHeight, drawings: { groups: TOOL_GROUPS } });
+      c = new Vela(el, { data: transformBars(bars.map((b) => ({ time: ms(b.time), open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume })), derived), timeframe: "1d", theme: createTheme({ colors: { background: cv("--island", el), accent: cv("--s1", el) } }), upColor: up, downColor: down, height: el.clientHeight, drawings: { groups: TOOL_GROUPS } });
       void c.ready().then(() => { if (dead) return; c!.renderer.set("attribution", false); handles.current.clear(); c!.addNativeIndicator("atlas.spans"); setChart(c); });
     });
     let frame = 0;
@@ -331,7 +359,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   useEffect(() => {
     if (!chart) return;
     const hollow = view.style === "hollow";
-    chart.renderer.set({ priceStyle: hollow ? "candles" : view.style, logScale: view.scale === "log", scaleMode: view.scale === "log" ? "price" : view.scale });
+    chart.renderer.set({ priceStyle: hollow || derived ? "candles" : view.style, logScale: view.scale === "log", scaleMode: view.scale === "log" ? "price" : view.scale });
     if (hollow) chart.renderer.set("upColor", cv("--island", box.current ?? undefined)); // shortcut: hollow = up candles filled with the background; Vela has no hollow style
     else chart.renderer.set("upColor", cv("--up", box.current ?? undefined));
   }, [chart, view.style, view.scale]);

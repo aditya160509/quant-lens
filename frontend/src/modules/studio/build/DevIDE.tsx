@@ -39,6 +39,7 @@ export type DevPreview = {
   marks?: { date: string; symbol: string; label: string }[] | null; tables?: Record<string, { date: string; symbol: string | null; cells: Record<string, unknown> }[]> | null;
   warmup?: { bars: number; first_eligible_date: string | null } | null; settings_overrides?: Record<string, unknown> | null;
   order_lines?: { file: string; line: number; count: number; dates: string[] }[] | null; locals?: Record<string, unknown> | null;
+  repaint?: { cuts: number; changed: number; dates: string[] } | null;
   invariants?: { count: number; rows: { date: string; symbol: string | null; file: string; line: number; text: string }[] } | null;
   coverage?: Record<string, { hit: number[]; lines: number[] }> | null;
 };
@@ -568,7 +569,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
 
   const runtime: Problem[] = prev?.status === "error" ? [{ severity: "error", file: prev.problem?.file ?? "main.py", line: prev.problem?.line ?? prev.line ?? 1, column: prev.problem?.column ?? 1, end_column: 200, code: prev.problem?.exception_type ?? "runtime", message: prev.reason ?? "Run failed" }] : [];
   const broken: Problem[] = (prev?.invariants?.rows ?? []).filter((r) => r.file === active).slice(0, 50).map((r) => ({ severity: "error", file: r.file, line: r.line, column: 1, end_column: 200, code: "invariant", message: `${r.text} (${r.symbol ?? ""} ${r.date})` }));
-  const problems = [...lint, ...types, ...compileProblems.filter((p) => p.file === active), ...runtime, ...broken];
+  // Look-ahead guard: the preview re-runs on cut-off history; signals that change mean the code reads future bars.
+  const lookahead: Problem[] = prev?.repaint?.changed && active === "main.py" ? [{ severity: "warning", file: active, line: 1, column: 1, end_column: 200, code: "look-ahead",
+    message: `Signals changed at ${prev.repaint.changed} of ${prev.repaint.cuts} history cuts (${prev.repaint.dates.slice(0, 5).join(", ")}): the code reads bars that were not known yet` }] : [];
+  const problems = [...lint, ...types, ...compileProblems.filter((p) => p.file === active), ...runtime, ...broken, ...lookahead];
   const errors = problems.filter((p) => p.severity === "error").length, warnings = problems.length - errors;
   // The editor keeps the space; the panel opens on its own only when an error appears.
   const hadErrors = useRef(0);
