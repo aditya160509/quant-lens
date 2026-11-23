@@ -40,6 +40,7 @@ export type DevPreview = {
   warmup?: { bars: number; first_eligible_date: string | null } | null; settings_overrides?: Record<string, unknown> | null;
   order_lines?: { file: string; line: number; count: number; dates: string[] }[] | null; locals?: Record<string, unknown> | null;
   repaint?: { cuts: number; changed: number; dates: string[] } | null;
+  symbol_stats?: { symbol: string; trades: number; pnl: number; wins: number; max_dd: number; win_rate: number }[] | null;
   invariants?: { count: number; rows: { date: string; symbol: string | null; file: string; line: number; text: string }[] } | null;
   coverage?: Record<string, { hit: number[]; lines: number[] }> | null;
 };

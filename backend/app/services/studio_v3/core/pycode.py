@@ -888,6 +888,8 @@ def typecheck(files: dict[str, str], file: str = "main.py") -> list[dict]:
             continue
         if "import" in m["code"] and "studio." in m["msg"]:  # studio.testing and studio.research are injected by the sandbox
             continue
+        if m["msg"].startswith("Object of type `Self") and m["msg"].endswith("has no attribute `use`"):  # self.use is bound by the runner
+            continue
         col = int(m["col"]) - 1
         problems.append({"severity": m["sev"], "file": file, "line": int(m["line"]), "column": col, "end_column": col + 1, "code": f"ty-{m['code']}", "message": m["msg"]})
     return problems

@@ -132,8 +132,10 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
       r.n++; r.pnl += Number(t.pnl) || 0; if (Number(t.pnl) > 0) r.wins++;
       r.peak = Math.max(r.peak, r.pnl); r.dd = Math.min(r.dd, r.pnl - r.peak); r.curve.push(r.pnl); m.set(k, r);
     }
+    // Counts come from the server when it sends them (exact for 4,000-name runs); the sparkline curve comes from the trades.
+    for (const r of prev?.symbol_stats ?? []) { const x = m.get(r.symbol) ?? { n: 0, pnl: 0, wins: 0, dd: 0, peak: 0, curve: [0] }; m.set(r.symbol, { ...x, n: r.trades, pnl: r.pnl, wins: r.wins, dd: r.max_dd }); }
     return [...m].sort((a, b) => b[1].n - a[1].n);
-  }, [prev?.trades, symbol]);
+  }, [prev?.trades, prev?.symbol_stats, symbol]);
   const [view, setView] = useState<View>(readView);
   const setV = (p: Partial<View>) => setView((v) => { const n = { ...v, ...p }; try { localStorage.setItem(VIEW_KEY, JSON.stringify(n)); } catch { /* private mode */ } return n; });
   const [compare, setCompare] = useState<string[]>([]);

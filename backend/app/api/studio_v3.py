@@ -647,6 +647,7 @@ class PreviewResult(BaseModel):
     problem: StrategyProblem | None = None
     symbol: str | None = None
     symbols: list[str] | None = None
+    symbol_stats: list[dict[str, Any]] | None = None
     bars_by_symbol: dict[str, list[dict[str, Any]]] | None = None
     window: dict[str, str] | None = None
     bars: list[dict[str, Any]]

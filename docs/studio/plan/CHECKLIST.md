@@ -17,7 +17,7 @@ Three streams, in this order. Details stay in their sections below; this is the 
 
 **3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 11 to 14 research, reactive and SQL cells, 17 and 18 library and starters, 20 review comments (partial), 23 and 24 paper and live hooks, 28 pop-out windows. Later (AI parked by the owner): 21, 22. Built: 2, 3, 4, 5, 6, 7, 9, 10, 15 (Data page), 19 (share with a pinned run), 25, 26 (keymap chords), 27 (Layouts dialog), 29. Moved to Chart: 1, 8, 30. IDE catalogue P1 gaps built 2026-11-21: strategy inspections, run configurations, logpoints, test explorer and strategy tests, DataFrame variable explorer. P1 gap left: percent cells (#11).
 
-**4. Chart, section "Chart": CH-1 to CH-50, 22 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
+**4. Chart, section "Chart": CH-1 to CH-50, 18 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
 
 ## Rules
 
@@ -549,7 +549,7 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [x] [M] CH-9 P1 Per-symbol strip in the footer (trades, P&L, win rate); "All symbols" trade list that switches the chart [DEV multi-symbol 2] (Symbols drawer in the chart bar lists every symbol; click switches the chart)
 - [x] [M] CH-10 P1 Universe list beside the chart: P&L, trades, win rate, max DD, sparkline; click loads the symbol [DEV multi-symbol 3, research] (Symbols drawer: P&L, trades, win rate, max DD, P&L sparkline)
 - [x] [E] CH-11 P1 Debugger pause switches the chart to the paused symbol [DEV multi-symbol 7] (chart follows the debugger's paused symbol)
-- [ ] [M] CH-12 P1 Per-symbol stats computed on the server for 4,000-name runs; bars fetched only for the selected symbol [DEV multi-symbol 8]
+- [x] [M] CH-12 P1 Per-symbol stats computed on the server for 4,000-name runs; bars fetched only for the selected symbol [DEV multi-symbol 8] (preview returns symbol_stats for every traded name (trades, P&L, wins, max DD, win rate); bars ship for all names up to 50, else the first plus the 50 busiest; the Symbols drawer reads the server rows)
 - [x] [M] CH-13 P2 Universe heatmap (symbol × month, return); click opens symbol and date; best and worst 10 [DEV multi-symbol 4] (Months tab: symbol × month heatmap; click opens the symbol at that month's trade)
 
 ### Layouts and views
@@ -571,9 +571,9 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [ ] [M] CH-25 P2 Alerts from the chart: right-click a price, indicator cross, drawing touch; uses the alert engine [C-18]
 
 ### Indicators and code (one language for chart and backtest)
-- [ ] [H] CH-26 P1 `class Indicator` plus `self.use(...)` in Strategy: one Python file draws on the chart and feeds the backtest, same numbers [research 3, C-13]
-- [ ] [M] CH-27 P1 Inputs, Plot and Fill declared in Python generate the settings form and styles [research 4]
-- [ ] [M] CH-28 P1 Multi-timeframe access in ctx and Indicator (`request.security` equivalent) [research 5]
+- [x] [H] CH-26 P1 `class Indicator` plus `self.use(...)` in Strategy: one Python file draws on the chart and feeds the backtest, same numbers [research 3, C-13] (any class with update(ctx) used via self.use(Cls, **inputs) steps before on_bar and plots as `Name(n).key`; the type checker accepts self.use)
+- [x] [M] CH-27 P1 Inputs, Plot and Fill declared in Python generate the settings form and styles [research 4] (class `inputs` join Build's Inputs as `Class_name`; `plots`/`fills` style the chart)
+- [x] [M] CH-28 P1 Multi-timeframe access in ctx and Indicator (`request.security` equivalent) [research 5] (ctx.timeframe('W'|'M'|'Q'|'Y') returns completed higher-timeframe bars only; indicators get the same ctx)
 - [ ] [M] CH-29 P1 Parameter scrubber / indicator lab: drag an input, the indicator and signals redraw with no backtest [C-12, research]
 - [x] [M] CH-30 P1 Look-ahead guard: run indicators on truncated history, report differences in Problems [research 8] (the preview's history-cut replay; changed signals show as a look-ahead warning in Problems)
 - [ ] [M] CH-31 P2 Indicator dialog: Inputs, Style, Visibility; apply to a pane; indicator on indicator; favourites [C-11 part]

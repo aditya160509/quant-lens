@@ -1079,6 +1079,9 @@ def test_preview_trades_several_symbols_from_the_universe_attribute(studio):
     explicit = studio.post("/api/studio-v3/preview", json={"symbol": "SPY", "symbols": ["AAA", "BBB"], "spec": {"code": spread}}).json()
     assert explicit["symbols"] == ["AAA", "BBB"]
     assert {t["symbol"] for t in result["trades"]} <= {"AAA", "BBB", "CCC"}
+    stats = {r["symbol"]: r for r in result["symbol_stats"]}  # CH-12: per-symbol rows from the server
+    assert sum(r["trades"] for r in stats.values()) == len(result["trades"])
+    assert all(abs(r["pnl"] - sum(t["pnl"] for t in result["trades"] if t["symbol"] == s)) < 1e-6 and r["max_dd"] <= 0 for s, r in stats.items())
 
 
 def test_nested_any_all_groups_generate_the_formula_and_trade_like_it(studio):

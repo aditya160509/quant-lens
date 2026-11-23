@@ -575,8 +575,20 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] 
             output["repaint"] = repaint_check(spec, prep, lo, full=sig)
     start = str(p.dates[lo].date())
     trades = [t for t in trades_table(r, p) if t["entry_date"] >= start]
+    # Per-symbol stats on the server (CH-12): a 4,000-name preview sends one row per name, and closes only for the first
+    # name and the 50 busiest; the chart fetches bars for the symbol it shows.
+    stats: dict[str, dict] = {}
+    for t in sorted(trades, key=lambda x: x["exit_date"]):
+        row = stats.setdefault(t["symbol"], {"symbol": t["symbol"], "trades": 0, "pnl": 0.0, "wins": 0, "max_dd": 0.0, "_peak": 0.0})
+        row["trades"] += 1
+        row["pnl"] += float(t["pnl"])
+        row["wins"] += int(t["pnl"] > 0)
+        row["_peak"] = max(row["_peak"], row["pnl"])
+        row["max_dd"] = min(row["max_dd"], row["pnl"] - row["_peak"])
+    symbol_stats = sorted(({k: v for k, v in r.items() if k != "_peak"} | {"win_rate": r["wins"] / r["trades"]} for r in stats.values()), key=lambda r: -r["trades"])
+    keep = set(p.symbols) if len(p.symbols) <= 50 else {p.symbols[0], *(r["symbol"] for r in symbol_stats[:50])}
     by_symbol = {name: [{"date": str(d.date()), "close": float(c)} for d, c in zip(p.dates[lo:], p.close[lo:, i], strict=True) if np.isfinite(c)]
-                 for i, name in enumerate(p.symbols)}
+                 for i, name in enumerate(p.symbols) if name in keep}
     bars = by_symbol[p.symbols[0]]
     if len(p.symbols) > 1:  # a book: the return is the account's, not a product of trade returns
         total = float(r.equity[-1] / r.equity[lo - run_from if spec.code.strip() else lo] - 1)
@@ -591,7 +603,7 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] 
         output.pop("profile", None)
     if output.get("order_lines") is True:  # formula strategies place no Python orders
         output["order_lines"] = []
-    return {"status": "ok", "symbol": p.symbols[0], "symbols": list(p.symbols), "bars_by_symbol": by_symbol, "window": {"start": start, "end": str(p.dates[-1].date())}, "bars": bars, "trades": trades, "total_return": total, **output, "risk_events": risk}
+    return {"status": "ok", "symbol": p.symbols[0], "symbols": list(p.symbols), "bars_by_symbol": by_symbol, "window": {"start": start, "end": str(p.dates[-1].date())}, "bars": bars, "trades": trades, "symbol_stats": symbol_stats, "total_return": total, **output, "risk_events": risk}
 
 
 def repaint_check(spec: Strategy, prep: Prepared, lo: int = 0, cuts: int = 50, *, full: C.Signals | None = None) -> dict:
