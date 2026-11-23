@@ -7,16 +7,11 @@ Build a trading strategy (blocks, formula, Python or plain English), test it unt
 | File | Holds |
 |---|---|
 | [CHECKLIST.md](plan/CHECKLIST.md) | Build order, phases 0–9, the only progress tracker |
-| [PAGE_LOG.md](plan/PAGE_LOG.md) | Per page when it closes: shipped, checked, open |
 | [PAGES.md](plan/PAGES.md) | The spec: 9 pages, inputs, outputs, acceptance ids |
 | [PLAN.md](plan/PLAN.md) | Principles, backend architecture, engine, data |
 | [DECISIONS.md](plan/DECISIONS.md) | Data limits and decisions taken |
-| [REVIEW.md](plan/REVIEW.md) | Why features were added, cut or merged |
 | [FEATURES_AND_OUTPUTS.md](plan/FEATURES_AND_OUTPUTS.md) | Every input and output with its reason |
-| [FRONTEND.md](plan/FRONTEND.md) | Screens, layouts, keyboard, budgets |
-| [BUILD_PROMPT.md](plan/BUILD_PROMPT.md) | Prompt for an agent continuing the build |
 | [FEATURES_PEAK.md](plan/FEATURES_PEAK.md) | Merged target: every feature at its peak, ranked |
-| [PYTHON_IDE.md](plan/PYTHON_IDE.md) | Python editor audit vs QuantConnect and the plan to a full IDE |
 
 ## standards/ — what every change is checked against
 

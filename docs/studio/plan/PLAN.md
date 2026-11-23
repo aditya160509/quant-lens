@@ -2,7 +2,7 @@
 
 Date: 2026-11-15. Status: proposed, not started. Owner decision taken: **rewrite from scratch**. Nothing in the current Studio code is kept as code; ideas that worked are carried over by name (section 4). The chart engine is also taken apart and rebuilt (section 6); it is the only part with progress worth mining.
 
-Companion files: [FEATURES_AND_OUTPUTS.md](FEATURES_AND_OUTPUTS.md) (every page, input and output), [FRONTEND.md](FRONTEND.md) (screens and interaction), [REUSE.md](../research/REUSE.md) (what to copy from Screener, Research, ML), [COMPETITORS.md](../research/COMPETITORS.md) and [OPEN_SOURCE.md](../research/OPEN_SOURCE.md) (research), [CHECKLIST.md](CHECKLIST.md) (progress).
+Companion files: [FEATURES_AND_OUTPUTS.md](FEATURES_AND_OUTPUTS.md) (every page, input and output), [REUSE.md](../research/REUSE.md) (what to copy from Screener, Research, ML), [COMPETITORS.md](../research/COMPETITORS.md) and [OPEN_SOURCE.md](../research/OPEN_SOURCE.md) (research), [CHECKLIST.md](CHECKLIST.md) (progress).
 
 ---
 
@@ -141,7 +141,6 @@ No new router. Studio registers as a lab on the same pattern as Screener:
 - Rebuild: one chart component on `lightweight-charts` 5 (already installed; panes and plugins), fed only by `/api/studio-v3/bars`.
 - New: strategy overlay (entries, exits, stops as price lines, position shading), trade markers that open the trade in the ledger, replay with a scrub bar (C3 pattern), multi-symbol sync.
 - Alerts move to the server (Screener's alerts and notify), not `localStorage`.
-- Detail in [FRONTEND.md](FRONTEND.md) §5.
 
 ## 7. Phases
 

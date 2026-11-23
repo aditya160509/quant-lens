@@ -1,6 +1,6 @@
 # Studio checklist (single tracker)
 
-One tracker for every acceptance id and every point in [FEATURES_PEAK.md](FEATURES_PEAK.md). Page specs: [PAGES.md](PAGES.md). Reasons: [REVIEW.md](REVIEW.md). Data limits and decisions: [DECISIONS.md](DECISIONS.md). Python editor gaps: [PYTHON_IDE.md](PYTHON_IDE.md). LEAN steps: [LEAN_PARITY.md](../research/LEAN_PARITY.md). Item-to-id map: bottom of FEATURES_PEAK.md.
+One tracker for every acceptance id and every point in [FEATURES_PEAK.md](FEATURES_PEAK.md). Page specs: [PAGES.md](PAGES.md). Data limits and decisions: [DECISIONS.md](DECISIONS.md). Python editor gaps: [PYTHON_IDE.md](PYTHON_IDE.md). LEAN steps: [LEAN_PARITY.md](../research/LEAN_PARITY.md). Item-to-id map: bottom of FEATURES_PEAK.md.
 
 ## Now: everything still open for Build + Workspace (one list)
 
