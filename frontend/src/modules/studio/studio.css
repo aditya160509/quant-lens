@@ -928,3 +928,5 @@
 .dv-watch-row span:last-child { text-align: right; }
 .dv-watch-row .up { color: var(--up); } .dv-watch-row .down { color: var(--down); }
 .dv-watch-row .icon-btn { opacity: 0; } .dv-watch-row:hover .icon-btn { opacity: 1; }
+
+.dv-undo { display: inline-flex; align-items: center; gap: 10px; }

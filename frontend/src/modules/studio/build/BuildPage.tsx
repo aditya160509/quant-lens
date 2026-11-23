@@ -3,11 +3,12 @@
 import { Command as CommandIcon, BookmarkPlus, CircleCheck, CircleDashed, CircleX, Download, GitBranch, GitMerge, Settings2, Link2, ArrowLeft, ArrowUp, Bookmark, Code2, FilePlus2, FolderGit2, Keyboard, LayoutPanelLeft, Palette as PaletteIcon, RotateCcw, Search, SlidersHorizontal, PlayCircle, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { minMax } from "./devStats";
 import toast from "react-hot-toast";
 import { defaultsFor } from "@/modules/research/StudyForm";
 import { useStudies } from "@/modules/research/store";
 import type { FeatureSpec } from "@/modules/research/types";
-import { studio, useTemplates, type Compiled, type Ledger } from "../api";
+import { copyText, studio, useTemplates, type Compiled, type Ledger } from "../api";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { TrialChip } from "../RunHeader";
 import { GroupEditor, groupFormula, paletteOrder, toGroup } from "./BlockRows";
@@ -57,11 +58,18 @@ const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : "Faile
 
 /** Percent fields are typed as percent and stored as fractions. */
 function Num({ label, value, pct, onChange, empty }: { label: string; value: number | null | undefined; pct?: boolean; empty?: boolean; onChange: (v: number | null) => void }) {
-  const shown = value === null || value === undefined ? "" : pct ? +(value * 100).toFixed(4) : value;
+  const show = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(pct ? +(v * 100).toFixed(4) : v));
+  // The field keeps what was typed ("0.", "-", "") and commits each valid number; outside edits replace it only while unfocused.
+  const [text, setText] = useState(() => show(value));
+  const typing = useRef(false);
+  useEffect(() => { if (!typing.current) setText(show(value)); }, [value, pct]); // eslint-disable-line react-hooks/exhaustive-deps
+  const n = Number(text.trim()), bad = !!text.trim() && !Number.isFinite(n);
   return (
     <label className="bd-num"><span>{label}</span>
-      <input className="input" inputMode="decimal" value={shown} placeholder={empty ? "—" : "0"}
-        onChange={(e) => { const t = e.target.value.trim(); if (!t) return onChange(empty ? null : 0); const n = Number(t); if (Number.isFinite(n)) onChange(pct ? n / 100 : n); }} />
+      <input className="input" inputMode="decimal" value={text} placeholder={empty ? "—" : "0"} aria-invalid={bad || undefined}
+        onFocus={() => { typing.current = true; }}
+        onChange={(e) => { const t = e.target.value; setText(t); const v = Number(t.trim()); if (t.trim() && Number.isFinite(v)) onChange(pct ? v / 100 : v); }}
+        onBlur={() => { typing.current = false; if (!text.trim()) { onChange(empty ? null : 0); setText(empty ? "" : "0"); } else setText(show(value)); }} />
       {pct ? <i>%</i> : null}
     </label>
   );
@@ -120,7 +128,8 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
     runPending.current = true;
     setStarting(true);
     try {
-      const sid = level === "full" ? await save(undefined, false) : loaded?.id;
+      // A full run of an unchanged, saved strategy reuses its version instead of adding one to the trial ledger.
+      const sid = level === "full" ? (loaded && !dirty ? loaded.id : await save(undefined, false)) : loaded?.id;
       if (level === "full" && !sid) { runPending.current = false; return; }
       // Run-config input overrides ("fast=10 slow=50") change quick runs only; full runs stay on the saved version for the trial ledger.
       const { params: over, ...rest } = settings;
@@ -169,7 +178,8 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
   const [fired, setFired] = useState<{ role: string; dates: string[] } | null>(null);
   const [pyView, setPyView] = useState<string | null>(null);
   useEffect(() => { void studio<{ formula: { fields: Ref[]; operators: Ref[] } }>("GET", "/manifest").then((m) => { setCatalogue([...m.formula.fields.map((f) => f.name), ...m.formula.operators.map((o) => o.example ?? o.name)]); setReference([...m.formula.operators, ...m.formula.fields]); }, () => undefined); }, []);
-  const history = useRef<{ past: Spec[]; future: Spec[] }>({ past: [], future: [] });
+  const history = useRef<{ past: Spec[]; future: Spec[]; at: number }>({ past: [], future: [], at: 0 });
+  const specRef = useRef<Spec | null>(null);
   const [palette, setPalette] = useState(false);
   const [seed, setSeed] = useState<{ q: string }>();
   const [devItems, setDevItems] = useState<{ id: string; group: string; label: string; hidden: boolean }[]>([]);
@@ -186,7 +196,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
 
   const load = useCallback((sid: string, version?: number) => studio<Loaded>("GET", `/strategies/${sid}${version ? `?version=${version}` : ""}`).then((s) => {
     const next = { ...BLANK, ...(version ? s.spec : s.draft ?? s.spec) };
-    setLoaded(s); setSpec(next); if (next.code.trim() && !new URLSearchParams(window.location.search).get("ui")) setUi("dev"); setDirty(!version && !!s.draft); history.current = { past: [], future: [] };
+    setLoaded(s); setSpec(next); if (next.code.trim() && !new URLSearchParams(window.location.search).get("ui")) setUi("dev"); setDirty(!version && !!s.draft); history.current = { past: [], future: [], at: 0 };
   }, fail), []);
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("share");
@@ -238,7 +248,16 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
       return save(next);
     }, fail);
   };
-  const edit = (next: Partial<Spec>) => readOnly ? void toast("Read-only", { id: "ro" }) : setSpec((cur) => { history.current.past = [...history.current.past.slice(-49), cur]; history.current.future = []; setDirty(true); return { ...cur, ...next }; });
+  // Undo history is recorded here, not inside the state updater (updaters must be pure); edits within 500 ms form one undo step.
+  specRef.current = spec;
+  const edit = (next: Partial<Spec>) => {
+    if (readOnly) return void toast("Read-only", { id: "ro" });
+    const h = history.current, now = Date.now(), cur = specRef.current!;
+    if (now - h.at > 500) h.past = [...h.past.slice(-49), cur];
+    h.at = now; h.future = [];
+    specRef.current = { ...cur, ...next };
+    setDirty(true); setSpec((c) => ({ ...c, ...next }));
+  };
 
   // Live compile, 250 ms after typing stops.
   useEffect(() => {
@@ -246,7 +265,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
     return () => clearTimeout(t);
   }, [spec]);
 
-  // Preview on one name, 300 ms after typing stops (B-5).
+  // Preview on one name once the compiled rule changes (B-5).
   useEffect(() => {
     if (!compiled?.ok || !symbol.trim() || (!auto && !nudge)) return;
     const hash = compiled.hash;
@@ -257,7 +276,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
     // The look-ahead replay is the slow part, so it runs once typing has stopped (B-5).
     const full = setTimeout(() => void studio<Preview>("POST", "/preview", body, request.signal).then((r) => { if (!request.signal.aborted) { checked = true; setPrev(r); setPreviewed(hash); } }, () => undefined).finally(() => { if (!request.signal.aborted) setNudge(0); }), 1200);
     return () => { clearTimeout(t); clearTimeout(full); request.abort(); };
-  }, [spec, symbol, years, compiled?.ok, auto, nudge, logpoints, coverage]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [compiled?.hash, symbol, years, compiled?.ok, auto, nudge, logpoints, coverage]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the rule hash, so name and notes edits do not re-run the preview
   const stale = !!prev && !!previewed && !!compiled?.hash && previewed !== compiled.hash;
 
   // Browser copy of unsaved edits, offered back when the page reopens with something different (B-27).
@@ -267,6 +286,12 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
     const t = setTimeout(() => { try { localStorage.setItem(backupKey, JSON.stringify({ spec, at: Date.now() })); } catch { /* full or blocked */ } }, 500);
     return () => clearTimeout(t);
   }, [spec, dirty, backupKey]);
+  // Leaving with unsaved edits asks first (the local backup stays as a second safety net).
+  useEffect(() => {
+    if (!dirty || readOnly) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty, readOnly]);
   useEffect(() => {
     if (!loaded) return;
     try {
@@ -316,7 +341,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
       try { localStorage.removeItem(`studio:draft:${s.id}`); localStorage.removeItem("studio:draft:new"); } catch { /* blocked */ }
       if (!loaded && navigate) router.replace(`/studio/build/${s.id}?ui=${ui}`);
       return s.id;
-    } catch (e) { setSaving(e instanceof Error && /409|version/i.test(e.message) ? "conflict" : "idle"); fail(e); return null; }
+    } catch (e) { setSaving((e as { status?: number })?.status === 409 ? "conflict" : "idle"); fail(e); return null; }
   }, [loaded, spec, router, ui]);
 
   const run = useCallback(async () => {
@@ -335,7 +360,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
       else if (e.key === "Enter" && ui !== "dev") { e.preventDefault(); void run(); }
       else if (e.key === "z" && !(e.target as HTMLElement).matches("input, textarea")) {
         e.preventDefault(); const h = history.current, from = e.shiftKey ? h.future : h.past, to = e.shiftKey ? h.past : h.future;
-        const prev = from.pop(); if (prev) setSpec((cur) => { to.push(cur); return prev; });
+        const prev = from.pop(); if (prev) { to.push(specRef.current!); h.at = 0; specRef.current = prev; setSpec(prev); setDirty(true); }
       }
     };
     window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);
@@ -482,7 +507,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
   );
   // Project actions: the Simple page's More menu and the Dev settings window's Project page.
   const projectActions: [ReactNode, string, boolean, () => void][] = [
-    [<Link2 key="l" size={13} />, "Copy read-only link", !loaded, () => { if (loaded) void studio<{ token: string }>("POST", `/strategies/${loaded.id}/share`).then((r) => { const u = `${location.origin}/studio/build?share=${r.token}`; void navigator.clipboard?.writeText(u); toast.success("Read-only link copied"); }, fail); }],
+    [<Link2 key="l" size={13} />, "Copy read-only link", !loaded, () => { if (loaded) void studio<{ token: string }>("POST", `/strategies/${loaded.id}/share`).then((r) => { const u = `${location.origin}/studio/build?share=${r.token}`; void copyText(u, "Read-only link copied"); }, fail); }],
     [<GitBranch key="b" size={13} />, `Branch from v${loaded?.version ?? 1}`, !loaded, () => { if (loaded) void studio<{ id: string }>("POST", `/strategies/${loaded.id}/versions/${loaded.version}/branch`).then((b) => router.push(`/studio/build/${b.id}`), fail); }],
     [<Download key="d" size={13} />, "Export project (.zip)", !loaded, () => { if (loaded) window.location.assign(`${STUDIO_BASE}/strategies/${loaded.id}/export.zip`); }],
     [<Upload key="u" size={13} />, "Import project (.zip)", false, () => zipInput.current?.click()],
@@ -649,7 +674,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
               {reference.filter((r) => !refQ || `${r.name} ${r.doc}`.toLowerCase().includes(refQ.toLowerCase())).map((r) => (
                 <button key={r.name} className="bd-refrow" title="Insert at the cursor" onClick={() => {
                   const f = focus.current, text = r.example ?? r.name;
-                  if (!f) return void navigator.clipboard?.writeText(text).then(() => toast.success("Copied"));
+                  if (!f) return void copyText(text);
                   const cur = spec[f.role] as string;
                   edit({ [f.role]: cur.slice(0, f.start) + text + cur.slice(f.end) });
                 }}><code>{r.args ? `${r.name}(${r.args.join(", ")})` : r.name}</code><span>{r.doc}</span></button>
@@ -798,8 +823,9 @@ function CustomiseDialog({ spec, onClose, sections = [], start, font, onFont }: 
 
 type TplStats = { status: string; stats: Record<string, { spark?: number[]; total_return?: number; sharpe?: number | null; max_drawdown?: number; trades?: number; symbols?: number; start?: string; end?: string; error?: string }> };
 let tplStats: Promise<TplStats> | null = null;
-const loadTplStats = (): Promise<TplStats> => {
-  tplStats ??= studio<TplStats>("GET", "/templates/stats").then((r) => { if (r.status !== "ready") { tplStats = null; return new Promise<TplStats>((ok) => setTimeout(() => ok(loadTplStats()), 2000)); } return r; }, (e) => { tplStats = null; throw e; });
+// Polls while the server computes the starters' backtests, backing off and giving up after about two minutes.
+const loadTplStats = (tries = 0): Promise<TplStats> => {
+  tplStats ??= studio<TplStats>("GET", "/templates/stats").then((r) => { if (r.status !== "ready") { tplStats = null; if (tries >= 12) throw new Error("Starter stats not ready"); return new Promise<TplStats>((ok) => setTimeout(() => ok(loadTplStats(tries + 1)), Math.min(2000 * 1.5 ** tries, 15000))); } return r; }, (e) => { tplStats = null; throw e; });
   return tplStats;
 };
 
@@ -808,7 +834,7 @@ function TplStat({ name }: { name: string }) {
   const [r, setR] = useState<TplStats["stats"][string] | null>(null);
   useEffect(() => { void loadTplStats().then((s) => setR(s.stats[name] ?? null), () => undefined); }, [name]);
   if (!r || r.total_return == null) return null;
-  const sp = r.spark ?? [], lo = Math.min(...sp), hi = Math.max(...sp);
+  const sp = r.spark ?? [], [lo, hi] = minMax(sp);
   const spark = sp.length > 1 ? <svg className="bd-tpl-spark" viewBox="0 0 60 16" preserveAspectRatio="none" aria-hidden><polyline fill="none" stroke="currentColor" strokeWidth="1.2" points={sp.map((v, i) => `${(i / (sp.length - 1)) * 60},${16 - ((v - lo) / (hi - lo || 1)) * 15}`).join(" ")} /></svg> : null;
   return <>{spark}<i className="bd-tpl-stat" data-neg={r.total_return < 0 || undefined} title={`${r.symbols} names, ${r.start} to ${r.end}`}>{r.total_return >= 0 ? "+" : ""}{(r.total_return * 100).toFixed(0)}% · Sharpe {r.sharpe?.toFixed(2) ?? "—"} · DD {((r.max_drawdown ?? 0) * 100).toFixed(0)}% · {r.trades} trades</i></>;
 }

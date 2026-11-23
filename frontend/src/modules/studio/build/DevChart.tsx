@@ -5,6 +5,7 @@ import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { Vela as VelaChart } from "@luxalgo/vela";
 import { studio } from "../api";
 import { ChartGrid } from "./ChartGrid";
+import { minMax } from "./devStats";
 import { type IndicatorInfo, IndicatorPicker } from "./IndicatorPicker";
 import type { DevPreview, Draw } from "./DevIDE";
 
@@ -154,7 +155,7 @@ const pushChart = () => { clearTimeout(pushTimer); pushTimer = setTimeout(() => 
   void studio("PUT", "/build/prefs/chart", out).catch(() => undefined);
 }, 1200); };
 const readView = (): View => { try { return { style: "candles", scale: "price", dw: false, blind: false, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") }; } catch { return { style: "candles", scale: "price", dw: false, blind: false }; } };
-const download = (name: string, href: string) => { const a = document.createElement("a"); a.href = href; a.download = name; a.click(); };
+const download = (name: string, href: string) => { const a = document.createElement("a"); a.href = href; a.download = name; a.click(); if (href.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(href)); };
 
 /** The Chart page's engine over the preview window: trades, ctx.plot series, the paused bar, and replay controls that drive the debugger. */
 const NO_NOTES: string[] = [];
@@ -575,7 +576,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
         <header><span className="seg" role="group">{(["symbols", "months", "regimes"] as const).map((d) => <button key={d} type="button" aria-pressed={drawer === d} onClick={() => setDrawer(d)}>{d[0]!.toUpperCase() + d.slice(1)}</button>)}</span>
           <button type="button" className="icon-btn" aria-label="Close" onClick={() => setDrawer(null)}><X size={14} /></button></header>
         {drawer === "symbols" ? <table className="dv-symtable"><thead><tr><th>Symbol</th><th>Trades</th><th>P&L</th><th>Win</th><th>Max DD</th><th aria-label="Curve" /></tr></thead>
-          <tbody>{perSym.map(([k, r]) => { const lo = Math.min(...r.curve), hi = Math.max(...r.curve), span = hi - lo || 1; return (
+          <tbody>{perSym.map(([k, r]) => { const [lo, hi] = minMax(r.curve), span = hi - lo || 1; return (
             <tr key={k} aria-selected={k === sym} onClick={() => setPick(k)}><td>{k}</td><td>{r.n}</td><td className={r.pnl >= 0 ? "up" : "down"}>{r.pnl.toFixed(0)}</td><td>{Math.round((r.wins / r.n) * 100)}%</td><td className="down">{r.dd.toFixed(0)}</td>
               <td><svg viewBox="0 0 60 16" width="60" height="16" aria-hidden><polyline fill="none" stroke="currentColor" strokeWidth="1.2" points={r.curve.map((v, i) => `${(i / Math.max(1, r.curve.length - 1)) * 60},${16 - ((v - lo) / span) * 16}`).join(" ")} /></svg></td></tr>); })}</tbody></table>
         : drawer === "months" && months ? <div className="dv-heat" style={{ gridTemplateColumns: `56px repeat(${months.cols.length}, minmax(8px, 22px))` }}>

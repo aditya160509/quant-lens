@@ -25,7 +25,8 @@ import { DevRobust } from "./DevRobust";
 import { DevRuns, type RunEntry } from "./DevRuns";
 import { DevTearsheet } from "./DevTearsheet";
 import { RunSummary } from "./RunSummary";
-import { tradeSummary } from "./devStats";
+import { minMax, tradeSummary } from "./devStats";
+import { PaneBoundary } from "./PaneBoundary";
 import { NotifyBell } from "./NotifyBell";
 import { Terminal, type TerminalHost } from "./Terminal";
 
@@ -380,6 +381,8 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
     setRecentStrats(list.filter((r) => r.id !== strategyId));
   }, [strategyId, spec.name]);
   const setFile = (name: string, text: string) => (keep(name), name in scratch ? setScratch((s) => ({ ...s, [name]: text })) : name === "main.py" ? edit({ code: text }) : edit({ files: { ...(spec.files ?? {}), [name]: text } }));
+  // Toast with an Undo button that puts back the files as they were when it was called (⌘Z cannot reach this inside the editor).
+  const undoable = (msg: string) => { const before = { code: spec.code, files: spec.files }; toast((t) => <span className="dv-undo">{msg}<button type="button" className="btn sm ghost" onClick={() => { edit(before); toast.dismiss(t.id); }}>Undo</button></span>, { duration: 6000 }); };
   const replaceFiles = (next: Record<string, string>) => {
     const all: Record<string, string> = { ...files, ...next };
     const { "main.py": code, ...rest } = all;
@@ -415,7 +418,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
       if (list === null) return;
       extra = { params: list.split(",").map((x) => x.trim()).filter(Boolean).map((x) => { const [name, ...d] = x.split("="); return { name: name.trim(), default: d.join("=").trim() || undefined }; }) };
     }
-    void studio<Record<string, string>>("POST", "/build/refactor", { code: source, file: active, files, ...r, ...extra }).then((out) => { replaceFiles(out); toast.success("Refactored · ⌘Z to undo"); }, (e: Error) => toast.error(e.message));
+    void studio<Record<string, string>>("POST", "/build/refactor", { code: source, file: active, files, ...r, ...extra }).then((out) => { replaceFiles(out); undoable("Refactored"); }, (e: Error) => toast.error(e.message));
   };
   const addScratch = () => {
     let n = 1; while (`scratch_${n}.py` in files) n++;
@@ -717,7 +720,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
     edit({ files: { ...rest, [n]: text ?? "" } }); setOpen((o) => o.map((x) => (x === f ? n : x))); if (active === f) setActive(n);
   };
   const dupFile = (f: string) => { let n = f.replace(/\.py$/, "_copy.py"); while (n in files) n = n.replace(/\.py$/, "_copy.py"); edit({ files: { ...(spec.files ?? {}), [n]: files[f] } }); goto(n, 1); };
-  const dropFile = (f: string) => { const { [f]: _, ...rest } = spec.files ?? {}; edit({ files: rest }); close(f); toast(`${f} deleted · ⌘Z to undo`); };
+  const dropFile = (f: string) => { const { [f]: _, ...rest } = spec.files ?? {}; edit({ files: rest }); close(f); undoable(`${f} deleted`); };
   const replaceAll = () => {
     if (!re) return;
     const next = Object.fromEntries(Object.entries(files).map(([f, t]) => [f, t.replace(re, rep)]));
@@ -739,10 +742,10 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
       writeShelf([{ name, at: Date.now(), files: draft }, ...shelf]);
       const { "main.py": code = "", ...rest } = r.files;
       edit({ code, files: Object.fromEntries(Object.entries(rest).filter(([f]) => !(f in scratch))) });
-      toast(`Shelved ${name} · draft reset to v${last} · ⌘Z to undo`);
+      undoable(`Shelved ${name}, draft reset to v${last}`);
     }, (e: Error) => toast.error(e.message));
   };
-  const unshelve = (s: Shelved) => { replaceFiles(s.files); toast(`${s.name} unshelved · ⌘Z to undo`); };
+  const unshelve = (s: Shelved) => { replaceFiles(s.files); undoable(`${s.name} unshelved`); };
   const dropShelf = (s: Shelved) => { if (window.confirm(`Delete shelf "${s.name}"? This cannot be undone.`)) writeShelf(shelf.filter((x) => x.at !== s.at)); };
   const runProfile = () => {
     openView("results"); setProfile("loading");
@@ -1158,7 +1161,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
             <h4><span className="dv-rail-tabs" role="tablist">{moved.map((k) => <button key={k} role="tab" aria-selected={sideTab === k} draggable onDragStart={(e) => e.dataTransfer.setData("text/x-studio-view", k)} onClick={() => setSideTab(k)}>{TABS.find(([x]) => x === k)?.[1] ?? k}</button>)}</span>
               <button className="icon-btn" aria-label="Move to panel" title="Move back to the bottom panel" onClick={() => toPanel(sideTab)}><Minimize2 size={12} /></button>
               <button className="icon-btn" aria-label="Close side bar" onClick={() => setRailOpen(false)}><X size={13} /></button></h4>
-            <div className="dv-side-view">{panelBody(sideTab, true)}</div>
+            <div className="dv-side-view"><PaneBoundary name="Side panel">{panelBody(sideTab, true)}</PaneBoundary></div>
           </> : <>
           <h4>{RAILS.find((r) => r[0] === (rail === "outline" ? "files" : rail))?.[2]}<button className="icon-btn" aria-label="Close side bar" title="Close side bar (⌘B)" onClick={() => setRailOpen(false)}><X size={13} /></button></h4>
           {rail === "files" || rail === "outline" ? (
@@ -1220,7 +1223,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
                 </div>
               )) : versions.length ? null : <p className="dv-empty">Save to start versions</p>}
               {snaps.length ? <><h4 className="dv-sub">Local history · 7 days</h4>
-                {snaps.slice(0, 60).map((sn) => <button key={sn.at} className="dv-item" title="Restore these files into the draft" onClick={() => { replaceFiles(sn.files); toast("Snapshot restored into the draft · ⌘Z to undo"); }}>
+                {snaps.slice(0, 60).map((sn) => <button key={sn.at} className="dv-item" title="Restore these files into the draft" onClick={() => { replaceFiles(sn.files); undoable("Snapshot restored into the draft"); }}>
                   {new Date(sn.at * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}<span>{Object.keys(sn.files).length} file{Object.keys(sn.files).length === 1 ? "" : "s"}</span></button>)}</> : null}
               <div className="shelf-head"><h4 className="dv-sub">Shelf</h4><button className="btn sm ghost" disabled={!timeline.length} onClick={shelveChanges}>Shelve changes</button></div>
               {shelf.map((s) => <div key={s.at} className="dv-file shelf-row"><span className="dv-item" title={`${s.name} · ${new Date(s.at).toLocaleString()}`}>{s.name}<span>{Object.keys(s.files).length} files</span></span>
@@ -1389,7 +1392,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
               <button className="icon-btn" aria-label="Hide panel" title="Hide panel ⌘J" onClick={() => setPanelOpen(false)}><X size={13} /></button>
             </div>
             <div className="dv-pbody" onScroll={(e) => { if (tab === "output") setLogTop(e.currentTarget.scrollTop); }}>
-              {panelBody(movedTab(tab) ? TABS.find(([k]) => !moved.includes(k))?.[0] ?? "tester" : tab, false)}
+              <PaneBoundary name="Panel">{panelBody(movedTab(tab) ? TABS.find(([k]) => !moved.includes(k))?.[0] ?? "tester" : tab, false)}</PaneBoundary>
             </div>
           </div>
       </Panel>
@@ -1397,7 +1400,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
   const rightPanel = (
       <Panel id="right" minSize={0}>
       <aside className="dv-side" inert={!chartOpen}>
-        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart onMark={markToCode} onNote={openBarThread} notes={[...new Set(cmts.filter((c) => c.date && !c.resolved).map((c) => c.date!))]} symbol={dbg?.symbol ?? symbol} drawKey={strategyId ?? "new"} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} max={maxChart} onMax={() => setMaxChart((x) => !x)} onAddIndicator={addIndicator} /></div> : null}
+        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><PaneBoundary name="Chart"><DevChart onMark={markToCode} onNote={openBarThread} notes={[...new Set(cmts.filter((c) => c.date && !c.resolved).map((c) => c.date!))]} symbol={dbg?.symbol ?? symbol} drawKey={strategyId ?? "new"} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} max={maxChart} onMax={() => setMaxChart((x) => !x)} onAddIndicator={addIndicator} /></PaneBoundary></div> : null}
       </aside>
       </Panel>
   );
@@ -1491,7 +1494,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
 }
 
 function Spark({ values }: { values: number[] }) {
-  const lo = Math.min(...values), hi = Math.max(...values), w = 120, h = 22;
+  const [lo, hi] = minMax(values), w = 120, h = 22;
   const d = values.map((v, i) => `${i ? "L" : "M"}${(i / (values.length - 1)) * w},${h - ((v - lo) / (hi - lo || 1)) * h}`).join("");
   return <svg className="dv-spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden><path d={d} fill="none" stroke={values.at(-1)! >= values[0] ? "var(--up)" : "var(--down)"} strokeWidth="1.5" /></svg>;
 }

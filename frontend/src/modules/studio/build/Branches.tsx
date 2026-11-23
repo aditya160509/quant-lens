@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { studio, type StrategyCard } from "../api";
 import { specDiff } from "./blocks";
+import { minMax } from "./devStats";
 
 type RunSum = { total_return?: number; sharpe?: number | null; trades?: number };
 type Compared = { a: string; b: string; diffs: Record<string, string>; runs: Record<string, RunSum> };
@@ -52,10 +53,10 @@ export function BranchDialog({ id, name, spec, onClose, onMerged }: { id: string
             {[cmp.a, cmp.b].map((sid) => <div key={sid} className="kpi"><span>{label(sid)}</span><b>{pct(cmp.runs[sid]?.total_return)}</b><i className="dv-delta">Sharpe {cmp.runs[sid]?.sharpe?.toFixed(2) ?? "—"} · {cmp.runs[sid]?.trades ?? "—"} trades</i></div>)}
           </div>
           {Object.values(curves).some((c) => c.length > 1) ? (() => {
-            const all = Object.values(curves).flatMap((c) => c.map((v) => v / c[0]));
-            const lo = Math.min(...all), hi = Math.max(...all), W = 600, H = 120;
+            const all = Object.values(curves).flatMap((c) => c.map((v) => v / (c[0] || 1)));
+            const [lo, hi] = minMax(all), W = 600, H = 120;
             return <section><h3>Equity</h3><svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img" aria-label="Equity of both strategies">
-              {[cmp.a, cmp.b].map((sid, k) => { const c = curves[sid] ?? []; return c.length > 1 ? <path key={sid} fill="none" strokeWidth="1.6" stroke={k ? "var(--s2)" : "var(--s1)"} d={c.map((v, i) => `${i ? "L" : "M"}${(i / (c.length - 1)) * W},${H - ((v / c[0] - lo) / (hi - lo || 1)) * H}`).join("")} /> : null; })}
+              {[cmp.a, cmp.b].map((sid, k) => { const c = curves[sid] ?? []; return c.length > 1 ? <path key={sid} fill="none" strokeWidth="1.6" stroke={k ? "var(--s2)" : "var(--s1)"} d={c.map((v, i) => `${i ? "L" : "M"}${(i / (c.length - 1)) * W},${H - ((v / (c[0] || 1) - lo) / (hi - lo || 1)) * H}`).join("")} /> : null; })}
             </svg><p className="bd-meta bd-legend"><i style={{ background: "var(--s1)" }} />{label(cmp.a)}<i style={{ background: "var(--s2)" }} />{label(cmp.b)}</p></section>;
           })() : null}
           {fields.length ? <section><h3>Rules and settings</h3>{fields.map(([k, a, b]) => <div key={k} className="bd-diff"><span>{k}</span><del>{a || "—"}</del><ins>{b || "—"}</ins></div>)}</section> : null}

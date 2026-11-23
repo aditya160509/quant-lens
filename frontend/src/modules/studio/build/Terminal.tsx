@@ -4,7 +4,7 @@ import { Columns2, Copy, Download, Pin, RotateCcw, Tag, Trash2 } from "lucide-re
 import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import toast from "react-hot-toast";
-import { studio } from "../api";
+import { copyText, studio } from "../api";
 
 /** One command and its result, shown as a block with a status, a duration and its output. */
 type Block = { id: number; cmd: string; status: "run" | "ok" | "err"; ms: number; out: string; value?: unknown; plots?: unknown[]; at: string };
@@ -81,6 +81,7 @@ export function Terminal({ host }: { host: TerminalHost }) {
   const [tasks, setTasks] = useState<Record<string, string>>(() => load("studio:tasks", {}));
   // shortcut: the Python session is replayed from its saved statements on every input (no live kernel); fine for research-sized work.
   const [session, setSession] = useState<string[]>(() => load(`studio:repl:${host.storeKey}`, []));
+  const taskStack = useRef<string[]>([]);
   const hist = useRef(-1), seq = useRef(0), end = useRef<HTMLDivElement>(null), box = useRef<HTMLDivElement>(null);
   const [history, setHistory] = useState<string[]>(() => load("studio:termhist", []));
   const [pins, setPins] = useState<string[]>(() => load("studio:termpins", []));
@@ -175,13 +176,18 @@ export function Terminal({ host }: { host: TerminalHost }) {
       if (what === "rm" && name) { setTasks(({ [name]: _gone, ...t }) => t); return { status: "ok", out: `Removed task ${name}` }; }
       const steps = tasks[what];
       if (!steps) return { status: "err", out: `No task ${what}` };
-      const outs: string[] = [];
-      for (const step of steps.replace(/^@save /, "").split("&&").map((s) => s.trim()).filter(Boolean)) {
-        const r = await exec(step);
-        outs.push(`› ${step}\n${r.out}`);
-        if (r.status === "err") return { status: "err", out: outs.join("\n") };
-      }
-      return { status: "ok", out: outs.join("\n") };
+      // A task that calls itself, directly or through others, stops instead of looping forever.
+      if (taskStack.current.includes(what) || taskStack.current.length >= 8) return { status: "err", out: `Task ${what} calls itself (${[...taskStack.current, what].join(" → ")})` };
+      taskStack.current.push(what);
+      try {
+        const outs: string[] = [];
+        for (const step of steps.replace(/^@save /, "").split("&&").map((s) => s.trim()).filter(Boolean)) {
+          const r = await exec(step);
+          outs.push(`› ${step}\n${r.out}`);
+          if (r.status === "err") return { status: "err", out: outs.join("\n") };
+        }
+        return { status: "ok", out: outs.join("\n") };
+      } finally { taskStack.current.pop(); }
     }
     const near = nearest(sub, SUBS);
     return { status: "err", out: `Unknown command atlas ${sub}${near ? `; did you mean atlas ${near}?` : ""}; try atlas help` };
@@ -246,7 +252,7 @@ export function Terminal({ host }: { host: TerminalHost }) {
           <header><span className="dv-con-q">› {b.cmd}</span><i>{b.status === "run" ? "running" : `${b.ms < 1000 ? `${Math.round(b.ms)} ms` : `${(b.ms / 1000).toFixed(1)} s`} · ${b.at}`}</i>
             <button className="icon-btn" aria-label="Run again" title="Run again" onClick={() => rerun(b.cmd)}><RotateCcw size={11} /></button>
             <button className="icon-btn" aria-label="Pin command" title={pins.includes(b.cmd) ? "Unpin" : "Pin to the top of history"} aria-pressed={pins.includes(b.cmd)} onClick={() => setPins((p) => (p.includes(b.cmd) ? p.filter((x) => x !== b.cmd) : [b.cmd, ...p]))}><Pin size={11} /></button>
-            <button className="icon-btn" aria-label="Copy as Markdown" title="Copy as Markdown" onClick={() => void navigator.clipboard.writeText(md(b)).then(() => toast("Copied"))}><Copy size={11} /></button>
+            <button className="icon-btn" aria-label="Copy as Markdown" title="Copy as Markdown" onClick={() => void copyText(md(b))}><Copy size={11} /></button>
             <button className="icon-btn" aria-label="Save as Markdown" title="Save as Markdown" onClick={() => saveMd(b)}><Download size={11} /></button>
           </header>
           {b.out ? <pre data-err={b.status === "err" || undefined}>{linked(b.out)}</pre> : null}

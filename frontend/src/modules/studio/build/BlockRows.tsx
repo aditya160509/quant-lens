@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, FolderPlus, Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
-import toast from "react-hot-toast";
+import { copyText } from "../api";
 import { fromFormula, OPS, toFormula, type Group, type Item, type Leaf } from "./blocks";
 
 export const KINDS: [string, string][] = [
@@ -41,7 +41,7 @@ export function GroupEditor({ id, group, onChange, suggestions, depth = 0, onRem
         </div>
         <span className="gx-sum">{group.items.length} condition{group.items.length === 1 ? "" : "s"}</span>
         <span style={{ flex: 1 }} />
-        <button className="icon-btn" title="Copy as code" aria-label="Copy as code" onClick={() => void navigator.clipboard?.writeText(groupFormula(group)).then(() => toast.success("Copied"))}><Copy size={12} /></button>
+        <button className="icon-btn" title="Copy as code" aria-label="Copy as code" onClick={() => void copyText(groupFormula(group))}><Copy size={12} /></button>
         {onRemove ? <button className="icon-btn" aria-label="Remove group" onClick={onRemove}><X size={12} /></button> : null}
       </div>
       {open ? (

@@ -1,4 +1,11 @@
 /** Pure statistics for the Dev views: tearsheet, trade excursions, Monte Carlo. Equity is a list of { date, value } with value as growth of 1 (or any positive level). */
+/** Smallest and largest of a list in one pass; spreading into Math.min/max overflows the stack past ~100k values. */
+export function minMax(xs: readonly number[]): [number, number] {
+  let lo = Infinity, hi = -Infinity;
+  for (const x of xs) { if (x < lo) lo = x; if (x > hi) hi = x; }
+  return [lo, hi];
+}
+
 export type Eq = { date: string; value: number };
 export type Trade = { entry_date: string; exit_date: string; side: string; entry: number; exit: number; pnl: number; ret: number };
 export type Ohlc = { time: string; high: number; low: number };
@@ -32,8 +39,9 @@ export function stats(eq: Eq[]) {
   const total = eq.length ? eq.at(-1)!.value / eq[0].value - 1 : 0;
   const cagr = yrs > 0 ? (1 + total) ** (1 / yrs) - 1 : 0;
   const vol = sd(r) * Math.sqrt(252), down = Math.sqrt(mean(r.map((x) => Math.min(x, 0) ** 2))) * Math.sqrt(252);
-  const maxdd = Math.min(0, ...drawdown(eq).map((d) => d.dd));
-  return { total, cagr, vol, sharpe: vol ? (mean(r) * 252) / vol : 0, sortino: down ? (mean(r) * 252) / down : 0, maxdd, calmar: maxdd ? cagr / -maxdd : 0, best: Math.max(0, ...r), worst: Math.min(0, ...r), hit: r.length ? r.filter((x) => x > 0).length / r.length : 0 };
+  const maxdd = Math.min(0, minMax(drawdown(eq).map((d) => d.dd))[0]);
+  const [rlo, rhi] = minMax(r);
+  return { total, cagr, vol, sharpe: vol ? (mean(r) * 252) / vol : 0, sortino: down ? (mean(r) * 252) / down : 0, maxdd, calmar: maxdd ? cagr / -maxdd : 0, best: Math.max(0, rhi), worst: Math.min(0, rlo), hit: r.length ? r.filter((x) => x > 0).length / r.length : 0 };
 }
 
 /** Compounded return per calendar month: rows are years, columns are Jan..Dec. */
@@ -61,7 +69,7 @@ export function rollingSharpe(eq: Eq[], window = 63) {
 export function excursions(t: Trade, bars: Ohlc[]) {
   const held = bars.filter((b) => b.time >= t.entry_date && b.time <= t.exit_date);
   if (!held.length || !t.entry) return { mae: null, mfe: null };
-  const hi = Math.max(...held.map((b) => b.high)), lo = Math.min(...held.map((b) => b.low));
+  const hi = minMax(held.map((b) => b.high))[1], lo = minMax(held.map((b) => b.low))[0];
   const long = t.side !== "short";
   const up = hi / t.entry - 1, down = lo / t.entry - 1;
   return long ? { mae: Math.min(0, down), mfe: Math.max(0, up) } : { mae: Math.min(0, -up), mfe: Math.max(0, -down) };
@@ -95,7 +103,10 @@ export function bootstrapTrades(pnl: number[], capital: number, runs: number, se
 export const percentile = (xs: number[], v: number) => (xs.filter((x) => x <= v).length / (xs.length || 1)) * 100;
 
 /** Strategy Tester summary from closed trades: net P&L, win rate, profit factor and the worst fall in cumulative P&L, in currency. */
-export function tradeSummary(trades: { pnl?: unknown; exit_date?: unknown; date?: unknown }[]) {
+export function tradeSummary(unsorted: { pnl?: unknown; exit_date?: unknown; date?: unknown }[]) {
+  // Equity and drawdown accrue in exit order; trades often arrive in entry order.
+  const at = (t: { exit_date?: unknown; date?: unknown }) => String(t.exit_date ?? t.date ?? "");
+  const trades = [...unsorted].sort((a, b) => (at(a) < at(b) ? -1 : at(a) > at(b) ? 1 : 0));
   const pnl = trades.map((t) => Number(t.pnl)).filter(Number.isFinite);
   const gain = pnl.filter((x) => x > 0).reduce((s, x) => s + x, 0), loss = -pnl.filter((x) => x < 0).reduce((s, x) => s + x, 0);
   let cum = 0, peak = 0, maxdd = 0;

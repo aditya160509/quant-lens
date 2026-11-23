@@ -1,7 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { STUDIO_BASE } from "./base";
+
+/** Copy to the clipboard and say whether it worked (the browser can refuse). */
+export const copyText = (text: string, ok = "Copied") =>
+  navigator.clipboard ? navigator.clipboard.writeText(text).then(() => void toast.success(ok), () => void toast.error("The browser blocked copying")) : toast.error("Copying is not available here");
 
 /** A request to the Studio API; a failed one throws the server's own message. */
 export async function studio<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
