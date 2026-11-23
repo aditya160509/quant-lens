@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from app.api import studio_v3 as api
 from app.services.shared import metrics as M
 from app.services.studio.jobs import JobStore
-from app.services.studio_v3.core import backtest, data, engine, formula, store
+from app.services.studio_v3.core import backtest, data, engine, formula, pyrunner, store
 from app.services.studio_v3.core import compile as C
 from app.services.studio_v3.core.spec import Costs, Settings, Strategy
 
@@ -1205,3 +1205,17 @@ class Strategy:
     rows = result["tables"]["seen"]
     plotted = {p["date"]: p["value"] for p in result["plots"]["Band(5).upper"]}
     assert all(r["cells"]["n"] == 5 and plotted[r["date"]] == r["cells"]["upper"] for r in rows)  # chart and strategy read the same numbers
+
+
+def test_timeframe_returns_only_completed_weeks():
+    dates = [str(d.date()) for d in pd.bdate_range("2024-01-01", periods=15)]  # Mon 1 Jan .. Fri 19 Jan: three full weeks
+    close = np.arange(1.0, 16.0)
+    cols = {f: close.copy() for f in ("open", "high", "low", "close")} | {"volume": np.ones(15)}
+    ctx = pyrunner.Ctx(cols, {}, {}, "X", dates)
+    ctx._t = 4  # Friday of week one: the week is still forming
+    assert len(ctx.timeframe("W")["close"]) == 0
+    ctx._t = 7  # Wednesday of week two
+    week = ctx.timeframe("W")
+    assert week["close"][0] == 5.0 and week["open"][0] == 1.0 and week["volume"][0] == 5.0
+    ctx._t = 14
+    assert [ctx.timeframe("W")["close"][-i] for i in (1, 0)] == [5.0, 10.0]

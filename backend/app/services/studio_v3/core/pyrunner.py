@@ -336,6 +336,29 @@ class Ctx:
         formula = indicator_formula(expr, period)
         return Indicator(self, formula, self._values[formula], period)
 
+    def timeframe(self, tf):
+        """Completed weekly ("W"), monthly ("M"), quarterly ("Q") or yearly ("Y") bars as of this bar, like Pine's request.security
+        without look-ahead: `ctx.timeframe("W").close[0]` is last week's close; the week still forming is never included."""
+        if tf not in ("W", "M", "Q", "Y"):
+            raise ValueError('timeframe takes "W", "M", "Q" or "Y"')
+        cache = self.__dict__.setdefault("_tf", {})
+        if tf not in cache:
+            days = np.array(self._dates, dtype="datetime64[D]")
+            period = {"W": (days.astype("int64") + 3) // 7, "M": days.astype("datetime64[M]").astype("int64"),
+                      "Q": days.astype("datetime64[M]").astype("int64") // 3, "Y": days.astype("datetime64[Y]").astype("int64")}[tf]
+            live = np.isfinite(self._cols["close"])
+            ids = np.unique(period[live])
+            agg = {f: np.full(len(ids), np.nan) for f in ("open", "high", "low", "close", "volume")}
+            for i, pid in enumerate(ids):
+                rows = np.flatnonzero((period == pid) & live)
+                agg["open"][i], agg["close"][i] = self._cols["open"][rows[0]], self._cols["close"][rows[-1]]
+                agg["high"][i], agg["low"][i] = np.nanmax(self._cols["high"][rows]), np.nanmin(self._cols["low"][rows])
+                agg["volume"][i] = np.nansum(self._cols["volume"][rows])
+            cache[tf] = (agg, np.searchsorted(ids, period))  # completed periods before each bar's own period
+        agg, done = cache[tf]
+        k = int(done[self.t])
+        return MappingProxyType({f: HistoryWindow(a[:k]) for f, a in agg.items()})
+
     def fit_every(self, n):
         """True on every n-th bar: refit a model there and reuse it in between."""
         if type(n) is not int or n < 1:
