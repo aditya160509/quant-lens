@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 
 from .compile import compile_spec
@@ -208,10 +209,107 @@ class Strategy:
 ]
 
 
+def _classic(name: str, rule: str, inputs: str, chart: str, body: str, plots: str = "") -> dict:
+    """A strategy ported from the old chart engine's list (TradingView's built-in strategies), long or flat: one indicator class computes
+    the buy and sell signals with studio.ta over the whole history, and the strategy acts on them bar by bar."""
+    lines = "\n".join(f"        {line}" for line in body.strip().splitlines())
+    reads = "        p = self.inputs\n" if re.search(r"\bp\[", body) else ""
+    imports = ("import numpy as np\n" if "np." in body else "") + ("from studio import ta\n" if "ta." in body else "")
+    code = f'''{imports}
+
+
+class Signals:
+    inputs = {inputs}
+    chart = "{chart}"
+    plots = {{"buy": {{"display": "none"}}, "sell": {{"display": "none"}}{plots}}}
+
+    def compute(self, bars):
+{reads}{lines}
+
+
+class Strategy:
+    def init(self, ctx):
+        self.signals = self.use(Signals)
+
+    def on_bar(self, ctx):
+        if ctx.position == 0 and self.signals["buy"]:
+            ctx.buy()
+        elif ctx.position > 0 and self.signals["sell"]:
+            ctx.sell()
+'''
+    return _t(name, rule, code=code)
+
+
+C, H, L, O = 'bars["close"]', 'bars["high"]', 'bars["low"]', 'bars["open"]'
+CLASSICS = [
+    _classic("Classic: MA cross", "Buy when the 10-bar average crosses above the 20-bar one; sell on the cross back.", '{"fast": (10, 2, 50, 1), "slow": (20, 5, 200, 1)}', "main", f"""
+fast, slow = ta.sma({C}, p["fast"]), ta.sma({C}, p["slow"])
+return {{"buy": ta.crossover(fast, slow), "sell": ta.crossunder(fast, slow), "fast": fast, "slow": slow}}"""),
+    _classic("Classic: three MA stack", "Buy when the 5, 10 and 20-bar averages stack upward; sell when they stack downward.", '{"short": (5, 2, 20, 1), "medium": (10, 5, 50, 1), "long": (20, 10, 100, 1)}', "main", f"""
+a, m, z = ta.sma({C}, p["short"]), ta.sma({C}, p["medium"]), ta.sma({C}, p["long"])
+up, down = (a > m) & (m > z), (a < m) & (m < z)
+return {{"buy": up & ~np.r_[False, up[:-1]], "sell": down & ~np.r_[False, down[:-1]], "short": a, "medium": m, "long": z}}"""),
+    _classic("Classic: RSI", "Buy when RSI(14) climbs back over 30; sell when it falls back under 70.", '{"length": (14, 2, 50, 1), "oversold": (30, 10, 40, 1), "overbought": (70, 60, 90, 1)}', "own", f"""
+r = ta.rsi({C}, p["length"])
+return {{"buy": ta.crossover(r, p["oversold"]), "sell": ta.crossunder(r, p["overbought"]), "rsi": r}}"""),
+    _classic("Classic: MACD", "Buy when MACD crosses above its signal line; sell on the cross below.", '{"fast": (12, 5, 30, 1), "slow": (26, 10, 50, 1), "signal": (9, 3, 20, 1)}', "own", f"""
+line, signal, hist = ta.macd({C}, p["fast"], p["slow"], p["signal"])
+return {{"buy": ta.crossover(line, signal), "sell": ta.crossunder(line, signal), "macd": line, "signal": signal, "hist": hist}}""", ', "hist": {"style": "histogram"}'),
+    _classic("Classic: Bollinger Bands", "Buy when the low first touches the lower band; sell when the high first touches the upper band.", '{"length": (20, 5, 50, 1), "mult": (2.0, 1.0, 4.0, 0.5)}', "main", f"""
+basis, upper, lower = ta.bb({C}, p["length"], p["mult"])
+return {{"buy": ta.crossunder({L}, lower), "sell": ta.crossover({H}, upper), "upper": upper, "basis": basis, "lower": lower}}"""),
+    _classic("Classic: stochastic slow", "Buy when %K crosses above %D near oversold; sell when it crosses below near overbought.", '{"k": (14, 5, 30, 1), "d": (3, 1, 10, 1), "smooth": (3, 1, 10, 1), "oversold": (20, 5, 30, 1), "overbought": (80, 70, 95, 1)}', "own", f"""
+k = ta.sma(ta.stoch({C}, {H}, {L}, p["k"]), p["smooth"])
+d = ta.sma(k, p["d"])
+return {{"buy": ta.crossover(k, d) & (k < p["oversold"] + 10), "sell": ta.crossunder(k, d) & (k > p["overbought"] - 10), "k": k, "d": d}}"""),
+    _classic("Classic: momentum", "Buy when 10-bar momentum turns positive; sell when it turns negative.", '{"length": (10, 3, 50, 1)}', "own", f"""
+m = ta.mom({C}, p["length"])
+return {{"buy": ta.crossover(m, 0), "sell": ta.crossunder(m, 0), "momentum": m}}"""),
+    _classic("Classic: consecutive up/down", "Buy after three down bars in a row; sell after three up bars.", '{"bars": (3, 2, 7, 1)}', "main", f"""
+return {{"buy": ta.sma({C} < {O}, p["bars"]) == 1, "sell": ta.sma({C} > {O}, p["bars"]) == 1}}"""),
+    _classic("Classic: bar up/down", "Buy on an up bar after a down bar; sell on a down bar after an up bar.", "{}", "main", f"""
+up, down = {C} > {O}, {C} < {O}
+return {{"buy": up & np.r_[False, ~up[:-1]], "sell": down & np.r_[False, ~down[:-1]]}}"""),
+    _classic("Classic: inside bar", "After an inside bar, buy a close above the mother bar's high; sell a close below its low.", "{}", "main", f"""
+mother_high, mother_low = ta.shift({H}, 2), ta.shift({L}, 2)
+inside = (ta.shift({H}) < mother_high) & (ta.shift({L}) > mother_low)
+return {{"buy": inside & ({C} > mother_high), "sell": inside & ({C} < mother_low)}}"""),
+    _classic("Classic: outside bar", "Buy an up bar that engulfs the last bar's range; sell a down one.", "{}", "main", f"""
+outside = ({H} > ta.shift({H})) & ({L} < ta.shift({L}))
+return {{"buy": outside & ({C} > {O}), "sell": outside & ({C} < {O})}}"""),
+    _classic("Classic: greedy trend", "Buy a rising close above its 10-bar average; sell a falling close below it.", '{"length": (10, 3, 30, 1)}', "main", f"""
+ma, prev = ta.sma({C}, p["length"]), ta.shift({C})
+return {{"buy": ({C} > ma) & ({C} > prev), "sell": ({C} < ma) & ({C} < prev), "average": ma}}"""),
+    _classic("Classic: channel breakout", "Buy a close through the prior 20-bar high; sell a close through the prior 20-bar low.", '{"length": (20, 5, 50, 1)}', "main", f"""
+upper, lower = ta.shift(ta.highest({H}, p["length"])), ta.shift(ta.lowest({L}, p["length"]))
+return {{"buy": ta.crossover({C}, upper), "sell": ta.crossunder({C}, lower), "upper": upper, "lower": lower}}"""),
+    _classic("Classic: Parabolic SAR", "Buy when price closes above the SAR; sell when it closes below.", '{"start": (0.02, 0.01, 0.1, 0.01), "maximum": (0.2, 0.1, 0.5, 0.05)}', "main", f"""
+s = ta.sar({H}, {L}, {C}, p["start"], p["start"], p["maximum"])
+return {{"buy": ta.crossover({C}, s), "sell": ta.crossunder({C}, s), "sar": s}}""", ', "sar": {"style": "dots"}'),
+    _classic("Classic: Keltner breakout", "Buy a close above the upper Keltner band; sell a close below the lower band.", '{"ema": (20, 5, 50, 1), "atr": (10, 5, 30, 1), "mult": (2.0, 1.0, 4.0, 0.5)}', "main", f"""
+basis = ta.ema({C}, p["ema"])
+width = p["mult"] * ta.atr({H}, {L}, {C}, p["atr"])
+return {{"buy": ta.crossover({C}, basis + width), "sell": ta.crossunder({C}, basis - width), "upper": basis + width, "basis": basis, "lower": basis - width}}"""),
+    _classic("Classic: ADX breakout", "When ADX rises through 25, buy if price is above its level 5 bars ago, sell if below.", '{"length": (14, 5, 30, 1), "threshold": (25, 15, 40, 1)}', "own", f"""
+adx = ta.dmi({H}, {L}, {C}, p["length"], p["length"])[2]
+fired, rising = ta.crossover(adx, p["threshold"]), {C} > ta.shift({C}, 5)
+return {{"buy": fired & rising, "sell": fired & ~rising, "adx": adx}}"""),
+    _classic("Classic: price channel", "Buy a high above the prior 20-bar high; sell a low under the prior 20-bar low.", '{"length": (20, 5, 55, 1)}', "main", f"""
+upper, lower = ta.shift(ta.highest({H}, p["length"])), ta.shift(ta.lowest({L}, p["length"]))
+return {{"buy": {H} > upper, "sell": {L} < lower, "upper": upper, "lower": lower}}"""),
+    _classic("Classic: volatility expansion", "Buy a one-bar rise larger than twice the 5-bar ATR; sell a fall that large.", '{"length": (5, 2, 20, 1), "mult": (2.0, 1.0, 4.0, 0.5)}', "own", f"""
+move, band = ta.change({C}), p["mult"] * ta.atr({H}, {L}, {C}, p["length"])
+return {{"buy": move > band, "sell": -move > band, "band": band}}"""),
+    _classic("Classic: pivot reversal", "Buy when a pivot low is confirmed (4 bars left, 2 right); sell on a confirmed pivot high.", '{"left": (4, 2, 10, 1), "right": (2, 1, 5, 1)}', "main", f"""
+low_pivot, high_pivot = ta.pivotlow({L}, p["left"], p["right"]), ta.pivothigh({H}, p["left"], p["right"])
+return {{"buy": np.isfinite(low_pivot), "sell": np.isfinite(high_pivot)}}"""),
+]
+
+
 def list_python_templates() -> list[dict]:
     return [{"name": template["name"], "rule": template["rule"], "spec": template["spec"],
              "symbols": _universe(template["spec"]["code"]) or (["SPY", "QQQ"] if template["name"] == "Python pairs" else ["SPY", "QQQ", "IWM"])}
-            for template in PYTHON_TEMPLATES]
+            for template in PYTHON_TEMPLATES + CLASSICS]
 
 
 def _universe(code: str) -> list[str] | None:

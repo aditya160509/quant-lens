@@ -106,3 +106,39 @@ class Strategy:
     rows = [r for r in result["tables"]["seen"] if r["cells"].get("rsi") is not None]
     assert rows and all(plotted[r["date"]] == pytest.approx(r["cells"]["rsi"]) for r in rows)
     assert {r["cells"].get("dir") for r in result["tables"]["seen"]} - {None} == {-1.0, 1.0}  # None while ATR warms up
+
+
+def test_candlestick_patterns_fire_on_their_textbook_shapes():
+    pad = [[10, 10.5, 9.5, 10.2]] * 10
+    cases = {
+        "bullish_engulfing": [[10.5, 10.6, 9.8, 9.9], [9.7, 10.9, 9.6, 10.8]],
+        "hammer": [[10.1, 10.16, 9.0, 10.15]],
+        "morning_star": [[11, 11.1, 9.0, 9.1], [8.9, 8.95, 8.7, 8.92], [9.0, 10.6, 8.95, 10.5]],
+        "three_black_crows": [[10.5, 10.55, 9.9, 10.0], [10.2, 10.25, 9.6, 9.7], [9.9, 9.95, 9.3, 9.4]],
+        "rising_window": [[10.6, 11, 10.55, 10.9]],
+    }
+    for name, rows in cases.items():
+        o, h, lo, c = np.array(pad + rows, dtype=float).T
+        found = ta.candles(o, h, lo, c)
+        assert set(found) == set(ta.PATTERN_SIDES) and found[name][-1], name
+        assert not any(v[:10].any() for k, v in found.items() if k not in ("doji", "spinning_top", "marubozu")), name  # the flat padding fires nothing directional
+
+
+def test_patterns_and_relative_strength_run_in_a_strategy(studio):  # noqa: F811
+    code = """from studio import ta
+
+class Strategy:
+    def init(self, ctx):
+        self.patterns = self.use(ta.Patterns)
+        self.rs = self.use(ta.RelativeStrength)
+
+    def on_bar(self, ctx):
+        ctx.table("seen", {"bull": self.patterns["bullish"], "beta": self.rs["beta"]})
+"""
+    result = studio.post("/api/studio-v3/preview", json={"symbol": "SPY", "spec": {"code": code}}).json()
+    assert result["status"] == "ok", (result.get("reason"), result.get("problem"))
+    assert {"Patterns.bull", "Patterns.bear", "RelativeStrength(63).rs", "RelativeStrength(63).rs_ma"} == set(result["plot_charts"])
+    rows = result["tables"]["seen"]
+    assert any(r["cells"].get("bull") for r in rows)
+    betas = [r["cells"]["beta"] for r in rows if r["cells"].get("beta") is not None]
+    assert betas and all(abs(b - 1) < 1e-6 for b in betas)  # SPY against SPY

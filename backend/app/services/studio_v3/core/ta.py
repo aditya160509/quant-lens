@@ -53,7 +53,8 @@ def _smooth(x, n, alpha):
     return out[:, 0] if flat else out
 
 
-def _shift(x, n=1):
+def shift(x, n=1):
+    """Pine's x[n]: the value n bars ago (NaN before the start)."""
     a = _a(x)
     out = np.full_like(a, nan)
     if n == 0:
@@ -163,7 +164,7 @@ def percentrank(x, length):
 
 
 def change(x, length=1):
-    return _a(x) - _shift(x, length)
+    return _a(x) - shift(x, length)
 
 
 def mom(x, length):
@@ -173,17 +174,17 @@ def mom(x, length):
 def roc(x, length):
     """Rate of change in percent."""
     with np.errstate(invalid="ignore", divide="ignore"):
-        return 100.0 * change(x, length) / _shift(x, length)
+        return 100.0 * change(x, length) / shift(x, length)
 
 
 def crossover(a, b):
     a, b = np.broadcast_arrays(_a(a), _a(b))
-    return (a > b) & (_shift(a) <= _shift(b))
+    return (a > b) & (shift(a) <= shift(b))
 
 
 def crossunder(a, b):
     a, b = np.broadcast_arrays(_a(a), _a(b))
-    return (a < b) & (_shift(a) >= _shift(b))
+    return (a < b) & (shift(a) >= shift(b))
 
 
 def cross(a, b):
@@ -239,7 +240,7 @@ def rsi(x, length):
 
 def tr(high, low, close):
     """True range; the first bar (no previous close) is high - low."""
-    prev = _shift(close)
+    prev = shift(close)
     h, lo = _a(high), _a(low)
     return np.fmax(h - lo, np.fmax(np.abs(h - prev), np.abs(lo - prev)))
 
@@ -415,6 +416,83 @@ def ichimoku(high, low, conversion=9, base=26, span_b=52):
 
     conv, bl = mid(conversion), mid(base)
     return conv, bl, (conv + bl) / 2, mid(span_b)
+
+
+# --- relative value (ported from the old chart's Alpha engine, made rolling so no bar sees later data) -----------------
+
+
+def zscore(x, length):
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return (_a(x) - sma(x, length)) / stdev(x, length)
+
+
+def beta(x, benchmark, length):
+    """Rolling beta of x's daily returns on the benchmark's."""
+    ra, rb = change(x) / shift(x), change(benchmark) / shift(benchmark)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return (sma(ra * rb, length) - sma(ra, length) * sma(rb, length)) / variance(rb, length)
+
+
+# --- candlestick patterns (ported from the old chart's pattern scanner) --------------------------------
+
+PATTERN_SIDES = {
+    "doji": "neutral", "hammer": "bullish", "shooting_star": "bearish", "marubozu": "neutral", "spinning_top": "neutral",
+    "bullish_engulfing": "bullish", "bearish_engulfing": "bearish", "dark_cloud_cover": "bearish", "piercing": "bullish",
+    "tweezer_top": "bearish", "tweezer_bottom": "bullish", "kicking_bullish": "bullish", "kicking_bearish": "bearish",
+    "rising_window": "bullish", "falling_window": "bearish", "bullish_doji_star": "bullish", "bearish_doji_star": "bearish",
+    "morning_star": "bullish", "evening_star": "bearish", "three_white_soldiers": "bullish", "three_black_crows": "bearish",
+    "bullish_abandoned_baby": "bullish", "bearish_abandoned_baby": "bearish", "tasuki_gap_up": "bullish", "tasuki_gap_down": "bearish",
+}
+
+
+def candles(open, high, low, close):
+    """{pattern: bool array}, true on the bar that completes the pattern. "Large" and "small" bodies compare with the
+    average body of the 10 bars before."""
+    o, h, lo, c = _a(open), _a(high), _a(low), _a(close)
+    body, rng = np.abs(c - o), h - lo
+    up_w, lo_w = h - np.fmax(o, c), np.fmin(o, c) - lo
+    bull, bear = c > o, c < o
+    avg = shift(sma(body, 10))
+
+    def b(x, n=1):  # a condition n bars ago
+        return np.r_[np.zeros(n, dtype=bool), np.asarray(x, dtype=bool)[:-n]]
+
+    p = shift
+    with np.errstate(invalid="ignore", divide="ignore"):
+        doji = (rng == 0) | (body / rng < 0.1)
+        maru = lambda t: (rng > 0) & (up_w / rng < t) & (lo_w / rng < t)
+        large, small = body > 1.5 * avg, body < 0.3 * avg
+        long_up, long_lo = up_w > 2 * body, lo_w > 2 * body
+        gap_up, gap_down = lo > p(h), h < p(lo)
+        return {
+            "doji": doji,
+            "hammer": (c < p(c)) & (lo_w >= 2 * body) & (up_w < 0.5 * body) & (body > 0),
+            "shooting_star": (c > p(c)) & (up_w >= 2 * body) & (lo_w < 0.5 * body) & (body > 0),
+            "marubozu": maru(0.05),
+            "spinning_top": (rng > 0) & (body / rng < 0.3) & (up_w > body) & (lo_w > body),
+            "bullish_engulfing": b(bear) & bull & (o < p(c)) & (c > p(o)),
+            "bearish_engulfing": b(bull) & bear & (o > p(c)) & (c < p(o)),
+            "dark_cloud_cover": b(bull) & bear & (o > p(h)) & (c < (p(o) + p(c)) / 2) & (c > p(o)),
+            "piercing": b(bear) & bull & (o < p(lo)) & (c > (p(o) + p(c)) / 2) & (c < p(o)),
+            "tweezer_top": b(bull) & bear & (np.abs(h - p(h)) < rng * 0.02),
+            "tweezer_bottom": b(bear) & bull & (np.abs(lo - p(lo)) < rng * 0.02),
+            "kicking_bullish": b(bear) & b(maru(0.1)) & bull & maru(0.1) & gap_up,
+            "kicking_bearish": b(bull) & b(maru(0.1)) & bear & maru(0.1) & gap_down,
+            "rising_window": gap_up,
+            "falling_window": gap_down,
+            "bullish_doji_star": b(bear) & b(large) & doji & (h < p(c)),
+            "bearish_doji_star": b(bull) & b(large) & doji & (lo > p(c)),
+            "morning_star": b(bear, 2) & b(large, 2) & b(small) & (p(h) < p(c, 2)) & bull & large & (c > (p(o, 2) + p(c, 2)) / 2),
+            "evening_star": b(bull, 2) & b(large, 2) & b(small) & (p(lo) > p(c, 2)) & bear & large & (c < (p(o, 2) + p(c, 2)) / 2),
+            "three_white_soldiers": b(bull, 2) & b(bull) & bull & (p(c) > p(c, 2)) & (c > p(c)) & (p(o) > p(o, 2)) & (p(o) < p(c, 2))
+            & (o > p(o)) & (o < p(c)) & ~b(long_up, 2) & ~b(long_up) & ~long_up,
+            "three_black_crows": b(bear, 2) & b(bear) & bear & (p(c) < p(c, 2)) & (c < p(c)) & (p(o) < p(o, 2)) & (p(o) > p(c, 2))
+            & (o < p(o)) & (o > p(c)) & ~b(long_lo, 2) & ~b(long_lo) & ~long_lo,
+            "bullish_abandoned_baby": b(bear, 2) & b(doji) & (p(h) < p(lo, 2)) & bull & (lo > p(h)),
+            "bearish_abandoned_baby": b(bull, 2) & b(doji) & (p(lo) > p(h, 2)) & bear & (h < p(lo)),
+            "tasuki_gap_up": b(bull, 2) & b(bull) & (p(lo) > p(h, 2)) & bear & (o > p(o)) & (c < p(o)) & (c > p(h, 2)),
+            "tasuki_gap_down": b(bear, 2) & b(bear) & (p(h) < p(lo, 2)) & bull & (o < p(o)) & (c > p(o)) & (c < p(lo, 2)),
+        }
 
 
 # --- ready indicators for self.use(...) ----------------------------------------------------------
@@ -605,4 +683,34 @@ class OBV:
         return {"obv": obv(bars["close"], bars["volume"])}
 
 
-INDICATORS = (SMA, EMA, HMA, BB, KC, Donchian, Supertrend, SAR, VWAP, Ichimoku, RSI, MACD, Stoch, ATR, ADX, CCI, MFI, WPR, OBV)
+class Patterns:
+    """Bullish candlestick patterns as dots under the bar, bearish ones over it; `bullish`/`bearish` count the patterns that fired."""
+    chart = "main"
+    plots = {"bull": {"color": UP, "style": "dots"}, "bear": {"color": DOWN, "style": "dots"}, "bullish": {"display": "none"}, "bearish": {"display": "none"}}
+
+    def compute(self, bars):
+        found = candles(bars["open"], bars["high"], bars["low"], bars["close"])
+        bull = sum(v.astype(float) for k, v in found.items() if PATTERN_SIDES[k] == "bullish")
+        bear = sum(v.astype(float) for k, v in found.items() if PATTERN_SIDES[k] == "bearish")
+        rng = bars["high"] - bars["low"]
+        return {"bull": np.where(bull > 0, bars["low"] - 0.25 * rng, nan), "bear": np.where(bear > 0, bars["high"] + 0.25 * rng, nan), "bullish": bull, "bearish": bear}
+
+
+class RelativeStrength:
+    """Price over the market (SPY), indexed to 100 at the first bar, with its moving average; `beta` and `zscore` (of the ratio) for strategies."""
+    inputs = {"length": (63, 5, 252, 1)}
+    plots = {"rs": {"color": BLUE}, "rs_ma": {"color": ORANGE}, "beta": {"display": "none"}, "zscore": {"display": "none"}}
+    levels = {"par": 100}
+
+    def compute(self, bars):
+        if "market" not in bars:
+            raise ValueError("RelativeStrength needs the market series (SPY)")
+        with np.errstate(invalid="ignore", divide="ignore"):
+            ratio = bars["close"] / bars["market"]
+        ok = np.isfinite(ratio)
+        rs = 100 * ratio / ratio[np.argmax(ok)] if ok.any() else ratio
+        n = self.inputs["length"]
+        return {"rs": rs, "rs_ma": sma(rs, n), "beta": beta(bars["close"], bars["market"], n), "zscore": zscore(ratio, n)}
+
+
+INDICATORS = (Patterns, RelativeStrength, SMA, EMA, HMA, BB, KC, Donchian, Supertrend, SAR, VWAP, Ichimoku, RSI, MACD, Stoch, ATR, ADX, CCI, MFI, WPR, OBV)

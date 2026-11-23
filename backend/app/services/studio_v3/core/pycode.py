@@ -877,7 +877,8 @@ def typecheck(files: dict[str, str], file: str = "main.py") -> list[dict]:
     with tempfile.TemporaryDirectory() as tmp:
         for name, text in files.items():
             if name.endswith(".py") and "/" not in name and ".." not in name:
-                (Path(tmp) / name).write_text(text)
+                # An indicator declares `inputs = {"n": (20, 2, 50, 1)}` but reads plain numbers at run time; typed as a dict, ty takes them as such.
+                (Path(tmp) / name).write_text(re.sub(r"^(\s+)inputs\s*=\s*\{", r"\1inputs: dict = {", text, flags=re.MULTILINE))
         (Path(tmp) / "studio").mkdir()  # `from studio import ta` resolves to the real library, so its calls are type-checked too
         (Path(tmp) / "studio" / "__init__.py").write_text("")
         (Path(tmp) / "studio" / "ta.py").write_text((Path(__file__).with_name("ta.py")).read_text())

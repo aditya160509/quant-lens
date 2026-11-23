@@ -83,7 +83,7 @@ def test_python_starter_gallery_trades_on_real_market_data():
     from app.services.studio_v3.core import compile as C
 
     gallery = templates.list_python_templates()
-    assert len({item["name"] for item in gallery}) == 12
+    assert len({item["name"] for item in gallery}) == 31
     prepared = {}
     for item in gallery:
         spec = Strategy(**item["spec"])

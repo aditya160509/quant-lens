@@ -1038,7 +1038,7 @@ class UsedIndicator:
     `plots = {"upper": {"color": "#f80", "style": "line"}}` ({"display": "none"} keeps an output off the chart), `fills = [("upper", "lower")]`,
     `levels = {"overbought": 70}` (flat lines in the indicator's pane).
     Instead of `update`, `compute(self, bars)` may return {name: array} for the whole history at once (bars: open, high, low, close,
-    volume, date arrays); the value at each bar is read from it, so vectorised `ta` functions run once. Only causal maths belongs
+    volume, date and, when the run has a benchmark, market arrays); the value at each bar is read from it, so vectorised `ta` functions run once. Only causal maths belongs
     there: the look-ahead check replays the run on cut history and reports any value that changes."""
 
     def __init__(self, cls, params, kwargs):
@@ -1068,7 +1068,10 @@ class UsedIndicator:
         if hasattr(self.impl, "compute"):
             if self._series is None:
                 n = len(ctx._dates)
-                bars = MappingProxyType({f: np.asarray(ctx._cols[f], dtype=float) for f in ("open", "high", "low", "close", "volume")} | {"date": np.asarray(ctx._dates)})
+                cols = {f: np.asarray(ctx._cols[f], dtype=float) for f in ("open", "high", "low", "close", "volume")} | {"date": np.asarray(ctx._dates)}
+                if getattr(ctx, "_benchmark", None) is not None:
+                    cols["market"] = np.asarray(ctx._benchmark, dtype=float)
+                bars = MappingProxyType(cols)
                 got = self.impl.compute(bars)
                 if not isinstance(got, dict):
                     raise ValueError(f"{self.name}.compute must return a dict of arrays")
