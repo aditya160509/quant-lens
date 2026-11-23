@@ -5,6 +5,7 @@ The child runs user callbacks with restricted builtins. Event runs use Studio's 
 
 import copy
 import importlib
+import importlib.util
 import inspect
 import json
 import math
@@ -1034,7 +1035,11 @@ class UsedIndicator:
     """A user indicator class run by `self.use(...)`: `update(self, ctx)` returns a number or a {name: number} dict each bar,
     before the strategy's on_bar sees it; every output is plotted, so the chart and the backtest read the same numbers.
     Class attributes: `inputs = {"n": (20, 5, 100, 1)}` (tuples join Build's Inputs as `Class_n`), `chart = "main"` or "own",
-    `plots = {"upper": {"color": "#f80", "style": "line"}}`, `fills = [("upper", "lower")]`."""
+    `plots = {"upper": {"color": "#f80", "style": "line"}}` ({"display": "none"} keeps an output off the chart), `fills = [("upper", "lower")]`,
+    `levels = {"overbought": 70}` (flat lines in the indicator's pane).
+    Instead of `update`, `compute(self, bars)` may return {name: array} for the whole history at once (bars: open, high, low, close,
+    volume, date arrays); the value at each bar is read from it, so vectorised `ta` functions run once. Only causal maths belongs
+    there: the look-ahead check replays the run on cut history and reports any value that changes."""
 
     def __init__(self, cls, params, kwargs):
         declared = getattr(cls, "inputs", {}) or {}
@@ -1053,16 +1058,36 @@ class UsedIndicator:
         self.chart = getattr(cls, "chart", "own")
         self.styles = getattr(cls, "plots", {}) or {}
         self.fills = getattr(cls, "fills", []) or []
-        self.out, self._t = {}, None
+        self.levels = getattr(cls, "levels", {}) or {}
+        self.out, self._t, self._series = {}, None, None
 
     def step(self, ctx):
         if self._t == ctx.t:
             return
         self._t = ctx.t
-        got = self.impl.update(ctx)
-        self.out = {k: float(v) for k, v in got.items()} if isinstance(got, dict) else {"": float(got)}
+        if hasattr(self.impl, "compute"):
+            if self._series is None:
+                n = len(ctx._dates)
+                bars = MappingProxyType({f: np.asarray(ctx._cols[f], dtype=float) for f in ("open", "high", "low", "close", "volume")} | {"date": np.asarray(ctx._dates)})
+                got = self.impl.compute(bars)
+                if not isinstance(got, dict):
+                    raise ValueError(f"{self.name}.compute must return a dict of arrays")
+                self._series = {str(k): np.broadcast_to(np.asarray(v, dtype=float), (n,)) for k, v in got.items()}
+                # Warm once every output has had a value; outputs that are NaN by design on some bars (Supertrend's up/down) stay ready.
+                self._warm = max((int(np.argmax(np.isfinite(v))) if np.isfinite(v).any() else n for v in self._series.values()), default=0)
+                for label, level in self.levels.items():
+                    ctx.hline(level, chart=self.chart, name=f"{self.name} {label}")
+            self.out = {k: float(v[ctx.t]) for k, v in self._series.items()}
+        else:
+            got = self.impl.update(ctx)
+            self.out = {k: float(v) for k, v in got.items()} if isinstance(got, dict) else {"": float(got)}
+            if self.levels and ctx.t == 0:
+                for label, level in self.levels.items():
+                    ctx.hline(level, chart=self.chart, name=f"{self.name} {label}")
         for key, value in self.out.items():
             style = self.styles.get(key, {}) if key else next(iter(self.styles.values()), {})
+            if style.get("display") == "none":
+                continue
             ctx.plot(f"{self.name}.{key}" if key else self.name, value, chart=style.get("chart", self.chart), color=style.get("color"), width=style.get("width"), style=style.get("style"))
         for a, b in self.fills:
             ctx.fill(f"{self.name}.{a}", f"{self.name}.{b}")
@@ -1078,6 +1103,8 @@ class UsedIndicator:
 
     @property
     def ready(self):
+        if self._series is not None:
+            return self._t >= self._warm
         return bool(self.out) and all(math.isfinite(v) for v in self.out.values())
 
 
@@ -1394,6 +1421,14 @@ def main():
 
         def project_import(name, globals_=None, locals_=None, fromlist=(), level=0):
             fromlist = tuple(fromlist or ())
+            if not level and (name == "studio.ta" or (name == "studio" and fromlist == ("ta",))):
+                if "studio" not in imported:
+                    spec = importlib.util.spec_from_file_location("studio.ta", Path(__file__).with_name("ta.py"))
+                    ta = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(ta)
+                    imported["studio"] = ModuleType("studio")
+                    imported["studio"].ta = ta
+                return imported["studio"]
             if name in helper_code and not level:
                 if any(item == "*" or item.startswith("_") for item in fromlist):
                     raise ImportError("Only named imports from saved project modules are allowed")

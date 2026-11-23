@@ -17,7 +17,7 @@ Three streams, in this order. Details stay in their sections below; this is the 
 
 **3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 11 to 14 research, reactive and SQL cells, 17 and 18 library and starters, 20 review comments (partial), 23 and 24 paper and live hooks, 28 pop-out windows. Later (AI parked by the owner): 21, 22. Built: 2, 3, 4, 5, 6, 7, 9, 10, 15 (Data page), 19 (share with a pinned run), 25, 26 (keymap chords), 27 (Layouts dialog), 29. Moved to Chart: 1, 8, 30. IDE catalogue P1 gaps built 2026-11-21: strategy inspections, run configurations, logpoints, test explorer and strategy tests, DataFrame variable explorer. P1 gap left: percent cells (#11).
 
-**4. Chart, section "Chart": CH-1 to CH-50, 14 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
+**4. Chart, section "Chart": CH-1 to CH-50, 12 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
 
 ## Rules
 
@@ -577,10 +577,10 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [x] [M] CH-29 P1 Parameter scrubber / indicator lab: drag an input, the indicator and signals redraw with no backtest [C-12, research] (each input with min and max gets a slider; dragging re-runs the preview in about 150 ms server time, which redraws plots, signals and trades)
 - [x] [M] CH-30 P1 Look-ahead guard: run indicators on truncated history, report differences in Problems [research 8] (the preview's history-cut replay; changed signals show as a look-ahead warning in Problems)
 - [ ] [M] CH-31 P2 Indicator dialog: Inputs, Style, Visibility; apply to a pane; indicator on indicator; favourites [C-11 part]
-- [ ] [M] CH-32 P2 Chart indicators match the backend formula within 1e-6 on a fixture [C-1]
+- [x] [M] CH-32 P2 Chart indicators match the backend formula within 1e-6 on a fixture [C-1] (studio.ta (core/ta.py) follows Pine's ta.* formulas and is the one implementation: formula rules (ema, rsi, atr) call it, Python strategies import it, the chart plots its output; test_studio_v3_ta checks it against literal Pine reference loops to 1e-9. Fixed on the way: ema and atr rules were NaN forever for a symbol listed after the panel's first date. Vela's own picker indicators are not compared)
 - [ ] [M] CH-33 P2 Signal pane: score, rank and percentile with the breakpoint line [research]
-- [ ] [M] CH-34 P2 Port the pattern scanner and alpha maths as Python indicators; the 20 old strategies as starters [research port list]
-- [ ] [M] CH-35 P3 Pine import via PineTS (licence check first) [DEV chart plan]
+- [ ] [M] CH-34 P2 Port the pattern scanner and alpha maths as Python indicators; the 20 old strategies as starters [research port list] (partial: `from studio import ta` gives 45 Pine-matching functions and 19 ready indicators for self.use (SMA, EMA, HMA, BB, KC, Donchian, Supertrend, SAR, VWAP, Ichimoku, RSI, MACD, Stoch, ATR, ADX, CCI, MFI, WPR, OBV) with levels, fills and one pane per indicator; a Python Supertrend starter; pattern scanner, alpha maths and the old strategies open)
+- [x] [M] CH-35 P3 Pine import via PineTS (licence check first) [DEV chart plan] (dropped 2026-11-23: Studio stays Python-only; studio.ta covers Pine's indicator maths instead)
 
 ### Strategy on the chart
 - [x] [M] CH-36 P1 Orders, stop, target and trailing-stop lines per trade [C-14 part, research 6] (entry, exit, MAE, MFE, stop and target lines across the trade under the cursor; the engine records each trade's stop and target levels (Exits settings or bracket); a trailing stop shows its stop level, not the path it trailed)

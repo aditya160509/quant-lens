@@ -72,6 +72,22 @@ PYTHON_TEMPLATES = [
         elif ctx.rule("rsi(close, 14) > 55"):
             ctx.sell()
 '''),
+    _t("Python Supertrend", "Ride the Supertrend while RSI is not stretched; the chart draws both from the same numbers.", code='''from studio import ta
+
+
+class Strategy:
+    def init(self, ctx):
+        self.trend = self.use(ta.Supertrend, factor=3.0, atr_period=10)
+        self.rsi = self.use(ta.RSI, length=14)
+
+    def on_bar(self, ctx):
+        if not self.trend.ready:
+            return
+        if ctx.position == 0 and self.trend["direction"] < 0 and self.rsi.value < 70:
+            ctx.buy()
+        elif ctx.position > 0 and self.trend["direction"] > 0:
+            ctx.sell()
+'''),
     _t("Python momentum rotation", "At month start, hold the strongest name by 63-session return.", code='''class Strategy:
     warmup = 63
     rebalance_schedule = "month_start"

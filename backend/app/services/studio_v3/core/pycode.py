@@ -35,6 +35,7 @@ ALLOWED_IMPORTS = {
     # B-56: models that fit on past bars. No datasets, model_selection or utils (joblib, downloads); `n_jobs` is refused in check().
     "sklearn.linear_model", "sklearn.ensemble", "sklearn.preprocessing", "sklearn.pipeline", "sklearn.metrics",
     "sklearn.tree", "sklearn.neighbors", "sklearn.cluster", "sklearn.decomposition",
+    "studio.ta",  # Studio's TradingView-matching indicator maths (core/ta.py)
 }
 # Defence in depth: library calls that reach the filesystem or spawn work, banned by name.
 BANNED_ATTRS = {
@@ -877,8 +878,11 @@ def typecheck(files: dict[str, str], file: str = "main.py") -> list[dict]:
         for name, text in files.items():
             if name.endswith(".py") and "/" not in name and ".." not in name:
                 (Path(tmp) / name).write_text(text)
+        (Path(tmp) / "studio").mkdir()  # `from studio import ta` resolves to the real library, so its calls are type-checked too
+        (Path(tmp) / "studio" / "__init__.py").write_text("")
+        (Path(tmp) / "studio" / "ta.py").write_text((Path(__file__).with_name("ta.py")).read_text())
         try:
-            out = subprocess.run([ty, "check", "--output-format", "concise", "--color", "never", "--python", sys.prefix, tmp], capture_output=True, text=True, timeout=5, check=False).stdout
+            out = subprocess.run([ty, "check", "--output-format", "concise", "--color", "never", "--python", sys.prefix, "--extra-search-path", tmp, tmp], capture_output=True, text=True, timeout=5, check=False).stdout
         except subprocess.TimeoutExpired:
             return []
     problems = []

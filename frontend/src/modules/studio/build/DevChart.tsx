@@ -11,7 +11,7 @@ type Bar = { time: string; open: number; high: number; low: number; close: numbe
 
 type Pt = { time: number; value: number | null };
 /** What the Vela natives read: ctx.plot series, held spans, the paused bar. Written by DevChart, read by the one chart on screen. */
-const feed = { tradeLines: [] as { price: number; color: string; title: string; from: number; to: number }[], plots: {} as Record<string, Pt[]>, colors: {} as Record<string, string>, draw: null as Draw | null, own: {} as Record<string, boolean>, bg: [] as { from: number; to: number; color: string }[], spans: [] as { from: number; to: number; color: string }[], subs: new Set<() => void>() };
+const feed = { tradeLines: [] as { price: number; color: string; title: string; from: number; to: number }[], plots: {} as Record<string, Pt[]>, colors: {} as Record<string, string>, draw: null as Draw | null, own: {} as Record<string, boolean>, groups: {} as Record<string, string[]>, hidden: new Set<string>(), bg: [] as { from: number; to: number; color: string }[], spans: [] as { from: number; to: number; color: string }[], subs: new Set<() => void>() };
 const push = () => feed.subs.forEach((f) => f());
 let probe: CanvasRenderingContext2D | null = null;
 /** A theme token as #rrggbb (tokens resolve to lab() in the browser; Vela wants hex). Read on the chart's own element, where the tokens live. */
@@ -31,24 +31,32 @@ const TOOL_GROUPS: { id: string; label: string; tools: import("@luxalgo/vela").D
   { id: "text", label: "Text and marks", tools: ["text", "note", "callout", "pricelabel", "flagmark", "arrowmarkup", "arrowmarkdown"] },
   { id: "measure", label: "Measure", tools: ["datepricerange", "position", "anchoredvwap", "fixedrangevp"] },
 ];
-/** Vela loads in the browser only; the two native indicators that paint our plots and spans register once. */
+const known = new Set<string>();
+let groupType: ((group: string, title: string, paneHint: "price" | "new") => string) | null = null;
+/** Vela loads in the browser only; the native indicators that paint our plots and spans register here. */
 function boot() {
   return Promise.all([import("@luxalgo/vela"), import("@luxalgo/vela/plugin")]).then(([{ Vela, createTheme }, { registerNativeIndicator, stableSeriesId }]) => {
-    for (const [type, paneHint] of [["atlas.plot", "price"], ["atlas.pane", "new"]] as const) registerNativeIndicator({
-      type, title: "Plot", paneHint, overlay: paneHint === "price", multiInstance: true,
+    // One type per plot group, registered on first use, so each legend reads the indicator's own name ("RSI(14)").
+    groupType = (group, title, paneHint) => { const type = `atlas.g.${group}`; if (!known.has(type)) { known.add(type); register(type, title, paneHint); } return type; };
+    const register = (type: string, title: string, paneHint: "price" | "new") => registerNativeIndicator({
+      type, title, paneHint, overlay: paneHint === "price", multiInstance: true,
       inputsSchema: () => [{ key: "name", title: "Name", type: "string", defval: "" }], defaultInputs: () => ({ name: "" }),
       create: () => {
         let ctx: import("@luxalgo/vela/plugin").NativeIndicatorContext | null = null, name = "", off = () => {};
+        // One instance per group: every output of one indicator (`RSI(14).rsi`, ...) shares its pane, fills and level lines, as on TradingView.
         const run = () => {
-          const pts = feed.plots[name]; if (!ctx || !pts) return;
-          const by = new Map(pts.map((p) => [p.time, p.value]));
-          const st = feed.draw?.styles[name], d = feed.draw, sid = (n: string) => stableSeriesId({ instanceId: "atlas.plot", kind: "line", title: n, ordinal: 0 });
-          const kind = ({ step: "step", histogram: "histogram", area: "area", dots: "circles" } as const)[st?.style as "step"] ?? "line";
-          const own = feed.own[name], firstOwn = Object.keys(feed.plots).find((n) => feed.own[n]) === name;
+          const names = feed.groups[name]; if (!ctx || !names) return;
+          const d = feed.draw, bars = ctx.bars(), sid = (n: string) => stableSeriesId({ instanceId: "atlas.plot", kind: "line", title: n, ordinal: 0 });
+          const own = feed.own[names[0]!], prefix = name.split("|")[0]!, groups = Object.keys(feed.groups);
+          const firstOwn = groups.find((g) => feed.own[feed.groups[g]![0]!]) === name, owned = (h: { name: string }) => groups.some((g) => h.name.startsWith(`${g.split("|")[0]} `));
           ctx.emit({
-            series: [{ id: sid(name), title: name, paneId: "", kind, points: ctx.bars().map((b) => ({ time: b.time, value: by.get(b.time) ?? null })), style: { color: st?.color ?? feed.colors[name], width: st?.width ?? 1.5, lineStyle: "solid" } }],
-            fills: (d?.fills ?? []).filter((f) => f.a === name && f.b !== name && feed.own[f.b] === own).map((f, i) => ({ id: `fill${i}`, paneId: "", fromSeriesId: sid(f.a), toSeriesId: sid(f.b), color: f.color ?? tint(feed.colors[name], "26") })),
-            priceLines: own && firstOwn ? (d?.hlines ?? []).filter((h) => h.chart === "own").map((h, i) => ({ id: `h${i}`, paneId: "", price: h.value, color: h.color ?? "#888888", lineStyle: "dashed" as const, width: 1, title: h.name })) : [],
+            series: names.filter((n) => !feed.hidden.has(n)).map((n) => {
+              const by = new Map((feed.plots[n] ?? []).map((p) => [p.time, p.value])), st = d?.styles[n];
+              const kind = ({ step: "step", histogram: "histogram", area: "area", dots: "circles" } as const)[st?.style as "step"] ?? "line";
+              return { id: sid(n), title: n, paneId: "", kind, points: bars.map((b) => ({ time: b.time, value: by.get(b.time) ?? null })), style: { color: st?.color ?? feed.colors[n], width: st?.width ?? 1.5, lineStyle: "solid" as const } };
+            }),
+            fills: (d?.fills ?? []).filter((f) => names.includes(f.a) && names.includes(f.b) && f.a !== f.b && !feed.hidden.has(f.a) && !feed.hidden.has(f.b)).map((f, i) => ({ id: `fill${i}`, paneId: "", fromSeriesId: sid(f.a), toSeriesId: sid(f.b), color: f.color ?? tint(feed.colors[f.a]!, "1f") })),
+            priceLines: own ? (d?.hlines ?? []).filter((h) => h.chart === "own" && (h.name.startsWith(`${prefix} `) || (firstOwn && !owned(h)))).map((h, i) => ({ id: `h${i}`, paneId: "", price: h.value, color: h.color ?? "#787b86", lineStyle: "dashed" as const, width: 1, title: h.name.startsWith(`${prefix} `) ? h.name.slice(prefix.length + 1) : h.name })) : [],
           });
         };
         return { start: (c, i) => { ctx = c; name = String(i.name ?? ""); off = (feed.subs.add(run), () => feed.subs.delete(run)); run(); }, onBars: run, onViewport: () => {}, setInputs: (i) => { name = String(i.name ?? ""); run(); }, suspend: () => {}, resume: run, stop: () => { off(); ctx = null; } };
@@ -292,17 +300,26 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     }
     const src = { ...plots, ...cmp, ...eqPlots, ...sp };
     const names = Object.keys(src);
+    // Group outputs by indicator: `Name(args).key` plots share one pane or overlay; plain plots on the price chart share one group so fills between them work.
+    const groups: Record<string, string[]> = {};
     names.forEach((n, i) => {
       feed.plots[n] = (src[n] ?? []).filter((p) => !p.symbol || p.symbol === sym).map((p) => ({ time: ms(p.date), value: p.value }));
       feed.colors[n] = cv(`--s${(i % 6) + 1}`, box.current ?? undefined);
       const wantOwn = n in sp ? true : n in cmp ? false : own[n] ?? prev?.plot_charts?.[n] !== "main";
       feed.own[n] = wantOwn;
-      let e = handles.current.get(n);
-      if (e && e.own !== wantOwn) { e.h.remove(); e = undefined; }
-      if (!e) { e = { h: chart.addNativeIndicator(wantOwn ? "atlas.pane" : "atlas.plot", { inputs: { name: n } }), own: wantOwn }; handles.current.set(n, e); }
-      e.h.setVisible(!hidden.includes(n));
+      const g = `${/^(.+\))\.[^.]+$/.exec(n)?.[1] ?? (wantOwn ? n : "main")}|${wantOwn ? "own" : "main"}`;
+      (groups[g] ??= []).push(n);
     });
-    handles.current.forEach((e, n) => { if (!names.includes(n)) { e.h.remove(); handles.current.delete(n); } });
+    feed.groups = groups;
+    feed.hidden = new Set(hidden);
+    Object.entries(groups).forEach(([g, list]) => {
+      const wantOwn = feed.own[list[0]!]!;
+      let e = handles.current.get(g);
+      const prefix = g.split("|")[0]!, title = prefix === "main" ? "Plots" : prefix;
+      if (!e) { e = { h: chart.addNativeIndicator(groupType!(g, title, wantOwn ? "new" : "price"), { inputs: { name: g } }), own: wantOwn }; handles.current.set(g, e); }
+      e.h.setVisible(list.some((n) => !hidden.includes(n)));
+    });
+    handles.current.forEach((e, g) => { if (!(g in groups)) { e.h.remove(); handles.current.delete(g); } });
     feed.draw = prev?.draw ?? null;
     feed.bg = (prev?.draw?.bg ?? []).map((b) => ({ from: ms(b.date), to: ms(b.date) + 864e5, color: b.color }));
     // Market regime ribbon: green above SPY's 200-day mean, red below; stronger in high volatility.

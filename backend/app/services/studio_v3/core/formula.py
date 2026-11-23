@@ -15,6 +15,8 @@ import pandas as pd
 from app.services.shared.formula import BINOPS, CMPOPS, SignalError
 from app.services.shared.formula import parse as _parse
 
+from . import ta
+
 MAX_WINDOW = 2000
 FIELDS = {"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume", "returns": "Close-to-close return", "market": "SPY close (the market), same on every name"}
 
@@ -27,25 +29,7 @@ def _roll(fn):
     return lambda x, n: getattr(_df(x).rolling(n, min_periods=n), fn)().to_numpy()
 
 
-def _smooth(x, n, alpha, start=0):
-    """LEAN's seed: the mean of the first n observations, then exponential smoothing (LEAN_PARITY row 19)."""
-    a = np.asarray(x, dtype=float)
-    out = np.full_like(a, np.nan, dtype=float)
-    if a.shape[0] < start + n:
-        return out
-    out[start + n - 1] = a[start:start + n].mean(axis=0)
-    for t in range(start + n, a.shape[0]):
-        previous = out[t - 1]
-        out[t] = previous + alpha * (a[t] - previous)
-    return out
-
-
-def _ema(x, n):
-    return _smooth(x, n, 2.0 / (n + 1))
-
-
-def _wilder(x, n):
-    return _smooth(x, n, 1.0 / n)
+_ema, _wilder, _rsi, true_range = ta.ema, ta.rma, ta.rsi, ta.tr  # one implementation for rules, Python strategies and the chart
 
 
 def _delay(x, n):
@@ -54,19 +38,6 @@ def _delay(x, n):
         return np.asarray(x, dtype=float)
     out[n:] = x[:-n]
     return out
-
-
-def _rsi(x, n):
-    d = np.diff(np.asarray(x, dtype=float), axis=0, prepend=np.nan)
-    up = _smooth(np.where(d > 0, d, 0.0), n, 1.0 / n, start=1)
-    down = _smooth(np.where(d < 0, -d, 0.0), n, 1.0 / n, start=1)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return np.where(down == 0, np.where(up == 0, 50.0, 100.0), 100.0 - 100.0 / (1.0 + up / down)) + up * 0
-
-
-def true_range(high, low, close):
-    prev = _delay(close, 1)
-    return np.fmax(high - low, np.fmax(np.abs(high - prev), np.abs(low - prev)))
 
 
 def _cross(a, b, up: bool):
