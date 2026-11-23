@@ -35,6 +35,7 @@ from app.services.studio_v3.core import (
     qc_import,
     store,
     strategy_tests,
+    ta,
     templates,
     validate,
     workspace,
@@ -867,6 +868,12 @@ def template_stats() -> dict[str, Any]:
 @router.get("/templates")
 def get_templates() -> dict[str, Any]:
     return {"templates": templates.list_templates(), "python_templates": templates.list_python_templates()}
+
+
+@router.get("/indicators")
+def get_indicators() -> dict[str, Any]:
+    """Ready indicators for `self.use(ta.X)`: name, title, overlay or own pane, inputs as (default, min, max, step), plotted outputs."""
+    return {"indicators": ta.catalogue()}
 
 
 @router.get("/strategies")

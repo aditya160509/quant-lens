@@ -825,3 +825,17 @@
 .dv-grid-ws { position: relative; min-height: 0; min-width: 0; overflow: hidden; }
 .dv-spread { display: flex; gap: 4px; } .dv-spread select { width: 70px; flex: none; }
 .dv-base-diff { margin: 0; padding: 2px 10px; font-size: 11.5px; color: var(--text-2); }
+
+/* Chart › Indicators picker (CH-31) */
+.dv-ind { position: absolute; z-index: 41; top: 40px; right: 56px; width: min(340px, calc(100% - 72px)); max-height: calc(100% - 96px); display: grid; grid-template-rows: auto 1fr; background: var(--island); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line-2), 0 18px 48px -18px oklch(0 0 0 / .6); overflow: hidden; }
+.dv-ind header { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
+.dv-ind header .input { flex: 1; }
+.dv-ind-list { overflow: auto; padding: 4px 0 8px; }
+.dv-ind-list h5 { margin: 8px 12px 4px; font-size: 11px; font-weight: 500; color: var(--text-3); }
+.dv-ind-row { display: flex; align-items: center; padding-right: 6px; }
+.dv-ind-row:hover { background: var(--hover, oklch(1 0 0 / .04)); }
+.dv-ind-pick { flex: 1; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; padding: 6px 12px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; font-size: 12.5px; }
+.dv-ind-pick b { font-weight: 500; }
+.dv-ind-pick code { font-size: 11px; color: var(--text-3); }
+.dv-ind-row [aria-pressed="true"] svg { fill: var(--warn, #f5a623); color: var(--warn, #f5a623); }
+.dv-plots input[type="color"] { width: 22px; height: 18px; padding: 0; border: 0; background: none; cursor: pointer; }

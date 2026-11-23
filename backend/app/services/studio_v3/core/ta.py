@@ -713,4 +713,20 @@ class RelativeStrength:
         return {"rs": rs, "rs_ma": sma(rs, n), "beta": beta(bars["close"], bars["market"], n), "zscore": zscore(ratio, n)}
 
 
+TITLES = {
+    "Patterns": "Candlestick patterns", "RelativeStrength": "Relative strength vs SPY", "SMA": "Simple moving average", "EMA": "Exponential moving average",
+    "HMA": "Hull moving average", "BB": "Bollinger Bands", "KC": "Keltner Channels", "Donchian": "Donchian Channels", "Supertrend": "Supertrend",
+    "SAR": "Parabolic SAR", "VWAP": "VWAP (monthly anchor)", "Ichimoku": "Ichimoku Cloud", "RSI": "Relative Strength Index", "MACD": "MACD",
+    "Stoch": "Stochastic", "ATR": "Average True Range", "ADX": "Directional Movement (ADX)", "CCI": "Commodity Channel Index", "MFI": "Money Flow Index",
+    "WPR": "Williams %R", "OBV": "On-Balance Volume",
+}
+
+
+def catalogue():
+    """The ready indicators as Build's indicator picker lists them."""
+    return [{"name": c.__name__, "title": TITLES.get(c.__name__, c.__name__), "overlay": getattr(c, "chart", "own") == "main",
+             "inputs": {k: list(v) for k, v in getattr(c, "inputs", {}).items()},
+             "outputs": [k for k, st in getattr(c, "plots", {}).items() if st.get("display") != "none"]} for c in INDICATORS]
+
+
 INDICATORS = (Patterns, RelativeStrength, SMA, EMA, HMA, BB, KC, Donchian, Supertrend, SAR, VWAP, Ichimoku, RSI, MACD, Stoch, ATR, ADX, CCI, MFI, WPR, OBV)

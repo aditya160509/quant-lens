@@ -7,6 +7,7 @@ import { ArrowDownToLine, Eraser, WrapText, BookOpen, Bug, CircleAlert, Gauge, S
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
+import { type IndicatorInfo, insertUse } from "./IndicatorPicker";
 import { SERIES } from "@/charts/core";
 import { Distribution } from "@/charts/Distribution";
 import { TimeSeries } from "@/charts/TimeSeries";
@@ -491,6 +492,16 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const setNumbered = (n: number, line: number) => setNbm((b) => { const cur = b[n]; const { [n]: _gone, ...rest } = b; return cur && cur.file === active && cur.line === line ? rest : { ...rest, [n]: { file: active, line } }; });
   const goNumbered = (n: number) => { const m = nbm[n]; if (m) goto(m.file, m.line); else toast(`No bookmark ${n}`); };
   const orderLines = prev?.order_lines;
+  // Chart › Indicators: the picked indicator becomes a `self.use(ta.X, ...)` line in Strategy.init, so the code stays the one source.
+  const addRef = useRef<(ind: IndicatorInfo) => void>(() => {});
+  addRef.current = (ind) => {
+    if (readOnly) return void toast.error("Read-only: take over to edit");
+    const next = insertUse(spec.code, ind);
+    if (next == null) return void toast.error("main.py has no class Strategy");
+    edit({ code: next });
+    toast.success(`${ind.title} added to Strategy.init`);
+  };
+  const addIndicator = useCallback((ind: IndicatorInfo) => addRef.current(ind), []);
   const markToCode = useCallback((d: string) => { const o = orderLines?.find((x) => x.dates.some((y) => y.slice(0, 10) === d)); if (o) gotoRef.current(o.file, o.line); else toast(`No order line for ${d}`); }, [orderLines]);
   const bmJump = (dir: 1 | -1, line: number) => {
     const marks = [...(bms[active] ?? [])].sort((x, y) => x - y);
@@ -1376,7 +1387,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const rightPanel = (
       <Panel id="right" minSize={0}>
       <aside className="dv-side" inert={!chartOpen}>
-        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart onMark={markToCode} onNote={openBarThread} notes={[...new Set(cmts.filter((c) => c.date && !c.resolved).map((c) => c.date!))]} symbol={dbg?.symbol ?? symbol} drawKey={strategyId ?? "new"} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} max={maxChart} onMax={() => setMaxChart((x) => !x)} /></div> : null}
+        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><DevChart onMark={markToCode} onNote={openBarThread} notes={[...new Set(cmts.filter((c) => c.date && !c.resolved).map((c) => c.date!))]} symbol={dbg?.symbol ?? symbol} drawKey={strategyId ?? "new"} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} max={maxChart} onMax={() => setMaxChart((x) => !x)} onAddIndicator={addIndicator} /></div> : null}
       </aside>
       </Panel>
   );
