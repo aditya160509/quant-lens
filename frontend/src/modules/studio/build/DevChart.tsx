@@ -417,7 +417,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
       ];
     }), ...base.map((d) => ({ id: `base${d}`, time: ms(d), group: "baseline", title: now.has(d) ? "Baseline entry (kept)" : "Baseline entry (gone now)", tooltip: `Baseline entry ${d}${now.has(d) ? "" : " · not in this run"}`, glyph: { shape: "circle" as const, color: now.has(d) ? "#8a8f98" : down, letter: "b" } })), ...notes.map((d) => ({ id: `note${d}`, time: ms(d), group: "notes", title: "Comment", tooltip: `Comment on ${d} (Shift+click the bar to open)`, glyph: { shape: "circle" as const, color: cv("--accent", box.current ?? undefined), letter: "C" } }))]);
     feed.spans = [
-      ...trades.map((t) => ({ from: ms(String(t.entry_date)), to: ms(String(t.exit_date)), color: tint(Number(t.pnl) >= 0 ? up : down, "1f") })),
+      ...trades.map((t) => ({ from: ms(String(t.entry_date)), to: ms(String(t.exit_date)), color: tint(Number(t.pnl) >= 0 ? up : down, "14") })),
       ...(pausedAt ? [{ from: ms(pausedAt), to: ms(pausedAt) + 864e5, color: tint(cv("--s1", box.current ?? undefined), "55") }] : []),
     ];
     const cur = pausedAt ? trades.find((t) => String(t.entry_date) <= pausedAt && pausedAt <= String(t.exit_date)) : undefined;
