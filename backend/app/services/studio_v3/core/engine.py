@@ -71,7 +71,8 @@ R_SIGNAL, R_STOP, R_TARGET, R_TRAIL, R_TIME, R_DELISTED, R_OPEN, R_BREAKEVEN, R_
 REASONS = {R_SIGNAL: "signal", R_STOP: "stop", R_TARGET: "target", R_TRAIL: "trailing stop", R_TIME: "time stop", R_DELISTED: "delisted",
            R_OPEN: "open at end", R_BREAKEVEN: "breakeven stop", R_SCALE: "scale out", R_RISK: "risk stop"}
 
-ENGINE_VERSION = "3.1"  # bump when a change can move a run's numbers
+ENGINE_VERSION = "3.1"
+MAX_ORDER_LOG = 20_000  # bump when a change can move a run's numbers
 
 # trade columns
 (T_SYM, T_DIR, T_ENTRY_BAR, T_EXIT_BAR, T_ENTRY_PX, T_EXIT_PX, T_SHARES, T_PNL, T_RET, T_MAE, T_MFE, T_REASON, T_COSTS, T_SIGNAL_BAR,
@@ -398,6 +399,7 @@ class Context:
         p = self._e.positions.get(symbol)
         if p and not p.exit_reason:
             p.exit_reason = R_SIGNAL
+            self._e._log(self.t, symbol, "submitted", -p.shares, self.t, note="exit")
 
 
 class SignalStrategy:
@@ -448,6 +450,15 @@ class EventEngine:
         self.peak, self.prev_eq = params.capital, params.capital
         self.halted = False
         self.risk_events: list[dict] = []
+        self.order_log: list[dict] = []  # submitted, filled, partial, rejected, cancelled; capped at MAX_ORDER_LOG
+
+    def _log(self, t: int, n: int, state: str, quantity: float, signal_bar: int, price: float = math.nan, note: str = "", side: int = 0) -> None:
+        """quantity is signed shares; NaN with `side` (+1/-1) when the order never got a size."""
+        if len(self.order_log) < MAX_ORDER_LOG:
+            known = math.isfinite(quantity)
+            self.order_log.append({"bar": int(t), "sym": int(n), "state": state, "side": "buy" if (quantity if known else side) > 0 else "sell",
+                                   "quantity": abs(float(quantity)) if known else None, "signal_bar": int(signal_bar),
+                                   "price": float(price) if math.isfinite(price) else None, "note": note})
 
     def _close(self, n: int, t: int, raw: float, reason: int, frac: float, bar_range: float, *, limit: float = math.nan) -> None:
         p, pos = self.p, self.positions[n]
@@ -505,8 +516,11 @@ class EventEngine:
     def _execute(self, t: int, px: np.ndarray, rng: np.ndarray) -> None:
         p, vol = self.p, self.bars["volume"][t]
         for n in sorted(self.positions):
-            if self.positions[n].exit_reason and math.isfinite(px[n]):
-                self._close(n, t, px[n], self.positions[n].exit_reason, 1.0, rng[n])
+            pos = self.positions[n]
+            if pos.exit_reason and math.isfinite(px[n]):
+                shares, reason = pos.shares, pos.exit_reason
+                self._close(n, t, px[n], reason, 1.0, rng[n])
+                self._log(t, n, "filled", -shares, pos.signal_bar, px[n], REASONS[reason])
         eq, gross, _, _ = self._mark()
         for n in sorted(self.pending):
             if not math.isfinite(px[n]):
@@ -526,9 +540,11 @@ class EventEngine:
             if sh < want - 1e-9:
                 self.unfilled += 1
             if sh <= 1e-9:
+                self._log(t, n, "rejected", d * want, sigbar, note="no buying power")
                 continue
             gross += sh * price
             self._open(n, t, sigbar, d, sh, px[n], price)
+            self._log(t, n, "filled" if sh >= want - 1e-9 else "partial", d * sh, sigbar, price)
 
     def _open(self, n, t, sigbar, direction, shares, raw, price):
         p = self.p
@@ -619,6 +635,10 @@ class EventEngine:
                     self._open(n, t, sigbar, direction, size, raw, price)
                 if size < remaining - 1e-9:
                     self.unfilled += 1
+                remaining -= max(size, 0.0)
+            done = abs(quantity) - remaining
+            self._log(t, n, "filled" if remaining <= 1e-9 else "partial" if done > 1e-9 else "rejected", direction * done if done > 1e-9 else quantity, sigbar,
+                      raw if done > 1e-9 else math.nan, "" if remaining <= 1e-9 else "no buying power or position cap")
 
     def run(self, strategy, *, stop_after=None) -> tuple:
         p, b = self.p, self.bars
@@ -674,7 +694,14 @@ class EventEngine:
                 for fill in self._fills:
                     on_fill(ctx, fill)
                 self._fills.clear()
+            before = dict(self.orders)
             strategy.on_bar(ctx)
+            for n, order in self.orders.items():
+                if before.get(n) != order:
+                    self._log(t, n, "submitted", order[0], order[3], note="limit" if math.isfinite(order[1]) else "stop" if math.isfinite(order[2]) else "market")
+            for n, order in before.items():
+                if n not in self.orders:
+                    self._log(t, n, "cancelled", order[0], order[3])
             for n in sorted(self.positions):
                 if t == last_bar[n]:
                     self._close(n, t, c[t, n] * (1.0 - p.delist_haircut), R_DELISTED, 1.0, 0.0)
@@ -712,6 +739,9 @@ class EventEngine:
                     sh = fills.size_shares(int(p.size_mode), p.size, eq, c[t, n], dist, per, self.size_vol[t, n] if self.size_vol is not None else math.nan, mult)
                     if sh > 0:
                         self.pending[n] = (self.wants[n], sh, t)
+                        self._log(t, n, "submitted", self.wants[n] * sh, t, note="market")
+                for n in cands[slots:]:
+                    self._log(t, n, "rejected", math.nan, t, note="no free position slot", side=self.wants[n])
             if p.fill != 0:
                 self._execute(t, c[t], rng)
                 if self.orders:
@@ -732,6 +762,10 @@ class EventEngine:
                     self.halted = True
                     event = {"bar": t, "kind": kind, "value": float(value), "limit": float(bound)}
                     self.risk_events.append(event)
+                    for n, order in self.orders.items():
+                        self._log(t, n, "cancelled", order[0], order[3], note="risk stop")
+                    for n, (d, sh, sigbar) in self.pending.items():
+                        self._log(t, n, "cancelled", d * sh, sigbar, note="risk stop")
                     self.orders.clear()
                     self.pending.clear()
                     for pos in self.positions.values():
@@ -773,6 +807,7 @@ class Result:
     traded: np.ndarray  # notional traded per bar
     unfilled: int
     risk_events: list[dict] = field(default_factory=list)  # account-level breaches, with the bar they happened on
+    orders: list[dict] = field(default_factory=list)  # event engine only: each order's submitted, filled, partial, rejected or cancelled events
 
 
 def _last_bar(close: np.ndarray) -> np.ndarray:
@@ -795,7 +830,7 @@ def run(bars: dict[str, np.ndarray], entries: np.ndarray, exits: np.ndarray, par
     if engine == "event" or strategy is not None:
         eng = EventEngine({"open": o, "high": h, "low": l, "close": c, "volume": v}, params, score, stop_dist, size_vol)
         out = eng.run(strategy or SignalStrategy(entries, exits))
-        return Result(*out[:7], unfilled=int(out[7]), risk_events=eng.risk_events)
+        return Result(*out[:7], unfilled=int(out[7]), risk_events=eng.risk_events, orders=eng.order_log)
     out = _vector(o, h, l, c, v, entries, exits, score if score is not None else _EMPTY2, score is not None,
                   stop_dist if stop_dist is not None else _EMPTY2, stop_dist is not None,
                   np.ascontiguousarray(size_vol, dtype=np.float64) if size_vol is not None else _EMPTY2, size_vol is not None,

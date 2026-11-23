@@ -1372,7 +1372,7 @@ def event_run(z, meta, load_strategy, make_contexts, use_context, values, curren
                 debug["equity_change"] = equity_change
             if hit is not None:
                 debug["breakpoint"] = {key: value for key, value in hit.items() if key != "bar"}
-        return engine.Result(*result[:7], unfilled=int(result[7]), risk_events=account.risk_events), submitted, warmup, isinstance(adapter, PortfolioStrategy), debug
+        return engine.Result(*result[:7], unfilled=int(result[7]), risk_events=account.risk_events, orders=account.order_log), submitted, warmup, isinstance(adapter, PortfolioStrategy), debug
 
     result, submitted, warmup, is_portfolio, debug = run_to(shape[0], True)
     dates = meta["dates"]
@@ -1556,8 +1556,9 @@ def main():
         }}))
         return
     risk_events = arrays.pop("risk_events", [])
+    orders = arrays.pop("orders", [])
     np.savez(sys.argv[2], **arrays)
-    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "draw": draw, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report, "debug": debug, "risk_events": risk_events,
+    sys.stdout.write(json.dumps({"ok": True, "logs": logs, "plots": plots, "plot_charts": plot_charts, "draw": draw, "marks": marks, "tables": tables, "repaint": repaint, "entry_signals": entry_signals, "warmup": warmup_report, "debug": debug, "risk_events": risk_events, "orders": orders,
                                 "order_lines": sorted(order_lines.values(), key=lambda r: (r["file"], r["line"])), "invariants": invariants,
                                 "profile": profiler.report({"main.py": src, **meta["modules"]}) if profiler else None,
                                 "coverage": logpoints.coverage({"main.py": compiled, **{f"{k}.py": v for k, v in helper_code.items()}}) if logpoints and logpoints.hit is not None else None}))

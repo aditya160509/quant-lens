@@ -144,6 +144,7 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["trades"], span: 7, view: "stTradeShape", title: "Trade shape", toggle: "Excursion" },
           { keys: ["event_study"], span: 12, view: "stEventStudy", title: "Around entries" },
           { keys: ["trades"], span: 12, view: "dataTable", title: "Trades", opts: { max: 100000, maxHeight: 560, columns: TRADE_COLUMNS, viewKey: "studio-trades" } },
+          { keys: ["orders"], span: 12, view: "dataTable", title: "Orders", opts: { max: 20000, maxHeight: 420, viewKey: "studio-orders" } },
         ] },
         { id: "returns", label: "Returns", items: [
           { keys: ["equity_curve"], span: 8, view: "monthlyHeatmap", title: "Calendar" },

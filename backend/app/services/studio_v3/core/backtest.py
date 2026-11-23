@@ -249,6 +249,14 @@ def side_curves(closed: np.ndarray, n: int, cap: float) -> dict[str, np.ndarray]
     return out
 
 
+def order_rows(orders: list[dict], trades: np.ndarray, dates, symbols) -> list[dict]:
+    """Each order event with its signal date, and for fills the P&L of the trade that signal opened (the signal log)."""
+    pnl = {(int(s), int(b)): float(v) for s, b, v in trades[:, [engine.T_SYM, engine.T_SIGNAL_BAR, engine.T_PNL]]} if len(trades) else {}
+    return [{"date": str(dates[o["bar"]].date()), "symbol": symbols[o["sym"]], "state": o["state"], "side": o["side"], "quantity": o["quantity"], "price": o["price"],
+             "signal_date": str(dates[o["signal_bar"]].date()), "note": o["note"],
+             "trade_pnl": pnl.get((o["sym"], o["signal_bar"])) if o["state"] in ("filled", "partial") else None} for o in orders]
+
+
 def attribution(trades: np.ndarray) -> list[dict]:
     """Closed trades, like the side split: gross gains and losses before any cost, then commissions (with borrow) and slippage; the steps add up to net P&L."""
     slip = float(trades[:, engine.T_SLIP].sum())
@@ -470,7 +478,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
         "summary_cards": [{"label": k, "value": v, **({"unit": u} if u else {})} for k, v, u in cards],
         "charts": {"side_equity": side_equity, "event_study": event_study(r.trades, p.close), "trade_mc": mc["fan"] if mc else [], "equity_curve": curve, "cost_ladder": ladder, "start_dates": sd, "exposure": exposure, "rolling": _rolling(r.equity, bench_eq, dates)},
         "tables": {"side_stats": [{"side": k, **v, "net_pnl": float(closed[m, engine.T_PNL].sum())} for (k, v), m in zip(trade_split.items(), (side != 0, side > 0, side < 0), strict=True)],
-                   "attribution": attribution(closed), "run_settings": run_settings(spec, settings, effective, dates, len(p.symbols)), "by_regime": regime_rows, "conditions": paths.conditions(r.equity, market, dates) if market is not None and np.isfinite(market).any() else [],
+                   "attribution": attribution(closed), "orders": order_rows(r.orders, r.trades, dates, p.symbols), "run_settings": run_settings(spec, settings, effective, dates, len(p.symbols)), "by_regime": regime_rows, "conditions": paths.conditions(r.equity, market, dates) if market is not None and np.isfinite(market).any() else [],
                    "rule_check": rules.pop("rows"), "holdings": [{"date": x["date"], "names": x["positions"]} for x in exposure], "seasonality": paths.seasonality(r.equity, dates), "ruin": mc["ruin"] if mc else [], "streaks": mc["streaks"] if mc else [],
                    "trades": trades, "carried_by": carried, "crises": crises, "drawdowns": dd_rows, "per_name": per_name, "my_limits": lim_rows,
                    "limits": limits.run_limits(start=str(dates[0].date()), end=str(dates[-1].date()), requested=prep.requested, held=held, delisted=int(dead.sum()), fill=settings.fill,

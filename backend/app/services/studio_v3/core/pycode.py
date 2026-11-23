@@ -794,7 +794,7 @@ def run_event(code: str, bars: dict[str, np.ndarray], dates: pd.DatetimeIndex, p
                       event_settings=asdict(settings), files=files, debug_symbol=debug_symbol, debug_after=debug_after, debug_event=debug_event, debug_breakpoint=debug_breakpoint, debug_loss=debug_loss, repaint_bars=repaint_bars, extras={**extras, **{f"raw_{k}": v for k, v in bars.items()}})
     return engine.Result(*(arrays[name] for name in (
         "trades", "equity", "gross_equity", "gross_exposure", "net_exposure", "positions", "traded",
-    )), unfilled=int(arrays["unfilled"].item()), risk_events=info.get("risk_events") or [])
+    )), unfilled=int(arrays["unfilled"].item()), risk_events=info.get("risk_events") or [], orders=info.get("orders") or [])
 
 
 def _execute(code, bars, dates, params, symbols, cache, output, *, event_settings=None, repaint_bars=None, extras=None, files=None, debug_symbol=None, debug_after=None, debug_event=None, debug_breakpoint=None, debug_loss=None):
@@ -825,6 +825,7 @@ def _execute(code, bars, dates, params, symbols, cache, output, *, event_setting
             raise CodeError(res.get("error") or (p.stderr.strip().splitlines() or ["the strategy process died"])[-1], res.get("problem"))
         if output is not None:
             output.update({field: res[field] for field in ("logs", "plots", "plot_charts", "draw", "marks", "tables", "risk_events")})
+            output["orders"] = res.get("orders") or []
             if res.get("entry_signals") is not None:
                 output["entry_signals"] = res["entry_signals"]
             if res.get("debug") is not None:

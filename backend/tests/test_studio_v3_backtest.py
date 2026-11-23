@@ -438,6 +438,20 @@ def test_full_backtest_runs_python_without_formula_rules(studio):
     assert len(result["tables"]["trades"]) == 1
     assert result["tables"]["trades"][0]["entry_date"] == "2015-01-05"
     assert result["tables"]["trades"][0]["exit_date"] == "2015-01-06"
+    orders = [(o["date"], o["state"], o["note"]) for o in result["tables"]["orders"]]
+    assert orders == [("2015-01-02", "submitted", "market"), ("2015-01-05", "filled", ""), ("2015-01-05", "submitted", "exit"), ("2015-01-06", "filled", "signal")]
+    assert result["tables"]["orders"][1]["trade_pnl"] == pytest.approx(result["tables"]["trades"][0]["pnl"])
+
+
+def test_event_engine_logs_submitted_rejected_and_filled_orders():
+    close = np.array([[100.0, 50.0], [100.0, 50.0], [96.0, 50.0], [92.0, 50.0], [90.0, 50.0]])
+    bars = {k: close for k in ("open", "high", "low", "close")} | {"volume": np.ones_like(close)}
+    entries = np.zeros((5, 2), dtype=np.int8)
+    entries[0] = 1
+    out = engine.run(bars, entries, np.zeros((5, 2), dtype=np.int8), engine.Params(commission_bps=0, slippage_bps=0, max_positions=1, max_daily_loss=0.03), engine="event")
+    states = [(o["bar"], o["sym"], o["state"], o["side"], o["note"]) for o in out.orders]
+    assert states[:3] == [(0, 0, "submitted", "buy", "market"), (0, 1, "rejected", "buy", "no free position slot"), (1, 0, "filled", "buy", "")]
+    assert out.orders[1]["quantity"] is None and out.orders[2]["quantity"] == pytest.approx(out.trades[0, engine.T_SHARES])
 
 
 def test_monthly_rule_uses_last_closed_calendar_month():
