@@ -153,7 +153,8 @@ export function WorkspaceShell({ module, className = "", children }: { module: s
               </Tooltip>
             ))}
           </div>
-          <SettingsPopover themeClass={themeClass} className={className} />
+          {/* Studio has one settings window (gear in its activity bar). */}
+          {module === "studio" ? null : <SettingsPopover themeClass={themeClass} className={className} />}
           <Tooltip label={theme === "dark" ? "Light theme" : "Dark theme"}>
             <button className="btn icon ghost" onClick={toggleTheme} aria-label="Toggle theme">
               {theme === "dark" ? <Sun size={15} strokeWidth={1.75} /> : <Moon size={15} strokeWidth={1.75} />}
@@ -198,34 +199,46 @@ const ACCENTS: { id: Accent; color: string }[] = [
 ];
 
 function SettingsPopover({ themeClass, className }: { themeClass: string; className: string }) {
-  const p = usePrefs();
   return (
     <Popover.Root>
       <Tooltip label="Workspace settings">
         <Popover.Trigger asChild><button className="btn icon ghost" aria-label="Workspace settings"><Settings2 size={15} strokeWidth={1.75} /></button></Popover.Trigger>
       </Tooltip>
       <Popover.Portal>
-        <Popover.Content className={`pop ws-tokens${themeClass} ${className}`} align="end" sideOffset={8} style={{ width: 260 }}>
-          <div className="hd">Density</div>
-          <div style={{ padding: "0 8px 6px" }}>
-            <Segmented<Density> label="Density" value={p.density} onChange={(density) => p.set({ density })} options={[{ value: "compact", label: "Compact" }, { value: "comfortable", label: "Comfortable" }]} />
-          </div>
-          <div className="row">Invert up/down colours<button type="button" className="toggle" aria-pressed={p.invertColors} aria-label="Invert up and down colours" onClick={() => p.set({ invertColors: !p.invertColors })} /></div>
-          <div className="row">Reduce motion<button type="button" className="toggle" aria-pressed={p.reducedMotion} aria-label="Reduce motion" onClick={() => p.set({ reducedMotion: !p.reducedMotion })} /></div>
-          <div className="row">Accent
-            <span style={{ display: "flex", gap: 8 }}>
-              {ACCENTS.map((a) => <button key={a.id} type="button" className="sw" style={{ background: a.color }} aria-label={`${a.id} accent`} aria-pressed={p.accent === a.id} onClick={() => p.set({ accent: a.id })} />)}
-            </span>
-          </div>
-          <div className="sep" />
-          <div className="hd">Charts</div>
-          <div style={{ padding: "0 8px 6px", display: "grid", gap: 6 }}>
-            <Segmented<Palette> label="Series colours" value={p.palette} onChange={(palette) => p.set({ palette })} options={[{ value: "default", label: "Default" }, { value: "colorblind", label: "Safe" }, { value: "vivid", label: "Vivid" }, { value: "mono", label: "Mono" }]} />
-            <Segmented<LineWeight> label="Line weight" value={p.lineWeight} onChange={(lineWeight) => p.set({ lineWeight })} options={[{ value: "thin", label: "Thin" }, { value: "regular", label: "Regular" }, { value: "bold", label: "Bold" }]} />
-          </div>
-          <div className="row">Gridlines<button type="button" className="toggle" aria-pressed={p.grid} aria-label="Gridlines" onClick={() => p.set({ grid: !p.grid })} /></div>
-        </Popover.Content>
+        <Popover.Content className={`pop ws-tokens${themeClass} ${className}`} align="end" sideOffset={8} style={{ width: 260 }}><AppearanceSettings /></Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+/** Theme, density, colours and chart look: the shell's popover and Studio's settings window share it. */
+export function AppearanceSettings() {
+  const p = usePrefs();
+  const theme = useSyncExternalStore(themeStore.subscribe, themeStore.get, () => "dark" as Theme);
+  return (
+    <>
+      <div className="hd">Theme</div>
+      <div style={{ padding: "0 8px 6px" }}>
+        <Segmented<Theme> label="Theme" value={theme} onChange={(t) => themeStore.set(t)} options={[{ value: "dark", label: "Dark" }, { value: "light", label: "Light" }]} />
+      </div>
+      <div className="hd">Density</div>
+      <div style={{ padding: "0 8px 6px" }}>
+        <Segmented<Density> label="Density" value={p.density} onChange={(density) => p.set({ density })} options={[{ value: "compact", label: "Compact" }, { value: "comfortable", label: "Comfortable" }]} />
+      </div>
+      <div className="row">Invert up/down colours<button type="button" className="toggle" aria-pressed={p.invertColors} aria-label="Invert up and down colours" onClick={() => p.set({ invertColors: !p.invertColors })} /></div>
+      <div className="row">Reduce motion<button type="button" className="toggle" aria-pressed={p.reducedMotion} aria-label="Reduce motion" onClick={() => p.set({ reducedMotion: !p.reducedMotion })} /></div>
+      <div className="row">Accent
+        <span style={{ display: "flex", gap: 8 }}>
+          {ACCENTS.map((a) => <button key={a.id} type="button" className="sw" style={{ background: a.color }} aria-label={`${a.id} accent`} aria-pressed={p.accent === a.id} onClick={() => p.set({ accent: a.id })} />)}
+        </span>
+      </div>
+      <div className="sep" />
+      <div className="hd">Charts</div>
+      <div style={{ padding: "0 8px 6px", display: "grid", gap: 6 }}>
+        <Segmented<Palette> label="Series colours" value={p.palette} onChange={(palette) => p.set({ palette })} options={[{ value: "default", label: "Default" }, { value: "colorblind", label: "Safe" }, { value: "vivid", label: "Vivid" }, { value: "mono", label: "Mono" }]} />
+        <Segmented<LineWeight> label="Line weight" value={p.lineWeight} onChange={(lineWeight) => p.set({ lineWeight })} options={[{ value: "thin", label: "Thin" }, { value: "regular", label: "Regular" }, { value: "bold", label: "Bold" }]} />
+      </div>
+      <div className="row">Gridlines<button type="button" className="toggle" aria-pressed={p.grid} aria-label="Gridlines" onClick={() => p.set({ grid: !p.grid })} /></div>
+    </>
   );
 }

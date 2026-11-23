@@ -3,7 +3,7 @@
 import { DiffEditor } from "@monaco-editor/react";
 import { Group, Panel, Separator, type GroupImperativeHandle } from "react-resizable-panels";
 import Link from "next/link";
-import { ArrowDownToLine, Eraser, WrapText, BookOpen, Bug, CircleAlert, Gauge, SquareTerminal, ChevronDown, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, FlaskConical, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
+import { ArrowDownToLine, Settings, Eraser, WrapText, BookOpen, Bug, CircleAlert, Gauge, SquareTerminal, ChevronDown, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, FlaskConical, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
@@ -19,8 +19,9 @@ import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 import { useServerPref } from "./serverPref";
 import { DevChart } from "./DevChart";
 import { CHART_CHANNEL } from "./ChartPopout";
-import { RunConfigPicker, RunConfigsDialog, useRunConfigs } from "./RunConfigs";
-import { fitWorkspace, LayoutsDialog, targets, useWorkspaces, WorkspaceMenu, type PanelId } from "./Workspace";
+import { RunConfigsEditor, useRunConfigs } from "./RunConfigs";
+import { AppearanceSettings } from "@/workspace/WorkspaceShell";
+import { fitWorkspace, LayoutsDialog, targets, useWorkspaces, WorkspaceItems, type PanelId } from "./Workspace";
 import { DevRobust } from "./DevRobust";
 import { DevRuns, type RunEntry } from "./DevRuns";
 import { DevTearsheet } from "./DevTearsheet";
@@ -182,8 +183,8 @@ function finder(query: string, opt: { regex: boolean; caseSensitive: boolean; wo
 }
 
 /** Build › Dev: a project rail, the editor in tabs, Problems / Output / Plots / Trades / Debug below, preview and checks on the right, a status bar. */
-export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting, onPreview, onSave, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel, savedFiles, logpoints = [], onLogpoints, coverage = false, onCoverage }: {
-  tools?: ReactNode; spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode; canRun: boolean; starting: boolean; onPreview: () => void;
+export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun, starting, onPreview, onSave, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel, savedFiles, logpoints = [], onLogpoints, coverage = false, onCoverage }: {
+  tools?: ReactNode; settings?: (pages: [string, ReactNode][], start: string | undefined, close: () => void) => ReactNode; spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode; canRun: boolean; starting: boolean; onPreview: () => void;
   onSave: () => void; compileProblems: Problem[];
   strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null, label?: string) => void; font?: number; savedFiles?: Record<string, string>;
   quick?: QuickRun | null; onQuickRun: (level: "quick" | "full", settings?: Record<string, unknown>) => void; onCancel?: () => void; logpoints?: Logpoint[]; onLogpoints?: (l: Logpoint[]) => void; coverage?: boolean; onCoverage?: (on: boolean) => void;
@@ -312,7 +313,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const [split, setSplit] = useState<string | null>(null);
   const [layoutsOpen, setLayoutsOpen] = useState(false);
   const rc = useRunConfigs();
-  const [rcOpen, setRcOpen] = useState(false);
+  const [settingsAt, setSettingsAt] = useState<string | null>(null);
   const [splitDown, setSplitDown] = useState(false);
   const editorSplitRef = useRef<GroupImperativeHandle>(null);
   const [dropSide, setDropSide] = useState<"main" | "split" | null>(null); // a tab dragged over the editor: right half opens it in the second group
@@ -768,6 +769,10 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   const maxTester = () => { const next = !panelMax; setPanelMax(next); if (next) testerBeforeMax.current = vRef.current?.getLayout().tester ?? ws.cur.layout.size.tester; const t = next ? 85 : (testerBeforeMax.current ?? 34); ws.patch((x) => ({ ...x, size: { ...x.size, tester: t } })); vRef.current?.setLayout(vKeys({ editor: 100 - t, tester: t })); };
 
   const running = quick?.status === "queued" || quick?.status === "running";
+  // Settings > Run: a finished run opens the full-page chart (watchlist, replay, trades).
+  const [chartAfterRun, setChartAfterRun] = useState(() => { try { return localStorage.getItem("studio:dev:chartafterrun") === "1"; } catch { return false; } });
+  const wasRunning = useRef(false);
+  useEffect(() => { if (wasRunning.current && !running && quick?.result && chartAfterRun) { setZen(false); setOpenP("chart", true); setMaxChart(true); } wasRunning.current = running; }, [running]); // eslint-disable-line react-hooks/exhaustive-deps
   const runCode = (level: "quick" | "full" = "quick") => {
     if (!canRun || starting || running) return;
     openView("results");
@@ -827,6 +832,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "\\" || e.key === "|")) { e.preventDefault(); setLayoutsOpen(true); return; }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === ",") { e.preventDefault(); setSettingsAt(""); return; }
       // Hide all tool windows (JetBrains Cmd+Shift+F12): outside the editor here, inside it through the action below.
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "F12" && !(e.target instanceof Element && e.target.closest(".monaco-editor"))) { e.preventDefault(); setZen((z) => !z); return; }
       if (e.defaultPrevented || e.repeat || e.key !== "Enter" || !(e.metaKey || e.ctrlKey) || (e.target instanceof Element && e.target.closest(".monaco-editor"))) return;
@@ -865,7 +871,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
     { id: "studio.docs", label: "Docs: open reference", keys: (m) => [m.KeyCode.F1], run: () => revealRail("docs") },
     { id: "studio.fullrun", label: "Run: full backtest (recorded)", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => runCode("full") },
     { id: "studio.quickrun", label: "Run: quick (top 50, 5 years)", run: () => runCode() },
-    { id: "studio.runconfigs", label: "Run: edit configurations", run: () => setRcOpen(true) },
+    { id: "studio.runconfigs", label: "Run: edit configurations", run: () => setSettingsAt("Run") },
+    { id: "studio.settings", label: "Settings", run: () => setSettingsAt("") },
     { id: "studio.cell", label: "Cells: run cell", keys: (m) => [m.KeyMod.WinCtrl | m.KeyCode.Enter], run: (line) => runCell(line) },
     { id: "studio.cellabove", label: "Cells: run above and this cell", keys: (m) => [m.KeyMod.WinCtrl | m.KeyMod.Shift | m.KeyCode.Enter], run: (line) => runCell(line, false) },
     { id: "studio.tests", label: "Test: run all", run: () => { revealRail("tests"); runTests(); } },
@@ -967,9 +974,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               })() : null;
 
   const focus = !iconsOpen && !railOpen && !panelOpen;
-  // One Layout menu (JetBrains: header widgets hide actions in drop-downs): workspace, views, panels, focus.
-  const bar = <>
-    <WorkspaceMenu ws={ws} onCustomise={() => setLayoutsOpen(true)}>
+  // Layout, run and appearance pages for the one settings window (gear at the foot of the activity bar).
+  const layoutPage = <WorkspaceItems ws={ws} onCustomise={() => { setSettingsAt(null); setLayoutsOpen(true); }}>
       <div className="hd">Open</div>
       <button role="menuitem" onClick={() => openView("results")}>Results</button>
       <button role="menuitem" onClick={() => openView("tearsheet")}>Tearsheet</button>
@@ -994,11 +1000,18 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
       <hr />
       <button role="menuitemcheckbox" aria-checked={chartFirst} onClick={ws.flipChartFirst}>Chart first</button>
       <button role="menuitemcheckbox" aria-checked={focus} onClick={() => { const on = !focus; setIconsOpen(!on); setRailOpen(!on); setPanelOpen(!on); }}>Focus mode</button>
-    </WorkspaceMenu>
+  </WorkspaceItems>;
+  const runPage = <>
+    <RunConfigsEditor rc={rc} />
+    <div className="bd-nums">
+      <label className="bd-num"><span>Run on save</span><input type="checkbox" checked={rc.runOnSave} onChange={(e) => rc.setRunOnSave(e.target.checked)} /></label>
+      <label className="bd-num"><span>Full-page chart after a run</span><input type="checkbox" checked={chartAfterRun} onChange={(e) => { setChartAfterRun(e.target.checked); try { localStorage.setItem("studio:dev:chartafterrun", e.target.checked ? "1" : "0"); } catch { /* blocked */ } }} /></label>
+    </div>
+  </>;
+  const bar = <>
     <LayoutsDialog ws={ws} open={layoutsOpen} onClose={() => setLayoutsOpen(false)} />
-    <RunConfigsDialog rc={rc} open={rcOpen} onClose={() => setRcOpen(false)} />
+    {settingsAt !== null ? settings?.([["Appearance", <div key="a" className="pop bd-appear"><AppearanceSettings /></div>], ["Layout", layoutPage], ["Run", runPage]], settingsAt || undefined, () => setSettingsAt(null)) : null}
     {tools}
-    <RunConfigPicker rc={rc} onEdit={() => setRcOpen(true)} />
     <button className="btn dv-execute" disabled={!canRun || starting || running} title={!canRun ? "Add strategy code or rules to run" : "Run backtest (⌘↵)"} onClick={() => runCode()}>
       <Play size={14} />{starting || running ? "Running…" : "Run"}
     </button>
@@ -1146,10 +1159,8 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               <button className="icon-btn" aria-label="Close side bar" onClick={() => setRailOpen(false)}><X size={13} /></button></h4>
             <div className="dv-side-view">{panelBody(sideTab, true)}</div>
           </> : <>
-          <h4>{rail === "files" || rail === "outline" ? (
-            <span className="dv-rail-tabs" role="tablist">{(["files", "outline"] as const).map((k) => <button key={k} role="tab" aria-selected={rail === k} onClick={() => revealRail(k)}>{k === "files" ? "Files" : "Outline"}</button>)}</span>
-          ) : RAILS.find((r) => r[0] === rail)?.[2]}<button className="icon-btn" aria-label="Close side bar" title="Close side bar (⌘B)" onClick={() => setRailOpen(false)}><X size={13} /></button></h4>
-          {rail === "files" ? (
+          <h4>{RAILS.find((r) => r[0] === (rail === "outline" ? "files" : rail))?.[2]}<button className="icon-btn" aria-label="Close side bar" title="Close side bar (⌘B)" onClick={() => setRailOpen(false)}><X size={13} /></button></h4>
+          {rail === "files" || rail === "outline" ? (
             <div className="dv-list dv-explorer">
               <details open><summary>Files</summary>
               {Object.keys(files).filter((f) => !(f in scratch)).map((f) => (
@@ -1173,11 +1184,9 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
               <details open><summary>Inputs<span>{Object.keys(inputs).length}</span></summary>
                 {inputList}
               </details>
-            </div>
-          ) : rail === "outline" ? (
-            <div className="dv-list">{outline.length ? outlineRows(outline) : <p className="dv-empty">No classes or functions</p>}
-              <h4 className="dv-sub">TODO</h4>
-              {todos.length ? todos.map((t) => <button key={`${t.file}:${t.line}`} className="dv-item" onClick={() => goto(t.file, t.line)}>{t.text}<span>{t.file}:{t.line}</span></button>) : <p className="dv-empty">No TODO, FIXME or XXX comments</p>}
+              {/* VS Code's Explorer stacks Outline under the files, so the side bar has no dead space and no second tab. */}
+              <details open><summary>Outline</summary>{outline.length ? outlineRows(outline) : <p className="dv-empty">No classes or functions</p>}</details>
+              {todos.length ? <details open><summary>TODO<span>{todos.length}</span></summary>{todos.map((t) => <button key={`${t.file}:${t.line}`} className="dv-item" onClick={() => goto(t.file, t.line)}>{t.text}<span>{t.file}:{t.line}</span></button>)}</details> : null}
             </div>
           ) : rail === "search" ? (
             <div className="dv-list">
@@ -1423,6 +1432,7 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
           const side = moved.includes(k), on = side ? railOpen && sideTab === k : panelOpen && tab === k;
           return <button key={k} className="icon-btn" title={l} aria-label={l} aria-pressed={on} onClick={() => { if (side) { if (on) setRailOpen(false); else { setSideTab(k); setRailOpen(true); } } else if (on) setPanelOpen(false); else { setPanelOpen(true); setTab(k); } }}>{icon}</button>;
         })}
+        {settings ? <button className="icon-btn" title="Settings (⌘,)" aria-label="Settings" aria-pressed={settingsAt !== null} onClick={() => setSettingsAt("")}><Settings size={18} /></button> : null}
       </nav>
       <div className="dv-body" ref={bodyRef}>
       {full ? (

@@ -640,12 +640,11 @@
 .dv-thumb rect { fill: color-mix(in oklab, var(--text) 12%, transparent); }
 .dv-thumb rect[data-z="editor"] { fill: color-mix(in oklab, var(--text) 22%, transparent); }
 .dv-layouts-new { justify-content: center; border: 1px dashed var(--line-2); }
-.dv-rcfg { height: 26px; max-width: 140px; padding: 0 6px; border: 1px solid var(--workspace-edge); border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-size: 12px; }
 .dv-rcfg-t { width: 100%; border-collapse: collapse; font-size: 12px; }
 .dv-rcfg-t th { text-align: left; font-weight: 500; color: var(--text-2); padding: 4px; }
 .dv-rcfg-t td { padding: 2px 4px; }
 .dv-rcfg-t input, .dv-rcfg-t select { width: 100%; min-width: 0; height: 26px; padding: 0 6px; border: 1px solid var(--line-2); border-radius: 6px; background: transparent; color: var(--text); font: inherit; }
-.dv-rcfg-t td:nth-child(3) { width: 64px; }
+.dv-rcfg-t td:nth-child(4) { width: 64px; }
 .dv-rcfg-t td:last-child { width: 28px; }
 .dv-layouts > .btn { justify-self: stretch; }
 .dv-zones { display: grid; gap: 12px; }
@@ -827,15 +826,77 @@
 .dv-base-diff { margin: 0; padding: 2px 10px; font-size: 11.5px; color: var(--text-2); }
 
 /* Chart › Indicators picker (CH-31) */
-.dv-ind { position: absolute; z-index: 41; top: 40px; right: 56px; width: min(340px, calc(100% - 72px)); max-height: calc(100% - 96px); display: grid; grid-template-rows: auto 1fr; background: var(--island); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line-2), 0 18px 48px -18px oklch(0 0 0 / .6); overflow: hidden; }
-.dv-ind header { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line); }
-.dv-ind header .input { flex: 1; }
-.dv-ind-list { overflow: auto; padding: 4px 0 8px; }
-.dv-ind-list h5 { margin: 8px 12px 4px; font-size: 11px; font-weight: 500; color: var(--text-3); }
-.dv-ind-row { display: flex; align-items: center; padding-right: 6px; }
-.dv-ind-row:hover { background: var(--hover, oklch(1 0 0 / .04)); }
-.dv-ind-pick { flex: 1; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; padding: 6px 12px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; font-size: 12.5px; }
+.dv-ind { position: fixed; inset: 0; margin: auto; width: min(880px, 94vw); height: min(620px, 86vh); padding: 0; border: 0; border-radius: 14px; background: var(--island); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2), 0 30px 80px -30px oklch(0 0 0 / .7); overflow: hidden; }
+.dv-ind[open] { display: grid; grid-template: auto auto 1fr / 200px minmax(0, 1fr); }
+.dv-ind::backdrop { background: oklch(0 0 0 / .5); }
+.dv-ind header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 6px; font-size: 16px; }
+.dv-ind-q { grid-column: 1 / -1; margin: 4px 16px 10px; width: auto; height: 36px; font-size: 14px; }
+.dv-ind-cats { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-top: 1px solid var(--line); border-right: 1px solid var(--line); }
+.dv-ind-cats button { display: flex; justify-content: space-between; height: 34px; padding: 0 10px; border: 0; border-radius: 7px; background: none; color: var(--text-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; align-items: center; }
+.dv-ind-cats button i { font-style: normal; font-size: 11px; color: var(--text-4); }
+.dv-ind-cats button:hover { background: color-mix(in oklab, var(--text) 6%, transparent); color: var(--text); }
+.dv-ind-cats button[aria-current="page"] { background: color-mix(in oklab, var(--text) 10%, transparent); color: var(--text); }
+.dv-ind-list { overflow: auto; border-top: 1px solid var(--line); }
+.dv-ind-hd { position: sticky; top: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 80px; gap: 12px; padding: 8px 16px 8px 44px; background: var(--island); font-size: 11px; color: var(--text-4); border-bottom: 1px solid var(--line); }
+.dv-ind-row { display: flex; align-items: center; padding-left: 8px; }
+.dv-ind-row:hover { background: color-mix(in oklab, var(--text) 5%, transparent); }
+.dv-ind-pick { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 80px; gap: 12px; align-items: baseline; padding: 9px 16px 9px 8px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; font-size: 13px; }
 .dv-ind-pick b { font-weight: 500; }
-.dv-ind-pick code { font-size: 11px; color: var(--text-3); }
+.dv-ind-pick code { font-size: 11.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-ind-pick span { font-size: 12px; color: var(--text-3); }
+.dv-ind-row .icon-btn:not([aria-pressed="true"]) { opacity: .35; } .dv-ind-row:hover .icon-btn { opacity: 1; }
 .dv-ind-row [aria-pressed="true"] svg { fill: var(--warn, #f5a623); color: var(--warn, #f5a623); }
 .dv-plots input[type="color"] { width: 22px; height: 18px; padding: 0; border: 0; background: none; cursor: pointer; }
+
+/* One settings window: pages on the left, the page on the right (T3 Code, VS Code). */
+.bd-set { width: min(1080px, 94vw); height: min(760px, 90vh); padding: 0; gap: 0; overflow: hidden; }
+.bd-set[open] { grid-template-columns: 210px minmax(0, 1fr); }
+.bd-set-nav { display: flex; flex-direction: column; gap: 2px; padding: 16px 10px; border-right: 1px solid var(--line); background: color-mix(in oklab, var(--text) 2.5%, transparent); }
+.bd-set-nav > b { padding: 0 10px 10px; font-size: 15px; }
+.bd-set-nav button { height: 32px; padding: 0 10px; border: 0; border-radius: 7px; background: none; color: var(--text-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.bd-set-nav button:hover { background: color-mix(in oklab, var(--text) 6%, transparent); color: var(--text); }
+.bd-set-nav button[aria-current="page"] { background: color-mix(in oklab, var(--text) 10%, transparent); color: var(--text); }
+.bd-set-nav select { width: 100%; }
+.bd-set-main { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 16px 20px; }
+.bd-set-main .bd-set-hd b { font-size: 15px; }
+.bd-set-main .bd-set-body { flex: 1; min-height: 0; overflow: auto; align-content: start; }
+.bd-set-ft { display: flex; gap: 8px; justify-content: flex-end; }
+.bd-set-extra { display: grid; gap: 12px; align-content: start; }
+.bd-appear { position: static; width: min(560px, 100%); padding: 6px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); }
+.dv-menu-static { position: static; width: min(420px, 100%); animation: none; box-shadow: inset 0 0 0 1px var(--line); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.bd-proj { display: grid; gap: 8px; justify-items: start; }
+.bd-proj .bd-menu-fields { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dv-rcfgs { display: grid; gap: 8px; }
+.dv-rcfg-ft { display: flex; gap: 8px; align-items: center; }
+.dv-rcfg-t td:first-child { width: 24px; } .dv-rcfg-t td:first-child input { width: auto; height: auto; }
+/* Dev keeps one settings entry (the gear in the activity bar): the shell's layout toggles, settings and theme buttons step aside. */
+.ws-top:has(.dv-bar.in-head) > :is(.ws-layout-toggles, [aria-label="Workspace settings"], [aria-label="Toggle theme"]) { display: none; }
+.bd-set .bd-nums { grid-template-columns: minmax(0, 1fr); gap: 0; max-width: 760px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in oklab, var(--text) 2%, transparent); }
+.bd-set .bd-nums > .bd-num:last-child { border-bottom: 0; }
+.bd-set .bd-num { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 12px 2px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--text); }
+.bd-set .bd-num > span { color: var(--text-2); }
+.bd-set .bd-num > .input, .bd-set .bd-num > select { width: 200px; }
+.bd-set .bd-num input[type="checkbox"] { width: 16px; height: 16px; justify-self: end; }
+.bd-set .bd-num:has(.bd-keys) { grid-template-columns: minmax(0, 1fr); }
+.bd-set h3 { margin-top: 8px !important; }
+/* Chart type menu (TradingView): every type with its glyph, grouped. */
+.dv-types .dv-menu { position: fixed; right: auto; min-width: 240px; max-height: 70vh; overflow: auto; z-index: 60; }
+.dv-types .dv-menu button { justify-content: flex-start; gap: 10px; height: 32px; font-size: 13px; }
+.dv-types .dv-menu button[aria-checked="true"]::after { margin-left: auto; }
+.dv-types .dv-menu .hd, .dv-watch .hd { padding: 6px 10px 2px; font-size: 11px; color: var(--text-4); }
+.dv-types summary { display: inline-flex; align-items: center; gap: 2px; }
+/* Full-page chart: watchlist on the right (TradingView's right toolbar). */
+.dv-chart[data-watch] { grid-template-columns: minmax(0, 1fr) 260px; }
+.dv-chart[data-watch] > :not(.dv-watch) { grid-column: 1; }
+.dv-watch { grid-column: 2; grid-row: 1 / -1; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); }
+.dv-watch form { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--line); }
+.dv-watch form b { font-size: 12.5px; font-weight: 500; }
+.dv-watch form .input { flex: 1; min-width: 0; }
+.dv-watch-list { flex: 1; overflow: auto; padding: 4px 0; }
+.dv-watch-row { display: flex; align-items: center; padding-right: 4px; }
+.dv-watch-row:hover, .dv-watch-row[aria-selected="true"] { background: color-mix(in oklab, var(--text) 7%, transparent); }
+.dv-watch-row > button:first-child { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto 64px; gap: 8px; align-items: baseline; padding: 6px 10px; border: 0; background: none; color: var(--text-2); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; font-variant-numeric: tabular-nums; }
+.dv-watch-row b { font-weight: 500; color: var(--text); }
+.dv-watch-row span:last-child { text-align: right; }
+.dv-watch-row .up { color: var(--up); } .dv-watch-row .down { color: var(--down); }
+.dv-watch-row .icon-btn { opacity: 0; } .dv-watch-row:hover .icon-btn { opacity: 1; }

@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerPref } from "./serverPref";
 
 /** Run configurations: named settings for /build/run (universe, dates, costs, fill). "Default" sends none, so the server's quick-run defaults apply. */
@@ -31,35 +31,22 @@ export function useRunConfigs() {
 }
 export type RunConfigs = ReturnType<typeof useRunConfigs>;
 
-export function RunConfigPicker({ rc, onEdit }: { rc: RunConfigs; onEdit: () => void }) {
-  return (
-    <select className="dv-rcfg" aria-label="Run configuration" title="Run configuration" value={rc.cur.name}
-      onChange={(e) => (e.target.value === "\u0000edit" ? onEdit() : rc.select(e.target.value))}>
-      {rc.list.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-      <option value={"\u0000edit"}>Edit configurations…</option>
-    </select>
-  );
-}
-
-export function RunConfigsDialog({ rc, open, onClose }: { rc: RunConfigs; open: boolean; onClose: () => void }) {
-  const ref = useRef<HTMLDialogElement>(null);
+/** Run configurations table for the settings window: each row is a named universe, date range, costs and fill. */
+export function RunConfigsEditor({ rc }: { rc: RunConfigs }) {
   const [rows, setRows] = useState(rc.list);
-  useEffect(() => { const d = ref.current; if (!d) return; if (open && !d.open) { setRows(rc.list); d.showModal(); } if (!open && d.open) d.close(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const set = (i: number, k: keyof RunConfig, v: string) => setRows((r) => r.map((c, j) => (j === i ? { ...c, [k]: k === "top_n" ? (v ? Number(v) : undefined) : v } : c)));
   const names = rows.map((c) => c.name.trim());
   const bad = names.some((n, i) => !n || names.indexOf(n) !== i);
+  const dirty = JSON.stringify(rows) !== JSON.stringify(rc.list);
   return (
-    <dialog ref={ref} className="dv-layouts dv-rcfgs" data-wide onClose={onClose} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="dv-layouts-hd"><b>Run configurations</b><span style={{ flex: 1 }} />
-        <button className="btn sm ghost" onClick={onClose}>Cancel</button>
-        <button className="btn sm" disabled={bad} title={bad ? "Each configuration needs a unique name" : undefined} onClick={() => { rc.save(rows.map((c) => ({ ...c, name: c.name.trim() }))); onClose(); }}>Save</button>
-      </div>
+    <div className="dv-rcfgs">
       <table className="dv-rcfg-t">
-        <thead><tr><th>Name</th><th>Symbols</th><th>Top N</th><th>Start</th><th>End</th><th>Costs</th><th>Fill</th><th>Inputs</th><th /></tr></thead>
+        <thead><tr><th /><th>Name</th><th>Symbols</th><th>Top N</th><th>Start</th><th>End</th><th>Costs</th><th>Fill</th><th>Inputs</th><th /></tr></thead>
         <tbody>{rows.map((c, i) => {
           const fixed = i === 0 && c.name === "Default";
           return (
             <tr key={i}>
+              <td><input type="radio" name="rc-active" aria-label={`Use ${c.name}`} checked={rc.cur.name === c.name} disabled={dirty} onChange={() => rc.select(c.name)} /></td>
               <td><input aria-label="Name" value={c.name} disabled={fixed} onChange={(e) => set(i, "name", e.target.value)} /></td>
               <td><input aria-label="Symbols" placeholder="Top 50" value={c.symbols ?? ""} disabled={fixed} onChange={(e) => set(i, "symbols", e.target.value.toUpperCase())} /></td>
               <td><input aria-label="Top N" type="number" min={1} value={c.top_n ?? ""} disabled={fixed} onChange={(e) => set(i, "top_n", e.target.value)} /></td>
@@ -73,7 +60,12 @@ export function RunConfigsDialog({ rc, open, onClose }: { rc: RunConfigs; open: 
           );
         })}</tbody>
       </table>
-      <button className="btn sm ghost dv-layouts-new" onClick={() => setRows((r) => [...r, { name: `Config ${r.length}` }])}><Plus size={13} />Add configuration</button>
-    </dialog>
+      <div className="dv-rcfg-ft">
+        <button className="btn sm ghost" onClick={() => setRows((r) => [...r, { name: `Config ${r.length}` }])}><Plus size={13} />Add configuration</button>
+        <span style={{ flex: 1 }} />
+        {dirty ? <button className="btn sm ghost" onClick={() => setRows(rc.list)}>Revert</button> : null}
+        <button className="btn sm primary" disabled={bad || !dirty} title={bad ? "Each configuration needs a unique name" : undefined} onClick={() => { const list = rows.map((c) => ({ ...c, name: c.name.trim() })); rc.save(list); setRows(list); }}>Save configurations</button>
+      </div>
+    </div>
   );
 }
