@@ -324,11 +324,11 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 
 ### Target additions (FEATURES_PEAK)
 
-- [ ] [E] K-12 Run header: strategy, version, range, capital, data version, execution preset, seed, duration, engine version; Reproduce and Duplicate and edit buttons
+- [ ] [E] K-12 Run header: strategy, version, range, capital, data version, execution preset, seed, duration, engine version; Reproduce and Duplicate and edit buttons (partial: engine version, data version, period and universe size in the Run settings table; header and buttons open)
 - [ ] [E] K-13 Immutable run record: code hash, params, data version, execution model, engine version, seed, timing; a re-run gives the same numbers (partial: certificate hash in Validate; per-run record not built) [FP 1]
 - [ ] [M] K-14 Stat tiles: pick any 8 of 60+ stats; each has a definition on hover (formula and LEAN reference) (partial: KPI strip picks 4 to 6; 60+ stats and definitions open) [FP 30]
 - [ ] [M] K-15 Add PSR, expectancy, fees total, volume traded and capacity to the stat strip [FP 30]
-- [ ] [E] K-16 All, Long and Short toggles on every metric
+- [ ] [E] K-16 All, Long and Short toggles on every metric (partial: Long and short card with all/long/short curves and stats; toggles on other metrics open)
 - [ ] [H] K-17 Date range brush recomputes every stat for the selected range [FP 30]
 - [ ] [E] K-18 Benchmark overlay: log or linear, % or $; regime shading; trade markers toggle (partial: hero shows benchmark; toggles open)
 - [ ] [E] K-19 Rolling 6, 12 and 36-month windows for return, Sharpe, volatility and beta (partial: rolling Sharpe, volatility and beta built; 36-month and return windows open)
@@ -339,7 +339,7 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [E] K-24 Per-trade drill: chart with entry and exit bars, rule values at entry, MAE and MFE, the code line that fired (jump to code) (partial: trade navigator on Chart; rule values and code line open) [FP 31]
 - [ ] [E] K-25 Trade analytics: P&L by hour, weekday, month, regime and symbol; streaks; expectancy by tag (partial: P&L by regime and month exist; others open)
 - [ ] [M] K-26 What-if exit overlay (stop or target change), flagged as approximate
-- [ ] [E] K-27 Costs tab: gross vs net, commission, slippage, borrow and financing bars; break-even cost level (partial: cost ladder 1×, 2×, 4×; gross vs net in Risk; break-even in Validate; financing open)
+- [ ] [E] K-27 Costs tab: gross vs net, commission, slippage, borrow and financing bars; break-even cost level (partial: cost ladder 1×, 2×, 4×; gross vs net in Risk; break-even in Validate; Profit and costs card splits commission and borrow from slippage; financing open)
 - [ ] [M] K-28 Cost sensitivity slider 0× to 3×, recomputed from stored fills [FP 32]
 - [ ] [E] K-29 Execution model panel with presets (US retail, crypto, futures) and a custom Python cost hook: fill, slippage (fixed bps, volume share, spread), commission, borrow, financing, margin, settlement, lot size, tick rounding, session calendar (partial: commission, slippage, borrow, volume cap, delisting haircut exist; presets and hook open) [FP 13]
 - [ ] K-30 Intrabar fill fidelity levels (fast, standard, detailed, tick) with the ambiguous-bar count shown (blocked by data: hourly bars removed 2026-11-16; worst-case stop-first rule applied and labelled) [FP 14]
@@ -348,10 +348,10 @@ The Python IDE items (tag PY) follow PYTHON_IDE.md. Build order is in the Rules 
 - [ ] [E] K-33 Warnings card: look-ahead suspicion, fewer than 30 trades, top trade above 20% of profit, parameter at range edge, costs above 50% of gross, survivorship note, data gaps (partial: few-trades label and K-7 refusal exist) [FP 34]
 - [ ] [M] K-34 Run-ups table, mirror of the drawdown table (top 10: start, trough, recovery, length) [FP 71]
 - [ ] [E] K-35 Capital efficiency: cash idle %, gross and net exposure over time, margin used, buying-power headroom (partial: exposure over time exists; cash idle, margin and headroom open) [FP 71]
-- [ ] [E] K-36 Benchmarks: any symbol, a 60/40 blend, another strategy; alpha, beta, information ratio and tracking error against each (partial: SPY default; blends and extra metrics open)
+- [ ] [E] K-36 Benchmarks: any symbol, a 60/40 blend, another strategy; alpha, beta, information ratio and tracking error against each (partial: SPY default; equal-weight universe and cash benchmark modes built; blends and extra metrics open)
 - [ ] [M] K-37 Report export: PDF or HTML tear sheet in a fixed order set in Library, with the Properties block
-- [ ] [M] K-38 Properties list: every setting used and the data version
-- [ ] [M] K-39 Tabs Orders, Positions and Exposure, Logs and Plots, Warnings, Code and Settings
+- [x] [M] K-38 Properties list: every setting used and the data version (Run tab: Run settings table with inputs, parameters, engine settings, engine version and data version)
+- [ ] [M] K-39 Tabs Orders, Positions and Exposure, Logs and Plots, Warnings, Code and Settings (partial: Orders card with submitted, filled, partial, rejected and cancelled events; Run settings tab)
 - [ ] [M] K-40 Customise: KPI set and order (shared with Backtest), tab order, default benchmark, report template, number formats, colour-blind palette
 - [ ] K-41 Options-specific output: fill at mid with slippage per contract, Greeks, assignment events (not in v3: options are out of v3 (PAGES "Not in v3"))
 - [ ] [M] K-42 Unfilled limit orders card (needs limit orders from Build B-12)
@@ -601,7 +601,7 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [ ] [M] CH-47 P2 Vela on every page (Backtest, Live, Library), then retire chart_engine once watchlist, trading, landing and security move [C-10]
 - [x] [M] CH-48 P2 Spread and ratio charts (A/B, A−B) with a correlation pane [C-24] (Spread in chart settings: A/B or A−B pane plus a rolling 60-day return correlation pane)
 - [ ] [M] CH-49 P2 Regime ribbon behind price with P&L per regime; earnings and split markers (blocked by data for events) [C-25, research] (partial: Regime ribbon in chart settings shades SPY trend × volatility behind price; the drawer's Regimes tab gives P&L, trades, win rate and days per regime at entry; earnings and split markers wait for event data)
-- [ ] [M] CH-50 P3 Cross-sectional pane, point-in-time fundamentals, automated trendlines and patterns as labelled heuristics, screenshot to tearsheet, share link, notes on the run [C-26, research]
+- [ ] [M] CH-50 P3 Cross-sectional pane, point-in-time fundamentals, automated trendlines and patterns as labelled heuristics, screenshot to tearsheet, share link, notes on the run [C-26, research] (partial: bar comments by symbol and date)
 
 Not planned: manual trading in replay and journal (OD-7, was C-21); watchlists, news, paper and broker trading inside the chart (other pages own these).
 
