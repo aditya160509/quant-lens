@@ -475,7 +475,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
 
   if (error || !bars.length) return <div className="dv-empty">{error ? `No bars: ${error}` : prev ? "Loading bars" : "Run a preview to chart it"}</div>;
   return (
-    <div className="dv-chart" data-watch={max || undefined}>
+    <div className="dv-chart" data-watch={max || undefined} data-idle={!prev || undefined}>
       {max ? <aside className="dv-watch" aria-label="Watchlist">
         <form onSubmit={(e) => { e.preventDefault(); const i = e.currentTarget.elements.namedItem("sym") as HTMLInputElement; const v = i.value.trim().toUpperCase(); if (v && !watch.includes(v)) saveWatch([...watch, v]); i.value = ""; }}>
           <b>Watchlist</b><input name="sym" className="input sm" placeholder="Add symbol" aria-label="Add symbol" /><button className="icon-btn" aria-label="Add to watchlist"><Plus size={14} /></button>
