@@ -67,7 +67,7 @@ Only after Batch 4. E2 M2 H0
 
 - [ ] `M` Chart price source moves to the parquet-first loader; `/api/prices` removed for Studio
 - [ ] `M` Chart alerts: a server job, or labelled "while this tab is open"
-- [ ] `E` Save drawings and indicator sets, or label them browser-local (drawing persistence is unverified)
+- [x] `E` Save drawings and indicator sets, or label them browser-local (drawing persistence is unverified) Done: drawings and chart prefs sync to `/build/prefs/chart`.
 - [ ] `E` Mount Chart as a Studio tab; `/trade` redirects. Read and keep `ReplayView` first (unverified)
 
 ## Batch 7: Merge and present

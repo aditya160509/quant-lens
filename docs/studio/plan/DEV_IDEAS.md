@@ -17,15 +17,15 @@
 - [ ] **#11 Research state.** Define how cell state can feed an isolated, reproducible preview. The existing cells endpoint already runs scripts and loads historical bars.
 - [ ] **#12 Date-range selection execution.** Run an expression, function or block in the existing sandbox against a requested window and return a typed result.
 - [ ] **#13 Reactive cells.** Resolve dependencies, track stale cells and execute the affected cells in order.
-- [ ] **#14 SQL cells.** Return bounded, read-only query results from the approved data store. Any new dependency needs separate approval.
+- [x] **#14 SQL cells.** Return bounded, read-only query results from the approved data store. Any new dependency needs separate approval.
 - [ ] **#17 Snippet library.** Add tags, sharing and sandboxed snippet tests to the existing snippet API.
 - [ ] **#18 Starter data.** Add a compact equity series and snippet references to the cached starter statistics.
-- [ ] **#20 Chart-bar comments.** Support symbol, timeframe and timestamp anchors, plus thread resolution.
+- [x] **#20 Chart-bar comments.** Support symbol, timeframe and timestamp anchors, plus thread resolution. Done: symbol and date anchors, resolve; bars are daily, so no timeframe.
 
 ### IDE catalogue and terminal (7 open)
 
 - [ ] **Run configurations.** Apply per-input overrides and support sharing saved configurations where authorized.
-- [ ] **Data breakpoints.** Stop the debugger when a watched value changes.
+- [x] **Data breakpoints.** Stop the debugger when a watched value changes.
 - [ ] **Compound launch.** Orchestrate independent runs across targets and collect comparable results. A single universe backtest already runs multiple symbols.
 - [ ] **Line blame.** Derive per-line version attribution from saved strategy history.
 - [ ] **Profile and settings sync.** Persist the remaining settings and profile bundles across devices. Layouts and run configs already have server persistence.
@@ -34,20 +34,20 @@
 
 ### Chart workspace and universe runs (2 open)
 
-- [ ] **Indicator-only Python mode.** Run no-trade scripts with validated input and overlay metadata and return plot series through the existing sandbox.
+- [x] **Indicator-only Python mode.** Run no-trade scripts with validated input and overlay metadata and return plot series through the existing sandbox.
 - [ ] **Universe summaries.** Add server-side per-symbol equity, exposure, drawdown and period rollups for large runs. Reuse current per-name trade statistics and fetch bars for the selected symbol. This also covers symbol-level exposure and turnover series in Results.
 
 ### Results and reporting (10 open)
 
-- [ ] **Order lifecycle.** Return durable order events with submitted, filled, partial, cancelled and rejected states.
-- [ ] **Long and short equity.** Produce separate side-level equity curves using the existing trade statistics.
-- [ ] **Profit and cost attribution.** Return gross gains, gross losses, commissions and slippage separately so the waterfall reconciles to net P&L.
+- [x] **Order lifecycle.** Return durable order events with submitted, filled, partial, cancelled and rejected states. Done: Orders card on Trades.
+- [x] **Long and short equity.** Produce separate side-level equity curves using the existing trade statistics.
+- [x] **Profit and cost attribution.** Return gross gains, gross losses, commissions and slippage separately so the waterfall reconciles to net P&L. Done: closed trades, same as the side split.
 - [ ] **Sector and factor analysis.** Supply point-in-time exposures and return attribution with coverage metadata.
-- [ ] **Signal log.** Retain emitted signals and associate them with orders, fills and realized outcomes where available.
-- [ ] **Run provenance.** Record effective input values, engine version and data identity with existing settings and run metadata.
+- [x] **Signal log.** Retain emitted signals and associate them with orders, fills and realized outcomes where available. Done: each order carries its signal date and the trade P&L it led to.
+- [x] **Run provenance.** Record effective input values, engine version and data identity with existing settings and run metadata.
 - [ ] **Intraday deep backtest.** Support intraday trade-level fills and equity with appropriate historical data and bounded runs.
-- [ ] **Benchmark modes.** Add equal-weight universe and cash benchmarks. The backtest already accepts a ticker benchmark.
-- [ ] **Entry event study.** Align historical bars around entries and aggregate paths with observation counts and coverage.
+- [x] **Benchmark modes.** Add equal-weight universe and cash benchmarks. The backtest already accepts a ticker benchmark.
+- [x] **Entry event study.** Align historical bars around entries and aggregate paths with observation counts and coverage.
 - [ ] **User-coded reports.** Run versioned `results.py` against a read-only result in the sandbox and persist bounded typed output with the run. Reusable report blocks, trade annotations and custom optimiser objectives are extensions of this package.
 
 ### Owner approval (3)
@@ -884,12 +884,12 @@ See the "Terminal / bottom panel power-ups" subsection below. Summary: the Conso
 
 **Our own**
 
-1. ◐ `Hard` **Python REPL bound to the strategy context.** `Console` already evaluates one expression at a paused bar through `POST /build/watch`. Extend it to a real REPL with statements and a persistent namespace: `ctx` (paused bar), `bars`, `trades`, `plots`, `np`, `pd`, `universe`. Show DataFrames as tables with copy and "send to Plots". Runs in the same sandbox as the strategy. P1.
-2. ◐ `Hard` **`atlas` CLI in the panel.** (run, test, cells, check, preview, task built; optimise/walkforward/robust/compare/data/export open) Commands, each a block with progress and a result link: `atlas run [--universe sp500] [--from 2018] [--cost bps=5]`, `atlas backtest`, `atlas optimise --param fast=5:30:5 --objective sharpe`, `atlas walkforward`, `atlas robust`, `atlas compare <run> <run>`, `atlas data coverage SPY`, `atlas plot <name>`, `atlas export trades.csv`. Same API calls the buttons make, so no second code path. P1.
+1. ✅ `Hard` **Python REPL bound to the strategy context.** `Console` already evaluates one expression at a paused bar through `POST /build/watch`. Extend it to a real REPL with statements and a persistent namespace: `ctx` (paused bar), `bars`, `trades`, `plots`, `np`, `pd`, `universe`. Show DataFrames as tables with copy and "send to Plots". Runs in the same sandbox as the strategy. P1. (Built: trades, plots and the paused bar are bound in Console)
+2. ✅ `Hard` **`atlas` CLI in the panel.** Commands, each a block with progress and a result link: `atlas run [--universe sp500] [--from 2018] [--cost bps=5]`, `atlas backtest`, `atlas optimise --param fast=5:30:5 --objective sharpe`, `atlas walkforward`, `atlas robust`, `atlas compare <run> <run>`, `atlas data coverage SPY`, `atlas plot <name>`, `atlas export trades.csv`. Same API calls the buttons make, so no second code path. P1. (Built: optimise, validate/walkforward, robust, compare, data, export)
 3. ✅ `Med` **Test runner.** `atlas test` lists pass/fail results with Python file links. The Tests sidebar provides the tree and a separate backtest snapshot control. P1.
 4. ✅ `Med` **Tasks.** Saved command chains run on demand or on every save (`--on-save`). P2.
 5. ⬜ `Hard` **Output as typed blocks.** A block is log, table, plot, or metric, not just text, so Output, Plots and Console share one stream. P2.
-6. ⬜ `Med` **Run history drawer.** Every command and run is searchable by name, tag, symbol, date. P2.
+6. ✅ `Med` **Run history drawer.** Every command and run is searchable by name, tag, symbol, date. P2. (Built: search by name, level, symbol, date, settings; inline rename)
 
 ---
 
@@ -934,30 +934,30 @@ Missing views, with where each comes from:
 
 | View | What it shows | Borrowed from | Pri |
 |---|---|---|---|
-| Orders tab (submitted, filled, partial, cancelled, rejected) | Every order, not just closed trades; download CSV | QuantConnect Orders, TradingView | P1 |
+| ✅ Orders tab (submitted, filled, partial, cancelled, rejected) | Every order, not just closed trades; download CSV | QuantConnect Orders, TradingView | P1 |
 | Trades list with run-up and drawdown per trade, bars held, cumulative P&L column | Richer trade table | TradingView List of trades | P1 |
 | Trade filters and bulk export | Winners, losers, by symbol, by date range, export | TradingView, QuantConnect | P1 |
-| Long versus short split of equity and stats | Two curves and a table | TradingView Performance summary (all, long, short) | P1 (trade_split exists in Preview only) |
+| ✅ Long versus short split of equity and stats | Two curves and a table | TradingView Performance summary (all, long, short) | P1 (trade_split exists in Preview only) |
 | Underwater plot with top-N drawdown periods shaded on equity | Depth and recovery time | vectorbt drawdowns.plot, QuantStats | P1 |
 | Yearly returns bars and calendar heatmap by year and month, versus benchmark | End-of-year returns | QuantStats | P1 |
 | Rolling volatility, rolling Sortino, rolling beta windows 3, 6, 12 months | Stability beyond Sharpe | QuantStats | P2 |
 | Daily and weekly return histogram with normal fit, skew, kurtosis, VaR, CVaR | Tail view | QuantStats | P2 |
 | Time patterns: P&L by weekday, month, hour held | When it makes money | TradingView, QuantStats | P2 |
-| Profit structure: gross profit, gross loss, fees, slippage, net as a waterfall | Where the edge goes | TradingView | P1 |
+| ✅ Profit structure: gross profit, gross loss, fees, slippage, net as a waterfall | Where the edge goes | TradingView | P1 |
 | Benchmark and alpha table: alpha, beta, information ratio, tracking error, Treynor, correlation | Versus SPY | QuantConnect Report, QuantStats | P1 |
 | Extra metrics: SQN, payoff ratio, gain-to-pain, tail ratio, Ulcer index, recovery factor, expectancy in R, Kelly, max DD duration, time in market | Fuller risk table (check which already exist in `devStats.ts`) | backtrader analyzers, QuantStats, vectorbt stats | P1 |
 | Turnover and holding count over time, average days held | Capacity link | QuantConnect | P2 |
 | Position and exposure by symbol over time (stacked area) | Concentration | backtrader PositionsValue, QuantConnect | P2 |
 | Sector and factor exposure (beta, size, value, momentum) of the book | Hidden bets | QuantConnect, institutional tearsheets | P2 |
-| Insights / signal log (signal, direction, confidence, realised) | Signal quality | QuantConnect Insights | P3 |
+| ◐ Insights / signal log (signal, direction, confidence, realised) | Signal quality | QuantConnect Insights | P3 |
 | Parameter table: which inputs this run used | Reproducibility | QuantConnect Parameters tab | P1 |
-| Run settings and data snapshot (range, universe size, costs, engine version, data hash) | Audit | TradingView Properties, QuantConnect | P1 |
+| ✅ Run settings and data snapshot (range, universe size, costs, engine version, data hash) | Audit | TradingView Properties, QuantConnect | P1 |
 | Date-range slider on the Tester that recomputes stats for a sub-range | Out-of-sample peek | TradingView trading range | P2 |
 | Trade-level equity "deep backtest" on intraday data | Finer fills | TradingView Deep Backtesting | P3 |
 | Compare two or more runs: metric table with deltas and overlaid drawdowns | Beyond equity overlay | QuantConnect compare | P2 |
 | Export: full HTML tearsheet, CSV of every table, image of each chart, share link | Take it out | QuantStats html report, QuantConnect Report PDF | P1 |
-| Benchmark choice per run (SPY, QQQ, equal-weight universe, cash) | Right yardstick | QuantConnect | P2 |
-| Event study: average path around entries (T-20 to T+20) | Entry timing | research standard | P2 |
+| ✅ Benchmark choice per run (SPY, QQQ, equal-weight universe, cash) | Right yardstick | QuantConnect | P2 |
+| ✅ Event study: average path around entries (T-20 to T+20) | Entry timing | research standard | P2 |
 | Factor attribution of returns (market, size, value, momentum) | Where return came from | institutional | P3 |
 
 ### 2. Users coding their own results

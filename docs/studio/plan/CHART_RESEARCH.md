@@ -251,31 +251,31 @@ Most demanded for a quant who backtests: marked **(M)**.
 
 | Feature | Detail (from TradingView docs) | Tag | Pri |
 |---|---|---|---|
-| ⬜ `Hard` Multi-chart layouts, 1 to 16 charts per layout (M) | Plan-dependent count; layout menu | VELA (workspace), old engine had 8 | P1 |
+| ◐ `Hard` Multi-chart layouts, 1 to 16 charts per layout (M) | Plan-dependent count; layout menu | VELA (workspace), old engine had 8 | P1 (Built: grid of up to 8 symbols in the Dev chart) |
 | ⬜ `Hard` Sync: symbol, interval, crosshair, time, date range (M) | Select Layout menu toggles | VELA (sync links: viewport, symbol, timeframe, crosshair, drawings, style) | P1 |
 | ⬜ `Hard` Sync groups by colour or emoji | Symbol/interval groups per chart | VELA (named groups) | P2 |
 | ⬜ `Med` Sync drawings in layout or globally | Same symbol only | VELA (drawings link) | P2 |
 | ⬜ `Med` Saved layouts, rename, copy, share, cloud save | Each layout is a workspace | GAP (persist state doc exists in Vela) | P2 |
-| ⬜ `Easy` Maximise one chart in a grid | | VELA (`maximizeCell`) | P2 |
+| ✅ `Easy` Maximise one chart in a grid | | VELA (`maximizeCell`) | P2 (Built: maximise and restore, ⌘⇧E) |
 | ⬜ `Med` Quick search for any action (M) | Global command search | GAP on chart (Studio has F1 for code) | P2 |
 | ⬜ `Med` Symbol search by typing | Type letters to open | VELA | P1 |
 | ⬜ `Easy` Time zone setting, exchange time | Bottom bar | VELA | P3 |
-| ⬜ `Easy` Range buttons 1D 5D 1M 3M 6M YTD 1Y 5Y All, Go to date | Bottom bar | VELA (bottom bar ranges) | P1 |
+| ✅ `Easy` Range buttons 1D 5D 1M 3M 6M YTD 1Y 5Y All, Go to date | Bottom bar | VELA (bottom bar ranges) | P1 (Built: 1M to ALL and go to date; daily bars, so no 1D/5D) |
 | ⬜ `Easy` Undo and redo for chart changes | | VELA | P2 |
-| ⬜ `Easy` Snapshot image, copy link | Take a snapshot | VELA (screenshot export) | P2 |
+| ◐ `Easy` Snapshot image, copy link | Take a snapshot | VELA (screenshot export) | P2 (Built: PNG export; no link) |
 | ◐ `Easy` Fullscreen, theme, mobile layout | | VELA (mobile drawer) | P3 |
 
 **Chart types (20+)**
 
 | Feature | Tag | Pri |
 |---|---|---|
-| ◐ `Easy` Candles, bars, line, area, baseline, step line, line with markers, columns, Heikin-Ashi, hollow candles | HAVE (Vela) | P1 |
+| ✅ `Easy` Candles, bars, line, area, baseline, step line, line with markers, columns, Heikin-Ashi, hollow candles | HAVE (Vela) | P1 (Built: all ten in Chart settings) |
 | ⬜ `Med` HLC area, high-low, volume candles | OLD or GAP | P3 |
-| ⬜ `Med` Renko, Kagi, line break, point and figure, range bars | OLD (old engine) | P2 |
+| ✅ `Med` Renko, Kagi, line break, point and figure, range bars | OLD (old engine) | P2 (Built: ATR-14 causal boxes) |
 | ⬜ `Hard` Volume footprint, TPO, session volume profile (M for futures only) | GAP (Vela has visible-range volume profile) | P3 |
 | ⬜ `Hard` Custom intervals incl. seconds and range bars | GAP (daily only) | P3 |
-| ⬜ `Med` Spreads and custom formula symbols (A/B, A-B) | GAP | P2 (ratio and spread are useful to quants) |
-| ⬜ `Med` Compare and overlay symbols | OLD, Vela API (verify) | P1 |
+| ✅ `Med` Spreads and custom formula symbols (A/B, A-B) | GAP | P2 (ratio and spread are useful to quants) (Built: ratio or difference with 60-day correlation) |
+| ✅ `Med` Compare and overlay symbols | OLD, Vela API (verify) | P1 (Built) |
 | ◐ `Easy` Log and percent scale, auto, lock scale | HAVE (Vela) | P1 |
 | ⬜ `Med` Extended hours and sessions | GAP | P3 |
 
@@ -296,7 +296,7 @@ Most demanded for a quant who backtests: marked **(M)**.
 | ⬜ `Med` Drawing templates (saved style presets per tool) | GAP | P3 |
 | ⬜ `Hard` Alerts on drawings | VELA (alerts in drawing-tools) | P3 |
 | ⬜ `Med` Object tree: hide, lock, group, z-order, rename (M) | VELA (object tree) | P1 |
-| ⬜ `Med` Data window: OHLC and indicator values under the crosshair (M) | VELA (data-window readout) | P1 |
+| ✅ `Med` Data window: OHLC and indicator values under the crosshair (M) | VELA (data-window readout) | P1 (Built) |
 
 **Indicators and scripting**
 
@@ -324,11 +324,11 @@ Most demanded for a quant who backtests: marked **(M)**.
 | ⬜ `Hard` Deep Backtesting (full history, intraday) | | GAP | P3 |
 | ◐ `Med` Bar replay, 9 speeds, step, autoplay, replay trading (M) | | HAVE (DevChart replay bound to debugger), multi-chart replay VELA | P1 |
 | ⬜ `Med` Alerts: 13 conditions, drawings, scripts, watchlists, webhooks, multi-condition | | VELA (alert bell), conditions OLD | P2 |
-| ⬜ `Med` Watchlists, flagged symbols, news, calendars | Right toolbar | GAP (Universe page has lists) | P2 |
+| ◐ `Med` Watchlists, flagged symbols, news, calendars | Right toolbar | GAP (Universe page has lists) | P2 (Built: watchlist in the symbols drawer) |
 | ⬜ `Med` Screeners (stocks, ETFs, Pine Screener) in chart | | GAP on chart (Screener v2 exists elsewhere) | P2 |
 | ⬜ `Med` Heatmaps by sector | | GAP on chart | P3 |
 | ⬜ `Hard` Paper trading, broker trading | | GAP (paper hook is idea #23) | P3 |
-| ⬜ `Easy` Export chart data CSV | Right-click, export | GAP | P1 |
+| ✅ `Easy` Export chart data CSV | Right-click, export | GAP | P1 (Built: bars, plots and trades) |
 | ⬜ `Hard` Publish ideas, social, Minds | | GAP | P3 |
 | ⬜ `Med` Fundamentals on chart (100+ metrics, earnings, dividends markers) | | GAP (marks API supports events) | P2 |
 | ⬜ `Hard` Options chain, yield curves, macro maps | | GAP | P3 |
@@ -355,7 +355,7 @@ Tags: ✅ Have · ◐ Partial · ⬜ Gap · ⏸ Later · difficulty `Easy` / `Me
 
 **Recommendation: native Python, one unification.** Do not adopt Pine (separate language, AGPL runtime, no gain for Python users) and do not copy Indie's restricted dialect. Keep full Python on the backend, as already decided. Add one small base class so the same file drives chart plots and backtests:
 
-- ⬜ `Hard` `class Indicator`: computes named series from bars. Declares `inputs` and `plots`. Pure function of data, so it runs vectorised (fast) or bar by bar.
+- ◐ `Hard` `class Indicator`: computes named series from bars. Declares `inputs` and `plots`. Pure function of data, so it runs vectorised (fast) or bar by bar. (Built: plots only, bar by bar, orders refused)
 - ⬜ `Hard` `class Strategy`: unchanged, but can `use` an indicator, so `self.ema = self.use(Ema, length=20)` gives the same numbers on the chart and in the backtest. One code path, no drift between what you see and what trades.
 - ⬜ `Med` The chart runs `Indicator` classes through the same pyrunner and draws them with `registerNativeIndicator` (already used for `atlas.plot`). The backtest imports the same class.
 
@@ -409,20 +409,20 @@ Tags: ✅ Have · ◐ Partial · ⬜ Gap · ⏸ Later · difficulty `Easy` / `Me
 
 | Idea | Why it matters | Pri |
 |---|---|---|
-| ⬜ `Med` Universe-aware chart: symbol list with per-symbol P&L, heatmap, linked chart (see DEV_IDEAS) | TradingView is one symbol at a time; our runs are 4,000 | P1 |
+| ✅ `Med` Universe-aware chart: symbol list with per-symbol P&L, heatmap, linked chart (see DEV_IDEAS) | TradingView is one symbol at a time; our runs are 4,000 | P1 (Built: symbols drawer, symbol × month heatmap) |
 | ⬜ `Med` Chart a **signal**, not just price: show the score, rank and percentile as a pane, with the breakpoint line | Quants debug ranks | P1 |
 | ✅ `Hard` Debugger-bound replay that stops on order, fill, 5% loss day, with locals (already built) | Nobody else ties replay to code state | P1 |
 | ⬜ `Med` Bar-level "why": click a bar to see the decision log and which rule fired | Trust in results | P1 |
-| ⬜ `Med` Trade ribbons with MAE and MFE bars and exit reason on the chart | Better than plain arrows | P1 |
+| ✅ `Med` Trade ribbons with MAE and MFE bars and exit reason on the chart | Better than plain arrows | P1 (Built: hovered trade draws entry, exit, MAE, MFE) |
 | ⬜ `Hard` Cross-sectional pane: on any date, scatter or bar of the signal across the universe, with the chosen names highlighted | Factor research | P2 |
 | ⬜ `Hard` Point-in-time data: show fundamentals and universe membership as of each bar, mark delisted names | No survivorship | P2 |
-| ⬜ `Med` Regime ribbon behind price (volatility or trend regime) with strategy P&L per regime | Already have regime stats | P2 |
-| ⬜ `Med` Equity, drawdown and exposure panes synced to the price chart time axis, so click an equity dip to see price | One time axis | P1 |
+| ✅ `Med` Regime ribbon behind price (volatility or trend regime) with strategy P&L per regime | Already have regime stats | P2 (Built) |
+| ✅ `Med` Equity, drawdown and exposure panes synced to the price chart time axis, so click an equity dip to see price | One time axis | P1 (Built) |
 | ⬜ `Med` Corporate actions and earnings markers from the marks API | Context for gaps | P2 |
-| ⬜ `Med` Compare two runs on the chart: trades of run A and run B as two marker layers, with a diff of entries | Debug a change | P2 |
+| ◐ `Med` Compare two runs on the chart: trades of run A and run B as two marker layers, with a diff of entries | Debug a change | P2 (Built: baseline run entries as a marker layer) |
 | ⬜ `Med` Parameter scrubber: drag an input and the indicator and signals redraw live (indicator-only, no backtest) | Fast intuition | P1 |
-| ⬜ `Med` Order and risk lines: stop, target, trailing stop levels drawn per trade | Verify exits | P2 |
-| ⬜ `Med` Notes and annotations stored with the run, shown on replay | Research journal | P3 |
+| ✅ `Med` Order and risk lines: stop, target, trailing stop levels drawn per trade | Verify exits | P2 (Built: stop and target per hovered trade) |
+| ◐ `Med` Notes and annotations stored with the run, shown on replay | Research journal | P3 (Built: bar comments by symbol and date, stored with the strategy) |
 | ⬜ `Med` Shareable chart link with run, symbol, date range and drawings | Collaboration | P3 |
 | ⏸ `Hard` AI "explain this bar" and "draw what the strategy saw" | Learning | P3 |
 | ⬜ `Med` Screenshot to report: one click to push the chart image into the tearsheet | Papers and write-ups | P2 |
@@ -432,12 +432,12 @@ Tags: ✅ Have · ◐ Partial · ⬜ Gap · ⏸ Later · difficulty `Easy` / `Me
 Tags: ✅ Have · ◐ Partial · ⬜ Gap · ⏸ Later · difficulty `Easy` / `Med` / `Hard`.
 
 1. ⬜ `Hard` Wire Vela's workspace (multi-chart, sync links, object tree, data window, ranges, replay) into the Chart tab: most TradingView parity is already in the package.
-2. ⬜ `Med` Add a symbol picker and universe list linked to the chart for multi-symbol runs.
-3. ⬜ `Hard` Introduce `class Indicator` plus `self.use(...)` in Strategy: one code, two outputs.
+2. ✅ `Med` Add a symbol picker and universe list linked to the chart for multi-symbol runs. (Built)
+3. ◐ `Hard` Introduce `class Indicator` plus `self.use(...)` in Strategy: one code, two outputs. (Built: class Indicator; self.use open)
 4. ⬜ `Med` Add inputs and plots declared in Python (`Input`, `Plot`, `Fill`) so settings forms and styles are generated.
 5. ⬜ `Med` Add multi-timeframe access in `ctx` and `Indicator` (a `request.security` equivalent).
-6. ⬜ `Med` Show orders, stops and targets on the chart; export chart data as CSV.
-7. ⬜ `Med` Port the old engine's missing pieces before delete: Renko, Kagi, P&F, range, line break, volume candles as Vela chart types; 20 strategies as starters; the pattern scanner and alpha maths as Python indicators.
+6. ◐ `Med` Show orders, stops and targets on the chart; export chart data as CSV. (Built: stops, targets, CSV; orders are a Results table)
+7. ◐ `Med` Port the old engine's missing pieces before delete: Renko, Kagi, P&F, range, line break, volume candles as Vela chart types; 20 strategies as starters; the pattern scanner and alpha maths as Python indicators. (Built: the chart types)
 8. ⬜ `Med` Add a look-ahead guard that runs indicators on truncated history and reports Problems.
-9. ⬜ `Med` Compare two runs on one chart.
+9. ◐ `Med` Compare two runs on one chart. (Built: baseline entries)
 10. ⬜ `Med` Run perf spike on Vela with 100k bars before dropping the old engine (the first decision in section 3.3).
