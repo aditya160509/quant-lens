@@ -184,7 +184,7 @@ def comments(sid: str) -> list[dict]:
     return store.kv_get(f"comments:{sid}", [])
 
 
-def add_comment(sid: str, file: str, line: int, text: str, author: str = "you", thread_id: str | None = None, date: str | None = None) -> dict:
+def add_comment(sid: str, file: str, line: int, text: str, author: str = "you", thread_id: str | None = None, date: str | None = None, symbol: str | None = None) -> dict:
     """A line comment, or with `date` a comment on that chart bar; a reply joins its thread's place."""
     store.get(sid)  # unknown strategy -> KeyError -> 404
     rows = comments(sid)
@@ -193,7 +193,7 @@ def add_comment(sid: str, file: str, line: int, text: str, author: str = "you", 
     if thread_id and not any(r["thread_id"] == thread_id for r in rows):
         raise KeyError(f"Unknown thread {thread_id}")
     head = next((r for r in rows if r["thread_id"] == thread_id), None)
-    row = {"id": secrets.token_hex(4), "thread_id": thread_id or secrets.token_hex(4), "file": head["file"] if head else file, "line": head["line"] if head else line, "date": head.get("date") if head else date,
+    row = {"id": secrets.token_hex(4), "thread_id": thread_id or secrets.token_hex(4), "file": head["file"] if head else file, "line": head["line"] if head else line, "date": head.get("date") if head else date, "symbol": head.get("symbol") if head else (symbol or "").upper() or None,
            "text": text.strip()[:4000], "author": author.strip()[:60] or "you", "version": store.get(sid)["version"], "created": time.time()}
     store.kv_set(f"comments:{sid}", [*rows, row])
     return row

@@ -74,8 +74,9 @@ def test_line_comment_threads_and_replies(studio):  # noqa: F811
     assert (reply["file"], reply["line"], reply["thread_id"], reply["version"]) == ("main.py", 2, first["thread_id"], first["version"])
     assert [c["text"] for c in studio.get(f"{API}/strategies/{sid}/comments").json()] == ["why 2?", "tuned"]
     assert studio.post(f"{API}/strategies/{sid}/comments", json={"text": "x", "thread_id": "nope"}).status_code == 404
-    bar = studio.post(f"{API}/strategies/{sid}/comments", json={"text": "gap down", "date": "2020-03-16"}).json()
-    assert bar["date"] == "2020-03-16" and studio.post(f"{API}/strategies/{sid}/comments", json={"text": "y", "thread_id": bar["thread_id"]}).json()["date"] == "2020-03-16"
+    bar = studio.post(f"{API}/strategies/{sid}/comments", json={"text": "gap down", "date": "2020-03-16", "symbol": "spy"}).json()
+    reply = studio.post(f"{API}/strategies/{sid}/comments", json={"text": "y", "thread_id": bar["thread_id"], "symbol": "QQQ"}).json()
+    assert (bar["date"], bar["symbol"], reply["date"], reply["symbol"]) == ("2020-03-16", "SPY", "2020-03-16", "SPY")
     assert studio.put(f"{API}/strategies/{sid}/comments/threads/{bar['thread_id']}/resolved").json() == {"resolved": True}
     assert all(c.get("resolved") for c in studio.get(f"{API}/strategies/{sid}/comments").json() if c["thread_id"] == bar["thread_id"])
     assert studio.delete(f"{API}/strategies/{sid}/comments/{first['id']}").json() == {"deleted": True}

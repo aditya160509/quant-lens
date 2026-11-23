@@ -1070,6 +1070,7 @@ class CommentBody(BaseModel):
     author: str = Field(default="you", max_length=60)
     thread_id: str | None = Field(default=None, max_length=16)
     date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")  # a comment on this chart bar
+    symbol: str | None = Field(default=None, max_length=24)  # that bar's symbol
 
 
 @router.get("/strategies/{sid}/comments")

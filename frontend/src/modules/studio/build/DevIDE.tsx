@@ -619,12 +619,12 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
     if (!dbg || !watches.length) { setWatchRows([]); return; }
     void studio<typeof watchRows>("POST", "/build/watch", { spec, symbol: dbg.symbol, date: dbg.date, expressions: watches }).then(setWatchRows, () => undefined);
   }, [dbg, watches]); // eslint-disable-line react-hooks/exhaustive-deps
-  type Cmt = { id: string; thread_id: string; file: string; line: number; text: string; author: string; created: number; date?: string | null; resolved?: boolean };
+  type Cmt = { id: string; thread_id: string; file: string; line: number; text: string; author: string; created: number; date?: string | null; symbol?: string | null; resolved?: boolean };
   const [cmts, setCmts] = useState<Cmt[]>([]);
-  const [thread, setThread] = useState<{ file: string; line: number; date?: string } | null>(null);
-  const inThread = (c: Cmt, t: { file: string; line: number; date?: string }) => (t.date ? c.date === t.date : !c.date && c.file === t.file && c.line === t.line);
+  const [thread, setThread] = useState<{ file: string; line: number; date?: string; symbol?: string } | null>(null);
+  const inThread = (c: Cmt, t: { file: string; line: number; date?: string; symbol?: string }) => (t.date ? c.date === t.date && (!c.symbol || c.symbol === t.symbol) : !c.date && c.file === t.file && c.line === t.line);
   // Shift+click a chart bar: a comment thread on that bar's date.
-  const openBarThread = useCallback((date: string) => { if (!strategyId) return toast.error("Save the strategy to comment"); setThread({ file: "main.py", line: 1, date }); setCmtText(""); }, [strategyId]);
+  const openBarThread = useCallback((date: string) => { if (!strategyId) return toast.error("Save the strategy to comment"); setThread({ file: "main.py", line: 1, date, symbol: (dbg?.symbol ?? symbol).toUpperCase() }); setCmtText(""); }, [strategyId, dbg?.symbol, symbol]);
   const resolveThread = (tid: string, resolved: boolean) => void studio("PUT", `/strategies/${strategyId}/comments/threads/${tid}/resolved?resolved=${resolved}`).then(loadCmts, (e: Error) => toast.error(e.message));
   const [cmtText, setCmtText] = useState("");
   const loadCmts = () => { if (strategyId) void studio<Cmt[]>("GET", `/strategies/${strategyId}/comments`).then(setCmts, () => undefined); };
@@ -1374,8 +1374,8 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
           </div>
         </div>
         {thread ? (
-          <div className="dv-thread" role="dialog" aria-label={thread.date ? `Comments on bar ${thread.date}` : `Comments on ${thread.file}:${thread.line}`}>
-            <header><b>{thread.date ? `Bar ${thread.date}` : `${thread.file}:${thread.line}`}</b>
+          <div className="dv-thread" role="dialog" aria-label={thread.date ? `Comments on ${thread.symbol ?? ""} bar ${thread.date}` : `Comments on ${thread.file}:${thread.line}`}>
+            <header><b>{thread.date ? `${thread.symbol ? thread.symbol + " · " : ""}${thread.date}` : `${thread.file}:${thread.line}`}</b>
               {(() => { const head = cmts.find((c) => inThread(c, thread)); return head ? <button className="btn sm ghost" onClick={() => resolveThread(head.thread_id, !head.resolved)}>{head.resolved ? "Reopen" : "Resolve"}</button> : null; })()}
               <button className="icon-btn" aria-label="Close thread" onClick={() => setThread(null)}><X size={12} /></button></header>
             {cmts.filter((c) => inThread(c, thread)).map((c) => (
@@ -1405,7 +1405,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
   const rightPanel = (
       <Panel id="right" minSize={0}>
       <aside className="dv-side" inert={!chartOpen}>
-        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><PaneBoundary name="Chart"><DevChart onMark={markToCode} onNote={openBarThread} notes={[...new Set(cmts.filter((c) => c.date && !c.resolved).map((c) => c.date!))]} symbol={dbg?.symbol ?? symbol} drawKey={strategyId ?? "new"} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} max={maxChart} onMax={() => setMaxChart((x) => !x)} onAddIndicator={addIndicator} /></PaneBoundary></div> : null}
+        {chartSeen.current ? <div className="dv-chartpane" hidden={!chartOpen}><PaneBoundary name="Chart"><DevChart onMark={markToCode} onNote={openBarThread} notes={[...new Set(cmts.filter((c) => c.date && !c.resolved && (!c.symbol || c.symbol === (dbg?.symbol ?? symbol).toUpperCase())).map((c) => c.date!))]} symbol={dbg?.symbol ?? symbol} drawKey={strategyId ?? "new"} prev={prev} pausedAt={dbg?.date ?? null} playing={playing} speed={speed} onPlay={setPlaying} onSpeed={setSpeed} onGo={replayGo} max={maxChart} onMax={() => setMaxChart((x) => !x)} onAddIndicator={addIndicator} /></PaneBoundary></div> : null}
       </aside>
       </Panel>
   );
