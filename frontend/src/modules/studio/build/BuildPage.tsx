@@ -120,7 +120,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
   const [coverage, setCoverage] = useState(false);
   const runPending = useRef(false);
   // Run-status polling stops when the page unmounts.
-  const alive = useRef(true);
+  const alive = useRef(true), job = useRef<string | null>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const [starting, setStarting] = useState(false);
   const quickRun = async (level: "quick" | "full", settings: Record<string, unknown> = {}) => {
@@ -137,8 +137,10 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
       const runSpec = pairs.length ? { ...spec, params: { ...spec.params, ...Object.fromEntries(pairs.map(([k, v]) => [k!, { ...spec.params[k!]!, value: Number(v) }])) } } : spec;
       const j = await studio<QuickRun>("POST", "/build/run", level === "full" ? { level, strategy_id: sid, settings: rest } : { level, spec: runSpec, settings: rest, ...(sid ? { strategy_id: sid } : {}) });
       setQuick({ ...j, level, status: "queued" });
+      job.current = j.job_id;
       const poll = async () => {
-        if (!alive.current) { runPending.current = false; return; }
+        // Stop when the page is gone or a newer run owns the display.
+        if (!alive.current || job.current !== j.job_id) { if (job.current === j.job_id) runPending.current = false; return; }
         const st = await studio<QuickRun>("GET", `/build/run/${j.job_id}`).catch(() => null);
         if (!st) {
           runPending.current = false;
@@ -146,7 +148,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
           return;
         }
         setQuick((q) => (q?.job_id === j.job_id ? { ...st, level } : q));
-        if (["queued", "running"].includes(st.status)) setTimeout(() => void poll(), 700);
+        if (["queued", "running"].includes(st.status)) setTimeout(() => void poll(), document.hidden ? 3000 : 700);
         else {
           runPending.current = false;
           if (level === "full" && sid) {
@@ -180,6 +182,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
   useEffect(() => { void studio<{ formula: { fields: Ref[]; operators: Ref[] } }>("GET", "/manifest").then((m) => { setCatalogue([...m.formula.fields.map((f) => f.name), ...m.formula.operators.map((o) => o.example ?? o.name)]); setReference([...m.formula.operators, ...m.formula.fields]); }, () => undefined); }, []);
   const history = useRef<{ past: Spec[]; future: Spec[]; at: number }>({ past: [], future: [], at: 0 });
   const specRef = useRef<Spec | null>(null);
+  const editRev = useRef(0), saveInFlight = useRef(false);
   const [palette, setPalette] = useState(false);
   const [seed, setSeed] = useState<{ q: string }>();
   const [devItems, setDevItems] = useState<{ id: string; group: string; label: string; hidden: boolean }[]>([]);
@@ -241,7 +244,10 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
     const fmt = (code: string) => studio<{ code: string }>("POST", "/format-python", { code }).then((r) => r.code, () => code);
     const own = (spec.files ?? {}) as Record<string, string>;
     const py = Object.entries(own).filter(([f]) => f.endsWith(".py"));
+    const at = editRev.current;
     void Promise.all([fmt(spec.code), ...py.map(([, c]) => fmt(c))]).then(([code, ...rest]) => {
+      // Typing continued while formatting: keep those edits and save them unformatted.
+      if (editRev.current !== at) return save();
       const files = { ...own, ...Object.fromEntries(py.map(([f], i) => [f, rest[i]!])) };
       const next = { ...spec, code: code!, files };
       if (code !== spec.code || py.some(([f, c]) => files[f] !== c)) edit({ code: code!, files });
@@ -254,15 +260,17 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
     if (readOnly) return void toast("Read-only", { id: "ro" });
     const h = history.current, now = Date.now(), cur = specRef.current!;
     if (now - h.at > 500) h.past = [...h.past.slice(-49), cur];
-    h.at = now; h.future = [];
+    h.at = now; h.future = []; editRev.current++;
     specRef.current = { ...cur, ...next };
     setDirty(true); setSpec((c) => ({ ...c, ...next }));
   };
 
   // Live compile, 250 ms after typing stops.
+  // A newer edit aborts the older request, so a slow response never replaces a newer result.
   useEffect(() => {
-    const t = setTimeout(() => studio<Compiled>("POST", "/compile", { spec }).then(setCompiled, (e) => setCompiled({ ok: false, findings: [{ severity: "error", role: "spec", line: 1, start: 0, end: 0, token: "", message: e instanceof Error ? e.message : "Invalid" }], hash: "", description: "" })), 250);
-    return () => clearTimeout(t);
+    const ac = new AbortController();
+    const t = setTimeout(() => studio<Compiled>("POST", "/compile", { spec }, ac.signal).then((c) => { if (!ac.signal.aborted) setCompiled(c); }, (e) => { if (!ac.signal.aborted) setCompiled({ ok: false, findings: [{ severity: "error", role: "spec", line: 1, start: 0, end: 0, token: "", message: e instanceof Error ? e.message : "Invalid" }], hash: "", description: "" }); }), 250);
+    return () => { clearTimeout(t); ac.abort(); };
   }, [spec]);
 
   // Preview on one name once the compiled rule changes (B-5).
@@ -309,15 +317,16 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
   // True-rate and last true date of every rule on the preview name, 600 ms after typing stops (B-108, B-111, B-116).
   useEffect(() => {
     if (!compiled?.ok || !symbol.trim() || ui === "dev") return;
+    const ac = new AbortController();
     const t = setTimeout(() => {
       for (const [role] of ROLES) {
         const expr = (spec[role] as string).trim();
         if (!expr || role === "score") continue;
-        void studio<Cond>("POST", "/build/condition", { spec, symbol: symbol.trim().toUpperCase(), expression: expr })
-          .then((c) => setConds((o) => ({ ...o, [role]: c })), (e: Error) => setConds((o) => ({ ...o, [role]: { error: e.message } })));
+        void studio<Cond>("POST", "/build/condition", { spec, symbol: symbol.trim().toUpperCase(), expression: expr }, ac.signal)
+          .then((c) => { if (!ac.signal.aborted) setConds((o) => ({ ...o, [role]: c })); }, (e: Error) => { if (!ac.signal.aborted) setConds((o) => ({ ...o, [role]: { error: e.message } })); });
       }
     }, 600);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); ac.abort(); };
   }, [spec, symbol, compiled?.ok, ui]);
   useEffect(() => {
     if (pyView === null) return;
@@ -327,22 +336,29 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
 
   // Autosave the draft every 2 s while there are unsaved edits (B-6).
   useEffect(() => {
-    if (!dirty || !loaded) return;
-    const t = setTimeout(() => void studio("PUT", `/strategies/${loaded.id}/draft`, { spec }).catch(() => undefined), 2000);
-    return () => clearTimeout(t);
-  }, [spec, dirty, loaded]);
+    if (!dirty || !loaded || readOnly || saving === "saving") return;
+    const ac = new AbortController();
+    const t = setTimeout(() => void studio("PUT", `/strategies/${loaded.id}/draft`, { spec }, ac.signal).catch(() => undefined), 2000);
+    return () => { clearTimeout(t); ac.abort(); };
+  }, [spec, dirty, loaded, readOnly, saving]);
 
   const save = useCallback(async (over?: Spec, navigate = true): Promise<string | null> => {
-    const body = { spec: over ?? spec };
+    if (readOnly) { toast("Read-only", { id: "ro" }); return null; }
+    if (saveInFlight.current) return null;
+    saveInFlight.current = true;
+    const at = editRev.current;
+    const body = { spec: over ?? spec, ...(loaded ? { base_version: loaded.latest } : {}) };
     setSaving("saving");
     try {
       const s = loaded ? await studio<Loaded>("PUT", `/strategies/${loaded.id}`, body) : await studio<Loaded>("POST", "/strategies", body);
-      setLoaded(s); setDirty(false); setSaving("idle"); toast.success(`Saved version ${s.latest}`);
+      // Edits typed while the save was in flight stay marked unsaved.
+      setLoaded(s); if (editRev.current === at) setDirty(false); setSaving("idle"); toast.success(`Saved version ${s.latest}`);
       try { localStorage.removeItem(`studio:draft:${s.id}`); localStorage.removeItem("studio:draft:new"); } catch { /* blocked */ }
       if (!loaded && navigate) router.replace(`/studio/build/${s.id}?ui=${ui}`);
       return s.id;
     } catch (e) { setSaving((e as { status?: number })?.status === 409 ? "conflict" : "idle"); fail(e); return null; }
-  }, [loaded, spec, router, ui]);
+    finally { saveInFlight.current = false; }
+  }, [loaded, spec, router, ui, readOnly]);
 
   const run = useCallback(async () => {
     const sid = await save(); if (!sid) return;
@@ -360,7 +376,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
       else if (e.key === "Enter" && ui !== "dev") { e.preventDefault(); void run(); }
       else if (e.key === "z" && !(e.target as HTMLElement).matches("input, textarea")) {
         e.preventDefault(); const h = history.current, from = e.shiftKey ? h.future : h.past, to = e.shiftKey ? h.past : h.future;
-        const prev = from.pop(); if (prev) { to.push(specRef.current!); h.at = 0; specRef.current = prev; setSpec(prev); setDirty(true); }
+        const prev = from.pop(); if (prev) { to.push(specRef.current!); h.at = 0; editRev.current++; specRef.current = prev; setSpec(prev); setDirty(true); }
       }
     };
     window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on);
@@ -507,19 +523,19 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
   );
   // Project actions: the Simple page's More menu and the Dev settings window's Project page.
   const projectActions: [ReactNode, string, boolean, () => void][] = [
-    [<Link2 key="l" size={13} />, "Copy read-only link", !loaded, () => { if (loaded) void studio<{ token: string }>("POST", `/strategies/${loaded.id}/share`).then((r) => { const u = `${location.origin}/studio/build?share=${r.token}`; void copyText(u, "Read-only link copied"); }, fail); }],
-    [<GitBranch key="b" size={13} />, `Branch from v${loaded?.version ?? 1}`, !loaded, () => { if (loaded) void studio<{ id: string }>("POST", `/strategies/${loaded.id}/versions/${loaded.version}/branch`).then((b) => router.push(`/studio/build/${b.id}`), fail); }],
+    [<Link2 key="l" size={13} />, "Copy read-only link", !loaded || !!readOnly, () => { if (loaded) void studio<{ token: string }>("POST", `/strategies/${loaded.id}/share`).then((r) => { const u = `${location.origin}/studio/build?share=${r.token}`; void copyText(u, "Read-only link copied"); }, fail); }],
+    [<GitBranch key="b" size={13} />, `Branch from v${loaded?.version ?? 1}`, !loaded || !!readOnly, () => { if (loaded) void studio<{ id: string }>("POST", `/strategies/${loaded.id}/versions/${loaded.version}/branch`).then((b) => router.push(`/studio/build/${b.id}`), fail); }],
     [<Download key="d" size={13} />, "Export project (.zip)", !loaded, () => { if (loaded) window.location.assign(`${STUDIO_BASE}/strategies/${loaded.id}/export.zip`); }],
-    [<Upload key="u" size={13} />, "Import project (.zip)", false, () => zipInput.current?.click()],
-    [<GitMerge key="m" size={13} />, "Compare and merge…", !loaded, () => setDialog("branches")],
-    [<BookmarkPlus key="t" size={13} />, "Save as my template", blank, () => { const name = spec.name || "Untitled"; saveMine([{ name, rule: String(spec.entry ?? ""), spec: { ...spec } }, ...mine.filter((t) => t.name !== name)].slice(0, 24)); toast.success(`Saved "${name}" as a template`); }],
+    [<Upload key="u" size={13} />, "Import project (.zip)", !!readOnly, () => zipInput.current?.click()],
+    [<GitMerge key="m" size={13} />, "Compare and merge…", !loaded || !!readOnly, () => setDialog("branches")],
+    [<BookmarkPlus key="t" size={13} />, "Save as my template", blank || !!readOnly, () => { const name = spec.name || "Untitled"; saveMine([{ name, rule: String(spec.entry ?? ""), spec: { ...spec } }, ...mine.filter((t) => t.name !== name)].slice(0, 24)); toast.success(`Saved "${name}" as a template`); }],
   ];
   const projectPage = (
     <>
       <h3>Strategy</h3>
       <div className="bd-nums"><div className="bd-num"><span>Name</span>{nameInput}</div><div className="bd-num"><span>Version</span><div className="bd-menu-fields">{versionControls}</div></div></div>
       <h3>Actions</h3>
-      <div className="bd-nums">{projectActions.map(([icon, label, off, go]) => <div key={label} className="bd-num"><span>{label}</span><button type="button" className="btn sm" disabled={off} title={off ? "Save the strategy first" : undefined} onClick={go}>{icon}{label.split(" ")[0]}</button></div>)}</div>
+      <div className="bd-nums">{projectActions.map(([icon, label, off, go]) => <div key={label} className="bd-num"><span>{label}</span><button type="button" className="btn sm" disabled={off} title={off ? (readOnly ? "Read-only" : "Save the strategy first") : undefined} onClick={go}>{icon}{label.split(" ")[0]}</button></div>)}</div>
     </>
   );
   const headRight = (

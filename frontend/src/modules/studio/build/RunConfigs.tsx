@@ -11,7 +11,7 @@ const COSTS = ["US retail", "Crypto taker", "Zero (costs off)", "Custom"]; // ba
 const DEFAULT: RunConfig = { name: "Default" };
 
 function load(): { active: string; list: RunConfig[]; runOnSave?: boolean } {
-  try { const s = JSON.parse(localStorage.getItem(KEY) ?? ""); if (Array.isArray(s.list)) return s; } catch { /* none or blocked */ }
+  try { const s = JSON.parse(localStorage.getItem(KEY) ?? ""); if (Array.isArray(s.list) && s.list.every((c: unknown) => typeof (c as RunConfig)?.name === "string")) return s; } catch { /* none, corrupt or blocked */ }
   return { active: "Default", list: [DEFAULT] };
 }
 
@@ -36,7 +36,11 @@ export function RunConfigsEditor({ rc }: { rc: RunConfigs }) {
   const [rows, setRows] = useState(rc.list);
   const set = (i: number, k: keyof RunConfig, v: string) => setRows((r) => r.map((c, j) => (j === i ? { ...c, [k]: k === "top_n" ? (v ? Number(v) : undefined) : v } : c)));
   const names = rows.map((c) => c.name.trim());
-  const bad = names.some((n, i) => !n || names.indexOf(n) !== i);
+  // Names unique and non-empty, Top N a whole number from 1, start on or before end.
+  const why = names.some((n, i) => !n || names.indexOf(n) !== i) ? "Each configuration needs a unique name"
+    : rows.some((c) => c.top_n !== undefined && !(Number.isInteger(c.top_n) && c.top_n >= 1)) ? "Top N must be a whole number of at least 1"
+    : rows.some((c) => c.start && c.end && c.start > c.end) ? "Start must be on or before End" : "";
+  const bad = !!why;
   const dirty = JSON.stringify(rows) !== JSON.stringify(rc.list);
   return (
     <div className="dv-rcfgs">
@@ -63,8 +67,9 @@ export function RunConfigsEditor({ rc }: { rc: RunConfigs }) {
       <div className="dv-rcfg-ft">
         <button className="btn sm ghost" onClick={() => setRows((r) => [...r, { name: `Config ${r.length}` }])}><Plus size={13} />Add configuration</button>
         <span style={{ flex: 1 }} />
+        {why ? <span className="bd-meta" role="alert">{why}</span> : null}
         {dirty ? <button className="btn sm ghost" onClick={() => setRows(rc.list)}>Revert</button> : null}
-        <button className="btn sm primary" disabled={bad || !dirty} title={bad ? "Each configuration needs a unique name" : undefined} onClick={() => { const list = rows.map((c) => ({ ...c, name: c.name.trim() })); rc.save(list); setRows(list); }}>Save configurations</button>
+        <button className="btn sm primary" disabled={bad || !dirty} title={why || undefined} onClick={() => { const list = rows.map((c) => ({ ...c, name: c.name.trim() })); rc.save(list); setRows(list); }}>Save configurations</button>
       </div>
     </div>
   );

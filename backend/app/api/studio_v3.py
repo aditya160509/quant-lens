@@ -63,6 +63,7 @@ class FeatureRequest(BaseModel):
 class SpecRequest(BaseModel):
     spec: dict[str, Any]
     folder: str = ""
+    base_version: int | None = Field(default=None, ge=1)  # the latest version the client saw; a newer one means 409
 
 
 def _actor(header: str | None) -> str:
@@ -921,9 +922,11 @@ def get_strategy(sid: str, version: int | None = None) -> dict[str, Any]:
 def save_version(sid: str, request: SpecRequest, x_studio_actor: str | None = Header(None), x_studio_session: str | None = Header(None)) -> dict[str, Any]:
     _guarded(workspace.check_writer, sid, x_studio_session)
     try:
-        return _known(store.save_version, sid, _spec(request.spec), _actor(x_studio_actor))
+        return _known(store.save_version, sid, _spec(request.spec), _actor(x_studio_actor), base_version=request.base_version)
     except store.VersionLocked as exc:
         raise HTTPException(423, str(exc)) from exc
+    except store.VersionConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 class ProjectFileUpdate(BaseModel):

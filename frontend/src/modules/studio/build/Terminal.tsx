@@ -199,7 +199,7 @@ export function Terminal({ host }: { host: TerminalHost }) {
     setInput(""); hist.current = -1; setPick(false);
     setHistory((h) => [cmd, ...h.filter((x) => x !== cmd)].slice(0, 100));
     if (cmd === "clear") return setBlocks([]);
-    if (cmd === "reset") { setSession([]); void studio("DELETE", `/build/kernel/console:${host.storeKey}`).catch(() => undefined); return toast("Python session reset"); }
+    if (cmd === "reset") { void studio("DELETE", `/build/kernel/console:${host.storeKey}`).then(() => { setSession([]); toast("Python session reset"); }, (e: Error) => toast.error(`Reset failed: ${e.message}`)); return; }
     const id = push(cmd), t0 = performance.now();
     void exec(cmd).then((r) => done(id, t0, r), (e: Error) => done(id, t0, { status: "err", out: e.message }));
   };

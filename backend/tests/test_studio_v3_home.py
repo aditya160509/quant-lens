@@ -54,6 +54,14 @@ def test_failed_run_and_data_newer_rank_order(client):
     assert [a["kind"] for a in items] == ["data_newer", "failed_run"]
 
 
+def test_save_with_stale_base_version_is_409(client):
+    s = _make()
+    store.save_version(s["id"], Strategy(name="A", entry_long="rsi(close, 14) < 20"))  # now v2
+    body = {"spec": Strategy(name="A", entry_long="rsi(close, 14) < 10").model_dump(), "base_version": 1}
+    assert client.put(f"/api/studio-v3/strategies/{s['id']}", json=body).status_code == 409
+    assert client.put(f"/api/studio-v3/strategies/{s['id']}", json={**body, "base_version": 2}).json()["latest"] == 3
+
+
 def test_duplicate_is_version_one_with_empty_ledger(client):  # H-3
     s = _make()
     store.record_trial(s["id"], "h1", "human", "backtest", 1.0, __import__("numpy").array([0.01, -0.01, 0.02]))

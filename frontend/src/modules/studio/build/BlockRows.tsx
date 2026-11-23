@@ -54,7 +54,7 @@ export function GroupEditor({ id, group, onChange, suggestions, depth = 0, onRem
               <option value="" disabled hidden>Condition</option>
               {paletteOrder().map(([v, l]) => <option key={l} value={v}>{l}</option>)}
             </select>
-            <button className="btn sm ghost" onClick={() => add({ op: group.op === "all" ? "any" : "all", items: [{ rule: "", enabled: true }] })}><FolderPlus size={12} />Group</button>
+            <button className="btn sm ghost" disabled={depth >= 6} title={depth >= 6 ? "Groups nest at most 6 deep" : undefined} onClick={() => add({ op: group.op === "all" ? "any" : "all", items: [{ rule: "", enabled: true }] })}><FolderPlus size={12} />Group</button>
           </div>
         </div>
       ) : <code className="gx-folded">{groupFormula(group) || "empty"}</code>}

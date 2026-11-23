@@ -17,7 +17,7 @@ import { useLayout } from "@/workspace/layout";
 import { CodeEditor, type EditorAction, type Problem } from "./CodeEditor";
 import { useServerPref } from "./serverPref";
 import { DevChart } from "./DevChart";
-import { CHART_CHANNEL } from "./ChartPopout";
+import { chartChannel } from "./ChartPopout";
 import { RunConfigsEditor, useRunConfigs } from "./RunConfigs";
 import { AppearanceSettings } from "@/workspace/WorkspaceShell";
 import { fitWorkspace, LayoutsDialog, targets, useWorkspaces, WorkspaceItems, type PanelId } from "./Workspace";
@@ -391,18 +391,20 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
   };
   const params = () => Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, p.value]));
   const inspectProject = async () => {
-    const found: Problem[] = [];
+    const found: Problem[] = [], failed = new Set<string>();
     setPanelOpen(true); setTab("problems"); setScope("project"); setReport([]);
     for (const f of Object.keys(files).filter((n) => n.endsWith(".py") && files[n].trim())) {
       const body = { code: files[f], file: f, files, params: params() };
       const [a, b] = await Promise.all([
-        studio<{ problems: Problem[] }>("POST", "/build/check", { ...body, strictness: strict ? "strict" : "basic", severity: sev }).catch(() => ({ problems: [] as Problem[] })),
-        studio<{ problems: Problem[] }>("POST", "/build/typecheck", body).catch(() => ({ problems: [] as Problem[] })),
+        studio<{ problems: Problem[] }>("POST", "/build/check", { ...body, strictness: strict ? "strict" : "basic", severity: sev }).catch(() => { failed.add(f); return { problems: [] as Problem[] }; }),
+        studio<{ problems: Problem[] }>("POST", "/build/typecheck", body).catch(() => { failed.add(f); return { problems: [] as Problem[] }; }),
       ]);
       found.push(...[...a.problems, ...b.problems].map((p) => ({ ...p, file: f })));
       setReport([...found]);
     }
-    toast(found.length ? `${found.length} problem${found.length === 1 ? "" : "s"} in ${new Set(found.map((p) => p.file)).size} file(s)` : "No problems in the project");
+    // A checker that could not run never reads as a clean project.
+    if (failed.size) toast.error(`Could not inspect ${[...failed].join(", ")}; ${found.length} problem${found.length === 1 ? "" : "s"} found elsewhere`);
+    else toast(found.length ? `${found.length} problem${found.length === 1 ? "" : "s"} in ${new Set(found.map((p) => p.file)).size} file(s)` : "No problems in the project");
   };
   const setSeverity = (code: string) => {
     const v = window.prompt(`Severity for ${code} (error, warning, info, off; empty resets)`, sev[code] ?? "")?.trim().toLowerCase();
@@ -646,16 +648,18 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
   };
   /** Replay moves the debugger one bar or to a date; chart, Debug locals, watches and Console follow dbg. Overlapping requests are dropped. */
   // Pop-out chart: send it the chart's state; it sends replay moves back.
-  const chartChan = useRef<BroadcastChannel | null>(null);
+  const chartChan = useRef<BroadcastChannel | null>(null), chartId = useRef(""), chartListening = useRef(false);
   const chartState = { type: "state", symbol: dbg?.symbol ?? symbol, prev, pausedAt: dbg?.date ?? null, drawKey: strategyId ?? "new" };
   const chartStateRef = useRef(chartState); chartStateRef.current = chartState;
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;
-    const c = chartChan.current = new BroadcastChannel(CHART_CHANNEL);
-    c.onmessage = (e: MessageEvent<{ type: string; date: string | null; step?: 1 | -1 }>) => { if (e.data.type === "hello") c.postMessage(chartStateRef.current); else if (e.data.type === "go") replayRef.current(e.data.date, e.data.step); };
+    chartId.current ||= crypto.randomUUID();
+    const c = chartChan.current = new BroadcastChannel(chartChannel(chartId.current));
+    c.onmessage = (e: MessageEvent<{ type: string; date: string | null; step?: 1 | -1 }>) => { if (e.data.type === "hello") { chartListening.current = true; c.postMessage(chartStateRef.current); } else if (e.data.type === "go") replayRef.current(e.data.date, e.data.step); };
     return () => c.close();
   }, []);
-  useEffect(() => { chartChan.current?.postMessage(chartState); }, [symbol, prev, dbg?.date, strategyId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The preview is only cloned across windows once a pop-out has said hello.
+  useEffect(() => { if (chartListening.current) chartChan.current?.postMessage(chartState); }, [symbol, prev, dbg?.date, strategyId]); // eslint-disable-line react-hooks/exhaustive-deps
   const replayRef = useRef<(date: string | null, step?: 1 | -1) => void>(() => undefined);
   const replayGo = useCallback((date: string | null, step?: 1 | -1) => {
     if (stepping.current) return;
@@ -865,7 +869,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
     { id: "studio.stepback", label: "Debug: step back one bar", keys: (m) => [m.KeyMod.Shift | m.KeyCode.F10], run: () => debug({ step: -1 }) },
     { id: "studio.layouts", label: "View: customise layouts", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Backslash], run: () => setLayoutsOpen(true) },
     { id: "studio.chartfirst", label: "View: chart first", run: () => ws.flipChartFirst() },
-    { id: "studio.popchart", label: "View: pop out chart", run: () => window.open(`${window.location.pathname}?popout=chart`, "atlas-chart", "popup,width=1200,height=760") },
+    { id: "studio.popchart", label: "View: pop out chart", run: () => window.open(`${window.location.pathname}?popout=chart&ch=${chartId.current}`, `atlas-chart-${chartId.current}`, "popup,width=1200,height=760") },
     { id: "studio.panel", label: "View: toggle panel", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyJ], run: () => setPanelOpen((o) => !o) },
     { id: "studio.rail", label: "View: toggle side bar", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyB], run: () => { if (railOpen) setRailOpen(false); else revealRail(rail); } },
     { id: "studio.files", label: "Go to file", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.KeyP], run: () => revealRail("files") },
