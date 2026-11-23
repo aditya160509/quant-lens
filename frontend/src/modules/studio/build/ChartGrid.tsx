@@ -1,5 +1,6 @@
 "use client";
 
+import { Columns2, Rows2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { studio } from "../api";
 
@@ -35,7 +36,7 @@ export function ChartGrid({ symbols, theme }: { symbols: string[]; theme: { back
   return (
     <div className="dv-grid">
       <div className="dv-grid-bar">
-        <span className="seg" role="group" aria-label="Layout">{LAYOUTS.map(([l, n]) => <button key={l} type="button" aria-pressed={layout === l} disabled={n > symbols.length && l !== "2v"} onClick={() => setLayout(l)}>{l === "2v" ? "2 ▯▯" : l === "2h" ? "2 ▭" : l}</button>)}</span>
+        <span className="seg" role="group" aria-label="Layout">{LAYOUTS.map(([l, n]) => <button key={l} type="button" aria-label={l === "2v" ? "Two side by side" : l === "2h" ? "Two stacked" : `${l} charts`} aria-pressed={layout === l} disabled={n > symbols.length && l !== "2v"} onClick={() => setLayout(l)}>{l === "2v" ? <Columns2 size={14} /> : l === "2h" ? <Rows2 size={14} /> : l}</button>)}</span>
         <label className="dv-check"><input type="checkbox" checked={sync.crosshair} onChange={(e) => setSync((x) => ({ ...x, crosshair: e.target.checked }))} />Sync crosshair</label>
         <label className="dv-check"><input type="checkbox" checked={sync.viewport} onChange={(e) => setSync((x) => ({ ...x, viewport: e.target.checked }))} />Sync time</label>
       </div>

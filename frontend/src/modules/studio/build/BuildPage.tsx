@@ -1,6 +1,6 @@
 "use client";
 
-import { Command as CommandIcon, BookmarkPlus, CircleCheck, CircleDashed, CircleX, Download, GitBranch, GitMerge, Settings2, Link2, ArrowLeft, Code2, FilePlus2, FolderGit2, Keyboard, LayoutPanelLeft, Palette as PaletteIcon, RotateCcw, Search, SlidersHorizontal, PlayCircle, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
+import { Command as CommandIcon, BookmarkPlus, CircleCheck, CircleDashed, CircleX, Download, GitBranch, GitMerge, Settings2, Link2, ArrowLeft, ArrowUp, Bookmark, Code2, FilePlus2, FolderGit2, Keyboard, LayoutPanelLeft, Palette as PaletteIcon, RotateCcw, Search, SlidersHorizontal, PlayCircle, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import toast from "react-hot-toast";
@@ -111,6 +111,9 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
   const [logpoints, setLogpoints] = useState<Logpoint[]>([]);
   const [coverage, setCoverage] = useState(false);
   const runPending = useRef(false);
+  // Run-status polling stops when the page unmounts.
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const [starting, setStarting] = useState(false);
   const quickRun = async (level: "quick" | "full", settings: Record<string, unknown> = {}) => {
     if (runPending.current) return;
@@ -126,6 +129,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
       const j = await studio<QuickRun>("POST", "/build/run", level === "full" ? { level, strategy_id: sid, settings: rest } : { level, spec: runSpec, settings: rest, ...(sid ? { strategy_id: sid } : {}) });
       setQuick({ ...j, level, status: "queued" });
       const poll = async () => {
+        if (!alive.current) { runPending.current = false; return; }
         const st = await studio<QuickRun>("GET", `/build/run/${j.job_id}`).catch(() => null);
         if (!st) {
           runPending.current = false;
@@ -544,8 +548,8 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
           <h3>Start from</h3>
           <div className="bd-tpls">
             {mine.map((t) => (
-              <div key={`m-${t.name}`} className="bd-tpl bd-tpl-mine" role="button" tabIndex={0} onClick={() => applyTemplate(t)} onKeyDown={(e) => { if (e.key === "Enter") applyTemplate(t); }}><b>{t.name}</b><span>{t.rule}</span>
-                <button className="icon-btn" aria-label={`Delete template ${t.name}`} onClick={(e) => { e.stopPropagation(); saveMine(mine.filter((x) => x !== t)); }}><Trash2 size={12} /></button></div>
+              <div key={`m-${t.name}`} className="bd-tpl-mine"><button type="button" className="bd-tpl" onClick={() => applyTemplate(t)}><b>{t.name}</b><span>{t.rule}</span></button>
+                <button type="button" className="icon-btn" aria-label={`Delete template ${t.name}`} onClick={() => saveMine(mine.filter((x) => x !== t))}><Trash2 size={12} /></button></div>
             ))}
             {templates.data.map((t) => (
               <button key={t.name} className="bd-tpl" onClick={() => applyTemplate(t)}><b>{t.name}</b><span>{t.rule}</span><TplStat name={t.name} /></button>
@@ -688,7 +692,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
   );
 }
 
-const NAV_ICONS: Record<string, ReactNode> = { General: <SlidersHorizontal size={16} />, Editor: <Code2 size={16} />, Appearance: <PaletteIcon size={16} />, Layout: <LayoutPanelLeft size={16} />, Run: <PlayCircle size={16} />, Project: <FolderGit2 size={16} />, Keybindings: <Keyboard size={16} />, "New strategy": <FilePlus2 size={16} /> };
+const NAV_ICONS: Record<string, ReactNode> = { General: <SlidersHorizontal size={16} />, Editor: <Code2 size={16} />, Appearance: <PaletteIcon size={16} />, Layout: <LayoutPanelLeft size={16} />, Run: <PlayCircle size={16} />, Project: <FolderGit2 size={16} />, Keybindings: <Keyboard size={16} />, Profiles: <Bookmark size={16} />, "New strategy": <FilePlus2 size={16} /> };
 
 /** The one settings window (T3 Code style): a page per area on the left, Build defaults, editor, keys and new-strategy defaults here, Dev adds appearance, layout, run and project pages. */
 function CustomiseDialog({ spec, onClose, sections = [], start, font, onFont }: { spec: Spec; onClose: () => void; sections?: [string, ReactNode][]; start?: string; font?: number; onFont?: (v: number) => void }) {
@@ -697,7 +701,7 @@ function CustomiseDialog({ spec, onClose, sections = [], start, font, onFont }: 
   const [kq, setKq] = useState("");
   const [q, setQ] = useState("");
   const [json, setJson] = useState<string | null>(null); // raw JSON view of the settings while editing
-  const own = ["General", "Editor", "Keybindings", "New strategy"];
+  const own = ["General", "Editor", "Keybindings", "New strategy", "Profiles"];
   const pages = [...own.slice(0, 2), ...sections.map(([n]) => n), ...own.slice(2)];
   const [page, setPage] = useState(start && pages.includes(start) ? start : pages[0]!);
   const body = useRef<HTMLDivElement>(null);
@@ -710,8 +714,7 @@ function CustomiseDialog({ spec, onClose, sections = [], start, font, onFont }: 
   const save = () => { writeDefaults(d); toast.success("Settings saved"); ref.current?.close(); };
   const fromJson = (text: string) => { try { const v: unknown = JSON.parse(text); if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("Settings must be a JSON object"); setD(v as Partial<Defaults>); setJson(null); } catch (e) { toast.error((e as Error).message); } };
   // A profile is everything in this window under one name: defaults, shortcuts, theme, appearance, run configurations, layouts, font.
-  const saveProfile = () => {
-    const name = window.prompt("Profile name")?.trim(); if (!name) return;
+  const saveProfile = (name: string) => {
     const keys: Record<string, string> = {}; for (const k of PROFILE_KEYS) { try { const v = localStorage.getItem(k); if (v !== null) keys[k] = v; } catch { /* blocked */ } }
     setProfiles((p) => [...p.filter((x) => x.name !== name), { name, defaults: d, keys }]);
     toast.success(`Saved profile ${name}`);
@@ -733,10 +736,6 @@ function CustomiseDialog({ spec, onClose, sections = [], start, font, onFont }: 
       </nav>
       <div className="bd-set-main">
       <div className="bd-set-hd"><span className="bd-set-crumb">Settings <i>/</i> <b>{q ? "Search" : page}</b></span>
-        <select className="bd-set-link" aria-label="Profile" value="" onChange={(e) => { const v = e.target.value; if (v === "\u0000save") saveProfile(); else if (v.startsWith("\u0000rm:")) setProfiles((p) => p.filter((x) => x.name !== v.slice(4))); else { const p = profiles.find((x) => x.name === v); if (p) applyProfile(p); } }}>
-          <option value="">Profiles</option>{profiles.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
-          <option value={"\u0000save"}>Save all as profile…</option>{profiles.map((p) => <option key={`rm${p.name}`} value={`\u0000rm:${p.name}`}>Delete {p.name}</option>)}
-        </select>
         <button className="bd-set-link" aria-pressed={json !== null} onClick={() => setJson(json === null ? JSON.stringify(d, null, 2) : null)}>JSON</button>
         <button className="bd-set-link" onClick={() => setD({})}><RotateCcw size={14} />Restore defaults</button></div>
       {json !== null ? <><textarea className="input bd-json" aria-label="Settings JSON" spellCheck={false} value={json} onChange={(e) => setJson(e.target.value)} /><button className="btn sm" onClick={() => fromJson(json)}>Apply JSON</button></> : null}
@@ -747,7 +746,7 @@ function CustomiseDialog({ spec, onClose, sections = [], start, font, onFont }: 
         <label className="bd-num"><span>Blocks</span><Segmented<"full" | "compact"> label="Block density" value={d.compact ? "compact" : "full"} onChange={(v) => setD({ ...d, compact: v === "compact" })} options={[{ value: "full", label: "Expanded" }, { value: "compact", label: "Compact" }]} /></label>
         <label className="bd-num"><span>Colour by role</span><input type="checkbox" checked={!d.plain} onChange={(e) => setD({ ...d, plain: !e.target.checked })} /></label>
         <div className="bd-num"><span>Condition order</span><ol className="bd-palette">{(d.palette?.length ? paletteOrder().sort((a, b) => d.palette!.indexOf(a[1]) - d.palette!.indexOf(b[1])) : paletteOrder()).map(([, l], i, all) => (
-          <li key={l}>{l}<button type="button" className="icon-btn" aria-label={`Move ${l} up`} disabled={!i} onClick={() => { const n = all.map(([, x]) => x); [n[i - 1], n[i]] = [n[i], n[i - 1]]; setD({ ...d, palette: n }); }}>↑</button></li>))}</ol></div>
+          <li key={l}>{l}<button type="button" className="icon-btn" aria-label={`Move ${l} up`} disabled={!i} onClick={() => { const n = all.map(([, x]) => x); [n[i - 1], n[i]] = [n[i], n[i - 1]]; setD({ ...d, palette: n }); }}><ArrowUp size={14} /></button></li>))}</ol></div>
       </div> : null}
       {show("Editor") ? <div className="bd-nums">
         <label className="bd-num"><span>Editor word wrap</span><input type="checkbox" checked={d.wrap !== false} onChange={(e) => setD({ ...d, wrap: e.target.checked })} /></label>
@@ -773,6 +772,16 @@ function CustomiseDialog({ spec, onClose, sections = [], start, font, onFont }: 
           <option value="equal">Equal</option><option value="pct_equity">% of equity</option><option value="risk">Risk per trade</option><option value="vol_target">Vol target</option><option value="score">Weight by score</option><option value="kelly">Kelly (capped)</option></select></label>
         <Num label="Value" value={sizing.value} onChange={(v) => setD({ ...d, sizing: { ...sizing, value: v ?? 0 } })} />
         <Num label="Max positions" value={sizing.max_positions} onChange={(v) => setD({ ...d, sizing: { ...sizing, max_positions: v ?? 0 } })} />
+      </div>
+      </> : null}
+      {show("Profiles") ? <>
+      <h3>Profiles</h3>
+      <div className="bd-nums">
+        {profiles.map((p) => <div key={p.name} className="bd-num"><span>{p.name}</span><span className="bd-row-acts">
+          <button type="button" className="btn sm" onClick={() => applyProfile(p)}>Apply</button>
+          <button type="button" className="icon-btn" aria-label={`Delete profile ${p.name}`} onClick={() => setProfiles((all) => all.filter((x) => x.name !== p.name))}><Trash2 size={14} /></button></span></div>)}
+        <form className="bd-num" onSubmit={(e) => { e.preventDefault(); const i = e.currentTarget.elements.namedItem("profile") as HTMLInputElement, n = i.value.trim(); if (n) { saveProfile(n); i.value = ""; } }}>
+          <input name="profile" className="input" placeholder="Name this setup" aria-label="Profile name" /><button className="btn sm primary">Save everything as profile</button></form>
       </div>
       </> : null}
       {q ? null : sections.map(([n, node]) => (page === n ? <div key={n} className="bd-set-extra">{node}</div> : null))}

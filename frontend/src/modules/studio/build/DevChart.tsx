@@ -509,7 +509,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
         <span className="dv-chartbar-gap" />
         {rows.length || perSym.length ? <button type="button" className="icon-btn" aria-label="Symbols, months and regimes" aria-pressed={!!drawer} title="Symbols, months and regimes" onClick={() => setDrawer((d) => (d ? null : "symbols"))}><List size={15} /></button> : null}
         <button type="button" className="icon-btn" aria-label="Chart settings" title="Chart settings" aria-pressed={settingsOpen !== null} onClick={() => setSettingsOpen("Display")}><Settings2 size={15} /></button>
-        {onMax ? <button type="button" className="icon-btn" aria-label={max ? "Restore chart" : "Maximise chart"} title={max ? "Restore (Esc)" : "Maximise chart (⌘⇧↵)"} onClick={onMax}>{max ? <Minimize2 size={15} /> : <Maximize2 size={15} />}</button> : null}
+        {onMax ? <button type="button" className="icon-btn" aria-label={max ? "Restore chart" : "Maximise chart"} title={max ? "Restore (Esc)" : "Maximise chart (⌘⇧E)"} onClick={onMax}>{max ? <Minimize2 size={15} /> : <Maximize2 size={15} />}</button> : null}
       </div>
       <div className="dv-chartbox" ref={box} />
       {settingsOpen !== null ? <dialog className="sh-import bd-set is-sm" aria-label="Chart settings" ref={(d) => { if (d && !d.open) d.showModal(); }} onClose={() => setSettingsOpen(null)} onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
@@ -556,7 +556,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
                   <button type="button" className="btn sm" onClick={() => { const { compare: c, ...v } = templates[n]!; setV(v); setCompare(c); }}>Apply</button>
                   <button type="button" className="icon-btn" aria-label={`Delete ${n}`} onClick={() => { const { [n]: _, ...rest } = templates; saveTemplates(rest); }}><X size={14} /></button></span></div>)}
                 <form className="bd-num" onSubmit={(e) => { e.preventDefault(); const i = e.currentTarget.elements.namedItem("tpl") as HTMLInputElement, n = i.value.trim(); if (n) { saveTemplates({ ...templates, [n]: { ...view, compare } }); i.value = ""; } }}>
-                  <input name="tpl" className="input" placeholder="Name this view" aria-label="Template name" style={{ width: "100%" }} /><button className="btn sm primary">Save current view</button></form>
+                  <input name="tpl" className="input" placeholder="Name this view" aria-label="Template name" /><button className="btn sm primary">Save current view</button></form>
               </div>
             </> : null}
             {settingsOpen === "Export" ? <>
@@ -573,7 +573,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
       {picker && onAddIndicator ? <IndicatorPicker onClose={() => setPicker(false)} onPick={(ind) => { onAddIndicator(ind); setPicker(false); }} /> : null}
       {drawer ? <div className="dv-symdrawer" role="dialog" aria-label="Symbols">
         <header><span className="seg" role="group">{(["symbols", "months", "regimes"] as const).map((d) => <button key={d} type="button" aria-pressed={drawer === d} onClick={() => setDrawer(d)}>{d[0]!.toUpperCase() + d.slice(1)}</button>)}</span>
-          <button type="button" className="icon-btn" aria-label="Close" onClick={() => setDrawer(null)}>×</button></header>
+          <button type="button" className="icon-btn" aria-label="Close" onClick={() => setDrawer(null)}><X size={14} /></button></header>
         {drawer === "symbols" ? <table className="dv-symtable"><thead><tr><th>Symbol</th><th>Trades</th><th>P&L</th><th>Win</th><th>Max DD</th><th aria-label="Curve" /></tr></thead>
           <tbody>{perSym.map(([k, r]) => { const lo = Math.min(...r.curve), hi = Math.max(...r.curve), span = hi - lo || 1; return (
             <tr key={k} aria-selected={k === sym} onClick={() => setPick(k)}><td>{k}</td><td>{r.n}</td><td className={r.pnl >= 0 ? "up" : "down"}>{r.pnl.toFixed(0)}</td><td>{Math.round((r.wins / r.n) * 100)}%</td><td className="down">{r.dd.toFixed(0)}</td>

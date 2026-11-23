@@ -3,13 +3,12 @@
 import { DiffEditor } from "@monaco-editor/react";
 import { Group, Panel, Separator, type GroupImperativeHandle } from "react-resizable-panels";
 import Link from "next/link";
-import { ArrowDownToLine, Settings, Eraser, WrapText, BookOpen, Bug, CircleAlert, Gauge, SquareTerminal, ChevronDown, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, FlaskConical, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
+import { ArrowDownToLine, Settings, Eraser, WrapText, BookOpen, Bug, CircleAlert, Gauge, SquareTerminal, Play, StepBack, StepForward, CornerDownRight, Maximize2, Minimize2, CaseSensitive, Pin, Lock, RotateCcw, Tag, Unlock, FileCode2, FilePlus2, FlaskConical, GitBranch, LayoutTemplate, ListTree, Pencil, Regex, Search, Trash2, Upload, WholeWord, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import { type IndicatorInfo, insertUse } from "./IndicatorPicker";
 import { SERIES } from "@/charts/core";
-import { Distribution } from "@/charts/Distribution";
 import { TimeSeries } from "@/charts/TimeSeries";
 import { DataTable } from "@/kit/DataTable";
 import { studio, usePyTemplates } from "../api";
@@ -900,7 +899,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
     ...[1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((n): EditorAction[] => [
       { id: `studio.nbm${n}`, label: `Bookmark ${n}: set`, keys: (m) => [m.KeyMod.WinCtrl | m.KeyMod.Shift | (m.KeyCode.Digit0 + n)], run: (line) => setNumbered(n, line) },
       { id: `studio.nbmgo${n}`, label: `Bookmark ${n}: go`, keys: (m) => [m.KeyMod.WinCtrl | (m.KeyCode.Digit0 + n)], run: () => goNumbered(n) }]),
-    { id: "studio.maxchart", label: "View: maximise chart", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.Enter], run: () => { setZen(false); if (!chartOpen) setOpenP("chart", true); setMaxChart((x) => !x); } },
+    { id: "studio.maxchart", label: "View: maximise chart", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.KeyE], run: () => { setZen(false); if (!chartOpen) setOpenP("chart", true); setMaxChart((x) => !x); } },
     { id: "studio.zen", label: "View: zen mode", keys: (m) => [m.KeyMod.chord(m.KeyMod.CtrlCmd | m.KeyCode.KeyK, m.KeyMod.CtrlCmd | m.KeyCode.KeyZ)], run: () => setZen((z) => !z) },
     { id: "studio.hidetools", label: "View: hide all tool windows", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyMod.Shift | m.KeyCode.F12], run: () => setZen((z) => !z) },
     { id: "studio.split", label: "View: split editor", keys: (m) => [m.KeyMod.CtrlCmd | m.KeyCode.Backslash], run: () => setSplit((x) => (x ? null : Object.keys(files).find((f) => f !== active) ?? active)) },
@@ -1469,7 +1468,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
         {quick && ["queued", "running"].includes(quick.status) ? <span className="dv-runchip">{quick.progress?.partial ? `bar ${quick.progress.partial.bars?.toLocaleString() ?? "…"} · ${quick.progress.partial.symbols ?? "…"} symbols · ${quick.progress.partial.elapsed_seconds?.toFixed(1) ?? "0"} s of ${quick.progress.partial.budget_seconds ?? "…"} s` : `${quick.level} run ${quick.progress?.percent ?? 0}%`}</span> : null}
         {trial}
         {open_.chart ? <a href="https://www.vela.dev" target="_blank" rel="noreferrer">Vela™</a> : null}
-        <span>{prev ? `${prev.status === "ok" ? `preview ${symbol}` : prev.status}${lastPreview ? ` · ${lastPreview}` : ""}` : "no preview"}</span><NotifyBell /><span>Python 3.12</span>
+        <span>{prev ? `${prev.status === "ok" ? `preview ${symbol}` : prev.status}${lastPreview ? ` · ${lastPreview}` : ""}` : "no preview"}</span><NotifyBell />
       </footer>
 
       <dialog ref={qcRef} className="sh-import" aria-label="Open a QuantConnect algorithm" onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>

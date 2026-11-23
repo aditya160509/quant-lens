@@ -13,13 +13,19 @@ export const KINDS: [string, string][] = [
 const isGroup = (x: Item): x is Group => typeof x === "object" && x !== null && "op" in x;
 const leaf = (x: Item): Leaf => (typeof x === "string" ? { rule: x, enabled: true } : x as Leaf);
 
+// Stable React keys for conditions: an edit carries the old row's key to its replacement, so focus stays on the row being typed in.
+const rowKeys = new WeakMap<object, string | number>();
+let nextRowKey = 0;
+const rowKey = (item: Item, i: number): string | number => { if (typeof item === "string") return `s${i}`; let k = rowKeys.get(item); if (k === undefined) rowKeys.set(item, (k = ++nextRowKey)); return k; };
+const keep = (from: Item, to: Item, i: number) => { if (typeof to !== "string" && from !== to) rowKeys.set(to, rowKey(from, i)); };
+
 /** One rule as an Any/All tree of conditions, nested to any depth; each condition can be switched off without deleting it (B-105, B-107). */
 export function GroupEditor({ id, group, onChange, suggestions, depth = 0, onRemove }: {
   id: string; group: Group; onChange: (g: Group) => void; suggestions: string[]; depth?: number; onRemove?: () => void;
 }) {
   const [open, setOpen] = useState(true);
   const addRef = useRef<HTMLSelectElement>(null);
-  const set = (i: number, next: Item | null) => onChange({ ...group, items: next === null ? group.items.filter((_, k) => k !== i) : group.items.map((x, k) => (k === i ? next : x)) });
+  const set = (i: number, next: Item | null) => { if (next) keep(group.items[i]!, next, i); onChange({ ...group, items: next === null ? group.items.filter((_, k) => k !== i) : group.items.map((x, k) => (k === i ? next : x)) }); };
   const add = (item: Item) => onChange({ ...group, items: [...group.items, item] });
   return (
     <div className="gx" data-depth={depth} tabIndex={depth === 0 ? -1 : undefined} onKeyDown={(e) => {
@@ -41,8 +47,8 @@ export function GroupEditor({ id, group, onChange, suggestions, depth = 0, onRem
       {open ? (
         <div className="gx-body">
           {group.items.map((item, i) => isGroup(item)
-            ? <GroupEditor key={i} id={id} group={item} depth={depth + 1} suggestions={suggestions} onChange={(g) => set(i, g)} onRemove={() => set(i, null)} />
-            : <Condition key={i} id={id} item={leaf(item)} onChange={(l) => set(i, l)} onRemove={() => set(i, null)} onDuplicate={() => onChange({ ...group, items: [...group.items.slice(0, i + 1), leaf(item), ...group.items.slice(i + 1)] })} />)}
+            ? <GroupEditor key={rowKey(item, i)} id={id} group={item} depth={depth + 1} suggestions={suggestions} onChange={(g) => set(i, g)} onRemove={() => set(i, null)} />
+            : <Condition key={rowKey(item, i)} id={id} item={leaf(item)} onChange={(l) => set(i, l)} onRemove={() => set(i, null)} onDuplicate={() => onChange({ ...group, items: [...group.items.slice(0, i + 1), { ...leaf(item) }, ...group.items.slice(i + 1)] })} />)}
           <div className="gx-add">
             <select ref={addRef} className="input" aria-label="Add condition" aria-keyshortcuts="/" value="" onChange={(e) => { if (e.target.value !== "-") add({ rule: e.target.value, enabled: true }); }}>
               <option value="" disabled hidden>Condition</option>
