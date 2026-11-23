@@ -1288,13 +1288,13 @@ def put_filters(request: FiltersRequest, x_studio_actor: str | None = Header(Non
 
 
 @router.get("/build/prefs/{name}")
-def get_build_prefs(name: Literal["layouts", "runconfigs", "inspections", "settings", "profiles", "artefacts"]) -> dict[str, Any]:
+def get_build_prefs(name: Literal["layouts", "runconfigs", "inspections", "settings", "profiles", "artefacts", "chart"]) -> dict[str, Any]:
     """Build's saved layouts and run configurations, kept on the server so they follow the user across browsers."""
     return {"value": store.kv_get(f"build:prefs:{name}")}
 
 
 @router.put("/build/prefs/{name}")
-def put_build_prefs(name: Literal["layouts", "runconfigs", "inspections", "settings", "profiles", "artefacts"], request: dict[str, Any], x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
+def put_build_prefs(name: Literal["layouts", "runconfigs", "inspections", "settings", "profiles", "artefacts", "chart"], request: dict[str, Any], x_studio_actor: str | None = Header(None)) -> dict[str, Any]:
     _human_only(x_studio_actor, "Saving Build preferences")
     if len(json.dumps(request)) > 200_000:
         raise HTTPException(413, "Preferences are limited to 200 KB")

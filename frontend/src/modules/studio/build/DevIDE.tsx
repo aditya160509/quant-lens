@@ -1002,7 +1002,9 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
       <button role="menuitemcheckbox" aria-checked={focus} onClick={() => { const on = !focus; setIconsOpen(!on); setRailOpen(!on); setPanelOpen(!on); }}>Focus mode</button>
   </WorkspaceItems>;
   const runPage = <>
+    <h3>Configurations</h3>
     <RunConfigsEditor rc={rc} />
+    <h3>After a run</h3>
     <div className="bd-nums">
       <label className="bd-num"><span>Run on save</span><input type="checkbox" checked={rc.runOnSave} onChange={(e) => rc.setRunOnSave(e.target.checked)} /></label>
       <label className="bd-num"><span>Full-page chart after a run</span><input type="checkbox" checked={chartAfterRun} onChange={(e) => { setChartAfterRun(e.target.checked); try { localStorage.setItem("studio:dev:chartafterrun", e.target.checked ? "1" : "0"); } catch { /* blocked */ } }} /></label>

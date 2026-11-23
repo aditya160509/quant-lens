@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, LayoutGrid, List, Maximize2, Minimize2, Pause, Play, Settings2, SlidersHorizontal, SquareFunction } from "lucide-react";
+import { Blocks, CandlestickChart, ChartArea, ChartBarBig, ChartCandlestick, ChartColumn, ChartColumnIncreasing, ChartColumnStacked, ChartLine, ChartNoAxesColumn, ChartScatter, ChevronDown, ChevronLeft, ChevronRight, Columns3, Download, Eye, GitCompareArrows, ArrowLeft, Bookmark, Grid3x3, List, Maximize2, Minimize2, Pause, Play, Plus, Settings2, SlidersHorizontal, SquareFunction, TrendingUpDown, Waves, X, type LucideIcon } from "lucide-react";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Vela as VelaChart } from "@luxalgo/vela";
 import { studio } from "../api";
@@ -86,6 +86,9 @@ const ms = (d: string) => Date.parse(d);
 export const SPEEDS = [1, 2, 5, 10, 20, 50];
 const RANGES = ["1M", "3M", "6M", "1Y", "5Y", "YTD", "ALL"] as const;
 const STYLES = [["candles", "Candles"], ["hollow", "Hollow candles"], ["bars", "OHLC bars"], ["heikinashi", "Heikin-Ashi"], ["line", "Line"], ["linemarkers", "Line with markers"], ["stepline", "Step line"], ["area", "Area"], ["baseline", "Baseline"], ["columns", "Columns"], ["renko", "Renko (ATR 14 box)"], ["linebreak", "Line break (3)"], ["kagi", "Kagi (ATR 14)"], ["pnf", "Point and figure (ATR 14, 3 box)"], ["range", "Range bars (ATR 14)"]] as const;
+const STYLE_ICON: Record<string, LucideIcon> = { candles: ChartCandlestick, hollow: CandlestickChart, bars: ChartNoAxesColumn, heikinashi: ChartColumnStacked, line: ChartLine, linemarkers: ChartScatter, stepline: ChartColumnIncreasing, area: ChartArea, baseline: Waves, columns: ChartColumn, renko: Blocks, linebreak: Columns3, kagi: TrendingUpDown, pnf: Grid3x3, range: ChartBarBig };
+const STYLE_GROUPS = [["Bars", ["candles", "hollow", "bars", "heikinashi"]], ["Lines and areas", ["line", "linemarkers", "stepline", "area", "baseline", "columns"]], ["Price only", ["renko", "linebreak", "kagi", "pnf", "range"]]] as const;
+const WATCH_KEY = "studio:chart:watch";
 const SCALES = [["price", "Linear"], ["log", "Log"], ["percent", "Percent"], ["indexed", "Indexed to 100"]] as const;
 type View = { style: string; scale: string; dw: boolean; blind: boolean; eq?: boolean; regime?: boolean };
 const VIEW_KEY = "studio:chart:view";
@@ -140,6 +143,16 @@ export function transformBars(src: Ohlcv[], style: string): Ohlcv[] {
   }
   return out;
 }
+// Drawings, view, templates, watchlist and colours mirror to the server, so they follow the user to any browser.
+const CHART_KEYS = /^studio:(drawings|chart):/;
+let chartPull: Promise<void> | null = null;
+const pullChart = () => (chartPull ??= studio<{ value: Record<string, string> | null }>("GET", "/build/prefs/chart").then((r) => { try { for (const [k, v] of Object.entries(r.value ?? {})) if (CHART_KEYS.test(k)) localStorage.setItem(k, v); } catch { /* blocked */ } }, () => undefined));
+let pushTimer: ReturnType<typeof setTimeout> | undefined;
+const pushChart = () => { clearTimeout(pushTimer); pushTimer = setTimeout(() => {
+  const out: Record<string, string> = {};
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i)!; if (CHART_KEYS.test(k)) out[k] = localStorage.getItem(k)!; } } catch { return; }
+  void studio("PUT", "/build/prefs/chart", out).catch(() => undefined);
+}, 1200); };
 const readView = (): View => { try { return { style: "candles", scale: "price", dw: false, blind: false, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") }; } catch { return { style: "candles", scale: "price", dw: false, blind: false }; } };
 const download = (name: string, href: string) => { const a = document.createElement("a"); a.href = href; a.download = name; a.click(); };
 
@@ -170,7 +183,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     return [...m].sort((a, b) => b[1].n - a[1].n);
   }, [prev?.trades, prev?.symbol_stats, symbol]);
   const [view, setView] = useState<View>(readView);
-  const setV = (p: Partial<View>) => setView((v) => { const n = { ...v, ...p }; try { localStorage.setItem(VIEW_KEY, JSON.stringify(n)); } catch { /* private mode */ } return n; });
+  const setV = (p: Partial<View>) => setView((v) => { const n = { ...v, ...p }; try { localStorage.setItem(VIEW_KEY, JSON.stringify(n)); pushChart(); } catch { /* private mode */ } return n; });
   const [compare, setCompare] = useState<string[]>([]);
   const [cmpBars, setCmpBars] = useState<Record<string, Bar[]>>({});
   // Spread or ratio against one other symbol, with its rolling 60-day return correlation.
@@ -180,18 +193,35 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   const [baseline, setBaseline] = useState<{ sym: string; dates: string[] } | null>(null);
   const TPL_KEY = "studio:chart:templates";
   const [templates, setTemplates] = useState<Record<string, View & { compare: string[] }>>(() => { try { return JSON.parse(localStorage.getItem(TPL_KEY) ?? "{}"); } catch { return {}; } });
-  const saveTemplates = (t: typeof templates) => { setTemplates(t); try { localStorage.setItem(TPL_KEY, JSON.stringify(t)); } catch { /* private mode */ } };
+  const saveTemplates = (t: typeof templates) => { setTemplates(t); try { localStorage.setItem(TPL_KEY, JSON.stringify(t)); pushChart(); } catch { /* private mode */ } };
   useEffect(() => {
     const want = [...compare, ...(spread ? [spread.sym] : [])].filter((c) => !cmpBars[c]); if (!want.length) return;
     void studio<{ bars: Record<string, Bar[]> }>("GET", `/bars?symbols=${encodeURIComponent(want.join(","))}&tf=1d`).then((d) => setCmpBars((x) => ({ ...x, ...d.bars })), () => undefined);
   }, [compare, spread?.sym]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The server copy lands in storage first; then view, templates and watchlist re-read it and the chart reloads drawings.
+  const [synced, setSynced] = useState(false);
+  useEffect(() => { void pullChart().then(() => {
+    setSynced(true); setView(readView());
+    try { setTemplates(JSON.parse(localStorage.getItem(TPL_KEY) ?? "{}")); setWatch(JSON.parse(localStorage.getItem(WATCH_KEY) ?? "[]")); } catch { /* blocked */ }
+  }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [settingsOpen, setSettingsOpen] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<null | "symbols" | "months" | "regimes">(null);
   const [picker, setPicker] = useState(false);
+  // Watchlist beside the full-page chart: the run's symbols plus ones the user adds, each with its last close and day change.
+  const [watch, setWatch] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem(WATCH_KEY) ?? "[]"); } catch { return []; } });
+  const saveWatch = (w: string[]) => { setWatch(w); try { localStorage.setItem(WATCH_KEY, JSON.stringify(w)); pushChart(); } catch { /* blocked */ } };
+  const [quotes, setQuotes] = useState<Record<string, { last: number; chg: number }>>({});
+  useEffect(() => {
+    const want = watch.filter((w) => !quotes[w]); if (!max || !want.length) return;
+    void studio<{ bars: Record<string, Bar[]> }>("GET", `/bars?symbols=${encodeURIComponent(want.join(","))}&tf=1d`).then((d) => setQuotes((q) => {
+      const next = { ...q }; for (const [k, b] of Object.entries(d.bars)) { const a = b.at(-1), z = b.at(-2); if (a) next[k] = { last: a.close, chg: z ? a.close / z.close - 1 : 0 }; } return next;
+    }), () => undefined);
+  }, [max, watch]); // eslint-disable-line react-hooks/exhaustive-deps
   // Per-output colours picked in the Plots menu, kept per strategy.
   const colorKey = `studio:chart:colors:${drawKey}`;
   const [colors, setColors] = useState<Record<string, string>>({});
   useEffect(() => { try { setColors(JSON.parse(localStorage.getItem(colorKey) ?? "{}")); } catch { setColors({}); } }, [colorKey]);
-  const setColor = (n: string, c: string) => setColors((x) => { const next = { ...x, [n]: c }; try { localStorage.setItem(colorKey, JSON.stringify(next)); } catch { /* blocked */ } return next; });
+  const setColor = (n: string, c: string) => setColors((x) => { const next = { ...x, [n]: c }; try { localStorage.setItem(colorKey, JSON.stringify(next)); pushChart(); } catch { /* blocked */ } return next; });
   // Symbol × month heatmap: summed trade return by exit month.
   const months = useMemo(() => {
     if (drawer !== "months") return null;
@@ -391,13 +421,12 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   }, [chart, onMark, onNote]);
 
 
-  // Drawings belong to the strategy and symbol (W-7); tool defaults and favourites follow the user everywhere.
-  // shortcut: kept in this browser's storage, not on the server; move to the strategy record when drawings need to sync across devices.
+  // Drawings belong to the strategy and symbol (W-7); tool defaults and favourites follow the user everywhere (synced through /build/prefs/chart).
   useEffect(() => {
-    if (!chart) return;
+    if (!chart || !synced) return;
     const key = `studio:drawings:${drawKey}:${sym}`, PREFS = "studio:drawings:prefs";
     const read = (k: string) => { try { return JSON.parse(localStorage.getItem(k) ?? "null"); } catch { return null; } };
-    const write = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* blocked or full */ } };
+    const write = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); pushChart(); } catch { /* blocked or full */ } };
     const d = chart.drawings, doc = read(key), prefs = read(PREFS);
     if (doc) d.fromJSON(doc);
     if (prefs?.defaults) d.setToolDefaults(prefs.defaults);
@@ -409,7 +438,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
       ...(["drawing:defaults", "drawing:favorites"] as const).map((e) => chart.on(e, savePrefs)),
     ];
     return () => offs.forEach((off) => off());
-  }, [chart, drawKey, sym]);
+  }, [chart, drawKey, sym, synced]);
 
   // Chart type and price scale (Vela renderer features).
   useEffect(() => {
@@ -446,43 +475,100 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
 
   if (error || !bars.length) return <div className="dv-empty">{error ? `No bars: ${error}` : prev ? "Loading bars" : "Run a preview to chart it"}</div>;
   return (
-    <div className="dv-chart">
+    <div className="dv-chart" data-watch={max || undefined}>
+      {max ? <aside className="dv-watch" aria-label="Watchlist">
+        <form onSubmit={(e) => { e.preventDefault(); const i = e.currentTarget.elements.namedItem("sym") as HTMLInputElement; const v = i.value.trim().toUpperCase(); if (v && !watch.includes(v)) saveWatch([...watch, v]); i.value = ""; }}>
+          <b>Watchlist</b><input name="sym" className="input sm" placeholder="Add symbol" aria-label="Add symbol" /><button className="icon-btn" aria-label="Add to watchlist"><Plus size={14} /></button>
+        </form>
+        <div className="dv-watch-list">
+          {watch.map((k) => { const q = quotes[k]; return (
+            <div key={k} className="dv-watch-row" aria-selected={k === sym}>
+              <button type="button" onClick={() => setPick(k)}><b>{k}</b><span>{q ? q.last.toFixed(2) : ""}</span><span className={q ? (q.chg >= 0 ? "up" : "down") : ""}>{q ? `${q.chg >= 0 ? "+" : ""}${(q.chg * 100).toFixed(2)}%` : ""}</span></button>
+              <button type="button" className="icon-btn" aria-label={`Remove ${k}`} onClick={() => saveWatch(watch.filter((w) => w !== k))}><X size={12} /></button>
+            </div>); })}
+          {perSym.length ? <><div className="hd">This run · {perSym.length}</div>
+            {perSym.map(([k, r]) => (
+              <div key={k} className="dv-watch-row" aria-selected={k === sym}>
+                <button type="button" onClick={() => setPick(k)}><b>{k}</b><span>{r.n} trades</span><span className={r.pnl >= 0 ? "up" : "down"}>{r.pnl >= 0 ? "+" : ""}{r.pnl.toFixed(0)}</span></button>
+              </div>))}</> : null}
+        </div>
+      </aside> : null}
       <div className="dv-chartbar" onDoubleClick={(e) => { if (e.target === e.currentTarget) onMax?.(); }}>
         {perSym.length > 1 ? <select className="input sm" aria-label="Symbol" title="Symbol ( , and . step)" value={sym} onChange={(e) => setPick(e.target.value)}>
           {perSym.map(([k, r]) => <option key={k} value={k}>{k} · {r.n} trades · {r.pnl >= 0 ? "+" : ""}{r.pnl.toFixed(0)} · {Math.round((r.wins / r.n) * 100)}% win</option>)}
         </select> : <b>{sym}</b>}
         <select className="input sm dv-rng-sel" aria-label="Range" value="" onChange={(e) => e.target.value && chart?.setVisibleRangePreset(e.target.value as (typeof RANGES)[number])}><option value="">Range</option>{RANGES.map((r) => <option key={r} value={r}>{r === "ALL" ? "All" : r}</option>)}</select>
         <span className="seg dv-rng" role="group" aria-label="Range">{RANGES.map((r) => <button key={r} type="button" onClick={() => chart?.setVisibleRangePreset(r)}>{r === "ALL" ? "All" : r}</button>)}</span>
-        <button type="button" className="icon-btn" aria-label="Grid" aria-pressed={grid} disabled={gridSyms.length < 2} title={gridSyms.length < 2 ? "Grid: add Compare symbols or run on several" : "Grid of symbols"} onClick={() => setGrid((g) => !g)}><LayoutGrid size={13} /></button>
-        {onAddIndicator ? <button type="button" className="icon-btn" aria-label="Indicators" title="Indicators" aria-pressed={picker} onClick={() => setPicker((x) => !x)}><SquareFunction size={13} /></button> : null}
-        {rows.length || perSym.length ? <button type="button" className="icon-btn" aria-label="Symbols, months and regimes" aria-pressed={!!drawer} title="Symbols, months and regimes" onClick={() => setDrawer((d) => (d ? null : "symbols"))}><List size={13} /></button> : null}
-        <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
-          <summary className="btn sm ghost" aria-label="Chart settings"><Settings2 size={13} /></summary>
-          <div className="dv-menu dv-chartmenu" role="menu">
-            <label>Type<select className="input sm" value={view.style} onChange={(e) => setV({ style: e.target.value })}>{STYLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
-            <label>Scale<select className="input sm" value={view.scale} onChange={(e) => setV({ scale: e.target.value })}>{SCALES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
-            <label>Go to<input className="input sm" type="date" min={bars[0]?.time} max={bars.at(-1)?.time} onChange={(e) => e.target.value && onGo(e.target.value)} /></label>
-            <label>Compare<input className="input sm" placeholder="QQQ, IWM" defaultValue={compare.join(", ")} onKeyDown={(e) => { if (e.key !== "Enter") return; const next = e.currentTarget.value.split(",").map((x) => x.trim().toUpperCase()).filter((x) => x && x !== sym); setCompare(next); if (next.length && view.scale === "price") setV({ scale: "percent" }); }} /></label>
-            <label>Spread<span className="dv-spread"><input className="input sm" placeholder="QQQ" defaultValue={spread?.sym ?? ""} onKeyDown={(e) => { if (e.key !== "Enter") return; const v = e.currentTarget.value.trim().toUpperCase(); setSpread(v && v !== sym ? { sym: v, mode: spread?.mode ?? "ratio" } : null); }} />
-              <select className="input sm" aria-label="Spread type" value={spread?.mode ?? "ratio"} onChange={(e) => spread && setSpread({ ...spread, mode: e.target.value as "ratio" | "diff" })}><option value="ratio">A/B</option><option value="diff">A−B</option></select></span></label>
-            <label>Template<select className="input sm" value="" onChange={(e) => { const t = templates[e.target.value]; if (!t) return; const { compare: c, ...v } = t; setV(v); setCompare(c); }}><option value="">Apply…</option>{Object.keys(templates).map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
-            <button type="button" onClick={() => { const n = window.prompt("Template name", "")?.trim(); if (n) saveTemplates({ ...templates, [n]: { ...view, compare } }); }}>Save view as template</button>
-            {Object.keys(templates).length ? <button type="button" onClick={() => { const n = window.prompt(`Delete which template? ${Object.keys(templates).join(", ")}`, "")?.trim(); if (n && templates[n]) { const { [n]: _, ...rest } = templates; saveTemplates(rest); } }}>Delete a template</button> : null}
-            <button type="button" onClick={() => setBaseline(baseline ? null : { sym, dates: rows.map((t) => String(t.entry_date)) })}>{baseline ? `Clear baseline (${baseline.dates.length} entries)` : "Pin trades as baseline"}</button>
-            {baseline?.sym === sym ? <p className="dv-base-diff">{(() => { const now = new Set(rows.map((t) => String(t.entry_date))), was = new Set(baseline.dates); const added = [...now].filter((d) => !was.has(d)).length, gone = [...was].filter((d) => !now.has(d)).length; return `vs baseline: ${added} new entries, ${gone} gone, ${now.size - added} same`; })()}</p> : null}
-            <hr />
-            <label className="dv-check"><input type="checkbox" checked={view.dw} onChange={(e) => setV({ dw: e.target.checked })} />Data window</label>
-            <label className="dv-check"><input type="checkbox" checked={!!view.eq} onChange={(e) => setV({ eq: e.target.checked })} />Equity, drawdown, exposure</label>
-            <label className="dv-check"><input type="checkbox" checked={!!view.regime} onChange={(e) => setV({ regime: e.target.checked })} />Regime ribbon</label>
-            <label className="dv-check"><input type="checkbox" checked={view.blind} onChange={(e) => setV({ blind: e.target.checked })} />Blind replay</label>
-            <hr />
-            <button type="button" onClick={exportPng}>Export PNG</button>
-            <button type="button" onClick={exportCsv}>Export CSV</button>
+        <details className="dv-view dv-types" onToggle={(e) => { const d = e.currentTarget, r = d.getBoundingClientRect(), m = d.querySelector<HTMLElement>(".dv-menu"); if (d.open && m) { m.style.top = `${r.bottom + 6}px`; m.style.left = `${r.left}px`; } }} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
+          {(() => { const I = STYLE_ICON[view.style] ?? ChartCandlestick; return <summary className="btn sm ghost" aria-label={`Chart type: ${STYLES.find(([v]) => v === view.style)?.[1] ?? view.style}`} title="Chart type"><I size={15} /><ChevronDown size={11} /></summary>; })()}
+          <div className="dv-menu" role="menu" onClick={(e) => { if ((e.target as HTMLElement).closest("button")) (e.currentTarget.parentElement as HTMLDetailsElement).open = false; }}>
+            {STYLE_GROUPS.map(([g, list]) => <Fragment key={g}><div className="hd">{g}</div>{list.map((v) => { const I = STYLE_ICON[v]!; return <button key={v} type="button" role="menuitemradio" aria-checked={view.style === v} onClick={() => setV({ style: v })}><I size={16} />{STYLES.find(([x]) => x === v)?.[1]}</button>; })}</Fragment>)}
           </div>
         </details>
-        {onMax ? <button type="button" className="icon-btn" aria-label={max ? "Restore chart" : "Maximise chart"} title={max ? "Restore (Esc)" : "Maximise chart (⌘⇧↵)"} onClick={onMax}>{max ? <Minimize2 size={13} /> : <Maximize2 size={13} />}</button> : null}
+        {onAddIndicator ? <button type="button" className="btn sm ghost dv-ind-btn" aria-pressed={picker} title="Indicators (/)" onClick={() => setPicker((x) => !x)}><SquareFunction size={15} />Indicators</button> : null}
+        <span className="dv-chartbar-gap" />
+        {rows.length || perSym.length ? <button type="button" className="icon-btn" aria-label="Symbols, months and regimes" aria-pressed={!!drawer} title="Symbols, months and regimes" onClick={() => setDrawer((d) => (d ? null : "symbols"))}><List size={15} /></button> : null}
+        <button type="button" className="icon-btn" aria-label="Chart settings" title="Chart settings" aria-pressed={settingsOpen !== null} onClick={() => setSettingsOpen("Display")}><Settings2 size={15} /></button>
+        {onMax ? <button type="button" className="icon-btn" aria-label={max ? "Restore chart" : "Maximise chart"} title={max ? "Restore (Esc)" : "Maximise chart (⌘⇧↵)"} onClick={onMax}>{max ? <Minimize2 size={15} /> : <Maximize2 size={15} />}</button> : null}
       </div>
       <div className="dv-chartbox" ref={box} />
+      {settingsOpen !== null ? <dialog className="sh-import bd-set is-sm" aria-label="Chart settings" ref={(d) => { if (d && !d.open) d.showModal(); }} onClose={() => setSettingsOpen(null)} onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
+        <nav className="bd-set-nav" aria-label="Chart settings pages">
+          {([["Display", <Eye key="d" size={16} />], ["Compare", <GitCompareArrows key="c" size={16} />], ["Templates", <Bookmark key="t" size={16} />], ["Export", <Download key="e" size={16} />]] as const).map(([n, icon]) => <button key={n} type="button" aria-current={settingsOpen === n ? "page" : undefined} onClick={() => setSettingsOpen(n)}>{icon}{n}</button>)}
+          <span style={{ flex: 1 }} />
+          <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()}><ArrowLeft size={16} />Back</button>
+        </nav>
+        <div className="bd-set-main">
+          <div className="bd-set-hd"><span className="bd-set-crumb">Chart <i>/</i> <b>{settingsOpen}</b></span><span className="bd-set-crumb" style={{ flex: "none" }}>{sym}</span></div>
+          <div className="bd-set-body"><div className="bd-set-col">
+            {settingsOpen === "Display" ? <>
+              <h3>Scale</h3>
+              <div className="bd-nums">
+                <label className="bd-num"><span>Price scale</span><select className="input" value={view.scale} onChange={(e) => setV({ scale: e.target.value })}>{SCALES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+                <label className="bd-num"><span>Go to date</span><input className="input" type="date" min={bars[0]?.time} max={bars.at(-1)?.time} onChange={(e) => e.target.value && onGo(e.target.value)} /></label>
+              </div>
+              <h3>Panes</h3>
+              <div className="bd-nums">
+                <label className="bd-num"><span>Data window</span><input type="checkbox" checked={view.dw} onChange={(e) => setV({ dw: e.target.checked })} /></label>
+                <label className="bd-num"><span>Equity, drawdown and exposure</span><input type="checkbox" checked={!!view.eq} onChange={(e) => setV({ eq: e.target.checked })} /></label>
+                <label className="bd-num"><span>Regime ribbon</span><input type="checkbox" checked={!!view.regime} onChange={(e) => setV({ regime: e.target.checked })} /></label>
+                <label className="bd-num"><span>Blind replay</span><input type="checkbox" checked={view.blind} onChange={(e) => setV({ blind: e.target.checked })} /></label>
+                <label className="bd-num"><span>Grid of symbols</span><input type="checkbox" checked={grid} disabled={gridSyms.length < 2} title={gridSyms.length < 2 ? "Add Compare symbols or run on several" : undefined} onChange={(e) => setGrid(e.target.checked)} /></label>
+              </div>
+            </> : null}
+            {settingsOpen === "Compare" ? <>
+              <h3>Overlay</h3>
+              <div className="bd-nums">
+                <label className="bd-num"><span>Compare with</span><input className="input" placeholder="QQQ, IWM" defaultValue={compare.join(", ")} onBlur={(e) => { const next = e.currentTarget.value.split(",").map((x) => x.trim().toUpperCase()).filter((x) => x && x !== sym); if (next.join() === compare.join()) return; setCompare(next); if (next.length && view.scale === "price") setV({ scale: "percent" }); }} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} /></label>
+                <label className="bd-num"><span>Spread against</span><input className="input" placeholder="QQQ" defaultValue={spread?.sym ?? ""} onBlur={(e) => { const v = e.currentTarget.value.trim().toUpperCase(); setSpread(v && v !== sym ? { sym: v, mode: spread?.mode ?? "ratio" } : null); }} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} /></label>
+                <label className="bd-num"><span>Spread type</span><select className="input" value={spread?.mode ?? "ratio"} disabled={!spread} onChange={(e) => spread && setSpread({ ...spread, mode: e.target.value as "ratio" | "diff" })}><option value="ratio">Ratio A/B</option><option value="diff">Difference A−B</option></select></label>
+              </div>
+              <h3>Baseline</h3>
+              <div className="bd-nums">
+                <div className="bd-num"><span>{baseline ? `Pinned ${baseline.dates.length} entries on ${baseline.sym}` : "Pin this run's trades to diff the next run"}{baseline?.sym === sym ? (() => { const now = new Set(rows.map((t) => String(t.entry_date))), was = new Set(baseline.dates); const added = [...now].filter((d) => !was.has(d)).length, gone = [...was].filter((d) => !now.has(d)).length; return <em className="dv-base-diff"> · {added} new, {gone} gone, {now.size - added} same</em>; })() : null}</span>
+                  <button type="button" className="btn sm" onClick={() => setBaseline(baseline ? null : { sym, dates: rows.map((t) => String(t.entry_date)) })}>{baseline ? "Clear" : "Pin"}</button></div>
+              </div>
+            </> : null}
+            {settingsOpen === "Templates" ? <>
+              <h3>Saved views</h3>
+              <div className="bd-nums">
+                {Object.keys(templates).map((n) => <div key={n} className="bd-num"><span>{n}</span><span className="bd-row-acts">
+                  <button type="button" className="btn sm" onClick={() => { const { compare: c, ...v } = templates[n]!; setV(v); setCompare(c); }}>Apply</button>
+                  <button type="button" className="icon-btn" aria-label={`Delete ${n}`} onClick={() => { const { [n]: _, ...rest } = templates; saveTemplates(rest); }}><X size={14} /></button></span></div>)}
+                <form className="bd-num" onSubmit={(e) => { e.preventDefault(); const i = e.currentTarget.elements.namedItem("tpl") as HTMLInputElement, n = i.value.trim(); if (n) { saveTemplates({ ...templates, [n]: { ...view, compare } }); i.value = ""; } }}>
+                  <input name="tpl" className="input" placeholder="Name this view" aria-label="Template name" style={{ width: "100%" }} /><button className="btn sm primary">Save current view</button></form>
+              </div>
+            </> : null}
+            {settingsOpen === "Export" ? <>
+              <h3>Export</h3>
+              <div className="bd-nums">
+                <div className="bd-num"><span>Chart image (PNG)</span><button type="button" className="btn sm" onClick={exportPng}><Download size={13} />PNG</button></div>
+                <div className="bd-num"><span>Bars, plots and trades (CSV)</span><button type="button" className="btn sm" onClick={exportCsv}><Download size={13} />CSV</button></div>
+              </div>
+            </> : null}
+          </div></div>
+        </div>
+      </dialog> : null}
       {grid && gridSyms.length > 1 ? <div className="dv-grid-over"><ChartGrid symbols={gridSyms} theme={gridTheme} /></div> : null}
       {picker && onAddIndicator ? <IndicatorPicker onClose={() => setPicker(false)} onPick={(ind) => { onAddIndicator(ind); setPicker(false); }} /> : null}
       {drawer ? <div className="dv-symdrawer" role="dialog" aria-label="Symbols">
