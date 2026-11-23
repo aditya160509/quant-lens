@@ -52,25 +52,41 @@ export function TBar({ t, width = 92 }: { t: number; width?: number }) {
 
 // ---------------------------------------------------------------- data table
 
-/** Column groups from shared prefixes ("income_revenue", "income_ebit" -> "Income"). */
-function groupCols(cols: string[]): { head: string | null; span: number; cols: string[] }[] {
+/** Column groups from a shared prefix on ADJACENT columns ("entry_date", "entry_price" -> "Entry"); a lone prefix forms no group. */
+export function groupCols(cols: string[]): { head: string | null; span: number; cols: string[] }[] {
   const pre = (c: string) => (c.includes("_") ? c.split("_")[0] : null);
-  const count = new Map<string, number>();
-  cols.forEach((c) => { const p = pre(c); if (p) count.set(p, (count.get(p) ?? 0) + 1); });
-  const out: { head: string | null; span: number; cols: string[] }[] = [];
+  const runs: { pre: string | null; cols: string[] }[] = [];
   cols.forEach((c) => {
-    const p = pre(c);
-    const head = p && (count.get(p) ?? 0) > 1 ? p : null;
-    const last = out[out.length - 1];
-    if (last && head && last.head === head) { last.span++; last.cols.push(c); } else out.push({ head, span: 1, cols: [c] });
+    const p = pre(c), last = runs[runs.length - 1];
+    if (p && last?.pre === p) last.cols.push(c); else runs.push({ pre: p, cols: [c] });
   });
-  return out;
+  return runs.map((r) => ({ head: r.pre && r.cols.length > 1 ? r.pre : null, span: r.cols.length, cols: r.cols }));
+}
+
+const ACR: Record<string, string> = { pnl: "P&L", mae: "MAE", mfe: "MFE", var: "VaR", cvar: "CVaR" };
+const colLabel = (c: string) => label(c).replace(/\b(pnl|mae|mfe|cvar|var)\b/gi, (m) => ACR[m.toLowerCase()]);
+
+const MONEY_COL = /(^|_)(pnl|p&l|costs?|fees?|avg_win|avg_loss|value|equity|price|entry|exit)$/i;
+const PCT_COL = /(^|_)(returns?|ret|drawdown|mae|mfe|win_rate)$/i;
+const COUNT_COL = /^(trades|bars|n|count)$|_(trades|bars|count|n)$/i;
+const SHARES_COL = /^(shares|qty|quantity)$/i;
+const NO_MEDIAN = /(^|_)(entry|exit|price|shares|qty|quantity|index|idx)$/i;
+
+/** One fixed-decimal writer per column kind, so every cell in a column has the same decimals; null leaves the column to fmtKey. */
+export function fixedFmt(c: string, vals: unknown[]): ((v: number) => string) | null {
+  if (isPKey(c) || isTKey(c) || !vals.some(isNum)) return null;
+  const n = (dp: number) => (v: number) => v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  if (PCT_COL.test(c)) return (v) => `${n(1)(v * 100)}%`;
+  if (COUNT_COL.test(c)) return n(0);
+  if (SHARES_COL.test(c)) return n(vals.filter(isNum).every(Number.isInteger) ? 0 : 3);
+  if (MONEY_COL.test(c)) return n(2);
+  return null;
 }
 
 /** Stable hue per name, so a ticker or sector keeps its colour everywhere. */
 const hue = (s: string) => Array.from({ length: s.length }, (_, i) => s.charCodeAt(i)).reduce((h, c) => (h * 31 + c) % 360, 7);
 
-const shortName = (c: string, head: string | null) => label(head && c.startsWith(`${head}_`) ? c.slice(head.length + 1) : c);
+const shortName = (c: string, head: string | null) => colLabel(head && c.startsWith(`${head}_`) ? c.slice(head.length + 1) : c);
 
 /** GitHub-style table text; pipes are escaped so a cell cannot add a column. */
 export function toMarkdown(cols: string[], rows: Row[]): string {
@@ -133,11 +149,16 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, hideOpt, order, activeSet]);
   const [lefts, setLefts] = useState<Record<string, number>>({});
+  const [forced, setForced] = useState<string[]>([]);
+  // A column with one value on every row (side "long") is a chip, not a column; ticking it in the chooser shows it.
+  const constants = useMemo(() => source.length > 3 ? base.filter((c) => new Set(source.map((r) => JSON.stringify(r[c] ?? null))).size === 1) : [], [source, base]);
+  const autoHid = constants.filter((c) => !forced.includes(c));
   const cols = useMemo(() => {
     const o = colOrder ? [...colOrder.filter((c) => base.includes(c)), ...base.filter((c) => !colOrder.includes(c))] : base;
-    const shown = o.filter((c) => !hidden.includes(c));
+    const shown = o.filter((c) => !hidden.includes(c) && !autoHid.includes(c));
     return [...shown.filter((c) => pinned.includes(c)), ...shown.filter((c) => !pinned.includes(c))];
-  }, [base, colOrder, hidden, pinned]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base, colOrder, hidden, pinned, constants, forced]);
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [sel, setSel] = useState<number | null>(null);
   const [prev, setPrev] = useState<Row[]>(rows);
@@ -175,7 +196,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const scrollRef = useRef<HTMLDivElement>(null);
   const numeric = useMemo(() => new Set(cols.filter((c) => rows.some((r) => isNum(r[c])))), [rows, cols]);
   // The footer's medians: computed once per data change, not on every scroll frame.
-  const medians = useMemo(() => Object.fromEntries([...numeric].filter((c) => !isPKey(c) && !/(^|_)(version|year|id)$/i.test(c) && rows.every((r) => r[c] == null || isNum(r[c])))  /* a mixed text/number column has no median */.map((c) => [c, reduce(rows.map((r) => r[c]).filter(isNum), "median")])), [rows, numeric]);
+  const medians = useMemo(() => Object.fromEntries([...numeric].filter((c) => !isPKey(c) && !NO_MEDIAN.test(c) && !/(^|_)(version|year|id)$/i.test(c) && rows.every((r) => r[c] == null || isNum(r[c])))  /* a mixed text/number column has no median */.map((c) => [c, reduce(rows.map((r) => r[c]).filter(isNum), "median")])), [rows, numeric]);
   const bound = useMemo(() => {
     const m: Record<string, number> = {};
     cols.forEach((c) => { if (numeric.has(c) && !isPKey(c)) m[c] = Math.max(1e-12, ...rows.map((r) => (isNum(r[c]) ? Math.abs(r[c]) : 0))); });
@@ -234,7 +255,14 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
     });
     return m;
   }, [rows, view.fmt]);
-  const numText = (c: string, v: unknown) => (view.num?.[c] && isNum(v) ? writeNum(view.num[c], v) : fmtKey(c, v));
+  const fixed = useMemo(() => Object.fromEntries(cols.map((c) => [c, fixedFmt(c, rows.map((r) => r[c]))])), [rows, cols]);
+  const numText = (c: string, v: unknown) => (view.num?.[c] && isNum(v) ? writeNum(view.num[c], v) : fixed[c] && isNum(v) ? fixed[c]!(v) : fmtKey(c, v));
+  const [hoverCol, setHoverCol] = useState<string | null>(null);
+  const toggleCol = (c: string) => {
+    const on = cols.includes(c);
+    setForced((f) => on ? f.filter((x) => x !== c) : [...f, c]);
+    patch({ hidden: on ? [...hidden, c] : hidden.filter((x) => x !== c) });
+  };
   const [dragCol, setDragCol] = useState<string | null>(null);
   const cellStyle = (c: string, v: unknown) => {
     const f = view.fmt[c];
@@ -270,7 +298,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const changePage = (next: number) => { setPage(next); setSel(null); if (scrollRef.current) scrollRef.current.scrollTop = 0; };
   // Rendered rows, reused while scrolling: only rows entering the window are built. Any input a row reads resets it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const rowCache = useMemo(() => new Map<string, ReactNode>(), [rows, cols, view, range, cut, flash, sel, picked, lefts, numeric, hatch, rowActions, selectable, bars]);
+  const rowCache = useMemo(() => new Map<string, ReactNode>(), [rows, cols, view, range, cut, flash, sel, picked, lefts, numeric, hatch, rowActions, selectable, bars, fixed]);
   if (!source.length) return <Empty />;
   const render = (r: Row, i: number, c: string) => {
     const v = r[c];
@@ -298,7 +326,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
     }
   };
   const sortTh = (c: string, text: string) => (
-    <th key={c} data-col={c} style={colStyle(c, true)} className={`sortable${numeric.has(c) ? " r" : ""}${dragCol && dragCol !== c ? " drop" : ""}`} aria-sort={sort?.key === c ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
+    <th key={c} data-col={c} style={colStyle(c, true)} onMouseEnter={() => setHoverCol(c)} onMouseLeave={() => setHoverCol(null)} className={`sortable${numeric.has(c) ? " r" : ""}${dragCol && dragCol !== c ? " drop" : ""}`} aria-sort={sort?.key === c ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
       draggable onDragStart={(e) => { setDragCol(c); e.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => setDragCol(null)}
       onDragOver={(e) => { if (dragCol && dragCol !== c) e.preventDefault(); }}
       onDrop={(e) => { e.preventDefault(); if (!dragCol || dragCol === c) return; const o = cols.filter((x) => x !== dragCol); o.splice(o.indexOf(c), 0, dragCol); patch({ order: [...o, ...hidden] }); setDragCol(null); }}
@@ -310,7 +338,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
         else patch({ sort: next(sort), sort2: sort?.key === c ? sort2 : null });
       }}>
       {text}{view.pct[c] ? (view.pct[c] === "sector" ? " %ile of sector" : " %ile of shown") : ""}
-      {sort?.key === c ? (sort.dir === 1 ? <ArrowUp size={10} style={{ marginLeft: 4, verticalAlign: -1 }} /> : <ArrowDown size={10} style={{ marginLeft: 4, verticalAlign: -1 }} />) : null}
+      {sort?.key === c ? (sort.dir === 1 ? <ArrowUp size={10} style={{ marginLeft: 4, verticalAlign: -1 }} /> : <ArrowDown size={10} style={{ marginLeft: 4, verticalAlign: -1 }} />) : hoverCol === c ? <ArrowUp size={10} style={{ marginLeft: 4, verticalAlign: -1, opacity: 0.35 }} aria-hidden /> : null}
       {sort2?.key === c ? <span className="sort2">{sort2.dir === 1 ? "↑" : "↓"}2</span> : null}
       </button>
       <span className="dt-grip" role="separator" aria-label={`Resize ${text}`} title="Drag to resize, double-click to fit" onPointerDown={(e) => startResize(c, e)} onDoubleClick={() => { const { [c]: _, ...rest } = widths; void _; patch({ widths: rest }); }} />
@@ -326,9 +354,10 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
           </div>
         ) : null}
         <label className="dt-q"><Search size={12} aria-hidden /><input type="search" placeholder="Search" aria-label="Search rows" value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} /></label>
+        {autoHid.map((c) => <span key={c} className="chip" title="Same on every row">{colLabel(c)}: {fmtKey(c, source[0][c])}</span>)}
         <span className="dt-n num">{rows.length === source.length ? rows.length : `${rows.length} of ${source.length}`}</span>
         <Popover.Root>
-          <Popover.Trigger asChild><button className="btn sm ghost" aria-label="Table options" data-hotkey="col" aria-keyshortcuts="F"><Columns3 size={13} />Table</button></Popover.Trigger>
+          <Popover.Trigger asChild><button className="btn sm ghost" aria-label="Table options" data-hotkey="col" aria-keyshortcuts="F"><Columns3 size={13} />Columns</button></Popover.Trigger>
           <Popover.Portal container={typeof document === "undefined" ? undefined : document.querySelector<HTMLElement>(".ws")}>
             <Popover.Content className="tbl-pop" align="end" sideOffset={6} collisionPadding={12}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 2, paddingBottom: 6 }}>
@@ -353,10 +382,10 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
               </div>
               <label className="dt-q" style={{ marginBottom: 6 }}><Search size={12} aria-hidden /><input type="search" placeholder="Find column" aria-label="Find column" value={colQ} onChange={(e) => setColQ(e.target.value)} /></label>
               <div className="tp-list">
-                {[...cols, ...hidden].filter((c) => !colQ || `${c} ${label(c)}`.toLowerCase().includes(colQ.toLowerCase())).map((c) => (
+                {[...new Set([...cols, ...hidden, ...autoHid])].filter((c) => !colQ || `${c} ${colLabel(c)}`.toLowerCase().includes(colQ.toLowerCase())).map((c) => (
                   <div key={c} className="tp-term">
-                    <input type="checkbox" checked={!hidden.includes(c)} aria-label={`Show ${c}`} onChange={() => patch({ hidden: hidden.includes(c) ? hidden.filter((x) => x !== c) : [...hidden, c] })} />
-                    <span style={{ flex: 1 }}>{label(c)}</span>
+                    <input type="checkbox" checked={cols.includes(c)} aria-label={`Show ${c}`} onChange={() => toggleCol(c)} />
+                    <span style={{ flex: 1 }}>{colLabel(c)}</span>
                     {numeric.has(c) ? (
                       <>
                         <select aria-label={`${label(c)} scale`} value={view.pct[c] ?? ""} onChange={(e) => { const { [c]: _, ...rest } = view.pct; void _; patch({ pct: e.target.value ? { ...rest, [c]: e.target.value as "all" | "sector" } : rest }); }}>
@@ -415,10 +444,10 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
           <button className="btn sm ghost" onClick={() => setPicked(new Set())}><X size={11} />Clear</button>
         </div>
       ) : null}
-      <div ref={scrollRef} className="tbl-wrap" style={{ maxHeight: (opts?.maxHeight as number | undefined) ?? 440 }}>
+      <div ref={scrollRef} className="tbl-wrap" style={{ maxHeight: (opts?.maxHeight as number | undefined) ?? 440, maxWidth: (opts?.maxWidth as number | undefined) ?? (cols.length <= 14 ? 1100 : undefined) }}>
         <table className="tbl">
           <thead>
-            {twoLevel ? <tr>{groups.map((g, k) => (g.head ? <th key={k} colSpan={g.span} className="grp">{label(g.head)}</th> : <th key={k} />))}</tr> : null}
+            {twoLevel ? <tr>{groups.map((g, k) => (g.head ? <th key={k} colSpan={g.span} className="grp">{colLabel(g.head)}</th> : <th key={k} />))}</tr> : null}
             <tr ref={headRow}>{selectable ? <th className="dt-chk"><input type="checkbox" aria-label="Select all shown" checked={shown.length > 0 && shown.every((i) => picked.has(i))} onChange={(e) => setPicked(e.target.checked ? new Set(shown) : new Set())} /></th> : null}{groups.flatMap((g) => g.cols.map((c) => sortTh(c, shortName(c, g.head))))}{rowActions ? <th aria-label="Actions" /> : null}</tr>
           </thead>
           <tbody>
