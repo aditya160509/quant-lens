@@ -1280,3 +1280,11 @@ def test_run_settings_and_benchmark_modes(studio):
         assert o["meta"]["benchmark"] == label and o["charts"]["equity_curve"][0]["benchmark"] == 100_000
         assert o["meta"]["total_return"] == out["meta"]["total_return"]
     assert o["charts"]["equity_curve"][-1]["benchmark"] == 100_000
+
+
+def test_short_window_never_shows_the_sealed_holdout(studio):
+    full = backtest.prepare(Settings(**SETTINGS))
+    mid = full.panel.dates[len(full.panel.dates) // 2]
+    short = backtest.prepare(Settings(**{**SETTINGS, "start": str(mid.date())}))
+    assert short.holdout_from == full.holdout_from  # one hold-out date for every run, from the whole history
+    assert short.panel.dates[-1] < pd.Timestamp(full.holdout_from)

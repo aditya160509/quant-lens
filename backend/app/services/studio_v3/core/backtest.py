@@ -68,7 +68,12 @@ def prepare(settings: Settings, *, include_holdout: bool = False) -> Prepared:
     keep = ok.sum(axis=1) >= np.maximum(1, 0.5 * alive.sum(axis=1))
     p = data.Panel(p.dates[keep], p.symbols, *(getattr(p, f)[keep] for f in data.FIELDS))
     alive, all_dates = alive[keep], p.dates
-    cut = len(p.dates) if include_holdout or not settings.holdout else max(int(len(p.dates) * (1 - settings.holdout)), 1)
+    # The hold-out is the last share of the WHOLE history (SPY's calendar), not of this run's window, so a short quick run
+    # cannot show dates a full run keeps sealed.
+    cal = data.panel(["SPY"], None, None).dates
+    sealed = cal[min(int(len(cal) * (1 - settings.holdout)), len(cal) - 1)] if len(cal) else None
+    cut = (len(p.dates) if include_holdout or not settings.holdout
+           else max(int(p.dates.searchsorted(sealed)), 1) if sealed is not None else max(int(len(p.dates) * (1 - settings.holdout)), 1))
     holdout_from = str(p.dates[cut].date()) if cut < len(p.dates) else None
     p, alive = p.window(0, cut), alive[:cut]
     sig_bars = {f: _fill_gaps(getattr(p, f), alive) for f in ("open", "high", "low", "close")} | {"volume": np.where(alive, np.nan_to_num(p.volume), np.nan)}
