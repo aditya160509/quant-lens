@@ -2,7 +2,7 @@ import { isNum, pct } from "@/modules/research/format";
 import type { FeatureResult, Row } from "@/modules/research/types";
 import { metaOf } from "./types";
 
-const money = (v: number) => (v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(0)}K` : `$${v.toFixed(0)}`);
+const money = (v: number): string => (v < 0 ? `-${money(-v)}` : v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `$${(v / 1e3).toFixed(0)}K` : `$${v.toFixed(0)}`);
 export { money };
 
 /** The one-line finding on each card (Outputs v2): built from the run's own numbers, or null when there is nothing to say. */
@@ -43,6 +43,8 @@ export function lead(view: string, r: FeatureResult): string | null {
     case "stCapacity": return isNum(m.capacity) ? `About ${money(m.capacity)} before one trade in ten exceeds 1% of the day's volume` : null;
     case "stExposure": return `In the market ${pct(m.exposure.time_in_market, 0)} of days; average exposure ${pct(m.exposure.avg_gross, 0)}`;
     case "stAttribution": { const g = Object.fromEntries(rows("attribution").map((q) => [String(q.step), q.value as number])); return isNum(g["Net P&L"]) && isNum(g["Gross gains"]) ? `Net ${money(g["Net P&L"])} after ${money(-(g["Commissions and borrow"] + g.Slippage))} of costs` : null; }
+    case "stEventStudy": { const at = (k: number) => rows("event_study").find((q) => q.offset === k), a = at(20), b = at(-20);
+      return a && isNum(a.mean) ? `${pct(a.mean, 1)} on average 20 bars after entry${b && isNum(b.mean) ? `, ${pct(-b.mean, 1)} in the 20 before` : ""}; ${pct(a.coverage as number, 0)} of entries reach +20` : null; }
     case "stSideEquity": { const l = rows("side_stats").find((q) => q.side === "long"), s = rows("side_stats").find((q) => q.side === "short"); return l && s && isNum(l.net_pnl) && isNum(s.net_pnl) ? `Long ${money(l.net_pnl)} from ${String(l.count)} trades; short ${money(s.net_pnl)} from ${String(s.count)}` : null; }
     default: return null;
   }

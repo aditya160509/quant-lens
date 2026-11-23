@@ -250,7 +250,7 @@ def side_curves(closed: np.ndarray, n: int, cap: float) -> dict[str, np.ndarray]
 
 
 def attribution(trades: np.ndarray) -> list[dict]:
-    """Gross gains and losses before any cost, then commissions (with borrow) and slippage; the steps add up to net P&L."""
+    """Closed trades, like the side split: gross gains and losses before any cost, then commissions (with borrow) and slippage; the steps add up to net P&L."""
     slip = float(trades[:, engine.T_SLIP].sum())
     comm = float(trades[:, engine.T_COSTS].sum()) - slip
     gross = trades[:, engine.T_PNL] + trades[:, engine.T_COSTS]
@@ -470,7 +470,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
         "summary_cards": [{"label": k, "value": v, **({"unit": u} if u else {})} for k, v, u in cards],
         "charts": {"side_equity": side_equity, "event_study": event_study(r.trades, p.close), "trade_mc": mc["fan"] if mc else [], "equity_curve": curve, "cost_ladder": ladder, "start_dates": sd, "exposure": exposure, "rolling": _rolling(r.equity, bench_eq, dates)},
         "tables": {"side_stats": [{"side": k, **v, "net_pnl": float(closed[m, engine.T_PNL].sum())} for (k, v), m in zip(trade_split.items(), (side != 0, side > 0, side < 0), strict=True)],
-                   "attribution": attribution(r.trades), "run_settings": run_settings(spec, settings, effective, dates, len(p.symbols)), "by_regime": regime_rows, "conditions": paths.conditions(r.equity, market, dates) if market is not None and np.isfinite(market).any() else [],
+                   "attribution": attribution(closed), "run_settings": run_settings(spec, settings, effective, dates, len(p.symbols)), "by_regime": regime_rows, "conditions": paths.conditions(r.equity, market, dates) if market is not None and np.isfinite(market).any() else [],
                    "rule_check": rules.pop("rows"), "holdings": [{"date": x["date"], "names": x["positions"]} for x in exposure], "seasonality": paths.seasonality(r.equity, dates), "ruin": mc["ruin"] if mc else [], "streaks": mc["streaks"] if mc else [],
                    "trades": trades, "carried_by": carried, "crises": crises, "drawdowns": dd_rows, "per_name": per_name, "my_limits": lim_rows,
                    "limits": limits.run_limits(start=str(dates[0].date()), end=str(dates[-1].date()), requested=prep.requested, held=held, delisted=int(dead.sum()), fill=settings.fill,

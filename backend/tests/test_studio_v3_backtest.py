@@ -1234,7 +1234,7 @@ def test_timeframe_returns_only_completed_weeks():
 def test_waterfall_sums_to_net_pnl_and_costs_split(studio):
     out = backtest.run_backtest(Strategy(**SMA), Settings(**SETTINGS))
     steps = {x["step"]: x["value"] for x in out["tables"]["attribution"]}
-    net = sum(t["pnl"] for t in out["tables"]["trades"])
+    net = {x["side"]: x for x in out["tables"]["side_stats"]}["all"]["net_pnl"]
     assert steps["Gross gains"] + steps["Gross losses"] + steps["Commissions and borrow"] + steps["Slippage"] == pytest.approx(net, abs=1e-6)
     assert steps["Net P&L"] == pytest.approx(net, abs=1e-6) and steps["Commissions and borrow"] < 0 and steps["Slippage"] < 0
     free = backtest.run_backtest(Strategy(**SMA), Settings(**SETTINGS, costs=Costs(commission_bps=0, slippage_bps=0, borrow_bps=0)))

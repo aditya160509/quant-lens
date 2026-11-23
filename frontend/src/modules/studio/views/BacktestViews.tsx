@@ -20,7 +20,7 @@ export function Skipped({ reason }: { reason: string }) {
   return <div className="st-skip" role="status">skipped: {reason}</div>;
 }
 
-const usd = (v: number) => `$${Math.round(v).toLocaleString()}`;
+const usd = (v: number) => `${v < 0 ? "-" : ""}$${Math.abs(Math.round(v)).toLocaleString()}`;
 
 /** Net against gross and the benchmark, with the underwater strip beneath. */
 export function Equity({ rows, result, scope, keys }: ViewProps) {
@@ -262,9 +262,10 @@ export function Holdings({ rows, result }: ViewProps) {
 export function SideEquity({ rows, result }: ViewProps) {
   const stats = (result.tables.side_stats ?? []) as ViewProps["rows"];
   if (rows.length < 2) return <Skipped reason="no closed trades" />;
+  const both = ["long", "short"].every((side) => stats.some((r) => r.side === side && Number(r.count) > 0)); // one side only: its line is the All line
   return (
     <div style={{ display: "grid", gap: 8 }}>
-      <TimeSeries data={rows} series={[{ key: "all", label: "All", color: "var(--accent)", width: 2 }, { key: "long", label: "Long", color: "var(--up)" }, { key: "short", label: "Short", color: "var(--down)" }]} height={220} format={usd} />
+      <TimeSeries data={rows} series={[{ key: "all", label: "All", color: "var(--accent)", width: 2 }, ...(both ? [{ key: "long", label: "Long", color: "var(--up)" }, { key: "short", label: "Short", color: "var(--down)" }] : [])]} height={220} format={usd} />
       <table className="vt-table">
         <thead><tr><th>Side</th><th className="num">Trades</th><th className="num">Net P&amp;L</th><th className="num">Win rate</th><th className="num">Avg win</th><th className="num">Avg loss</th><th className="num">Profit factor</th><th className="num">Expectancy</th></tr></thead>
         <tbody>{stats.map((r) => (
@@ -299,11 +300,5 @@ export function RunSettings({ rows }: ViewProps) {
 export function EventStudy({ rows }: ViewProps) {
   if (!rows.some((r) => isNum(r.mean))) return <Skipped reason="no entries with bars around them" />;
   const pts = rows.filter((r) => isNum(r.mean)).map((r) => ({ x: r.offset as number, y: r.mean as number }));
-  const cov = rows.find((r) => r.offset === 0)?.coverage;
-  return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <XYPlot points={[]} lines={[{ label: "Average move", color: "var(--accent)", points: pts }]} xLabel="Bars from entry" yLabel="Move since entry bar" height={220} formatX={(v) => `${v > 0 ? "+" : ""}${Math.round(v)}`} formatY={(v) => pct(v, 1)} />
-      <Bars bars={rows.map((r) => ({ label: String(r.offset), value: r.n as number, detail: [["Entries", String(r.n)], ["Coverage", pct(r.coverage, 0)]] }))} format={(v) => String(Math.round(v))} signed={false} yLabel={`Entries observed${isNum(cov) ? ` (${pct(cov, 0)} at T+0)` : ""}`} height={120} />
-    </div>
-  );
+  return <XYPlot points={[]} lines={[{ label: "Average move", color: "var(--accent)", points: pts }]} xLabel="Bars from entry" yLabel="Move since entry bar" height={240} formatX={(v) => `${v > 0 ? "+" : ""}${Math.round(v)}`} formatY={(v) => pct(v, 1)} />;
 }

@@ -175,7 +175,7 @@ export function DataTable({ rows: source, opts }: { rows: Row[]; opts?: Record<s
   const scrollRef = useRef<HTMLDivElement>(null);
   const numeric = useMemo(() => new Set(cols.filter((c) => rows.some((r) => isNum(r[c])))), [rows, cols]);
   // The footer's medians: computed once per data change, not on every scroll frame.
-  const medians = useMemo(() => Object.fromEntries([...numeric].filter((c) => !isPKey(c) && !/(^|_)(version|year|id)$/i.test(c)).map((c) => [c, reduce(rows.map((r) => r[c]).filter(isNum), "median")])), [rows, numeric]);
+  const medians = useMemo(() => Object.fromEntries([...numeric].filter((c) => !isPKey(c) && !/(^|_)(version|year|id)$/i.test(c) && rows.every((r) => r[c] == null || isNum(r[c])))  /* a mixed text/number column has no median */.map((c) => [c, reduce(rows.map((r) => r[c]).filter(isNum), "median")])), [rows, numeric]);
   const bound = useMemo(() => {
     const m: Record<string, number> = {};
     cols.forEach((c) => { if (numeric.has(c) && !isPKey(c)) m[c] = Math.max(1e-12, ...rows.map((r) => (isNum(r[c]) ? Math.abs(r[c]) : 0))); });
