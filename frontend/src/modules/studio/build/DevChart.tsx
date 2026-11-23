@@ -76,19 +76,43 @@ const ms = (d: string) => Date.parse(d);
 
 export const SPEEDS = [1, 2, 5, 10, 20, 50];
 const RANGES = ["1M", "3M", "6M", "1Y", "5Y", "YTD", "ALL"] as const;
-const STYLES = [["candles", "Candles"], ["hollow", "Hollow candles"], ["bars", "OHLC bars"], ["heikinashi", "Heikin-Ashi"], ["line", "Line"], ["linemarkers", "Line with markers"], ["stepline", "Step line"], ["area", "Area"], ["baseline", "Baseline"], ["columns", "Columns"], ["renko", "Renko (ATR 14 box)"], ["linebreak", "Line break (3)"]] as const;
+const STYLES = [["candles", "Candles"], ["hollow", "Hollow candles"], ["bars", "OHLC bars"], ["heikinashi", "Heikin-Ashi"], ["line", "Line"], ["linemarkers", "Line with markers"], ["stepline", "Step line"], ["area", "Area"], ["baseline", "Baseline"], ["columns", "Columns"], ["renko", "Renko (ATR 14 box)"], ["linebreak", "Line break (3)"], ["kagi", "Kagi (ATR 14)"], ["pnf", "Point and figure (ATR 14, 3 box)"], ["range", "Range bars (ATR 14)"]] as const;
 const SCALES = [["price", "Linear"], ["log", "Log"], ["percent", "Percent"], ["indexed", "Indexed to 100"]] as const;
 type View = { style: string; scale: string; dw: boolean; blind: boolean; eq?: boolean };
 const VIEW_KEY = "studio:chart:view";
 type Ohlcv = { time: number; open: number; high: number; low: number; close: number; volume: number };
 /** Price-only bar types: each new brick or line is stamped with the bar that completed it (1 ms apart when one bar makes several). */
+export const DERIVED = new Set(["renko", "linebreak", "kagi", "pnf", "range"]);
 export function transformBars(src: Ohlcv[], style: string): Ohlcv[] {
-  if (style !== "renko" && style !== "linebreak" || src.length < 2) return src;
+  if (!DERIVED.has(style) || src.length < 2) return src;
   const out: Ohlcv[] = [];
+  // Box = average true range over the last 14 bars of the window, fixed for the whole chart.
+  const tr = src.slice(-15).map((b, i, a) => (i ? Math.max(b.high - b.low, Math.abs(b.high - a[i - 1]!.close), Math.abs(b.low - a[i - 1]!.close)) : 0)).slice(1);
+  const box = tr.reduce((p, v) => p + v, 0) / tr.length || src[0]!.close * 0.01;
+  const seg = (time: number, a: number, b: number, volume: number): Ohlcv => ({ time: Math.max(time, (out.at(-1)?.time ?? -Infinity) + 1), open: a, high: Math.max(a, b), low: Math.min(a, b), close: b, volume });
+  if (style === "range") {
+    // A bar closes once its high-low span reaches one box.
+    let cur: Ohlcv | null = null;
+    for (const b of src) {
+      cur = cur ? { ...cur, high: Math.max(cur.high, b.high), low: Math.min(cur.low, b.low), close: b.close, volume: cur.volume + b.volume } : { ...b };
+      if (cur.high - cur.low >= box) { out.push({ ...cur, time: Math.max(b.time, (out.at(-1)?.time ?? -Infinity) + 1) }); cur = null; }
+    }
+    return out;
+  }
+  if (style === "kagi" || style === "pnf") {
+    // Kagi: one segment per swing, reversing after a one-box move against the extreme. Point and figure: columns in whole boxes, reversing after three.
+    const rev = style === "pnf" ? 3 * box : box, snap = (x: number) => (style === "pnf" ? Math.floor(x / box) * box : x);
+    let start = snap(src[0]!.close), end = start, up = src[1]!.close >= src[0]!.close, t = src[0]!.time, vol = 0;
+    for (const b of src.slice(1)) {
+      vol += b.volume;
+      const x = snap(b.close);
+      if (up ? x > end : x < end) end = x;
+      else if (up ? end - b.close >= rev : b.close - end >= rev) { out.push(seg(t, start, end, vol)); start = end; end = style === "pnf" ? x + (up ? box : 0) : b.close; up = !up; t = b.time; vol = 0; }
+    }
+    out.push(seg(t, start, end, vol));
+    return out;
+  }
   if (style === "renko") {
-    // Box = average true range over the last 14 bars of the window, fixed for the whole chart.
-    const tr = src.slice(-15).map((b, i, a) => (i ? Math.max(b.high - b.low, Math.abs(b.high - a[i - 1]!.close), Math.abs(b.low - a[i - 1]!.close)) : 0)).slice(1);
-    const box = tr.reduce((p, v) => p + v, 0) / tr.length || src[0]!.close * 0.01;
     let last = src[0]!.close;
     for (const b of src) {
       let k = 0;
@@ -221,7 +245,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   }, [hop, perSym, sym]);
   const valueAt = (name: string) => { const pts = prev?.plots?.[name]?.filter((p) => !p.symbol || p.symbol === sym) ?? []; const hit = pausedAt ? pts.findLast((p) => p.date <= pausedAt) : pts.at(-1); return hit?.value == null ? "—" : +hit.value.toFixed(4); };
   const plots = prev?.plots;
-  const derived = view.style === "renko" || view.style === "linebreak" ? view.style : "";
+  const derived = DERIVED.has(view.style) ? view.style : "";
   const barsKey = `${sym}:${bars.length}:${bars[0]?.time}:${bars.at(-1)?.time}:${derived}`;
   useEffect(() => {
     const el = box.current; if (!el || !bars.length) return;
