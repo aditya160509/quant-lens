@@ -1180,3 +1180,28 @@ def test_scale_in_adds_first_entry_size_up_to_max_entries():  # B-124
     base = Strategy(entry_long="close > sma(close, 100)", exit_long="close < sma(close, 100)", sizing={"mode": "pct_equity", "value": 0.3, "max_positions": 1})
     peak = {k: float(np.max(B.simulate(base.model_copy(update={"scale_in": "rsi(close, 2) < 10", "max_entries": k}), prep, st).gross_exposure)) for k in (1, 2, 3)}
     assert peak[1] < 0.45 < peak[2] < 0.75 < peak[3] < 1.05
+
+
+def test_python_indicator_class_feeds_strategy_and_chart_with_inputs(studio):
+    code = """class Band:
+    inputs = {"n": (3, 2, 50, 1)}
+    chart = "main"
+    plots = {"upper": {"color": "#ff9900"}}
+    fills = [("upper", "lower")]
+    def update(self, ctx):
+        w = ctx.history("close", self.inputs["n"]).to_numpy()
+        return {"upper": w.max(), "lower": w.min()}
+
+class Strategy:
+    def init(self, ctx):
+        self.band = self.use(Band)
+    def on_bar(self, ctx):
+        ctx.table("seen", {"upper": self.band["upper"], "n": self.band.impl.inputs["n"]})
+"""
+    result = studio.post("/api/studio-v3/preview", json={"symbol": "SPY", "spec": {"code": code, "params": {"Band_n": {"value": 5}}}}).json()
+    assert result["status"] == "ok", (result.get("reason"), result.get("problem"))
+    assert result["plot_charts"] == {"Band(5).upper": "main", "Band(5).lower": "main"}
+    assert result["draw"]["fills"] == [{"a": "Band(5).upper", "b": "Band(5).lower", "color": None}]
+    rows = result["tables"]["seen"]
+    plotted = {p["date"]: p["value"] for p in result["plots"]["Band(5).upper"]}
+    assert all(r["cells"]["n"] == 5 and plotted[r["date"]] == r["cells"]["upper"] for r in rows)  # chart and strategy read the same numbers

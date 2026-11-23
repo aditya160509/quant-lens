@@ -1007,11 +1007,84 @@ def _indicator_method(name):
     return indicator
 
 
+class UsedIndicator:
+    """A user indicator class run by `self.use(...)`: `update(self, ctx)` returns a number or a {name: number} dict each bar,
+    before the strategy's on_bar sees it; every output is plotted, so the chart and the backtest read the same numbers.
+    Class attributes: `inputs = {"n": (20, 5, 100, 1)}` (tuples join Build's Inputs as `Class_n`), `chart = "main"` or "own",
+    `plots = {"upper": {"color": "#f80", "style": "line"}}`, `fills = [("upper", "lower")]`."""
+
+    def __init__(self, cls, params, kwargs):
+        declared = getattr(cls, "inputs", {}) or {}
+        unknown = set(kwargs) - set(declared)
+        if unknown:
+            raise ValueError(f"{cls.__name__} has no input {min(unknown)!r}; declare it in {cls.__name__}.inputs")
+        inputs = {}
+        for k, v in declared.items():
+            default = v[0] if isinstance(v, tuple) else v
+            got = kwargs.get(k, params.get(f"{cls.__name__}_{k}", default))
+            # Build's Inputs send floats; an input declared as an integer (a window length) stays one.
+            inputs[k] = int(got) if isinstance(default, int) and isinstance(got, float) and got.is_integer() else got
+        self.impl = cls()
+        self.impl.inputs = inputs
+        self.name = cls.__name__ + (f"({', '.join(f'{v:g}' if isinstance(v, (int, float)) else str(v) for v in inputs.values())})" if inputs else "")
+        self.chart = getattr(cls, "chart", "own")
+        self.styles = getattr(cls, "plots", {}) or {}
+        self.fills = getattr(cls, "fills", []) or []
+        self.out, self._t = {}, None
+
+    def step(self, ctx):
+        if self._t == ctx.t:
+            return
+        self._t = ctx.t
+        got = self.impl.update(ctx)
+        self.out = {k: float(v) for k, v in got.items()} if isinstance(got, dict) else {"": float(got)}
+        for key, value in self.out.items():
+            style = self.styles.get(key, {}) if key else next(iter(self.styles.values()), {})
+            ctx.plot(f"{self.name}.{key}" if key else self.name, value, chart=style.get("chart", self.chart), color=style.get("color"), width=style.get("width"), style=style.get("style"))
+        for a, b in self.fills:
+            ctx.fill(f"{self.name}.{a}", f"{self.name}.{b}")
+
+    @property
+    def value(self):
+        if len(self.out) != 1:
+            raise ValueError(f"{self.name} has several outputs; read one with [name]")
+        return next(iter(self.out.values()))
+
+    def __getitem__(self, key):
+        return self.out[key]
+
+    @property
+    def ready(self):
+        return bool(self.out) and all(math.isfinite(v) for v in self.out.values())
+
+
 def bind_indicators(strategy):
-    """LEAN's `self.sma(symbol, 50)` form next to `ctx.indicator`; a method the user wrote wins."""
+    """LEAN's `self.sma(symbol, 50)` form next to `ctx.indicator`; a method the user wrote wins.
+    Also `self.use(IndicatorClass, **inputs)`: the indicator updates and plots itself before every on_bar."""
     for name in INDICATOR_NAMES:
         if not hasattr(type(strategy), name):
             setattr(strategy, name, MethodType(_indicator_method(name), strategy))
+    used = []
+
+    def use(self, cls, **inputs):
+        ctx = getattr(self, "_studio_ctx", None)
+        handle = UsedIndicator(cls, ctx.params if ctx is not None else {}, inputs)
+        used.append(handle)
+        if ctx is not None:
+            handle.step(ctx)
+        return handle
+
+    if not hasattr(type(strategy), "use"):
+        strategy.use = MethodType(use, strategy)
+    on_bar = getattr(strategy, "on_bar", None)
+    if on_bar is not None:  # portfolio strategies may only rebalance
+
+        def stepped(ctx):
+            for handle in used:
+                handle.step(ctx)
+            return on_bar(ctx)
+
+        strategy.on_bar = stepped
     return strategy
 
 
@@ -1372,7 +1445,8 @@ def main():
             entries, exits = np.zeros((T, N), np.int8), np.zeros((T, N), np.int8)
             contexts = make_contexts(True)
             for j, ctx in enumerate(contexts):
-                s = cls()
+                s = bind_indicators(cls())
+                s._studio_ctx = ctx
                 if hasattr(s, "init"):
                     s.init(ctx)
                 live = np.flatnonzero(np.isfinite(fields["close"][:, j]))

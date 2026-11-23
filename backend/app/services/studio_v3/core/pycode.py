@@ -645,7 +645,10 @@ def _strategy_problems(tree: ast.AST, params: dict[str, float], skip: set[int]) 
     nodes = list(ast.walk(tree))
     strings = " ".join(n.value for n in nodes if isinstance(n, ast.Constant) and isinstance(n.value, str))
     if not any(isinstance(n, ast.Attribute) and n.attr == "params" for n in nodes):
+        classes = {n.name for n in nodes if isinstance(n, ast.ClassDef)}
         for name in params:
+            if name.split("_")[0] in classes:  # an indicator input (Class_name), read by self.use
+                continue
             if not re.search(rf"\b{re.escape(name)}\b", strings):
                 out.append({"severity": "warning", "line": 1, "column": 1, "end_column": 1, "code": "studio-unused-param",
                             "message": f"Param {name} is never read."})

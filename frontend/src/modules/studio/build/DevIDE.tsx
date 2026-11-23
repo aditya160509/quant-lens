@@ -349,8 +349,12 @@ export function DevIDE({ tools, spec, edit, symbol, prev, side, canRun, starting
   // Inputs: params = {"name": (default, min, max, step)} in class Strategy, plus saved overrides; editing one re-runs the preview.
   const inputs = useMemo(() => {
     const out: Spec["params"] = {};
-    const body = /params\s*=\s*\{([^}]*)\}/.exec(spec.code)?.[1] ?? "";
-    for (const m of body.matchAll(/["'](\w+)["']\s*:\s*\(\s*([-\d.e]+)\s*,\s*([-\d.e]+)\s*,\s*([-\d.e]+)\s*,\s*([-\d.e]+)\s*\)/g)) out[m[1]] = { value: +m[2], min: +m[3], max: +m[4], step: +m[5] };
+    // Strategy's params, then each indicator class's inputs as Class_name (the backend reads both the same way).
+    for (const cls of spec.code.split(/^class\s+/m).slice(1)) {
+      const name = /^(\w+)/.exec(cls)?.[1] ?? "", strat = name === "Strategy";
+      const body = new RegExp(`^\\s+${strat ? "params" : "inputs"}\\s*=\\s*\\{([^}]*)\\}`, "m").exec(cls)?.[1] ?? "";
+      for (const m of body.matchAll(/["'](\w+)["']\s*:\s*\(\s*([-\d.e]+)\s*,\s*([-\d.e]+)\s*,\s*([-\d.e]+)\s*,\s*([-\d.e]+)\s*\)/g)) out[strat ? m[1] : `${name}_${m[1]}`] = { value: +m[2], min: +m[3], max: +m[4], step: +m[5] };
+    }
     return { ...out, ...Object.fromEntries(Object.entries(spec.params).map(([k, p]) => [k, { ...out[k], ...p }])) };
   }, [spec.code, spec.params]);
   const setInput = (n: string, p: Spec["params"][string], value: number) => Number.isFinite(value) && edit({ params: { ...spec.params, [n]: { ...p, value } } });

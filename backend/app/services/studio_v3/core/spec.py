@@ -158,11 +158,13 @@ class Strategy(_Model):
             except SyntaxError:
                 return self.params
             for strategy in tree.body:
-                if not isinstance(strategy, ast.ClassDef) or strategy.name != "Strategy":
+                if not isinstance(strategy, ast.ClassDef):
                     continue
+                # Strategy.params, and any other class's `inputs` (indicators run by self.use) as `Class_name`.
+                attr, prefix = ("params", "") if strategy.name == "Strategy" else ("inputs", f"{strategy.name}_")
                 for assignment in strategy.body:
                     if not isinstance(assignment, ast.Assign) or not any(
-                        isinstance(target, ast.Name) and target.id == "params" for target in assignment.targets
+                        isinstance(target, ast.Name) and target.id == attr for target in assignment.targets
                     ) or not isinstance(assignment.value, ast.Dict):
                         continue
                     for key, item in zip(assignment.value.keys, assignment.value.values, strict=True):
@@ -178,7 +180,7 @@ class Strategy(_Model):
                             continue
                         default, minimum, maximum, step = values
                         if minimum <= default <= maximum and step > 0:
-                            declared[key.value] = Param(value=default, min=minimum, max=maximum, step=step)
+                            declared[prefix + key.value] = Param(value=default, min=minimum, max=maximum, step=step)
         return {**declared, **self.params}
 
     def values(self) -> dict[str, float]:
