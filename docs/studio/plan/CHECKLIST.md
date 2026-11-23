@@ -17,7 +17,7 @@ Three streams, in this order. Details stay in their sections below; this is the 
 
 **3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 11 to 14 research, reactive and SQL cells, 17 and 18 library and starters, 20 review comments (partial), 23 and 24 paper and live hooks, 28 pop-out windows. Later (AI parked by the owner): 21, 22. Built: 2, 3, 4, 5, 6, 7, 9, 10, 15 (Data page), 19 (share with a pinned run), 25, 26 (keymap chords), 27 (Layouts dialog), 29. Moved to Chart: 1, 8, 30. IDE catalogue P1 gaps built 2026-11-21: strategy inspections, run configurations, logpoints, test explorer and strategy tests, DataFrame variable explorer. P1 gap left: percent cells (#11).
 
-**4. Chart, section "Chart": CH-1 to CH-50, 17 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
+**4. Chart, section "Chart": CH-1 to CH-50, 15 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
 
 ## Rules
 
@@ -574,7 +574,7 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [x] [H] CH-26 P1 `class Indicator` plus `self.use(...)` in Strategy: one Python file draws on the chart and feeds the backtest, same numbers [research 3, C-13] (any class with update(ctx) used via self.use(Cls, **inputs) steps before on_bar and plots as `Name(n).key`; the type checker accepts self.use)
 - [x] [M] CH-27 P1 Inputs, Plot and Fill declared in Python generate the settings form and styles [research 4] (class `inputs` join Build's Inputs as `Class_name`; `plots`/`fills` style the chart)
 - [x] [M] CH-28 P1 Multi-timeframe access in ctx and Indicator (`request.security` equivalent) [research 5] (ctx.timeframe('W'|'M'|'Q'|'Y') returns completed higher-timeframe bars only; indicators get the same ctx)
-- [ ] [M] CH-29 P1 Parameter scrubber / indicator lab: drag an input, the indicator and signals redraw with no backtest [C-12, research]
+- [x] [M] CH-29 P1 Parameter scrubber / indicator lab: drag an input, the indicator and signals redraw with no backtest [C-12, research] (each input with min and max gets a slider; dragging re-runs the preview in about 150 ms server time, which redraws plots, signals and trades)
 - [x] [M] CH-30 P1 Look-ahead guard: run indicators on truncated history, report differences in Problems [research 8] (the preview's history-cut replay; changed signals show as a look-ahead warning in Problems)
 - [ ] [M] CH-31 P2 Indicator dialog: Inputs, Style, Visibility; apply to a pane; indicator on indicator; favourites [C-11 part]
 - [ ] [M] CH-32 P2 Chart indicators match the backend formula within 1e-6 on a fixture [C-1]
@@ -597,7 +597,7 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 ### Data, export and speed
 - [x] [E] CH-44 P1 Export chart data as CSV and the chart as PNG [C-23, research 6] (Export PNG and CSV in chart settings)
 - [ ] [H] CH-45 P1 Speed: 10 years plus 3 indicators first paint under 400 ms; 100k bars pan at 60 fps; replay 20× at 60 fps [C-3, C-5, C-28, research 10]
-- [ ] [M] CH-46 P2 Chart, Backtest and Live read the same close for the same symbol and date [C-2]
+- [x] [M] CH-46 P2 Chart, Backtest and Live read the same close for the same symbol and date [C-2] (/bars, backtest and live all read core/data.py; test_bars_endpoint_serves_the_same_closes_as_the_backtest pins it)
 - [ ] [M] CH-47 P2 Vela on every page (Backtest, Live, Library), then retire chart_engine once watchlist, trading, landing and security move [C-10]
 - [x] [M] CH-48 P2 Spread and ratio charts (A/B, A−B) with a correlation pane [C-24] (Spread in chart settings: A/B or A−B pane plus a rolling 60-day return correlation pane)
 - [ ] [M] CH-49 P2 Regime ribbon behind price with P&L per regime; earnings and split markers (blocked by data for events) [C-25, research]
