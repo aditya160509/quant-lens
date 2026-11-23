@@ -70,6 +70,8 @@ TEMPLATE = '''class Strategy:
 '''
 
 
+ORDER_CALLS = {"buy", "sell", "short", "cover", "market_order", "limit_order", "stop_order", "stop_limit_order", "bracket", "order_value", "target_weights"}
+
 def _finding(line: int, col: int, end: int, msg: str, token: str = "", severity: str = "error") -> dict:
     return {"severity": severity, "role": "code", "line": line, "start": col, "end": end, "token": token, "message": msg}
 
@@ -215,8 +217,13 @@ def check(code: str, params: dict[str, float], *, modules: set[str] | None = Non
             found.append(_finding(*at, "global and nonlocal are not allowed", "global"))
         elif any(not _literal_formula(arg) for arg in _formula_args(n)):
             found.append(_finding(*at, f"ctx.{n.func.attr}() needs a literal formula string", n.func.attr))
-    if entry and not any(isinstance(n, ast.ClassDef) and n.name == "Strategy" for n in tree.body):
-        found.append(_finding(1, 0, 0, "Define class Strategy with on_bar(self, ctx)"))
+    if entry and not any(isinstance(n, ast.ClassDef) and n.name in ("Strategy", "Indicator") for n in tree.body):
+        found.append(_finding(1, 0, 0, "Define class Strategy (or class Indicator, plots only) with on_bar(self, ctx)"))
+    # An Indicator only plots: no orders.
+    for cls in (n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Indicator"):
+        for n in ast.walk(cls):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in ORDER_CALLS:
+                found.append(_finding(n.lineno, n.col_offset, getattr(n, "end_col_offset", n.col_offset), f"An Indicator only plots; ctx.{n.func.attr}() places an order", n.func.attr))
     for e in exprs(code):
         try:
             formula.parse(e, params)

@@ -142,3 +142,18 @@ class Strategy:
     assert any(r["cells"].get("bull") for r in rows)
     betas = [r["cells"]["beta"] for r in rows if r["cells"].get("beta") is not None]
     assert betas and all(abs(b - 1) < 1e-6 for b in betas)  # SPY against SPY
+
+
+def test_indicator_script_plots_without_trading(studio):  # noqa: F811
+    code = """class Indicator:
+    overlay = True
+    params = {"length": 10}
+
+    def on_bar(self, ctx):
+        ctx.plot("mid", (ctx.high[-1] + ctx.low[-1]) / 2)
+"""
+    result = studio.post("/api/studio-v3/preview", json={"symbol": "SPY", "spec": {"code": code}}).json()
+    assert result["status"] == "ok", (result.get("reason"), result.get("problem"))
+    assert result["plot_charts"] == {"mid": "main"} and not result["trades"]
+    refused = studio.post("/api/studio-v3/compile", json={"spec": {"code": code.replace('ctx.plot("mid"', 'ctx.buy()\n        ctx.plot("mid"')}}).json()
+    assert any("only plots" in f["message"] for f in refused["findings"])

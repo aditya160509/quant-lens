@@ -415,7 +415,10 @@ class Ctx:
             row["fields"] = clean
         self._logs.append(row)
 
-    def plot(self, name, value, chart="own", color=None, width=None, style=None):
+    _default_chart = "own"  # an Indicator with overlay = True draws on price by default
+
+    def plot(self, name, value, chart=None, color=None, width=None, style=None):
+        chart = chart or self._default_chart
         """Record a value in a named plot on the main chart or in a separate pane."""
         if chart not in ("main", "own"):
             raise ValueError("Plot chart must be main or own")
@@ -1458,9 +1461,11 @@ def main():
         builtins["__import__"] = project_import
         g = {"__builtins__": builtins, "__name__": "strategy", "math": math}
         exec(compiled, g)  # noqa: S102 source was checked by pycode.check
-        cls = g.get("Strategy")
+        cls = g.get("Strategy") or g.get("Indicator")
         if cls is None:
-            raise NameError("define class Strategy with on_bar(self, ctx)")
+            raise NameError("define class Strategy (or class Indicator) with on_bar(self, ctx)")
+        if cls is g.get("Indicator") and "Strategy" not in g:
+            Ctx._default_chart = "main" if getattr(cls, "overlay", False) is True else "own"
         warmup = getattr(cls, "warmup", 0)
         if type(warmup) is not int or warmup < 0:
             raise ValueError("Strategy.warmup must be a nonnegative integer")
