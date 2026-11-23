@@ -94,31 +94,43 @@ const SCALES = [["price", "Linear"], ["log", "Log"], ["percent", "Percent"], ["i
 type View = { style: string; scale: string; dw: boolean; blind: boolean; eq?: boolean; regime?: boolean };
 const VIEW_KEY = "studio:chart:view";
 type Ohlcv = { time: number; open: number; high: number; low: number; close: number; volume: number };
-/** Price-only bar types: each new brick or line is stamped with the bar that completed it (1 ms apart when one bar makes several). */
+/** Price-only bar types. Each brick or line carries the time of the source bar that completed it; when one bar completes several,
+ * the later ones sit 1 ms after the previous, an ordering key for the chart's x-axis only, never an intraday event time. Approximations for display, not signals. */
 export const DERIVED = new Set(["renko", "linebreak", "kagi", "pnf", "range"]);
-export function transformBars(src: Ohlcv[], style: string): Ohlcv[] {
+export const MAX_BRICKS = 20_000;
+export type Derived = Ohlcv[] & { invalid?: string };
+const ok = (b: Ohlcv) => [b.open, b.high, b.low, b.close].every((x) => Number.isFinite(x) && x > 0) && b.high >= b.low;
+/** Box per bar = mean true range over the last 14 bars up to and including it (fewer while warming up), so a brick never uses later data. */
+export function causalBox(src: Ohlcv[], n = 14): number[] {
+  const tr = src.map((b, i) => (i ? Math.max(b.high - b.low, Math.abs(b.high - src[i - 1]!.close), Math.abs(b.low - src[i - 1]!.close)) : b.high - b.low));
+  let sum = 0;
+  return tr.map((t, i) => { sum += t - (i >= n ? tr[i - n]! : 0); return sum / Math.min(i + 1, n) || src[i]!.close * 0.01; });
+}
+export function transformBars(src: Ohlcv[], style: string): Derived {
   if (!DERIVED.has(style) || src.length < 2) return src;
+  const fail = (invalid: string): Derived => Object.assign(src.slice(), { invalid });
+  if (!src.every(ok)) return fail("Prices must be positive numbers for this bar type; showing candles");
+  const boxes = causalBox(src);
+  if (!boxes.every((x) => Number.isFinite(x) && x > 0)) return fail("Box size is invalid; showing candles");
   const out: Ohlcv[] = [];
-  // Box = average true range over the last 14 bars of the window, fixed for the whole chart.
-  const tr = src.slice(-15).map((b, i, a) => (i ? Math.max(b.high - b.low, Math.abs(b.high - a[i - 1]!.close), Math.abs(b.low - a[i - 1]!.close)) : 0)).slice(1);
-  const box = tr.reduce((p, v) => p + v, 0) / tr.length || src[0]!.close * 0.01;
   const seg = (time: number, a: number, b: number, volume: number): Ohlcv => ({ time: Math.max(time, (out.at(-1)?.time ?? -Infinity) + 1), open: a, high: Math.max(a, b), low: Math.min(a, b), close: b, volume });
   if (style === "range") {
-    // A bar closes once its high-low span reaches one box.
+    // A bar closes once its high-low span reaches the box at the bar that completes it.
     let cur: Ohlcv | null = null;
-    for (const b of src) {
+    for (const [i, b] of src.entries()) {
       cur = cur ? { ...cur, high: Math.max(cur.high, b.high), low: Math.min(cur.low, b.low), close: b.close, volume: cur.volume + b.volume } : { ...b };
-      if (cur.high - cur.low >= box) { out.push({ ...cur, time: Math.max(b.time, (out.at(-1)?.time ?? -Infinity) + 1) }); cur = null; }
+      if (cur.high - cur.low >= boxes[i]!) { out.push({ ...cur, time: Math.max(b.time, (out.at(-1)?.time ?? -Infinity) + 1) }); cur = null; }
     }
     return out;
   }
   if (style === "kagi" || style === "pnf") {
     // Kagi: one segment per swing, reversing after a one-box move against the extreme. Point and figure: columns in whole boxes, reversing after three.
-    const rev = style === "pnf" ? 3 * box : box, snap = (x: number) => (style === "pnf" ? Math.floor(x / box) * box : x);
-    let start = snap(src[0]!.close), end = start, up = src[1]!.close >= src[0]!.close, t = src[0]!.time, vol = 0;
-    for (const b of src.slice(1)) {
+    const snap = (x: number, box: number) => (style === "pnf" ? Math.floor(x / box) * box : x);
+    let start = snap(src[0]!.close, boxes[0]!), end = start, up = src[1]!.close >= src[0]!.close, t = src[0]!.time, vol = 0;
+    for (let i = 1; i < src.length; i++) {
+      const b = src[i]!, box = boxes[i]!, rev = style === "pnf" ? 3 * box : box;
       vol += b.volume;
-      const x = snap(b.close);
+      const x = snap(b.close, box);
       if (up ? x > end : x < end) end = x;
       else if (up ? end - b.close >= rev : b.close - end >= rev) { out.push(seg(t, start, end, vol)); start = end; end = style === "pnf" ? x + (up ? box : 0) : b.close; up = !up; t = b.time; vol = 0; }
     }
@@ -127,7 +139,10 @@ export function transformBars(src: Ohlcv[], style: string): Ohlcv[] {
   }
   if (style === "renko") {
     let last = src[0]!.close;
-    for (const b of src) {
+    for (const [i, b] of src.entries()) {
+      const box = boxes[i]!;
+      // One gap can be thousands of boxes; check the cap before generating them.
+      if (out.length + Math.abs(b.close - last) / box > MAX_BRICKS) return fail(`More than ${MAX_BRICKS.toLocaleString()} bricks; showing candles`);
       let k = 0;
       while (b.close >= last + box) { out.push({ time: b.time + k++, open: last, high: last + box, low: last, close: last + box, volume: k === 1 ? b.volume : 0 }); last += box; }
       while (b.close <= last - box) { out.push({ time: b.time + k++, open: last, high: last, low: last - box, close: last - box, volume: k === 1 ? b.volume : 0 }); last -= box; }
@@ -137,7 +152,7 @@ export function transformBars(src: Ohlcv[], style: string): Ohlcv[] {
   // Three-line break: a new line only when the close breaks the high or low of the last three lines.
   out.push({ ...src[0]!, open: src[0]!.open, high: Math.max(src[0]!.open, src[0]!.close), low: Math.min(src[0]!.open, src[0]!.close) });
   for (const b of src.slice(1)) {
-    const prev = out.slice(-3), top = Math.max(...prev.map((x) => x.high)), bot = Math.min(...prev.map((x) => x.low)), l = out.at(-1)!;
+    const prev = out.slice(-3), top = minMax(prev.map((x) => x.high))[1], bot = minMax(prev.map((x) => x.low))[0], l = out.at(-1)!;
     const up = l.close >= l.open;
     if (b.close > (up ? l.close : top)) out.push({ time: b.time, open: up ? l.close : l.open, high: b.close, low: up ? l.close : l.open, close: b.close, volume: b.volume });
     else if (b.close < (up ? bot : l.close)) out.push({ time: b.time, open: up ? l.open : l.close, high: up ? l.open : l.close, low: b.close, close: b.close, volume: b.volume });
@@ -155,10 +170,21 @@ const pushChart = () => { clearTimeout(pushTimer); pushTimer = setTimeout(() => 
   void studio("PUT", "/build/prefs/chart", out).catch(() => undefined);
 }, 1200); };
 const readView = (): View => { try { return { style: "candles", scale: "price", dw: false, blind: false, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}") }; } catch { return { style: "candles", scale: "price", dw: false, blind: false }; } };
+/** RFC 4180 CSV. Numbers stay numbers; text starting with = + - @ (or tab/CR) gets a leading apostrophe so spreadsheets do not run it as a formula. */
+export const csvCell = (v: unknown) => {
+  if (typeof v === "number") return Number.isFinite(v) ? String(v) : "";
+  if (v == null) return "";
+  const t = /^[=+\-@\t\r]/.test(String(v)) ? `'${v}` : String(v);
+  return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+};
+export const toCsv = (rows: unknown[][]) => rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
 const download = (name: string, href: string) => { const a = document.createElement("a"); a.href = href; a.download = name; a.click(); if (href.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(href)); };
 
 /** The Chart page's engine over the preview window: trades, ctx.plot series, the paused bar, and replay controls that drive the debugger. */
 const NO_NOTES: string[] = [];
+const NO_BARS: Record<string, Bar[]> = {};
+const TF = "1d";
+const ck = (s: string) => `${s}|${TF}`;
 export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing, speed, onPlay, onSpeed, onGo, onMark, onNote, notes = NO_NOTES, drawKey, max, onMax, onAddIndicator }: {
   symbol: string; prev: DevPreview | null; drawKey: string; pausedAt: string | null; playing: boolean; speed: number;
   onPlay: (on: boolean) => void; onSpeed: (s: number) => void; onGo: (date: string | null, step?: 1 | -1) => void; onMark?: (date: string) => void; onNote?: (date: string) => void; notes?: string[]; max?: boolean; onMax?: () => void; onAddIndicator?: (ind: IndicatorInfo) => void;
@@ -186,7 +212,8 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   const [view, setView] = useState<View>(readView);
   const setV = (p: Partial<View>) => setView((v) => { const n = { ...v, ...p }; try { localStorage.setItem(VIEW_KEY, JSON.stringify(n)); pushChart(); } catch { /* private mode */ } return n; });
   const [compare, setCompare] = useState<string[]>([]);
-  const [cmpBars, setCmpBars] = useState<Record<string, Bar[]>>({});
+  // Compare and spread bars, keyed symbol|timeframe and dropped when the main chart's date range changes.
+  const [cmpCache, setCmpCache] = useState<{ range: string; bars: Record<string, Bar[]> }>({ range: "", bars: {} });
   // Spread or ratio against one other symbol, with its rolling 60-day return correlation.
   const [spread, setSpread] = useState<{ sym: string; mode: "ratio" | "diff" } | null>(null);
   const [grid, setGrid] = useState(false);
@@ -195,10 +222,6 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   const TPL_KEY = "studio:chart:templates";
   const [templates, setTemplates] = useState<Record<string, View & { compare: string[] }>>(() => { try { return JSON.parse(localStorage.getItem(TPL_KEY) ?? "{}"); } catch { return {}; } });
   const saveTemplates = (t: typeof templates) => { setTemplates(t); try { localStorage.setItem(TPL_KEY, JSON.stringify(t)); pushChart(); } catch { /* private mode */ } };
-  useEffect(() => {
-    const want = [...compare, ...(spread ? [spread.sym] : [])].filter((c) => !cmpBars[c]); if (!want.length) return;
-    void studio<{ bars: Record<string, Bar[]> }>("GET", `/bars?symbols=${encodeURIComponent(want.join(","))}&tf=1d`).then((d) => setCmpBars((x) => ({ ...x, ...d.bars })), () => undefined);
-  }, [compare, spread?.sym]); // eslint-disable-line react-hooks/exhaustive-deps
   // The server copy lands in storage first; then view, templates and watchlist re-read it and the chart reloads drawings.
   const [synced, setSynced] = useState(false);
   useEffect(() => { void pullChart().then(() => {
@@ -229,7 +252,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     const cols = [...new Set((prev?.trades ?? []).map((t) => String(t.exit_date).slice(0, 7)))].sort();
     const cell = new Map<string, number>();
     for (const t of prev?.trades ?? []) { const k = `${String(t.symbol ?? symbol).toUpperCase()}|${String(t.exit_date).slice(0, 7)}`; cell.set(k, (cell.get(k) ?? 0) + (Number(t.return) || 0)); }
-    const max = Math.max(1e-9, ...[...cell.values()].map(Math.abs));
+    const max = Math.max(1e-9, minMax([...cell.values()].map(Math.abs))[1]);
     return { cols, cell, max, rows: perSym.slice(0, 40).map(([k]) => k) };
   }, [drawer, prev?.trades, perSym, symbol]);
   const [readout, setReadout] = useState<import("@luxalgo/vela").DataWindowReadout | null>(null);
@@ -243,6 +266,16 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
 
   const from = prev?.bars?.[0]?.date, to = prev?.bars?.at(-1)?.date;
   const bars = useMemo(() => all.filter((b) => (!from || b.time >= from) && (!to || b.time <= to)), [all, from, to]);
+  const range = `${bars[0]?.time}:${bars.at(-1)?.time}`;
+  const cmpBars = cmpCache.range === range ? cmpCache.bars : NO_BARS;
+  useEffect(() => {
+    const want = [...compare, ...(spread ? [spread.sym] : [])].filter((c) => !cmpBars[ck(c)]); if (!want.length) return;
+    const request = new AbortController();
+    void studio<{ bars: Record<string, Bar[]> }>("GET", `/bars?symbols=${encodeURIComponent(want.join(","))}&tf=${TF}`, undefined, request.signal).then((d) => {
+      if (!request.signal.aborted) setCmpCache((x) => ({ range, bars: { ...(x.range === range ? x.bars : {}), ...Object.fromEntries(Object.entries(d.bars).map(([k, v]) => [ck(k), v])) } }));
+    }, () => undefined);
+    return () => request.abort();
+  }, [compare, spread?.sym, range]); // eslint-disable-line react-hooks/exhaustive-deps
   const at = pausedAt ? bars.findIndex((b) => b.time >= pausedAt) : -1;
   const [hidden, setHidden] = useState<string[]>([]);
   const [own, setOwn] = useState<Record<string, boolean>>({});
@@ -293,13 +326,14 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   const plots = prev?.plots;
   const derived = DERIVED.has(view.style) ? view.style : "";
   const barsKey = `${sym}:${bars.length}:${bars[0]?.time}:${bars.at(-1)?.time}:${derived}`;
+  const chartData = useMemo(() => transformBars(bars.map((b) => ({ time: ms(b.time), open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume })), derived), [bars, derived]);
   useEffect(() => {
     const el = box.current; if (!el || !bars.length) return;
     let dead = false, c: VelaChart | null = null;
     void (booted ??= boot()).then(({ Vela, createTheme }) => {
       if (dead) return;
       const up = cv("--up", el), down = cv("--down", el);
-      c = new Vela(el, { data: transformBars(bars.map((b) => ({ time: ms(b.time), open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume })), derived), timeframe: "1d", theme: createTheme({ colors: { background: cv("--island", el), accent: cv("--s1", el) } }), upColor: up, downColor: down, height: el.clientHeight, drawings: { groups: TOOL_GROUPS } });
+      c = new Vela(el, { data: chartData, timeframe: "1d", theme: createTheme({ colors: { background: cv("--island", el), accent: cv("--s1", el) } }), upColor: up, downColor: down, height: el.clientHeight, drawings: { groups: TOOL_GROUPS } });
       void c.ready().then(() => { if (dead) return; c!.renderer.set("attribution", false); handles.current.clear(); c!.addNativeIndicator("atlas.spans"); setChart(c); });
     });
     let frame = 0;
@@ -323,10 +357,10 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   useEffect(() => {
     if (!chart) return;
     // Compare symbols ride on the price pane as plain series; the Percent or Indexed scale rebases them with price.
-    const cmp = Object.fromEntries(compare.filter((c) => cmpBars[c]).map((c) => [c, cmpBars[c]!.map((b) => ({ date: b.time, symbol: null, value: b.close }))]));
+    const cmp = Object.fromEntries(compare.filter((c) => cmpBars[ck(c)]).map((c) => [c, cmpBars[ck(c)]!.map((b) => ({ date: b.time, symbol: null, value: b.close }))]));
     const sp: Record<string, { date: string; symbol: null; value: number | null }[]> = {};
-    if (spread && cmpBars[spread.sym]) {
-      const b = new Map(cmpBars[spread.sym]!.map((x) => [x.time, x.close])), pts = bars.filter((x) => b.has(x.time));
+    if (spread && cmpBars[ck(spread.sym)]) {
+      const b = new Map(cmpBars[ck(spread.sym)]!.map((x) => [x.time, x.close])), pts = bars.filter((x) => b.has(x.time));
       sp[`${sym}${spread.mode === "ratio" ? "/" : "−"}${spread.sym}`] = pts.map((x) => ({ date: x.time, symbol: null, value: spread.mode === "ratio" ? x.close / b.get(x.time)! : x.close - b.get(x.time)! }));
       const ra = pts.map((x, i) => (i ? x.close / pts[i - 1]!.close - 1 : 0)), rb = pts.map((x, i) => (i ? b.get(x.time)! / b.get(pts[i - 1]!.time)! - 1 : 0));
       sp[`Corr 60d ${spread.sym}`] = pts.map((x, i) => {
@@ -463,8 +497,8 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
   }, [chart, view.blind, pausedAt]);
   const exportCsv = () => {
     const names = Object.keys(plots ?? {}), by = names.map((n) => new Map((plots?.[n] ?? []).filter((p) => !p.symbol || p.symbol === sym).map((p) => [p.date, p.value])));
-    const rowsOut = bars.map((b) => [b.time, b.open, b.high, b.low, b.close, b.volume, ...by.map((m) => m.get(b.time) ?? "")].join(","));
-    download(`${sym}.csv`, URL.createObjectURL(new Blob([["date,open,high,low,close,volume", ...names].join(",") + "\n" + rowsOut.join("\n")], { type: "text/csv" })));
+    const rowsOut = bars.map((b) => [b.time, b.open, b.high, b.low, b.close, b.volume, ...by.map((m) => m.get(b.time))]);
+    download(`${sym}.csv`, URL.createObjectURL(new Blob([toCsv([["date", "open", "high", "low", "close", "volume", ...names], ...rowsOut])], { type: "text/csv" })));
   };
   const exportPng = () => { const url = chart?.renderer.screenshot(); if (url) download(`${sym}.png`, url); };
 
@@ -507,6 +541,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
           </div>
         </details>
         {onAddIndicator ? <button type="button" className="btn sm ghost dv-ind-btn" aria-pressed={picker} title="Indicators (/)" onClick={() => setPicker((x) => !x)}><SquareFunction size={15} />Indicators</button> : null}
+        {chartData.invalid ? <span className="dv-count" role="status">{chartData.invalid}</span> : null}
         <span className="dv-chartbar-gap" />
         {rows.length || perSym.length ? <button type="button" className="icon-btn" aria-label="Symbols, months and regimes" aria-pressed={!!drawer} title="Symbols, months and regimes" onClick={() => setDrawer((d) => (d ? null : "symbols"))}><List size={15} /></button> : null}
         <button type="button" className="icon-btn" aria-label="Chart settings" title="Chart settings" aria-pressed={settingsOpen !== null} onClick={() => setSettingsOpen("Display")}><Settings2 size={15} /></button>

@@ -13,6 +13,7 @@ export function ChartGrid({ symbols, theme }: { symbols: string[]; theme: { back
   const [layout, setLayout] = useState<string>(symbols.length > 4 ? "8" : symbols.length > 2 ? "4" : "2v");
   const [sync, setSync] = useState({ crosshair: true, viewport: true });
   const [bars, setBars] = useState<Record<string, Bar[]> | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const cells = symbols.slice(0, LAYOUTS.find(([l]) => l === layout)?.[1] ?? 4);
   const key = cells.join(",");
   useEffect(() => {
@@ -22,7 +23,9 @@ export function ChartGrid({ symbols, theme }: { symbols: string[]; theme: { back
   }, [key]);
   useEffect(() => {
     const el = box.current; if (!el || !bars) return;
+    // `dead` is this run's generation token: a late import or creation from an earlier run never mounts.
     let dead = false, ws: { destroy: () => void } | null = null;
+    setFailed(null);
     void Promise.all([import("@luxalgo/vela/workspace"), import("@luxalgo/vela")]).then(([{ VelaWorkspace }, { createTheme }]) => {
       if (dead) return;
       ws = new VelaWorkspace(el, {
@@ -30,7 +33,7 @@ export function ChartGrid({ symbols, theme }: { symbols: string[]; theme: { back
         cells: Object.fromEntries(cells.map((s, i) => [`c${i}`, { symbol: s, timeframe: "1d", data: (bars[s] ?? []).map((b) => ({ time: Date.parse(b.time), open: b.open, high: b.high, low: b.low, close: b.close, volume: b.volume })) }])),
         sync: { crosshair: sync.crosshair, viewport: sync.viewport },
       });
-    });
+    }).catch((e: Error) => { if (!dead) setFailed(e.message); });
     return () => { dead = true; ws?.destroy(); };
   }, [bars, layout, sync, theme]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
@@ -40,7 +43,7 @@ export function ChartGrid({ symbols, theme }: { symbols: string[]; theme: { back
         <label className="dv-check"><input type="checkbox" checked={sync.crosshair} onChange={(e) => setSync((x) => ({ ...x, crosshair: e.target.checked }))} />Sync crosshair</label>
         <label className="dv-check"><input type="checkbox" checked={sync.viewport} onChange={(e) => setSync((x) => ({ ...x, viewport: e.target.checked }))} />Sync time</label>
       </div>
-      <div className="dv-grid-ws" ref={box}>{bars ? null : <p className="dv-empty">Loading bars</p>}</div>
+      <div className="dv-grid-ws" ref={box}>{failed ? <p className="dv-empty">Chart failed: {failed}</p> : bars ? null : <p className="dv-empty">Loading bars</p>}</div>
     </div>
   );
 }

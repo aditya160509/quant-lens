@@ -12,7 +12,10 @@ import { drawdown, monthly, returns, rollingSharpe, stats, topDrawdowns } from "
 
 const SECTIONS = ["Statistics", "Monthly returns", "Drawdown", "Rolling Sharpe", "Distribution"] as const;
 const KEY = "studio:dev:tearsheet";
-const pc = (v: number) => `${(v * 100).toFixed(1)}%`;
+const pc = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1)}%`);
+const fx = (v: number | null) => (v === null ? "—" : v.toFixed(2));
+const ANNUAL = "Annualised over 252 periods a year with a zero risk-free rate";
+const TIPS: Record<string, string> = { CAGR: "Compound annual growth from first to last equity, by calendar days", Sharpe: ANNUAL, Sortino: `${ANNUAL}; downside deviation only`, Calmar: "CAGR over max drawdown", Volatility: ANNUAL };
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** One scrollable page over a finished run: statistics, monthly returns, drawdowns, rolling Sharpe, return distribution. */
@@ -30,7 +33,7 @@ export function DevTearsheet({ quick }: { quick: QuickRun | null }) {
   const on = (n: string) => !off.includes(n);
   const rate = (trades.length ? trades.filter((t) => Number(t.pnl) > 0).length / trades.length : 0);
   const gain = trades.reduce((a, t) => a + Math.max(0, Number(t.pnl)), 0), loss = trades.reduce((a, t) => a + Math.min(0, Number(t.pnl)), 0);
-  const cards: [string, string][] = [["CAGR", pc(s.cagr)], ["Sharpe", s.sharpe.toFixed(2)], ["Sortino", s.sortino.toFixed(2)], ["Max drawdown", pc(s.maxdd)], ["Calmar", s.calmar.toFixed(2)], ["Volatility", pc(s.vol)], ["Best day", pc(s.best)], ["Worst day", pc(s.worst)],
+  const cards: [string, string][] = [["CAGR", pc(s.cagr)], ["Sharpe", fx(s.sharpe)], ["Sortino", fx(s.sortino)], ["Max drawdown", pc(s.maxdd)], ["Calmar", fx(s.calmar)], ["Volatility", pc(s.vol)], ["Best day", pc(s.best)], ["Worst day", pc(s.worst)],
     ["Win rate", pc(rate)], ["Profit factor", loss ? (gain / -loss).toFixed(2) : "—"]];
   return (
     <div className="dv-tear">
@@ -38,8 +41,8 @@ export function DevTearsheet({ quick }: { quick: QuickRun | null }) {
         <summary className="icon-btn" aria-label="Sections" title="Sections"><Settings2 size={14} /></summary>
         <div className="dv-menu" role="menu">{SECTIONS.map((n) => <button key={n} role="menuitemcheckbox" aria-checked={on(n)} onClick={() => toggle(n)}>{n}</button>)}</div>
       </details>
-      {on("Statistics") ? <div className="dv-cards">{cards.map(([k, v]) => <span key={k}><i>{k}</i><b>{v}</b></span>)}</div> : null}
-      {on("Monthly returns") && mo.years.length ? <div className="dv-plot"><b>Monthly returns</b><Heatmap rows={mo.years} cols={MONTHS} values={mo.values} format={(v) => pc(v)} /></div> : null}
+      {on("Statistics") ? <div className="dv-cards">{cards.map(([k, v]) => <span key={k} title={TIPS[k]}><i>{k}</i><b>{v}</b></span>)}</div> : null}
+      {on("Monthly returns") && mo.years.length ? <div className="dv-plot"><b>Monthly returns</b><Heatmap rows={mo.years} cols={MONTHS} values={mo.values} format={pc} /></div> : null}
       {on("Drawdown") ? <div className="dv-plot"><b>Underwater</b>
         <TimeSeries data={dd} height={160} series={[{ key: "dd", label: "Drawdown", color: SERIES[1] }]} />
         <DataTable rows={worst.map((d, i) => ({ rank: i + 1, depth: d.depth, start: d.start, trough: d.trough, recovered: d.end ?? "open", days: Math.round(d.days) }))} /></div> : null}
