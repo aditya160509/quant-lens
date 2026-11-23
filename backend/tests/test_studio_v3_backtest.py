@@ -1229,3 +1229,35 @@ def test_timeframe_returns_only_completed_weeks():
     assert week["close"][0] == 5.0 and week["open"][0] == 1.0 and week["volume"][0] == 5.0
     ctx._t = 14
     assert [ctx.timeframe("W")["close"][-i] for i in (1, 0)] == [5.0, 10.0]
+
+
+def test_waterfall_sums_to_net_pnl_and_costs_split(studio):
+    out = backtest.run_backtest(Strategy(**SMA), Settings(**SETTINGS))
+    steps = {x["step"]: x["value"] for x in out["tables"]["attribution"]}
+    net = sum(t["pnl"] for t in out["tables"]["trades"])
+    assert steps["Gross gains"] + steps["Gross losses"] + steps["Commissions and borrow"] + steps["Slippage"] == pytest.approx(net, abs=1e-6)
+    assert steps["Net P&L"] == pytest.approx(net, abs=1e-6) and steps["Commissions and borrow"] < 0 and steps["Slippage"] < 0
+    free = backtest.run_backtest(Strategy(**SMA), Settings(**SETTINGS, costs=Costs(commission_bps=0, slippage_bps=0, borrow_bps=0)))
+    assert {x["step"]: x["value"] for x in free["tables"]["attribution"]}["Slippage"] == 0
+
+
+def test_side_equity_stats_and_event_study(studio):
+    out = backtest.run_backtest(Strategy(**SMA), Settings(**SETTINGS))
+    stats = {x["side"]: x for x in out["tables"]["side_stats"]}
+    assert stats["all"]["net_pnl"] == pytest.approx(stats["long"]["net_pnl"] + stats["short"]["net_pnl"])
+    last = out["charts"]["side_equity"][-1]
+    assert last["all"] == pytest.approx(100_000 + stats["all"]["net_pnl"]) and last["long"] == pytest.approx(100_000 + stats["long"]["net_pnl"])
+    es = out["charts"]["event_study"]
+    assert [x["offset"] for x in es] == list(range(-20, 21)) and es[20]["mean"] == 0 and es[20]["coverage"] == 1 and all(0 <= x["coverage"] <= 1 for x in es)
+
+
+def test_run_settings_and_benchmark_modes(studio):
+    out = backtest.run_backtest(Strategy(**SMA), Settings(**SETTINGS))
+    rows = {(x["group"], x["setting"]): x["value"] for x in out["tables"]["run_settings"]}
+    assert rows[("Run", "engine_version")] == engine.ENGINE_VERSION and rows[("Run", "data_version")] == "fixture" and rows[("Run", "universe_size")] == 4
+    assert rows[("Inputs", "benchmark_mode")] == "ticker" and rows[("Parameters", "fast")] == 10
+    for mode, label in (("equal_weight", "Equal weight"), ("cash", "Cash")):
+        o = backtest.run_backtest(Strategy(**SMA), Settings(**SETTINGS, benchmark_mode=mode))
+        assert o["meta"]["benchmark"] == label and o["charts"]["equity_curve"][0]["benchmark"] == 100_000
+        assert o["meta"]["total_return"] == out["meta"]["total_return"]
+    assert o["charts"]["equity_curve"][-1]["benchmark"] == 100_000
