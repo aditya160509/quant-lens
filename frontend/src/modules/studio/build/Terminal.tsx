@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import toast from "react-hot-toast";
 import { copyText, studio } from "../api";
+import { toCsv } from "./DevChart";
 
 /** One command and its result, shown as a block with a status, a duration and its output. */
 type Block = { id: number; cmd: string; status: "run" | "ok" | "err"; ms: number; out: string; value?: unknown; plots?: unknown[]; at: string };
@@ -22,6 +23,10 @@ export type TerminalHost = {
   /** Bumped on every save: tasks added with --on-save run then. */ saved: number;
   split?: { on: boolean; toggle: () => void };
   /** Code sent from the editor (Run selection in Console); runs when n changes. */ inject?: { cmd: string; n: number };
+  /** The latest preview, bound in the console as `trades` and `plots` (DataFrames) and `paused` (the debugger's bar). */
+  context?: { trades: unknown[]; plots: Record<string, unknown[]> };
+  /** Save and open a Studio feature page on this strategy (Optimise, Validate). */ open?: (fid: string, slug: string) => void;
+  /** Run an IDE action by id; false when there is no such action. */ action?: (id: string) => boolean;
 };
 
 const HELP = `atlas run [quick|full] [--symbols A,B] [--top 50] [--from 2018-01-01] [--to 2024-12-31] [--costs "US retail"] [--fill same_close]
@@ -30,15 +35,24 @@ atlas cells <file> [n]      run the # %% cells of a file up to cell n
 atlas check [file]          lint a file
 atlas preview               refresh the preview
 atlas compare SPY,QQQ,IWM   preview each symbol and compare return, trades, win rate
+atlas optimise              save and open Optimise on this strategy
+atlas validate              save and open Validate (walk-forward, holdout, PBO);  atlas walkforward  same
+atlas robust                Monte Carlo on the preview's trades
+atlas data SPY              data coverage: first and last bar, gaps, issues
+atlas export trades.csv     download the preview's trades
 atlas task add <name> [--on-save] <cmd && cmd>   save a task (--on-save: run it on every save);  atlas task <name>  run it;  atlas task list | rm <name>
 clear                       clear the blocks;  reset  forget the Python session
 Ctrl+R search history · Ctrl+↑/↓ jump between commands
 Anything else is Python, run in a session that keeps its variables; load, plot, sql, np and pd are ready.
 While the debugger is paused, plain input is a formula evaluated at the paused bar.`;
 const PRELUDE = "from studio.research import load, plot, sql\nimport numpy as np\nimport pandas as pd";
-const COMMANDS = ["atlas run quick", "atlas run full", "atlas run quick --symbols ", "atlas run quick --from ", "atlas test", "atlas cells", "atlas check", "atlas preview", "atlas compare ", "atlas task list", "atlas task add ", "atlas task add --on-save ", "atlas help", "clear", "reset"];
+const COMMANDS = ["atlas run quick", "atlas run full", "atlas run quick --symbols ", "atlas run quick --from ", "atlas test", "atlas cells", "atlas check", "atlas preview", "atlas compare ", "atlas task list", "atlas task add ", "atlas task add --on-save ", "atlas optimise", "atlas validate", "atlas robust", "atlas data ", "atlas export trades.csv", "atlas help", "clear", "reset"];
 const TERM_COLORS = ["blue", "green", "amber", "red", "violet"];
-const SUBS = ["run", "test", "cells", "check", "preview", "compare", "task", "help"];
+const SUBS = ["run", "test", "cells", "check", "preview", "compare", "task", "help", "optimise", "validate", "walkforward", "robust", "data", "export"];
+/** A JSON-like value as a Python literal (the sandbox has no json module); non-finite numbers become None. */
+export const py = (v: unknown): string => v === null || v === undefined ? "None" : typeof v === "boolean" ? (v ? "True" : "False")
+  : typeof v === "number" ? (Number.isFinite(v) ? String(v) : "None") : typeof v === "string" ? JSON.stringify(v)
+  : Array.isArray(v) ? `[${v.map(py).join(", ")}]` : typeof v === "object" ? `{${Object.entries(v).map(([k, x]) => `${JSON.stringify(k)}: ${py(x)}`).join(", ")}}` : "None";
 /** Edit distance, for "did you mean". */
 function dist(a: string, b: string) {
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
@@ -81,7 +95,7 @@ export function Terminal({ host }: { host: TerminalHost }) {
   const [tasks, setTasks] = useState<Record<string, string>>(() => load("studio:tasks", {}));
   // shortcut: the Python session is replayed from its saved statements on every input (no live kernel); fine for research-sized work.
   const [session, setSession] = useState<string[]>(() => load(`studio:repl:${host.storeKey}`, []));
-  const taskStack = useRef<string[]>([]);
+  const taskStack = useRef<string[]>([]), sentCtx = useRef("");
   const hist = useRef(-1), seq = useRef(0), end = useRef<HTMLDivElement>(null), box = useRef<HTMLDivElement>(null);
   const [history, setHistory] = useState<string[]>(() => load("studio:termhist", []));
   const [pins, setPins] = useState<string[]>(() => load("studio:termpins", []));
@@ -119,8 +133,12 @@ export function Terminal({ host }: { host: TerminalHost }) {
     const file = "__session__.py", key = `console:${host.storeKey}`;
     const syms = [...new Set([host.symbol, ...[...[...session, src].join("\n").matchAll(/load\(\s*["']([\w.^=-]+)["']/g)].map((m) => m[1]!.toUpperCase())])].slice(0, 5);
     const call = (cells: string[], run: number[]) => studio<{ outputs: CellRow[]; restarted: boolean }>("POST", "/build/kernel", { key, ...project(), files: { ...host.extra, [file]: [PRELUDE, ...cells].map((c) => `# %%\n${c}`).join("\n") }, file, cells: run, symbols: syms });
-    let r = await call([src], [1]);
-    if (r.restarted) r = await call([...session, src], [...Array(session.length + 2).keys()]);
+    // The preview's trades, plots and paused bar are re-bound only when they change since the last statement.
+    const c = host.context, ctx = `trades = pd.DataFrame(${py(c?.trades ?? [])})\nplots = {k: pd.DataFrame(v) for k, v in ${py(c?.plots ?? {})}.items()}\npaused = ${py(host.paused)}`;
+    const fresh = ctx !== sentCtx.current;
+    let r = fresh ? await call([ctx, src], [1, 2]) : await call([src], [1]);
+    if (r.restarted) r = await call([ctx, ...session, src], [...Array(session.length + 3).keys()]);
+    sentCtx.current = ctx;
     const last = r.outputs.at(-1);
     if (last?.error) return { status: "err" as const, out: `${last.stdout}${last.error}` };
     setSession((x) => [...x, src]);
@@ -150,6 +168,23 @@ export function Terminal({ host }: { host: TerminalHost }) {
       return { status: "ok", out: table.map((r) => r.map((x, c) => (c ? x.padStart(w[c]!) : x.padEnd(w[c]!))).join("  ")).join("\n") };
     }
     if (sub === "preview") { host.preview(); return { status: "ok", out: "Preview refreshed" }; }
+    if (sub === "optimise" || sub === "optimize") { if (!host.open) return { status: "err", out: "Optimise opens from the Build page" }; host.open("st02", "optimise"); return { status: "ok", out: "Saving and opening Optimise" }; }
+    if (sub === "validate" || sub === "walkforward") { if (!host.open) return { status: "err", out: "Validate opens from the Build page" }; host.open("st03", "validate"); return { status: "ok", out: "Saving and opening Validate (walk-forward, holdout, PBO)" }; }
+    if (sub === "robust") return host.action?.("studio.robust") ? { status: "ok", out: "Robustness opened beside the code" } : { status: "err", out: "Robustness is not available here" };
+    if (sub === "data") {
+      const sym = (rest[0] ?? host.symbol).toUpperCase();
+      const d = await studio<{ symbol: string; first: string; last: string; bars: number; gaps: number; missing: number; bad: number; dups: number; stale: number; issues_total: number }>("GET", `/data/symbols/${encodeURIComponent(sym)}`);
+      return { status: d.issues_total ? "err" : "ok", out: `${d.symbol}  ${d.first} to ${d.last}  ${d.bars} bars\ngaps ${d.gaps}  missing ${d.missing}  bad ${d.bad}  duplicates ${d.dups}  stale ${d.stale}  issues ${d.issues_total}` };
+    }
+    if (sub === "export") {
+      const rows = (host.context?.trades ?? []) as Record<string, unknown>[];
+      if (!rows.length) return { status: "err", out: "No trades in the preview to export" };
+      const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+      const a = document.createElement("a"), name = rest[0] ?? "trades.csv";
+      a.href = URL.createObjectURL(new Blob([toCsv([cols, ...rows.map((r) => cols.map((c) => r[c]))])], { type: "text/csv" }));
+      a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href));
+      return { status: "ok", out: `Downloaded ${name}: ${rows.length} trades, ${cols.length} columns` };
+    }
     if (sub === "test") {
       const r = await studio<{ tests: TestRow[] }>("POST", "/build/test", { ...project(), ...(rest[0] ? { file: rest[0] } : {}) });
       const bad = r.tests.filter((t) => t.status !== "passed");

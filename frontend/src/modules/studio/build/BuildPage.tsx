@@ -375,13 +375,15 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
     finally { saveInFlight.current = false; }
   }, [loaded, spec, router, ui, readOnly]);
 
-  const run = useCallback(async () => {
+  // Save, then open a Studio feature page (Backtest, Optimise, Validate) on this strategy and start it.
+  const openFeature = useCallback(async (fid = "st01", slug = "backtest") => {
     const sid = await save(); if (!sid) return;
     try { localStorage.setItem("studio:strategy", sid); } catch { /* storage blocked */ }
-    const f = features.find((x) => x.id === "st01");
-    if (f) useStudies.getState().setForm("st01", (cur) => ({ ...cur, strategy_id: sid }), defaultsFor(f));
-    router.push("/studio/backtest?go=1");
+    const f = features.find((x) => x.id === fid);
+    if (f) useStudies.getState().setForm(fid, (cur) => ({ ...cur, strategy_id: sid }), defaultsFor(f));
+    router.push(`/studio/${slug}?go=1`);
   }, [save, features, router]);
+  const run = useCallback(() => openFeature(), [openFeature]);
 
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
@@ -625,7 +627,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
         </section>
       ) : null}
       {ui === "dev" ? <DevIDE tools={headRight} settings={(extra, start, close) => <CustomiseDialog spec={spec} onClose={close} start={start} sections={[...extra, ["Project", projectPage]]} font={font} onFont={(v) => { setFont(v); try { localStorage.setItem("studio:dev:font", String(v)); } catch { /* blocked */ } }} />} canRun={!!spec.code.trim() || ROLES.some(([role]) => !!String(spec[role] ?? "").trim())} starting={starting} onPreview={() => setNudge((n) => n + 1)} spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} compileProblems={compileProblems}
-        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={(d, l) => { setPausedAt(d); setPausedLabel(l ?? "❚❚"); }} font={font} savedFiles={loaded ? { "main.py": (loaded.spec as Spec).code ?? "", ...(((loaded.spec as Spec).files as Record<string, string>) ?? {}) } : undefined} quick={quick} onQuickRun={(l, st) => void quickRun(l, st)} logpoints={logpoints} onLogpoints={setLogpoints} coverage={coverage} onCoverage={setCoverage} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid" data-compact={readDefaults().compact || undefined} data-plain={readDefaults().plain || undefined}>
+        strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={(d, l) => { setPausedAt(d); setPausedLabel(l ?? "❚❚"); }} font={font} savedFiles={loaded ? { "main.py": (loaded.spec as Spec).code ?? "", ...(((loaded.spec as Spec).files as Record<string, string>) ?? {}) } : undefined} quick={quick} onQuickRun={(l, st) => void quickRun(l, st)} logpoints={logpoints} onLogpoints={setLogpoints} coverage={coverage} onCoverage={setCoverage} onCancel={cancelRun} onOpenFeature={(fid, slug) => void openFeature(fid, slug)} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid" data-compact={readDefaults().compact || undefined} data-plain={readDefaults().plain || undefined}>
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
             {(["blocks", "formula", "english"] as const).map((m) => <button key={m} role="tab" aria-selected={mode === m && !spec.code.trim()} className={`btn sm${mode === m && !spec.code.trim() ? " on" : ""}`} onClick={() => switchMode(m)}>{{ blocks: "Blocks", formula: "Formula", english: "Plain English" }[m]}</button>)}

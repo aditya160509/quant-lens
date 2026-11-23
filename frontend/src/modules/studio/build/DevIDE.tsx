@@ -183,11 +183,11 @@ function finder(query: string, opt: { regex: boolean; caseSensitive: boolean; wo
 }
 
 /** Build › Dev: a project rail, the editor in tabs, Problems / Output / Plots / Trades / Debug below, preview and checks on the right, a status bar. */
-export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun, starting, onPreview, onSave, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel, savedFiles, logpoints = [], onLogpoints, coverage = false, onCoverage }: {
+export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun, starting, onPreview, onSave, compileProblems, strategyId, versions, runs, saved, trial, readOnly, onReload, version, stale, onPause, font, quick, onQuickRun, onCancel, onOpenFeature, savedFiles, logpoints = [], onLogpoints, coverage = false, onCoverage }: {
   tools?: ReactNode; settings?: (pages: [string, ReactNode][], start: string | undefined, close: () => void) => ReactNode; spec: Spec; edit: (next: Partial<Spec>) => void; symbol: string; prev: DevPreview | null; side: ReactNode; canRun: boolean; starting: boolean; onPreview: () => void;
   onSave: () => void; compileProblems: Problem[];
   strategyId?: string; versions: Version[]; runs: Record<string, RunSum>; saved: Saved; trial?: ReactNode; readOnly?: boolean; onReload?: () => void; version?: number; stale?: boolean; onPause?: (date: string | null, label?: string) => void; font?: number; savedFiles?: Record<string, string>;
-  quick?: QuickRun | null; onQuickRun: (level: "quick" | "full", settings?: Record<string, unknown>) => void; onCancel?: () => void; logpoints?: Logpoint[]; onLogpoints?: (l: Logpoint[]) => void; coverage?: boolean; onCoverage?: (on: boolean) => void;
+  quick?: QuickRun | null; onQuickRun: (level: "quick" | "full", settings?: Record<string, unknown>) => void; onCancel?: () => void; onOpenFeature?: (fid: string, slug: string) => void; logpoints?: Logpoint[]; onLogpoints?: (l: Logpoint[]) => void; coverage?: boolean; onCoverage?: (on: boolean) => void;
 }) {
   // Scratch files live in this browser only: they sit in `files` for the editor but never reach the spec, runs or saves.
   const [scratch, setScratch] = useState<Record<string, string>>(() => { try { return JSON.parse(localStorage.getItem("studio:dev:scratch") ?? "{}"); } catch { return {}; } });
@@ -670,10 +670,10 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
   const [runLog, setRunLog] = useState<RunEntry[]>([]);
   useEffect(() => {
     if (quick?.status !== "completed" || !quick.result?.meta) return;
-    setRunLog((l) => (l.some((r) => r.id === quick.job_id) ? l : [{ id: quick.job_id, label: `Run ${l.length + 1} · ${quick.level}`, at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), pinned: false, run: quick }, ...l].slice(0, 20)));
+    setRunLog((l) => (l.some((r) => r.id === quick.job_id) ? l : [{ id: quick.job_id, label: `Run ${l.length + 1} · ${quick.level}`, at: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), pinned: false, run: quick, settings: lastRun.current?.settings }, ...l].slice(0, 20)));
   }, [quick]);
   const pinRun = (id: string) => setRunLog((l) => l.map((r) => (r.id === id ? { ...r, pinned: !r.pinned } : r)));
-  const renameRun = (id: string) => { const n = window.prompt("Name this run")?.trim(); if (n) setRunLog((l) => l.map((r) => (r.id === id ? { ...r, label: n } : r))); };
+  const renameRun = (id: string, label: string) => setRunLog((l) => l.map((r) => (r.id === id ? { ...r, label } : r)));
   const openView = (v: Exclude<View, "code">) => { setExtra((x) => (x.includes(v) ? x : [...x, v])); setView(v); };
   const closeView = (v: Exclude<View, "code">) => { setExtra((x) => x.filter((y) => y !== v)); if (view === v) setView("code"); };
   useEffect(() => { if (!open_.chart) setPlaying(false); }, [open_.chart]);
@@ -932,7 +932,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
   ));
   const todos = useMemo(() => Object.entries(files).filter(([f]) => !(f in scratch)).flatMap(([f, text]) => text.split("\n").flatMap((line, i) => /#.*\b(TODO|FIXME|XXX)\b/.test(line) ? [{ file: f, line: i + 1, text: line.trim().replace(/^#\s*/, "") }] : [])), [files, scratch]);
   const docRows = (docs ?? []).filter((d) => !docQ || `${d.scope}.${d.name} ${d.documentation ?? ""}`.toLowerCase().includes(docQ.toLowerCase()));
-  const termHost: TerminalHost = { inject: termCmd, files, code: spec.code, extra: spec.files ?? {}, active, symbol, storeKey: strategyId ?? "draft", spec, paused: dbg ? { symbol: dbg.symbol ?? symbol, date: dbg.date } : null, preview: onPreview, goto, saved: savedTick, atDate: (d: string) => { setTab("debug"); debug({ date: d }); },
+  const termHost: TerminalHost = { open: (fid, slug) => onOpenFeature?.(fid, slug), action: (aid) => { const a = actions.find((x) => x.id === aid); if (!a) return false; a.run(1); return true; }, context: { trades: prev?.trades ?? [], plots: prev?.plots ?? {} }, inject: termCmd, files, code: spec.code, extra: spec.files ?? {}, active, symbol, storeKey: strategyId ?? "draft", spec, paused: dbg ? { symbol: dbg.symbol ?? symbol, date: dbg.date } : null, preview: onPreview, goto, saved: savedTick, atDate: (d: string) => { setTab("debug"); debug({ date: d }); },
                   run: (level, settings) => { if (!canRun || starting || running) throw new Error("A run is already going or runs are off here"); const s = { ...rc.settings, ...settings }; openView("results"); lastRun.current = { level, settings: s }; onQuickRun(level, s); },
                   plots: (p) => <CellPlots plots={p as CellPlot[]} />,
                   render: (v) => (tableOf(v) ? <VarGrid t={tableOf(v)!} open /> : typeof v === "object" ? <KV rows={v as Record<string, unknown>} /> : <pre>{show(v)}</pre>) };
