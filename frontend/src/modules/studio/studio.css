@@ -932,3 +932,4 @@
 .dv-strip dd[data-muted] { color: var(--text-3); font-weight: 500; }
 .dv-scope { margin: 0; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .dv-dbar-end { margin-inline-start: auto; display: inline-flex; gap: 6px; }
+.dv-pmore { flex: none; width: auto; height: 26px; margin-inline-end: 4px; }

@@ -941,6 +941,25 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
                   plots: (p) => <CellPlots plots={p as CellPlot[]} />,
                   render: (v) => (tableOf(v) ? <VarGrid t={tableOf(v)!} open /> : typeof v === "object" ? <KV rows={v as Record<string, unknown>} /> : <pre>{show(v)}</pre>) };
   const TABS: [Tab, string, number | null][] = [["tester", "Tester", null], ["problems", "Problems", problems.length], ["output", "Output", prev?.logs?.length ?? null], ["plots", "Plots", plots.length + Object.keys(prev?.tables ?? {}).length || null], ["trades", "Trades", prev?.trades.length ?? null], ["debug", "Debug", null], ["console", "Console", null], ...(hasCells || cellOut ? [["cells", "Cells", null] as [Tab, string, null]] : []), ["preview", "Preview", null]];
+  // Tabs that do not fit the panel width move into a More menu (measured, so it follows panel resizes).
+  const shownTabs = TABS.filter(([k]) => !moved.includes(k));
+  const ptabs = useRef<HTMLDivElement>(null), tabW = useRef<Record<string, number>>({});
+  const [fit, setFit] = useState(99);
+  const tabKeys = shownTabs.map(([k]) => k).join(",");
+  useEffect(() => {
+    const el = ptabs.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      el.querySelectorAll<HTMLElement>("[data-tab]").forEach((b) => { if (!b.hidden) tabW.current[b.dataset.tab!] = b.offsetWidth + 2; });
+      const keys = tabKeys.split(","), room = el.clientWidth - 16, w = (k: string) => tabW.current[k] ?? 96;
+      if (keys.reduce((a, k) => a + w(k), 0) <= room) return setFit(99);
+      let used = 0, n = 0;
+      while (n < keys.length && used + w(keys[n]!) <= room - 72) used += w(keys[n++]!);
+      setFit(Math.max(1, n));
+    };
+    const ro = new ResizeObserver(measure); ro.observe(el); measure();
+    return () => ro.disconnect();
+  }, [tabKeys]);
   const toggles = <span className="dv-toggles">
     <button className="icon-btn" aria-pressed={opt.caseSensitive} title="Match case" onClick={() => setOpt((o) => ({ ...o, caseSensitive: !o.caseSensitive }))}><CaseSensitive size={14} /></button>
     <button className="icon-btn" aria-pressed={opt.word} title="Whole word" onClick={() => setOpt((o) => ({ ...o, word: !o.word }))}><WholeWord size={14} /></button>
@@ -1394,9 +1413,12 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
       <Panel id="tester" minSize={0}>
           <div className="dv-panel" inert={!panelOpen} aria-hidden={!panelOpen}>
             <div className="dv-phead">
-              <div className="dv-ptabs" role="tablist" aria-label="Bottom panel" onDragOver={(e) => { if (e.dataTransfer.types.includes("text/x-studio-view")) e.preventDefault(); }} onDrop={(e) => { const t = e.dataTransfer.getData("text/x-studio-view") as Tab; if (t) { e.preventDefault(); toPanel(t); } }}>
-              {TABS.filter(([k]) => !moved.includes(k)).map(([k, l, n]) => <button key={k} role="tab" aria-selected={tab === k} draggable onDragStart={(e) => e.dataTransfer.setData("text/x-studio-view", k)} onClick={() => setTab(k)}>{l}{n ? <span className="num">{n}</span> : null}</button>)}
+              <div className="dv-ptabs" ref={ptabs} role="tablist" aria-label="Bottom panel" onDragOver={(e) => { if (e.dataTransfer.types.includes("text/x-studio-view")) e.preventDefault(); }} onDrop={(e) => { const t = e.dataTransfer.getData("text/x-studio-view") as Tab; if (t) { e.preventDefault(); toPanel(t); } }}>
+              {shownTabs.map(([k, l, n], i) => <button key={k} data-tab={k} hidden={i >= fit} role="tab" aria-selected={tab === k} draggable onDragStart={(e) => e.dataTransfer.setData("text/x-studio-view", k)} onClick={() => setTab(k)}>{l}{n ? <span className="num">{n}</span> : null}</button>)}
               </div>
+              {fit < shownTabs.length ? <select className="input sm dv-pmore" aria-label="More panel tabs" value={shownTabs.slice(fit).some(([k]) => k === tab) ? tab : ""} onChange={(e) => e.target.value && setTab(e.target.value as Tab)}>
+                <option value="">More</option>{shownTabs.slice(fit).map(([k, l, n]) => <option key={k} value={k}>{l}{n ? ` (${n})` : ""}</option>)}
+              </select> : null}
               <button className="icon-btn" aria-label={panelMax ? "Restore panel" : "Maximise panel"} title={panelMax ? "Restore panel" : "Maximise panel"} onClick={maxTester}>{panelMax ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
               <button className="icon-btn" aria-label="Hide panel" title="Hide panel ⌘J" onClick={() => setPanelOpen(false)}><X size={13} /></button>
             </div>
@@ -1480,7 +1502,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
         {quick && ["queued", "running"].includes(quick.status) ? <span className="dv-runchip">{quick.progress?.partial ? `bar ${quick.progress.partial.bars?.toLocaleString() ?? "…"} · ${quick.progress.partial.symbols ?? "…"} symbols · ${quick.progress.partial.elapsed_seconds?.toFixed(1) ?? "0"} s of ${quick.progress.partial.budget_seconds ?? "…"} s` : `${quick.level} run ${quick.progress?.percent ?? 0}%`}</span> : null}
         {trial}
         {open_.chart ? <a href="https://www.vela.dev" target="_blank" rel="noreferrer">Vela™</a> : null}
-        <span>{prev ? `${prev.status === "ok" ? `preview ${symbol}` : prev.status}${lastPreview ? ` · ${lastPreview}` : ""}` : "no preview"}</span><NotifyBell />
+        <span title={lastPreview ? `Preview ran at ${lastPreview}` : undefined}>{prev ? (prev.status === "ok" ? `${symbol}${prev.bars?.length ? ` · data to ${prev.bars.at(-1)!.date}` : ""}` : prev.status) : "no preview"}</span><NotifyBell />
       </footer>
 
       <dialog ref={qcRef} className="sh-import" aria-label="Open a QuantConnect algorithm" onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>

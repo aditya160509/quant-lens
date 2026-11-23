@@ -197,7 +197,7 @@ function ResearchPanels() {
       <Panel id="center" minSize={460}>
         <Group orientation="vertical" id={`${L.id}-rows-v2`} className={animate ? "ws-animate" : undefined} defaultLayout={inner.defaultLayout} onLayoutChanged={inner.onLayoutChanged}>
           <Panel id="results" minSize={260}>
-            <div style={{ position: "relative", height: "100%", display: "flex" }}>{center}<RunsPill runs={runs} /></div>
+            <div style={{ position: "relative", height: "100%", display: "flex" }}>{center}{special?.id === "build" ? null : <RunsPill runs={runs} />}</div>
           </Panel>
           <Separator className="ws-sep h" />
           <Panel id="dock" panelRef={bottom.panelRef} onResize={bottom.onResize} defaultSize={bottom.defaultOpen ? 220 : 0} minSize={120} maxSize="85%" collapsible collapsedSize={0}>
@@ -433,7 +433,7 @@ function RunsPill({ runs }: { runs: RunRecord[] }) {
   const failed = runs.filter((r) => r.status === "failed").length;
   return (
     <button type="button" className="runs-pill" aria-keyshortcuts="Meta+J" onClick={() => useLayout.getState().set("bottom", true, true)}>
-      <Dot live={live > 0} tone={failed ? "down" : live ? null : "up"} />
+      {live || failed ? <Dot live={live > 0} tone={failed ? "down" : null} /> : null}
       <span>{live ? `${live} running` : `${runs.length} runs`}</span>
       {failed ? <b>{failed} failed</b> : null}
     </button>

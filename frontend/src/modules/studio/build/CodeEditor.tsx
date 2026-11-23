@@ -173,7 +173,7 @@ function theme(monaco: Monaco, dark: boolean) {
   const v = (n: string, f: string) => hex(getComputedStyle(el).getPropertyValue(n).trim() || f, f);
   const bg = v("--island", dark ? "#16181d" : "#ffffff"), text = v("--text", dark ? "#e6e6e6" : "#111111"), muted = v("--text-3", "#7a7f87"), line = v("--line", dark ? "#262a31" : "#e6e6e6");
   monaco.editor.defineTheme("studio", { base: dark ? "vs-dark" : "vs", inherit: true, rules: [{ token: "comment", foreground: muted.slice(1, 7), fontStyle: "italic" }, ...SYNTAX[dark ? "dark" : "light"]],
-    colors: { "editor.background": bg, "editor.foreground": text, "editorLineNumber.foreground": muted, "editorLineNumber.activeForeground": text, "editor.lineHighlightBackground": line, "editor.lineHighlightBorder": "#00000000", "editorGutter.background": bg, "editorWidget.background": bg, "editorWidget.border": line, "editorIndentGuide.background1": line } });
+    colors: { "editor.background": bg, "editor.foreground": text, "editorLineNumber.foreground": muted, "editorLineNumber.activeForeground": text, "editor.lineHighlightBackground": line, "editor.lineHighlightBorder": "#00000000", "editorGutter.background": bg, "editorWidget.background": bg, "editorWidget.border": line, "editorIndentGuide.background1": line, "editorInlayHint.foreground": muted, "editorInlayHint.background": "#00000000", "editorInlayHint.typeForeground": muted, "editorInlayHint.parameterForeground": muted } });
   monaco.editor.setTheme("studio");
 }
 
@@ -281,7 +281,7 @@ export function CodeEditor({ path, value, onChange, problems, project, onSave, o
   const prefs = editorPrefs();
   return (
     <div className="dv-monaco"><Editor language="python" path={path} value={value} onChange={(v) => onChange(v ?? "")} onMount={mount} theme="studio" height="100%"
-      options={{ minimap: { enabled: prefs.minimap === true }, wordWrap: prefs.wrap === false ? "off" : "on", rulers: prefs.rulers ? [prefs.rulers] : [], overviewRulerLanes: 0, overviewRulerBorder: false, hideCursorInOverviewRuler: true, fontSize: font, lineHeight: Math.round(font * 1.54), fontLigatures: prefs.ligatures === true, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true, fixedOverflowWidgets: true, scrollbar: { alwaysConsumeMouseWheel: false },
+      options={{ minimap: { enabled: prefs.minimap === true }, wordWrap: prefs.wrap === true ? "on" : "off", inlayHints: { enabled: prefs.hints === false ? "off" : "on", fontSize: Math.max(10, Math.round(font * 0.82)) }, rulers: prefs.rulers ? [prefs.rulers] : [], overviewRulerLanes: 0, overviewRulerBorder: false, hideCursorInOverviewRuler: true, fontSize: font, lineHeight: Math.round(font * 1.54), fontLigatures: prefs.ligatures === true, lineNumbersMinChars: 3, scrollBeyondLastLine: false, tabSize: 4, renderLineHighlight: "line", automaticLayout: true, fixedOverflowWidgets: true, scrollbar: { alwaysConsumeMouseWheel: false },
         padding: { top: 10 }, fontFamily: "'JetBrains Mono', var(--font-mono), ui-monospace, monospace", quickSuggestions: { strings: true, other: true, comments: false },
         bracketPairColorization: { enabled: true }, stickyScroll: { enabled: true }, folding: true, guides: { indentation: true, bracketPairs: true }, glyphMargin: true, readOnly }} /></div>
   );
@@ -293,7 +293,7 @@ export const REBINDABLE: [string, string][] = [["studio.debug", "Debug: start"],
 
 export const userKeys = (): Record<string, string> => { try { return (JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as { keys?: Record<string, string> }).keys ?? {}; } catch { return {}; } };
 /** Editor settings from Customise Build: word wrap (on unless off), ruler column (0 none), ligatures (off unless on). */
-const editorPrefs = ():{ wrap?: boolean; rulers?: number; ligatures?: boolean; minimap?: boolean } => { try { return JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}"); } catch { return {}; } };
+const editorPrefs = ():{ wrap?: boolean; hints?: boolean; rulers?: number; ligatures?: boolean; minimap?: boolean } => { try { return JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}"); } catch { return {}; } };
 
 /** "Cmd+Shift+K", "F6", "Alt+Enter" or a chord "Cmd+K Cmd+S" as a Monaco keybinding; null when it does not parse. */
 export function parseKeys(m: Monaco, text: string): number[] | null {

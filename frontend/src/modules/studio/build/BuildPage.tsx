@@ -48,7 +48,7 @@ const EXITS: [string, string, boolean][] = [["stop", "Stop", true], ["stop_atr",
   ["breakeven", "Breakeven at", true], ["scale_at", "Scale out at", true], ["scale_frac", "Scale out share", true]];
 const LIMITS: [string, string, boolean][] = [["max_drawdown", "Max drawdown", true], ["max_drawdown_months", "Max drawdown months", false], ["min_trades", "Min trades", false],
   ["min_years", "Min years", false], ["max_beta", "Max beta", false], ["max_cost_share", "Max cost share", true], ["min_start_pass", "Min start dates passing", true]];
-type Defaults = { ui: "simple" | "dev"; mode: "blocks" | "formula" | "english"; exits: Record<string, number>; sizing: Spec["sizing"]; compact: boolean; plain: boolean; palette: string[]; keys: Record<string, string>; wrap: boolean; rulers: number; ligatures: boolean; minimap: boolean; lens: boolean };
+type Defaults = { ui: "simple" | "dev"; mode: "blocks" | "formula" | "english"; exits: Record<string, number>; sizing: Spec["sizing"]; compact: boolean; plain: boolean; palette: string[]; keys: Record<string, string>; wrap: boolean; hints?: boolean; rulers: number; ligatures: boolean; minimap: boolean; lens: boolean };
 type Profile = { name: string; defaults: Partial<Defaults>; layouts?: unknown; keys?: Record<string, string> };
 /** What a profile captures besides the Build defaults: theme, appearance, run configurations, layouts, editor font. */
 const PROFILE_KEYS = ["ws-theme", "ws-prefs", "studio:runconfigs", "studio:dev:workspaces", "studio:dev:font", "studio:dev:chartafterrun", "studio:chart:watch", "studio:chart:view"];
@@ -807,7 +807,8 @@ function CustomiseDialog({ spec, onClose, sections = [], start, font, onFont }: 
           <li key={l}>{l}<button type="button" className="icon-btn" aria-label={`Move ${l} up`} disabled={!i} onClick={() => { const n = all.map(([, x]) => x); [n[i - 1], n[i]] = [n[i], n[i - 1]]; setD({ ...d, palette: n }); }}><ArrowUp size={14} /></button></li>))}</ol></div>
       </div> : null}
       {show("Editor") ? <div className="bd-nums">
-        <label className="bd-num"><span>Editor word wrap</span><input type="checkbox" checked={d.wrap !== false} onChange={(e) => setD({ ...d, wrap: e.target.checked })} /></label>
+        <label className="bd-num"><span>Editor word wrap</span><input type="checkbox" checked={d.wrap === true} onChange={(e) => setD({ ...d, wrap: e.target.checked })} /></label>
+        <label className="bd-num"><span>Inlay hints</span><input type="checkbox" checked={d.hints !== false} onChange={(e) => setD({ ...d, hints: e.target.checked })} /></label>
         <label className="bd-num"><span>Editor rulers</span><Segmented<number> label="Editor rulers" value={d.rulers ?? 0} onChange={(rulers) => setD({ ...d, rulers })} options={[0, 80, 100, 120].map((v) => ({ value: v, label: v ? String(v) : "None" }))} /></label>
         <label className="bd-num"><span>Editor minimap</span><input type="checkbox" checked={!!d.minimap} onChange={(e) => setD({ ...d, minimap: e.target.checked })} /></label>
         <label className="bd-num"><span>Editor ligatures</span><input type="checkbox" checked={!!d.ligatures} onChange={(e) => setD({ ...d, ligatures: e.target.checked })} /></label>
