@@ -78,7 +78,7 @@ export const SPEEDS = [1, 2, 5, 10, 20, 50];
 const RANGES = ["1M", "3M", "6M", "1Y", "5Y", "YTD", "ALL"] as const;
 const STYLES = [["candles", "Candles"], ["hollow", "Hollow candles"], ["bars", "OHLC bars"], ["heikinashi", "Heikin-Ashi"], ["line", "Line"], ["linemarkers", "Line with markers"], ["stepline", "Step line"], ["area", "Area"], ["baseline", "Baseline"], ["columns", "Columns"], ["renko", "Renko (ATR 14 box)"], ["linebreak", "Line break (3)"], ["kagi", "Kagi (ATR 14)"], ["pnf", "Point and figure (ATR 14, 3 box)"], ["range", "Range bars (ATR 14)"]] as const;
 const SCALES = [["price", "Linear"], ["log", "Log"], ["percent", "Percent"], ["indexed", "Indexed to 100"]] as const;
-type View = { style: string; scale: string; dw: boolean; blind: boolean; eq?: boolean };
+type View = { style: string; scale: string; dw: boolean; blind: boolean; eq?: boolean; regime?: boolean };
 const VIEW_KEY = "studio:chart:view";
 type Ohlcv = { time: number; open: number; high: number; low: number; close: number; volume: number };
 /** Price-only bar types: each new brick or line is stamped with the bar that completed it (1 ms apart when one bar makes several). */
@@ -176,7 +176,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     const want = [...compare, ...(spread ? [spread.sym] : [])].filter((c) => !cmpBars[c]); if (!want.length) return;
     void studio<{ bars: Record<string, Bar[]> }>("GET", `/bars?symbols=${encodeURIComponent(want.join(","))}&tf=1d`).then((d) => setCmpBars((x) => ({ ...x, ...d.bars })), () => undefined);
   }, [compare, spread?.sym]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [drawer, setDrawer] = useState<null | "symbols" | "months">(null);
+  const [drawer, setDrawer] = useState<null | "symbols" | "months" | "regimes">(null);
   // Symbol × month heatmap: summed trade return by exit month.
   const months = useMemo(() => {
     if (drawer !== "months") return null;
@@ -305,8 +305,10 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
     handles.current.forEach((e, n) => { if (!names.includes(n)) { e.h.remove(); handles.current.delete(n); } });
     feed.draw = prev?.draw ?? null;
     feed.bg = (prev?.draw?.bg ?? []).map((b) => ({ from: ms(b.date), to: ms(b.date) + 864e5, color: b.color }));
+    // Market regime ribbon: green above SPY's 200-day mean, red below; stronger in high volatility.
+    if (view.regime) for (const r of prev?.regimes ?? []) if (r.regime !== "warm-up") feed.bg.push({ from: ms(r.from), to: ms(r.to), color: tint(cv(r.regime.startsWith("trend up") ? "--up" : "--down", box.current ?? undefined), r.regime.endsWith("high vol") ? "22" : "0e") });
     push();
-  }, [chart, plots, hidden, own, sym, prev?.plot_charts, prev?.draw, compare, cmpBars, eqPlots, spread]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chart, plots, hidden, own, sym, prev?.plot_charts, prev?.draw, compare, cmpBars, eqPlots, spread, view.regime, prev?.regimes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Trades as markers on the lane, held spans and the paused bar as shading, the view follows the paused bar.
   useEffect(() => {
@@ -426,7 +428,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
         <select className="input sm dv-rng-sel" aria-label="Range" value="" onChange={(e) => e.target.value && chart?.setVisibleRangePreset(e.target.value as (typeof RANGES)[number])}><option value="">Range</option>{RANGES.map((r) => <option key={r} value={r}>{r === "ALL" ? "All" : r}</option>)}</select>
         <span className="seg dv-rng" role="group" aria-label="Range">{RANGES.map((r) => <button key={r} type="button" onClick={() => chart?.setVisibleRangePreset(r)}>{r === "ALL" ? "All" : r}</button>)}</span>
         <button type="button" className="icon-btn" aria-label="Grid" aria-pressed={grid} disabled={gridSyms.length < 2} title={gridSyms.length < 2 ? "Grid: add Compare symbols or run on several" : "Grid of symbols"} onClick={() => setGrid((g) => !g)}><LayoutGrid size={13} /></button>
-        {rows.length || perSym.length ? <button type="button" className="icon-btn" aria-label="Symbols and months" aria-pressed={!!drawer} title="Symbols and months" onClick={() => setDrawer((d) => (d ? null : "symbols"))}><List size={13} /></button> : null}
+        {rows.length || perSym.length ? <button type="button" className="icon-btn" aria-label="Symbols, months and regimes" aria-pressed={!!drawer} title="Symbols, months and regimes" onClick={() => setDrawer((d) => (d ? null : "symbols"))}><List size={13} /></button> : null}
         <details className="dv-view" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.open = false; }}>
           <summary className="btn sm ghost" aria-label="Chart settings"><Settings2 size={13} /></summary>
           <div className="dv-menu dv-chartmenu" role="menu">
@@ -444,6 +446,7 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
             <hr />
             <label className="dv-check"><input type="checkbox" checked={view.dw} onChange={(e) => setV({ dw: e.target.checked })} />Data window</label>
             <label className="dv-check"><input type="checkbox" checked={!!view.eq} onChange={(e) => setV({ eq: e.target.checked })} />Equity, drawdown, exposure</label>
+            <label className="dv-check"><input type="checkbox" checked={!!view.regime} onChange={(e) => setV({ regime: e.target.checked })} />Regime ribbon</label>
             <label className="dv-check"><input type="checkbox" checked={view.blind} onChange={(e) => setV({ blind: e.target.checked })} />Blind replay</label>
             <hr />
             <button type="button" onClick={exportPng}>Export PNG</button>
@@ -455,16 +458,18 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
       <div className="dv-chartbox" ref={box} />
       {grid && gridSyms.length > 1 ? <div className="dv-grid-over"><ChartGrid symbols={gridSyms} theme={gridTheme} /></div> : null}
       {drawer ? <div className="dv-symdrawer" role="dialog" aria-label="Symbols">
-        <header><span className="seg" role="group">{(["symbols", "months"] as const).map((d) => <button key={d} type="button" aria-pressed={drawer === d} onClick={() => setDrawer(d)}>{d === "symbols" ? "Symbols" : "Months"}</button>)}</span>
+        <header><span className="seg" role="group">{(["symbols", "months", "regimes"] as const).map((d) => <button key={d} type="button" aria-pressed={drawer === d} onClick={() => setDrawer(d)}>{d[0]!.toUpperCase() + d.slice(1)}</button>)}</span>
           <button type="button" className="icon-btn" aria-label="Close" onClick={() => setDrawer(null)}>×</button></header>
         {drawer === "symbols" ? <table className="dv-symtable"><thead><tr><th>Symbol</th><th>Trades</th><th>P&L</th><th>Win</th><th>Max DD</th><th aria-label="Curve" /></tr></thead>
           <tbody>{perSym.map(([k, r]) => { const lo = Math.min(...r.curve), hi = Math.max(...r.curve), span = hi - lo || 1; return (
             <tr key={k} aria-selected={k === sym} onClick={() => setPick(k)}><td>{k}</td><td>{r.n}</td><td className={r.pnl >= 0 ? "up" : "down"}>{r.pnl.toFixed(0)}</td><td>{Math.round((r.wins / r.n) * 100)}%</td><td className="down">{r.dd.toFixed(0)}</td>
               <td><svg viewBox="0 0 60 16" width="60" height="16" aria-hidden><polyline fill="none" stroke="currentColor" strokeWidth="1.2" points={r.curve.map((v, i) => `${(i / Math.max(1, r.curve.length - 1)) * 60},${16 - ((v - lo) / span) * 16}`).join(" ")} /></svg></td></tr>); })}</tbody></table>
-        : months ? <div className="dv-heat" style={{ gridTemplateColumns: `56px repeat(${months.cols.length}, minmax(8px, 22px))` }}>
+        : drawer === "months" && months ? <div className="dv-heat" style={{ gridTemplateColumns: `56px repeat(${months.cols.length}, minmax(8px, 22px))` }}>
           <span />{months.cols.map((c) => <span key={c} className="dv-heat-col">{c.endsWith("-01") ? c.slice(0, 4) : ""}</span>)}
           {months.rows.map((k) => <Fragment key={k}><b>{k}</b>{months.cols.map((c) => { const v = months.cell.get(`${k}|${c}`); return <button key={c} type="button" title={`${k} ${c}: ${v == null ? "no trades" : `${(v * 100).toFixed(1)}%`}`} style={v == null ? undefined : { background: `color-mix(in oklab, var(${v >= 0 ? "--up" : "--down"}) ${Math.round(20 + 80 * Math.abs(v) / months.max)}%, transparent)` }} onClick={() => { setPick(k); const t = (prev?.trades ?? []).find((x) => String(x.symbol ?? symbol).toUpperCase() === k && String(x.exit_date).startsWith(c)); if (t) onGo(String(t.entry_date)); setDrawer(null); }} />; })}</Fragment>)}
         </div> : null}
+        {drawer === "regimes" ? <table className="dv-symtable"><thead><tr><th>Regime at entry</th><th>Trades</th><th>P&L</th><th>Win</th><th>Days</th></tr></thead>
+          <tbody>{(prev?.regime_pnl ?? []).map((r) => <tr key={r.regime}><td>{r.regime}</td><td>{r.trades}</td><td className={r.pnl >= 0 ? "up" : "down"}>{r.pnl.toFixed(0)}</td><td>{Math.round(r.win_rate * 100)}%</td><td>{r.days}</td></tr>)}</tbody></table> : null}
       </div> : null}
       {readout?.date ? <div className="dv-dw" aria-label="Data window">
         <b>{readout.date}</b>

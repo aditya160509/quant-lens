@@ -41,6 +41,8 @@ export type DevPreview = {
   order_lines?: { file: string; line: number; count: number; dates: string[] }[] | null; locals?: Record<string, unknown> | null;
   repaint?: { cuts: number; changed: number; dates: string[] } | null;
   symbol_stats?: { symbol: string; trades: number; pnl: number; wins: number; max_dd: number; win_rate: number }[] | null;
+  regimes?: { regime: string; from: string; to: string }[] | null;
+  regime_pnl?: { regime: string; trades: number; pnl: number; win_rate: number; days: number }[] | null;
   invariants?: { count: number; rows: { date: string; symbol: string | null; file: string; line: number; text: string }[] } | null;
   coverage?: Record<string, { hit: number[]; lines: number[] }> | null;
 };

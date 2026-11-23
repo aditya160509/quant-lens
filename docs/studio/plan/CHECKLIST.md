@@ -600,7 +600,7 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [x] [M] CH-46 P2 Chart, Backtest and Live read the same close for the same symbol and date [C-2] (/bars, backtest and live all read core/data.py; test_bars_endpoint_serves_the_same_closes_as_the_backtest pins it)
 - [ ] [M] CH-47 P2 Vela on every page (Backtest, Live, Library), then retire chart_engine once watchlist, trading, landing and security move [C-10]
 - [x] [M] CH-48 P2 Spread and ratio charts (A/B, A−B) with a correlation pane [C-24] (Spread in chart settings: A/B or A−B pane plus a rolling 60-day return correlation pane)
-- [ ] [M] CH-49 P2 Regime ribbon behind price with P&L per regime; earnings and split markers (blocked by data for events) [C-25, research]
+- [ ] [M] CH-49 P2 Regime ribbon behind price with P&L per regime; earnings and split markers (blocked by data for events) [C-25, research] (partial: Regime ribbon in chart settings shades SPY trend × volatility behind price; the drawer's Regimes tab gives P&L, trades, win rate and days per regime at entry; earnings and split markers wait for event data)
 - [ ] [M] CH-50 P3 Cross-sectional pane, point-in-time fundamentals, automated trendlines and patterns as labelled heuristics, screenshot to tearsheet, share link, notes on the run [C-26, research]
 
 Not planned: manual trading in replay and journal (OD-7, was C-21); watchlists, news, paper and broker trading inside the chart (other pages own these).

@@ -1,5 +1,6 @@
 """Studio v3 phase 1: compile, backtest payload, ledger, strategies and the agent API. Acceptance ids from docs/studio/plan/PAGES.md."""
 
+import itertools
 import json
 import time
 
@@ -1085,6 +1086,9 @@ def test_preview_trades_several_symbols_from_the_universe_attribute(studio):
     bracketed = studio.post("/api/studio-v3/preview", json={"symbol": "SPY", "spec": {"code": code, "exits": {"stop": 0.05, "target": 0.1}}}).json()
     assert all(abs(t["stop"] / t["entry"] - 0.95) < 1e-9 and abs(t["target"] / t["entry"] - 1.1) < 1e-9 for t in bracketed["trades"])  # CH-36: levels drawn on the chart
     assert all(t["stop"] is None and t["target"] is None for t in result["trades"])
+    spans = result["regimes"]  # CH-49: back-to-back spans over the window, P&L per regime adds up
+    assert spans[0]["from"] == result["window"]["start"] and spans[-1]["to"] == result["window"]["end"] and all(x["to"] < y["from"] for x, y in itertools.pairwise(spans))
+    assert abs(sum(r["pnl"] for r in result["regime_pnl"]) - sum(t["pnl"] for t in result["trades"])) < 1e-6
 
 
 def test_nested_any_all_groups_generate_the_formula_and_trade_like_it(studio):

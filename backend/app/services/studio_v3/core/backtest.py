@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import math
 import time
 from dataclasses import dataclass, replace
@@ -604,7 +605,15 @@ def preview(spec: Strategy, symbol: str, years: float = 2.0, symbols: list[str] 
         output.pop("profile", None)
     if output.get("order_lines") is True:  # formula strategies place no Python orders
         output["order_lines"] = []
-    return {"status": "ok", "symbol": p.symbols[0], "symbols": list(p.symbols), "bars_by_symbol": by_symbol, "window": {"start": start, "end": str(p.dates[-1].date())}, "bars": bars, "trades": trades, "symbol_stats": symbol_stats, "total_return": total, **output, "risk_events": risk}
+    # CH-49: market regime (SPY trend x volatility, the chart symbol when SPY is not held) as spans, and P&L by the regime at entry.
+    m = data.panel(["SPY"])
+    reg = paths.regimes(pd.Series(m.close[:, 0], index=m.dates).reindex(p.dates).ffill().to_numpy() if m.symbols else p.close[:, 0], p.dates)[lo:]
+    cut = [0, *(i for i in range(1, len(reg)) if reg[i] != reg[i - 1]), len(reg)]
+    regimes = [{"regime": reg[a], "from": str(p.dates[lo + a].date()), "to": str(p.dates[lo + z - 1].date())} for a, z in itertools.pairwise(cut)]
+    at = {str(d.date()): i - lo for i, d in enumerate(p.dates[lo:], lo)}
+    held = [t for t in trades if t["entry_date"] in at]
+    regime_pnl = paths.by_regime(reg, np.array([at[t["entry_date"]] for t in held], dtype=int), np.array([t["pnl"] for t in held]), np.array([t["return"] for t in held]))
+    return {"status": "ok", "symbol": p.symbols[0], "symbols": list(p.symbols), "bars_by_symbol": by_symbol, "window": {"start": start, "end": str(p.dates[-1].date())}, "bars": bars, "trades": trades, "symbol_stats": symbol_stats, "total_return": total, **output, "risk_events": risk, "regimes": regimes, "regime_pnl": regime_pnl}
 
 
 def repaint_check(spec: Strategy, prep: Prepared, lo: int = 0, cuts: int = 50, *, full: C.Signals | None = None) -> dict:
