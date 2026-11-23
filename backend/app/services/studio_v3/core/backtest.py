@@ -201,6 +201,7 @@ def trades_table(r: engine.Result, p: data.Panel) -> list[dict]:
         "entry": x[cols.T_ENTRY_PX], "exit": x[cols.T_EXIT_PX], "shares": x[cols.T_SHARES], "pnl": x[cols.T_PNL], "return": x[cols.T_RET],
         "bars": int(x[cols.T_EXIT_BAR] - x[cols.T_ENTRY_BAR]), "mae": x[cols.T_MAE], "mfe": x[cols.T_MFE], "exit_reason": engine.REASONS[int(x[cols.T_REASON])],
         "costs": x[cols.T_COSTS], "signal_date": d[int(x[cols.T_SIGNAL_BAR])], "risk": x[cols.T_RISK],
+        "stop": None if np.isnan(x[cols.T_STOP]) else x[cols.T_STOP], "target": None if np.isnan(x[cols.T_TGT]) else x[cols.T_TGT],
     } for x in t]
 
 

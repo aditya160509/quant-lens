@@ -17,7 +17,7 @@ Three streams, in this order. Details stay in their sections below; this is the 
 
 **3. DEV_IDEAS catalogue (docs/studio/plan/DEV_IDEAS.md), not yet built:** 11 to 14 research, reactive and SQL cells, 17 and 18 library and starters, 20 review comments (partial), 23 and 24 paper and live hooks, 28 pop-out windows. Later (AI parked by the owner): 21, 22. Built: 2, 3, 4, 5, 6, 7, 9, 10, 15 (Data page), 19 (share with a pinned run), 25, 26 (keymap chords), 27 (Layouts dialog), 29. Moved to Chart: 1, 8, 30. IDE catalogue P1 gaps built 2026-11-21: strategy inspections, run configurations, logpoints, test explorer and strategy tests, DataFrame variable explorer. P1 gap left: percent cells (#11).
 
-**4. Chart, section "Chart": CH-1 to CH-50, 15 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
+**4. Chart, section "Chart": CH-1 to CH-50, 14 open.** Merged from the old Chart page, W-7, W-12, DEV_IDEAS 1, 8, 30, the multi-symbol proposal and CHART_RESEARCH; duplicates removed.
 
 ## Rules
 
@@ -583,7 +583,7 @@ One list for every chart item. It merges the old Chart page items (C-1 to C-35, 
 - [ ] [M] CH-35 P3 Pine import via PineTS (licence check first) [DEV chart plan]
 
 ### Strategy on the chart
-- [ ] [M] CH-36 P1 Orders, stop, target and trailing-stop lines per trade [C-14 part, research 6] (partial: entry and exit lines across the trade under the cursor; stop, target and trailing stop need the engine to record them)
+- [x] [M] CH-36 P1 Orders, stop, target and trailing-stop lines per trade [C-14 part, research 6] (entry, exit, MAE, MFE, stop and target lines across the trade under the cursor; the engine records each trade's stop and target levels (Exits settings or bracket); a trailing stop shows its stop level, not the path it trailed)
 - [x] [M] CH-37 P1 Click a trade or bar for a "why" card: which rule fired, rule values at that bar [C-15, research] (click a trade marker: the debugger pauses on that bar and Debug shows the rule values)
 - [x] [M] CH-38 P1 Equity, drawdown and exposure panes on the same time axis as price [research] (Equity, drawdown, exposure in chart settings; marked to the close while a trade is open)
 - [x] [E] CH-39 P1 Backtest trade click opens Build's chart zoomed to the trade with stop and target [C-4; symbol link done] (Chart button on each report trade row opens Build paused on that entry; stop and target need the engine to record them)

@@ -62,7 +62,7 @@ function boot() {
         const run = () => ctx?.emit({
           backgrounds: [...feed.spans, ...feed.bg].map((x, i) => ({ id: `span${i}`, paneId: "", from: x.from, to: x.to, color: x.color, overlay: true })),
           priceLines: [...(feed.draw?.hlines ?? []).filter((h) => h.chart === "main").map((h, i) => ({ id: `h${i}`, paneId: "", price: h.value, color: h.color ?? "#888888", lineStyle: "dashed" as const, width: 1, title: h.name })),],
-          // The trade under the cursor: entry, exit, MAE and MFE levels drawn across its holding span.
+          // The trade under the cursor: entry, exit, MAE, MFE, stop and target levels drawn across its holding span.
           lines: feed.tradeLines.map((l, i) => ({ id: `t${i}`, paneId: "", xloc: "bar_time" as const, x1: l.from, y1: l.price, x2: l.to, y2: l.price, extend: "none" as const, color: l.color, invisible: false, width: 1, style: "dashed" as const, arrowLeft: false, arrowRight: false, overlay: true })),
           labels: feed.tradeLines.map((l, i) => ({ id: `tl${i}`, paneId: "", xloc: "bar_time" as const, x: l.from, y: l.price, yloc: "price" as const, text: l.title, style: "label_left" as const, color: "#00000000", textColor: l.color, size: "small" as const, textAlign: "left" as const, fontFamily: "default" as const, noFill: true })),
         });
@@ -335,6 +335,8 @@ export const DevChart = memo(function DevChart({ symbol, prev, pausedAt, playing
       { price: Number(cur.exit), color: Number(cur.pnl) >= 0 ? up : down, title: `Exit · ${String(cur.exit_reason ?? "")}` , ...span },
       ...(Number.isFinite(Number(cur.mae)) ? [{ price: en * (1 + dir * Number(cur.mae)), color: down, title: "MAE" , ...span }] : []),
       ...(Number.isFinite(Number(cur.mfe)) ? [{ price: en * (1 + dir * Number(cur.mfe)), color: up, title: "MFE" , ...span }] : []),
+      ...(cur.stop != null ? [{ price: Number(cur.stop), color: down, title: "Stop", ...span }] : []),
+      ...(cur.target != null ? [{ price: Number(cur.target), color: up, title: "Target", ...span }] : []),
     ] : [];
     push();
     if (pausedAt) { const r = chart.getVisibleRange(), t = ms(pausedAt); if (r && (t < r.from || t > r.to)) { const w = r.to - r.from; chart.setVisibleRange({ from: t - w / 2, to: t + w / 2 }); } }
