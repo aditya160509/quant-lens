@@ -24,7 +24,7 @@ import { fitWorkspace, LayoutsDialog, targets, useWorkspaces, WorkspaceItems, ty
 import { DevRobust } from "./DevRobust";
 import { DevRuns, type RunEntry } from "./DevRuns";
 import { DevTearsheet } from "./DevTearsheet";
-import { RunSummary } from "./RunSummary";
+import { MIN_TRADES, RunSummary, type Stat, StatStrip } from "./RunSummary";
 import { minMax, tradeSummary } from "./devStats";
 import { PaneBoundary } from "./PaneBoundary";
 import { NotifyBell } from "./NotifyBell";
@@ -67,7 +67,8 @@ type Profile = { lines?: { file?: string; line: number; seconds: number; hits?: 
 export type QuickRun = { job_id: string; level: "quick" | "full"; status: string; progress?: { percent?: number; message?: string; partial?: { symbols?: number; bars?: number; elapsed_seconds?: number; budget_seconds?: number } } | null;
   error?: string | null; delta?: { total_return: number | null; sharpe: number | null; trades: number | null } | null;
   result?: { summary_cards?: { label: string; value: number | null }[]; charts?: { equity_curve?: { date: string; strategy: number; benchmark: number | null }[] }; tables?: { trades?: Record<string, unknown>[] };
-    meta?: { headline?: string; total_return?: number; metrics?: Record<string, number | null>; trade_split?: Record<string, Record<string, number>> } } };
+    meta?: { headline?: string; total_return?: number; metrics?: Record<string, number | null>; trade_split?: Record<string, Record<string, number>>; open_trades?: number; benchmark?: string | null;
+      period?: [string, string]; universe?: { requested?: number; held?: number }; holdout_from?: string | null; fill_model?: string; data_version?: string; exposure?: { time_in_market?: number } } } };
 type Sym = { name: string; kind: string; line: number; column: number; children: Sym[] };
 type Debug = { date: string; symbol: string; bar_index: number; state: Record<string, unknown>; context: Record<string, number | null>; orders: Record<string, unknown>[]; fills: Record<string, unknown>[];
   previous_date: string | null; next_date: string | null; breakpoint?: { file: string; line: number; hit_count: number; locals: Record<string, unknown>; watch?: { name: string; before: unknown; after: unknown } | null } | null; equity_change?: number | null };
@@ -115,7 +116,7 @@ const RAILS: [Rail, ReactNode, string][] = [
 
 const money = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 /** Strategy Tester summary: every headline number on one screen, colour only where it means gain or loss. */
-function Tester({ trades, inputs }: { trades: Record<string, unknown>[]; inputs: ReactNode }) {
+function Tester({ trades, inputs, scope }: { trades: Record<string, unknown>[]; inputs: ReactNode; scope: string }) {
   const s = useMemo(() => tradeSummary(trades), [trades]);
   // Run feedback in place: after a re-run, tiles that moved show a ±delta that fades out.
   const last = useRef<typeof s | null>(null);
@@ -131,15 +132,18 @@ function Tester({ trades, inputs }: { trades: Record<string, unknown>[]; inputs:
     setDiff(d);
     const t = setTimeout(() => setDiff({}), 3000); return () => clearTimeout(t);
   }, [s]);
-  const tiles: [string, string, "up" | "down" | null][] = [
-    ["Net P&L", money(s.net), s.net >= 0 ? "up" : "down"], ["Max drawdown", money(s.maxdd), s.maxdd < 0 ? "down" : null],
-    ["Win rate", s.win === null ? "–" : `${(s.win * 100).toFixed(0)}%`, null], ["Profit factor", s.pf === null ? "–" : s.pf.toFixed(2), s.pf === null ? null : s.pf >= 1 ? "up" : "down"],
-    ["Trades", String(s.trades), null], ["Avg trade", s.avg === null ? "–" : money(s.avg), s.avg === null ? null : s.avg >= 0 ? "up" : "down"],
+  const few = s.trades < MIN_TRADES, na = { value: "n/a", muted: true, title: `${s.trades} trade${s.trades === 1 ? "" : "s"}: too few for this ratio` };
+  const stats: Stat[] = [
+    { label: "Net P&L", value: money(s.net), tone: s.net >= 0 ? "up" : "down", sub: diff["Net P&L"] }, { label: "Max drawdown", value: money(s.maxdd), tone: s.maxdd < 0 ? "down" : null, sub: diff["Max drawdown"] },
+    few ? { label: "Win rate", ...na } : { label: "Win rate", value: s.win === null ? "–" : `${(s.win * 100).toFixed(0)}%`, sub: diff["Win rate"] },
+    few ? { label: "Profit factor", ...na } : { label: "Profit factor", value: s.pf === null ? "–" : s.pf.toFixed(2), tone: s.pf === null ? null : s.pf >= 1 ? "up" : "down" },
+    { label: "Trades", value: String(s.trades), sub: diff.Trades }, few ? { label: "Avg trade", ...na } : { label: "Avg trade", value: s.avg === null ? "–" : money(s.avg), tone: s.avg === null ? null : s.avg >= 0 ? "up" : "down" },
   ];
   return (
     <div className="dv-tester">
       <div className="dv-tester-main">
-      {s.trades ? <dl className="dv-tiles">{tiles.map(([k, v, tone]) => <div key={k}><dt>{k}</dt><dd className="num" data-tone={tone ?? undefined}>{v}{diff[k] ? <small className="dv-tdelta">{diff[k]}</small> : null}</dd></div>)}</dl> : <p className="dv-empty">Run the preview to see results</p>}
+      <p className="dv-scope">{scope}</p>
+      {s.trades ? <StatStrip stats={stats} /> : <p className="dv-empty">Run the preview to see results</p>}
       {s.curve.length > 1 ? <TimeSeries data={s.curve} series={[{ key: "net", label: "Cumulative P&L", color: "var(--text-2)" }, { key: "dd", label: "Drawdown", color: "var(--down)" }]} height={140} legend={false} /> : null}
       </div>
       <aside className="dv-tester-set" aria-label="Inputs"><h4>Inputs</h4>{inputs}</aside>
@@ -954,7 +958,8 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
                       <button className="btn sm" disabled={!canRun || starting || running} onClick={() => runCode("full")}>Full backtest<kbd>⌘⇧↵</kbd></button>
                       <button className="btn sm" onClick={runProfile}>Profile</button>
                       {running ? <button className="btn sm" onClick={onCancel}>Cancel<kbd>Esc</kbd></button> : null}
-                      {quick ? <span className="dv-count">{rc.cur.name !== "Default" ? `${rc.cur.name}, ${quick.level === "quick" ? "not in the ledger" : "recorded in the ledger"}` : quick.level === "quick" ? "Top 50 names, 5 years, not in the ledger" : "Full period, recorded in the ledger"}</span> : null}
+                      {quick ? <span className="dv-count">{rc.cur.name !== "Default" ? `${rc.cur.name}, ` : ""}{quick.level === "quick" ? "not in the ledger" : "recorded in the ledger"}</span> : null}
+                      {m && quick?.job_id ? <span className="dv-dbar-end"><Link className="btn sm" href={`/studio/report/${quick.job_id}`}>Open report</Link><button className="btn sm ghost" title="Open the report in its own window" onClick={() => window.open(`/studio/report/${quick.job_id}`, "atlas-report", "popup,width=1180,height=820")}>Pop out</button>{quick.level === "full" ? <Link className="btn sm" href="/studio/backtest">Open in Backtest</Link> : null}</span> : null}
                     </div>
                     {running ? <div className="dv-prog"><i style={{ width: `${quick!.progress?.percent ?? 2}%` }} /><span>{quick!.progress?.message ?? "Queued"}</span></div> : null}
                     {quick?.status === "failed" ? <p className="bd-find error"><b>Failed</b>{quick.error}</p> : null}
@@ -962,7 +967,6 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
                     {!quick && !r && !starting && !profile ? <p className="dv-empty">Run a backtest to see results.</p> : null}
                     {m ? <>
                       <RunSummary quick={quick!} />
-                      <span className="dv-dbar">{quick?.job_id ? <><Link className="btn sm" href={`/studio/report/${quick.job_id}`}>Open report</Link><button className="btn sm ghost" title="Open the report in its own window" onClick={() => window.open(`/studio/report/${quick.job_id}`, "atlas-report", "popup,width=1180,height=820")}>Pop out</button></> : null}{quick?.level === "full" ? <Link className="btn sm" href="/studio/backtest">Open in Backtest</Link> : null}</span>
                     </> : !quick && r ? (
                       <div className="kpis">
                         <div className="kpi"><span>v{version} return</span><b>{pct(r.total_return)}</b></div>
@@ -1095,7 +1099,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
                   {!plots.length && !Object.keys(prev?.tables ?? {}).length ? <p className="dv-empty">No plots</p> : null}
                 </div>
               ) : null}
-              {tab === "tester" ? <Tester trades={prev?.trades ?? []} inputs={inputList} /> : null}
+              {tab === "tester" ? <Tester trades={prev?.trades ?? []} inputs={inputList} scope={`Preview · ${dbg?.symbol ?? symbol}${prev?.bars?.length ? ` · ${prev.bars[0]!.date} → ${prev.bars.at(-1)!.date}` : ""}`} /> : null}
               {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades", rowActions: (r: Record<string, unknown>) => {
                 const d = String(r.entry_date ?? "").slice(0, 10), o = d ? prev.order_lines?.find((x) => x.dates.some((y) => y.slice(0, 10) === d)) : undefined;
                 return o ? <button className="icon-btn" title={`Go to ${o.file}:${o.line}`} aria-label="Go to the line that placed this order" onClick={() => goto(o.file, o.line)}><FileCode2 size={12} /></button> : null;

@@ -364,8 +364,9 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     dates = p.dates
     ret = M.return_metrics(r.equity, dates)
     years = ret.get("years") or len(dates) / M.ANN
-    tr = M.trade_metrics(r.trades[:, engine.T_PNL], r.trades[:, engine.T_RET], r.trades[:, engine.T_EXIT_BAR] - r.trades[:, engine.T_ENTRY_BAR], r.trades[:, engine.T_MAE],
-                         r.trades[:, engine.T_MFE], r.trades[:, engine.T_RISK], years)
+    # Trade statistics count closed trades only, the same basis as the side split; open positions are reported as open_trades.
+    tr = M.trade_metrics(closed[:, engine.T_PNL], closed[:, engine.T_RET], closed[:, engine.T_EXIT_BAR] - closed[:, engine.T_ENTRY_BAR], closed[:, engine.T_MAE],
+                         closed[:, engine.T_MFE], closed[:, engine.T_RISK], years)
     bench_eq = None
     if prep.benchmark is not None:
         b = pd.Series(prep.benchmark).bfill().to_numpy()
@@ -470,8 +471,8 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
         f"Sharpe {ret['sharpe']:.2f}" if ret.get("sharpe") is not None else "", f"worst drawdown {ret['max_drawdown'] * 100:.0f}%" if ret else "", f"{len(r.trades)} trades"] if x)
     result_hash = hashlib.sha256(r.trades.tobytes() + r.equity.tobytes()).hexdigest()[:16]
     run_hash = hashlib.sha256(f"{spec.hash()}:{settings.hash()}:{data.data_version()}".encode()).hexdigest()[:16]
-    few = len(r.trades) < FEW_TRADES
-    cards = [("Sharpe", ret.get("sharpe"), None), ("CAGR", ret.get("cagr"), "%"), ("Max drawdown", ret.get("max_drawdown"), "%"), ("Trades", len(r.trades), None),
+    few = len(closed) < FEW_TRADES
+    cards = [("Sharpe", ret.get("sharpe"), None), ("CAGR", ret.get("cagr"), "%"), ("Max drawdown", ret.get("max_drawdown"), "%"), ("Trades", len(closed), None),
              ("Win rate", tr.get("win_rate"), "%"), ("Profit factor", tr.get("profit_factor"), "×")]
     out = {
         "feature_id": "st01", "status": "ok",

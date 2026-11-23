@@ -76,7 +76,12 @@ def test_hero_numbers_equal_metrics_py(studio):  # K-1
     for k in ("sharpe", "cagr", "max_drawdown", "total_return", "sortino"):
         assert out["meta"]["metrics"][k] == pytest.approx(want[k], abs=1e-9)
     cards = {c["label"]: c["value"] for c in out["summary_cards"]}
-    assert cards["Sharpe"] == pytest.approx(want["sharpe"], abs=1e-9) and cards["Trades"] == len(r.trades)
+    closed = r.trades[r.trades[:, engine.T_REASON] != engine.R_OPEN]
+    assert cards["Sharpe"] == pytest.approx(want["sharpe"], abs=1e-9) and cards["Trades"] == len(closed)
+    # one basis: the headline trade stats equal the closed-trade side split
+    m, split = out["meta"]["metrics"], out["meta"]["trade_split"]["all"]
+    assert m["trades"] == split["count"] == len(closed) and out["meta"]["open_trades"] == len(r.trades) - len(closed)
+    assert m["win_rate"] == pytest.approx(split["win_rate"]) and m["profit_factor"] == pytest.approx(split["profit_factor"])
     assert out["meta"]["total_return"] == pytest.approx(r.equity[-1] / settings.capital - 1, abs=1e-9)
 
 

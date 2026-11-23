@@ -587,14 +587,6 @@
   .dv-bar { justify-content: flex-start; }
 }
 .dv-tester { gap: 12px; padding: 12px; display: flex; flex-wrap: wrap; align-items: flex-start; container-type: normal; }
-.dv-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 0; }
-@container (max-width: 760px) { .dv-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@container (max-width: 380px) { .dv-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.dv-tiles > div { padding: 10px 12px; border-radius: 10px; background: color-mix(in oklab, var(--text) 4%, transparent); }
-.dv-tiles dt { font-size: 12px; color: var(--text-3); }
-.dv-tiles dd { margin: 4px 0 0; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: var(--text); }
-.dv-tiles dd[data-tone="up"] { color: var(--up); }
-.dv-tiles dd[data-tone="down"] { color: var(--down); }
 /* Dev controls living in the workspace header: one row, no own border, the page's own bar row collapses. */
 .dv-bar.in-head { flex-wrap: nowrap; justify-content: flex-start; min-height: 0; padding: 0; gap: 4px; border: 0; }
 .dv-bar.in-head .btn { height: 30px; border-radius: 8px; }
@@ -621,9 +613,6 @@
 .dv-tester-main { flex: 1 1 360px; display: grid; gap: 12px; min-width: 0; container-type: inline-size; }
 .dv-tester-set { flex: 1 0 200px; max-width: 320px; display: grid; gap: 6px; padding: 10px 12px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); }
 .dv-tester-set h4 { margin: 0; font-size: 12px; font-weight: 500; color: var(--text-3); }
-.dv-tdelta { margin-left: 6px; font-size: 11px; font-weight: 500; color: var(--text-3); animation: dv-tdelta 3s ease-out forwards; }
-@keyframes dv-tdelta { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
-.rm .dv-tdelta { animation: none; }
 
 /* Layouts dialog (Hermes): thumbnails of every layout, a zone editor for new ones. */
 .dv-layouts { position: fixed; inset: 0; margin: auto; height: fit-content; max-height: calc(100vh - 32px); overflow: auto; width: min(560px, calc(100vw - 32px)); padding: 16px; border: 0; border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); display: none; }
@@ -930,3 +919,16 @@
 .dv-watch-row .icon-btn { opacity: 0; } .dv-watch-row:hover .icon-btn { opacity: 1; }
 
 .dv-undo { display: inline-flex; align-items: center; gap: 10px; }
+
+/* One stat style for Tester and Results: a single row of figures, wrapping only when narrow. */
+.dv-strip { display: flex; flex-wrap: wrap; gap: 4px 0; margin: 0; border-block: 1px solid var(--border); }
+.dv-strip > div { flex: 1 1 96px; min-width: 0; padding: 6px 12px; border-inline-start: 1px solid var(--border); }
+.dv-strip > div:first-child { border-inline-start: 0; padding-inline-start: 0; }
+.dv-strip dt { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.dv-strip dd { margin: 2px 0 0; font: 600 15px/1.3 var(--font-mono, ui-monospace, monospace); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text); }
+.dv-strip dd small { margin-inline-start: 6px; font-size: 11px; font-weight: 500; color: var(--text-3); }
+.dv-strip dd[data-tone="up"] { color: var(--up); }
+.dv-strip dd[data-tone="down"] { color: var(--down); }
+.dv-strip dd[data-muted] { color: var(--text-3); font-weight: 500; }
+.dv-scope { margin: 0; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.dv-dbar-end { margin-inline-start: auto; display: inline-flex; gap: 6px; }
