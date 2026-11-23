@@ -1007,3 +1007,45 @@ Core calls (all take a title, return nothing, are cheap to stream): `metric`, `t
 - Starter gallery gets 5 `results.py` examples: tail risk, regime split, entry timing event study, sector exposure, "carried by top 5 names".
 
 **Build order.** (1) Backend: run `on_finish` in the existing sandbox, return a JSON report. (2) Frontend: a Report view with metric tiles, table (our DataTable), plot (our TimeSeries) and bar. (3) `results.py` tab and templates. (4) Pin and diff. (5) Objective hook for the optimiser. Estimate: about 1 to 2 hours of Claude time for 1 and 2 together, medium.
+
+#### 2b. Second part: users write their own HTML page (researched 2026-11-23)
+
+**Verdict.** Worth building, as a second tier on top of the typed blocks above, not instead of them. Blocks stay the default: they are themed, diffable by title, exportable to CSV and safe by construction. A raw HTML page is the escape hatch for what blocks cannot draw (a custom D3 view, an interactive what-if, a one-off layout for a paper figure). People who already write HTML and JS get to use that skill, and nothing they write can reach Studio.
+
+**How T3 Code does it (read from its source and docs).**
+- Agents and files can show a self-contained HTML page in the thread or the file viewer. The page loads in an `<iframe>` with `sandbox="allow-scripts"` and no `allow-same-origin`, so it gets an opaque `null` origin: scripts run, but the page cannot read the app's cookies, storage, DOM or session (PR #5112, PR #9143, `docs/user/html-renders.md`).
+- The file viewer has a Source / Rendered toggle, remembered as a preference; a link to a line always opens Source.
+- Pages pick up the app theme (light, dark, custom) and the page's links open in the real browser, not inside the frame.
+- Local images are inlined when the page is published, so it keeps working after files move.
+- Previews may load public CDN scripts but nothing on the local network: names that resolve to private addresses are blocked.
+- A reviewer flagged that scripts could read the frame's signed asset URL from `location.href`; T3 accepted it because the URL is short-lived and single-file. We avoid the issue by using `srcdoc`, so there is no URL to leak.
+- MCP Apps (the standard T3 follows for tool UIs) adds the rule we copy for the network: with no declared domains the host MUST apply a CSP with `connect-src 'none'`, and the page talks to the host only through a small JSON message channel the host checks.
+- CoCalc's model is the same idea taken further: no "Trust" button, because nothing user-written ever runs in the app's own page; isolation, not a click, is the protection.
+
+**Design for Studio.**
+- API: `ctx.report.html(title, html, *, height=None, libs=())` inside `on_finish`. The Python builds the full page (data already embedded as JSON), so the page never needs to fetch anything. A file `report.html` next to `results.py` is the same thing with `{{ result_json }}` filled in by the runner.
+- Storage: the HTML string is saved with the run like any other report item, capped at 2 MB per page and 5 pages per run, and versioned with the strategy. Pinned runs keep their pages.
+- Rendering: its own tab in Results, `<iframe srcdoc=… sandbox="allow-scripts" referrerpolicy="no-referrer" allow="">`. Source / Rendered toggle, full-screen button, "Download .html".
+- Libraries: the network is closed, so `libs=["plotly", "d3", "vega-lite"]` makes the host inline pinned, vendored copies from our own bundle. No CDN, no version drift, works offline.
+- Theme: the host injects our CSS variables (colours, font, light/dark) into the page `<head>`, and re-sends them on theme change, so a page matches Studio unless its own CSS overrides.
+- Size: the page reports its height over the message channel; the host clamps it (max 4,000 px, then the frame scrolls).
+- Chart link: the one action a page may ask for is `{"type": "open", "symbol": "AAPL", "date": "2024-03-15"}`, which opens the Build chart at that bar. The host checks the schema and the symbol against the run's universe before acting.
+
+**Safety rules (all required, none optional).**
+1. `sandbox="allow-scripts"` only. Never `allow-same-origin` (with scripts it lets the frame remove its own sandbox), never `allow-forms`, `allow-popups`, `allow-top-navigation`, `allow-modals` or `allow-downloads`. A lint test asserts the exact attribute.
+2. `srcdoc`, never a URL: nothing signed to steal, and no direct link that would open the page unsandboxed on our origin.
+3. A CSP `<meta>` injected first in `<head>` by the host, before the user's markup: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'`. This closes image beacons and `fetch`, the exfiltration path behind the EchoLeak incident. The host strips any user `<meta http-equiv>` and `<base>` tags first.
+4. The page gets only the run's own result data, written in by Python. No API base URL, token, cookie, user name or other run is ever put in the page.
+5. The message channel accepts only `size` and `open`, checks `event.source === frame.contentWindow`, validates every field, and ignores everything else. The host never posts secrets into the frame.
+6. Runaway scripts: a page renders only when its tab is opened; a "Stop page" button removes the frame. The tab shows the page's size and when it was built.
+7. Python side is unchanged: `results.py` runs in the same sandbox, time budget and memory limit as the strategy, with no network and no files.
+8. Sharing: shared and read-only views render the page under the same rules. A future hosted deployment serves pages from a separate content domain (the WHATWG and CoCalc advice for hostile content) instead of `srcdoc` on the app origin.
+9. Export: "Download .html" writes the page with the CSP kept in, so a copy opened later still cannot phone home.
+
+**Ways to get the most out of it.**
+- Starter gallery: five pages that show what blocks cannot do (interactive parameter what-if, D3 trade timeline, drawdown explorer, sector sunburst, a print-ready one-page summary for a paper).
+- `ctx.report.html` can embed a block's data: `ctx.report.data("trades")` returns the same JSON the built-in views use, so a custom page starts from clean data.
+- Print to PDF from the full-screen view, for write-ups.
+- Diff: two pinned runs show their pages side by side with the same scroll position.
+
+**Build order.** (1) `ctx.report.html` in the runner with size caps. (2) The sandboxed Report tab with the CSP, toggle and full screen. (3) Vendored libraries and theme injection. (4) Height and chart-link messages. (5) Gallery and download. Estimate: medium, about 1 hour of Claude time for 1 and 2; the rest is small.
