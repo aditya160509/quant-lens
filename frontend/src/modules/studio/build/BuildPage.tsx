@@ -1,8 +1,8 @@
 "use client";
 
-import { Command as CommandIcon, BookmarkPlus, CircleCheck, CircleDashed, CircleX, Download, GitBranch, GitMerge, Settings2, Link2, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
+import { Command as CommandIcon, BookmarkPlus, CircleCheck, CircleDashed, CircleX, Download, GitBranch, GitMerge, Settings2, Link2, ArrowLeft, Code2, FilePlus2, FolderGit2, Keyboard, LayoutPanelLeft, Palette as PaletteIcon, RotateCcw, Search, SlidersHorizontal, PlayCircle, MoreHorizontal, Play, Plus, Save, Trash2, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { defaultsFor } from "@/modules/research/StudyForm";
 import { useStudies } from "@/modules/research/store";
@@ -47,8 +47,10 @@ const EXITS: [string, string, boolean][] = [["stop", "Stop", true], ["stop_atr",
   ["breakeven", "Breakeven at", true], ["scale_at", "Scale out at", true], ["scale_frac", "Scale out share", true]];
 const LIMITS: [string, string, boolean][] = [["max_drawdown", "Max drawdown", true], ["max_drawdown_months", "Max drawdown months", false], ["min_trades", "Min trades", false],
   ["min_years", "Min years", false], ["max_beta", "Max beta", false], ["max_cost_share", "Max cost share", true], ["min_start_pass", "Min start dates passing", true]];
-type Defaults = { ui: "simple" | "dev"; mode: "blocks" | "formula" | "english"; exits: Record<string, number>; sizing: Spec["sizing"]; compact: boolean; plain: boolean; palette: string[]; keys: Record<string, string>; wrap: boolean; rulers: number; ligatures: boolean; minimap: boolean };
-type Profile = { name: string; defaults: Partial<Defaults>; layouts: unknown };
+type Defaults = { ui: "simple" | "dev"; mode: "blocks" | "formula" | "english"; exits: Record<string, number>; sizing: Spec["sizing"]; compact: boolean; plain: boolean; palette: string[]; keys: Record<string, string>; wrap: boolean; rulers: number; ligatures: boolean; minimap: boolean; lens: boolean };
+type Profile = { name: string; defaults: Partial<Defaults>; layouts?: unknown; keys?: Record<string, string> };
+/** What a profile captures besides the Build defaults: theme, appearance, run configurations, layouts, editor font. */
+const PROFILE_KEYS = ["ws-theme", "ws-prefs", "studio:runconfigs", "studio:dev:workspaces", "studio:dev:font", "studio:dev:chartafterrun", "studio:chart:watch", "studio:chart:view"];
 const writeDefaults = (d: Partial<Defaults>) => { try { localStorage.setItem("studio:build:defaults", JSON.stringify(d)); localStorage.removeItem("studio:build:ui"); } catch { /* blocked */ } void studio("PUT", "/build/prefs/settings", d).catch(() => undefined); };
 const readDefaults = (): Partial<Defaults> => { try { return JSON.parse(localStorage.getItem("studio:build:defaults") ?? "{}") as Partial<Defaults>; } catch { return {}; } };
 const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : "Failed");
@@ -474,24 +476,33 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
         ) : null}
     </>
   );
+  // Project actions: the Simple page's More menu and the Dev settings window's Project page.
+  const projectActions: [ReactNode, string, boolean, () => void][] = [
+    [<Link2 key="l" size={13} />, "Copy read-only link", !loaded, () => { if (loaded) void studio<{ token: string }>("POST", `/strategies/${loaded.id}/share`).then((r) => { const u = `${location.origin}/studio/build?share=${r.token}`; void navigator.clipboard?.writeText(u); toast.success("Read-only link copied"); }, fail); }],
+    [<GitBranch key="b" size={13} />, `Branch from v${loaded?.version ?? 1}`, !loaded, () => { if (loaded) void studio<{ id: string }>("POST", `/strategies/${loaded.id}/versions/${loaded.version}/branch`).then((b) => router.push(`/studio/build/${b.id}`), fail); }],
+    [<Download key="d" size={13} />, "Export project (.zip)", !loaded, () => { if (loaded) window.location.assign(`${STUDIO_BASE}/strategies/${loaded.id}/export.zip`); }],
+    [<Upload key="u" size={13} />, "Import project (.zip)", false, () => zipInput.current?.click()],
+    [<GitMerge key="m" size={13} />, "Compare and merge…", !loaded, () => setDialog("branches")],
+    [<BookmarkPlus key="t" size={13} />, "Save as my template", blank, () => { const name = spec.name || "Untitled"; saveMine([{ name, rule: String(spec.entry ?? ""), spec: { ...spec } }, ...mine.filter((t) => t.name !== name)].slice(0, 24)); toast.success(`Saved "${name}" as a template`); }],
+  ];
+  const projectPage = (
+    <>
+      <h3>Strategy</h3>
+      <div className="bd-nums"><div className="bd-num"><span>Name</span>{nameInput}</div><div className="bd-num"><span>Version</span><div className="bd-menu-fields">{versionControls}</div></div></div>
+      <h3>Actions</h3>
+      <div className="bd-nums">{projectActions.map(([icon, label, off, go]) => <div key={label} className="bd-num"><span>{label}</span><button type="button" className="btn sm" disabled={off} title={off ? "Save the strategy first" : undefined} onClick={go}>{icon}{label.split(" ")[0]}</button></div>)}</div>
+    </>
+  );
   const headRight = (
     <>
         {ui === "dev" ? null : versionControls}
         <span className="bd-ui"><Segmented<"simple" | "dev"> label="Interface" value={ui} onChange={switchUi} options={[{ value: "simple", label: "Simple" }, { value: "dev", label: "Dev" }]} /></span>
         {/* Dev keeps ⌘⇧P and the header search; the button would be a third way in. */}
         {ui === "dev" ? null : <button className="btn" title="Commands (⌘⇧P)" aria-label="Commands" onClick={() => setPalette(true)}><CommandIcon size={14} />Commands<kbd>⌘⇧P</kbd></button>}
-        <button className="btn icon" aria-label="More" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMore({ x: r.right - 220, y: r.bottom + 4 }); }}><MoreHorizontal size={15} /></button>
-        <PopMenu at={more} onClose={() => setMore(null)} width={220} sticky={ui === "dev"}>
-          {ui === "dev" ? <div className="bd-menu-fields">{nameInput}{versionControls}</div> : null}
-          <MenuItem icon={<Link2 size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) void studio<{ token: string }>("POST", `/strategies/${loaded.id}/share`).then((r) => { const u = `${location.origin}/studio/build?share=${r.token}`; void navigator.clipboard?.writeText(u); toast.success("Read-only link copied"); }, fail); }}>Copy read-only link</MenuItem>
-          <MenuItem icon={<GitBranch size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) void studio<{ id: string }>("POST", `/strategies/${loaded.id}/versions/${loaded.version}/branch`).then((b) => router.push(`/studio/build/${b.id}`), fail); }}>Branch from v{loaded?.version ?? 1}</MenuItem>
-          <MenuItem icon={<Download size={13} />} disabled={!loaded} onClick={() => { setMore(null); if (loaded) window.location.assign(`${STUDIO_BASE}/strategies/${loaded.id}/export.zip`); }}>Export project (.zip)</MenuItem>
-          <MenuItem icon={<Upload size={13} />} onClick={() => { setMore(null); zipInput.current?.click(); }}>Import project (.zip)</MenuItem>
-          <MenuItem icon={<GitMerge size={13} />} disabled={!loaded} onClick={() => { setMore(null); setDialog("branches"); }}>Compare and merge…</MenuItem>
-          <MenuItem icon={<BookmarkPlus size={13} />} disabled={blank} onClick={() => { setMore(null); const name = spec.name || "Untitled"; saveMine([{ name, rule: String(spec.entry ?? ""), spec: { ...spec } }, ...mine.filter((t) => t.name !== name)].slice(0, 24)); toast.success(`Saved "${name}" as a template`); }}>Save as my template</MenuItem>
+        {ui === "dev" ? null : <button className="btn icon" aria-label="More" aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMore({ x: r.right - 220, y: r.bottom + 4 }); }}><MoreHorizontal size={15} /></button>}
+        <PopMenu at={more} onClose={() => setMore(null)} width={220}>
+          {projectActions.map(([icon, label, off, go]) => <MenuItem key={label} icon={icon} disabled={off} onClick={() => { setMore(null); go(); }}>{label}</MenuItem>)}
           <MenuItem icon={<Settings2 size={13} />} onClick={() => { setMore(null); setDialog("customise"); }}>Settings…</MenuItem>
-          <div className="hd">Editor font</div>
-          <div style={{ padding: "2px 8px 8px" }}><Segmented<number> label="Editor font size" value={font} onChange={(v) => { setFont(v); try { localStorage.setItem("studio:dev:font", String(v)); } catch { /* blocked */ } }} options={[12, 13, 14, 15].map((v) => ({ value: v, label: String(v) }))} /></div>
         </PopMenu>
         <input ref={zipInput} type="file" accept=".zip,application/zip" hidden onChange={(e) => {
           const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
@@ -553,7 +564,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
           })() : null}
         </section>
       ) : null}
-      {ui === "dev" ? <DevIDE tools={headRight} canRun={!!spec.code.trim() || ROLES.some(([role]) => !!String(spec[role] ?? "").trim())} starting={starting} onPreview={() => setNudge((n) => n + 1)} spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} compileProblems={compileProblems}
+      {ui === "dev" ? <DevIDE tools={headRight} settings={(extra, start, close) => <CustomiseDialog spec={spec} onClose={close} start={start} sections={[...extra, ["Project", projectPage]]} font={font} onFont={(v) => { setFont(v); try { localStorage.setItem("studio:dev:font", String(v)); } catch { /* blocked */ } }} />} canRun={!!spec.code.trim() || ROLES.some(([role]) => !!String(spec[role] ?? "").trim())} starting={starting} onPreview={() => setNudge((n) => n + 1)} spec={spec} edit={edit} symbol={symbol} prev={prev} side={<>{side}{paramsCard}</>} onSave={formatSave} compileProblems={compileProblems}
         strategyId={loaded?.id} versions={loaded?.versions ?? []} runs={loaded?.runs_by_version ?? {}} saved={savedState} readOnly={!!readOnly} version={loaded?.version} stale={stale} onPause={(d, l) => { setPausedAt(d); setPausedLabel(l ?? "❚❚"); }} font={font} savedFiles={loaded ? { "main.py": (loaded.spec as Spec).code ?? "", ...(((loaded.spec as Spec).files as Record<string, string>) ?? {}) } : undefined} quick={quick} onQuickRun={(l, st) => void quickRun(l, st)} logpoints={logpoints} onLogpoints={setLogpoints} coverage={coverage} onCoverage={setCoverage} onCancel={cancelRun} trial={loaded ? <TrialChip ledger={loaded.trials} strategyId={loaded.id} /> : null} onReload={() => loaded && void load(loaded.id)} /> : <div className="bd-grid" data-compact={readDefaults().compact || undefined} data-plain={readDefaults().plain || undefined}>
         <section className="bd-card bd-rules">
           <div className="bd-modes" role="tablist">
@@ -677,55 +688,83 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
   );
 }
 
-/** Defaults for new strategies and how Build opens (B-66, B-100, B-135). Kept in this browser. */
-function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void }) {
+const NAV_ICONS: Record<string, ReactNode> = { General: <SlidersHorizontal size={16} />, Editor: <Code2 size={16} />, Appearance: <PaletteIcon size={16} />, Layout: <LayoutPanelLeft size={16} />, Run: <PlayCircle size={16} />, Project: <FolderGit2 size={16} />, Keybindings: <Keyboard size={16} />, "New strategy": <FilePlus2 size={16} /> };
+
+/** The one settings window (T3 Code style): a page per area on the left, Build defaults, editor, keys and new-strategy defaults here, Dev adds appearance, layout, run and project pages. */
+function CustomiseDialog({ spec, onClose, sections = [], start, font, onFont }: { spec: Spec; onClose: () => void; sections?: [string, ReactNode][]; start?: string; font?: number; onFont?: (v: number) => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [d, setD] = useState<Partial<Defaults>>(readDefaults);
   const [kq, setKq] = useState("");
   const [q, setQ] = useState("");
   const [json, setJson] = useState<string | null>(null); // raw JSON view of the settings while editing
+  const own = ["General", "Editor", "Keybindings", "New strategy"];
+  const pages = [...own.slice(0, 2), ...sections.map(([n]) => n), ...own.slice(2)];
+  const [page, setPage] = useState(start && pages.includes(start) ? start : pages[0]!);
   const body = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.showModal(); }, []);
   // Search: hide every setting whose label does not match.
-  useEffect(() => { for (const el of body.current?.querySelectorAll<HTMLElement>(".bd-num, h3") ?? []) el.hidden = !!q && !el.textContent?.toLowerCase().includes(q.toLowerCase()); }, [q, json]);
+  useEffect(() => { for (const el of body.current?.querySelectorAll<HTMLElement>(".bd-num, h3") ?? []) el.hidden = !!q && !el.textContent?.toLowerCase().includes(q.toLowerCase()); }, [q, json, page]);
   const [profiles, setProfiles] = useState<Profile[]>(() => { try { return JSON.parse(localStorage.getItem("studio:build:profiles") ?? "[]"); } catch { return []; } });
   useEffect(() => { try { localStorage.setItem("studio:build:profiles", JSON.stringify(profiles)); } catch { /* blocked */ } }, [profiles]);
   useServerPref("profiles", profiles, setProfiles);
   const save = () => { writeDefaults(d); toast.success("Settings saved"); ref.current?.close(); };
   const fromJson = (text: string) => { try { const v: unknown = JSON.parse(text); if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("Settings must be a JSON object"); setD(v as Partial<Defaults>); setJson(null); } catch (e) { toast.error((e as Error).message); } };
-  // A profile bundles these settings (shortcuts included) with the Dev layouts.
-  const layouts = () => { try { return JSON.parse(localStorage.getItem("studio:dev:workspaces") ?? "null"); } catch { return null; } };
-  const saveProfile = () => { const name = window.prompt("Profile name")?.trim(); if (name) setProfiles((p) => [...p.filter((x) => x.name !== name), { name, defaults: d, layouts: layouts() }]); };
-  const applyProfile = (p: Profile) => { setD(p.defaults); try { if (p.layouts) localStorage.setItem("studio:dev:workspaces", JSON.stringify(p.layouts)); } catch { /* blocked */ } writeDefaults(p.defaults); toast.success(`Profile ${p.name}: reload Dev to apply its layouts`); };
+  // A profile is everything in this window under one name: defaults, shortcuts, theme, appearance, run configurations, layouts, font.
+  const saveProfile = () => {
+    const name = window.prompt("Profile name")?.trim(); if (!name) return;
+    const keys: Record<string, string> = {}; for (const k of PROFILE_KEYS) { try { const v = localStorage.getItem(k); if (v !== null) keys[k] = v; } catch { /* blocked */ } }
+    setProfiles((p) => [...p.filter((x) => x.name !== name), { name, defaults: d, keys }]);
+    toast.success(`Saved profile ${name}`);
+  };
+  const applyProfile = (p: Profile) => {
+    writeDefaults(p.defaults);
+    try { if (p.layouts) localStorage.setItem("studio:dev:workspaces", JSON.stringify(p.layouts)); for (const [k, v] of Object.entries(p.keys ?? {})) localStorage.setItem(k, v); } catch { /* blocked */ }
+    window.location.reload();
+  };
   const exits = { ...BLANK.exits, ...d.exits }, sizing = { ...BLANK.sizing, ...d.sizing };
+  const show = (n: string) => !!q || page === n;
   return (
-    <dialog ref={ref} className="sh-import" aria-label="Settings" onClose={onClose} onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
-      <div className="bd-set-hd"><b style={{ fontSize: 15 }}>Settings</b>
-        <input className="input" type="search" aria-label="Search settings" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="input" aria-label="Profile" value="" onChange={(e) => { const v = e.target.value; if (v === "\u0000save") saveProfile(); else if (v.startsWith("\u0000rm:")) setProfiles((p) => p.filter((x) => x.name !== v.slice(4))); else { const p = profiles.find((x) => x.name === v); if (p) applyProfile(p); } }}>
+    <dialog ref={ref} className="sh-import bd-set" aria-label="Settings" onClose={onClose} onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
+      <nav className="bd-set-nav" aria-label="Settings pages">
+        <label className="bd-set-search"><Search size={15} /><input type="search" aria-label="Search settings" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /><kbd>/</kbd></label>
+        {pages.map((n) => <button key={n} type="button" aria-current={!q && page === n ? "page" : undefined} onClick={() => { setQ(""); setJson(null); setPage(n); }}>{NAV_ICONS[n] ?? <SlidersHorizontal size={16} />}{n}</button>)}
+        <span style={{ flex: 1 }} />
+        <button type="button" onClick={() => ref.current?.close()}><ArrowLeft size={16} />Back</button>
+      </nav>
+      <div className="bd-set-main">
+      <div className="bd-set-hd"><span className="bd-set-crumb">Settings <i>/</i> <b>{q ? "Search" : page}</b></span>
+        <select className="bd-set-link" aria-label="Profile" value="" onChange={(e) => { const v = e.target.value; if (v === "\u0000save") saveProfile(); else if (v.startsWith("\u0000rm:")) setProfiles((p) => p.filter((x) => x.name !== v.slice(4))); else { const p = profiles.find((x) => x.name === v); if (p) applyProfile(p); } }}>
           <option value="">Profiles</option>{profiles.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
-          <option value={"\u0000save"}>Save current as profile…</option>{profiles.map((p) => <option key={`rm${p.name}`} value={`\u0000rm:${p.name}`}>Delete {p.name}</option>)}
+          <option value={"\u0000save"}>Save all as profile…</option>{profiles.map((p) => <option key={`rm${p.name}`} value={`\u0000rm:${p.name}`}>Delete {p.name}</option>)}
         </select>
-        <button className="btn sm" aria-pressed={json !== null} onClick={() => setJson(json === null ? JSON.stringify(d, null, 2) : null)}>JSON</button></div>
+        <button className="bd-set-link" aria-pressed={json !== null} onClick={() => setJson(json === null ? JSON.stringify(d, null, 2) : null)}>JSON</button>
+        <button className="bd-set-link" onClick={() => setD({})}><RotateCcw size={14} />Restore defaults</button></div>
       {json !== null ? <><textarea className="input bd-json" aria-label="Settings JSON" spellCheck={false} value={json} onChange={(e) => setJson(e.target.value)} /><button className="btn sm" onClick={() => fromJson(json)}>Apply JSON</button></> : null}
-      <div ref={body} hidden={json !== null} className="bd-set-body">
-      <div className="bd-nums">
+      <div ref={body} hidden={json !== null} className="bd-set-body"><div className="bd-set-col">
+      {show("General") ? <div className="bd-nums">
         <label className="bd-num"><span>Open in</span><Segmented<"simple" | "dev"> label="Default interface" value={d.ui ?? "simple"} onChange={(ui) => setD({ ...d, ui })} options={[{ value: "simple", label: "Simple" }, { value: "dev", label: "Dev" }]} /></label>
         <label className="bd-num"><span>Simple starts in</span><select className="input" value={d.mode ?? "formula"} onChange={(e) => setD({ ...d, mode: e.target.value as Defaults["mode"] })}><option value="blocks">Blocks</option><option value="formula">Formula</option><option value="english">Plain English</option></select></label>
         <label className="bd-num"><span>Blocks</span><Segmented<"full" | "compact"> label="Block density" value={d.compact ? "compact" : "full"} onChange={(v) => setD({ ...d, compact: v === "compact" })} options={[{ value: "full", label: "Expanded" }, { value: "compact", label: "Compact" }]} /></label>
         <label className="bd-num"><span>Colour by role</span><input type="checkbox" checked={!d.plain} onChange={(e) => setD({ ...d, plain: !e.target.checked })} /></label>
+        <div className="bd-num"><span>Condition order</span><ol className="bd-palette">{(d.palette?.length ? paletteOrder().sort((a, b) => d.palette!.indexOf(a[1]) - d.palette!.indexOf(b[1])) : paletteOrder()).map(([, l], i, all) => (
+          <li key={l}>{l}<button type="button" className="icon-btn" aria-label={`Move ${l} up`} disabled={!i} onClick={() => { const n = all.map(([, x]) => x); [n[i - 1], n[i]] = [n[i], n[i - 1]]; setD({ ...d, palette: n }); }}>↑</button></li>))}</ol></div>
+      </div> : null}
+      {show("Editor") ? <div className="bd-nums">
         <label className="bd-num"><span>Editor word wrap</span><input type="checkbox" checked={d.wrap !== false} onChange={(e) => setD({ ...d, wrap: e.target.checked })} /></label>
         <label className="bd-num"><span>Editor rulers</span><Segmented<number> label="Editor rulers" value={d.rulers ?? 0} onChange={(rulers) => setD({ ...d, rulers })} options={[0, 80, 100, 120].map((v) => ({ value: v, label: v ? String(v) : "None" }))} /></label>
         <label className="bd-num"><span>Editor minimap</span><input type="checkbox" checked={!!d.minimap} onChange={(e) => setD({ ...d, minimap: e.target.checked })} /></label>
         <label className="bd-num"><span>Editor ligatures</span><input type="checkbox" checked={!!d.ligatures} onChange={(e) => setD({ ...d, ligatures: e.target.checked })} /></label>
-        <div className="bd-num"><span>Condition order</span><ol className="bd-palette">{(d.palette?.length ? paletteOrder().sort((a, b) => d.palette!.indexOf(a[1]) - d.palette!.indexOf(b[1])) : paletteOrder()).map(([, l], i, all) => (
-          <li key={l}>{l}<button type="button" className="icon-btn" aria-label={`Move ${l} up`} disabled={!i} onClick={() => { const n = all.map(([, x]) => x); [n[i - 1], n[i]] = [n[i], n[i - 1]]; setD({ ...d, palette: n }); }}>↑</button></li>))}</ol></div>
+        {onFont ? <label className="bd-num"><span>Editor font size</span><Segmented<number> label="Editor font size" value={font ?? 13} onChange={onFont} options={[12, 13, 14, 15].map((v) => ({ value: v, label: String(v) }))} /></label> : null}
+        <label className="bd-num"><span>Run and Debug lenses above Strategy</span><input type="checkbox" checked={!!d.lens} onChange={(e) => setD({ ...d, lens: e.target.checked })} /></label>
+      </div> : null}
+      {show("Keybindings") ? <div className="bd-nums">
         <div className="bd-num"><span>Dev shortcuts</span><div className="bd-keys">
           <div className="km-bar"><input className="input" aria-label="Search shortcuts" type="search" placeholder="Search" value={kq} onChange={(e) => setKq(e.target.value)} /><button type="button" className="btn" onClick={() => setD({ ...d, keys: {} })}>Reset</button></div>
           {FIXED.filter(([, l, k]) => `${l} ${k}`.toLowerCase().includes(kq.toLowerCase())).map(([kid, l, k]) => <div key={kid} className="km-fixed"><span>{l}</span><kbd>{k}</kbd></div>)}
           {REBINDABLE.filter(([kid, l]) => `${l} ${d.keys?.[kid] ?? ""}`.toLowerCase().includes(kq.toLowerCase())).map(([kid, l]) => { const v = d.keys?.[kid] ?? "", c = conflictWith(kid, v, d.keys ?? {}), cl = c && (FIXED.find((f) => f[0] === c)?.[1] ?? REBINDABLE.find((r) => r[0] === c)?.[1]); return (
           <label key={kid}><span>{l}</span><input className="input" aria-label={`Shortcut for ${l}`} aria-invalid={!!c} placeholder="default" value={v} onChange={(e) => setD({ ...d, keys: { ...d.keys, [kid]: e.target.value } })} />{c && <em className="km-conflict">Used by {cl}</em>}</label>); })}</div></div>
-      </div>
+      </div> : null}
+      {show("New strategy") ? <>
       <h3 style={{ margin: 0, fontSize: 13 }}>New strategy exits</h3>
       <div className="bd-nums">{EXITS.map(([k, l, p]) => <Num key={k} label={l} pct={p} value={exits[k]} onChange={(v) => setD({ ...d, exits: { ...exits, [k]: v ?? 0 } })} />)}</div>
       <h3 style={{ margin: 0, fontSize: 13 }}>New strategy sizing</h3>
@@ -735,11 +774,14 @@ function CustomiseDialog({ spec, onClose }: { spec: Spec; onClose: () => void })
         <Num label="Value" value={sizing.value} onChange={(v) => setD({ ...d, sizing: { ...sizing, value: v ?? 0 } })} />
         <Num label="Max positions" value={sizing.max_positions} onChange={(v) => setD({ ...d, sizing: { ...sizing, max_positions: v ?? 0 } })} />
       </div>
-      </div>
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+      </> : null}
+      {q ? null : sections.map(([n, node]) => (page === n ? <div key={n} className="bd-set-extra">{node}</div> : null))}
+      </div></div>
+      <div className="bd-set-ft">
         <button className="btn" onClick={() => setD({ ...d, exits: spec.exits, sizing: spec.sizing })}>Use this strategy's</button>
         <button className="btn" onClick={() => ref.current?.close()}>Cancel</button>
         <button className="btn primary" onClick={save}>Save</button>
+      </div>
       </div>
     </dialog>
   );

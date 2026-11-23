@@ -779,7 +779,6 @@
 .dv-term-pick button:hover { background: var(--line); color: var(--text); }
 .dv-term-split { display: grid; grid-template-columns: 1fr 1fr; height: 100%; } .dv-term-split > * + * { border-left: 1px solid var(--line); }
 .dv-term-host { height: 100%; } .dv-term-split[hidden], .dv-term-host[hidden] { display: none; }
-.bd-set-hd { display: flex; gap: 8px; align-items: center; } .bd-set-hd b { flex: 1; } .bd-set-hd .input { width: auto; min-width: 0; }
 .bd-json { min-height: 320px; font: 12px var(--mono); white-space: pre; resize: vertical; }
 .bd-set-body { display: grid; gap: 12px; }
 .bd-tpl-spark { width: 60px; height: 16px; color: var(--text-3); vertical-align: middle; margin-right: 6px; }
@@ -848,37 +847,48 @@
 .dv-ind-row [aria-pressed="true"] svg { fill: var(--warn, #f5a623); color: var(--warn, #f5a623); }
 .dv-plots input[type="color"] { width: 22px; height: 18px; padding: 0; border: 0; background: none; cursor: pointer; }
 
-/* One settings window: pages on the left, the page on the right (T3 Code, VS Code). */
-.bd-set { width: min(1080px, 94vw); height: min(760px, 90vh); padding: 0; gap: 0; overflow: hidden; }
-.bd-set[open] { grid-template-columns: 210px minmax(0, 1fr); }
-.bd-set-nav { display: flex; flex-direction: column; gap: 2px; padding: 16px 10px; border-right: 1px solid var(--line); background: color-mix(in oklab, var(--text) 2.5%, transparent); }
-.bd-set-nav > b { padding: 0 10px 10px; font-size: 15px; }
-.bd-set-nav button { height: 32px; padding: 0 10px; border: 0; border-radius: 7px; background: none; color: var(--text-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
-.bd-set-nav button:hover { background: color-mix(in oklab, var(--text) 6%, transparent); color: var(--text); }
-.bd-set-nav button[aria-current="page"] { background: color-mix(in oklab, var(--text) 10%, transparent); color: var(--text); }
-.bd-set-nav select { width: 100%; }
-.bd-set-main { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 16px 20px; }
-.bd-set-main .bd-set-hd b { font-size: 15px; }
-.bd-set-main .bd-set-body { flex: 1; min-height: 0; overflow: auto; align-content: start; }
-.bd-set-ft { display: flex; gap: 8px; justify-content: flex-end; }
+/* One settings window, full screen (T3 Code): icon nav with search and Back, breadcrumb header, centred column of cards. */
+.bd-set { position: fixed; inset: 10px; width: auto; height: auto; max-width: none; max-height: none; margin: 0; padding: 0; gap: 0; overflow: hidden; border-radius: 14px; }
+.bd-set[open] { grid-template-columns: 300px minmax(0, 1fr); }
+.bd-set-nav { display: flex; flex-direction: column; gap: 2px; padding: 14px 10px; border-right: 1px solid var(--line); background: color-mix(in oklab, var(--text) 2%, var(--bg, transparent)); }
+.bd-set-search { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; margin-bottom: 8px; color: var(--text-2); }
+.bd-set-search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 14px; outline: none; }
+.bd-set-search kbd { font-size: 11px; padding: 1px 6px; border-radius: 5px; background: color-mix(in oklab, var(--text) 8%, transparent); color: var(--text-3); }
+.bd-set-nav button { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 12px; border: 0; border-radius: 9px; background: none; color: var(--text-2); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.bd-set-nav button svg { color: var(--text-3); }
+.bd-set-nav button:hover { background: color-mix(in oklab, var(--text) 5%, transparent); color: var(--text); }
+.bd-set-nav button[aria-current="page"] { background: color-mix(in oklab, var(--text) 9%, transparent); color: var(--text); }
+.bd-set-nav button[aria-current="page"] svg { color: var(--text); }
+.bd-set-main { display: flex; flex-direction: column; min-height: 0; }
+.bd-set-hd { display: flex; gap: 4px; align-items: center; height: 52px; padding: 0 20px; border-bottom: 1px solid var(--line); }
+.bd-set-crumb { flex: 1; font-size: 14px; color: var(--text-3); } .bd-set-crumb i { font-style: normal; margin: 0 6px; } .bd-set-crumb b { font-weight: 500; color: var(--text); }
+.bd-set-link { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 0; border-radius: 7px; background: none; color: var(--text-2); font: inherit; font-size: 13px; cursor: pointer; }
+.bd-set-link:hover, .bd-set-link[aria-pressed="true"] { background: color-mix(in oklab, var(--text) 6%, transparent); color: var(--text); }
+.bd-set-main > .bd-json { margin: 20px; flex: 1; }
+.bd-set-main .bd-set-body { flex: 1; min-height: 0; overflow: auto; display: block; padding: 28px 40px 40px; }
+.bd-set-col { display: grid; gap: 12px; max-width: 1060px; margin: 0 auto; }
+.bd-set-ft { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--line); }
 .bd-set-extra { display: grid; gap: 12px; align-content: start; }
-.bd-appear { position: static; width: min(560px, 100%); padding: 6px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); }
+.bd-set h3 { margin: 16px 0 2px !important; padding: 0 4px; font-size: 15px !important; font-weight: 500; color: var(--text-2); }
+.bd-set h3:first-child { margin-top: 0 !important; }
+.bd-set .bd-nums { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 22px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in oklab, var(--text) 2%, transparent); }
+.bd-set .bd-nums > .bd-num:last-child { border-bottom: 0; }
+.bd-set .bd-num { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; min-height: 64px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--text); }
+.bd-set .bd-num > span { color: var(--text); font-weight: 500; }
+.bd-set .bd-num > .input, .bd-set .bd-num > select { width: 220px; height: 36px; border-radius: 9px; }
+.bd-set .bd-num input[type="checkbox"] { appearance: none; position: relative; width: 40px; height: 22px; justify-self: end; border-radius: 99px; background: color-mix(in oklab, var(--text) 14%, transparent); cursor: pointer; transition: background .15s; }
+.bd-set .bd-num input[type="checkbox"]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--text); transition: transform .15s; }
+.bd-set .bd-num input[type="checkbox"]:checked { background: var(--accent); } .bd-set .bd-num input[type="checkbox"]:checked::after { transform: translateX(18px); background: #fff; }
+.bd-set .bd-num:has(.bd-keys) { grid-template-columns: minmax(0, 1fr); }
+.bd-set .bd-appear { position: static; box-shadow: inset 0 0 0 1px var(--line); width: 100%; padding: 10px 14px; border-radius: 14px; }
+.bd-set .dv-menu-static { width: 100%; padding: 6px; border-radius: 14px; }
+.bd-set .dv-rcfgs { padding: 14px; border: 1px solid var(--line); border-radius: 14px; }
 .dv-menu-static { position: static; width: min(420px, 100%); animation: none; box-shadow: inset 0 0 0 1px var(--line); backdrop-filter: none; -webkit-backdrop-filter: none; }
-.bd-proj { display: grid; gap: 8px; justify-items: start; }
-.bd-proj .bd-menu-fields { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .dv-rcfgs { display: grid; gap: 8px; }
 .dv-rcfg-ft { display: flex; gap: 8px; align-items: center; }
 .dv-rcfg-t td:first-child { width: 24px; } .dv-rcfg-t td:first-child input { width: auto; height: auto; }
 /* Dev keeps one settings entry (the gear in the activity bar): the shell's layout toggles, settings and theme buttons step aside. */
 .ws-top:has(.dv-bar.in-head) > :is(.ws-layout-toggles, [aria-label="Workspace settings"], [aria-label="Toggle theme"]) { display: none; }
-.bd-set .bd-nums { grid-template-columns: minmax(0, 1fr); gap: 0; max-width: 760px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in oklab, var(--text) 2%, transparent); }
-.bd-set .bd-nums > .bd-num:last-child { border-bottom: 0; }
-.bd-set .bd-num { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 12px 2px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--text); }
-.bd-set .bd-num > span { color: var(--text-2); }
-.bd-set .bd-num > .input, .bd-set .bd-num > select { width: 200px; }
-.bd-set .bd-num input[type="checkbox"] { width: 16px; height: 16px; justify-self: end; }
-.bd-set .bd-num:has(.bd-keys) { grid-template-columns: minmax(0, 1fr); }
-.bd-set h3 { margin-top: 8px !important; }
 /* Chart type menu (TradingView): every type with its glyph, grouped. */
 .dv-types .dv-menu { position: fixed; right: auto; min-width: 240px; max-height: 70vh; overflow: auto; z-index: 60; }
 .dv-types .dv-menu button { justify-content: flex-start; gap: 10px; height: 32px; font-size: 13px; }
