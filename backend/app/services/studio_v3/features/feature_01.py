@@ -30,6 +30,10 @@ OUTPUTS = [
     {"key": "statistics", "source": "tables", "render": "table", "label": "Statistics"},
     {"key": "conditions", "source": "tables", "render": "table", "label": "Conditions"},
     {"key": "rule_check", "source": "tables", "render": "table", "label": "Rule check"},
+    {"key": "side_equity", "source": "charts", "render": "lineChart", "label": "Long and short"},
+    {"key": "event_study", "source": "charts", "render": "lineChart", "label": "Entry event study"},
+    {"key": "attribution", "source": "tables", "render": "table", "label": "Profit and cost attribution"},
+    {"key": "run_settings", "source": "tables", "render": "table", "label": "Run settings"},
     {"key": "holdings", "source": "tables", "render": "table", "label": "Names held"},
 ]
 

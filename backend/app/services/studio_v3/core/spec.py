@@ -161,7 +161,7 @@ class Strategy(_Model):
                 if not isinstance(strategy, ast.ClassDef):
                     continue
                 # Strategy.params, and any other class's `inputs` (indicators run by self.use) as `Class_name`.
-                attr, prefix = ("params", "") if strategy.name == "Strategy" else ("inputs", f"{strategy.name}_")
+                attr, prefix = ("params", "") if strategy.name in ("Strategy", "Indicator") else ("inputs", f"{strategy.name}_")
                 for assignment in strategy.body:
                     if not isinstance(assignment, ast.Assign) or not any(
                         isinstance(target, ast.Name) and target.id == attr for target in assignment.targets
@@ -220,6 +220,7 @@ class Settings(_Model):
     capital: float = Field(100_000.0, gt=0)
     leverage: float = Field(1.0, gt=0, le=10)
     benchmark: str = "SPY"
+    benchmark_mode: Literal["ticker", "equal_weight", "cash"] = "ticker"  # ticker: the symbol above; equal_weight: the run's universe, rebalanced daily; cash: flat
     seed: int = 7
     rule_target: float = Field(0.10, gt=0, le=10)  # Backtest > Paths > Rule check
     rule_daily_loss: float = Field(0.05, gt=0, le=1)

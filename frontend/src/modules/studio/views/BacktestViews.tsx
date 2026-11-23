@@ -257,3 +257,53 @@ export function Holdings({ rows, result }: ViewProps) {
     </div>
   );
 }
+
+/** Realised equity of all trades, longs and shorts, with the same trade statistics split by side. */
+export function SideEquity({ rows, result }: ViewProps) {
+  const stats = (result.tables.side_stats ?? []) as ViewProps["rows"];
+  if (rows.length < 2) return <Skipped reason="no closed trades" />;
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <TimeSeries data={rows} series={[{ key: "all", label: "All", color: "var(--accent)", width: 2 }, { key: "long", label: "Long", color: "var(--up)" }, { key: "short", label: "Short", color: "var(--down)" }]} height={220} format={usd} />
+      <table className="vt-table">
+        <thead><tr><th>Side</th><th className="num">Trades</th><th className="num">Net P&amp;L</th><th className="num">Win rate</th><th className="num">Avg win</th><th className="num">Avg loss</th><th className="num">Profit factor</th><th className="num">Expectancy</th></tr></thead>
+        <tbody>{stats.map((r) => (
+          <tr key={String(r.side)}>
+            <td>{String(r.side)}</td><td className="num">{String(r.count)}</td><td className={`num ${isNum(r.net_pnl) && r.net_pnl < 0 ? "st-down" : ""}`}>{isNum(r.net_pnl) ? usd(r.net_pnl) : "—"}</td><td className="num">{isNum(r.win_rate) ? pct(r.win_rate, 0) : "—"}</td>
+            <td className="num">{isNum(r.avg_win) ? usd(r.avg_win) : "—"}</td><td className="num">{isNum(r.avg_loss) ? usd(r.avg_loss) : "—"}</td>
+            <td className="num">{isNum(r.profit_factor) ? r.profit_factor.toFixed(2) : "—"}</td><td className="num">{isNum(r.expectancy) ? pct(r.expectancy, 2) : "—"}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Gross gains, gross losses, commissions and slippage; the steps add up to net P&L. */
+export function Attribution({ rows }: ViewProps) {
+  if (!rows.length) return <Skipped reason="no trades" />;
+  const max = Math.max(1e-9, ...rows.map((r) => Math.abs(r.value as number)));
+  return (
+    <div className="st-pairs">
+      {rows.map((r) => <div key={String(r.step)} className="st-pair"><span>{String(r.step)}</span><div className="bar"><i className={(r.value as number) < 0 ? "neg" : ""} style={{ width: `${(Math.abs(r.value as number) / max) * 100}%` }} /></div><b className="num">{usd(r.value as number)}</b></div>)}
+    </div>
+  );
+}
+
+/** What the run used: inputs, engine, and the data it ran on. */
+export function RunSettings({ rows }: ViewProps) {
+  return <DataTable rows={rows} opts={{ maxHeight: 360, max: 1000, viewKey: "studio-run-settings" }} />;
+}
+
+/** Average side-signed move from 20 bars before each entry to 20 after, and how many entries each bar rests on. */
+export function EventStudy({ rows }: ViewProps) {
+  if (!rows.some((r) => isNum(r.mean))) return <Skipped reason="no entries with bars around them" />;
+  const pts = rows.filter((r) => isNum(r.mean)).map((r) => ({ x: r.offset as number, y: r.mean as number }));
+  const cov = rows.find((r) => r.offset === 0)?.coverage;
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <XYPlot points={[]} lines={[{ label: "Average move", color: "var(--accent)", points: pts }]} xLabel="Bars from entry" yLabel="Move since entry bar" height={220} formatX={(v) => `${v > 0 ? "+" : ""}${Math.round(v)}`} formatY={(v) => pct(v, 1)} />
+      <Bars bars={rows.map((r) => ({ label: String(r.offset), value: r.n as number, detail: [["Entries", String(r.n)], ["Coverage", pct(r.coverage, 0)]] }))} format={(v) => String(Math.round(v))} signed={false} yLabel={`Entries observed${isNum(cov) ? ` (${pct(cov, 0)} at T+0)` : ""}`} height={120} />
+    </div>
+  );
+}

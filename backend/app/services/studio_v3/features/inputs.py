@@ -40,6 +40,7 @@ def shared_inputs() -> list[dict]:
         field("capital", "Starting capital", "number", 100000, "Capital", min=1),
         field("leverage", "Leverage cap", "number", 1.0, "Capital", min=0.1, max=10),
         field("benchmark", "Benchmark", "ticker", "SPY", "Benchmark"),
+        field("benchmark_mode", "Benchmark mode", "select", "ticker", "Benchmark", options=["ticker", "equal_weight", "cash"]),
     ]
 
 
@@ -60,6 +61,6 @@ def parse(payload: dict[str, Any]) -> tuple[Strategy, Settings, str | None, int 
     symbols = payload.get("symbols") or []
     if isinstance(symbols, str):
         symbols = [s for s in symbols.replace(",", " ").split() if s]
-    keys = ("top_n", "start", "end", "holdout", "fill", "delist_haircut", "capital", "leverage", "benchmark", "seed",
+    keys = ("top_n", "start", "end", "holdout", "fill", "delist_haircut", "capital", "leverage", "benchmark", "benchmark_mode", "seed",
             "rule_target", "rule_daily_loss", "rule_max_dd", "rule_min_days")
     return spec, Settings(symbols=list(symbols), costs=costs, **{k: payload[k] for k in keys if k in payload}), sid, int(version) if version else None

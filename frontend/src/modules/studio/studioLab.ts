@@ -106,7 +106,7 @@ registerViews({ stOrders: LV.Orders, stPaper: LV.Paper, stAlerts: LV.Alerts, stR
 const TS = group(() => import("@/modules/screener/test/TearSheet") as Promise<Record<string, unknown>>);
 registerViews({ stEquity: BV.Equity, stStartDates: BV.StartDates, stSurvivorship: BV.Survivorship, stCarriedBy: BV.CarriedBy, stTradeShape: BV.TradeShape, stTradeReturns: BV.TradeReturns,
   stHoldTime: BV.HoldTime, stCrises: BV.Crises, stCosts: BV.Costs, stCapacity: BV.Capacity, stExposure: BV.Exposure, stDrawdowns: BV.Drawdowns, stStability: BV.Stability, stByRegime: BV.ByRegime, stSeasonality: BV.Seasonality, stPerName: BV.PerName, stContributors: BV.Contributors,
-  stTradeFan: BV.TradeFan, stOnChart: BV.OnChart, stRuin: BV.Ruin, stStreaks: BV.Streaks, stTimeline: BV.Timeline, stConditions: BV.Conditions, stRuleCheck: BV.RuleCheck, stHoldings: BV.Holdings,
+  stTradeFan: BV.TradeFan, stOnChart: BV.OnChart, stRuin: BV.Ruin, stStreaks: BV.Streaks, stTimeline: BV.Timeline, stConditions: BV.Conditions, stRuleCheck: BV.RuleCheck, stHoldings: BV.Holdings, stSideEquity: BV.SideEquity, stAttribution: BV.Attribution, stRunSettings: BV.RunSettings, stEventStudy: BV.EventStudy,
   monthlyHeatmap: TS.MonthlyHeatmap, yearlyVsBenchmark: TS.YearlyVsBenchmark, underwater: TS.Underwater },
   ["stEquity", "stStartDates", "stSurvivorship", "stTradeShape", "stCrises", "stExposure", "stStability"]);
 registerAlternates({ stTradeShape: [{ label: "Returns", view: "stTradeReturns" }, { label: "Hold time", view: "stHoldTime" }], stCarriedBy: [{ label: "Table", view: "dataTable" }], stCrises: [{ label: "Table", view: "dataTable" }],
@@ -135,11 +135,14 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["equity_curve"], span: 12, view: "stEquity", title: "Equity and drawdown" },
           { keys: ["start_dates"], span: 6, view: "stStartDates", title: "Start dates" },
           { keys: ["equity_curve"], span: 6, view: "stSurvivorship", title: "Survivorship" },
+          { keys: ["side_equity"], span: 8, view: "stSideEquity", title: "Long and short" },
+          { keys: ["attribution"], span: 4, view: "stAttribution", title: "Profit and costs" },
         ] },
         { id: "trades", label: "Trades", items: [
           { keys: ["per_name"], span: 12, view: "stOnChart", title: "Trades on price" },
           { keys: ["carried_by"], span: 5, view: "stCarriedBy", title: "Carried by" },
           { keys: ["trades"], span: 7, view: "stTradeShape", title: "Trade shape", toggle: "Excursion" },
+          { keys: ["event_study"], span: 12, view: "stEventStudy", title: "Around entries" },
           { keys: ["trades"], span: 12, view: "dataTable", title: "Trades", opts: { max: 100000, maxHeight: 560, columns: TRADE_COLUMNS, viewKey: "studio-trades" } },
         ] },
         { id: "returns", label: "Returns", items: [
@@ -171,6 +174,9 @@ export const STUDIO_LAB: LabConfig = {
           { keys: ["ruin"], span: 6, view: "stRuin", title: "Ruin" },
           { keys: ["streaks"], span: 6, view: "stStreaks", title: "Losing streaks" },
           { keys: ["rule_check"], span: 12, view: "stRuleCheck", title: "Rule check" },
+        ] },
+        { id: "run", label: "Run", items: [
+          { keys: ["run_settings"], span: 12, view: "stRunSettings", title: "Run settings" },
         ] },
       ],
       drop: ["cost_ladder", "my_limits", "limits", "statistics"],

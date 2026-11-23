@@ -42,6 +42,8 @@ export function lead(view: string, r: FeatureResult): string | null {
     case "stCosts": return m.costs_off ? "Costs off" : isNum(m.costs.share_of_gross) ? `Costs ate ${pct(m.costs.share_of_gross, 0)} of gross profit` : `Costs ${money(m.costs.total)}; no gross profit to compare`;
     case "stCapacity": return isNum(m.capacity) ? `About ${money(m.capacity)} before one trade in ten exceeds 1% of the day's volume` : null;
     case "stExposure": return `In the market ${pct(m.exposure.time_in_market, 0)} of days; average exposure ${pct(m.exposure.avg_gross, 0)}`;
+    case "stAttribution": { const g = Object.fromEntries(rows("attribution").map((q) => [String(q.step), q.value as number])); return isNum(g["Net P&L"]) && isNum(g["Gross gains"]) ? `Net ${money(g["Net P&L"])} after ${money(-(g["Commissions and borrow"] + g.Slippage))} of costs` : null; }
+    case "stSideEquity": { const l = rows("side_stats").find((q) => q.side === "long"), s = rows("side_stats").find((q) => q.side === "short"); return l && s && isNum(l.net_pnl) && isNum(s.net_pnl) ? `Long ${money(l.net_pnl)} from ${String(l.count)} trades; short ${money(s.net_pnl)} from ${String(s.count)}` : null; }
     default: return null;
   }
 }

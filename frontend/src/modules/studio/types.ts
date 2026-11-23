@@ -12,6 +12,7 @@ export type StudioMeta = FeatureResult["meta"] & {
   total_return: number;
   years: number;
   benchmark: string | null;
+  benchmark_mode: "ticker" | "equal_weight" | "cash";
   costs_off: boolean;
   few_trades: boolean;
   open_trades: number;

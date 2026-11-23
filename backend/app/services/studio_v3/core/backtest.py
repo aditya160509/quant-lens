@@ -6,7 +6,7 @@ import hashlib
 import itertools
 import math
 import time
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -241,6 +241,58 @@ def start_dates(spec: Strategy, prep: Prepared, settings: Settings, sig: C.Signa
     return out
 
 
+def side_curves(closed: np.ndarray, n: int, cap: float) -> dict[str, np.ndarray]:
+    """Realised equity per side: capital plus the P&L of the trades that closed by each bar (the same trades as `trade_split`)."""
+    out = {}
+    for k, m in (("all", closed[:, engine.T_DIR] != 0), ("long", closed[:, engine.T_DIR] > 0), ("short", closed[:, engine.T_DIR] < 0)):
+        out[k] = cap + np.cumsum(np.bincount(closed[m, engine.T_EXIT_BAR].astype(int), weights=closed[m, engine.T_PNL], minlength=n)[:n])
+    return out
+
+
+def attribution(trades: np.ndarray) -> list[dict]:
+    """Gross gains and losses before any cost, then commissions (with borrow) and slippage; the steps add up to net P&L."""
+    slip = float(trades[:, engine.T_SLIP].sum())
+    comm = float(trades[:, engine.T_COSTS].sum()) - slip
+    gross = trades[:, engine.T_PNL] + trades[:, engine.T_COSTS]
+    gains, losses = float(gross[gross > 0].sum()), float(gross[gross < 0].sum())
+    return [{"step": k, "value": v} for k, v in (("Gross gains", gains), ("Gross losses", losses), ("Commissions and borrow", -comm), ("Slippage", -slip), ("Net P&L", gains + losses - comm - slip))]
+
+
+def event_study(trades: np.ndarray, close: np.ndarray, span: int = 20) -> list[dict]:
+    """Mean close around each entry, relative to the entry bar and signed by trade side; n counts the entries with a bar at that offset."""
+    sym, eb, d = trades[:, engine.T_SYM].astype(int), trades[:, engine.T_ENTRY_BAR].astype(int), trades[:, engine.T_DIR]
+    rows = []
+    for k in range(-span, span + 1):
+        t = eb + k
+        ok = (t >= 0) & (t < close.shape[0])
+        v = np.full(len(eb), np.nan)
+        v[ok] = d[ok] * (close[t[ok], sym[ok]] / close[eb[ok], sym[ok]] - 1)
+        v = v[np.isfinite(v)]
+        rows.append({"offset": k, "mean": float(v.mean()) if len(v) else None, "n": len(v), "coverage": len(v) / len(eb)})
+    return rows
+
+
+def benchmark_curve(mode: str, close: np.ndarray, cap: float) -> np.ndarray | None:
+    """Equal-weight (daily rebalanced over the names trading each day) or cash; None leaves the ticker benchmark."""
+    if mode == "cash":
+        return np.full(len(close), cap)
+    if mode == "equal_weight":
+        r = np.nan_to_num(np.nanmean(np.where(np.isfinite(close[1:] / close[:-1]), close[1:] / close[:-1] - 1, np.nan), axis=1))
+        return cap * np.concatenate(([1.0], np.cumprod(1 + r)))
+    return None
+
+
+def run_settings(spec: Strategy, settings: Settings, effective: engine.Params, dates: pd.DatetimeIndex, universe: int) -> list[dict]:
+    """The inputs the run really used and what it ran on, as rows for the Run settings table."""
+    s = settings.model_dump()
+    rows = [("Inputs", k, v) for k, v in {**{k: v for k, v in s.items() if k != "costs"}, **{f"costs.{k}": v for k, v in s["costs"].items()}}.items()]
+    rows += [("Parameters", k, v) for k, v in spec.values().items()]
+    rows += [("Engine", k, v) for k, v in asdict(effective).items()]
+    rows += [("Run", "engine_version", engine.ENGINE_VERSION), ("Run", "data_version", data.data_version()), ("Run", "period", f"{dates[0].date()} to {dates[-1].date()}"),
+             ("Run", "bars", len(dates)), ("Run", "universe_size", universe)]
+    return [{"group": g, "setting": k, "value": ", ".join(map(str, v)) if isinstance(v, (list, tuple)) else v} for g, k, v in rows]
+
+
 def _rolling(eq: np.ndarray, bench: np.ndarray | None, dates: pd.DatetimeIndex) -> list[dict]:
     e = pd.Series(eq, index=dates)
     r = e.pct_change()
@@ -310,6 +362,10 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     if prep.benchmark is not None:
         b = pd.Series(prep.benchmark).bfill().to_numpy()
         bench_eq = b / b[0] * cap
+    regime_eq, bench_label = bench_eq, settings.benchmark  # regimes always read the ticker
+    mode_eq = benchmark_curve(settings.benchmark_mode, p.close, cap)
+    if mode_eq is not None:
+        bench_eq, bench_label = mode_eq, "Equal weight" if settings.benchmark_mode == "equal_weight" else "Cash"
     bm = M.benchmark_metrics(r.equity, bench_eq) if bench_eq is not None else {}
     ext = M.extra_metrics(r.equity, bench_eq, dates)
     ext["psr_benchmark_sharpe"] = 1.0
@@ -379,9 +435,9 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
         by_name.setdefault(t["symbol"], []).append(t["pnl"])
     per_name = sorted(({"symbol": k, "trades": len(v), "pnl": float(sum(v)), "win_rate": float(np.mean([x > 0 for x in v])), "share": float(sum(v) / net_profit) if net_profit > 0 else None,
                         "best": max(v), "worst": min(v)} for k, v in by_name.items()), key=lambda x: -x["pnl"])
-    labels = paths.regimes(bench_eq, dates) if bench_eq is not None else None
+    labels = paths.regimes(regime_eq, dates) if regime_eq is not None else None
     market = prep.sig_bars["market"][:, 0] if "market" in prep.sig_bars else None
-    regime_rows = paths.by_regime(labels, r.trades[:, engine.T_ENTRY_BAR].astype(int), pnl, r.trades[:, engine.T_RET]) if bench_eq is not None else []
+    regime_rows = paths.by_regime(labels, r.trades[:, engine.T_ENTRY_BAR].astype(int), pnl, r.trades[:, engine.T_RET]) if regime_eq is not None else []
     mc = paths.trade_monte_carlo(closed[:, engine.T_PNL], cap, seed=settings.seed)
     lim_rows = check_limits(spec, ret, tr, bm, cost_share, sd_pass)
     judged = [x for x in lim_rows if x["pass"] is not None]
@@ -395,12 +451,14 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     rules = paths.rule_check(r.equity, dates, settings.rule_target, settings.rule_daily_loss, settings.rule_max_dd, settings.rule_min_days)
     if surv:
         surv.pop("equity")
+    curves = side_curves(closed, len(dates), cap)
+    side_equity = [{"date": str(dates[i].date()), **{k: float(v[i]) for k, v in curves.items()}} for i in idx]
     exposure = [{"date": str(dates[i].date()), "gross": r.gross_exposure[i], "net": r.net_exposure[i], "positions": r.positions[i]} for i in idx]
 
     sign = lambda v: f"{'+' if v > 0 else ''}{v * 100:.0f}%"
     total = float(r.equity[-1] / cap - 1)
     headline = ", ".join(x for x in [
-        f"{sign(total)}" + (f" vs {settings.benchmark} {sign(bm['benchmark_total_return'])}" if bm else ""), f"{years:.1f} years",
+        f"{sign(total)}" + (f" vs {bench_label} {sign(bm['benchmark_total_return'])}" if bm else ""), f"{years:.1f} years",
         f"Sharpe {ret['sharpe']:.2f}" if ret.get("sharpe") is not None else "", f"worst drawdown {ret['max_drawdown'] * 100:.0f}%" if ret else "", f"{len(r.trades)} trades"] if x)
     result_hash = hashlib.sha256(r.trades.tobytes() + r.equity.tobytes()).hexdigest()[:16]
     run_hash = hashlib.sha256(f"{spec.hash()}:{settings.hash()}:{data.data_version()}".encode()).hexdigest()[:16]
@@ -410,8 +468,9 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
     out = {
         "feature_id": "st01", "status": "ok",
         "summary_cards": [{"label": k, "value": v, **({"unit": u} if u else {})} for k, v, u in cards],
-        "charts": {"trade_mc": mc["fan"] if mc else [], "equity_curve": curve, "cost_ladder": ladder, "start_dates": sd, "exposure": exposure, "rolling": _rolling(r.equity, bench_eq, dates)},
-        "tables": {"by_regime": regime_rows, "conditions": paths.conditions(r.equity, market, dates) if market is not None and np.isfinite(market).any() else [],
+        "charts": {"side_equity": side_equity, "event_study": event_study(r.trades, p.close), "trade_mc": mc["fan"] if mc else [], "equity_curve": curve, "cost_ladder": ladder, "start_dates": sd, "exposure": exposure, "rolling": _rolling(r.equity, bench_eq, dates)},
+        "tables": {"side_stats": [{"side": k, **v, "net_pnl": float(closed[m, engine.T_PNL].sum())} for (k, v), m in zip(trade_split.items(), (side != 0, side > 0, side < 0), strict=True)],
+                   "attribution": attribution(r.trades), "run_settings": run_settings(spec, settings, effective, dates, len(p.symbols)), "by_regime": regime_rows, "conditions": paths.conditions(r.equity, market, dates) if market is not None and np.isfinite(market).any() else [],
                    "rule_check": rules.pop("rows"), "holdings": [{"date": x["date"], "names": x["positions"]} for x in exposure], "seasonality": paths.seasonality(r.equity, dates), "ruin": mc["ruin"] if mc else [], "streaks": mc["streaks"] if mc else [],
                    "trades": trades, "carried_by": carried, "crises": crises, "drawdowns": dd_rows, "per_name": per_name, "my_limits": lim_rows,
                    "limits": limits.run_limits(start=str(dates[0].date()), end=str(dates[-1].date()), requested=prep.requested, held=held, delisted=int(dead.sum()), fill=settings.fill,
@@ -420,7 +479,7 @@ def run_backtest(spec: Strategy, settings: Settings, progress=None) -> dict:
                    "statistics": [{"metric": k, "value": v} for k, v in {**ret, **tr, **bm, **ext}.items()]},
         "meta": {
             **output,
-            "headline": headline, "verdict_chip": "not validated", "metrics": {**ret, **tr, **bm, **ext}, "total_return": total, "years": years, "benchmark": settings.benchmark if bm else None,
+            "headline": headline, "verdict_chip": "not validated", "metrics": {**ret, **tr, **bm, **ext}, "total_return": total, "years": years, "benchmark": bench_label if bm or mode_eq is not None else None, "benchmark_mode": settings.benchmark_mode,
             "rule_check": {**rules, "target": settings.rule_target, "daily_loss": settings.rule_daily_loss, "max_dd": settings.rule_max_dd, "min_days": settings.rule_min_days},
             "costs_off": not (effective.commission_bps or effective.commission_share or effective.commission_min or effective.slippage_bps or effective.slippage_range),
             "few_trades": few, "open_trades": len(r.trades) - len(closed), "unfilled": r.unfilled, "entry_signals": n_entries,

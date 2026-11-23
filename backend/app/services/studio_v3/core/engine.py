@@ -71,10 +71,12 @@ R_SIGNAL, R_STOP, R_TARGET, R_TRAIL, R_TIME, R_DELISTED, R_OPEN, R_BREAKEVEN, R_
 REASONS = {R_SIGNAL: "signal", R_STOP: "stop", R_TARGET: "target", R_TRAIL: "trailing stop", R_TIME: "time stop", R_DELISTED: "delisted",
            R_OPEN: "open at end", R_BREAKEVEN: "breakeven stop", R_SCALE: "scale out", R_RISK: "risk stop"}
 
+ENGINE_VERSION = "3.1"  # bump when a change can move a run's numbers
+
 # trade columns
 (T_SYM, T_DIR, T_ENTRY_BAR, T_EXIT_BAR, T_ENTRY_PX, T_EXIT_PX, T_SHARES, T_PNL, T_RET, T_MAE, T_MFE, T_REASON, T_COSTS, T_SIGNAL_BAR,
- T_RISK, T_STOP, T_TGT) = range(17)
-NT = 17  # T_STOP and T_TGT: the stop and target levels when the trade closed, NaN when unset
+ T_RISK, T_STOP, T_TGT, T_SLIP) = range(18)
+NT = 18  # T_STOP and T_TGT: the stop and target levels when the trade closed, NaN when unset; T_SLIP: slippage paid, already inside the fill prices
 
 # vector-engine state columns per symbol
 SH, EPX, EBAR, STOP, TGT, SCL, HW, LO, HI, ECOST, ESLIP, SKIND, PDIR, PSH, PEXIT, SIGBAR, LAST, RISK, SCL2 = range(19)
@@ -108,7 +110,7 @@ def _close(S, acct, trades, P, n, t, raw, reason, frac, bar_range):
     trades[k, T_MAE] = (lo / S[n, EPX] - 1.0) if d > 0 else -(hi / S[n, EPX] - 1.0)
     trades[k, T_MFE] = (hi / S[n, EPX] - 1.0) if d > 0 else -(lo / S[n, EPX] - 1.0)
     trades[k, T_REASON], trades[k, T_COSTS], trades[k, T_SIGNAL_BAR], trades[k, T_RISK] = reason, comm + slip + ecost + eslip, S[n, SIGBAR], risk
-    trades[k, T_STOP], trades[k, T_TGT] = S[n, STOP], S[n, TGT]
+    trades[k, T_STOP], trades[k, T_TGT], trades[k, T_SLIP] = S[n, STOP], S[n, TGT], slip + eslip
     acct[NTR] += 1
     if frac >= 1.0:
         S[n, SH] = 0.0
@@ -333,7 +335,7 @@ def _vector(o, h, l, c, v, entries, exits, score, has_score, stop_dist, has_dist
             trades[k, T_MAE] = (S[n, LO] / S[n, EPX] - 1.0) if d > 0 else -(S[n, HI] / S[n, EPX] - 1.0)
             trades[k, T_MFE] = (S[n, HI] / S[n, EPX] - 1.0) if d > 0 else -(S[n, LO] / S[n, EPX] - 1.0)
             trades[k, T_REASON], trades[k, T_COSTS], trades[k, T_SIGNAL_BAR], trades[k, T_RISK] = R_OPEN, S[n, ECOST] + S[n, ESLIP], S[n, SIGBAR], S[n, RISK]
-            trades[k, T_STOP], trades[k, T_TGT] = S[n, STOP], S[n, TGT]
+            trades[k, T_STOP], trades[k, T_TGT], trades[k, T_SLIP] = S[n, STOP], S[n, TGT], S[n, ESLIP]
             acct[NTR] += 1
     return trades[: int(acct[NTR])], net, gross_eq, gross_x, net_x, npos_t, traded, acct[UNFILLED], risk_bar, risk_kind, risk_value
 
@@ -465,7 +467,7 @@ class EventEngine:
         mae = (lo / pos.entry_px - 1.0) if d > 0 else -(hi / pos.entry_px - 1.0)
         mfe = (hi / pos.entry_px - 1.0) if d > 0 else -(lo / pos.entry_px - 1.0)
         self.trades.append((n, d, pos.entry_bar, t, pos.entry_px, px, sh, pnl, pnl / (sh * pos.entry_px), mae, mfe, reason,
-                            comm + slip + ecost + eslip, pos.signal_bar, risk, pos.stop, pos.target))
+                            comm + slip + ecost + eslip, pos.signal_bar, risk, pos.stop, pos.target, slip + eslip))
         if frac >= 1.0:
             del self.positions[n]
         else:
@@ -752,7 +754,7 @@ class EventEngine:
             mae = (pos.lo / pos.entry_px - 1.0) if d > 0 else -(pos.hi / pos.entry_px - 1.0)
             mfe = (pos.hi / pos.entry_px - 1.0) if d > 0 else -(pos.lo / pos.entry_px - 1.0)
             self.trades.append((n, d, pos.entry_bar, T - 1, pos.entry_px, pos.last, sh, pnl, pnl / (sh * pos.entry_px), mae, mfe, R_OPEN,
-                                pos.cost + pos.slip, pos.signal_bar, pos.risk, pos.stop, pos.target))
+                                pos.cost + pos.slip, pos.signal_bar, pos.risk, pos.stop, pos.target, pos.slip))
         trades = np.array(self.trades, dtype=np.float64).reshape(-1, NT)
         return trades, *out, float(self.unfilled)
 
