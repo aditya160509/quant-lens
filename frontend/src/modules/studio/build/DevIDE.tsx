@@ -116,7 +116,7 @@ const RAILS: [Rail, ReactNode, string][] = [
 
 const money = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 /** Strategy Tester summary: every headline number on one screen, colour only where it means gain or loss. */
-function Tester({ trades, inputs, scope }: { trades: Record<string, unknown>[]; inputs: ReactNode; scope: string }) {
+function Tester({ trades, inputs, scope, hasInputs }: { trades: Record<string, unknown>[]; inputs: ReactNode; scope: string; hasInputs: boolean }) {
   const s = useMemo(() => tradeSummary(trades), [trades]);
   // Run feedback in place: after a re-run, tiles that moved show a ±delta that fades out.
   const last = useRef<typeof s | null>(null);
@@ -146,7 +146,7 @@ function Tester({ trades, inputs, scope }: { trades: Record<string, unknown>[]; 
       {s.trades ? <StatStrip stats={stats} /> : <p className="dv-empty">Run the preview to see results</p>}
       {s.curve.length > 1 ? <TimeSeries data={s.curve} series={[{ key: "net", label: "Cumulative P&L", color: "var(--text-2)" }, { key: "dd", label: "Drawdown", color: "var(--down)" }]} height={140} legend={false} /> : null}
       </div>
-      <aside className="dv-tester-set" aria-label="Inputs"><h4>Inputs</h4>{inputs}</aside>
+      {hasInputs ? <aside className="dv-tester-set" aria-label="Inputs"><h4>Inputs</h4>{inputs}</aside> : null}
     </div>
   );
 }
@@ -930,7 +930,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
   for (let level = outline; ;) { const s0 = level.filter((x) => x.line <= cursor.line).at(-1); if (!s0) break; crumbs.push(s0); level = s0.children; }
   const outlineRows = (items: Sym[], depth = 0): ReactNode => items.map((s) => (
     <div key={`${s.name}${s.line}`}>
-      <button className="dv-item" style={{ paddingLeft: 10 + depth * 14 }} onClick={() => goto(active, s.line, s.column)}><i className={`dv-k dv-k-${s.kind}`}>{s.kind[0]}</i>{s.name}<span>{s.line}</span></button>
+      <button className="dv-item" style={{ paddingLeft: 10 + depth * 14 }} title={`${s.kind} · line ${s.line}`} onClick={() => goto(active, s.line, s.column)}><i className="dv-k" aria-hidden>{s.kind === "class" ? "◇" : "ƒ"}</i>{s.name}</button>
       {outlineRows(s.children, depth + 1)}
     </div>
   ));
@@ -1118,7 +1118,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
                   {!plots.length && !Object.keys(prev?.tables ?? {}).length ? <p className="dv-empty">No plots</p> : null}
                 </div>
               ) : null}
-              {tab === "tester" ? <Tester trades={prev?.trades ?? []} inputs={inputList} scope={`Preview · ${dbg?.symbol ?? symbol}${prev?.bars?.length ? ` · ${prev.bars[0]!.date} → ${prev.bars.at(-1)!.date}` : ""}`} /> : null}
+              {tab === "tester" ? <Tester trades={prev?.trades ?? []} inputs={inputList} hasInputs={Object.keys(inputs).length > 0} scope={`Preview · ${dbg?.symbol ?? symbol}${prev?.bars?.length ? ` · ${prev.bars[0]!.date} → ${prev.bars.at(-1)!.date}` : ""}`} /> : null}
               {tab === "trades" ? (prev?.trades.length ? <DataTable rows={prev.trades} opts={{ viewKey: "studio:dev:trades", rowActions: (r: Record<string, unknown>) => {
                 const d = String(r.entry_date ?? "").slice(0, 10), o = d ? prev.order_lines?.find((x) => x.dates.some((y) => y.slice(0, 10) === d)) : undefined;
                 return o ? <button className="icon-btn" title={`Go to ${o.file}:${o.line}`} aria-label="Go to the line that placed this order" onClick={() => goto(o.file, o.line)}><FileCode2 size={12} /></button> : null;
@@ -1213,11 +1213,11 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
               ))}
               <button className="btn sm ghost" onClick={addScratch}><FilePlus2 size={13} />New scratch file</button>
               </details>
-              <details open><summary>Inputs<span>{Object.keys(inputs).length}</span></summary>
+              {Object.keys(inputs).length ? <details open><summary>Inputs<span>{Object.keys(inputs).length}</span></summary>
                 {inputList}
-              </details>
+              </details> : null}
               {/* VS Code's Explorer stacks Outline under the files, so the side bar has no dead space and no second tab. */}
-              <details open><summary>Outline</summary>{outline.length ? outlineRows(outline) : <p className="dv-empty">No classes or functions</p>}</details>
+              {outline.length ? <details open><summary>Outline</summary>{outlineRows(outline)}</details> : null}
               {todos.length ? <details open><summary>TODO<span>{todos.length}</span></summary>{todos.map((t) => <button key={`${t.file}:${t.line}`} className="dv-item" onClick={() => goto(t.file, t.line)}>{t.text}<span>{t.file}:{t.line}</span></button>)}</details> : null}
             </div>
           ) : rail === "search" ? (

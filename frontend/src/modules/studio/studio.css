@@ -244,8 +244,7 @@
 .dv-status .num, .dv-status b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .dv-status > button:hover { background: var(--line); color: var(--text); }
 
-.dv-k { width: 15px; height: 15px; display: inline-grid; place-items: center; border-radius: 4px; font: 600 9.5px var(--mono); font-style: normal; text-transform: uppercase; color: var(--bg, #000); background: var(--text-3); }
-.dv-k-class { background: var(--warn); } .dv-k-method, .dv-k-function { background: var(--accent); } .dv-k-indicator { background: var(--up); }
+.dv-k { width: 14px; display: inline-grid; place-items: center; font: 12px var(--mono); font-style: normal; color: var(--text-3); }
 .dv-tpl { display: grid; gap: 2px; padding: 8px; border: 0; border-radius: 8px; background: none; color: var(--text); text-align: left; cursor: pointer; }
 .dv-tpl:hover { background: var(--line); }
 .dv-tpl b { font-size: 12.5px; font-weight: 600; }
