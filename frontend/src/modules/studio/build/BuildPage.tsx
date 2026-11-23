@@ -190,7 +190,7 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
     const items = (e: Event) => setDevItems((e as CustomEvent).detail);
     const open = (e: Event) => { setSeed({ q: (e as CustomEvent<string>).detail }); setPalette(true); };
     let last = 0; // double Shift opens Search Everywhere
-    const key = (e: KeyboardEvent) => { if (e.key !== "Shift") { last = 0; return; } if (e.repeat) return; const t = Date.now(); if (t - last < 400) { last = 0; open(new CustomEvent("x", { detail: "" })); } else last = t; };
+    const key = (e: KeyboardEvent) => { if (e.key !== "Shift" || e.isComposing) { last = 0; return; } if (e.repeat) return; const t = Date.now(); if (t - last < 400) { last = 0; open(new CustomEvent("x", { detail: "" })); } else last = t; };
     window.addEventListener("studio:devitems", items); window.addEventListener("studio:palette", open); window.addEventListener("keydown", key);
     return () => { window.removeEventListener("studio:devitems", items); window.removeEventListener("studio:palette", open); window.removeEventListener("keydown", key); };
   }, []);
@@ -221,7 +221,11 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
     takeLease();
     const t = setInterval(() => takeLease(), 30_000);
     const sid = loaded.id, s = session.current;
-    return () => { clearInterval(t); void fetch(`${STUDIO_BASE}/strategies/${sid}/lease?session=${s}`, { method: "DELETE", keepalive: true }).catch(() => undefined); };
+    const release = () => void fetch(`${STUDIO_BASE}/strategies/${sid}/lease?session=${s}`, { method: "DELETE", keepalive: true }).catch(() => undefined);
+    // Renew as soon as a throttled or sleeping tab is visible again; release when the page is closed.
+    const onVis = () => { if (!document.hidden) takeLease(); };
+    document.addEventListener("visibilitychange", onVis); window.addEventListener("pagehide", release);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pagehide", release); release(); };
   }, [loaded?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -291,7 +295,18 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
   const backupKey = `studio:draft:${loaded?.id ?? id ?? "new"}`;
   useEffect(() => {
     if (!dirty) return;
-    const t = setTimeout(() => { try { localStorage.setItem(backupKey, JSON.stringify({ spec, at: Date.now() })); } catch { /* full or blocked */ } }, 500);
+    const t = setTimeout(() => {
+      const raw = JSON.stringify({ spec, at: Date.now() });
+      // Bounded: drafts over 1 MB are not mirrored, only the 20 newest drafts are kept, and a full store says so once.
+      if (raw.length > 1_000_000) return void toast("This draft is too large for the browser backup; the server draft still saves", { id: "backup" });
+      try {
+        const fresh = localStorage.getItem(backupKey) === null;
+        localStorage.setItem(backupKey, raw);
+        if (!fresh) return;
+        const old = Object.keys(localStorage).filter((k) => k.startsWith("studio:draft:")).map((k) => { try { return [k, (JSON.parse(localStorage.getItem(k)!) as { at?: number }).at ?? 0] as const; } catch { return [k, 0] as const; } });
+        for (const [k] of old.sort((a, b) => b[1] - a[1]).slice(20)) localStorage.removeItem(k);
+      } catch { toast.error("Browser storage is full; the local draft backup is off", { id: "backup" }); }
+    }, 500);
     return () => clearTimeout(t);
   }, [spec, dirty, backupKey]);
   // Leaving with unsaved edits asks first (the local backup stays as a second safety net).
@@ -370,11 +385,11 @@ function BuildEditor({ features, id }: { features: FeatureSpec[]; id?: string })
 
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
+      if (!(e.metaKey || e.ctrlKey) || e.isComposing) return;
       if (e.key.toLowerCase() === "p" && e.shiftKey) { e.preventDefault(); setPalette((o) => !o); }
-      else if (e.key === "s") { e.preventDefault(); void save(); }
+      else if (e.key.toLowerCase() === "s" && !e.shiftKey) { e.preventDefault(); void save(); }
       else if (e.key === "Enter" && ui !== "dev") { e.preventDefault(); void run(); }
-      else if (e.key === "z" && !(e.target as HTMLElement).matches("input, textarea")) {
+      else if (e.key.toLowerCase() === "z" && !(e.target as HTMLElement).matches("input, textarea")) {
         e.preventDefault(); const h = history.current, from = e.shiftKey ? h.future : h.past, to = e.shiftKey ? h.past : h.future;
         const prev = from.pop(); if (prev) { to.push(specRef.current!); h.at = 0; editRev.current++; specRef.current = prev; setSpec(prev); setDirty(true); }
       }

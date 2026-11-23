@@ -837,6 +837,7 @@ export function DevIDE({ tools, settings, spec, edit, symbol, prev, side, canRun
   const saveAndRun = () => { onSave(); setSavedTick((n) => n + 1); if (rc.runOnSave && !readOnly) runCode("quick"); };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.isComposing) return;
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "\\" || e.key === "|")) { e.preventDefault(); setLayoutsOpen(true); return; }
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === ",") { e.preventDefault(); setSettingsAt(""); return; }
       // Hide all tool windows (JetBrains Cmd+Shift+F12): outside the editor here, inside it through the action below.
