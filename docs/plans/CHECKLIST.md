@@ -14,7 +14,7 @@ Tick items here only. The plan is in [PLAN.md](PLAN.md).
 - [x] Accessibility pass
 - [x] Heat table, Distribution, Scatter v2, Waterfall v2, Dendrogram linking
 - [x] Live overview tiles and pipeline diagram
-- [ ] Fresh design pass: [issues and finish target](../reviews/design/ML_UI_ISSUES.md)
+- [ ] Fresh design pass: issues and finish target
 
 ## Phase 0: Foundation (deferred)
 - [x] Remove v1 pages, legacy services and routers
@@ -95,13 +95,13 @@ Merged into Factors as a section (2026-11-17). See Step 3.
 ## Step 6: Portfolio
 - [ ] Product review (written 2026-11-09)
 - [ ] One NAV key; no fake sparklines (PLAN 6.2; not in the review)
-- [ ] Build: see [PORTFOLIO_CHECKLIST.md](PORTFOLIO_CHECKLIST.md); ship and tag `portfolio-v1`
+- [ ] Build: one Portfolio page (Studio OD-20); ship and tag `portfolio-v1`
 
 ## Step 7: Studio and Chart
 - [ ] Product review (written 2026-11-09); decide Paper
 - [ ] Decide Chart as a Studio tab (first batch of the checklist)
 - [ ] Custom chart with drawings, indicators, layouts, replay (PLAN 7.3; the review lists only the data and alert fixes)
-- [ ] Build: see [STUDIO_CHECKLIST.md](STUDIO_CHECKLIST.md); Chart is built inside Studio; tag `studio-v1`
+- [ ] Build: see [Studio CHECKLIST.md](../studio/plan/CHECKLIST.md); Chart is built inside Studio; tag `studio-v1`
 
 ## Step 8: Widget workspace
 - [ ] Plan and research

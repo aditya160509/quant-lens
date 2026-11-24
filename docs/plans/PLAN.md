@@ -315,7 +315,7 @@ Spec: `../reviews/product/PCA_V2_PRODUCT_REVIEW.md` (written 2026-11-09); page c
 
 #### 5a. PCA checklist and order
 
-Build list: [PCA_CHECKLIST.md](PCA_CHECKLIST.md), 8 batches, 71 items. Batches 1 and 2 are the 33 correctness fixes; no page is built before they land. Batch 2 holds three owner decisions (H1, H2, H3) that block the spectrum and contagion pages. Order: Correctness (two batches), Data path, Workspace, Pages, Freedom, Validate and monitor, Ship.
+Build list (removed 2026-11-24): 8 batches, 71 items. Batches 1 and 2 are the 33 correctness fixes; no page is built before they land. Batch 2 holds three owner decisions (H1, H2, H3) that block the spectrum and contagion pages. Order: Correctness (two batches), Data path, Workspace, Pages, Freedom, Validate and monitor, Ship.
 
 - **Needs Screener:** global search, kit, saved universes, and for Batch 7 the scheduler and alerts (Screener Batch 9).
 - **Needs Volatility:** the event ledger and regime and covariance work stay consistent with Volatility's kernels (decisions 7 and 14).
@@ -338,7 +338,7 @@ Spec: `../reviews/product/PORTFOLIO_V2_PRODUCT_REVIEW.md` (written 2026-11-09); 
 
 #### 6a. Portfolio checklist and order
 
-Build list: [PORTFOLIO_CHECKLIST.md](PORTFOLIO_CHECKLIST.md), 7 batches, 42 items. Order: Clean the backend, Workspace, Construct, Test, Stress, Freedom and export, Ship. Later items need user data or a data purchase.
+Build list (removed 2026-11-24): 7 batches, 42 items. Order: Clean the backend, Workspace, Construct, Test, Stress, Freedom and export, Ship. Later items need user data or a data purchase.
 
 - **Needs Screener:** the kit, universe picker, search and, for Batch 4, shared validation (Screener Batch 8).
 - **Owns:** covariance (decision 3), construction, Kelly sizing and reverse stress. Factors Batch 6, Volatility Batches 5 and 7 and Studio Batch 7 reuse them, so Construct (Batch 3) and Stress (Batch 5) are built before those.
@@ -361,7 +361,7 @@ Spec: `../reviews/product/STUDIO_V2_PRODUCT_REVIEW.md` (written 2026-11-09). Sel
 
 #### 7a. Studio checklist and order
 
-Build list: [STUDIO_CHECKLIST.md](STUDIO_CHECKLIST.md), 9 batches, 40 items. Order: Decisions, Fix what is wrong, Trust features, Data and the end of `studio_v2`, Develop, Chart as a tab, Merge and present, Freedom, Ship. Chart is Batch 6; it waits for the parquet-first loader in Batch 4.
+Build list: [Studio CHECKLIST.md](../studio/plan/CHECKLIST.md), 9 batches, 40 items. Order: Decisions, Fix what is wrong, Trust features, Data and the end of `studio_v2`, Develop, Chart as a tab, Merge and present, Freedom, Ship. Chart is Batch 6; it waits for the parquet-first loader in Batch 4.
 
 - **Needs Screener:** the kit and exhibits, the Typst report, the universe picker, and later Apprise delivery.
 - **Needs Research:** the trial counter and deflated Sharpe in Batch 3 use the Research ledger and the shared validation statistics.
