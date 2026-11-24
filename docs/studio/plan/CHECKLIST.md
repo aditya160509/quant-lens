@@ -782,6 +782,7 @@ Each needs an answer before the page it blocks. Defaults are in the text.
 - [ ] [M] OD-17 Dividends on shorts stay off until phase 9 (DECISIONS)
 - [ ] OD-18 Tax and wash-sale (REVIEW G10) is not in v3. Confirm it stays out
 - [ ] OD-19 Tick data is not in v3 (REVIEW §3). Confirm it stays out
+- [ ] [M] OD-20 Decided 2026-11-24: one Portfolio page only. Remove Studio Portfolio (`/studio/portfolio`) with no redirect. The main Portfolio page becomes the full one: save portfolios (stocks or Studio strategies) and backtest a saved portfolio directly from there. Not started; check what `/studio/portfolio` does today so nothing is lost
 
 ## Workspace (Studio v3 single screen, plan: docs/studio/plan/workspace_plan.html): 12 / 12 done
 Merges Build (141 done features move into panels unchanged), the 22 open Build items, and DEV_IDEAS catalogue items (as numbered there).
